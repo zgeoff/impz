@@ -55,7 +55,7 @@ export function renderUsage(ctx: Readonly<CommandContext<never>>): string {
   const lines = [
     `${ctx.description ?? ''} (${named})`,
     '',
-    `USAGE ${commandName}${hasOptions ? ' [OPTIONS]' : ''} ${usageLine.join(' ')}`,
+    `USAGE ${commandName}${hasOptions ? ' [OPTIONS]' : ''} ${usageLine.join(' ')}`.trimEnd(),
     '',
   ];
 
@@ -158,7 +158,7 @@ function renderDescription(arg: Readonly<ArgSchema>, isRequired: boolean): strin
 }
 
 // two-space indented columns: the first right-aligned, the rest padded to
-// the widest
+// the widest, with no trailing spaces
 function formatColumns(rows: readonly (readonly string[])[]): string {
   const widths: number[] = [];
 
@@ -176,7 +176,8 @@ function formatColumns(rows: readonly (readonly string[])[]): string {
 
           return `  ${index === 0 ? cell.padStart(width) : cell.padEnd(width)}`;
         })
-        .join('  '),
+        .join('  ')
+        .trimEnd(),
     )
     .join('\n');
 }
