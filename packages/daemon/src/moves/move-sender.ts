@@ -1,12 +1,9 @@
-import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { MovePlan, MoveStatus, WarmHost } from '@impz/api';
 import { ORPCError } from '@orpc/server';
 import { buildInvalidStateError, buildNotFoundError } from '../api-errors';
 import type { Broker } from '../broker/broker-service';
 import type { Config } from '../config';
 import { listCheckpoints } from '../db/checkpoints';
-import { listColdBoots } from '../db/cold-boots';
-import { findImageById } from '../db/images';
 import { findImpById, findImpByName, listImps, updateImpMove } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import { findMoveSend, removeMoveSend, updateMoveSend, writeMoveSend } from '../db/move-sends';
@@ -15,38 +12,19 @@ import type { EgressService } from '../egress/egress-service';
 import type { LockedImp } from '../imps/imp-lock';
 import type { Imps } from '../imps/imp-service';
 import type { StartTimer } from '../process/clock';
-import type { StreamedCommand } from '../process/run-stream';
-import { sendLongRequest } from '../process/send-long-request';
 import { readErrorMessage } from '../read-error-message';
-import { encodeSnapshotMeta } from '../sleep/snapshot-meta';
-import type { SnapshotMeta } from '../sleep/snapshot-meta';
-import { buildImagePaths } from '../storage/data-layout';
 import type { MoveMode, StorageBackend } from '../storage/storage-backend';
-import { buildMovedLeases, requireLeasesKept } from './build-moved-leases';
-import { buildWarmHeader, checkWarmMove, requireSnapshotMeta } from './check-warm-move';
-import type { WarmParts } from './check-warm-move';
-import {
-  MOVE_FRAMES,
-  countDataBytes,
-  encodeCommand,
-  encodeFile,
-  encodeJsonFrame,
-} from './move-frames';
-import type { MoveFile } from './move-frames';
-import {
-  MOVE_FINISH_HEADER,
-  MOVE_PART_HEADER,
-  MOVE_PATHS,
-  MoveCommitReplySchema,
-  MoveOfferReplySchema,
-} from './move-header';
-import type { MoveHeader } from './move-header';
-import { sendInParts } from './move-parts';
-import { ReceiptSchema, buildTicketHeader, parseTicket, readReceipt } from './move-tickets';
-import type { ReadonlyReceiptBody, ReceiptBody } from './move-tickets';
+import { checkWarmMove, requireSnapshotMeta } from './check-warm-move';
+import { countMoveBytes } from './count-move-bytes';
+import { MOVE_PATHS, MoveCommitReplySchema } from './move-header';
 import { OfferRefusalError } from './offer-refusal-error';
 import { readPeerUrlAddress } from './peer-address';
 import type { PeerRanges } from './peer-address';
+import { requireOk } from './require-ok';
+import { runMoveSend } from './run-move-send';
+import type { SendTarget } from './run-move-send';
+import { sendMoveAbort } from './send-move-abort';
+import { sendToPeer } from './send-to-peer';
 
 export interface MoveSender {
   readonly prepare: (name: string, options: PrepareOptions) => Promise<MovePlan>;
@@ -123,149 +101,6 @@ interface SendTask {
   isDone: boolean;
 }
 
-// a request to the target: the ticket header always, and these besides
-interface PeerRequest {
-  readonly body?: string | ReadableStream<Uint8Array>;
-  readonly duplex?: 'half';
-  readonly signal?: AbortSignal;
-  readonly extraHeaders?: Readonly<Record<string, string>>;
-}
-
-// One piece of the stream after the header: a file, or a command's output
-type StreamPart =
-  | { readonly kind: 'file'; readonly path: string; readonly file: MoveFile }
-  | { readonly kind: 'command'; readonly open: () => StreamedCommand; readonly file: MoveFile };
-
-interface OpenedParts {
-  readonly parts: readonly StreamPart[];
-  readonly streams: MoveHeader['streams'];
-
-  // what `zfs send` says its streams take; null for files
-  readonly estimateBytes: number | null;
-  readonly close: () => Promise<void>;
-}
-
-// The target's time to answer, in place of Bun's 360 s limit on a silent
-// answer: a part and the finish wait on the target's disk, which can take
-// minutes; the offer, the commit and the abort (which removes a copy) less
-const PEER_DEADLINES_MS = {
-  stream: 60 * 60 * 1000,
-  control: 10 * 60 * 1000,
-} as const;
-
-// `zfs send -nP` estimates: the ticket allows this much more
-const ESTIMATE_SLACK = 1.1;
-const ESTIMATE_SLACK_BYTES = 64 * 1024 * 1024;
-
-type SentFile = ReceiptBody['files'][number];
-
-// where a send goes, with its ticket, how it carries the disk, and whether
-// the memory goes too
-interface SendTarget {
-  readonly peer: string;
-  readonly ticket: string;
-  readonly mode: MoveMode;
-  readonly isWarm: boolean;
-}
-
-// what a running send reports as it goes
-interface SendProgress {
-  readonly signal: AbortSignal;
-  readonly onData: (bytes: number) => void;
-}
-
-async function requireOk(response: Response, what: string): Promise<unknown> {
-  const body = await readJsonBody(response);
-
-  if (!response.ok) {
-    const error =
-      body !== null && typeof body === 'object' && 'error' in body ? String(body.error) : '';
-
-    throw new Error(`${what}: the target answered ${String(response.status)} ${error}`.trim());
-  }
-
-  return body;
-}
-
-async function readJsonBody(response: Response): Promise<unknown> {
-  try {
-    const body: unknown = await response.json();
-
-    return body;
-  } catch {
-    return null;
-  }
-}
-
-// the receipt must name this imp and repeat every sha256 the stream sent
-function checkReceiptFiles(
-  body: ReadonlyReceiptBody,
-  imp: Readonly<ImpRecord>,
-  sent: readonly Readonly<SentFile>[],
-): void {
-  const same =
-    body.impId === imp.id &&
-    body.name === imp.name &&
-    body.files.length === sent.length &&
-    body.files.every(
-      (file, index) =>
-        file.kind === sent[index]?.kind &&
-        file.index === sent[index].index &&
-        file.sha256 === sent[index].sha256 &&
-        file.bytes === sent[index].bytes,
-    );
-
-  if (!same) {
-    throw new Error('the receipt does not match what was sent');
-  }
-}
-
-// The stream: the header, each file's frames, END. `onFile` gets each
-// file's sha256 as it ends, for the receipt to repeat.
-async function* encodeStream(
-  header: Readonly<MoveHeader>,
-  parts: readonly StreamPart[],
-  onData: (bytes: number) => void,
-  onFile: (file: SentFile) => void,
-): AsyncGenerator<Uint8Array, void, undefined> {
-  yield encodeJsonFrame(MOVE_FRAMES.header, encodeHeader(header));
-
-  for (const part of parts) {
-    let bytes = 0;
-
-    const count = (more: number) => {
-      bytes += more;
-
-      onData(more);
-    };
-
-    const onSum = (sha256: string) => {
-      onFile({
-        kind: part.file.kind,
-        ...(part.file.index !== undefined && { index: part.file.index }),
-        sha256,
-        bytes,
-      });
-    };
-
-    yield* part.kind === 'file'
-      ? encodeFile(part.path, part.file, count, onSum)
-      : encodeCommand(part.open, part.file, count, onSum);
-  }
-
-  yield encodeJsonFrame(MOVE_FRAMES.end, {});
-}
-
-// The header as JSON: a warm move's snapshot record goes as meta.json holds
-// it, its sessions and services in the agent's own JSON form
-function encodeHeader(header: Readonly<MoveHeader>): unknown {
-  if (header.warm === null) {
-    return header;
-  }
-
-  return { ...header, warm: { ...header.warm, meta: encodeSnapshotMeta(header.warm.meta) } };
-}
-
 // a public imp's credential and DNS record belong to this host's domain
 function buildPublicError(name: string) {
   return new ORPCError('PRECONDITION_FAILED', {
@@ -293,227 +128,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     return imp;
   };
 
-  // What a send carries after the header, in order: the image (when asked),
-  // then each checkpoint oldest first and the disk, as files or as streams
-  const openParts = async (
-    imp: ImpRecord,
-    mode: MoveMode,
-    isImageIncluded: boolean,
-    warm: WarmParts | null,
-  ): Promise<OpenedParts> => {
-    const opened = await openDiskParts(imp, mode, isImageIncluded);
-
-    if (warm === null) {
-      return opened;
-    }
-
-    // after the disk: the drive the snapshot reopens, then its two files
-    const paths = deps.storage.resolveImpPaths(imp.id);
-
-    const memory: StreamPart[] = [
-      ...(warm.isDriveIncluded && warm.meta.systemDrivePath !== undefined
-        ? [
-            {
-              kind: 'file' as const,
-              path: warm.meta.systemDrivePath,
-              file: { kind: 'system-drive' as const, sizeBytes: 0 },
-            },
-          ]
-        : []),
-      { kind: 'file', path: paths.vmstate, file: { kind: 'vmstate', sizeBytes: 0 } },
-      { kind: 'file', path: paths.memFile, file: { kind: 'mem', sizeBytes: 0 } },
-    ];
-
-    return { ...opened, parts: [...opened.parts, ...memory] };
-  };
-
-  const openDiskParts = async (
-    imp: ImpRecord,
-    mode: MoveMode,
-    isImageIncluded: boolean,
-  ): Promise<OpenedParts> => {
-    const image = await findImageById(deps.db, imp.imageId);
-
-    if (image === undefined) {
-      throw new Error(`${imp.name} has no image row`);
-    }
-
-    const listed = await listCheckpoints(deps.db, imp.id);
-
-    const checkpoints = listed.toReversed();
-    const imagePaths = buildImagePaths(deps.dataDir, image.digest);
-
-    const parts: StreamPart[] = isImageIncluded
-      ? [
-          { kind: 'file', path: imagePaths.rootfs, file: { kind: 'image-rootfs', sizeBytes: 0 } },
-          { kind: 'file', path: imagePaths.config, file: { kind: 'image-config', sizeBytes: 0 } },
-        ]
-      : [];
-
-    const ids = checkpoints.map((checkpoint) => checkpoint.id);
-
-    const source = await deps.storage.openMoveSource(imp.id, ids, mode);
-
-    if (source.kind === 'files') {
-      for (const [index, path] of source.checkpointPaths.entries()) {
-        parts.push({ kind: 'file', path, file: { kind: 'checkpoint', index, sizeBytes: 0 } });
-      }
-
-      parts.push({ kind: 'file', path: source.diskPath, file: { kind: 'disk', sizeBytes: 0 } });
-
-      return { parts, streams: null, estimateBytes: null, close: source.close };
-    }
-
-    const streams = source.steps.map((step) => ({
-      checkpoint: step.checkpointId === null ? null : ids.indexOf(step.checkpointId),
-      dataset: step.dataset,
-      base: step.base,
-    }));
-
-    for (const [index, step] of source.steps.entries()) {
-      parts.push({
-        kind: 'command',
-        open: step.open,
-        file: { kind: 'zfs-stream', index, sizeBytes: 0 },
-      });
-    }
-
-    const estimateBytes = source.steps.reduce((sum, step) => sum + step.estimateBytes, 0);
-
-    return { parts, streams, estimateBytes, close: source.close };
-  };
-
-  // A close that fails leaves the move snapshot to the GC: logged, so it
-  // never hides the error the send itself ended with
-  const removeParts = async (opened: OpenedParts): Promise<void> => {
-    try {
-      await opened.close();
-    } catch (error) {
-      deps.log(`impd: move: closing the source's parts failed: ${readErrorMessage(error)}`);
-    }
-  };
-
-  // the bytes a send carries: the files' data, and the streams' estimate
-  // with room to spare
-  const countBytes = async (
-    imp: ImpRecord,
-    mode: MoveMode,
-    meta: SnapshotMeta | null,
-  ): Promise<number> => {
-    const warm = meta === null ? null : { meta, isDriveIncluded: true };
-
-    const opened = await openParts(imp, mode, true, warm);
-
-    try {
-      let bytes = 0;
-
-      for (const part of opened.parts) {
-        if (part.kind === 'file') {
-          bytes += await countDataBytes(part.path);
-        }
-      }
-
-      if (opened.estimateBytes !== null) {
-        bytes += Math.ceil(opened.estimateBytes * ESTIMATE_SLACK) + ESTIMATE_SLACK_BYTES;
-      }
-
-      return bytes;
-    } finally {
-      await removeParts(opened);
-    }
-  };
-
-  const buildHeader = async (
-    imp: ImpRecord,
-    isImageIncluded: boolean,
-    streams: MoveHeader['streams'],
-    warm: WarmParts | null,
-  ): Promise<MoveHeader> => {
-    const image = await findImageById(deps.db, imp.imageId);
-
-    if (image === undefined) {
-      throw new Error(`${imp.name} has no image row`);
-    }
-
-    const listed = await listCheckpoints(deps.db, imp.id);
-
-    const checkpoints = listed.toReversed();
-
-    const egress = await deps.egress.readPolicy(imp.name);
-    const grants = await deps.grants.listGrantDetails(imp.name);
-    const leases = await buildMovedLeases(deps, imp);
-
-    return {
-      version: 1,
-      imp: {
-        id: imp.id,
-        name: imp.name,
-        vcpus: imp.vcpus,
-        memoryMib: imp.memoryMib,
-        maxMemoryMib: imp.maxMemoryMib,
-        httpPort: imp.httpPort,
-        diskBytes: imp.diskBytes,
-        cpu: imp.cpu,
-        egress: { mode: egress.mode, allow: [...egress.allow] },
-        grants: grants.filter((grant) => grant.filter === null).map((grant) => grant.secret),
-        filteredGrants: grants.flatMap((grant) =>
-          grant.filter === null ? [] : [{ secret: grant.secret, filter: grant.filter }],
-        ),
-        isIdentityResetPending: imp.isIdentityResetPending,
-        isDiskGrowPending: imp.isDiskGrowPending,
-        isBackedUp: imp.isBackedUp,
-        coldBoots: await listColdBoots(deps.db, imp.id),
-        leases,
-      },
-      image: {
-        name: image.name,
-        ref: image.ref,
-        digest: image.digest,
-        sizeBytes: image.sizeBytes,
-        source: image.source,
-        sourceImp: image.sourceImp,
-        isIncluded: isImageIncluded,
-      },
-      checkpoints: checkpoints.map((checkpoint) => ({
-        label: checkpoint.label,
-        createdAt: checkpoint.createdAt,
-        diskBytes: checkpoint.diskBytes,
-      })),
-      streams,
-      warm: warm === null ? null : await buildWarmHeader(deps, imp, warm),
-    };
-  };
-
-  const sendToPeer = (
-    peer: string,
-    path: string,
-    ticket: string,
-    init: PeerRequest = {},
-  ): Promise<Response> => {
-    const { extraHeaders, ...rest } = init;
-    const ms = path === MOVE_PATHS.receive ? PEER_DEADLINES_MS.stream : PEER_DEADLINES_MS.control;
-
-    // a redirect could send the ticket somewhere else: it fails instead
-    return sendLongRequest(
-      new URL(path, peer).toString(),
-      {
-        method: 'POST',
-        redirect: 'manual',
-        ...rest,
-        headers: { ...buildTicketHeader(ticket), ...extraHeaders },
-      },
-      {
-        deadline: {
-          ms,
-          buildError: () =>
-            new Error(`${path}: the target sent no answer in ${String(ms / 60_000)} minutes`),
-        },
-        ...(deps.startPeerDeadline !== undefined && { startTimer: deps.startPeerDeadline }),
-        ...(deps.fetch !== undefined && { send: deps.fetch }),
-      },
-    );
-  };
-
   // The commit, then the source's copy goes: whenever the target says the
   // imp is live there, whether on this call or one before a crash
   const runCommit = async (imp: ImpRecord, peer: string, ticket: string): Promise<void> => {
@@ -523,7 +137,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       );
     });
 
-    const response = await sendToPeer(peer, MOVE_PATHS.commit, ticket);
+    const response = await sendToPeer(deps, peer, MOVE_PATHS.commit, ticket);
     const answer = await requireOk(response, 'commit');
 
     const reply = MoveCommitReplySchema.parse(answer);
@@ -546,111 +160,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     deps.log(`impd: move: ${imp.name}: committed on ${peer}; the copy here is gone`);
   };
 
-  const runSend = async (imp: ImpRecord, target: SendTarget, progress: SendProgress) => {
-    const peer = target.peer;
-    const ticket = target.ticket;
-    const secret = parseTicket(ticket)?.secret ?? '';
-    const signal = progress.signal;
-
-    const image = await findImageById(deps.db, imp.imageId);
-
-    const meta = target.isWarm ? requireSnapshotMeta(deps, imp) : null;
-
-    const offer = await sendToPeer(peer, MOVE_PATHS.offer, ticket, {
-      body: JSON.stringify({
-        imageDigest: image?.digest ?? '',
-        ...(meta !== null && { systemDrive: meta.systemDrive }),
-      }),
-      signal,
-      extraHeaders: { 'content-type': 'application/json' },
-    });
-
-    const offered = await requireOk(offer, 'offer');
-
-    const reply = MoveOfferReplySchema.parse(offered);
-
-    if (target.mode === 'zfs' && reply.storage !== 'zfs') {
-      throw new Error('the target is not on ZFS any more; prepare the move again');
-    }
-
-    // a target from before elastic memory would land the imp at a fixed size
-    if (imp.maxMemoryMib > imp.memoryMib && !reply.keepsMaxMemory) {
-      throw new OfferRefusalError(
-        "the target's impd predates elastic memory and would drop the imp's max memory; upgrade it first",
-      );
-    }
-
-    await requireLeasesKept(deps, imp, reply.keepsLeases);
-
-    // a target from before the setting would put the imp's disk in its backups
-    if (!imp.isBackedUp && !reply.keepsBackupOff) {
-      throw new OfferRefusalError(
-        "the target's impd predates imps left out of backups and would back this one up; upgrade it first",
-      );
-    }
-
-    // a move never changes the policy, either way
-    const policy = await deps.egress.readPolicy(imp.name);
-
-    if (EGRESS_MODE_TRAITS[policy.mode].isPublic && !reply.keepsPublicEgress) {
-      throw new OfferRefusalError(
-        "the target's impd predates the public egress policy and would receive the imp as none; upgrade it first",
-      );
-    }
-
-    const warm = meta === null ? null : { meta, isDriveIncluded: reply.needsSystemDrive };
-
-    const opened = await openParts(imp, target.mode, reply.needsImage, warm);
-
-    const sent: SentFile[] = [];
-
-    try {
-      const header = await buildHeader(imp, reply.needsImage, opened.streams, warm);
-
-      const frames = encodeStream(header, opened.parts, progress.onData, (file) => {
-        sent.push(file);
-      });
-
-      await sendInParts(
-        frames,
-        async (part, body) => {
-          const sentPart = await sendToPeer(peer, MOVE_PATHS.receive, ticket, {
-            body,
-            duplex: 'half',
-            signal,
-            extraHeaders: { [MOVE_PART_HEADER]: String(part) },
-          });
-
-          await requireOk(sentPart, `part ${String(part)}`);
-        },
-        deps.partBytes,
-      );
-    } finally {
-      await removeParts(opened);
-    }
-
-    const response = await sendToPeer(peer, MOVE_PATHS.receive, ticket, {
-      signal,
-      extraHeaders: { [MOVE_FINISH_HEADER]: '1' },
-    });
-
-    const answer = await requireOk(response, 'receive');
-
-    const receipt = ReceiptSchema.parse(answer);
-    const body = readReceipt(receipt, secret);
-
-    if (body === null) {
-      throw new Error('the receipt is not signed with this ticket');
-    }
-
-    checkReceiptFiles(body, imp, sent);
-
-    // from here both hosts hold the imp, and neither may wake it
-    await updateMoveSend(deps.db, imp.id, { receipt: JSON.stringify(receipt) });
-    await updateImpMove(deps.db, imp.id, 'moved');
-    await runCommit(imp, peer, ticket);
-  };
-
   // in the background, so a target that is down never holds up impd's start
   const runCommitAfterRestart = async (imp: ImpRecord, peer: string, ticket: string) => {
     try {
@@ -658,31 +167,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     } catch (error) {
       deps.log(`impd: move: ${imp.name}: commit after restart: ${readErrorMessage(error)}`);
     }
-  };
-
-  // The target's answer to an abort. Before the receipt it cannot have
-  // committed, so a ticket it no longer knows means it holds nothing.
-  const sendAbort = async (
-    imp: ImpRecord,
-    peer: string,
-    ticket: string,
-  ): Promise<'aborted' | 'committed'> => {
-    const response = await sendToPeer(peer, MOVE_PATHS.abort, ticket);
-    const answer = await readJsonBody(response);
-
-    const reply = MoveCommitReplySchema.safeParse(answer);
-
-    if (reply.success && reply.data.isCommitted) {
-      return 'committed';
-    }
-
-    const isForgotten = response.status === 401 && imp.moveState === 'sending';
-
-    if (response.ok || isForgotten) {
-      return 'aborted';
-    }
-
-    throw new Error(`abort: the target answered ${String(response.status)}`);
   };
 
   const removeMark = async (imp: ImpRecord): Promise<void> => {
@@ -705,7 +189,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     }
 
     try {
-      await sendAbort(imp, peer, ticket);
+      await sendMoveAbort(deps, imp, peer, ticket);
     } catch (error) {
       const message = `the target did not confirm the abort (${readErrorMessage(error)}); run impz move ${imp.name} <host> --abort`;
 
@@ -744,12 +228,14 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
     const run = async (): Promise<void> => {
       try {
-        await runSend(imp, target, {
+        await runMoveSend(deps, imp, target, {
           signal: task.abort.signal,
           onData: (bytes) => {
             task.sentBytes += bytes;
           },
         });
+
+        await runCommit(imp, peer, ticket);
 
         task.isDone = true;
       } catch (error) {
@@ -815,7 +301,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     const isZfs = deps.storage.kind === 'zfs' && options.targetStorage === 'zfs';
     const mode: MoveMode = isZfs ? 'zfs' : 'files';
 
-    const bytes = await countBytes(imp, mode, meta);
+    const bytes = await countMoveBytes(deps, imp, mode, meta);
 
     await writeMoveSend(deps.db, {
       imp_id: imp.id,
@@ -1051,7 +537,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       const isMarked = imp.moveState === 'sending' || imp.moveState === 'moved';
 
       if (isMarked && peer !== null && ticket !== null) {
-        const outcome = await withPeerError(() => sendAbort(imp, peer, ticket));
+        const outcome = await withPeerError(() => sendMoveAbort(deps, imp, peer, ticket));
 
         // the target committed: the copy here is the one to go
         if (outcome === 'committed') {
