@@ -71,17 +71,17 @@ These steps are done for `zgeoff/impz`. They are here for a new repository, or t
    name, not the full slug. Without it, or without the App, the `tap` job is skipped and every other
    job still runs.
 4. **npm.** Trusted publishing can only be set up for a package that exists, so a new package's
-   first publish is by hand:
+   first publish is by hand, from a machine logged in with `npm login`:
 
    ```sh
-   npm login
-   scripts/release/first-publish-client.sh
+   tarball=$(scripts/release/pack-client.sh)
+   scripts/release/check-client-package.sh "$tarball"
+   npm publish "$tarball" --access public
    ```
 
-   The script publishes the current version, then prints the last two steps: add the trusted
-   publisher on npmjs.com (workflow `release.yml`), and set the Actions variable
-   `NPM_PUBLISH_ENABLED` to `true`. From then on each release publishes with OIDC, and no npm token
-   lives in CI.
+   Then add the trusted publisher on npmjs.com (workflow `release.yml`), and set the Actions
+   variable `NPM_PUBLISH_ENABLED` to `true`. From then on each release publishes with OIDC, and no
+   npm token lives in CI.
 
 ## Dry run
 
