@@ -1,4 +1,4 @@
-import { waitFor } from '@impz/test-utils/wait-for'; // oxlint-disable-line no-restricted-imports -- a test harness outside test-utils/; GEO-363 moves it to @impz/daemon/testing
+import { waitFor } from '@impz/test-utils/wait-for'; // oxlint-disable-line zgeoff/import-zones -- a test harness outside test-utils/; GEO-363 moves it to @impz/daemon/testing
 
 // 'done' or 'failed' once the promise settles, 'hung' when it is still
 // pending after `ms` of polling its state, read on `clock`
