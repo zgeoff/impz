@@ -1171,7 +1171,7 @@ export const MIGRATIONS: Record<string, Migration> = {
           .execute();
 
         // the foreign key kept every row's imp, so each finds its name; a row
-        // in a database written with the keys off keeps its id as its name
+        // that outlived its imp with the keys off takes its imp id as its name
         await sql`
           INSERT INTO broker_audit_kept
             (id, imp_id, imp_name, secret_name, at, method, host, path, status, request_bytes,

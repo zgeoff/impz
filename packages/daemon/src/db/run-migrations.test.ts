@@ -624,6 +624,43 @@ test('#runMigrations keeps every broker audit row with its imp’s name in the k
   ]);
 });
 
+test('#runMigrations keeps a broker audit row whose imp is gone, under its imp id, in the kept-audit migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '035_drop_old_oauth');
+
+  // a row an impd at 035 left with the foreign keys off, its imp gone
+  await sql`PRAGMA foreign_keys = OFF`.execute(db);
+
+  await sql`INSERT INTO broker_audit (id, imp_id, secret_name, at, method, host, path, status,
+    request_bytes, response_bytes, duration_ms, reason)
+    VALUES (4, 'gone', 'gh', 1, 'GET', 'api.github.com', '/user', 200, 2, 3, 5, NULL)`.execute(db);
+
+  await sql`PRAGMA foreign_keys = ON`.execute(db);
+
+  await runMigrations(db);
+
+  const rows = await db.selectFrom('broker_audit').selectAll().execute();
+
+  expect(rows).toStrictEqual([
+    {
+      id: 4,
+      imp_id: 'gone',
+      imp_name: 'gone',
+      secret_name: 'gh',
+      at: 1,
+      method: 'GET',
+      host: 'api.github.com',
+      path: '/user',
+      status: 200,
+      request_bytes: 2,
+      response_bytes: 3,
+      duration_ms: 5,
+      reason: null,
+    },
+  ]);
+});
+
 test('#runMigrations keeps an imp’s broker audit rows past its delete in the kept-audit migration', async () => {
   const db = createUnmigratedDatabase();
 

@@ -30,6 +30,7 @@ import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildStubBrokerGuest } from '../test-utils/build-stub-broker-guest';
 import { buildStubBrokerTokenEndpoint } from '../test-utils/build-stub-broker-token-endpoint';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
+import { buildStubHeldAnswer } from '../test-utils/build-stub-held-answer';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
 import { findFreePorts } from '../test-utils/find-free-ports';
 import { startStubBrokerGuestSocket } from '../test-utils/start-stub-broker-guest-socket';
@@ -342,25 +343,28 @@ test('it records the audit row of a request that ends after its imp is destroyed
   await ctx.impd.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_real' });
   await ctx.impd.broker.addGrant('dev', 'gh');
 
-  // the destroy lands while the upstream handles /slow, which answers once
-  // the imp's row is gone
-  const destroy: { done: Promise<unknown> } = { done: Promise.resolve() };
+  const held = buildStubHeldAnswer();
 
-  ctx.answers.set('/slow', async () => {
-    destroy.done = ctx.client.imps.destroy({ name: 'dev' });
+  ctx.answers.set('/slow', held.answer);
 
-    await waitFor(async () => {
-      const imp = await findImpByName(ctx.db, 'dev');
+  // the destroy lands while the upstream holds /slow, and the upstream
+  // answers once the imp's row is gone
+  const request = ctx.guest.curl('https://api.github.com/slow');
 
-      expect(imp).toBeUndefined();
-    });
+  await held.arrived;
 
-    return new Response('from upstream');
+  const destroy = ctx.client.imps.destroy({ name: 'dev' });
+
+  await waitFor(async () => {
+    const imp = await findImpByName(ctx.db, 'dev');
+
+    expect(imp).toBeUndefined();
   });
 
-  await ctx.guest.curl('https://api.github.com/slow');
+  held.release(new Response('from upstream'));
 
-  await destroy.done;
+  await request;
+  await destroy;
 
   const audit: unknown = await waitFor(async () => {
     const rows = await listAuditEntries(ctx.db, null, 10, null);

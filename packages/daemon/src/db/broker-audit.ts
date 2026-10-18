@@ -32,7 +32,7 @@ export interface NewAuditEntry {
 
 export async function writeAuditEntry(db: ImpDatabase, entry: NewAuditEntry): Promise<void> {
   await db.transaction().execute(async (trx) => {
-    const row = await trx
+    await trx
       .insertInto('broker_audit')
       .values({
         imp_id: entry.impId,
@@ -48,16 +48,7 @@ export async function writeAuditEntry(db: ImpDatabase, entry: NewAuditEntry): Pr
         duration_ms: entry.durationMs,
         reason: entry.reason,
       })
-      .returning('id')
-      .executeTakeFirstOrThrow();
-
-    // ids only grow, so the cut is one indexed delete, as in the API audit
-    if (row.id > AUDIT_ROWS) {
-      await trx
-        .deleteFrom('broker_audit')
-        .where('id', '<=', row.id - AUDIT_ROWS)
-        .execute();
-    }
+      .execute();
 
     const sameKind = entry.reason === null ? 'is' : 'is not';
 
@@ -79,6 +70,20 @@ export async function writeAuditEntry(db: ImpDatabase, entry: NewAuditEntry): Pr
         .where('reason', sameKind, null)
         .where('id', '<=', cut.id)
         .execute();
+    }
+
+    // counted in rows, not ids: the per-imp cuts leave gaps in the ids, and a
+    // cut by id would take other imps' rows with the table under its cap
+    const oldest = await trx
+      .selectFrom('broker_audit')
+      .select('id')
+      .orderBy('id', 'desc')
+      .offset(AUDIT_ROWS)
+      .limit(1)
+      .executeTakeFirst();
+
+    if (oldest !== undefined) {
+      await trx.deleteFrom('broker_audit').where('id', '<=', oldest.id).execute();
     }
   });
 }

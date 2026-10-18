@@ -27,7 +27,6 @@ import invariant from 'tiny-invariant';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import {
-  AUDIT_ROWS,
   AUDIT_ROWS_PER_IMP,
   listAuditEntries,
   listRefusedRequests,
@@ -967,54 +966,6 @@ test('it keeps the audit rows of a destroyed imp under its name', async () => {
   const left = await listAuditEntries(ctx.db, null, 10, null);
 
   expect(left.map((row) => [row.imp, row.path])).toStrictEqual([['dev', '/kept']]);
-});
-
-test('it removes the oldest audit rows across every imp past the table cap', async () => {
-  const ctx = await setupTest();
-
-  // a destroyed imp's row, then one whose id leaves room for one more under
-  // the cap
-  await ctx.db
-    .insertInto('broker_audit')
-    .values([
-      {
-        id: 1,
-        imp_id: 'gone',
-        imp_name: 'old',
-        secret_name: 'gh',
-        at: 1,
-        method: 'GET',
-        host: 'api.github.com',
-        path: '/oldest',
-        status: 200,
-        request_bytes: 0,
-        response_bytes: 0,
-        duration_ms: 0,
-        reason: null,
-      },
-      {
-        id: AUDIT_ROWS,
-        imp_id: 'gone',
-        imp_name: 'old',
-        secret_name: 'gh',
-        at: 2,
-        method: 'GET',
-        host: 'api.github.com',
-        path: '/older',
-        status: 200,
-        request_bytes: 0,
-        response_bytes: 0,
-        duration_ms: 0,
-        reason: null,
-      },
-    ])
-    .execute();
-
-  await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impName: 'dev', path: '/newest' }));
-
-  const rows = await listAuditEntries(ctx.db, null, 10, null);
-
-  expect(rows.map((row) => row.path)).toStrictEqual(['/newest', '/older']);
 });
 
 test('it reports a fork whose grants cannot be copied, and logs the cause', async () => {
