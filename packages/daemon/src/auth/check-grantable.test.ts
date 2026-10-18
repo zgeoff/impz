@@ -18,7 +18,6 @@ import { createImage } from '../db/images';
 import { findImpByName } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import { listTokenRecords } from '../db/tokens';
-import type { GrantableSecret } from '../db/tokens';
 import { createEd25519Key } from '../ssh/host-key';
 import {
   buildImagePaths,
@@ -2316,55 +2315,45 @@ test('it copies nothing of a secret taken off the list after the access check', 
 const GH_NOT_GRANTABLE: readonly GrantNotCopied[] = [{ secret: 'gh', reason: 'not-grantable' }];
 
 test.each([
-  ['its exact name and generation', (entry: GrantableSecret) => entry, []],
-  [
-    'a case variant of its name',
-    (entry: GrantableSecret) => ({ ...entry, name: 'GH' }),
-    GH_NOT_GRANTABLE,
-  ],
-  [
-    'its name with whitespace',
-    (entry: GrantableSecret) => ({ ...entry, name: 'gh ' }),
-    GH_NOT_GRANTABLE,
-  ],
-  [
-    'a unicode look-alike of its name',
-    (entry: GrantableSecret) => ({ ...entry, name: 'g\u04BB' }),
-    GH_NOT_GRANTABLE,
-  ],
-  ['an empty name', (entry: GrantableSecret) => ({ ...entry, name: '' }), GH_NOT_GRANTABLE],
-  [
-    'another generation',
-    (entry: GrantableSecret) => ({ ...entry, generation: `${entry.generation}-old` }),
-    GH_NOT_GRANTABLE,
-  ],
-])('it copies a fork’s grant only for a list entry with %s', async (_kind, toEntry, notCopied) => {
-  const ctx = await setupTest();
+  ['its exact name and generation', 'gh', '', []],
+  ['a case variant of its name', 'GH', '', GH_NOT_GRANTABLE],
+  ['its name with whitespace', 'gh ', '', GH_NOT_GRANTABLE],
+  ['a unicode look-alike of its name', 'g\u04BB', '', GH_NOT_GRANTABLE],
+  ['an empty name', '', '', GH_NOT_GRANTABLE],
+  ['another generation', 'gh', '-old', GH_NOT_GRANTABLE],
+])(
+  'it copies a fork’s grant only for a list entry with %s',
+  async (_kind, name, generationSuffix, notCopied) => {
+    const ctx = await setupTest();
 
-  await ctx.client.imps.create({ name: 'dev-a' });
-  await ctx.client.imps.create({ name: 'dev-b' });
-  await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-127-0' });
-  await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
+    await ctx.client.imps.create({ name: 'dev-a' });
+    await ctx.client.imps.create({ name: 'dev-b' });
+    await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-127-0' });
+    await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
 
-  await ctx.client.tokens.create({
-    name: 'agent',
-    scope: 'manage',
-    imps: ['dev-*'],
-    grantable: ['gh'],
-  });
+    await ctx.client.tokens.create({
+      name: 'agent',
+      scope: 'manage',
+      imps: ['dev-*'],
+      grantable: ['gh'],
+    });
 
-  const [token] = await listTokenRecords(ctx.db);
-  const from = await findImpByName(ctx.db, 'dev-a');
-  const to = await findImpByName(ctx.db, 'dev-b');
+    const [token] = await listTokenRecords(ctx.db);
+    const from = await findImpByName(ctx.db, 'dev-a');
+    const to = await findImpByName(ctx.db, 'dev-b');
 
-  invariant(token);
-  invariant(from);
-  invariant(to);
+    invariant(token);
+    invariant(from);
+    invariant(to);
 
-  const outcome = await createForkGrants(ctx.db, from.id, to.id, {
-    tokenId: token.id,
-    grantable: token.grantable.map((entry) => toEntry(entry)),
-  });
+    const outcome = await createForkGrants(ctx.db, from.id, to.id, {
+      tokenId: token.id,
+      grantable: token.grantable.map((entry) => ({
+        name,
+        generation: `${entry.generation}${generationSuffix}`,
+      })),
+    });
 
-  expect(outcome).toStrictEqual({ kind: 'copied', notCopied });
-});
+    expect(outcome).toStrictEqual({ kind: 'copied', notCopied });
+  },
+);
