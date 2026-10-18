@@ -1,7 +1,8 @@
-// One-off (GEO-1198): drops each `const { a, b } = ctx;` that no-pick-destructuring refuses and
-// writes `ctx.a` at each use, outside strings and comments. Run from the repo root:
-// `bun scripts/dev/qualify-context-members.ts <file>…`. A second run finds nothing to rewrite.
+// Drops each `const { a, b } = ctx;` that no-pick-destructuring refuses and writes `ctx.a` at
+// each use in its block, outside strings and comments. Run from the repo root:
+// `bun scripts/dev/transform-context-members.ts <file>…`. A second run finds nothing to rewrite.
 import { readFileSync, writeFileSync } from 'node:fs';
+import { parseArgs } from 'node:util';
 
 const DESTRUCTURE = /^\s*const \{ (?<names>[\w, ]+) \} = ctx;\n/gmv;
 
@@ -18,12 +19,53 @@ interface Scan {
   readonly modes: Mode[];
   quote: string;
   index: number;
+
+  // the `}` that closes the declaration's block was reached
+  isDone: boolean;
+}
+
+// Each `const { a } = ctx;` goes, and `a` becomes `ctx.a` from there to the
+// end of the block that holds the declaration, one declaration at a time.
+export function transformContextMembers(source: string): string {
+  let rewritten = source;
+
+  for (;;) {
+    const [match] = rewritten.matchAll(DESTRUCTURE);
+
+    if (match === undefined) {
+      return rewritten;
+    }
+
+    const names = new Set((match.groups?.['names'] ?? '').split(',').map((name) => name.trim()));
+
+    const start = match.index;
+    const rest = rewritten.slice(start + match[0].length);
+
+    const scan: Scan = {
+      source: rest,
+      names,
+      out: [],
+      brackets: [],
+      modes: ['code'],
+      quote: '',
+      index: 0,
+      isDone: false,
+    };
+
+    while (!scan.isDone && scan.index < scan.source.length) {
+      advance(scan);
+    }
+
+    rewritten = rewritten.slice(0, start) + scan.out.join('') + rest.slice(scan.index);
+  }
 }
 
 function main(): void {
-  for (const file of process.argv.slice(2)) {
+  const args = parseArgs({ args: Bun.argv.slice(2), allowPositionals: true });
+
+  for (const file of args.positionals) {
     const source = readFileSync(file, 'utf8');
-    const rewritten = transform(source);
+    const rewritten = transformContextMembers(source);
 
     if (rewritten !== source) {
       writeFileSync(file, rewritten);
@@ -31,43 +73,6 @@ function main(): void {
       console.log(`qualified ${file}`);
     }
   }
-}
-
-function transform(source: string): string {
-  const matches = [...source.matchAll(DESTRUCTURE)];
-  const [first] = matches;
-
-  if (first === undefined) {
-    return source;
-  }
-
-  const names = new Set(
-    matches.flatMap((match) =>
-      (match.groups?.['names'] ?? '').split(',').map((name) => name.trim()),
-    ),
-  );
-
-  const stripped = source.replaceAll(DESTRUCTURE, '');
-  const start = first.index;
-
-  // the function ends at the first `}` alone at the start of a line
-  const end = stripped.indexOf('\n}\n', start) + 1;
-
-  const scan: Scan = {
-    source: stripped.slice(start, end),
-    names,
-    out: [],
-    brackets: [],
-    modes: ['code'],
-    quote: '',
-    index: 0,
-  };
-
-  while (scan.index < scan.source.length) {
-    advance(scan);
-  }
-
-  return stripped.slice(0, start) + scan.out.join('') + stripped.slice(end);
 }
 
 function advance(scan: Scan): void {
@@ -142,6 +147,12 @@ function advanceCode(scan: Scan, char: string, next: string): void {
     return;
   }
 
+  if (')]}'.includes(char) && scan.brackets.length === 0) {
+    scan.isDone = true;
+
+    return;
+  }
+
   if ('([{'.includes(char)) {
     scan.brackets.push(char);
   }
@@ -159,11 +170,12 @@ function advanceCode(scan: Scan, char: string, next: string): void {
   }
 
   const before = findSignificant(scan.source, scan.index - 1, -1);
+  const isSpread = scan.source.slice(Math.max(0, scan.index - 3), scan.index) === '...';
   const after = findSignificant(scan.source, scan.index + word.length, 1);
   const isInObject = scan.brackets.at(-1) === '{' && '{,'.includes(before);
 
   // a name after a dot is another object's member, and one before a colon a key
-  if (!scan.names.has(word) || before === '.' || (isInObject && after === ':')) {
+  if (!scan.names.has(word) || (before === '.' && !isSpread) || (isInObject && after === ':')) {
     advanceBy(scan, word.length);
 
     return;
@@ -195,4 +207,6 @@ function advanceBy(scan: Scan, count: number): void {
   scan.index += count;
 }
 
-main();
+if (import.meta.main) {
+  main();
+}
