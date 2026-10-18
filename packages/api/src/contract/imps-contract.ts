@@ -1,64 +1,23 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
-import { CheckpointRefSchema } from '../schemas/checkpoint-schema';
+import { CheckpointRefSchema } from '../schemas/checkpoint-ref-schema';
+import { CpuLimitSchema } from '../schemas/cpu-limit-schema';
+import { CpuWeightSchema } from '../schemas/cpu-weight-schema';
 import { EgressPolicySchema } from '../schemas/egress-schema';
 import { EmptySchema } from '../schemas/empty-schema';
 import { ExposeInputSchema, ExposeResultSchema } from '../schemas/exposure-schema';
+import { ImpCreateInputSchema } from '../schemas/imp-create-input-schema';
 import { ForkResultSchema, ImpSchema } from '../schemas/imp-schema';
-import { NameInputSchema, NameSchema } from '../schemas/name-schema';
-import { MAX_CREATE_NETWORKS } from '../schemas/network-schema';
+import { NameInputSchema } from '../schemas/name-input-schema';
+import { NameSchema } from '../schemas/name-schema';
+import { PortSchema } from '../schemas/port-schema';
+import { VcpusSchema } from '../schemas/vcpus-schema';
 import { IMP_ERRORS } from './imp-errors';
 
 const base = oc.errors(IMP_ERRORS);
 
 // a sleep or stop that ends the imp's leases rather than fail with LEASED
 const ForceInputSchema = z.object({ name: NameSchema, force: z.boolean().optional() });
-
-// cores; below 0.1 the VMM thread starves and a boot times out. impd also
-// refuses more than the host has.
-const CpuLimitSchema = z.number().min(0.1);
-
-// the guest's cores, which the host's limit then shares out
-const VcpusSchema = z.int().min(1).max(32);
-
-// a TCP port in the guest
-const PortSchema = z.int().min(1).max(65_535);
-
-// cgroup v2 cpu.weight; 100 is the default share
-const CpuWeightSchema = z.int().min(1).max(10_000);
-
-// imps.create's input, which the MCP tool imp_create picks its fields from
-export const ImpCreateInputSchema = z.object({
-  name: NameSchema.optional(),
-  image: NameSchema.optional(),
-  vcpus: VcpusSchema.optional(),
-  memoryMib: z.int().min(128).optional(),
-
-  // what the guest may grow to under memory pressure, at most 4 ×
-  // memoryMib; memoryMib by default, which never grows
-  maxMemoryMib: z.int().min(128).optional(),
-
-  // at least the image's filesystem; IMP_DEFAULT_DISK_GIB by default
-  diskMib: z.int().min(1024).optional(),
-
-  // the guest port the wake proxy forwards HTTP to (default 8080)
-  httpPort: PortSchema.optional(),
-
-  // what the imp may reach directly (default open)
-  policy: EgressPolicySchema.optional(),
-
-  // null, the default, is no limit
-  cpuLimit: CpuLimitSchema.nullable().optional(),
-  cpuWeight: CpuWeightSchema.optional(),
-
-  // networks it joins, which must exist; host-wide callers only
-  networks: z.array(NameSchema).max(MAX_CREATE_NETWORKS).optional(),
-
-  // false leaves the imp's disk and checkpoints out of every backup
-  // run, for its life (default true); an impd without
-  // features.backupOptOut ignores it, so check that first
-  backup: z.boolean().optional(),
-});
 
 export const impsContract = {
   create: base.input(ImpCreateInputSchema).output(ImpSchema),

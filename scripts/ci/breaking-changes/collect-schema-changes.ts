@@ -1,28 +1,32 @@
-import type { MessageDirection } from '../../packages/api/src/protocols/build-protocol-schema';
-import { readInclusive } from './bound';
-import { collectBoundChange, collectBoundChanges } from './collect-bound-changes';
+import type { MessageDirection } from '../../../packages/api/src/protocols/build-protocol-schema';
+import { ANNOTATIONS } from './annotations';
+import { buildWithout } from './build-without';
+import { collectBoundChange } from './collect-bound-change';
+import { collectBoundChanges } from './collect-bound-changes';
 import type { Comparison } from './comparison';
-import { findTagKeys, formatTag, hasOtherTag } from './find-tag-keys';
-import { formatChange, formatSides } from './format-change';
-import { formatValue, formatValues } from './format-value';
-import { ANNOTATIONS, isAnything } from './is-anything';
+import { findRef } from './find-ref';
+import { findTagKeys } from './find-tag-keys';
+import { formatChange } from './format-change';
+import { formatSides } from './format-sides';
+import { formatTag } from './format-tag';
+import { formatValue } from './format-value';
+import { formatValues } from './format-values';
+import { hasOtherTag } from './has-other-tag';
+import { isAnything } from './is-anything';
+import { isSchemaObject } from './is-schema-object';
 import { isValueAccepted } from './is-value-accepted';
+import { JSON_TYPES } from './json-types';
 import { mergeIntersection } from './merge-intersection';
-import type { Schema, SchemaObject } from './read-schema';
-import {
-  JSON_TYPES,
-  buildWithout,
-  findRef,
-  isSchemaObject,
-  readBranches,
-  readSchema,
-  readSchemaList,
-  readSchemaMap,
-  readStrings,
-  readTypes,
-  readValues,
-} from './read-schema';
+import { readBranches } from './read-branches';
+import { readInclusive } from './read-inclusive';
+import { readSchema } from './read-schema';
+import { readSchemaList } from './read-schema-list';
+import { readSchemaMap } from './read-schema-map';
+import { readStrings } from './read-strings';
+import { readTypes } from './read-types';
+import { readValues } from './read-values';
 import { resolveRef } from './resolve-ref';
+import type { Schema, SchemaObject } from './schema';
 
 // Every value of the narrow side must pass the wide side: base's into head's
 // for what impd reads, head's into base's for what it sends.

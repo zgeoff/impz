@@ -1,16 +1,14 @@
-import type { MessageDirection } from '../../packages/api/src/protocols/build-protocol-schema';
-import { ANNOTATIONS } from './is-anything';
-import type { Schema, SchemaObject } from './read-schema';
-import {
-  JSON_TYPES,
-  buildWithout,
-  isSchemaObject,
-  readSchema,
-  readSchemaList,
-  readSchemaMap,
-  readTypes,
-} from './read-schema';
+import type { MessageDirection } from '../../../packages/api/src/protocols/build-protocol-schema';
+import { ANNOTATIONS } from './annotations';
+import { buildWithout } from './build-without';
+import { isSchemaObject } from './is-schema-object';
+import { JSON_TYPES } from './json-types';
+import { readSchema } from './read-schema';
+import { readSchemaList } from './read-schema-list';
+import { readSchemaMap } from './read-schema-map';
+import { readTypes } from './read-types';
 import { resolveRef } from './resolve-ref';
+import type { Schema, SchemaObject } from './schema';
 
 // an intersection, with its siblings, as the fewest schemas a value must pass at once
 export function mergeIntersection(

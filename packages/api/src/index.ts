@@ -89,7 +89,7 @@ export type { ImageBuildRun, ImageBuildSource } from './schemas/image-build-run-
 export { ImageSchema, ImageSourceSchema } from './schemas/image-schema';
 export type { Image, ImageSource } from './schemas/image-schema';
 export { CheckpointCreateInputSchema, impContract } from './contract/imp-contract';
-export { ImpCreateInputSchema } from './contract/imps-contract';
+export { ImpCreateInputSchema } from './schemas/imp-create-input-schema';
 export type { ImpContract } from './contract/imp-contract';
 export { IMP_ERRORS } from './contract/imp-errors';
 export type { ForbiddenReason } from './contract/imp-errors';

@@ -7,7 +7,9 @@ import { defineCommand } from '../cli/define-command';
 import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
 import { toSignalExitCode } from '../cli/to-signal-exit-code';
-import { formatCpuUse, formatDiskUse, formatImp } from '../output/format-imps';
+import { formatCpuUse } from '../output/format-cpu-use';
+import { formatDiskUse } from '../output/format-disk-use';
+import { formatImp } from '../output/format-imp';
 import { formatOutput, formatTable } from '../output/format-output';
 import { parseCount } from '../parse/parse-size';
 

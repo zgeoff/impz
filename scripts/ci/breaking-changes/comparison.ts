@@ -1,5 +1,5 @@
-import type { MessageDirection } from '../../packages/api/src/protocols/build-protocol-schema';
-import type { Schema } from './read-schema';
+import type { MessageDirection } from '../../../packages/api/src/protocols/build-protocol-schema';
+import type { Schema } from './schema';
 
 export interface Comparison {
   readonly direction: MessageDirection;

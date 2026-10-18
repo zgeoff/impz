@@ -1,9 +1,5 @@
 import type { Comparison } from './comparison';
 
-export function formatChange(path: string, what: string): string {
-  return `${path === '' ? '' : ` ${path}`}: ${what}`;
-}
-
 // "base → head", whichever side of the comparison each one is
 export function formatSides<T>(
   comparison: Comparison,

@@ -1,7 +1,7 @@
 import type { ProtocolSchema } from '../../packages/api/src/protocols/build-protocol-schema';
 import type { JsonOutputSchema } from '../../packages/cli/src/output/build-json-output-schema';
-import { collectSchemaChanges } from './collect-schema-changes';
-import { formatValue } from './format-value';
+import { collectSchemaChanges } from './breaking-changes/collect-schema-changes';
+import { formatValue } from './breaking-changes/format-value';
 
 // The changes from base to head that break a client of the other version, by
 // the rules in docs/runbooks/releasing.md#breaking-changes.

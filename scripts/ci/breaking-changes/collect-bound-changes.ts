@@ -1,9 +1,12 @@
-import type { Bound, Side } from './bound';
-import { isWithin, readInclusive, readLower, readUpper } from './bound';
+import { collectBoundChange } from './collect-bound-change';
 import type { Comparison } from './comparison';
-import { formatChange, formatSides } from './format-change';
+import { formatChange } from './format-change';
+import { formatSides } from './format-sides';
 import { formatValue } from './format-value';
-import type { SchemaObject } from './read-schema';
+import { readInclusive } from './read-inclusive';
+import { readLower } from './read-lower';
+import { readUpper } from './read-upper';
+import type { SchemaObject } from './schema';
 
 export function collectBoundChanges(
   narrow: SchemaObject,
@@ -32,31 +35,4 @@ export function collectBoundChanges(
     ),
     ...(fitsStep ? [] : [formatChange(path, `multipleOf ${stepChange}`)]),
   ];
-}
-
-export function collectBoundChange(
-  name: string,
-  narrow: Bound | undefined,
-  wide: Bound | undefined,
-  side: Side,
-  path: string,
-  comparison: Comparison,
-): string[] {
-  if (wide === undefined || (narrow !== undefined && isWithin(narrow, wide, side))) {
-    return [];
-  }
-
-  const change = formatSides(comparison, narrow, wide, (bound) => formatBound(bound, side));
-
-  return [formatChange(path, `${name} ${change}`)];
-}
-
-function formatBound(bound: Bound | undefined, side: Side): string {
-  if (bound === undefined) {
-    return 'none';
-  }
-
-  const sign = side === 'lower' ? '>' : '<';
-
-  return `${bound.exclusive ? sign : `${sign}=`} ${String(bound.value)}`;
 }

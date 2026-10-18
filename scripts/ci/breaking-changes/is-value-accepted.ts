@@ -1,8 +1,14 @@
 import type { Bound, Side } from './bound';
-import { isWithin, readInclusive, readLower, readUpper } from './bound';
-import type { Schema, SchemaObject } from './read-schema';
-import { readBranches, readSchemaList, readTypes, readValues } from './read-schema';
+import { isWithin } from './is-within';
+import { readBranches } from './read-branches';
+import { readInclusive } from './read-inclusive';
+import { readLower } from './read-lower';
+import { readSchemaList } from './read-schema-list';
+import { readTypes } from './read-types';
+import { readUpper } from './read-upper';
+import { readValues } from './read-values';
 import { resolveRef } from './resolve-ref';
+import type { Schema, SchemaObject } from './schema';
 
 // a plain validator for the values of a `const` or an `enum`
 export function isValueAccepted(schemaRef: Schema, value: unknown, root: Schema): boolean {

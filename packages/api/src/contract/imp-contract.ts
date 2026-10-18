@@ -8,7 +8,8 @@ import {
   BackupRunSchema,
   BackupStatusSchema,
 } from '../schemas/backup-schema';
-import { CheckpointRefSchema, CheckpointSchema } from '../schemas/checkpoint-schema';
+import { CheckpointRefSchema } from '../schemas/checkpoint-ref-schema';
+import { CheckpointSchema } from '../schemas/checkpoint-schema';
 import { EmptySchema } from '../schemas/empty-schema';
 import { ImpEventSchema } from '../schemas/event-schema';
 import { FileContentSchema, FilePathSchema } from '../schemas/file-schema';
@@ -25,7 +26,8 @@ import {
   WarmHostSchema,
   WarmMoveSchema,
 } from '../schemas/move-schema';
-import { NameInputSchema, NameSchema } from '../schemas/name-schema';
+import { NameInputSchema } from '../schemas/name-input-schema';
+import { NameSchema } from '../schemas/name-schema';
 import { NetworkJoinSchema, NetworkSchema } from '../schemas/network-schema';
 import {
   ApprovalCodeSchema,

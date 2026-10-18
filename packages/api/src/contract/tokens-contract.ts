@@ -1,7 +1,8 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { EmptySchema } from '../schemas/empty-schema';
-import { NameInputSchema, NameSchema } from '../schemas/name-schema';
+import { NameInputSchema } from '../schemas/name-input-schema';
+import { NameSchema } from '../schemas/name-schema';
 import {
   GrantableSchema,
   GrantableUpdateSchema,
