@@ -28,7 +28,6 @@ import { requireOwnDrivePath, requireWarmMove, writeWarmFiles } from './check-wa
 import { COMMIT_WINDOW_MS } from './commit-window-ms';
 import { createByteCounter } from './create-byte-counter';
 import type { ByteCounter } from './create-byte-counter';
-import { isTicketedName } from './is-ticketed-name';
 import {
   FileEndSchema,
   MOVE_FRAMES,
@@ -45,6 +44,7 @@ import { MoveRequestError } from './move-request-error';
 import { buildReceipt, isSameHash } from './move-tickets';
 import type { ReceiptBody } from './move-tickets';
 import { removeStagedImp } from './remove-staged-imp';
+import { requireTicketedName } from './require-ticketed-name';
 import { writeMoveStreams } from './write-move-streams';
 
 const ID_ATTEMPTS = 5;
@@ -103,9 +103,7 @@ export async function readMoveStream(
   // source built the header, however long the disk then takes
   const headerAt = deps.now();
 
-  if (!isTicketedName(row.name, header.imp.name)) {
-    throw new MoveRequestError(403, `the ticket is for ${row.name}, not ${header.imp.name}`);
-  }
+  requireTicketedName(row.name, header.imp.name);
 
   if ((await findImpById(deps.db, header.imp.id)) !== undefined) {
     throw new MoveRequestError(409, `this host has an imp with id ${header.imp.id}`);
