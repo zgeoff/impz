@@ -13,7 +13,12 @@ import type { ImpPaths, SnapshotPaths } from '../storage/data-layout';
 import { BASE_BOOT_ARGS, VM_DEVICES, createMarks, setupVm } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
 import { createFirecrackerClient } from './firecracker-client';
-import type { HotplugState, InstanceState } from './firecracker-client';
+import type {
+  FirecrackerClient,
+  HotplugState,
+  InstanceState,
+  SnapshotType,
+} from './firecracker-client';
 import type { FoundVm, VmOwner } from './firecracker-process';
 import {
   buildFirecrackerCommand,
@@ -385,16 +390,30 @@ export function createVmRunner(
       createOwnedFile(files.memFilePath, owner);
       cgroup?.liftLimit();
 
+      // a woken VM writes only the pages it dirtied, over a copy of the file
+      // it woke from (docs/architecture/lifecycle/sleep-and-wake.md#sleep)
+      const baseStep = await writeSnapshotBase(api, paths.memFile, files.memFilePath);
+
+      if (baseStep !== null) {
+        setMark(baseStep);
+      }
+
+      const type: SnapshotType = baseStep === 'copyBase' ? 'Diff' : 'Full';
+
       // a pause that times out may still land: resume or kill either way
       try {
         await api.pause();
 
         setMark('pause');
 
-        await api.createSnapshot(files);
+        await api.createSnapshot(files, type);
       } catch (error) {
         rmSync(files.snapshotPath, { force: true });
         rmSync(files.memFilePath, { force: true });
+
+        // a snapshot that failed late may have cleared the dirty page log: with
+        // no file to copy, the next sleep takes a Full; the VM keeps its mapping
+        rmSync(paths.memFile, { force: true });
 
         try {
           await api.resume();
@@ -467,9 +486,10 @@ export function createVmRunner(
         const api = createFirecrackerClient(plan.paths.apiSocket);
 
         // the load binds the vsock socket; the seal comes before the guest runs
+        // the next sleep writes only the pages the guest dirties from here on
         await api.loadSnapshot(
           { snapshotPath: plan.paths.vmstate, memFilePath: plan.paths.memFile },
-          { resumeVm: false },
+          { resumeVm: false, isTrackingDirtyPages: true },
         );
 
         jails.seal(plan.paths, pid);
@@ -590,4 +610,29 @@ export function createVmRunner(
     buildTemplateVm: (plan) => buildTemplateVm(plan, jails, mergeWrapper),
     loadTemplateVm: (plan) => loadTemplateVm(plan, jails, mergeWrapper),
   };
+}
+
+// the copy runs under the imp's lock: a hung one costs the sleep a Full snapshot
+const BASE_COPY_TIMEOUT_MS = 120_000;
+
+// `base` copied over `memFile`, holes kept and blocks cloned where the
+// filesystem can, while the guest runs: it never writes into the file it maps
+async function writeSnapshotBase(
+  api: FirecrackerClient,
+  base: string,
+  memFile: string,
+): Promise<'copyBase' | 'copyBaseFailed' | null> {
+  const config = await api.loadMachineConfig().catch(() => null);
+
+  // a VM that does not track its dirty pages takes a Full snapshot
+  if (config?.isTrackingDirtyPages !== true) {
+    return null;
+  }
+
+  const copied = await runCommand(['cp', '--reflink=auto', '--sparse=always', base, memFile], {
+    signal: AbortSignal.timeout(BASE_COPY_TIMEOUT_MS),
+  });
+
+  // a Full snapshot then writes every page over what the copy left
+  return copied.exitCode === 0 ? 'copyBase' : 'copyBaseFailed';
 }

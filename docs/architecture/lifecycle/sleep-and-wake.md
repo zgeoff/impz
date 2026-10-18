@@ -23,8 +23,9 @@ is the only thing a crash has to get right.
    files.
 4. It waits for one of the host's sleep slots. A snapshot pushes the whole memory file through the
    host's page cache, and a few at a time keep a burst of sleeps from flooding it.
-5. It pauses the VM and has Firecracker write a full snapshot into new files. A failure here deletes
-   the new files and resumes the VM, and the imp stays awake.
+5. It pauses the VM and has Firecracker write a snapshot into new files: a full snapshot for a VM
+   that booted, and a diff snapshot for a woken one ([woken VMs](#the-sleep-of-a-woken-vm)). A
+   failure here deletes the new files and resumes the VM, and the imp stays awake.
 6. It kills Firecracker. The VM is paused and its state is on disk, so nothing needs a clean
    shutdown.
 7. It renames the new files over the old ones, digs holes in the memory file where the guest's pages
@@ -37,6 +38,26 @@ faults pages in from it, so the next sleep always writes new files and renames t
 
 The tap stays across a sleep, because the snapshot names it, and a container restart, which removes
 every tap, makes it again before the next wake.
+
+### The sleep of a woken VM
+
+A woken VM takes a diff snapshot, which writes only the pages the guest wrote since the wake. A full
+snapshot of a woken VM reads every page it never touched back from the old memory file, one disk
+read per page, so its sleep takes as long as the whole memory takes to read. The wake loads the
+snapshot with KVM's dirty page log on, and KVM spends guest CPU time recording each page the guest
+writes.
+
+Before the pause, impd copies the old memory file into the new one, with holes kept as holes and
+blocks shared where the filesystem clones them. The VM never writes into the file it maps, so the
+copy is whole while the guest runs. Firecracker then writes the dirty pages over the copy, and the
+new file holds the full memory, as a full snapshot would. A VM that tracks no dirty pages, such as
+one that booted cold or restored a template, takes a full snapshot. A copy that fails also leads to
+a full snapshot, which writes every page over what the copy left.
+
+A diff snapshot that fails can fail after Firecracker cleared its dirty page log, and a later diff
+would then miss the pages that log held. So when any snapshot fails, impd removes the memory file
+the VM woke from, if there is one, before it resumes the VM. The VM keeps its private mapping of
+that file. The next sleep has no file to copy and takes a full snapshot.
 
 ## Wake
 

@@ -8,6 +8,9 @@ const InstanceInfoSchema = z.object({ state: z.enum(['Not started', 'Running', '
 
 export type InstanceState = z.infer<typeof InstanceInfoSchema>['state'];
 
+// a VM that does not track the pages it dirties leaves the field out
+const MachineConfigSchema = z.object({ track_dirty_pages: z.boolean().optional() });
+
 interface BootSource {
   readonly kernelImagePath: string;
   readonly bootArgs: string;
@@ -65,6 +68,10 @@ interface BalloonStats {
   readonly availableMib: number;
 }
 
+// Full writes every page of the guest; Diff writes only the pages dirtied since
+// the load, over a mem file that already holds the rest
+export type SnapshotType = 'Full' | 'Diff';
+
 interface SnapshotFiles {
   readonly snapshotPath: string;
   readonly memFilePath: string;
@@ -81,11 +88,21 @@ interface SnapshotOverrides {
 interface LoadOptions {
   readonly resumeVm: boolean;
   readonly overrides?: SnapshotOverrides;
+
+  // KVM logs the pages the guest writes, so the VM's next sleep can take a Diff
+  readonly isTrackingDirtyPages?: boolean;
+}
+
+interface MachineState {
+  readonly isTrackingDirtyPages: boolean;
 }
 
 export interface FirecrackerClient {
   readonly putBootSource: (source: BootSource) => Promise<void>;
   readonly putMachineConfig: (config: MachineConfig) => Promise<void>;
+
+  // a loaded VM answers with what its load set
+  readonly loadMachineConfig: () => Promise<MachineState>;
   readonly putDrive: (drive: Drive) => Promise<void>;
 
   // after boot: Firecracker reads the file's size again and tells the guest
@@ -109,8 +126,8 @@ export interface FirecrackerClient {
   readonly pause: () => Promise<void>;
   readonly resume: () => Promise<void>;
 
-  // a full snapshot; pause the VM first
-  readonly createSnapshot: (files: SnapshotFiles) => Promise<void>;
+  // pause the VM first; a Diff needs a VM that tracks its dirty pages
+  readonly createSnapshot: (files: SnapshotFiles, type: SnapshotType) => Promise<void>;
 
   // only on a fresh Firecracker process, before any other configuration
   readonly loadSnapshot: (files: SnapshotFiles, options: LoadOptions) => Promise<void>;
@@ -193,6 +210,13 @@ export function createFirecrackerClient(
       }),
     putMachineConfig: (config) =>
       sendPut('/machine-config', { vcpu_count: config.vcpuCount, mem_size_mib: config.memSizeMib }),
+    loadMachineConfig: async () => {
+      const text = await sendRequest('GET', '/machine-config');
+
+      const parsed = MachineConfigSchema.parse(JSON.parse(text));
+
+      return { isTrackingDirtyPages: parsed.track_dirty_pages === true };
+    },
     putDrive: (drive) =>
       sendPut(`/drives/${drive.driveId}`, {
         drive_id: drive.driveId,
@@ -256,11 +280,11 @@ export function createFirecrackerClient(
     resume: async () => {
       await sendRequest('PATCH', '/vm', { state: 'Resumed' });
     },
-    createSnapshot: (files) =>
+    createSnapshot: (files, type) =>
       sendPut(
         '/snapshot/create',
         {
-          snapshot_type: 'Full',
+          snapshot_type: type,
           snapshot_path: files.snapshotPath,
           mem_file_path: files.memFilePath,
           sync_snapshot_files: true,
@@ -274,6 +298,7 @@ export function createFirecrackerClient(
           snapshot_path: files.snapshotPath,
           mem_backend: { backend_type: 'File', backend_path: files.memFilePath },
           resume_vm: options.resumeVm,
+          ...(options.isTrackingDirtyPages === true && { track_dirty_pages: true }),
           ...(options.overrides !== undefined && {
             network_overrides: [
               { iface_id: options.overrides.ifaceId, host_dev_name: options.overrides.hostDevName },

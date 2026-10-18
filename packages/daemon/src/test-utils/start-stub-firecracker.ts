@@ -2,6 +2,7 @@ import { expect, onTestFinished } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
+import type { StubGuestMemory } from './stub-guest-memory-schema';
 
 interface StubFirecrackerOptions {
   readonly apiSocket: string;
@@ -14,6 +15,9 @@ interface StubFirecrackerOptions {
 
   // true: log each call's body after its path
   readonly isLoggingBodies?: boolean;
+
+  // the guest memory a snapshot writes; without it a snapshot writes no files
+  readonly memory?: Readonly<StubGuestMemory>;
 }
 
 // The command that runs run-stub-firecracker.ts in place of Firecracker,
@@ -30,6 +34,7 @@ export function buildStubFirecrackerArgv(options: Readonly<StubFirecrackerOption
     options.logPath,
     failures.length === 0 ? 'none' : failures.join(','),
     options.isLoggingBodies === true ? 'bodies' : 'lines',
+    options.memory === undefined ? 'none' : JSON.stringify(options.memory),
   ];
 }
 
