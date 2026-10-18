@@ -2315,15 +2315,15 @@ test('it copies nothing of a secret taken off the list after the access check', 
 const GH_NOT_GRANTABLE: readonly GrantNotCopied[] = [{ secret: 'gh', reason: 'not-grantable' }];
 
 test.each([
-  ['its exact name and generation', 'gh', '', []],
-  ['a case variant of its name', 'GH', '', GH_NOT_GRANTABLE],
-  ['its name with whitespace', 'gh ', '', GH_NOT_GRANTABLE],
-  ['a unicode look-alike of its name', 'g\u04BB', '', GH_NOT_GRANTABLE],
-  ['an empty name', '', '', GH_NOT_GRANTABLE],
-  ['another generation', 'gh', '-old', GH_NOT_GRANTABLE],
+  ['its exact name and generation', 'gh', '', [], ['gh']],
+  ['a case variant of its name', 'GH', '', GH_NOT_GRANTABLE, []],
+  ['its name with whitespace', 'gh ', '', GH_NOT_GRANTABLE, []],
+  ['a unicode look-alike of its name', 'g\u04BB', '', GH_NOT_GRANTABLE, []],
+  ['an empty name', '', '', GH_NOT_GRANTABLE, []],
+  ['another generation', 'gh', '-old', GH_NOT_GRANTABLE, []],
 ])(
-  'it copies a fork’s grant only for a list entry with %s',
-  async (_kind, name, generationSuffix, notCopied) => {
+  'it copies a fork’s grant to the destination only for a list entry with %s',
+  async (_kind, name, generationSuffix, notCopied, granted) => {
     const ctx = await setupTest();
 
     await ctx.client.imps.create({ name: 'dev-a' });
@@ -2354,6 +2354,9 @@ test.each([
       })),
     });
 
+    const devBGrants = await ctx.client.grants.list({ name: 'dev-b' });
+
     expect(outcome).toStrictEqual({ kind: 'copied', notCopied });
+    expect(devBGrants).toStrictEqual(granted);
   },
 );
