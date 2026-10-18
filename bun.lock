@@ -279,7 +279,7 @@
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "@zgeoff/bun-test-extended": "0.1.0",
-    "@zgeoff/bun-test-react": "0.1.0",
+    "@zgeoff/bun-test-react": "0.2.1",
     "@zgeoff/format-codemod": "0.1.0",
     "@zgeoff/oxlint-config": "0.2.5",
     "acme-client": "5.4.0",
@@ -1133,7 +1133,7 @@
 
     "@zgeoff/bun-test-extended": ["@zgeoff/bun-test-extended@0.1.0", "", { "dependencies": { "jest-extended": "7.0.0", "jest-matcher-utils": "30.4.1" } }, "sha512-cGR7cagfrFDvLGLe+9S8c5wbKfNYbuwbkp1sXdQmlo3D2c8AkS0JKPvEod/YNxk4DanS3BUju2GE4ilkEySogA=="],
 
-    "@zgeoff/bun-test-react": ["@zgeoff/bun-test-react@0.1.0", "", { "dependencies": { "@happy-dom/global-registrator": "20.14.5", "@testing-library/jest-dom": "7.0.1", "happy-dom": "20.14.5" }, "peerDependencies": { "@testing-library/react": ">=16.0.0", "react": ">=19.0.0", "react-dom": ">=19.0.0", "zustand": ">=5.0.0" }, "optionalPeers": ["zustand"] }, "sha512-+WutmZNuhKBCxZ/HW3U0ARAZ2NbT9Hqwx2Uo6AXDa9RWOuSluiJcjJC/mHMSniXFIBWbTB5gQwSN1iGZ+ztETA=="],
+    "@zgeoff/bun-test-react": ["@zgeoff/bun-test-react@0.2.1", "", { "dependencies": { "@happy-dom/global-registrator": "20.14.5", "@testing-library/jest-dom": "7.0.1", "happy-dom": "20.14.5" }, "peerDependencies": { "@testing-library/react": ">=16.0.0", "react": ">=19.0.0", "react-dom": ">=19.0.0", "zustand": ">=5.0.0" }, "optionalPeers": ["zustand"] }, "sha512-PyttguyF542VNL3CikzklSXY2LGIeDRvbLqqOeVrjeENPOkBJKxvCfsqFaCOJJj31EU3uxM4eYqMhfiF5f1B3A=="],
 
     "@zgeoff/format-codemod": ["@zgeoff/format-codemod@0.1.0", "", { "dependencies": { "oxc-parser": "0.137.0" }, "bin": { "format-codemod": "dist/cli.js" } }, "sha512-WVP6d3iuuaKuYrGIuHLkTxjI3W2IQzeAq6TtUiZiz+uw4f2AF2q4GgKQ6czpz/89qgZXauvhl1Pcef1/NZl4Rg=="],
 
