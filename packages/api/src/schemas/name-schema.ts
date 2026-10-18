@@ -8,3 +8,5 @@ export const NameSchema = z
     /^[a-z][a-z0-9-]{0,30}$/u,
     'must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens',
   );
+
+export const NameInputSchema = z.object({ name: NameSchema });

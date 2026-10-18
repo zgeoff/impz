@@ -2,7 +2,8 @@ import type { SystemInfo } from '@impz/api';
 import { jsonArg } from '../args/common-args';
 import { defineCommand } from '../cli/define-command';
 import { runAction } from '../cli/run-action';
-import { formatBootStatus, formatHttps, formatImpInfo, formatJson } from '../output/format-output';
+import { formatImpInfo } from '../output/format-imps';
+import { formatBootStatus, formatHttps, formatJson } from '../output/format-output';
 
 export const infoCommand = defineCommand({
   name: 'info',

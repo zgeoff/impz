@@ -1,7 +1,8 @@
 import { jsonArg, nameArg } from '../args/common-args';
 import { defineCommand, defineGroup } from '../cli/define-command';
 import { runAction } from '../cli/run-action';
-import { formatImp, formatOutput } from '../output/format-output';
+import { formatImp } from '../output/format-imps';
+import { formatOutput } from '../output/format-output';
 import { parseSize } from '../parse/parse-size';
 
 const resizeCommand = defineCommand({

@@ -16,7 +16,6 @@ import {
   forkCommand,
   holdCommand,
   lsCommand,
-  newCommand,
   policyCommand,
   rmCommand,
   sleepCommand,
@@ -29,6 +28,7 @@ import { infoCommand } from '../commands/info';
 import { mcpCommand } from '../commands/mcp';
 import { moveCommand } from '../commands/move';
 import { netCommand } from '../commands/networks';
+import { newCommand } from '../commands/new';
 import { oauthCommand } from '../commands/oauth';
 import { proxyCommand } from '../commands/proxy';
 import {

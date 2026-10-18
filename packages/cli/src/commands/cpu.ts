@@ -7,13 +7,8 @@ import { defineCommand } from '../cli/define-command';
 import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
 import { toSignalExitCode } from '../cli/to-signal-exit-code';
-import {
-  formatCpuUse,
-  formatDiskUse,
-  formatImp,
-  formatOutput,
-  formatTable,
-} from '../output/format-output';
+import { formatCpuUse, formatDiskUse, formatImp } from '../output/format-imps';
+import { formatOutput, formatTable } from '../output/format-output';
 import { parseCount } from '../parse/parse-size';
 
 // how often `impz top` asks again when no event comes

@@ -2,7 +2,8 @@ import { authArgs } from '../args/auth-args';
 import { jsonArg, nameArg } from '../args/common-args';
 import { defineCommand } from '../cli/define-command';
 import { runAction } from '../cli/run-action';
-import { formatExposeResult, formatImp, formatOutput } from '../output/format-output';
+import { formatExposeResult, formatImp } from '../output/format-imps';
+import { formatOutput } from '../output/format-output';
 import { parsePublicAuth } from '../parse/parse-public-auth';
 
 export const exposeCommand = defineCommand({

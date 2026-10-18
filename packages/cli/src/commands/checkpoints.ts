@@ -3,7 +3,8 @@ import { defineCommand } from '../cli/define-command';
 import { dispatchVerb, listOperands } from '../cli/dispatch-verb';
 import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
-import { formatCheckpoints, formatImp, formatOutput } from '../output/format-output';
+import { formatImp } from '../output/format-imps';
+import { formatCheckpoints, formatOutput } from '../output/format-output';
 
 export const checkpointCommand = defineCommand({
   name: 'checkpoint',
