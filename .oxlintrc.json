@@ -48,7 +48,7 @@
     // off until GEO-1199 trims the functions that take more than 4 parameters
     "max-params": "off",
     // the package boundaries: a package imports only the packages below it, by name, and
-    // production code imports no test support; oxlintrc.test.ts checks that each one fails
+    // production code imports no test support
     "zgeoff/import-zones": [
       "error",
       {

@@ -59,8 +59,7 @@ docs/
 - Pin exact versions, with no `^` or `~` ranges. `bun add` saves exact versions through the `exact`
   setting in [`bunfig.toml`](bunfig.toml), so the rule covers hand-written edits.
 - The `zgeoff/import-zones` options in [`.oxlintrc.json`](.oxlintrc.json) hold the package
-  boundaries, and each entry's reason holds the fix. [`oxlintrc.test.ts`](oxlintrc.test.ts) checks
-  that each boundary still fails a forbidden import.
+  boundaries, and each entry's reason holds the fix.
 
 ## Commands
 
