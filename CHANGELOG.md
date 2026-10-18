@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.3](https://github.com/zgeoff/impz/compare/v2.5.2...v2.5.3) (2026-10-18)
+
+
+### Bug Fixes
+
+* **deps:** update module golang.org/x/term to v0.47.0 ([#513](https://github.com/zgeoff/impz/issues/513)) ([ed978e1](https://github.com/zgeoff/impz/commit/ed978e1910897d38f265325c9eba726ae761605e))
+* **geo-1269:** keep the broker audit row of a request past its imp ([#501](https://github.com/zgeoff/impz/issues/501)) ([b941a79](https://github.com/zgeoff/impz/commit/b941a79bfdc083f7cde1413535a044b1c789deda))
+
 ## [2.5.2](https://github.com/zgeoff/impz/compare/v2.5.1...v2.5.2) (2026-10-18)
 
 ### Bug Fixes
