@@ -70,6 +70,71 @@ test('it reports the owner domain, home path, and vault by file and line', async
   ]);
 });
 
+test.each([
+  ['a subdomain of the owner domain', 'https://deep.imp.owner.example:8443/mcp', 'owner domain'],
+  ['the owner domain in capitals', 'Host: OWNER.EXAMPLE', 'owner domain'],
+  ['the owner domain with a trailing dot', 'dig owner.example.', 'owner domain'],
+  ['the owner domain in an email', 'mail pat@owner.example', 'owner domain'],
+  ['a macOS home path', 'cd /Users/pat/projects', 'owner home path'],
+  ['a home path that ends a sentence', 'It sits in /home/pat.', 'owner home path'],
+  ['a home path before a comma', 'Use /home/pat, then stop.', 'owner home path'],
+  ['a home path in capitals', 'cd /Users/Pat/notes', 'owner home path'],
+  [
+    'a vault outside the allow list',
+    'op read op://team-vault/item/token',
+    'vault outside the allow list',
+  ],
+  ['an allowed vault in capitals', 'op read op://Vault/item/token', 'vault outside the allow list'],
+  [
+    'a vault that only starts with an allowed name',
+    'op read op://vaults/item',
+    'vault outside the allow list',
+  ],
+  [
+    'a vault that extends an allowed name',
+    'op read op://example-real/item',
+    'vault outside the allow list',
+  ],
+  ['an empty vault name', 'op read op:///item/token', 'vault outside the allow list'],
+])('it refuses %s', async (_label, line, message) => {
+  const ctx = await setupTest();
+
+  const domain = createHash('sha256').update('owner.example').digest('hex');
+  const login = createHash('sha256').update('pat').digest('hex');
+
+  await Bun.write(join(ctx.root, 'notes/a.md'), `${line}\n`);
+
+  expect(
+    checkOwnerNames(ctx.root, ['notes/a.md'], {
+      domains: new Set([domain]),
+      logins: new Set([login]),
+    }),
+  ).toStrictEqual([{ file: 'notes/a.md', line: 1, message }]);
+});
+
+test.each([
+  ['a domain that only ends with the owner domain text', 'https://notowner.example'],
+  ['a domain that extends the owner domain', 'https://owner.example.org'],
+  ['a domain with a hyphen in place of the dot', 'https://owner-example.com'],
+  ['a login that only starts with the owner login', 'cd /home/patrick/projects'],
+  ['an allowed vault', 'op read op://vault/item/token'],
+  ['a vault placeholder', 'op read op://$IMP_OP_VAULT/item/token'],
+])('it passes %s', async (_label, line) => {
+  const ctx = await setupTest();
+
+  const domain = createHash('sha256').update('owner.example').digest('hex');
+  const login = createHash('sha256').update('pat').digest('hex');
+
+  await Bun.write(join(ctx.root, 'notes/a.md'), `${line}\n`);
+
+  expect(
+    checkOwnerNames(ctx.root, ['notes/a.md'], {
+      domains: new Set([domain]),
+      logins: new Set([login]),
+    }),
+  ).toStrictEqual([]);
+});
+
 test('it skips a file that is gone from the tree or binary', async () => {
   const ctx = await setupTest();
 
