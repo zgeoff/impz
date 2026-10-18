@@ -10,9 +10,12 @@ import { buildImpPaths, buildSystemDrivePath } from '../storage/data-layout';
 import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { STUB_AGENT_VERSION } from '../test-utils/build-stub-vmm';
+import { buildTestApp } from './build-test-app';
+import { findBrokenInvariants } from './find-broken-invariants';
 import { removeUnusedDrives } from './remove-unused-drives';
-import { buildTestApp, createImpTest, findBrokenInvariants, waitForOutcome } from './test-imps';
+import { createImpTest } from './test-imps';
 import type { ImpTestOptions } from './test-imps';
+import { waitForOutcome } from './wait-for-outcome';
 
 // An upgrade as imp-host does it: SIGTERM sleeps every awake imp, and a new
 // impd starts on a new system drive (an agent change), over the same data,

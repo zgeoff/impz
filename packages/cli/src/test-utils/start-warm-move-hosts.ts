@@ -1,5 +1,5 @@
 import { createImpClient } from '@impz/client';
-import { TEST_TOKEN } from '@impz/daemon/src/imps/test-imps';
+import { TEST_TOKEN } from '@impz/daemon/src/imps/test-token';
 import { createMoveHosts, createUbuntuImage } from '@impz/daemon/src/moves/test-moves';
 import invariant from 'tiny-invariant';
 

@@ -8,7 +8,9 @@ import { findImpByName } from '../db/imps';
 import { buildTemplateKey } from '../templates/boot-templates';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubDiskTools } from '../test-utils/build-stub-disk-tools';
-import { buildTestApp, createImpTest, findBrokenInvariants } from './test-imps';
+import { buildTestApp } from './build-test-app';
+import { findBrokenInvariants } from './find-broken-invariants';
+import { createImpTest } from './test-imps';
 
 // Cold boots with IMP_BOOT_TEMPLATES on, over the stub VMM: the first boot
 // of a shape boots the kernel and builds the template beside it; later ones

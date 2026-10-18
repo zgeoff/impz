@@ -12,9 +12,11 @@ import type { StartTimer } from '../process/clock';
 import { createSemaphore } from '../process/semaphore';
 import { startRealTimer } from '../process/start-real-timer';
 import { readErrorMessage } from '../read-error-message';
+import { buildTrackedBody } from './build-tracked-body';
 import { buildErrorPage } from './error-pages';
 import { PEER_HEADER, isCallerPath } from './forwarded-peers';
 import type { ForwardedPeers } from './forwarded-peers';
+import { openUpstreamSocket } from './open-upstream-socket';
 import { parseHostName } from './parse-host-name';
 
 // hop-by-hop headers (RFC 9110 7.6.1) stay on their own hop
@@ -57,12 +59,6 @@ interface WakeProxyDeps {
 
   // that deadline's timer, returning its cancel; setTimeout by default
   readonly startTimer?: StartTimer;
-}
-
-// how long an upstream WebSocket may take to open, and the timer that waits
-interface OpenDeadline {
-  readonly timeoutMs: number;
-  readonly startTimer: StartTimer;
 }
 
 // Where a request goes: an imp, which it wakes, impd's own API, nowhere,
@@ -544,68 +540,6 @@ function buildUpstreamHeaders(
   headers.set('x-forwarded-proto', new URL(request.url).protocol.replace(':', ''));
 
   return headers;
-}
-
-// counts the connection until the body is sent or the client goes away
-function buildTrackedBody(source: ReadableStream<Uint8Array>, release: () => void) {
-  const reader = source.getReader();
-
-  return new ReadableStream<Uint8Array>({
-    pull: async (controller) => {
-      try {
-        const chunk = await reader.read();
-
-        if (chunk.done) {
-          release();
-
-          controller.close();
-        } else {
-          controller.enqueue(chunk.value);
-        }
-      } catch (error) {
-        release();
-
-        controller.error(error);
-      }
-    },
-    cancel: async (reason) => {
-      release();
-
-      await reader.cancel(reason);
-    },
-  });
-}
-
-function openUpstreamSocket(
-  target: string,
-  protocols: readonly string[],
-  headers: Readonly<Headers>,
-  deadline: Readonly<OpenDeadline>,
-): Promise<WebSocket> {
-  return new Promise((resolve, reject) => {
-    const socket = new WebSocket(target, {
-      protocols: [...protocols],
-      headers: Object.fromEntries(headers),
-    });
-
-    socket.binaryType = 'arraybuffer';
-
-    const cancelTimer = deadline.startTimer(() => {
-      socket.close();
-
-      reject(new Error('timed out'));
-    }, deadline.timeoutMs);
-
-    socket.addEventListener('open', () => {
-      cancelTimer();
-      resolve(socket);
-    });
-
-    socket.addEventListener('error', () => {
-      cancelTimer();
-      reject(new Error('connection failed'));
-    });
-  });
 }
 
 // 1005, 1006 and 1015 describe a close; they cannot be sent in one

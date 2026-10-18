@@ -8,7 +8,7 @@ export interface AsleepLine {
   readonly steps: Readonly<Record<string, number>>;
 }
 
-// The newest `impd: <name>: asleep in` line in an impd log (imp-vm-ops.ts
+// The newest `impd: <name>: asleep in` line in an impd log (make-sleep-imp-vm.ts
 // logs one per sleep), or null when the log holds none for that imp.
 export function findAsleepLine(log: string, name: string): AsleepLine | null {
   const line = log

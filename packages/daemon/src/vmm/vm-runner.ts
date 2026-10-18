@@ -1,24 +1,19 @@
 import { lstatSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { sendGrow, sendPing, sendResumed, sendShutdown } from '../agent-client/agent-requests';
 import { waitForAgent } from '../agent-client/wait-for-agent';
-import { BLOCK_MIB, ONLINE_MOVABLE_ARG, SLOT_MIB, findRegionMib } from '../memory/elastic-memory';
-import type { SlotAddress } from '../net/addressing';
-import { GATEWAY_IP6 } from '../net/addressing6';
+import { BLOCK_MIB, SLOT_MIB, findRegionMib } from '../memory/elastic-memory';
 import { stopPid } from '../process/proc';
 import { runCommand } from '../process/run-command';
 import { VM_DEADLINES } from '../process/vm-deadlines';
 import { writeToDisk } from '../process/write-file-durably';
 import { readErrorMessage } from '../read-error-message';
 import type { ImpPaths, SnapshotPaths } from '../storage/data-layout';
-import { BASE_BOOT_ARGS, VM_DEVICES, createMarks, setupVm } from './configure-vm';
+import { buildBootArgs } from './build-boot-args';
+import type { VmPlan } from './build-boot-args';
+import { VM_DEVICES, createMarks, setupVm } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
 import { createFirecrackerClient } from './firecracker-client';
-import type {
-  FirecrackerClient,
-  HotplugState,
-  InstanceState,
-  SnapshotType,
-} from './firecracker-client';
+import type { HotplugState, InstanceState, SnapshotType } from './firecracker-client';
 import type { FoundVm, VmOwner } from './firecracker-process';
 import {
   buildFirecrackerCommand,
@@ -35,6 +30,7 @@ import type { JailUser, Jails } from './jail';
 import { buildTemplateVm, loadTemplateVm } from './template-vm';
 import type { TemplateBuildPlan, TemplateRestorePlan } from './template-vm';
 import { createOwnedFile } from './vm-files';
+import { writeSnapshotBase } from './write-snapshot-base';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const WAKE_AGENT_DEADLINE_MS = 10_000;
@@ -45,33 +41,6 @@ const GUEST_MEMORY_TIMEOUTS = { requestMs: 1000, snapshotMs: 1000 };
 
 // a sleep asks under the imp's lock: a wedged agent must not hold it long
 const UPTIME_PING_TIMEOUT_MS = 250;
-
-export interface VmPlan {
-  readonly firecrackerBin: string;
-  readonly kernelPath: string;
-  readonly systemDrivePath: string;
-  readonly paths: ImpPaths;
-  readonly address: SlotAddress;
-  readonly impId: string;
-  readonly hostname: string;
-  readonly vcpus: number;
-  readonly memoryMib: number;
-
-  // above memoryMib, the guest gets a virtio-mem region to grow into
-  // (docs/architecture/lifecycle/elastic-memory.md)
-  readonly maxMemoryMib: number;
-  readonly dns: readonly string[];
-
-  // the CPU limit's cgroup; null runs the VM unlimited
-  readonly cgroup: ImpCgroup | null;
-
-  // the first boot of an imp from a template: the agent gives it a new
-  // machine-id and ssh host keys (docs/guides/templates.md#identity)
-  readonly isIdentityReset: boolean;
-
-  // the imp's jail user; null runs Firecracker unjailed, as root
-  readonly jail: JailUser | null;
-}
 
 // what an elastic guest holds and has free, as Firecracker reports it
 export interface GuestMemory extends HotplugState {
@@ -184,25 +153,6 @@ export interface VmRunner {
 
   // the guest plugs or unplugs blocks toward `mib` of its region
   readonly requestPluggedMib: (paths: ImpPaths, mib: number) => Promise<void>;
-}
-
-// The kernel cmdline: the system drive (vdb) is the initial root and the agent
-// PID 1; imp.* parameters configure the guest
-// (docs/architecture/guest/agent.md#two-drives-and-a-kernel).
-export function buildBootArgs(plan: Readonly<VmPlan>): string {
-  return [
-    ...BASE_BOOT_ARGS,
-    `imp.id=${plan.impId}`,
-    `imp.hostname=${plan.hostname}`,
-    `imp.ip=${plan.address.guestIp}/${String(plan.address.prefixLength)}`,
-    `imp.gw=${plan.address.hostIp}`,
-    ...(plan.address.guestIp6 === null
-      ? []
-      : [`imp.ip6=${plan.address.guestIp6}/128`, `imp.gw6=${GATEWAY_IP6}`]),
-    `imp.dns=${plan.dns.join(',')}`,
-    ...(plan.isIdentityReset ? ['imp.reset_identity=1'] : []),
-    ...(findRegionMib(plan.memoryMib, plan.maxMemoryMib) > 0 ? [ONLINE_MOVABLE_ARG] : []),
-  ].join(' ');
 }
 
 // `jails` releases a jail whatever started the VM: an impd with the jailer
@@ -610,29 +560,4 @@ export function createVmRunner(
     buildTemplateVm: (plan) => buildTemplateVm(plan, jails, mergeWrapper),
     loadTemplateVm: (plan) => loadTemplateVm(plan, jails, mergeWrapper),
   };
-}
-
-// the copy runs under the imp's lock: a hung one costs the sleep a Full snapshot
-const BASE_COPY_TIMEOUT_MS = 120_000;
-
-// `base` copied over `memFile`, holes kept and blocks cloned where the
-// filesystem can, while the guest runs: it never writes into the file it maps
-async function writeSnapshotBase(
-  api: FirecrackerClient,
-  base: string,
-  memFile: string,
-): Promise<'copyBase' | 'copyBaseFailed' | null> {
-  const config = await api.loadMachineConfig().catch(() => null);
-
-  // a VM that does not track its dirty pages takes a Full snapshot
-  if (config?.isTrackingDirtyPages !== true) {
-    return null;
-  }
-
-  const copied = await runCommand(['cp', '--reflink=auto', '--sparse=always', base, memFile], {
-    signal: AbortSignal.timeout(BASE_COPY_TIMEOUT_MS),
-  });
-
-  // a Full snapshot then writes every page over what the copy left
-  return copied.exitCode === 0 ? 'copyBase' : 'copyBaseFailed';
 }

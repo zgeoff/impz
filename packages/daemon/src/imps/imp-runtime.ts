@@ -1,18 +1,11 @@
 import { ORPCError } from '@orpc/server';
-import { AgentError } from '../agent-client/agent-connection';
-import {
-  buildAgentOutdatedError,
-  buildAgentUnknownError,
-  hasFeature,
-} from '../agent-client/agent-outdated';
 import type { AgentFeature } from '../agent-client/agent-outdated';
-import type { Activity, InnerStatus, SessionInfo } from '../agent-client/agent-protocol';
+import type { Activity, InnerStatus } from '../agent-client/agent-protocol';
 import { sendActivity, sendPing } from '../agent-client/agent-requests';
 import { openDialStream } from '../agent-client/dial-stream';
 import type { DialStream, DialTarget } from '../agent-client/dial-stream';
 import { openAttachStream, openExecStream } from '../agent-client/exec-stream';
 import type { AgentAttachRequest, AgentExecRequest, ExecStream } from '../agent-client/exec-stream';
-import { isAgentError } from '../agent-client/is-agent-error';
 import { openAccept, openListener } from '../agent-client/listener-stream';
 import type { GuestListener, ListenSpec } from '../agent-client/listener-stream';
 import {
@@ -21,29 +14,25 @@ import {
   isDiskFullError,
   isMovingError,
 } from '../api-errors';
-import { listColdBoots, writeUnknownBoot } from '../db/cold-boots';
+import { listColdBoots } from '../db/cold-boots';
 import { findImpById, findImpByName, listImps, updateImpActivity } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
-import { updateImpState } from '../db/update-imp-state';
-import { checkBrokerAttach, checkOpenedSession } from '../exec/broker-sessions';
-import { buildBrokerNotReadyError, checkBrokerReady, isBrokerRequired } from '../exec/exec-require';
-import { mergeEnv } from '../exec/merge-env';
 import { readErrorMessage } from '../read-error-message';
 import { findSessionLogImp } from '../session-logs/find-session-log-imp';
 import { toSeenSessions } from '../sessions/session-cache';
-import { readVmIdentity } from '../sleep/vm-identity';
 import type { ImpPaths } from '../storage/data-layout';
 import type { BootTemplates } from '../templates/boot-templates';
-import { isJailedFirecracker } from '../vmm/firecracker-process';
 import type { ActivityTracker, ConnectionKind } from './activity-tracker';
-import { checkAdoptedMergeFlag } from './check-merge-flag';
 import type { ImpClock, ImpGuest, ImpHost, ImpMemory, ImpVms } from './imp-context';
 import type { ImpLock, LockedImp } from './imp-lock';
-import type { ImpVmOps, YoungGuestWait } from './imp-vm-ops';
+import type { ImpVmOps } from './imp-vm-ops';
 import { createLockFreeSleep } from './lock-free-sleep';
 import type { LockFreeSleep, SleepOutcome, SleepPolicy } from './lock-free-sleep';
-import { startCounting } from './read-running-imp-usage';
-import { createVmReconciler } from './reconcile-vms';
+import { makeReconcileImps } from './make-reconcile-imps';
+import type { YoungGuestWait } from './make-sleep-imp-vm';
+import { openImpExec } from './open-imp-exec';
+import { requireFeature } from './require-feature';
+import { withColdBoots } from './with-cold-boots';
 
 // What the wake proxy, the idle loop, the governor and impd's start and stop
 // need: imps woken on demand, put to sleep in the background, and the
@@ -181,28 +170,11 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
   const context = parts.context;
   const lock = parts.lock;
   const ops = parts.ops;
-  const reconciler = createVmReconciler(context, ops);
   const lastDiskFull: { error: Error | null } = { error: null };
 
   // imps whose background sleep found a young guest and waits for it; each
   // leaves once its sleep ends
   const youngGuestWaits = new Set<string>();
-
-  // An elastic guest may hold more than its memory, and a new impd's cgroup
-  // writer knows nothing of it: the limit covers what the guest holds, or the
-  // most it can, before a sleep or a snapshot sets up the cgroup again.
-  const setAdoptedMemoryLimit = async (imp: LockedImp, paths: ImpPaths): Promise<void> => {
-    if (imp.maxMemoryMib <= imp.memoryMib) {
-      return;
-    }
-
-    const pluggedMib = await context.vms.readGuestMemory(paths).then(
-      (memory) => Math.max(memory.pluggedMib, memory.requestedMib),
-      () => imp.maxMemoryMib - imp.memoryMib,
-    );
-
-    context.memoryLimit.setGuestMib(imp.id, imp.memoryMib + pluggedMib);
-  };
 
   const requireRunningImp = async (
     name: string,
@@ -371,129 +343,9 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
 
   return {
     openExec: (name, request, feature) =>
-      openStream(name, 'exec', (paths, imp) => {
-        const requiresBroker = isBrokerRequired(request.require);
-
-        // the egress broker's variables are for the imp's own code, not the
-        // agent's world
-        if (requiresBroker && request.outer === true) {
-          throw buildBrokerNotReadyError('an exec in the agent gets no broker variables');
-        }
-
-        // an old agent would run a session's command as a plain exec
-        if (request.session !== undefined) {
-          requireFeature(paths, 'sessions');
-        }
-
-        if (feature !== undefined) {
-          requireFeature(paths, feature);
-        }
-
-        if (request.dropSysAdmin === true) {
-          requireFeature(paths, 'drop-sys-admin');
-        }
-
-        if (request.outer === true) {
-          requireFeature(paths, 'outer-exec');
-
-          return openExecStream(paths.vsockSocket, request);
-        }
-
-        // the broker's variables under the caller's own; a command that
-        // requires the broker starts only with them as impd set them
-        const startWithBroker = async (target: ImpRecord): Promise<ExecStream> => {
-          const broker = await context.readExecEnv(target, paths.vsockSocket);
-
-          const base = broker.kind === 'ready' ? broker.env : [];
-          const env = mergeEnv(base, request.env ?? []);
-
-          if (requiresBroker) {
-            const refused = checkBrokerReady(broker, env);
-
-            if (refused !== null) {
-              throw refused;
-            }
-
-            await requireSameBoot(context, target);
-          }
-
-          const session = request.session;
-
-          // the agent's sessions, for a start that requires the broker and
-          // may attach: a refused attach must not reach the agent
-          const listed: SessionInfo[] = [];
-
-          if (requiresBroker && session !== undefined) {
-            const activity = await sendActivity(paths.vsockSocket);
-
-            listed.push(...activity.sessions);
-
-            const refused = await checkBrokerAttach(
-              context.db,
-              target.id,
-              session,
-              request.resumeFrom?.executionGeneration,
-              listed,
-            );
-
-            if (refused !== null) {
-              throw refused;
-            }
-          }
-
-          const opening = openExecStream(paths.vsockSocket, {
-            ...request,
-            ...(env.length > 0 && { env }),
-          });
-
-          if (session === undefined) {
-            return opening;
-          }
-
-          const openNoted = async (): Promise<ExecStream> => {
-            const stream = await opening;
-
-            if (!requiresBroker) {
-              return stream;
-            }
-
-            const refused = await checkOpenedSession(
-              context.db,
-              target.id,
-              session,
-              stream,
-              listed,
-            );
-
-            if (refused !== null) {
-              stream.close();
-              throw refused;
-            }
-
-            return stream;
-          };
-
-          // a session this start created gets its log tap once it opens
-          return withColdBoots(context, target, openNoted()).then((stream) => {
-            startNewLogTap(context, target, stream);
-
-            return stream;
-          });
-        };
-
-        if (!requiresBroker) {
-          return startWithBroker(imp);
-        }
-
-        // Under the lock no restore, reboot or sleep replaces the guest
-        // between the bundle step and the start; an imp a stop got to first
-        // boots again, as for any exec. It may wait behind a locked operation.
-        return lock.withImp(name, async (locked) => {
-          const running = locked.state === 'running' ? locked : await ops.requireRunningImp(locked);
-
-          return startWithBroker(running);
-        });
-      }),
+      openStream(name, 'exec', (paths, imp) =>
+        openImpExec(parts, name, request, feature, paths, imp),
+      ),
     openBuilderExec: (name, request) =>
       openStream(name, 'exec', (paths) => openExecStream(paths.vsockSocket, request), true, true),
     openAttach: (name, request) =>
@@ -638,123 +490,7 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
       await context.sessionLogs.sweep(imps.map((imp) => findSessionLogImp(context.findPaths, imp)));
     },
 
-    // the lock's liveness check marks an imp whose VM died with impd stopped
-    reconcileImps: async () => {
-      // the first read sets what a lost VM's oops is judged against
-      const flag = context.kernelOops.readFlag();
-
-      if (flag === 'set') {
-        context.log(
-          'impd: the kernel oopsed since the host booted (taint flag D); the host needs a reboot',
-        );
-      }
-
-      if (flag === 'unknown') {
-        context.log('impd: cannot read the kernel taint flag; imps a kernel oops held stay held');
-      }
-
-      const imps = await listImps(context.db);
-
-      // a reboot freed the disk of a hold impd finds with the flag clear, which
-      // only a reboot clears, or with another boot's id, whatever the flag reads
-      const bootId = context.kernelOops.findBootId();
-
-      await removeStaleOopsHolds(
-        context,
-        imps.filter(
-          (imp) =>
-            flag === 'clear' ||
-            (bootId !== null && imp.oopsBootId !== null && imp.oopsBootId !== bootId),
-        ),
-      );
-
-      // cgroups of imps destroyed while impd was down, or whose remove failed
-      const impIds = new Set(imps.map((imp) => imp.id));
-
-      // the jails first: their sweep kills every process of the uid, a
-      // template build's too, so the cgroups are empty for the rmdir
-      for (const impId of await context.vms.removeOrphanJails(impIds)) {
-        context.log(`impd: removed the jail of imp ${impId}: no imp has that id`);
-      }
-
-      for (const impId of context.cgroups.removeOrphans(impIds)) {
-        context.log(`impd: removed the cgroup of imp ${impId}: no imp has that id`);
-      }
-
-      // a moving imp too, as its move would: the moves recover after this
-      await Promise.all(
-        imps.map((listed) =>
-          lock.withImpId(
-            listed.id,
-            async (found) => {
-              if (found === undefined) {
-                return;
-              }
-
-              const imp = await reconciler.reconcileImp(found);
-
-              const paths = context.findPaths(imp.id);
-
-              // a loaded guest may answer late; killing it would lose its memory
-              if (imp.state === 'running') {
-                const ready = await context.vms.isAgentReady(paths);
-
-                const note = ready ? '' : ' (the agent does not answer yet)';
-                const jailed = imp.pid !== null && isJailedFirecracker(imp.pid) ? 'jailed ' : '';
-
-                context.log(
-                  `impd: ${imp.name}: re-adopted ${jailed}firecracker pid ${String(imp.pid)}${note}`,
-                );
-
-                if (imp.pid !== null) {
-                  await setAdoptedMemoryLimit(imp, paths);
-
-                  context.cgroups.adopt(imp.id, imp.pid, imp.cpu, imp.memoryMib);
-
-                  startCounting(context, imp, imp.pid);
-
-                  await checkAdoptedMergeFlag(context, imp, imp.pid);
-                }
-
-                if (ready) {
-                  await writeAdoptedBoot(context, imp);
-                }
-
-                // the record does not change; the event stream still hears of it
-                await ops.updateState(imp, { reason: 'adopted', state: 'running' });
-
-                return;
-              }
-
-              if (imp.state !== 'creating') {
-                return;
-              }
-
-              const error = 'impd stopped while the imp was being created';
-
-              try {
-                if (imp.pid !== null && context.vms.isVmAlive(imp.pid, paths)) {
-                  await context.vms.stopVm(imp.pid, paths, false);
-                }
-              } catch (stopError) {
-                // one stuck VM must not keep impd from starting; the record
-                // keeps its pid, so a start or destroy kills it again
-                context.log(`impd: ${imp.name}: could not stop: ${readErrorMessage(stopError)}`);
-
-                await ops.updateState(imp, { reason: 'failed', state: 'error', error });
-
-                return;
-              }
-
-              await ops.updateState(imp, { reason: 'failed', state: 'error', pid: null, error });
-            },
-            { isMove: true },
-          ),
-        ),
-      );
-
-      await reconciler.killUnknownVms(new Set(imps.map((imp) => imp.id)));
-    },
+    reconcileImps: makeReconcileImps(parts),
 
     waitForLifecycle: () => lock.waitForAll(),
     isImpBusy: (id) => lock.isLocked(id),
@@ -779,51 +515,6 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
     bootTemplates: context.templates,
     readDiskFullError: () => lastDiskFull.error,
   };
-}
-
-// The guest the bundle step ran in is the one the command starts in: the
-// caller holds the lock, and this catches any write that got past it.
-async function requireSameBoot(context: ImpHost, imp: ImpRecord): Promise<void> {
-  const fresh = await findImpById(context.db, imp.id);
-
-  if (fresh?.state !== 'running' || fresh.pid !== imp.pid) {
-    throw buildBrokerNotReadyError('the imp booted again after the broker CA step');
-  }
-}
-
-// A session's output, and NO_SESSION, name the imp's cold boots, read after
-// any boot the open caused, so that boot comes first
-async function withColdBoots(
-  context: ImpHost,
-  imp: ImpRecord,
-  opening: Promise<ExecStream>,
-): Promise<ExecStream> {
-  let stream: ExecStream;
-
-  try {
-    stream = await opening;
-  } catch (error) {
-    if (isAgentError(error, 'NO_SESSION') && isRecord(error.data)) {
-      const coldBoots = await listColdBoots(context.db, imp.id);
-
-      throw new AgentError(error.code, error.detail, { ...error.data, coldBoots });
-    }
-
-    throw error;
-  }
-
-  const output = stream.output;
-
-  if (output?.continuity !== 'offsets') {
-    return stream;
-  }
-
-  const coldBoots = await listColdBoots(context.db, imp.id).catch((error: unknown) => {
-    stream.close();
-    throw error;
-  });
-
-  return { ...stream, output: { ...output, coldBoots } };
 }
 
 // INVALID_STATE for an attach that must not wake the imp; an imp still
@@ -853,74 +544,4 @@ function updateInner(context: ImpGuest, impId: string, inner: InnerStatus | unde
   }
 
   context.inners.record(impId, inner);
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null;
-}
-
-// A VM booted before impd kept cold boots has none on record: its boot is
-// `unknown`, so a client still learns that it ended earlier generations.
-async function writeAdoptedBoot(context: ImpHost & ImpVms, imp: ImpRecord): Promise<void> {
-  try {
-    const ping = await sendPing(context.findPaths(imp.id).vsockSocket);
-
-    if (ping.bootId !== undefined) {
-      await writeUnknownBoot(context.db, imp.id, ping.bootId, new Date());
-    }
-  } catch (error) {
-    context.log(`impd: ${imp.name}: could not read its boot id: ${readErrorMessage(error)}`);
-  }
-}
-
-// fails before an old agent gets a request it cannot serve; an imp booted
-// before impd recorded agent versions has none, and its answer decides
-// unless the feature is strict
-function requireFeature(paths: ImpPaths, feature: AgentFeature): void {
-  const agentVersion = readVmIdentity(paths)?.agentVersion;
-
-  if (!hasFeature(agentVersion, feature)) {
-    throw agentVersion === undefined
-      ? buildAgentUnknownError(feature)
-      : buildAgentOutdatedError(feature);
-  }
-}
-
-// a session that just started with log is tapped at once, while the agent's
-// ring still holds its first output
-function startNewLogTap(
-  context: ImpVms & ImpGuest,
-  imp: Readonly<ImpRecord>,
-  stream: Readonly<ExecStream>,
-) {
-  const output = stream.output;
-
-  if (
-    stream.created &&
-    stream.session !== null &&
-    output?.continuity === 'offsets' &&
-    output.log?.enabled === true
-  ) {
-    context.sessionLogs.tapNow(findSessionLogImp(context.findPaths, imp), {
-      name: stream.session,
-      executionGeneration: output.executionGeneration,
-      bootId: output.bootId,
-    });
-  }
-}
-
-// Clears the hold an oops of an earlier boot left on an imp, so a new oops
-// in another task never holds it again; the imp keeps its state.
-async function removeStaleOopsHolds(context: ImpHost, imps: readonly ImpRecord[]): Promise<void> {
-  for (const imp of imps.filter((listed) => listed.hasOopsHold)) {
-    await updateImpState(context.db, imp.id, {
-      reason: 'repaired',
-      state: imp.state,
-      error: null,
-      hasOopsHold: false,
-      oopsBootId: null,
-    });
-
-    context.log(`impd: ${imp.name}: the host rebooted since a kernel oops held its disk`);
-  }
 }

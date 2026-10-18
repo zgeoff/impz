@@ -11,7 +11,9 @@ import {
 } from '../sleep/snapshot-meta';
 import { buildImpPaths } from '../storage/data-layout';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildTestApp, createImpTest, findBrokenInvariants } from './test-imps';
+import { buildTestApp } from './build-test-app';
+import { findBrokenInvariants } from './find-broken-invariants';
+import { createImpTest } from './test-imps';
 import type { ImpTestOptions } from './test-imps';
 
 // impd killed at the points a sleep, a wake or a start can be cut, and the
