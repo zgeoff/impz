@@ -1,5 +1,5 @@
 import type { Insertable, Selectable, Updateable } from 'kysely';
-import { isSlotFree } from './allocate-slot';
+import { isSlotFree } from './is-slot-free';
 import type { ImpDatabase, ImpQueries } from './open-database';
 import type { DB } from './schema';
 
