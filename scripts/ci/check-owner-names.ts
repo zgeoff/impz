@@ -4,6 +4,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import * as z from 'zod';
 
 export interface OwnerNameHashes {
   readonly domains: ReadonlySet<string>;
@@ -125,10 +126,11 @@ function listFiles(): string[] {
   return [...new Set(result.stdout.toString().split('\0').filter(Boolean))];
 }
 
+const hashesSchema = z.object({ domains: z.array(z.string()), logins: z.array(z.string()) });
+
 function loadHashes(): OwnerNameHashes {
-  const parsed = JSON.parse(
-    readFileSync(new URL('owner-name-hashes.json', import.meta.url), 'utf8'),
-  ) as { domains: string[]; logins: string[] };
+  const text = readFileSync(new URL('owner-name-hashes.json', import.meta.url), 'utf8');
+  const parsed = hashesSchema.parse(JSON.parse(text));
 
   return { domains: new Set(parsed.domains), logins: new Set(parsed.logins) };
 }
