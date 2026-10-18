@@ -28,7 +28,7 @@ import { buildSystemDrivePath, buildSystemDrivesDir } from '../storage/data-layo
 import type { ImpPaths } from '../storage/data-layout';
 import type { StorageBackend } from '../storage/storage-backend';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildStubVmm } from '../test-utils/build-stub-vmm'; // oxlint-disable-line no-restricted-imports -- a test harness outside test-utils/; GEO-363 moves it to @impz/daemon/testing
+import { buildStubVmm } from '../test-utils/build-stub-vmm'; // oxlint-disable-line zgeoff/import-zones -- a test harness outside test-utils/; GEO-363 moves it to @impz/daemon/testing
 import { createCpuCgroups } from '../vmm/cpu-cgroups';
 import type { CpuCgroups } from '../vmm/cpu-cgroups';
 import type { Jails } from '../vmm/jail';
