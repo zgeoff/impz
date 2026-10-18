@@ -1,9 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import {
+  existsSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -161,6 +163,7 @@ test('#load_tailscale_authkey exports a key from op and keeps it out of a bash -
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
         HOME: ctx.dir,
         IMP_TAILSCALE_OP: '1',
+        IMP_OP_VAULT: 'example',
       },
     },
   );
@@ -186,6 +189,7 @@ test('#load_tailscale_authkey asks op once in a run after an op miss', () => {
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
         HOME: ctx.dir,
         IMP_TAILSCALE_OP: '1',
+        IMP_OP_VAULT: 'example',
       },
     },
   );
@@ -193,7 +197,7 @@ test('#load_tailscale_authkey asks op once in a run after an op miss', () => {
   expect(result.stdout.toString()).toBe('1\n');
 
   expect(readFileSync(op.calls, 'utf8')).toBe(
-    'op read op://imp-e2e/imp-e2e-tailscale-oauth/client-secret\n',
+    'op read op://example/imp-e2e-tailscale-oauth/client-secret\n',
   );
 });
 
@@ -219,6 +223,7 @@ test("#load_tailscale_authkey joins a dev instance with impz's tag:imp-e2e clien
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
         HOME: ctx.dir,
         IMP_TAILSCALE_OP: '1',
+        IMP_OP_VAULT: 'example',
       },
     },
   );
@@ -227,7 +232,7 @@ test("#load_tailscale_authkey joins a dev instance with impz's tag:imp-e2e clien
   expect(result.stderr.toString()).not.toContain('tskey-client-fake-for-the-trace-check');
 
   expect(readFileSync(op.calls, 'utf8')).toBe(
-    'op read op://imp-e2e/imp-e2e-tailscale-oauth/client-secret\n',
+    'op read op://example/imp-e2e-tailscale-oauth/client-secret\n',
   );
 });
 
@@ -248,6 +253,7 @@ test('#load_tailscale_authkey keeps the tags IMP_TAILSCALE_TAGS sets for a clien
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
         HOME: ctx.dir,
         IMP_TAILSCALE_OP: '1',
+        IMP_OP_VAULT: 'example',
         IMP_TAILSCALE_TAGS: 'tag:sandbox-dev',
       },
     },
@@ -276,6 +282,42 @@ test('#load_tailscale_authkey never asks op without IMP_TAILSCALE_OP=1', () => {
   expect(readFileSync(op.calls, 'utf8')).toBe('');
 });
 
+test('#load_tailscale_authkey skips op without a vault, names the variables to set, and falls back to .env', () => {
+  const ctx = setupTest();
+  const op = createStubBin(ctx.dir, 'op', "echo 'fake-tskey-from-op'");
+
+  writeFileSync(join(ctx.dir, '.env'), 'TAILSCALE_AUTHKEY=fake-tskey-from-env\n');
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      'source "$1"; IMP_ROOT=$2; unset TAILSCALE_AUTHKEY; load_tailscale_authkey; echo "found $? [$TAILSCALE_AUTHKEY] [$IMP_TAILSCALE_OP_MISSED]"',
+      'bash',
+      new URL('lib.sh', import.meta.url).pathname,
+      ctx.dir,
+    ],
+    {
+      env: {
+        PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
+        HOME: ctx.dir,
+        IMP_TAILSCALE_OP: '1',
+      },
+    },
+  );
+
+  expect({
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    stdout: 'found 0 [fake-tskey-from-env] [1]\n',
+    stderr:
+      'impz: set IMP_OP_VAULT to the 1Password vault that holds imp-e2e-tailscale-oauth/client-secret, or IMP_TAILSCALE_AUTHKEY_REF to its reference\n',
+  });
+
+  expect(readFileSync(op.calls, 'utf8')).toBe('');
+});
+
 test('#load_tailscale_e2e_authkey joins e2e nodes with the tag:imp-e2e client from op, ephemeral and preauthorized, untraced', () => {
   const ctx = setupTest();
   const op = createStubBin(ctx.dir, 'op', "echo 'fake-tskey-client-for-the-trace-check'");
@@ -293,15 +335,147 @@ test('#load_tailscale_e2e_authkey joins e2e nodes with the tag:imp-e2e client fr
       'bash',
       new URL('lib.sh', import.meta.url).pathname,
     ],
-    { env: { PATH: `${op.bin}:${process.env['PATH'] ?? ''}`, HOME: ctx.dir } },
+    {
+      env: {
+        PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
+        HOME: ctx.dir,
+        IMP_OP_VAULT: 'example',
+      },
+    },
   );
 
   expect(result.stdout.toString()).toBe('found 0\nmatch\ntag:imp-e2e\n');
   expect(result.stderr.toString()).not.toContain('fake-tskey-client-for-the-trace-check');
 
   expect(readFileSync(op.calls, 'utf8')).toBe(
-    'op read op://imp-e2e/imp-e2e-tailscale-oauth/client-secret\n',
+    'op read op://example/imp-e2e-tailscale-oauth/client-secret\n',
   );
+});
+
+test('#load_tailscale_e2e_authkey reads the reference IMP_E2E_TAILSCALE_OAUTH_REF names over the vault', () => {
+  const ctx = setupTest();
+  const op = createStubBin(ctx.dir, 'op', "echo 'fake-tskey-client-other'");
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      'source "$1"; load_tailscale_e2e_authkey; echo "found $?"',
+      'bash',
+      new URL('lib.sh', import.meta.url).pathname,
+    ],
+    {
+      env: {
+        PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
+        HOME: ctx.dir,
+        IMP_OP_VAULT: 'example',
+        IMP_E2E_TAILSCALE_OAUTH_REF: 'op://vault/e2e-client/secret',
+      },
+    },
+  );
+
+  expect(result.stdout.toString()).toBe('found 0\n');
+  expect(readFileSync(op.calls, 'utf8')).toBe('op read op://vault/e2e-client/secret\n');
+});
+
+test('#load_tailscale_e2e_authkey never asks op without a vault, and names the variables to set', () => {
+  const ctx = setupTest();
+  const op = createStubBin(ctx.dir, 'op', "echo 'fake-tskey-client-other'");
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      'source "$1"; load_tailscale_e2e_authkey; echo "found $?"',
+      'bash',
+      new URL('lib.sh', import.meta.url).pathname,
+    ],
+    { env: { PATH: `${op.bin}:${process.env['PATH'] ?? ''}`, HOME: ctx.dir } },
+  );
+
+  expect({
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    stdout: 'found 1\n',
+    stderr:
+      'impz: set IMP_OP_VAULT to the 1Password vault that holds imp-e2e-tailscale-oauth/client-secret, or IMP_E2E_TAILSCALE_OAUTH_REF to its reference\n',
+  });
+
+  expect(readFileSync(op.calls, 'utf8')).toBe('');
+});
+
+test('#write_tailnet_oauth_file writes the OAuth client from the item in IMP_OP_VAULT, owner-only', () => {
+  const ctx = setupTest();
+
+  const op = createStubBin(
+    ctx.dir,
+    'op',
+    `case "$2" in */client-id) echo 'fake-client-id' ;; */client-secret) echo 'fake-client-secret' ;; esac`,
+  );
+
+  const file = join(ctx.dir, 'data/tailnet-oauth.json');
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      'source "$1"; write_tailnet_oauth_file "$2"; echo "found $?"',
+      'bash',
+      new URL('lib.sh', import.meta.url).pathname,
+      file,
+    ],
+    {
+      env: {
+        PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
+        HOME: ctx.dir,
+        IMP_OP_VAULT: 'example',
+      },
+    },
+  );
+
+  expect(result.stdout.toString()).toBe('found 0\n');
+
+  expect(readFileSync(op.calls, 'utf8')).toBe(
+    'op read op://example/imp-e2e-tailscale-services/client-id\nop read op://example/imp-e2e-tailscale-services/client-secret\n',
+  );
+
+  expect(JSON.parse(readFileSync(file, 'utf8'))).toStrictEqual({
+    clientId: 'fake-client-id',
+    clientSecret: 'fake-client-secret',
+  });
+
+  expect(statSync(file).mode & 0o777).toBe(0o600);
+});
+
+test('#write_tailnet_oauth_file never asks op without a vault, and names the variables to set', () => {
+  const ctx = setupTest();
+  const op = createStubBin(ctx.dir, 'op', "echo 'fake-client-id'");
+  const file = join(ctx.dir, 'data/tailnet-oauth.json');
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      'source "$1"; write_tailnet_oauth_file "$2"; echo "found $?"',
+      'bash',
+      new URL('lib.sh', import.meta.url).pathname,
+      file,
+    ],
+    { env: { PATH: `${op.bin}:${process.env['PATH'] ?? ''}`, HOME: ctx.dir } },
+  );
+
+  expect({
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    stdout: 'found 1\n',
+    stderr:
+      'impz: set IMP_OP_VAULT to the 1Password vault that holds imp-e2e-tailscale-services, or IMP_TAILNET_OAUTH_REF to its reference\n',
+  });
+
+  expect(readFileSync(op.calls, 'utf8')).toBe('');
+  expect(existsSync(file)).toBe(false);
 });
 
 test("#load_tailscale_e2e_authkey never gives e2e nodes dev's tag:imp key from the env or .env", () => {

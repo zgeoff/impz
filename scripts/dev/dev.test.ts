@@ -392,6 +392,7 @@ test('it refuses up with IMP_TAILNET_NAMES=1 when 1Password has no OAuth client'
       IMP_HOST_IMAGE_READY: '1',
       IMP_DEV_TAILNET: '0',
       IMP_TAILNET_NAMES: '1',
+      IMP_OP_VAULT: 'example',
     },
   });
 

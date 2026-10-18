@@ -50,7 +50,7 @@ test('#requireTailnetReady fails with what the suite lacks while this machine is
     requireTailnetReady({ BackendState: 'NeedsLogin' }, true);
   }).toThrowWithMessage(
     Error,
-    'tailscale needs the tag:imp-e2e OAuth client (op://imp-e2e/imp-e2e-tailscale-oauth) and this machine on the tailnet',
+    'tailscale needs the tag:imp-e2e OAuth client (op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth) and this machine on the tailnet',
   );
 });
 

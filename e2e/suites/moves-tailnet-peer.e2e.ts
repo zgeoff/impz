@@ -29,7 +29,7 @@ async function setupTest() {
 }
 
 // the definition of done needs the tailnet; any other run skips without the
-// tag:imp-e2e OAuth client (op://imp-e2e/imp-e2e-tailscale-oauth)
+// tag:imp-e2e OAuth client (op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth)
 test.skipIf(!hasTailscaleE2EKey() && !config.acceptance)(
   'it moves an imp between two tailnet nodes, past the peer check on their tailnet addresses',
   async () => {
@@ -37,7 +37,7 @@ test.skipIf(!hasTailscaleE2EKey() && !config.acceptance)(
 
     invariant(
       hasTailscaleE2EKey(),
-      'moves-tailnet needs the tag:imp-e2e OAuth client (op://imp-e2e/imp-e2e-tailscale-oauth)',
+      'moves-tailnet needs the tag:imp-e2e OAuth client (op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth)',
     );
 
     const plain = `${ctx.prefix}a`;
