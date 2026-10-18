@@ -4,26 +4,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 
-const DESTRUCTURE = /^\s*const \{ (?<names>[\w, ]+) \} = ctx;\n/gmv;
-
-// what the character under the cursor is part of
-type Mode = 'code' | 'line-comment' | 'block-comment' | 'quote' | 'template';
-
-interface Scan {
-  readonly source: string;
-  readonly names: ReadonlySet<string>;
-  readonly out: string[];
-
-  // the open brackets, with `${` as `$`, whose close resumes the template
-  readonly brackets: string[];
-  readonly modes: Mode[];
-  quote: string;
-  index: number;
-
-  // the `}` that closes the declaration's block was reached
-  isDone: boolean;
-}
-
 // Each `const { a } = ctx;` goes, and `a` becomes `ctx.a` from there to the
 // end of the block that holds the declaration, one declaration at a time.
 export function transformContextMembers(source: string): string {
@@ -49,6 +29,7 @@ export function transformContextMembers(source: string): string {
       modes: ['code'],
       quote: '',
       index: 0,
+      isInClass: false,
       isDone: false,
     };
 
@@ -60,19 +41,27 @@ export function transformContextMembers(source: string): string {
   }
 }
 
-function main(): void {
-  const args = parseArgs({ args: Bun.argv.slice(2), allowPositionals: true });
+const DESTRUCTURE = /^\s*const \{ (?<names>[\w, ]+) \} = ctx;\n/gmv;
 
-  for (const file of args.positionals) {
-    const source = readFileSync(file, 'utf8');
-    const rewritten = transformContextMembers(source);
+// what the character under the cursor is part of
+type Mode = 'code' | 'line-comment' | 'block-comment' | 'quote' | 'template' | 'regex';
 
-    if (rewritten !== source) {
-      writeFileSync(file, rewritten);
+interface Scan {
+  readonly source: string;
+  readonly names: ReadonlySet<string>;
+  readonly out: string[];
 
-      console.log(`qualified ${file}`);
-    }
-  }
+  // the open brackets, with `${` as `$`, whose close resumes the template
+  readonly brackets: string[];
+  readonly modes: Mode[];
+  quote: string;
+  index: number;
+
+  // the regex literal under the cursor is inside a `[…]` class
+  isInClass: boolean;
+
+  // the `}` that closes the declaration's block was reached
+  isDone: boolean;
 }
 
 function advance(scan: Scan): void {
@@ -121,6 +110,12 @@ function advance(scan: Scan): void {
     return;
   }
 
+  if (mode === 'regex') {
+    advanceRegex(scan, char);
+
+    return;
+  }
+
   advanceCode(scan, char, next);
 }
 
@@ -131,6 +126,14 @@ function advanceCode(scan: Scan, char: string, next: string): void {
     scan.modes.push(comment);
 
     advanceBy(scan, 2);
+
+    return;
+  }
+
+  if (char === '/' && isRegexStart(scan)) {
+    scan.modes.push('regex');
+
+    advanceBy(scan, 1);
 
     return;
   }
@@ -189,6 +192,45 @@ function advanceCode(scan: Scan, char: string, next: string): void {
   scan.index += word.length;
 }
 
+// a regex literal is copied unchanged: a `/` outside a class ends it, with its flags
+function advanceRegex(scan: Scan, char: string): void {
+  if (char === '\\') {
+    advanceBy(scan, 2);
+
+    return;
+  }
+
+  if (char === '/' && !scan.isInClass) {
+    scan.modes.pop();
+
+    const flags = /^\/[a-z]*/v.exec(scan.source.slice(scan.index))?.[0] ?? '/';
+
+    advanceBy(scan, flags.length);
+
+    return;
+  }
+
+  if (char === '[' || char === ']') {
+    scan.isInClass = char === '[';
+  }
+
+  advanceBy(scan, 1);
+}
+
+// a `/` starts a regex where no value ends before it: after an operator, an
+// open bracket, the start, or a keyword such as `return`
+function isRegexStart(scan: Scan): boolean {
+  const before = findSignificant(scan.source, scan.index - 1, -1);
+
+  if (before === '' || '(,=:[!&|?{};+-*%<>~^'.includes(before)) {
+    return true;
+  }
+
+  const head = scan.source.slice(0, scan.index).trimEnd();
+
+  return /(?:^|[^\w$])(?:return|typeof|case|in|of|void|delete|throw|yield|await)$/v.test(head);
+}
+
 // the nearest character that is not whitespace, walking by `step`
 function findSignificant(source: string, from: number, step: number): string {
   let index = from;
@@ -205,6 +247,21 @@ function advanceBy(scan: Scan, count: number): void {
   scan.out.push(scan.source.slice(scan.index, scan.index + count));
 
   scan.index += count;
+}
+
+function main(): void {
+  const args = parseArgs({ args: Bun.argv.slice(2), allowPositionals: true });
+
+  for (const file of args.positionals) {
+    const source = readFileSync(file, 'utf8');
+    const rewritten = transformContextMembers(source);
+
+    if (rewritten !== source) {
+      writeFileSync(file, rewritten);
+
+      console.log(`qualified ${file}`);
+    }
+  }
 }
 
 if (import.meta.main) {
