@@ -1,45 +1,36 @@
 import { join } from 'node:path';
-import { createApiAudit } from './audit/api-audit';
-import type { ApiAudit } from './audit/api-audit';
-import { createKnownHosts } from './auth/ambient-request';
-import { createRevocations } from './auth/revocations';
-import { createTailnetIdentities, runWhois } from './auth/tailnet-identity';
 import type { TailnetPeer } from './auth/tailnet-identity';
-import { loadTokenStore } from './auth/token-store';
 import { createBackupService } from './backup/backup-service';
 import { createBroker } from './broker/broker-service';
 import type { Broker, BrokerDeps } from './broker/broker-service';
 import { createSecretFiles } from './broker/secret-files';
 import type { SecretFiles } from './broker/secret-files';
-import { buildApp } from './build-app';
 import type { AppDeps } from './build-app';
-import { createCheckpointService } from './checkpoints/checkpoint-service';
+import { buildImpdApp } from './build-impd-app';
+import { buildImpdServices } from './build-impd-services';
+import { buildImpdStorage } from './build-impd-storage';
+import type { ImpdStorage } from './build-impd-storage';
+import { buildTailnetAccess } from './build-tailnet-access';
 import type { DiskFreezer } from './checkpoints/consistent-disk';
 import type { Config } from './config';
+import { createImpdMoves } from './create-impd-moves';
 import { countImpsByState } from './db/imps';
 import { isImpSetWrite } from './db/is-imp-set-write';
 import type { ImpDatabase } from './db/open-database';
 import { runNft } from './egress/egress-firewall';
 import { createEgressService } from './egress/egress-service';
 import type { EgressDeps, EgressService } from './egress/egress-service';
-import { createGovernedImps } from './governor/create-governed-imps';
 import { createDnsToken } from './https/dns/dns-token';
 import { createPublicRecordsLink } from './https/public-records-link';
-import { createBuildContextRoute } from './images/build-context-route';
-import { BUILD_KEEPALIVE_MS } from './images/build-event-stream';
 import type { Repeat } from './images/build-event-stream';
 import { createBuilders } from './images/builder-imps';
 import type { Builders } from './images/builder-imps';
 import { HOST_ADD_WARNING } from './images/create-image-adds';
 import { HOST_BUILD_WARNING } from './images/create-image-builds';
-import { createImageService } from './images/image-service';
-import type { ImageService, ImageServiceDeps } from './images/image-service';
-import { createTemplateService } from './images/template-service';
+import type { ImageServiceDeps } from './images/image-service';
 import type { ImpServiceDeps, Imps } from './imps/imp-service';
-import { createKernelOopsWatch } from './imps/kernel-oops-watch';
 import { removeUnusedDrives } from './imps/remove-unused-drives';
-import { createMoveService } from './moves/move-service';
-import type { MoveServiceDeps } from './moves/move-service';
+import { loadImpdAccess } from './load-impd-access';
 import {
   checkHostRules6,
   readIpv6DefaultRoute,
@@ -47,31 +38,23 @@ import {
   resolveIpv6Plan,
 } from './net/ipv6-plan';
 import type { Ipv6Plan } from './net/ipv6-plan';
-import { createStatusCache, readTailscaleStatus } from './net/tailscale-status';
+import { readTailscaleStatus } from './net/tailscale-status';
 import type { TailscaleStatus } from './net/tailscale-status';
-import { createTapDevices } from './net/tap-devices';
 import type { TapDevices } from './net/tap-devices';
-import { createNetworkService } from './networks/network-service';
-import { createMcpAuth } from './oauth/create-mcp-auth';
 import { printLog } from './process/print-log';
 import { runCommand } from './process/run-command';
 import type { CommandRunner } from './process/run-command';
 import { createForwardedPeers } from './proxy/forwarded-peers';
 import type { WakeProxy } from './proxy/wake-proxy';
-import { UNKNOWN_VERSION, readHostIdentity } from './sleep/vm-identity';
+import { readHostIdentity } from './sleep/vm-identity';
 import type { HostIdentity } from './sleep/vm-identity';
 import { createAuthorizedKeys } from './ssh/authorized-keys';
 import { setupSshDir } from './ssh/host-key';
-import { createDiskBudget } from './storage/disk-budget';
-import type { DiskBudget } from './storage/disk-budget';
-import { CHANGES_USAGE, createDiskUsageCache } from './storage/disk-usage-cache';
-import type { DiskUsageCache } from './storage/disk-usage-cache';
+import { startGovernedImps } from './start-governed-imps';
+import { CHANGES_USAGE } from './storage/disk-usage-cache';
 import { readLiveStorage } from './storage/read-live-storage';
 import type { SystemFiles } from './storage/setup-system-files';
 import type { StorageBackend } from './storage/storage-backend';
-import { createStorageGate } from './storage/storage-gate';
-import type { StorageGate } from './storage/storage-gate';
-import { createStorageGc } from './storage/storage-gc';
 import { buildTailnetNames } from './tailnet-names/build-tailnet-names';
 import type { TailnetNames } from './tailnet-names/tailnet-names';
 import { startImpTelemetry } from './telemetry/imp-telemetry';
@@ -203,61 +186,6 @@ export interface ImpdDeps {
   readonly keepaliveRepeat?: Repeat;
 }
 
-// What the storage services need, and the data dir's backend
-export interface ImpdStorage {
-  readonly storageGate: StorageGate;
-  readonly diskBudget: DiskBudget;
-
-  // the builders, once the imps they run as exist
-  readonly setBuilders: (builders: Builders) => void;
-  readonly images: ImageService;
-  readonly diskUsage: DiskUsageCache;
-}
-
-// The storage gate, the disk budget, the images and the usage cache
-export function buildImpdStorage(config: Config, deps: Readonly<ImpdDeps>): ImpdStorage {
-  const log = deps.log ?? printLog;
-  const storage = deps.storage;
-
-  // every operation that makes storage before its row joins it; the GC waits
-  const storageGate = createStorageGate();
-  const zfsCommitDelayMs = config.storageBackend === 'zfs' ? 20_000 : 0;
-
-  const diskBudget = createDiskBudget({
-    storage: deps.readDiskSpace === undefined ? storage : { readUsage: deps.readDiskSpace },
-    reserveBytes: config.diskReserveBytes,
-    releaseDelayMs: zfsCommitDelayMs,
-    log,
-  });
-
-  // the image builders need the imps, which need the images
-  const buildersHolder: { builders: Builders | null } = { builders: null };
-
-  const images = createImageService({
-    config,
-    db: deps.db,
-    storage,
-    storageGate,
-    diskBudget,
-    readBuilders: () => buildersHolder.builders,
-    log,
-    ...(deps.now !== undefined && { now: deps.now }),
-    ...deps.images,
-  });
-
-  const diskUsage = createDiskUsageCache({ db: deps.db, storage, log });
-
-  return {
-    storageGate,
-    diskBudget,
-    setBuilders: (builders) => {
-      buildersHolder.builders = builders;
-    },
-    images,
-    diskUsage,
-  };
-}
-
 // The credential broker, with the secret files it shares with the GC
 export function createImpdBroker(
   config: Config,
@@ -296,58 +224,6 @@ export function buildImpdEgress(
   });
 }
 
-export interface GovernedParts {
-  readonly storage: ImpdStorage;
-  readonly broker: Pick<Broker, 'readExecEnv'>;
-  readonly egress: EgressService;
-  readonly ipv6: Ipv6Plan | null;
-  readonly cgroups: CpuCgroups;
-  readonly readServiceUrl: (name: string) => string | null;
-  readonly readTailscale: () => Promise<TailscaleStatus>;
-}
-
-// The imp service with its RAM governor and memory controller. A restart
-// calls it again with a new runner, over the same database and storage.
-export function startGovernedImps(
-  config: Config,
-  deps: Readonly<ImpdDeps>,
-  parts: Readonly<GovernedParts>,
-  identity: Readonly<HostIdentity>,
-  vms: VmRunner,
-): ReturnType<typeof createGovernedImps> {
-  return createGovernedImps({
-    cgroups: parts.cgroups,
-
-    // each VM's memory.max follows what its elastic guest holds
-    memoryLimit: parts.cgroups,
-    config,
-    db: deps.db,
-    images: parts.storage.images,
-    taps: deps.taps ?? createTapDevices(),
-    vms,
-    storage: deps.storage,
-    identity,
-    ipv6: parts.ipv6,
-    log: deps.log ?? printLog,
-    readExecEnv: parts.broker.readExecEnv,
-    storageGate: parts.storage.storageGate,
-    diskBudget: parts.storage.diskBudget,
-    readDiskUsage: parts.storage.diskUsage.read,
-    egress: parts.egress,
-    readServiceUrl: parts.readServiceUrl,
-    readTailnetHostname: async () => {
-      const status = await parts.readTailscale();
-
-      return status.hostname;
-    },
-    ...(deps.now !== undefined && { now: deps.now }),
-
-    // the host's own taint flag; main.ts passes the watch it shares with storage
-    kernelOops: createKernelOopsWatch(),
-    ...deps.imps,
-  });
-}
-
 // The image builders, which run as imps
 export function startImpdBuilders(
   config: Config,
@@ -366,244 +242,6 @@ export function startImpdBuilders(
   storage.setBuilders(builders);
 
   return builders;
-}
-
-// The API tokens, their revocations and the OAuth grants on top of them
-export async function loadImpdAccess(
-  config: Config,
-  deps: Readonly<ImpdDeps>,
-  isFileKey: (blob: Buffer) => boolean,
-) {
-  const now = deps.now ?? Date.now;
-  const log = deps.log ?? printLog;
-  const revocations = createRevocations();
-
-  const tokens = await loadTokenStore({
-    db: deps.db,
-    rootToken: deps.rootToken,
-    now,
-    onRemove: revocations.revoke,
-    isFileKey,
-  });
-
-  const oauth = createMcpAuth({
-    db: deps.db,
-    tokens,
-    revocations,
-    config: config.publicMcp,
-    now,
-    log,
-  });
-
-  return { revocations, tokens, oauth };
-}
-
-type ImpdAccess = Readonly<Awaited<ReturnType<typeof loadImpdAccess>>>;
-
-// The services over the imps that the API serves
-export function buildImpdServices(
-  config: Config,
-  deps: Readonly<ImpdDeps>,
-  parts: Readonly<{
-    storage: Pick<ImpdStorage, 'storageGate' | 'diskBudget'>;
-    imps: Imps;
-    egress: EgressService;
-    secretFiles: SecretFiles;
-  }>,
-) {
-  const db = deps.db;
-  const log = deps.log ?? printLog;
-  const storage = deps.storage;
-  const freezer = deps.freezer === undefined ? {} : { freezer: deps.freezer };
-
-  const checkpoints = createCheckpointService({
-    config,
-    db,
-    imps: parts.imps,
-    storage,
-    diskBudget: parts.storage.diskBudget,
-    log,
-    ...freezer,
-  });
-
-  const templates = createTemplateService({
-    config,
-    db,
-    imps: parts.imps,
-    storage,
-    storageGate: parts.storage.storageGate,
-    diskBudget: parts.storage.diskBudget,
-    log,
-    ...freezer,
-  });
-
-  const networks = createNetworkService({ db, egress: parts.egress, imps: parts.imps });
-
-  const gc = createStorageGc({
-    db,
-    storage,
-    storageGate: parts.storage.storageGate,
-    log,
-    secretFiles: parts.secretFiles,
-  });
-
-  const audit = createApiAudit({ db, now: deps.now ?? Date.now, log });
-
-  return { checkpoints, templates, networks, gc, audit };
-}
-
-type ImpdServices = Readonly<ReturnType<typeof buildImpdServices>>;
-
-// The moves to and from other hosts
-export function createImpdMoves(
-  config: Config,
-  deps: Readonly<ImpdDeps>,
-  parts: Readonly<{
-    storage: Pick<ImpdStorage, 'storageGate' | 'diskBudget'>;
-    imps: Imps;
-    broker: MoveServiceDeps['grants'];
-    egress: EgressService;
-    audit: ApiAudit;
-    readIdentity: () => HostIdentity;
-  }>,
-  hooks: Readonly<
-    Pick<MoveServiceDeps, 'readTailnetIp' | 'releaseName' | 'onCommitted'> &
-      Partial<
-        Pick<
-          MoveServiceDeps,
-          'fetch' | 'startPeerDeadline' | 'partBytes' | 'readWarmHost' | 'readTapMac'
-        >
-      >
-  >,
-) {
-  return createMoveService({
-    audit: parts.audit,
-    config,
-    db: deps.db,
-    dataDir: config.dataDir,
-    storage: deps.storage,
-    storageGate: parts.storage.storageGate,
-    diskBudget: parts.storage.diskBudget,
-    imps: parts.imps,
-    grants: parts.broker,
-    egress: parts.egress,
-    readIdentity: parts.readIdentity,
-    ...hooks,
-    now: deps.now ?? Date.now,
-    log: deps.log ?? printLog,
-  });
-}
-
-// tailnet identity, when IMP_TAILNET_IDENTITIES has rules; both ask about
-// the node on every request, so they share one cached status
-function buildTailnetAccess(
-  config: Config,
-  deps: Readonly<Pick<ImpdDeps, 'now' | 'whois'>>,
-  readStatus: () => Promise<TailscaleStatus>,
-): AppDeps['tailnet'] {
-  if (config.tailnetRules === null) {
-    return null;
-  }
-
-  const now = deps.now ?? Date.now;
-  const readTailscale = createStatusCache(readStatus, now);
-
-  return {
-    identities: createTailnetIdentities({
-      rules: config.tailnetRules,
-      whois: deps.whois ?? runWhois,
-      readTailscale,
-      now,
-    }),
-    knownHosts: createKnownHosts({
-      readTailscale,
-      domain: config.https?.domain ?? null,
-    }),
-  };
-}
-
-export interface ImpdAppParts {
-  readonly storage: Pick<ImpdStorage, 'images' | 'diskBudget'>;
-  readonly access: ImpdAccess;
-  readonly services: ImpdServices;
-  readonly imps: Imps;
-  readonly governor: AppDeps['governor'];
-  readonly broker: Broker;
-  readonly egress: EgressService;
-  readonly identity: HostIdentity;
-  readonly peers: AppDeps['peers'];
-  readonly tailnet: AppDeps['tailnet'];
-  readonly backups: AppDeps['backups'];
-  readonly moves: AppDeps['moves'];
-  readonly publicRecords: AppDeps['publicRecords'];
-  readonly checkDnsToken: AppDeps['checkDnsToken'];
-  readonly readTailscale: () => Promise<TailscaleStatus>;
-  readonly readTailnetNames: AppDeps['readTailnetNames'];
-  readonly isReady: () => boolean;
-
-  // the gap between the progress events of a streamed image call
-  readonly keepaliveMs?: number;
-  readonly readKsmHostStats?: AppDeps['readKsmHostStats'];
-}
-
-// impd's HTTP app: the RPC API, exec, tunnels, the dashboard and MCP
-export function buildImpdApp(
-  config: Config,
-  deps: Readonly<ImpdDeps>,
-  parts: Readonly<ImpdAppParts>,
-) {
-  const now = deps.now ?? Date.now;
-  const keepaliveMs = parts.keepaliveMs ?? BUILD_KEEPALIVE_MS;
-
-  return buildApp({
-    config,
-    db: deps.db,
-    rootToken: deps.rootToken,
-    tokens: parts.access.tokens,
-    revocations: parts.access.revocations,
-    oauth: parts.access.oauth,
-    peers: parts.peers,
-    tailnet: parts.tailnet,
-    imps: parts.imps,
-    images: parts.storage.images,
-    governor: parts.governor,
-    ...(parts.readKsmHostStats !== undefined && { readKsmHostStats: parts.readKsmHostStats }),
-    checkpoints: parts.services.checkpoints,
-    templates: parts.services.templates,
-    backups: parts.backups,
-    broker: parts.broker,
-    egress: parts.egress,
-    networks: parts.services.networks,
-    firecrackerVersion:
-      parts.identity.firecrackerVersion === UNKNOWN_VERSION
-        ? null
-        : parts.identity.firecrackerVersion,
-    systemFiles: deps.systemFiles.info,
-    storage: deps.storage,
-    diskBudget: parts.storage.diskBudget,
-    gc: parts.services.gc,
-    readTailscale: parts.readTailscale,
-    readTailnetNames: parts.readTailnetNames,
-    publicRecords: parts.publicRecords,
-    checkDnsToken: parts.checkDnsToken,
-    isReady: parts.isReady,
-    now,
-    log: deps.log ?? printLog,
-    ...(deps.logRpcFailure !== undefined && { logRpcFailure: deps.logRpcFailure }),
-    audit: parts.services.audit,
-    buildContexts: createBuildContextRoute({
-      config,
-      images: parts.storage.images,
-      diskBudget: parts.storage.diskBudget,
-      audit: parts.services.audit,
-      now,
-      keepaliveMs,
-      ...(deps.keepaliveRepeat !== undefined && { repeat: deps.keepaliveRepeat }),
-    }),
-    imageKeepaliveMs: keepaliveMs,
-    ...(deps.keepaliveRepeat !== undefined && { imageKeepaliveRepeat: deps.keepaliveRepeat }),
-    moves: parts.moves,
-  });
 }
 
 // Every impd service, wired and started as a host runs them: storage
