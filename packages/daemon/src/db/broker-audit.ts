@@ -7,10 +7,17 @@ import type { ImpDatabase } from './open-database';
 // requests sent with a credential
 export const AUDIT_ROWS_PER_IMP = 1000;
 
+// rows the log keeps across every imp, destroyed ones included, whose rows
+// no new row of their own ever cuts; the oldest go first
+export const AUDIT_ROWS = 100_000;
+
 // A request the broker sent with a credential, with reason null, or one it
 // refused, with no secret. Nothing from a header or a body is kept.
 export interface NewAuditEntry {
   readonly impId: string;
+
+  // kept in the row, so it outlives the imp
+  readonly impName: string;
   readonly secretName: string | null;
   readonly at: Date;
   readonly method: string | null;
@@ -25,10 +32,11 @@ export interface NewAuditEntry {
 
 export async function writeAuditEntry(db: ImpDatabase, entry: NewAuditEntry): Promise<void> {
   await db.transaction().execute(async (trx) => {
-    await trx
+    const row = await trx
       .insertInto('broker_audit')
       .values({
         imp_id: entry.impId,
+        imp_name: entry.impName,
         secret_name: entry.secretName,
         at: entry.at.getTime(),
         method: entry.method,
@@ -40,7 +48,16 @@ export async function writeAuditEntry(db: ImpDatabase, entry: NewAuditEntry): Pr
         duration_ms: entry.durationMs,
         reason: entry.reason,
       })
-      .execute();
+      .returning('id')
+      .executeTakeFirstOrThrow();
+
+    // ids only grow, so the cut is one indexed delete, as in the API audit
+    if (row.id > AUDIT_ROWS) {
+      await trx
+        .deleteFrom('broker_audit')
+        .where('id', '<=', row.id - AUDIT_ROWS)
+        .execute();
+    }
 
     const sameKind = entry.reason === null ? 'is' : 'is not';
 
@@ -66,8 +83,9 @@ export async function writeAuditEntry(db: ImpDatabase, entry: NewAuditEntry): Pr
   });
 }
 
-// The requests sent with a credential, newest first; one imp's when impId is
-// set, and only imps within the patterns when there are any.
+// The requests sent with a credential, newest first, destroyed imps' among
+// them; one imp's when impId is set, and only imps within the patterns when
+// there are any.
 export async function listAuditEntries(
   db: ImpDatabase,
   impId: string | null,
@@ -84,7 +102,7 @@ export async function listAuditEntries(
 
     return {
       at: new Date(row.at),
-      imp: row.name,
+      imp: row.imp_name,
       secret: row.secret_name,
       method: row.method,
       host: row.host,
@@ -114,7 +132,7 @@ export async function listRefusedRequests(
 
     return {
       at: new Date(row.at),
-      imp: row.name,
+      imp: row.imp_name,
       method: row.method,
       host: row.host,
       path: row.path,
@@ -137,33 +155,19 @@ function listAuditRows(db: ImpDatabase, filter: Readonly<AuditRowFilter>) {
 
   const base = db
     .selectFrom('broker_audit')
-    .innerJoin('imps', 'imps.id', 'broker_audit.imp_id')
-    .select([
-      'imps.name',
-      'broker_audit.id',
-      'broker_audit.secret_name',
-      'broker_audit.at',
-      'broker_audit.method',
-      'broker_audit.host',
-      'broker_audit.path',
-      'broker_audit.status',
-      'broker_audit.request_bytes',
-      'broker_audit.response_bytes',
-      'broker_audit.duration_ms',
-      'broker_audit.reason',
-    ])
-    .where('broker_audit.reason', kind, null)
-    .orderBy('broker_audit.id', 'desc')
+    .selectAll()
+    .where('reason', kind, null)
+    .orderBy('id', 'desc')
     .limit(filter.limit);
 
-  const named = filter.impId === null ? base : base.where('broker_audit.imp_id', '=', filter.impId);
+  const named = filter.impId === null ? base : base.where('imp_id', '=', filter.impId);
   const patterns = filter.patterns;
 
   return (
     patterns === null
       ? named
       : named.where((eb) =>
-          eb.or(patterns.map((pattern) => eb('imps.name', 'like', toLikePattern(pattern)))),
+          eb.or(patterns.map((pattern) => eb('imp_name', 'like', toLikePattern(pattern)))),
         )
   ).execute();
 }

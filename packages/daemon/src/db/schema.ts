@@ -42,6 +42,7 @@ export interface BrokerAudit {
   host: string | null;
   id: Generated<number>;
   imp_id: string;
+  imp_name: string;
   method: string | null;
   path: string | null;
   reason: AuditRefusal | null;

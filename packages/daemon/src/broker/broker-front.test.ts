@@ -456,6 +456,7 @@ test('it records a refused audit row for an imp past its connection cap', async 
 
   expect(recordAudit).toHaveBeenCalledExactlyOnceWith({
     impId: 'imp-1',
+    impName: 'dev',
     secretName: null,
     at: expect.toBeValidDate(),
     method: null,
@@ -499,6 +500,7 @@ test('it records a refused audit row with the method of a head that is not a CON
 
   expect(recordAudit).toHaveBeenCalledExactlyOnceWith({
     impId: 'imp-1',
+    impName: 'dev',
     secretName: null,
     at: expect.toBeValidDate(),
     method: 'POST',
@@ -572,6 +574,7 @@ test('it records a refused audit row for a tunnel the egress policy does not all
 
   expect(recordAudit).toHaveBeenCalledExactlyOnceWith({
     impId: 'imp-1',
+    impName: 'dev',
     secretName: null,
     at: expect.toBeValidDate(),
     method: 'CONNECT',
@@ -617,6 +620,7 @@ test('it records a refused audit row for a tunnel to an address the check refuse
 
   expect(recordAudit).toHaveBeenCalledExactlyOnceWith({
     impId: 'imp-1',
+    impName: 'dev',
     secretName: null,
     at: expect.toBeValidDate(),
     method: 'CONNECT',

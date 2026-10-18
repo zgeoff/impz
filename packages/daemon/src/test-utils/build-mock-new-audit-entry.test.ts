@@ -4,6 +4,7 @@ import { buildMockNewAuditEntry } from './build-mock-new-audit-entry';
 test('it builds a default new audit entry', () => {
   expect(buildMockNewAuditEntry()).toStrictEqual({
     impId: expect.toBeString(),
+    impName: expect.toBeString(),
     secretName: expect.toBeString(),
     at: expect.toBeValidDate(),
     method: 'GET',
@@ -20,6 +21,7 @@ test('it builds a default new audit entry', () => {
 test('it applies overrides on top of the defaults', () => {
   const entry = buildMockNewAuditEntry({
     impId: 'imp-1',
+    impName: 'dev',
     secretName: null,
     at: new Date(Date.UTC(2026, 0, 1)),
     method: 'CONNECT',
@@ -34,6 +36,7 @@ test('it applies overrides on top of the defaults', () => {
 
   expect(entry).toStrictEqual({
     impId: 'imp-1',
+    impName: 'dev',
     secretName: null,
     at: new Date(Date.UTC(2026, 0, 1)),
     method: 'CONNECT',

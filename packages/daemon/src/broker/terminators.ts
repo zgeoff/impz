@@ -15,6 +15,9 @@ const MAX_REQUEST_BODY_BYTES = 8 * 1024 ** 3;
 
 export interface TerminatorKey {
   readonly impId: string;
+
+  // for the audit rows, which outlive the imp
+  readonly impName: string;
   readonly host: string;
 }
 

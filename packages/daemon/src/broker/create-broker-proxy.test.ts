@@ -1,4 +1,4 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -17,6 +17,7 @@ import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { listAuditEntries } from '../db/broker-audit';
 import { createImage } from '../db/images';
+import { findImpByName } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import { findSecret, listGrantNames, removeCheckedGrant } from '../db/secrets';
 import {
@@ -149,6 +150,7 @@ async function setupTest() {
 
   // impd's clock, which a test moves on
   const clock = { nowMs: Date.now() };
+  const log = mock<(message: string) => void>(() => {});
 
   const impd = await createImpd(config, {
     db,
@@ -166,7 +168,7 @@ async function setupTest() {
       },
     },
     readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
+    log,
     readIdentity: (files, ipv6Prefix) => ({
       firecrackerVersion: 'v1.17.0',
       snapshotVersion: 'v12.0.0',
@@ -244,6 +246,7 @@ async function setupTest() {
     dataDir,
     impd,
     clock,
+    log,
     client,
     seen,
     tunnelled,
@@ -325,6 +328,64 @@ test('it records an audit row for a forwarded request', async () => {
       durationMs: expect.toBeNumber() as unknown,
     },
   ]);
+});
+
+test('it records the audit row of a request that ends after its imp is destroyed', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.github.com': ctx.upstreamOrigin } }),
+  );
+
+  await ctx.client.imps.create({ name: 'dev' });
+  await ctx.impd.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_real' });
+  await ctx.impd.broker.addGrant('dev', 'gh');
+
+  // the destroy lands while the upstream handles /slow, which answers once
+  // the imp's row is gone
+  const destroy: { done: Promise<unknown> } = { done: Promise.resolve() };
+
+  ctx.answers.set('/slow', async () => {
+    destroy.done = ctx.client.imps.destroy({ name: 'dev' });
+
+    await waitFor(async () => {
+      const imp = await findImpByName(ctx.db, 'dev');
+
+      expect(imp).toBeUndefined();
+    });
+
+    return new Response('from upstream');
+  });
+
+  await ctx.guest.curl('https://api.github.com/slow');
+
+  await destroy.done;
+
+  const audit: unknown = await waitFor(async () => {
+    const rows = await listAuditEntries(ctx.db, null, 10, null);
+
+    expect(rows).toHaveLength(1);
+
+    return rows;
+  });
+
+  expect(audit).toStrictEqual([
+    {
+      at: expect.toBeValidDate() as unknown,
+      imp: 'dev',
+      secret: 'gh',
+      method: 'GET',
+      host: 'api.github.com',
+      path: '/slow',
+      status: 200,
+      requestBytes: 0,
+      responseBytes: 'from upstream'.length,
+      durationMs: expect.toBeNumber() as unknown,
+    },
+  ]);
+
+  expect(ctx.log.mock.calls).not.toContainEqual([expect.toInclude('audit write failed')]);
 });
 
 test('it streams a large upload through and counts its bytes', async () => {
@@ -545,6 +606,7 @@ test('it keeps no credential, header, query or body in the audit row of a refuse
     {
       id: expect.toBeNumber() as unknown,
       imp_id: dev.id,
+      imp_name: 'dev',
       secret_name: null,
       at: expect.toBeNumber() as unknown,
       method: 'POST',

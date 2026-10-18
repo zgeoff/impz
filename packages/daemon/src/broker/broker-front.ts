@@ -237,6 +237,7 @@ async function runConnection(
 
     deps.recordAudit({
       impId: peer.id,
+      impName: peer.name,
       secretName: null,
       at: new Date(),
       method: refusal.method,
@@ -298,7 +299,11 @@ async function runConnection(
   if (granted) {
     tunnels.drop(peer.id, socket);
 
-    const path = await deps.openTerminator({ impId: peer.id, host: head.host });
+    const path = await deps.openTerminator({
+      impId: peer.id,
+      impName: peer.name,
+      host: head.host,
+    });
 
     startRelay(socket, createConnection({ path }), read.rest);
 

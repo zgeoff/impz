@@ -27,6 +27,7 @@ import invariant from 'tiny-invariant';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import {
+  AUDIT_ROWS,
   AUDIT_ROWS_PER_IMP,
   listAuditEntries,
   listRefusedRequests,
@@ -879,6 +880,7 @@ test('it lists only the sent requests in the audit, and only the refused ones as
     ctx.db,
     buildMockNewAuditEntry({
       impId: dev.id,
+      impName: 'dev',
       secretName: null,
       method: 'CONNECT',
       host: 'exfil.test',
@@ -943,26 +945,76 @@ test('it lists only the audit rows of imps within the patterns', async () => {
   const dev = await ctx.client.imps.create({ name: 'dev' });
   const other = await ctx.client.imps.create({ name: 'other' });
 
-  for (const impId of [dev.id, other.id]) {
-    await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId }));
-  }
+  await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId: dev.id, impName: 'dev' }));
+  await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId: other.id, impName: 'other' }));
 
   const rows = await ctx.impd.broker.listAudit(null, 10, ['de*']);
 
   expect(rows.map((row) => row.imp)).toStrictEqual(['dev']);
 });
 
-test('it removes the audit rows of a destroyed imp', async () => {
+test('it keeps the audit rows of a destroyed imp under its name', async () => {
   const ctx = await setupTest();
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
-  await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId: dev.id }));
+  await writeAuditEntry(
+    ctx.db,
+    buildMockNewAuditEntry({ impId: dev.id, impName: 'dev', path: '/kept' }),
+  );
 
   await ctx.client.imps.destroy({ name: 'dev' });
 
   const left = await listAuditEntries(ctx.db, null, 10, null);
 
-  expect(left).toStrictEqual([]);
+  expect(left.map((row) => [row.imp, row.path])).toStrictEqual([['dev', '/kept']]);
+});
+
+test('it removes the oldest audit rows across every imp past the table cap', async () => {
+  const ctx = await setupTest();
+
+  // a destroyed imp's row, then one whose id leaves room for one more under
+  // the cap
+  await ctx.db
+    .insertInto('broker_audit')
+    .values([
+      {
+        id: 1,
+        imp_id: 'gone',
+        imp_name: 'old',
+        secret_name: 'gh',
+        at: 1,
+        method: 'GET',
+        host: 'api.github.com',
+        path: '/oldest',
+        status: 200,
+        request_bytes: 0,
+        response_bytes: 0,
+        duration_ms: 0,
+        reason: null,
+      },
+      {
+        id: AUDIT_ROWS,
+        imp_id: 'gone',
+        imp_name: 'old',
+        secret_name: 'gh',
+        at: 2,
+        method: 'GET',
+        host: 'api.github.com',
+        path: '/older',
+        status: 200,
+        request_bytes: 0,
+        response_bytes: 0,
+        duration_ms: 0,
+        reason: null,
+      },
+    ])
+    .execute();
+
+  await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impName: 'dev', path: '/newest' }));
+
+  const rows = await listAuditEntries(ctx.db, null, 10, null);
+
+  expect(rows.map((row) => row.path)).toStrictEqual(['/newest', '/older']);
 });
 
 test('it reports a fork whose grants cannot be copied, and logs the cause', async () => {

@@ -233,6 +233,7 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     createHandler: (key) =>
       createForwarder({
         impId: key.impId,
+        impName: key.impName,
         host: key.host,
         findCredential,
         resolveUpstream: deps.resolveUpstream,

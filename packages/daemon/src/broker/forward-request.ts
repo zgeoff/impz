@@ -43,6 +43,7 @@ export type UpstreamFetch = (url: string, init: UpstreamInit) => Promise<Respons
 
 export interface ForwardDeps {
   readonly impId: string;
+  readonly impName: string;
   readonly host: string;
 
   // null once the grant is gone: a terminator can outlive it by a request
@@ -97,6 +98,7 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
     const sendRefusal = (status: number, message: string, reason: AuditRefusal): Response => {
       deps.recordAudit({
         impId: deps.impId,
+        impName: deps.impName,
         secretName: null,
         at: new Date(),
         method: request.method,
@@ -152,6 +154,7 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
       const sendAudit = (status: number): void => {
         deps.recordAudit({
           impId: deps.impId,
+          impName: deps.impName,
           secretName: sent.secretName,
           at: new Date(),
           method: request.method,

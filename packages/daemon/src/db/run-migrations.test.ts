@@ -522,6 +522,7 @@ test('#runMigrations keeps every broker audit row as a sent request in the refus
     {
       id: 7,
       imp_id: 'imp',
+      imp_name: 'dev',
       secret_name: 'gh',
       at: 1,
       method: 'GET',
@@ -555,7 +556,7 @@ test('#runMigrations makes an imp’s delete remove its broker audit rows in the
     VALUES ('gone', 'gh', 1, 'GET', 'api.github.com', '/user', 200, 0, 0, 0),
       ('kept', 'gh', 1, 'GET', 'api.github.com', '/user', 200, 0, 0, 0)`.execute(db);
 
-  await runMigrations(db);
+  await runMigrationsTo(db, '030_add_broker_audit_refusals');
 
   await db.deleteFrom('imps').where('id', '=', 'gone').execute();
 
@@ -564,7 +565,113 @@ test('#runMigrations makes an imp’s delete remove its broker audit rows in the
   expect(rows).toStrictEqual([{ imp_id: 'kept' }]);
 });
 
-test('#runMigrations keeps the broker audit index in the refusals migration', async () => {
+test('#runMigrations keeps every broker audit row with its imp’s name in the kept-audit migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '035_drop_old_oauth');
+
+  // rows as an impd at 035 wrote them: a sent request and a refused one
+  await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
+    VALUES ('img', 'base', 'imp/base:latest', 'sha256:0', 1, 0)`.execute(db);
+
+  await sql`INSERT INTO imps (id, name, image_id, state, vcpus, memory_mib, slot, ip,
+    created_at, last_active_at)
+    VALUES ('imp-1', 'dev', 'img', 'stopped', 1, 512, 0, 'ip-1', 0, 0),
+      ('imp-2', 'ops', 'img', 'stopped', 1, 512, 1, 'ip-2', 0, 0)`.execute(db);
+
+  await sql`INSERT INTO broker_audit (id, imp_id, secret_name, at, method, host, path, status,
+    request_bytes, response_bytes, duration_ms, reason)
+    VALUES (3, 'imp-1', 'gh', 1, 'GET', 'api.github.com', '/user', 200, 2, 3, 4, NULL),
+      (9, 'imp-2', NULL, 5, 'CONNECT', 'example.com', NULL, 403, 0, 0, 6, 'egress-policy')`.execute(
+    db,
+  );
+
+  await runMigrations(db);
+
+  const rows = await db.selectFrom('broker_audit').selectAll().orderBy('id').execute();
+
+  expect(rows).toStrictEqual([
+    {
+      id: 3,
+      imp_id: 'imp-1',
+      imp_name: 'dev',
+      secret_name: 'gh',
+      at: 1,
+      method: 'GET',
+      host: 'api.github.com',
+      path: '/user',
+      status: 200,
+      request_bytes: 2,
+      response_bytes: 3,
+      duration_ms: 4,
+      reason: null,
+    },
+    {
+      id: 9,
+      imp_id: 'imp-2',
+      imp_name: 'ops',
+      secret_name: null,
+      at: 5,
+      method: 'CONNECT',
+      host: 'example.com',
+      path: null,
+      status: 403,
+      request_bytes: 0,
+      response_bytes: 0,
+      duration_ms: 6,
+      reason: 'egress-policy',
+    },
+  ]);
+});
+
+test('#runMigrations keeps an imp’s broker audit rows past its delete in the kept-audit migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '035_drop_old_oauth');
+
+  await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
+    VALUES ('img', 'base', 'imp/base:latest', 'sha256:0', 1, 0)`.execute(db);
+
+  await sql`INSERT INTO imps (id, name, image_id, state, vcpus, memory_mib, slot, ip,
+    created_at, last_active_at)
+    VALUES ('gone', 'dev', 'img', 'stopped', 1, 512, 0, 'ip-1', 0, 0)`.execute(db);
+
+  await sql`INSERT INTO broker_audit (imp_id, secret_name, at, method, host, path, status,
+    request_bytes, response_bytes, duration_ms)
+    VALUES ('gone', 'gh', 1, 'GET', 'api.github.com', '/user', 200, 0, 0, 0)`.execute(db);
+
+  await runMigrations(db);
+
+  await db.deleteFrom('imps').where('id', '=', 'gone').execute();
+
+  // a row for the deleted imp, as a request that ends after the delete writes
+  await db
+    .insertInto('broker_audit')
+    .values({
+      imp_id: 'gone',
+      imp_name: 'dev',
+      secret_name: 'gh',
+      at: 2,
+      method: 'GET',
+      host: 'api.github.com',
+      path: '/late',
+      status: 200,
+      request_bytes: 0,
+      response_bytes: 0,
+      duration_ms: 0,
+      reason: null,
+    })
+    .execute();
+
+  const rows = await db.selectFrom('broker_audit').select(['imp_name', 'path']).execute();
+
+  expect(rows).toStrictEqual([
+    { imp_name: 'dev', path: '/user' },
+    { imp_name: 'dev', path: '/late' },
+  ]);
+});
+
+test('#runMigrations keeps the broker audit index through the table copies', async () => {
   const db = createUnmigratedDatabase();
 
   await runMigrations(db);
