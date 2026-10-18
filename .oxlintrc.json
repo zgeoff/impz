@@ -43,8 +43,6 @@
     ],
     // zod's documented import form is `import * as z from 'zod'`
     "import/no-namespace": "off",
-    // off until GEO-1198 splits the files over 500 lines
-    "max-lines": "off",
     // off until GEO-1199 trims the functions that take more than 4 parameters
     "max-params": "off"
   },
@@ -62,6 +60,12 @@
         // stylesheets are imported for their side effect
         "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }]
       }
+    },
+    {
+      // the dashboard's stand-in for impd's router, which goes when GEO-365
+      // runs the dashboard on the real router
+      "files": ["packages/dashboard/src/mocks/impd-router.ts"],
+      "rules": { "max-lines": "off" }
     },
     {
       // the cli keeps every error that main.ts maps to an exit code in one module
