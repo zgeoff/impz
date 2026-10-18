@@ -28,6 +28,7 @@ import { requireOwnDrivePath, requireWarmMove, writeWarmFiles } from './check-wa
 import { COMMIT_WINDOW_MS } from './commit-window-ms';
 import { createByteCounter } from './create-byte-counter';
 import type { ByteCounter } from './create-byte-counter';
+import { isTicketedName } from './is-ticketed-name';
 import {
   FileEndSchema,
   MOVE_FRAMES,
@@ -102,7 +103,7 @@ export async function readMoveStream(
   // source built the header, however long the disk then takes
   const headerAt = deps.now();
 
-  if (header.imp.name !== row.name) {
+  if (!isTicketedName(row.name, header.imp.name)) {
     throw new MoveRequestError(403, `the ticket is for ${row.name}, not ${header.imp.name}`);
   }
 
