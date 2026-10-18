@@ -3,7 +3,7 @@ import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ImpSchema } from '@impz/api';
-import type { ImpContract } from '@impz/api';
+import type { GrantNotCopied, ImpContract } from '@impz/api';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
@@ -2312,32 +2312,31 @@ test('it copies nothing of a secret taken off the list after the access check', 
   expect(devBGrants).toStrictEqual([]);
 });
 
+// the source's one grant, skipped
+const GH_NOT_GRANTABLE: readonly GrantNotCopied[] = [{ secret: 'gh', reason: 'not-grantable' }];
+
 test.each([
   ['its exact name and generation', (entry: GrantableSecret) => entry, []],
   [
     'a case variant of its name',
     (entry: GrantableSecret) => ({ ...entry, name: 'GH' }),
-    [{ secret: 'gh', reason: 'not-grantable' }],
+    GH_NOT_GRANTABLE,
   ],
   [
     'its name with whitespace',
     (entry: GrantableSecret) => ({ ...entry, name: 'gh ' }),
-    [{ secret: 'gh', reason: 'not-grantable' }],
+    GH_NOT_GRANTABLE,
   ],
   [
     'a unicode look-alike of its name',
     (entry: GrantableSecret) => ({ ...entry, name: 'g\u04BB' }),
-    [{ secret: 'gh', reason: 'not-grantable' }],
+    GH_NOT_GRANTABLE,
   ],
-  [
-    'an empty name',
-    (entry: GrantableSecret) => ({ ...entry, name: '' }),
-    [{ secret: 'gh', reason: 'not-grantable' }],
-  ],
+  ['an empty name', (entry: GrantableSecret) => ({ ...entry, name: '' }), GH_NOT_GRANTABLE],
   [
     'another generation',
     (entry: GrantableSecret) => ({ ...entry, generation: `${entry.generation}-old` }),
-    [{ secret: 'gh', reason: 'not-grantable' }],
+    GH_NOT_GRANTABLE,
   ],
 ])('it copies a fork’s grant only for a list entry with %s', async (_kind, toEntry, notCopied) => {
   const ctx = await setupTest();
