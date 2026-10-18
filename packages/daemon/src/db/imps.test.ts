@@ -690,6 +690,7 @@ test.each([
 test.each([
   ['an unmarked imp straight to moved', {}, 'moved', 'null to moved'],
   ['a moved imp back to sending', { moveState: 'moved' }, 'sending', 'moved to sending'],
+  ['a moved imp to receiving', { moveState: 'moved' }, 'receiving', 'moved to receiving'],
   ['a sending imp to receiving', { moveState: 'sending' }, 'receiving', 'sending to receiving'],
   ['a receiving imp to moved', { moveState: 'receiving' }, 'moved', 'receiving to moved'],
 ] as const)('#updateImpMove refuses %s and keeps the mark', async (_kind, start, to, change) => {
