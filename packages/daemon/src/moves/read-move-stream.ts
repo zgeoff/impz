@@ -25,6 +25,7 @@ import type { StorageBackend } from '../storage/storage-backend';
 import type { StorageGate } from '../storage/storage-gate';
 import { writeReceivedLeases } from './build-moved-leases';
 import { requireOwnDrivePath, requireWarmMove, writeWarmFiles } from './check-warm-move';
+import { COMMIT_WINDOW_MS } from './commit-window-ms';
 import { createByteCounter } from './create-byte-counter';
 import type { ByteCounter } from './create-byte-counter';
 import {
@@ -45,9 +46,6 @@ import type { ReceiptBody } from './move-tickets';
 import { removeStagedImp } from './remove-staged-imp';
 import { writeMoveStreams } from './write-move-streams';
 
-// the commit is good this long after the receipt
-// (docs/architecture/storage/moves.md#one-live-copy)
-export const COMMIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 const ID_ATTEMPTS = 5;
 
 interface ReceiveStreamDeps {
