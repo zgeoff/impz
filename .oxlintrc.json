@@ -46,7 +46,119 @@
     // off until GEO-1198 splits the files over 500 lines
     "max-lines": "off",
     // off until GEO-1199 trims the functions that take more than 4 parameters
-    "max-params": "off"
+    "max-params": "off",
+    // the package boundaries: a package imports only the packages below it, by name, and
+    // production code imports no test support; oxlintrc.test.ts checks that each one fails
+    "zgeoff/import-zones": [
+      "error",
+      {
+        "zones": {
+          "packages": ["packages/**"],
+          "shared": ["packages/shared/**"],
+          "client": ["packages/client/**"],
+          "above-client": ["packages/{mcp,cli,daemon,dashboard}/**"],
+          "test-utils": ["packages/test-utils/**"],
+          "runtime-neutral": ["packages/{shared,api,client}/**"],
+          // the daemon's own test helpers build queries against real databases
+          "db": ["packages/daemon/src/{db,test-utils}/**"],
+          "tests": [
+            "**/*.{test,e2e,pebble}.{ts,tsx}",
+            "**/{test-utils,smoke,mocks}/**",
+            "packages/dashboard/e2e/**",
+            "**/test-setup.ts"
+          ]
+        },
+        "edges": [
+          {
+            "name": "package-by-name",
+            "from": ["packages"],
+            "to": ["packages"],
+            // a test may reach another package's helpers, which no package exports, by path
+            "allow": ["tests"],
+            "allowWithin": "packages/*",
+            "reason": "import another package by its package name, never by a relative path"
+          },
+          {
+            "name": "test-support",
+            "from": ["packages"],
+            "to": ["tests"],
+            "ignore": [
+              "**/*.{test,e2e,pebble}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "packages/dashboard/e2e/**",
+              "**/test-setup.ts"
+            ],
+            "reason": "production code never imports test support"
+          }
+        ],
+        "modules": [
+          {
+            "name": "kysely",
+            "modules": ["kysely", "kysely-codegen"],
+            "from": ["packages"],
+            "allow": ["db"],
+            "reason": "query through a repository in packages/daemon/src/db instead"
+          },
+          {
+            "name": "test-support",
+            "modules": ["@impz/test-utils", "@impz/api/test-utils", "@impz/client/test-utils"],
+            "from": ["packages"],
+            "allow": ["tests"],
+            "reason": "production code never imports test support"
+          },
+          {
+            "name": "runtime-neutral",
+            "modules": ["node:*"],
+            "from": ["runtime-neutral"],
+            "allow": ["tests"],
+            "reason": "@impz/shared, @impz/api and the client run in any runtime"
+          },
+          {
+            "name": "package-order",
+            "modules": ["@impz/*"],
+            "from": ["shared"],
+            "allow": ["tests"],
+            "reason": "@impz/shared imports no @impz/* package"
+          },
+          {
+            "name": "package-order",
+            "modules": ["@impz/api"],
+            "from": ["packages"],
+            "allow": ["client", "above-client", "tests"],
+            "reason": "only the client, @impz/mcp and the apps import @impz/api"
+          },
+          {
+            "name": "package-order",
+            "modules": ["@impz/local-tar", "@impz/client", "@impz/mcp"],
+            "from": ["packages"],
+            "allow": ["above-client", "tests"],
+            "reason": "only @impz/mcp and the apps import @impz/local-tar, the client and @impz/mcp"
+          },
+          {
+            "name": "package-order",
+            "modules": ["@impz/cli", "@impz/daemon", "@impz/dashboard"],
+            "from": ["packages"],
+            "allow": ["tests"],
+            "reason": "an app imports no other app"
+          },
+          {
+            "name": "package-order",
+            "modules": [
+              "@impz/local-tar",
+              "@impz/api",
+              "@impz/client",
+              "@impz/mcp",
+              "@impz/cli",
+              "@impz/daemon",
+              "@impz/dashboard"
+            ],
+            "from": ["test-utils"],
+            "allow": [],
+            "reason": "@impz/test-utils is a leaf: it imports only @impz/shared"
+          }
+        ]
+      }
+    ]
   },
   "overrides": [
     {
@@ -67,517 +179,6 @@
       // the cli keeps every error that main.ts maps to an exit code in one module
       "files": ["packages/cli/src/cli/errors.ts"],
       "rules": { "max-classes-per-file": "off" }
-    },
-    {
-      // stage 1 import rules, one override per package. A later override
-      // replaces an earlier one's no-restricted-imports, so each block carries
-      // every pattern its files need, and type-only imports count. No pattern
-      // uses a `!` negation: oxlint lets an import that one negation matches
-      // past every pattern of the rule. This block covers a package that has
-      // no block of its own yet: only db and test support build queries, so
-      // every other module goes through db's repositories
-      "files": ["packages/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["kysely", "kysely/*", "kysely-codegen"],
-                "message": "Query through a repository in packages/daemon/src/db instead."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // the platform helpers: imports no @impz/* package
-      "files": ["packages/shared/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["kysely", "kysely/*", "kysely-codegen"],
-                "message": "Query through a repository in packages/daemon/src/db instead."
-              },
-              {
-                "group": ["node:*"],
-                "message": "Keep this package runtime-neutral: no node: import in @impz/shared, @impz/api or the client."
-              },
-              {
-                "group": [
-                  "@impz/test-utils",
-                  "@impz/test-utils/**",
-                  "**/test-utils",
-                  "**/test-utils/**",
-                  "**/mocks",
-                  "**/mocks/**",
-                  "**/smoke",
-                  "**/smoke/**"
-                ],
-                "message": "Production code never imports test support."
-              },
-              {
-                "group": [
-                  "@impz/local-tar",
-                  "@impz/local-tar/**",
-                  "@impz/api",
-                  "@impz/api/**",
-                  "@impz/client",
-                  "@impz/client/**",
-                  "@impz/mcp",
-                  "@impz/mcp/**",
-                  "@impz/cli",
-                  "@impz/cli/**",
-                  "@impz/daemon",
-                  "@impz/daemon/**",
-                  "@impz/dashboard",
-                  "@impz/dashboard/**"
-                ],
-                "message": "@impz/shared imports no @impz/* package."
-              },
-              {
-                "regex": "^(\\.\\./)+(api|cli|client|daemon|dashboard|local-tar|mcp|shared|test-utils)/(src|smoke)(/|$)",
-                "message": "Import another package by its package name, never by a relative path."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // a leaf: imports only @impz/shared
-      "files": ["packages/local-tar/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["kysely", "kysely/*", "kysely-codegen"],
-                "message": "Query through a repository in packages/daemon/src/db instead."
-              },
-              {
-                "group": [
-                  "@impz/test-utils",
-                  "@impz/test-utils/**",
-                  "**/test-utils",
-                  "**/test-utils/**",
-                  "**/mocks",
-                  "**/mocks/**",
-                  "**/smoke",
-                  "**/smoke/**"
-                ],
-                "message": "Production code never imports test support."
-              },
-              {
-                "group": [
-                  "@impz/api",
-                  "@impz/api/**",
-                  "@impz/client",
-                  "@impz/client/**",
-                  "@impz/mcp",
-                  "@impz/mcp/**",
-                  "@impz/cli",
-                  "@impz/cli/**",
-                  "@impz/daemon",
-                  "@impz/daemon/**",
-                  "@impz/dashboard",
-                  "@impz/dashboard/**"
-                ],
-                "message": "@impz/local-tar is a leaf: it may import only @impz/shared."
-              },
-              {
-                "regex": "^(\\.\\./)+(api|cli|client|daemon|dashboard|local-tar|mcp|shared|test-utils)/(src|smoke)(/|$)",
-                "message": "Import another package by its package name, never by a relative path."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // the contract: imports only @impz/shared
-      "files": ["packages/api/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["kysely", "kysely/*", "kysely-codegen"],
-                "message": "Query through a repository in packages/daemon/src/db instead."
-              },
-              {
-                "group": ["node:*"],
-                "message": "Keep this package runtime-neutral: no node: import in @impz/shared, @impz/api or the client."
-              },
-              {
-                "group": [
-                  "@impz/test-utils",
-                  "@impz/test-utils/**",
-                  "**/test-utils",
-                  "**/test-utils/**",
-                  "**/mocks",
-                  "**/mocks/**",
-                  "**/smoke",
-                  "**/smoke/**"
-                ],
-                "message": "Production code never imports test support."
-              },
-              {
-                "group": [
-                  "@impz/local-tar",
-                  "@impz/local-tar/**",
-                  "@impz/client",
-                  "@impz/client/**",
-                  "@impz/mcp",
-                  "@impz/mcp/**",
-                  "@impz/cli",
-                  "@impz/cli/**",
-                  "@impz/daemon",
-                  "@impz/daemon/**",
-                  "@impz/dashboard",
-                  "@impz/dashboard/**"
-                ],
-                "message": "@impz/api may import only @impz/shared."
-              },
-              {
-                "regex": "^(\\.\\./)+(api|cli|client|daemon|dashboard|local-tar|mcp|shared|test-utils)/(src|smoke)(/|$)",
-                "message": "Import another package by its package name, never by a relative path."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // the published client: imports only @impz/shared and @impz/api
-      "files": ["packages/client/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["kysely", "kysely/*", "kysely-codegen"],
-                "message": "Query through a repository in packages/daemon/src/db instead."
-              },
-              {
-                "group": ["node:*"],
-                "message": "Keep this package runtime-neutral: no node: import in @impz/shared, @impz/api or the client."
-              },
-              {
-                "group": [
-                  "@impz/test-utils",
-                  "@impz/test-utils/**",
-                  "**/test-utils",
-                  "**/test-utils/**",
-                  "**/mocks",
-                  "**/mocks/**",
-                  "**/smoke",
-                  "**/smoke/**"
-                ],
-                "message": "Production code never imports test support."
-              },
-              {
-                "group": [
-                  "@impz/local-tar",
-                  "@impz/local-tar/**",
-                  "@impz/mcp",
-                  "@impz/mcp/**",
-                  "@impz/cli",
-                  "@impz/cli/**",
-                  "@impz/daemon",
-                  "@impz/daemon/**",
-                  "@impz/dashboard",
-                  "@impz/dashboard/**"
-                ],
-                "message": "The client may import only @impz/shared and @impz/api."
-              },
-              {
-                "regex": "^(\\.\\./)+(api|cli|client|daemon|dashboard|local-tar|mcp|shared|test-utils)/(src|smoke)(/|$)",
-                "message": "Import another package by its package name, never by a relative path."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // the MCP server: imports the leaves, @impz/api and the client
-      "files": ["packages/mcp/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["kysely", "kysely/*", "kysely-codegen"],
-                "message": "Query through a repository in packages/daemon/src/db instead."
-              },
-              {
-                "group": [
-                  "@impz/test-utils",
-                  "@impz/test-utils/**",
-                  "**/test-utils",
-                  "**/test-utils/**",
-                  "**/mocks",
-                  "**/mocks/**",
-                  "**/smoke",
-                  "**/smoke/**"
-                ],
-                "message": "Production code never imports test support."
-              },
-              {
-                "group": [
-                  "@impz/cli",
-                  "@impz/cli/**",
-                  "@impz/daemon",
-                  "@impz/daemon/**",
-                  "@impz/dashboard",
-                  "@impz/dashboard/**"
-                ],
-                "message": "@impz/mcp may import only @impz/shared, @impz/local-tar, @impz/api and the client."
-              },
-              {
-                "regex": "^(\\.\\./)+(api|cli|client|daemon|dashboard|local-tar|mcp|shared|test-utils)/(src|smoke)(/|$)",
-                "message": "Import another package by its package name, never by a relative path."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // an app: imports every package below it, never another app
-      "files": ["packages/cli/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["kysely", "kysely/*", "kysely-codegen"],
-                "message": "Query through a repository in packages/daemon/src/db instead."
-              },
-              {
-                "group": [
-                  "@impz/test-utils",
-                  "@impz/test-utils/**",
-                  "**/test-utils",
-                  "**/test-utils/**",
-                  "**/mocks",
-                  "**/mocks/**",
-                  "**/smoke",
-                  "**/smoke/**"
-                ],
-                "message": "Production code never imports test support."
-              },
-              {
-                "group": [
-                  "@impz/daemon",
-                  "@impz/daemon/**",
-                  "@impz/dashboard",
-                  "@impz/dashboard/**"
-                ],
-                "message": "@impz/cli is an app: it may import @impz/shared, @impz/local-tar, @impz/api, the client and @impz/mcp, never another app."
-              },
-              {
-                "regex": "^(\\.\\./)+(api|cli|client|daemon|dashboard|local-tar|mcp|shared|test-utils)/(src|smoke)(/|$)",
-                "message": "Import another package by its package name, never by a relative path."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // an app: imports every package below it, never another app
-      "files": ["packages/daemon/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["kysely", "kysely/*", "kysely-codegen"],
-                "message": "Query through a repository in packages/daemon/src/db instead."
-              },
-              {
-                "group": [
-                  "@impz/test-utils",
-                  "@impz/test-utils/**",
-                  "**/test-utils",
-                  "**/test-utils/**",
-                  "**/mocks",
-                  "**/mocks/**",
-                  "**/smoke",
-                  "**/smoke/**"
-                ],
-                "message": "Production code never imports test support."
-              },
-              {
-                "group": ["@impz/cli", "@impz/cli/**", "@impz/dashboard", "@impz/dashboard/**"],
-                "message": "@impz/daemon is an app: it may import @impz/shared, @impz/local-tar, @impz/api, the client and @impz/mcp, never another app."
-              },
-              {
-                "regex": "^(\\.\\./)+(api|cli|client|daemon|dashboard|local-tar|mcp|shared|test-utils)/(src|smoke)(/|$)",
-                "message": "Import another package by its package name, never by a relative path."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // an app: imports every package below it, never another app
-      "files": ["packages/dashboard/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["kysely", "kysely/*", "kysely-codegen"],
-                "message": "Query through a repository in packages/daemon/src/db instead."
-              },
-              {
-                "group": [
-                  "@impz/test-utils",
-                  "@impz/test-utils/**",
-                  "**/test-utils",
-                  "**/test-utils/**",
-                  "**/mocks",
-                  "**/mocks/**",
-                  "**/smoke",
-                  "**/smoke/**"
-                ],
-                "message": "Production code never imports test support."
-              },
-              {
-                "group": ["@impz/cli", "@impz/cli/**", "@impz/daemon", "@impz/daemon/**"],
-                "message": "@impz/dashboard is an app: it may import @impz/shared, @impz/local-tar, @impz/api, the client and @impz/mcp, never another app."
-              },
-              {
-                "regex": "^(\\.\\./)+(api|cli|client|daemon|dashboard|local-tar|mcp|shared|test-utils)/(src|smoke)(/|$)",
-                "message": "Import another package by its package name, never by a relative path."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // the database folder: the daemon's rules, with Kysely allowed
-      "files": ["packages/daemon/src/db/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": [
-                  "@impz/test-utils",
-                  "@impz/test-utils/**",
-                  "**/test-utils",
-                  "**/test-utils/**",
-                  "**/mocks",
-                  "**/mocks/**",
-                  "**/smoke",
-                  "**/smoke/**"
-                ],
-                "message": "Production code never imports test support."
-              },
-              {
-                "group": ["@impz/cli", "@impz/cli/**", "@impz/dashboard", "@impz/dashboard/**"],
-                "message": "@impz/daemon is an app: it may import @impz/shared, @impz/local-tar, @impz/api, the client and @impz/mcp, never another app."
-              },
-              {
-                "regex": "^(\\.\\./)+(api|cli|client|daemon|dashboard|local-tar|mcp|shared|test-utils)/(src|smoke)(/|$)",
-                "message": "Import another package by its package name, never by a relative path."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // test support: tests may boot impd and reach any package's helpers, so only the Kysely rule holds
-      "files": [
-        "**/*.test.ts",
-        "**/*.test.tsx",
-        "**/*.e2e.ts",
-        "**/*.pebble.ts",
-        "**/test-utils/**",
-        "**/smoke/**",
-        "**/mocks/**",
-        "packages/dashboard/e2e/**",
-        "**/test-setup.ts"
-      ],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["kysely", "kysely/*", "kysely-codegen"],
-                "message": "Query through a repository in packages/daemon/src/db instead."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // the shared test helpers: a leaf, like @impz/local-tar
-      "files": ["packages/test-utils/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["kysely", "kysely/*", "kysely-codegen"],
-                "message": "Query through a repository in packages/daemon/src/db instead."
-              },
-              {
-                "group": [
-                  "@impz/local-tar",
-                  "@impz/local-tar/**",
-                  "@impz/api",
-                  "@impz/api/**",
-                  "@impz/client",
-                  "@impz/client/**",
-                  "@impz/mcp",
-                  "@impz/mcp/**",
-                  "@impz/cli",
-                  "@impz/cli/**",
-                  "@impz/daemon",
-                  "@impz/daemon/**",
-                  "@impz/dashboard",
-                  "@impz/dashboard/**"
-                ],
-                "message": "@impz/test-utils is a leaf: it may import only @impz/shared."
-              },
-              {
-                "regex": "^(\\.\\./)+(api|cli|client|daemon|dashboard|local-tar|mcp|shared|test-utils)/(src|smoke)(/|$)",
-                "message": "Import another package by its package name, never by a relative path."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      // the daemon's own test helpers build queries against real databases
-      "files": ["packages/daemon/src/test-utils/**", "packages/daemon/src/db/**/*.test.ts"],
-      "rules": {
-        "no-restricted-imports": "off"
-      }
     }
   ],
   // .claude/** holds the skill-gate hook, which repo-sync delivers from

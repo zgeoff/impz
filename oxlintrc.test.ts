@@ -5,11 +5,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import * as z from 'zod';
 
-// The stage 1 import rules live in .oxlintrc.json's overrides. Each test lints
-// one fixture file at a path inside a temp tree laid out like packages/, under a
-// config that extends the real one, so the overrides' globs match the fixture.
+// Each test lints one fixture in a temp tree laid out like packages/, under a
+// config that extends the real one. The rule judges a relative import only when
+// it resolves, so a test that imports a file writes that file too.
 
-const DiagnosticSchema = z.object({ code: z.string(), help: z.string().nullish() });
+const DiagnosticSchema = z.object({ code: z.string(), message: z.string() });
 const DiagnosticsSchema = z.object({ diagnostics: z.array(DiagnosticSchema) });
 
 function setupTest() {
@@ -28,185 +28,120 @@ function setupTest() {
   return { dir, oxlint: join(import.meta.dir, 'node_modules/.bin/oxlint') };
 }
 
-test('it refuses a kysely import outside the daemon database folder', () => {
-  const ctx = setupTest();
-  const file = join(ctx.dir, 'packages/daemon/src/imps/fixture.ts');
-
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, "import { Kysely } from 'kysely';\n\nexport const db = Kysely;\n");
-
-  const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
-  const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
-
-  const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-    .map((diagnostic) => diagnostic.help);
-
-  expect([...new Set(messages)]).toStrictEqual([
-    'Query through a repository in packages/daemon/src/db instead.',
-  ]);
-});
-
 test.each([
-  ['the daemon database folder', 'packages/daemon/src/db/fixture.ts'],
-  ['a database test', 'packages/daemon/src/db/fixture.test.ts'],
-  ["the daemon's test helpers", 'packages/daemon/src/test-utils/fixture.ts'],
-])('it allows a kysely import in %s', (_label, path) => {
-  const ctx = setupTest();
-  const file = join(ctx.dir, path);
-
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, "import { Kysely } from 'kysely';\n\nexport const db = Kysely;\n");
-
-  const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
-  const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
-
-  const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-    .map((diagnostic) => diagnostic.help);
-
-  expect(messages).toStrictEqual([]);
-});
-
-test('it refuses a kysely import in a test outside the daemon', () => {
-  const ctx = setupTest();
-  const file = join(ctx.dir, 'packages/cli/src/fixture.test.ts');
-
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, "import { Kysely } from 'kysely';\n\nexport const db = Kysely;\n");
-
-  const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
-  const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
-
-  const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-    .map((diagnostic) => diagnostic.help);
-
-  expect([...new Set(messages)]).toStrictEqual([
-    'Query through a repository in packages/daemon/src/db instead.',
-  ]);
-});
-
-test.each([['shared'], ['api'], ['client']])('it refuses a node: import in packages/%s', (pkg) => {
-  const ctx = setupTest();
-  const file = join(ctx.dir, 'packages', pkg, 'src/fixture.ts');
-
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, "import { join } from 'node:path';\n\nexport const joinPath = join;\n");
-
-  const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
-  const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
-
-  const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-    .map((diagnostic) => diagnostic.help);
-
-  expect([...new Set(messages)]).toStrictEqual([
-    'Keep this package runtime-neutral: no node: import in @impz/shared, @impz/api or the client.',
-  ]);
-});
-
-test.each([
-  ['a test of a runtime-neutral package', 'packages/api/src/fixture.test.ts'],
-  ['a package above the client', 'packages/local-tar/src/fixture.ts'],
-])('it allows a node: import in %s', (_label, path) => {
-  const ctx = setupTest();
-  const file = join(ctx.dir, path);
-
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, "import { join } from 'node:path';\n\nexport const joinPath = join;\n");
-
-  const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
-  const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
-
-  const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-    .map((diagnostic) => diagnostic.help);
-
-  expect(messages).toStrictEqual([]);
-});
-
-test.each([
-  ['packages/daemon/src/imps/fixture.ts', '@impz/test-utils/wait-for'],
-  ['packages/daemon/src/imps/fixture.ts', '../test-utils/build-stub-vmm'],
-  ['packages/cli/src/fixture.ts', './test-utils/start-cli'],
-  ['packages/dashboard/src/fixture.ts', './mocks/db/imp-collection'],
-  ['packages/client/src/fixture.ts', '../smoke/run-stub-impd'],
+  ['kysely', 'packages/daemon/src/imps/fixture.ts', 'kysely'],
+  ['kysely', 'packages/cli/src/fixture.test.ts', 'kysely'],
+  ['kysely', 'packages/test-utils/src/fixture.ts', 'kysely/helpers/sqlite'],
+  ['runtime-neutral', 'packages/shared/src/fixture.ts', 'node:path'],
+  ['runtime-neutral', 'packages/api/src/fixture.ts', 'node:path'],
+  ['runtime-neutral', 'packages/client/src/fixture.ts', 'node:path'],
+  ['test-support', 'packages/daemon/src/imps/fixture.ts', '@impz/test-utils/wait-for'],
 
   // the client may import @impz/api, but not the api's test helpers
-  ['packages/client/src/fixture.ts', '@impz/api/test-utils/build-mock-image'],
-])('it refuses production code in %s that imports %s', (path, source) => {
+  ['test-support', 'packages/client/src/fixture.ts', '@impz/api/test-utils/build-mock-image'],
+  ['package-order', 'packages/shared/src/fixture.ts', '@impz/api'],
+  ['package-order', 'packages/local-tar/src/fixture.ts', '@impz/api'],
+  ['package-order', 'packages/test-utils/src/fixture.ts', '@impz/api'],
+  ['package-order', 'packages/api/src/fixture.ts', '@impz/client'],
+  ['package-order', 'packages/client/src/fixture.ts', '@impz/mcp'],
+  ['package-order', 'packages/mcp/src/fixture.ts', '@impz/daemon/src/config'],
+  ['package-order', 'packages/cli/src/fixture.ts', '@impz/daemon/src/create-impd'],
+  ['package-order', 'packages/daemon/src/fixture.ts', '@impz/cli'],
+  ['package-order', 'packages/dashboard/src/fixture.ts', '@impz/daemon/src/auth/authenticate'],
+])('it refuses a %s import in %s of %s', (rule, path, source) => {
   const ctx = setupTest();
   const file = join(ctx.dir, path);
 
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `import { helper } from '${source}';\n\nexport const used = helper;\n`);
+  writeFileSync(file, `import { value } from '${source}';\n\nexport const used = value;\n`);
 
   const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
   const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
 
-  const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-    .map((diagnostic) => diagnostic.help);
+  const rules = report.diagnostics
+    .filter((diagnostic) => diagnostic.code === 'zgeoff(import-zones)')
+    .map((diagnostic) => diagnostic.message.split(':')[0]);
 
-  expect([...new Set(messages)]).toStrictEqual(['Production code never imports test support.']);
+  expect([...new Set(rules)]).toStrictEqual([rule]);
 });
 
 test.each([
-  ['a test', 'packages/daemon/src/imps/fixture.test.ts'],
-  ['a test helper', 'packages/cli/src/test-utils/fixture.ts'],
-  ["the dashboard's mock impd", 'packages/dashboard/src/mocks/fixture.ts'],
-  ["the client's smoke", 'packages/client/smoke/fixture.ts'],
-])('it allows test support in %s', (_label, path) => {
+  [
+    'test-support',
+    'packages/daemon/src/imps/fixture.ts',
+    '../test-utils/build-stub-vmm',
+    'packages/daemon/src/test-utils/build-stub-vmm.ts',
+  ],
+  [
+    'test-support',
+    'packages/cli/src/fixture.ts',
+    './test-utils/start-cli',
+    'packages/cli/src/test-utils/start-cli.ts',
+  ],
+  [
+    'test-support',
+    'packages/dashboard/src/fixture.ts',
+    './mocks/db/imp-collection',
+    'packages/dashboard/src/mocks/db/imp-collection.ts',
+  ],
+  [
+    'test-support',
+    'packages/client/src/fixture.ts',
+    '../smoke/run-stub-impd',
+    'packages/client/smoke/run-stub-impd.ts',
+  ],
+  [
+    'package-by-name',
+    'packages/cli/src/fixture.ts',
+    '../../daemon/src/create-impd',
+    'packages/daemon/src/create-impd.ts',
+  ],
+  [
+    'package-by-name',
+    'packages/test-utils/src/fixture.ts',
+    '../../daemon/src/create-impd',
+    'packages/daemon/src/create-impd.ts',
+  ],
+])('it refuses a %s import in %s of %s', (rule, path, source, target) => {
   const ctx = setupTest();
   const file = join(ctx.dir, path);
 
   mkdirSync(dirname(file), { recursive: true });
-
-  writeFileSync(
-    file,
-    "import { waitFor } from '@impz/test-utils/wait-for';\n\nexport const wait = waitFor;\n",
-  );
+  writeFileSync(file, `import { value } from '${source}';\n\nexport const used = value;\n`);
+  mkdirSync(dirname(join(ctx.dir, target)), { recursive: true });
+  writeFileSync(join(ctx.dir, target), 'export const value = 1;\n');
 
   const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
   const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
 
-  const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-    .map((diagnostic) => diagnostic.help);
+  const rules = report.diagnostics
+    .filter((diagnostic) => diagnostic.code === 'zgeoff(import-zones)')
+    .map((diagnostic) => diagnostic.message.split(':')[0]);
 
-  expect(messages).toStrictEqual([]);
+  expect([...new Set(rules)]).toStrictEqual([rule]);
 });
 
 test.each([
-  ['shared', '@impz/api', '@impz/shared imports no @impz/* package.'],
-  ['local-tar', '@impz/api', '@impz/local-tar is a leaf: it may import only @impz/shared.'],
-  ['test-utils', '@impz/api', '@impz/test-utils is a leaf: it may import only @impz/shared.'],
-  ['api', '@impz/client', '@impz/api may import only @impz/shared.'],
-  ['client', '@impz/mcp', 'The client may import only @impz/shared and @impz/api.'],
-  [
-    'mcp',
-    '@impz/daemon/src/config',
-    '@impz/mcp may import only @impz/shared, @impz/local-tar, @impz/api and the client.',
-  ],
-  [
-    'cli',
-    '@impz/daemon/src/create-impd',
-    '@impz/cli is an app: it may import @impz/shared, @impz/local-tar, @impz/api, the client and @impz/mcp, never another app.',
-  ],
-  [
-    'daemon',
-    '@impz/cli',
-    '@impz/daemon is an app: it may import @impz/shared, @impz/local-tar, @impz/api, the client and @impz/mcp, never another app.',
-  ],
-  [
-    'dashboard',
-    '@impz/daemon/src/auth/authenticate',
-    '@impz/dashboard is an app: it may import @impz/shared, @impz/local-tar, @impz/api, the client and @impz/mcp, never another app.',
-  ],
-])('it refuses packages/%s importing %s', (pkg, source, message) => {
+  ['the daemon database folder', 'packages/daemon/src/db/fixture.ts', 'kysely'],
+  ['a database test', 'packages/daemon/src/db/fixture.test.ts', 'kysely'],
+  ["the daemon's test helpers", 'packages/daemon/src/test-utils/fixture.ts', 'kysely'],
+  ['a test of a runtime-neutral package', 'packages/api/src/fixture.test.ts', 'node:path'],
+  ['a package above the client', 'packages/local-tar/src/fixture.ts', 'node:path'],
+  ['a test', 'packages/daemon/src/imps/fixture.test.ts', '@impz/test-utils/wait-for'],
+  ['a test helper', 'packages/cli/src/test-utils/fixture.ts', '@impz/test-utils/wait-for'],
+  ["the dashboard's mock impd", 'packages/dashboard/src/mocks/fixture.ts', '@impz/test-utils'],
+  ["the client's smoke", 'packages/client/smoke/fixture.ts', '@impz/test-utils/wait-for'],
+  ['local-tar', 'packages/local-tar/src/fixture.ts', '@impz/shared/format-bytes'],
+  ['api', 'packages/api/src/fixture.ts', '@impz/shared'],
+  ['the client', 'packages/client/src/fixture.ts', '@impz/api'],
+  ['mcp', 'packages/mcp/src/fixture.ts', '@impz/local-tar'],
+  ['mcp', 'packages/mcp/src/fixture.ts', '@impz/client'],
+  ['the cli', 'packages/cli/src/fixture.ts', '@impz/mcp'],
+  ['the daemon', 'packages/daemon/src/fixture.ts', '@impz/client'],
+  ['the dashboard', 'packages/dashboard/src/fixture.ts', '@impz/api'],
+])('it allows %s in %s to import %s', (_label, path, source) => {
   const ctx = setupTest();
-  const file = join(ctx.dir, 'packages', pkg, 'src/fixture.ts');
+  const file = join(ctx.dir, path);
 
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `import { value } from '${source}';\n\nexport const used = value;\n`);
@@ -215,63 +150,11 @@ test.each([
   const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
 
   const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-    .map((diagnostic) => diagnostic.help);
-
-  expect([...new Set(messages)]).toStrictEqual([message]);
-});
-
-test.each([
-  ['local-tar', '@impz/shared/format-bytes'],
-  ['api', '@impz/shared'],
-  ['client', '@impz/api'],
-  ['mcp', '@impz/local-tar'],
-  ['mcp', '@impz/client'],
-  ['cli', '@impz/mcp'],
-  ['daemon', '@impz/client'],
-  ['dashboard', '@impz/api'],
-])('it allows packages/%s to import %s', (pkg, source) => {
-  const ctx = setupTest();
-  const file = join(ctx.dir, 'packages', pkg, 'src/fixture.ts');
-
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `import { value } from '${source}';\n\nexport const used = value;\n`);
-
-  const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
-  const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
-
-  const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-    .map((diagnostic) => diagnostic.help);
+    .filter((diagnostic) => diagnostic.code === 'zgeoff(import-zones)')
+    .map((diagnostic) => diagnostic.message);
 
   expect(messages).toStrictEqual([]);
 });
-
-test.each([['cli'], ['test-utils']])(
-  'it refuses packages/%s reaching another package by a relative path',
-  (pkg) => {
-    const ctx = setupTest();
-    const file = join(ctx.dir, 'packages', pkg, 'src/fixture.ts');
-
-    mkdirSync(dirname(file), { recursive: true });
-
-    writeFileSync(
-      file,
-      "import { value } from '../../daemon/src/create-impd';\n\nexport const used = value;\n",
-    );
-
-    const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
-    const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
-
-    const messages = report.diagnostics
-      .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-      .map((diagnostic) => diagnostic.help);
-
-    expect([...new Set(messages)]).toStrictEqual([
-      'Import another package by its package name, never by a relative path.',
-    ]);
-  },
-);
 
 test('it counts a type-only import against the package order', () => {
   const ctx = setupTest();
@@ -284,10 +167,12 @@ test('it counts a type-only import against the package order', () => {
   const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
 
   const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-    .map((diagnostic) => diagnostic.help);
+    .filter((diagnostic) => diagnostic.code === 'zgeoff(import-zones)')
+    .map((diagnostic) => diagnostic.message);
 
-  expect([...new Set(messages)]).toStrictEqual(['@impz/api may import only @impz/shared.']);
+  expect(messages).toStrictEqual([
+    'package-order: @impz/client is allowed only in above-client, tests — only @impz/mcp and the apps import @impz/local-tar, the client and @impz/mcp',
+  ]);
 });
 
 test('it counts a type-only re-export against the package order', () => {
@@ -301,10 +186,10 @@ test('it counts a type-only re-export against the package order', () => {
   const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
 
   const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)')
-    .map((diagnostic) => diagnostic.help);
+    .filter((diagnostic) => diagnostic.code === 'zgeoff(import-zones)')
+    .map((diagnostic) => diagnostic.message);
 
-  expect([...new Set(messages)]).toStrictEqual([
-    'The client may import only @impz/shared and @impz/api.',
+  expect(messages).toStrictEqual([
+    'package-order: @impz/daemon/src/create-impd is allowed only in tests — an app imports no other app',
   ]);
 });
