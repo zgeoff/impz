@@ -697,7 +697,7 @@ test.each([
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id, ...start }));
 
-  await expect(updateImpMove(ctx.db, imp.id, to)).rejects.toThrow(
+  expect(updateImpMove(ctx.db, imp.id, to)).rejects.toThrow(
     `imp ${imp.id}: the move mark cannot go from ${change}`,
   );
 
