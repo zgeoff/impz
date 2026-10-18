@@ -74,10 +74,25 @@ read_proxy_privileges() {
   jq -r '.proxy.privileges[][]' "$IMP_ROOT/deploy/imp-host.args.json"
 }
 
+# resolve_op_ref VAR ITEM prints the 1Password reference that the variable
+# named VAR holds, else op://$IMP_OP_VAULT/ITEM. impz names no vault of its
+# own, so with neither set it says which to set on stderr and returns 1.
+resolve_op_ref() {
+  local ref=${!1:-}
+  if [ -z "$ref" ] && [ -n "${IMP_OP_VAULT:-}" ]; then
+    ref="op://$IMP_OP_VAULT/$2"
+  fi
+  if [ -z "$ref" ]; then
+    echo "impz: set IMP_OP_VAULT to the 1Password vault that holds $2, or $1 to its reference" >&2
+    return 1
+  fi
+  printf '%s\n' "$ref"
+}
+
 # load_tailscale_authkey exports TAILSCALE_AUTHKEY from the first source that
 # has one and returns 1 when none does: the env var; then a 1Password read of
 # IMP_TAILSCALE_AUTHKEY_REF (default impz's own tag:imp-e2e client,
-# op://imp-e2e/imp-e2e-tailscale-oauth/client-secret) when op is on PATH; then
+# op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth/client-secret) when op is on PATH; then
 # TAILSCALE_AUTHKEY in the repo's .env. An OAuth client secret from op
 # (tskey-client-) joins as tag:imp-e2e, or IMP_TAILSCALE_TAGS when set, ephemeral
 # and preauthorized, as load_tailscale_e2e_authkey's nodes do. A failed op read
@@ -93,10 +108,11 @@ load_tailscale_authkey() {
   # dev instance would join the tailnet
   if [ -z "$key" ] && [ "${IMP_TAILSCALE_OP:-}" = 1 ] && [ -z "${IMP_TAILSCALE_OP_MISSED:-}" ] &&
     command -v op >/dev/null 2>&1; then
+    local ref
     # stdin closed and a deadline: a locked desktop app must not hang a run
-    key=$(timeout 20 op read \
-      "${IMP_TAILSCALE_AUTHKEY_REF:-op://imp-e2e/imp-e2e-tailscale-oauth/client-secret}" \
-      </dev/null 2>/dev/null) || key=
+    if ref=$(resolve_op_ref IMP_TAILSCALE_AUTHKEY_REF imp-e2e-tailscale-oauth/client-secret); then
+      key=$(timeout 20 op read "$ref" </dev/null 2>/dev/null) || key=
+    fi
     [ -n "$key" ] || export IMP_TAILSCALE_OP_MISSED=1
     # tailscale up takes a client secret as a key only with tags to advertise
     if [[ $key == tskey-client-* ]]; then
@@ -121,7 +137,7 @@ load_tailscale_authkey() {
 # for the e2e suites' nodes and returns 1 when it has no key. The key is the
 # OAuth client secret of tag:imp-e2e, from IMP_E2E_TAILSCALE_AUTHKEY, else a
 # 1Password read of IMP_E2E_TAILSCALE_OAUTH_REF (default
-# op://imp-e2e/imp-e2e-tailscale-oauth/client-secret). tailscale up takes the
+# op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth/client-secret). tailscale up takes the
 # secret as an auth key; the suffix makes each node ephemeral and
 # preauthorized. Never TAILSCALE_AUTHKEY or .env: those may hold a tag:imp key,
 # and tag:imp nodes reach a live impd. Tracing stays off in here.
@@ -130,11 +146,10 @@ load_tailscale_e2e_authkey() {
     local xtrace=$-
     set +x
   } 2>/dev/null
-  local secret=${IMP_E2E_TAILSCALE_AUTHKEY:-} found=1
-  if [ -z "$secret" ] && command -v op >/dev/null 2>&1; then
-    secret=$(timeout 20 op read \
-      "${IMP_E2E_TAILSCALE_OAUTH_REF:-op://imp-e2e/imp-e2e-tailscale-oauth/client-secret}" \
-      </dev/null 2>/dev/null) || secret=
+  local secret=${IMP_E2E_TAILSCALE_AUTHKEY:-} found=1 ref
+  if [ -z "$secret" ] && command -v op >/dev/null 2>&1 &&
+    ref=$(resolve_op_ref IMP_E2E_TAILSCALE_OAUTH_REF imp-e2e-tailscale-oauth/client-secret); then
+    secret=$(timeout 20 op read "$ref" </dev/null 2>/dev/null) || secret=
   fi
   if [ -n "$secret" ]; then
     export TAILSCALE_AUTHKEY="${secret%%\?*}?ephemeral=true&preauthorized=true"
@@ -148,16 +163,17 @@ load_tailscale_e2e_authkey() {
 # write_tailnet_oauth_file PATH writes the OAuth client for per-imp tailnet
 # names (docs/guides/tailscale.md#per-imp-names) to PATH, mode 0600, from the
 # 1Password item IMP_TAILNET_OAUTH_REF (default impz's own
-# op://imp-e2e/imp-e2e-tailscale-services), fields client-id and client-secret.
-# Returns 1 when op has no such item.
+# op://$IMP_OP_VAULT/imp-e2e-tailscale-services), fields client-id and
+# client-secret. Returns 1 when op has no such item, or neither variable is set.
 # Tracing stays off in here, so `bash -x` never shows the secret.
 write_tailnet_oauth_file() {
   {
     local xtrace=$-
     set +x
   } 2>/dev/null
-  local ref=${IMP_TAILNET_OAUTH_REF:-op://imp-e2e/imp-e2e-tailscale-services} id secret found=1
+  local ref id secret found=1
   if command -v op >/dev/null 2>&1 &&
+    ref=$(resolve_op_ref IMP_TAILNET_OAUTH_REF imp-e2e-tailscale-services) &&
     id=$(timeout 20 op read "$ref/client-id" </dev/null 2>/dev/null) &&
     secret=$(timeout 20 op read "$ref/client-secret" </dev/null 2>/dev/null) &&
     [ -n "$id" ] && [ -n "$secret" ]; then

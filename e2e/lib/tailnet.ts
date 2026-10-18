@@ -48,7 +48,7 @@ export interface TailnetNode {
 }
 
 const TAILNET_NOT_READY =
-  'tailscale needs the tag:imp-e2e OAuth client (op://imp-e2e/imp-e2e-tailscale-oauth) and this machine on the tailnet';
+  'tailscale needs the tag:imp-e2e OAuth client (op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth) and this machine on the tailnet';
 
 // a tailnet suite runs only with the tag:imp-e2e key for impd's node and this
 // machine on the tailnet to reach it from; `status` is this machine's

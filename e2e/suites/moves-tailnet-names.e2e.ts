@@ -41,7 +41,7 @@ async function setupTest() {
 const tailscaleStatus = await readLocalTailscaleStatus();
 
 // the tailnet name handover needs the Tailscale Services OAuth client of #30
-// (op://imp-e2e/imp-e2e-tailscale-services); set IMP_E2E_TAILNET_NAMES=1 when
+// (op://$IMP_OP_VAULT/imp-e2e-tailscale-services); set IMP_E2E_TAILNET_NAMES=1 when
 // 1Password holds it
 const tailnetNamesMissing =
   !isTailnetReady(tailscaleStatus, hasTailscaleE2EKey()) ||
