@@ -21,6 +21,10 @@ impz runs on one Linux machine, in one host container, in one of two ways:
   The host container loads its rules into its own network namespace, and the guard against spoofed
   guest addresses and the broker's port rule need both. Most distribution kernels and WSL2 have
   them; `setup-net.sh` fails at start without them.
+- A Tailscale tailnet and a tagged auth key for it. Other machines reach impd and the imps through
+  the tailnet, and without one impd listens on the host's loopback only. One exception: a public imp
+  listens on every address ([public imps](./https.md#public-imps)). The
+  [Tailscale guide](./tailscale.md) covers the key and the ACL.
 - [Bun](https://bun.sh) for the CLI, and Go for the guest agent.
 - Disk for the sparse XFS file. `IMP_STORAGE_GIB` (default 200) sets its apparent size; it uses only
   what imps write.
@@ -112,7 +116,7 @@ to the server and run it as root. Take it from a release tag: it runs the image 
 <!-- x-release-please-start-version -->
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/zgeoff/impz/v2.5.3/deploy/bootstrap.sh
+curl -fsSLO https://raw.githubusercontent.com/zgeoff/impz/v2.5.4/deploy/bootstrap.sh
 install -m 0600 /dev/null /root/ts-key && vi /root/ts-key        # the auth key, one line
 bash bootstrap.sh --dry-run --data-device /dev/nvme1n1 --tailscale-authkey-file /root/ts-key
 bash bootstrap.sh --yes --data-device /dev/nvme1n1 --tailscale-authkey-file /root/ts-key
@@ -431,7 +435,7 @@ gh attestation verify oci://ghcr.io/zgeoff/imp-host:<version> -R zgeoff/impz
 <!-- x-release-please-start-version -->
 
 ```sh
-docker pull ghcr.io/zgeoff/imp-host:2.5.3
+docker pull ghcr.io/zgeoff/imp-host:2.5.4
 gh release download -R zgeoff/impz -p 'impz-linux-x64' -p SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS && install -m 0755 impz-linux-x64 ~/.local/bin/impz
 ```

@@ -4,7 +4,9 @@ An imp is a persistent Linux microVM that sleeps when it is idle and wakes on th
 it. A sleeping imp holds no RAM: its memory is a snapshot on disk, and a wake loads it back with
 every process where it was. Its disk is a copy-on-write clone, so a checkpoint, a restore or a fork
 costs no copy. One host runs every imp, and one daemon, impd, owns them all. impd keeps every awake
-imp under a RAM budget the owner sets, and sleeps the least recently active ones to make room.
+imp under a RAM budget the owner sets, and sleeps the least recently active ones to make room. The
+host joins a Tailscale tailnet that the owner runs, and other machines reach impd through that
+tailnet. One exception: an imp the owner makes public takes requests from the internet.
 
 The code is one Bun workspace and one Go module. impd is `packages/daemon`. Its typed contract,
 `packages/api`, is shared with the CLI, the npm client, the MCP server and the dashboard. Helpers
