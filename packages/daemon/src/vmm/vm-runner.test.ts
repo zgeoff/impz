@@ -382,6 +382,28 @@ test('#sleepVm removes the memory file a woken VM woke from when its snapshot fa
   expect(isFirecrackerAlive(vm.pid, paths.apiSocket)).toBeTrue();
 });
 
+test('#sleepVm removes the memory file a VM woke from when a full snapshot fails after its machine config did not answer', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+
+  mkdirSync(paths.snapshotDir, { recursive: true });
+  writeFileSync(paths.memFile, `${'a'.repeat(4096)}${'b'.repeat(4096)}`);
+
+  const vm = await startStubFirecracker({
+    apiSocket: paths.apiSocket,
+    logPath: ctx.logPath,
+    isLoggingBodies: true,
+    failures: ['GET /machine-config', 'PUT /snapshot/create'],
+    memory: { pages: 'aB', dirtyPages: [1], isTrackingDirtyPages: true },
+  });
+
+  const sleeping = createVmRunner(buildStubJails().jails).sleepVm(vm.pid, paths, null, paths);
+
+  expect(sleeping).rejects.toThrow('refused PUT /snapshot/create');
+  expect(readFileSync(ctx.logPath, 'utf8')).toInclude('{"snapshot_type":"Full"');
+  expect(existsSync(paths.memFile)).toBeFalse();
+});
+
 // a sleep asks under the imp's lock: far below a ping's default of 2 s
 test('#readGuestUptimeMs asks the agent with a 250 ms deadline', async () => {
   const ctx = setupTest();

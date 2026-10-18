@@ -55,9 +55,9 @@ one that booted cold or restored a template, takes a full snapshot. A copy that 
 a full snapshot, which writes every page over what the copy left.
 
 A diff snapshot that fails can fail after Firecracker cleared its dirty page log, and a later diff
-would then miss the pages that log held. So when a snapshot of a woken VM fails, impd removes the
-memory file the VM woke from before it resumes the VM. The VM keeps its private mapping of that
-file. The next sleep has no file to copy and takes a full snapshot.
+would then miss the pages that log held. So when any snapshot fails, impd removes the memory file
+the VM woke from, if there is one, before it resumes the VM. The VM keeps its private mapping of
+that file. The next sleep has no file to copy and takes a full snapshot.
 
 ## Wake
 

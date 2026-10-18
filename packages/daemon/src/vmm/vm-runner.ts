@@ -413,9 +413,7 @@ export function createVmRunner(
 
         // a snapshot that failed late may have cleared the dirty page log: with
         // no file to copy, the next sleep takes a Full; the VM keeps its mapping
-        if (baseStep !== null) {
-          rmSync(paths.memFile, { force: true });
-        }
+        rmSync(paths.memFile, { force: true });
 
         try {
           await api.resume();
