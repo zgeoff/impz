@@ -1,12 +1,15 @@
 import { verifyOAuthQueryParams } from '@better-auth/oauth-provider';
-import { ScopeSchema } from '@impz/api';
 import type { Scope } from '@impz/api';
 import type { Caller } from '../auth/caller';
 import type { ImpDatabase } from '../db/open-database';
+import { buildBadTokenRequest } from './build-bad-token-request';
+import { buildConsentBinding } from './build-consent-binding';
 import type { Approval, SignIns } from './create-sign-ins';
 import { formatApprovalCode } from './create-sign-ins';
 import { deriveTokenHash } from './derive-token-hash';
+import { expandScopes } from './expand-scopes';
 import { formatScopeList, pickGrantScope } from './grant-limits';
+import { isSameOriginForm } from './is-same-origin-form';
 import {
   buildPageHeaders,
   renderAllowPage,
@@ -15,6 +18,12 @@ import {
 } from './oauth-pages';
 import type { SignInErrorPage } from './oauth-pages';
 import { readBodyText } from './read-body-text';
+import { readErrorDescription } from './read-error-description';
+import { readForm } from './read-form';
+import { readURLField } from './read-url-field';
+import { removeDpopProof } from './remove-dpop-proof';
+import { removeReplayedGrant } from './remove-replayed-grant';
+import { removeTokenSessions } from './remove-token-sessions';
 
 // The public route's OAuth paths (docs/guides/mcp.md#public-route): better-auth
 // runs the protocol, and impd serves the two pages it sends a browser to,
@@ -223,7 +232,7 @@ export function makeOAuthRouter(
   // sign-in is approved, makes its user and carries the authorization on to
   // consent; deny returns to the client.
   const runLogin = async (request: Request, url: Readonly<RequestTarget>): Promise<Response> => {
-    const form = request.method === 'POST' ? await readForm(request) : null;
+    const form = request.method === 'POST' ? await readForm(request, MAX_FORM_BYTES) : null;
 
     const oauthQuery =
       request.method === 'GET' ? url.search.slice(1) : (form?.get('oauth_query') ?? '');
@@ -311,7 +320,7 @@ export function makeOAuthRouter(
   // signed in for; either answer returns to the client with the session
   // cookie cleared
   const runConsent = async (request: Request, url: Readonly<RequestTarget>): Promise<Response> => {
-    const form = request.method === 'POST' ? await readForm(request) : null;
+    const form = request.method === 'POST' ? await readForm(request, MAX_FORM_BYTES) : null;
 
     const oauthQuery =
       request.method === 'GET' ? url.search.slice(1) : (form?.get('oauth_query') ?? '');
@@ -423,31 +432,6 @@ export function makeOAuthRouter(
     });
   };
 
-  // A refused refresh of a spent token is a replay, even one racing the
-  // refresh that spent it, which better-auth refuses without revoking
-  // anything: the grant goes, with what the winner got.
-  const removeReplayedGrant = async (form: Readonly<URLSearchParams>): Promise<void> => {
-    const refreshToken = form.get('refresh_token');
-    const clientID = form.get('client_id');
-
-    if (form.get('grant_type') !== 'refresh_token' || refreshToken === null || clientID === null) {
-      return;
-    }
-
-    // only its own client replays a token; another client's try ends nothing
-    const spent = await deps.db
-      .selectFrom('oauthRefreshToken')
-      .select('userId')
-      .where('token', '=', deriveTokenHash(refreshToken))
-      .where('clientId', '=', clientID)
-      .where((eb) => eb.or([eb('revoked', 'is not', null), eb('rotatedAt', 'is not', null)]))
-      .executeTakeFirst();
-
-    if (spent !== undefined) {
-      await deps.removeGrantRows([spent.userId], 'a spent refresh token came again');
-    }
-  };
-
   // A code exchange binds its tokens to the session that approved them;
   // once issued, no token needs it, so every session a token holds goes,
   // with the expired ones.
@@ -464,33 +448,11 @@ export function makeOAuthRouter(
     const response = await deps.auth.handler(toPublicFormRequest(request, url, body));
 
     if (response.status === 400) {
-      await removeReplayedGrant(new URLSearchParams(body));
+      await removeReplayedGrant(deps, new URLSearchParams(body));
     }
 
     if (response.ok) {
-      const held = await deps.db
-        .selectFrom('oauthAccessToken')
-        .select('sessionId')
-        .where('sessionId', 'is not', null)
-        .union(
-          deps.db
-            .selectFrom('oauthRefreshToken')
-            .select('sessionId')
-            .where('sessionId', 'is not', null),
-        )
-        .execute();
-
-      const sessionIDs = held.flatMap((row) => (row.sessionId === null ? [] : [row.sessionId]));
-
-      await deps.db
-        .deleteFrom('session')
-        .where((eb) =>
-          eb.or([
-            eb('expiresAt', '<', new Date().toISOString()),
-            ...(sessionIDs.length === 0 ? [] : [eb('id', 'in', sessionIDs)]),
-          ]),
-        )
-        .execute();
+      await removeTokenSessions(deps.db);
     }
 
     return response;
@@ -621,34 +583,6 @@ export function makeOAuthRouter(
   };
 }
 
-// imp's scopes, lowest first, as words a request may hold
-const SCOPE_ORDER: readonly string[] = ScopeSchema.options;
-
-// each of imp's scopes with the lower ones it holds; any other word stays,
-// for better-auth to refuse
-function expandScopes(asked: readonly string[]): string[] {
-  const expanded = asked.flatMap((word) => {
-    const index = SCOPE_ORDER.indexOf(word);
-
-    return index === -1 ? [word] : SCOPE_ORDER.slice(0, index + 1);
-  });
-
-  return [...new Set(expanded)];
-}
-
-// The parts of an authorization request that stay the same from its login
-// page to its consent page. better-auth signs each page's query afresh, so
-// a sign-in binds to its consent through these.
-function buildConsentBinding(oauthQuery: string): string {
-  const params = new URLSearchParams(oauthQuery);
-
-  return JSON.stringify(
-    ['client_id', 'redirect_uri', 'scope', 'resource', 'state', 'code_challenge'].map(
-      (name) => params.get(name) ?? '',
-    ),
-  );
-}
-
 async function findClientName(db: ImpDatabase, clientID: string): Promise<string> {
   const row = await db
     .selectFrom('oauthClient')
@@ -657,77 +591,6 @@ async function findClientName(db: ImpDatabase, clientID: string): Promise<string
     .executeTakeFirst();
 
   return row?.name ?? clientID;
-}
-
-// better-auth's next URL in a JSON answer, as `url` or `redirect_uri`
-function readURLField(answer: unknown): string | null {
-  if (typeof answer !== 'object' || answer === null) {
-    return null;
-  }
-
-  const fields = new Map<string, unknown>(Object.entries(answer));
-
-  const next: unknown = fields.get('url') ?? fields.get('redirect_uri');
-
-  return typeof next === 'string' ? next : null;
-}
-
-// better-auth's error_description in a JSON refusal, or null
-function readErrorDescription(answer: unknown): string | null {
-  if (typeof answer !== 'object' || answer === null) {
-    return null;
-  }
-
-  const fields = new Map<string, unknown>(Object.entries(answer));
-
-  const description = fields.get('error_description');
-
-  return typeof description === 'string' ? description : null;
-}
-
-// The route takes bearer tokens alone, so a client's DPoP proof is dropped
-// and better-auth issues a bearer token, as RFC 9449 lets a server do.
-function removeDpopProof(request: Request): Headers {
-  const kept = new Headers(request.headers);
-
-  kept.delete('dpop');
-
-  return kept;
-}
-
-// a urlencoded form of at most MAX_FORM_BYTES; null for anything else
-async function readForm(request: Request): Promise<URLSearchParams | null> {
-  const type = request.headers.get('content-type') ?? '';
-
-  if (!type.startsWith('application/x-www-form-urlencoded')) {
-    return null;
-  }
-
-  const text = await readBodyText(request, MAX_FORM_BYTES);
-
-  return text === null ? null : new URLSearchParams(text);
-}
-
-// RFC 6749's refusal of a token or revoke request with no body, or one past
-// MAX_FORM_BYTES, which better-auth never reads
-function buildBadTokenRequest(): Response {
-  return Response.json(
-    { error: 'invalid_request', error_description: 'the request body is missing or too large' },
-    { status: 400, headers: { 'cache-control': 'no-store' } },
-  );
-}
-
-// A form a page on another origin posts never counts. A browser names the
-// page's origin, or sends Origin null with Sec-Fetch-Site, which it sets
-// itself and no page can change.
-function isSameOriginForm(request: Request, origin: string): boolean {
-  const from = request.headers.get('origin');
-
-  if (from === origin) {
-    return true;
-  }
-
-  return from === 'null' && request.headers.get('sec-fetch-site') === 'same-origin';
 }
 
 function buildErrorPage(error: SignInErrorPage): Response {
