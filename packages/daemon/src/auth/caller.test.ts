@@ -535,6 +535,7 @@ test('it lists a token limited to dev-* only the refused broker requests of its 
     ctx.db,
     buildMockNewAuditEntry({
       impId: devA.id,
+      impName: 'dev-a',
       secretName: null,
       path: null,
       status: 403,
@@ -546,6 +547,7 @@ test('it lists a token limited to dev-* only the refused broker requests of its 
     ctx.db,
     buildMockNewAuditEntry({
       impId: prod.id,
+      impName: 'prod',
       secretName: null,
       path: null,
       status: 403,

@@ -37,7 +37,7 @@ test('it serves the handler for its pair over TLS on the socket it opens', async
 
   ctx.stack.defer(() => terminators.stop());
 
-  const socket = await terminators.open({ impId: 'imp-1', host: 'api.github.com' });
+  const socket = await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
 
   const response = await fetch('https://api.github.com/x', {
     unix: socket,
@@ -97,8 +97,8 @@ test('it starts one server for a pair opened twice at once', async () => {
   ctx.stack.defer(() => terminators.stop());
 
   const sockets = await Promise.all([
-    terminators.open({ impId: 'imp-1', host: 'api.github.com' }),
-    terminators.open({ impId: 'imp-1', host: 'api.github.com' }),
+    terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' }),
+    terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' }),
   ]);
 
   expect(sockets[1]).toBe(sockets[0]);
@@ -118,8 +118,8 @@ test('it starts a server for each pair', async () => {
   ctx.stack.defer(() => terminators.stop());
 
   const sockets = await Promise.all([
-    terminators.open({ impId: 'imp-1', host: 'api.github.com' }),
-    terminators.open({ impId: 'imp-2', host: 'api.github.com' }),
+    terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' }),
+    terminators.open({ impId: 'imp-2', impName: 'ops', host: 'api.github.com' }),
   ]);
 
   expect(sockets[0]).not.toBe(sockets[1]);
@@ -141,9 +141,11 @@ test('it starts a server again for a pair whose start failed', async () => {
 
   ctx.stack.defer(() => terminators.stop());
 
-  await Promise.allSettled([terminators.open({ impId: 'imp-1', host: 'api.github.com' })]);
+  await Promise.allSettled([
+    terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' }),
+  ]);
 
-  const socket = await terminators.open({ impId: 'imp-1', host: 'api.github.com' });
+  const socket = await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
 
   expect(existsSync(socket)).toBeTrue();
   expect(issueLeaf).toHaveBeenCalledTimes(2);
@@ -161,10 +163,9 @@ test('it rejects an open whose server cannot start', async () => {
 
   ctx.stack.defer(() => terminators.stop());
 
-  expect(terminators.open({ impId: 'imp-1', host: 'api.github.com' })).rejects.toThrowWithMessage(
-    Error,
-    'no key',
-  );
+  expect(
+    terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' }),
+  ).rejects.toThrowWithMessage(Error, 'no key');
 });
 
 test('it stops the server of a pair the prune does not keep', async () => {
@@ -179,8 +180,13 @@ test('it stops the server of a pair the prune does not keep', async () => {
 
   ctx.stack.defer(() => terminators.stop());
 
-  const kept = await terminators.open({ impId: 'imp-1', host: 'api.github.com' });
-  const dropped = await terminators.open({ impId: 'imp-2', host: 'api.github.com' });
+  const kept = await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
+
+  const dropped = await terminators.open({
+    impId: 'imp-2',
+    impName: 'ops',
+    host: 'api.github.com',
+  });
 
   await terminators.prune((key: TerminatorKey) => key.impId === 'imp-1');
 
@@ -200,11 +206,11 @@ test('it keeps the server of a pair the prune keeps', async () => {
 
   ctx.stack.defer(() => terminators.stop());
 
-  const before = await terminators.open({ impId: 'imp-1', host: 'api.github.com' });
+  const before = await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
 
   await terminators.prune(() => true);
 
-  const after = await terminators.open({ impId: 'imp-1', host: 'api.github.com' });
+  const after = await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
 
   expect(after).toBe(before);
 });
@@ -229,11 +235,11 @@ test('it issues a new leaf for a kept pair whose leaf is due', async () => {
 
   ctx.stack.defer(() => terminators.stop());
 
-  const before = await terminators.open({ impId: 'imp-1', host: 'api.github.com' });
+  const before = await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
 
   await terminators.prune(() => true);
 
-  const after = await terminators.open({ impId: 'imp-1', host: 'api.github.com' });
+  const after = await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
 
   expect(after).not.toBe(before);
   expect(issued).toHaveLength(2);
@@ -252,7 +258,7 @@ test('it removes the socket directory when it stops', async () => {
 
   ctx.stack.defer(() => terminators.stop());
 
-  await terminators.open({ impId: 'imp-1', host: 'api.github.com' });
+  await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
   await terminators.stop();
 
   expect(existsSync(join(ctx.dir, 'run'))).toBeFalse();

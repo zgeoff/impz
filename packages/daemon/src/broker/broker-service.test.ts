@@ -879,6 +879,7 @@ test('it lists only the sent requests in the audit, and only the refused ones as
     ctx.db,
     buildMockNewAuditEntry({
       impId: dev.id,
+      impName: 'dev',
       secretName: null,
       method: 'CONNECT',
       host: 'exfil.test',
@@ -943,26 +944,28 @@ test('it lists only the audit rows of imps within the patterns', async () => {
   const dev = await ctx.client.imps.create({ name: 'dev' });
   const other = await ctx.client.imps.create({ name: 'other' });
 
-  for (const impId of [dev.id, other.id]) {
-    await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId }));
-  }
+  await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId: dev.id, impName: 'dev' }));
+  await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId: other.id, impName: 'other' }));
 
   const rows = await ctx.impd.broker.listAudit(null, 10, ['de*']);
 
   expect(rows.map((row) => row.imp)).toStrictEqual(['dev']);
 });
 
-test('it removes the audit rows of a destroyed imp', async () => {
+test('it keeps the audit rows of a destroyed imp under its name', async () => {
   const ctx = await setupTest();
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
-  await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId: dev.id }));
+  await writeAuditEntry(
+    ctx.db,
+    buildMockNewAuditEntry({ impId: dev.id, impName: 'dev', path: '/kept' }),
+  );
 
   await ctx.client.imps.destroy({ name: 'dev' });
 
   const left = await listAuditEntries(ctx.db, null, 10, null);
 
-  expect(left).toStrictEqual([]);
+  expect(left.map((row) => [row.imp, row.path])).toStrictEqual([['dev', '/kept']]);
 });
 
 test('it reports a fork whose grants cannot be copied, and logs the cause', async () => {

@@ -7,6 +7,7 @@ import type { NewAuditEntry } from '../db/broker-audit';
 export function buildMockNewAuditEntry(overrides: Partial<NewAuditEntry> = {}): NewAuditEntry {
   return {
     impId: faker.string.uuid(),
+    impName: faker.word.noun(),
     secretName: faker.word.noun(),
     at: faker.date.recent(),
     method: 'GET',

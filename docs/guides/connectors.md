@@ -39,7 +39,9 @@ put secrets into the sandbox as environment variables.
 A secret name has the same form as an imp name. The value must be printable ASCII without spaces,
 which every API token is. An imp may hold one credential per host, so two grants that cover the same
 host conflict. impd checks for the clash and makes the grant in one transaction, so two grants at
-once cannot both pass. `impz rm` takes the imp's grants and audit rows with it.
+once cannot both pass. `impz rm` takes the imp's grants with it. Its audit rows stay under its name,
+and so does the row of a request that ends after the imp is gone. `impz audit` with no imp lists
+them.
 
 A fork copies the grants of its source, as it copies the disk, from the live disk or from a
 checkpoint alike. What it copies depends on who forks:
@@ -452,8 +454,8 @@ grant's [filter](#narrow-a-grant). The broker refuses before it adds any credent
 row has no secret. `impz audit --kind refused` lists each with its reason, such as `egress-policy`.
 A head without a host leaves the host empty. The log keeps the newest 1000 rows of each kind per
 imp, sent and refused, so a guest's refusals never push out the requests sent with its credentials.
-It records at most 20 refusals per imp in one second, because a refusal costs the guest almost
-nothing.
+Across every imp, destroyed ones included, it keeps the newest 100,000 rows. It records at most 20
+refusals per imp in one second, because a refusal costs the guest almost nothing.
 
 ## Limits
 
