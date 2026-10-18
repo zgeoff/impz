@@ -2387,12 +2387,7 @@ test('it writes each move mark MOVE_TRANSITIONS holds, and no other, on both hos
   await ctx.runMove('web');
 
   // every mark these moves write is in the table, and each the table holds is written
-  expect(new Set(written.map((pair) => formatMovePair(pair)))).toStrictEqual(
-    new Set(MOVE_TRANSITIONS.map((pair) => formatMovePair(pair))),
+  expect(new Set(written.map(([from, to]) => `${String(from)} → ${String(to)}`))).toStrictEqual(
+    new Set(MOVE_TRANSITIONS.map(([from, to]) => `${String(from)} → ${String(to)}`)),
   );
 });
-
-// a move mark change as `from → to`, null as `null`
-function formatMovePair([from, to]: readonly [MoveState | null, MoveState | null]): string {
-  return `${String(from)} → ${String(to)}`;
-}
