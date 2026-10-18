@@ -1,5 +1,5 @@
 import { ServiceRestartSchema, ServiceStateSchema } from '@impz/api';
-import type { ImpEvent, Service, ServiceDef, ServiceList, ServiceLog } from '@impz/api';
+import type { Service, ServiceDef, ServiceList, ServiceLog } from '@impz/api';
 import { ORPCError } from '@orpc/server';
 import type { LogCursor, ServiceStatus, ServicesList } from '../agent-client/agent-protocol';
 import { isAgentError } from '../agent-client/is-agent-error';
@@ -10,7 +10,6 @@ import {
   sendServicesRemove,
   sendServicesRestart,
 } from '../agent-client/service-requests';
-import type { ServiceLogChunk, ServiceLogStream } from '../agent-client/service-requests';
 import {
   buildAgentOutdatedApiError,
   buildConflictError,
@@ -24,6 +23,11 @@ import { findSignalName } from '../exec/signal-names';
 import type { ImpRuntime } from '../imps/imp-runtime';
 import type { StartTimer } from '../process/clock';
 import { startRealTimer } from '../process/start-real-timer';
+import { createLogDecoders } from './create-log-decoders';
+import { mergeLogStreams } from './merge-log-streams';
+import type { NamedStream } from './merge-log-streams';
+import { stopOnReturn } from './stop-on-return';
+import { waitForImpChange } from './wait-for-imp-change';
 
 // The `services` API (docs/guides/services.md) through the guest agent. A
 // call wakes or boots the imp and counts as an exec, except a list and a
@@ -130,11 +134,6 @@ interface WaitContext {
   readonly runtime: Pick<ImpRuntime, 'findAgent'>;
   readonly now: () => number;
   readonly startTimer: StartTimer;
-}
-
-interface NamedStream {
-  readonly service: string;
-  readonly stream: ServiceLogStream;
 }
 
 // what one follow holds, so a reader that stops or a restart can end it
@@ -523,40 +522,6 @@ function stopStreams(streams: readonly NamedStream[]): void {
   }
 }
 
-// Resolves on the imp's next event, after `timeoutMs`, or on the abort.
-function waitForImpChange(
-  context: Readonly<Pick<FollowContext, 'events' | 'startTimer'>>,
-  name: string,
-  signal: Readonly<AbortSignal>,
-  timeoutMs: number,
-): Promise<void> {
-  if (signal.aborted) {
-    return Promise.resolve();
-  }
-
-  const waiting = Promise.withResolvers<void>();
-
-  const stopWaiting = (): void => {
-    cancelTimer();
-    unsubscribe();
-
-    signal.removeEventListener('abort', stopWaiting);
-    waiting.resolve();
-  };
-
-  const unsubscribe = context.events.subscribe((event: Readonly<ImpEvent>) => {
-    if ('imp' in event && event.imp.name === name) {
-      stopWaiting();
-    }
-  });
-
-  const cancelTimer = context.startTimer(stopWaiting, timeoutMs);
-
-  signal.addEventListener('abort', stopWaiting, { once: true });
-
-  return waiting.promise;
-}
-
 async function* readLogs(
   streams: readonly NamedStream[],
 ): AsyncGenerator<ServiceLog, void, undefined> {
@@ -622,122 +587,4 @@ function toApiService(service: ServiceStatus): Service {
     // an agent too old to say counts as root
     root: service.root ?? true,
   };
-}
-
-// A generator that waits on a follow's next chunk runs no `finally` until
-// one comes, so a reader that stops closes the streams first: their reads
-// end, and the generator returns.
-function stopOnReturn<T>(
-  generator: Readonly<AsyncGenerator<T, void, undefined>>,
-  stop: () => void,
-): AsyncIteratorObject<T, void, undefined> {
-  const stopIteration = (): Promise<IteratorResult<T, void>> => {
-    stop();
-
-    return generator.return();
-  };
-
-  const iterator: AsyncIteratorObject<T, void, undefined> = {
-    next: () => generator.next(),
-    return: stopIteration,
-    throw: (error: unknown) => {
-      stop();
-
-      return generator.throw(error);
-    },
-    [Symbol.asyncIterator]: () => iterator,
-    [Symbol.asyncDispose]: async () => {
-      await stopIteration();
-    },
-  };
-
-  return iterator;
-}
-
-interface MergedChunk {
-  readonly service: string;
-  readonly chunk: ServiceLogChunk;
-
-  // the data decoded, or '' for a cursor
-  readonly text: string;
-}
-
-interface Pending {
-  readonly result: IteratorResult<ServiceLogChunk, void>;
-  readonly index: number;
-}
-
-// Each service's UTF-8 decoder, kept across a follow's reconnects: a cursor
-// can fall inside a character, and its rest comes on the next stream.
-interface LogDecoders {
-  readonly readText: (service: string, data: Uint8Array) => string;
-
-  // what the decoders still hold, once the log ends for good
-  readonly readRest: () => Generator<ServiceLog, void, undefined>;
-}
-
-function createLogDecoders(): LogDecoders {
-  const decoders = new Map<string, TextDecoder>();
-
-  return {
-    readText: (service, data) => {
-      const decoder = decoders.get(service) ?? new TextDecoder();
-
-      decoders.set(service, decoder);
-
-      return decoder.decode(data, { stream: true });
-    },
-    *readRest() {
-      for (const [service, decoder] of decoders) {
-        const rest = decoder.decode();
-
-        if (rest !== '') {
-          yield { type: 'log', service, text: rest };
-        }
-      }
-    },
-  };
-}
-
-// Each stream's chunks as they come, decoded per service so a character
-// split across chunks stays whole.
-async function* mergeLogStreams(
-  streams: readonly NamedStream[],
-  decoders: LogDecoders,
-): AsyncGenerator<MergedChunk, void, undefined> {
-  const iterators = streams.map((entry) => entry.stream.chunks());
-
-  const readNext = async (index: number): Promise<Pending> => {
-    const iterator = iterators[index];
-
-    if (iterator === undefined) {
-      throw new Error(`no log stream ${String(index)}`);
-    }
-
-    const result = await iterator.next();
-
-    return { result, index };
-  };
-
-  const pending = new Map<number, Promise<Pending>>(
-    streams.map((_entry, index) => [index, readNext(index)]),
-  );
-
-  while (pending.size > 0) {
-    const next = await Promise.race(pending.values());
-
-    const service = streams[next.index]?.service ?? '';
-
-    if (next.result.done === true) {
-      pending.delete(next.index);
-      continue;
-    }
-
-    pending.set(next.index, readNext(next.index));
-
-    const chunk = next.result.value;
-    const text = chunk.kind === 'data' ? decoders.readText(service, chunk.data) : '';
-
-    yield { service, chunk, text };
-  }
 }
