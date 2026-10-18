@@ -173,7 +173,8 @@ export async function runMoveSend(
 
   checkReceiptFiles(body, imp, sent);
 
-  // from here both hosts hold the imp, and neither may wake it
+  // from here both hosts hold the imp, and neither may wake it: sending →
+  // moved, as MOVE_TRANSITIONS holds
   await updateMoveSend(deps.db, imp.id, { receipt: JSON.stringify(receipt) });
   await updateImpMove(deps.db, imp.id, 'moved');
 }
