@@ -27,7 +27,9 @@ and try two things at once.
 impz runs on one Linux machine with `/dev/kvm`: bare metal, or a VM with nested virtualization, with
 Docker. On a fresh Ubuntu or Debian server, `deploy/bootstrap.sh` from a release tag sets up the
 host and starts impd ([bootstrap a server](./docs/guides/install.md#bootstrap-a-server)), and
-[NixOS](./docs/guides/nixos.md) has a module. Then install the CLI on your own machine:
+[NixOS](./docs/guides/nixos.md) has a module. The host joins a
+[Tailscale](./docs/guides/tailscale.md) tailnet that you own, and other machines reach impd and the
+imps through it. Then install the CLI on your own machine:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/zgeoff/impz/main/install.sh | sh   # install the CLI
