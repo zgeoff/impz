@@ -22,14 +22,9 @@ import {
   isMovingError,
 } from '../api-errors';
 import { listColdBoots, writeUnknownBoot } from '../db/cold-boots';
-import {
-  findImpById,
-  findImpByName,
-  listImps,
-  updateImpActivity,
-  updateImpState,
-} from '../db/imps';
+import { findImpById, findImpByName, listImps, updateImpActivity } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
+import { updateImpState } from '../db/update-imp-state';
 import { checkBrokerAttach, checkOpenedSession } from '../exec/broker-sessions';
 import { buildBrokerNotReadyError, checkBrokerReady, isBrokerRequired } from '../exec/exec-require';
 import { mergeEnv } from '../exec/merge-env';

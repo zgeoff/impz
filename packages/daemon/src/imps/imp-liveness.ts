@@ -1,5 +1,7 @@
-import { findImpById, updateImpState } from '../db/imps';
-import type { ImpRecord, ImpStateChange } from '../db/imps';
+import { findImpById } from '../db/imps';
+import type { ImpRecord } from '../db/imps';
+import { updateImpState } from '../db/update-imp-state';
+import type { ImpStateChange } from '../db/update-imp-state';
 import { hasSnapshot, readLoadingMeta, readSnapshotMeta } from '../sleep/snapshot-meta';
 import type { ImpPaths } from '../storage/data-layout';
 import { isImpVm } from '../vmm/firecracker-process';

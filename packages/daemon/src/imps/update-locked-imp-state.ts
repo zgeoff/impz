@@ -1,6 +1,7 @@
-import { updateImpState } from '../db/imps';
-import type { ImpRecord, ImpStateChange } from '../db/imps';
+import type { ImpRecord } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
+import { updateImpState } from '../db/update-imp-state';
+import type { ImpStateChange } from '../db/update-imp-state';
 import { isLockedImp, toLockedImp } from './imp-lock';
 import type { LockedImp } from './imp-lock';
 import { requireTransition } from './imp-transitions';

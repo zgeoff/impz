@@ -4,8 +4,9 @@ import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
 import { createImage } from './images';
 import type { ImpWrite } from './imp-write-feed';
-import { createImp, updateImpState } from './imps';
+import { createImp } from './imps';
 import { openDatabase } from './open-database';
+import { updateImpState } from './update-imp-state';
 
 test('it publishes each imp write on the feed it was given', async () => {
   const writes = createEventBus<ImpWrite>();

@@ -13,10 +13,10 @@ import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import type { ImpdDeps } from '../create-impd';
 import { listApiCalls } from '../db/api-audit';
+import { createForkGrants } from '../db/create-fork-grants';
 import { createImage } from '../db/images';
 import { findImpByName } from '../db/imps';
 import { openDatabase } from '../db/open-database';
-import { createForkGrants } from '../db/secrets';
 import { listTokenRecords } from '../db/tokens';
 import { createEd25519Key } from '../ssh/host-key';
 import {

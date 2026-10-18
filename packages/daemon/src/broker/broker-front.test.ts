@@ -2,7 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { createConnection } from 'node:net';
 import type { EgressMode } from '@impz/api';
 import type { NewAuditEntry } from '../db/broker-audit';
-import type { BrokerPeer } from '../db/secrets';
+import type { BrokerPeer } from '../db/find-broker-peer';
 import { parseSubnet } from '../net/addressing';
 import { findFreePorts } from '../test-utils/find-free-ports';
 import { startStubBrokerGuestSocket } from '../test-utils/start-stub-broker-guest-socket';

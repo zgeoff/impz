@@ -1,6 +1,7 @@
 import { hasScope, isImpAllowed } from '@impz/api';
 import type { ForbiddenReason, ImpContract, Scope } from '@impz/api';
-import type { ForkAuthority, GrantAuthority } from '../db/secrets';
+import type { ForkAuthority } from '../db/create-fork-grants';
+import type { GrantAuthority } from '../db/secrets';
 import { formatCaller } from './caller';
 import type { Caller } from './caller';
 import { checkGrantable } from './check-grantable';

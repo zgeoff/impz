@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { findImpByName, updateImpState } from '../db/imps';
+import { findImpByName } from '../db/imps';
+import { updateImpState } from '../db/update-imp-state';
 import { buildImpPaths } from '../storage/data-layout';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { createImpTest, writeTestSnapshot } from './test-imps';

@@ -19,19 +19,20 @@ import {
 } from '../api-errors';
 import type { Config } from '../config';
 import { listAuditEntries, listRefusedRequests } from '../db/broker-audit';
+import { createForkGrants } from '../db/create-fork-grants';
+import type { ForkAuthority } from '../db/create-fork-grants';
 import { findImpByName, listImps } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
 import {
   createCheckedGrant,
-  createForkGrants,
   listAllGrantedRules,
   listGrantNames,
   listGrantedRules,
   listGrants,
   removeCheckedGrant,
 } from '../db/secrets';
-import type { ForkAuthority, GrantAuthority, GrantClash } from '../db/secrets';
+import type { GrantAuthority, GrantClash } from '../db/secrets';
 import { deriveSlotAddress } from '../net/addressing';
 import type { Ipv6Plan } from '../net/ipv6-plan';
 import { readErrorMessage } from '../read-error-message';

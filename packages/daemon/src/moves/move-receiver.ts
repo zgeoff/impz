@@ -5,7 +5,7 @@ import { ORPCError } from '@orpc/server';
 import type { ApiAudit } from '../audit/api-audit';
 import type { Broker } from '../broker/broker-service';
 import { findImageByDigest } from '../db/images';
-import { SlotTakenError, findImpByName, listImps, updateImpCommitted } from '../db/imps';
+import { findImpByName, listImps, updateImpCommitted } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import { listLeases } from '../db/leases';
 import {
@@ -20,6 +20,7 @@ import {
 } from '../db/move-tickets';
 import type { MoveTicketRow, NewMoveTicketRow } from '../db/move-tickets';
 import type { ImpDatabase } from '../db/open-database';
+import { SlotTakenError } from '../db/slot-taken-error';
 import type { EgressService } from '../egress/egress-service';
 import type { Imps } from '../imps/imp-service';
 import { readErrorMessage } from '../read-error-message';
