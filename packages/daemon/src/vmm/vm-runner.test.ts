@@ -358,7 +358,9 @@ test('#sleepVm takes a full snapshot of a woken VM whose memory file cannot be c
   expect(timings).toContainKey('copyBaseFailed');
 });
 
-test('#sleepVm keeps the memory file a woken VM maps whole when its diff snapshot fails', async () => {
+// the failed snapshot may have cleared the dirty page log, so a later diff
+// over that file could miss pages
+test('#sleepVm removes the memory file a woken VM woke from when its snapshot fails, and leaves the VM running', async () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
 
@@ -375,7 +377,7 @@ test('#sleepVm keeps the memory file a woken VM maps whole when its diff snapsho
   const sleeping = createVmRunner(buildStubJails().jails).sleepVm(vm.pid, paths, null, paths);
 
   expect(sleeping).rejects.toThrow('refused PUT /snapshot/create');
-  expect(readFileSync(paths.memFile, 'latin1')).toBe(`${'a'.repeat(4096)}${'b'.repeat(4096)}`);
+  expect(existsSync(paths.memFile)).toBeFalse();
   expect(existsSync(`${paths.memFile}.new`)).toBeFalse();
   expect(isFirecrackerAlive(vm.pid, paths.apiSocket)).toBeTrue();
 });
