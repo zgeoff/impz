@@ -21,6 +21,10 @@ impz runs on one Linux machine, in one host container, in one of two ways:
   The host container loads its rules into its own network namespace, and the guard against spoofed
   guest addresses and the broker's port rule need both. Most distribution kernels and WSL2 have
   them; `setup-net.sh` fails at start without them.
+- A Tailscale tailnet and a tagged auth key for it. Other machines reach impd and the imps through
+  the tailnet, and without one impd listens on the host's loopback only. One exception: a public imp
+  listens on every address ([public imps](./https.md#public-imps)). The
+  [Tailscale guide](./tailscale.md) covers the key and the ACL.
 - [Bun](https://bun.sh) for the CLI, and Go for the guest agent.
 - Disk for the sparse XFS file. `IMP_STORAGE_GIB` (default 200) sets its apparent size; it uses only
   what imps write.
