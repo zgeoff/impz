@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.4](https://github.com/zgeoff/impz/compare/v2.5.3...v2.5.4) (2026-10-18)
+
+### Bug Fixes
+
+- **geo-1287:** name no 1Password vault in scripts or docs
+  ([#512](https://github.com/zgeoff/impz/issues/512))
+  ([31642fe](https://github.com/zgeoff/impz/commit/31642fe535c257e1b5e41c68d0001004cc068789))
+
 ## [2.5.3](https://github.com/zgeoff/impz/compare/v2.5.2...v2.5.3) (2026-10-18)
 
 ### Bug Fixes
