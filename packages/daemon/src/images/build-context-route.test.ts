@@ -18,7 +18,6 @@ import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
 import { createApiAudit } from '../audit/api-audit';
-import { toApiImage } from '../build-router';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import type { ImpdDeps } from '../create-impd';
@@ -41,6 +40,7 @@ import { buildStubVmm } from '../test-utils/build-stub-vmm';
 import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
 import { findFreePorts } from '../test-utils/find-free-ports';
 import { startStubDockerEngine } from '../test-utils/start-stub-docker-engine';
+import { toApiImage } from '../to-api-image';
 import { createBuildContextRoute } from './build-context-route';
 import { PIN_INSPECT_FORMAT } from './image-pin';
 
