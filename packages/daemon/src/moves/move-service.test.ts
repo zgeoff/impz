@@ -1,9 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { MoveState } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { findImageByName } from '../db/images';
+import type { ImpWrite } from '../db/imp-write-feed';
 import { findImpByName, listImps, updateImpExposure, updateImpMove } from '../db/imps';
 import { TEST_TOKEN, buildTestApp } from '../imps/test-imps';
 import { buildMockMoveTicketRow } from '../test-utils/build-mock-move-ticket-row';
@@ -25,6 +27,7 @@ import {
   readReceipt,
   readTicketHeader,
 } from './move-tickets';
+import { MOVE_TRANSITIONS } from './move-transitions';
 import {
   SOURCE_PEER,
   TARGET_URL,
@@ -2333,3 +2336,63 @@ test('it moves an imp from an XFS host to a ZFS host as files, its checkpoints a
     `tank/imp/disks/${created.id}@${checkpoints[0].id}`,
   );
 });
+
+test('it writes each move mark MOVE_TRANSITIONS holds, and no other, on both hosts', async () => {
+  const ctx = await setupTest({ hook: buildStubDroppedCommit() });
+
+  // each imp's last mark on each host, and every change a write made to it
+  const marks = new Map<string, MoveState | null>();
+
+  const written: (readonly [MoveState | null, MoveState | null])[] = [];
+
+  const makeRecorder =
+    (host: string) =>
+    (write: ImpWrite): void => {
+      if (write.kind === 'added' || write.kind === 'changed') {
+        const key = `${host}/${write.imp.id}`;
+        const from = marks.get(key) ?? null;
+
+        if (from !== write.imp.moveState) {
+          written.push([from, write.imp.moveState]);
+        }
+
+        marks.set(key, write.imp.moveState);
+      }
+    };
+
+  const stopSource = ctx.source.db.writes.subscribe(makeRecorder('source'));
+  const stopTarget = ctx.target.db.writes.subscribe(makeRecorder('target'));
+
+  onTestFinished(() => {
+    stopSource();
+    stopTarget();
+  });
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  // an abort before the stream
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+  await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
+  await ctx.sourceApp.client.moves.abort({ name: 'dev' });
+
+  // a stream to its receipt, a dropped commit, then an abort
+  await ctx.runMove('dev');
+  await ctx.sourceApp.client.moves.abort({ name: 'dev' });
+
+  // a whole move
+  await ctx.sourceApp.client.imps.create({ name: 'web', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'web' });
+  await ctx.runMove('web');
+
+  // every mark these moves write is in the table, and each the table holds is written
+  expect(new Set(written.map((pair) => formatMovePair(pair)))).toStrictEqual(
+    new Set(MOVE_TRANSITIONS.map((pair) => formatMovePair(pair))),
+  );
+});
+
+// a move mark change as `from → to`, null as `null`
+function formatMovePair([from, to]: readonly [MoveState | null, MoveState | null]): string {
+  return `${String(from)} → ${String(to)}`;
+}
