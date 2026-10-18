@@ -58,8 +58,8 @@ docs/
   for an external dependency and `"workspace:*"` for an internal one.
 - Pin exact versions, with no `^` or `~` ranges. `bun add` saves exact versions through the `exact`
   setting in [`bunfig.toml`](bunfig.toml), so the rule covers hand-written edits.
-- The `no-restricted-imports` blocks in [`.oxlintrc.json`](.oxlintrc.json) hold the package
-  boundaries, and each pattern's message holds the fix.
+- The `zgeoff/import-zones` options in [`.oxlintrc.json`](.oxlintrc.json) hold the package
+  boundaries, and each entry's reason holds the fix.
 
 ## Commands
 
