@@ -14,6 +14,15 @@ interface StubFirecrackerOptions {
 
   // true: log each call's body after its path
   readonly isLoggingBodies?: boolean;
+
+  // the guest memory a snapshot writes, one fill character per 4 KiB page,
+  // and the pages the guest wrote since its load; without it a snapshot
+  // writes no files
+  readonly memory?: {
+    readonly pages: string;
+    readonly dirtyPages: readonly number[];
+    readonly isTrackingDirtyPages: boolean;
+  };
 }
 
 // The command that runs run-stub-firecracker.ts in place of Firecracker,
@@ -30,6 +39,7 @@ export function buildStubFirecrackerArgv(options: Readonly<StubFirecrackerOption
     options.logPath,
     failures.length === 0 ? 'none' : failures.join(','),
     options.isLoggingBodies === true ? 'bodies' : 'lines',
+    options.memory === undefined ? 'none' : JSON.stringify(options.memory),
   ];
 }
 

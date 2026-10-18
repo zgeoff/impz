@@ -181,7 +181,7 @@ async function runBuildVm(
       createOwnedFile(plan.vmstate, owner);
       createOwnedFile(plan.memFile, owner);
 
-      await api.createSnapshot({ snapshotPath: plan.vmstate, memFilePath: plan.memFile });
+      await api.createSnapshot({ snapshotPath: plan.vmstate, memFilePath: plan.memFile }, 'Full');
     } finally {
       stopPid(pid);
 

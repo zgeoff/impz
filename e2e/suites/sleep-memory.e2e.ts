@@ -1,4 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import invariant from 'tiny-invariant';
 import { waitAwakePastIdle } from '../lib/awake-past-idle';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
@@ -14,8 +15,9 @@ import {
   runShellInImp,
   startImp,
 } from '../lib/imp-cli';
+import { findAsleepLine } from '../lib/impd-sleep-log';
 import { holdImp, waitForExec } from '../lib/imps';
-import { checkFirecrackerRunning } from '../lib/instance';
+import { checkFirecrackerRunning, readImpdLogSince } from '../lib/instance';
 import { checkMemoryProof, startMemoryProof } from '../lib/memory-proof';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
@@ -175,6 +177,73 @@ test('it sleeps an idle imp by itself, wakes it intact on a request, and keeps i
 
   expect(byPort).toBe(proof.token);
   expect(wokenByPort).toBe('running');
+});
+
+// A woken VM's sleep writes only the pages the guest dirtied, over a copy of
+// the memory file it woke from: what the guest wrote before and after each
+// wake comes back whole.
+test('it keeps what a woken imp wrote through its next sleeps, which write only the pages it dirtied', async () => {
+  const ctx = await setupTest();
+
+  const name = `${ctx.prefix}diff`;
+
+  await runImp('new', name, '--image', resolveImageName('e2e-bare'), '--memory', '512');
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+  await waitForExec(name);
+
+  const proof = await startMemoryProof(name);
+
+  await runImp('sleep', name);
+  await runImp('wake', name);
+
+  // 8 MiB the guest writes after the wake, on a tmpfs only its memory holds
+  const written = await runShellInImp(
+    name,
+    'mkdir -p /run/dirty && mount -t tmpfs -o size=16m tmpfs /run/dirty && ' +
+      'head -c 8388608 /dev/urandom > /run/dirty/blob && sha256sum /run/dirty/blob',
+  );
+
+  const secondFrom = new Date();
+
+  await runImp('sleep', name);
+
+  const secondLog = await readImpdLogSince(secondFrom);
+
+  const second = findAsleepLine(secondLog, name);
+
+  await runImp('wake', name);
+
+  const afterSecond = await runShellInImp(name, 'sha256sum /run/dirty/blob');
+
+  await checkMemoryProof(proof);
+
+  // a later sleep writes over the file a diff sleep wrote
+  await runShellInImp(name, 'echo again > /run/dirty/note');
+
+  const thirdFrom = new Date();
+
+  await runImp('sleep', name);
+
+  const thirdLog = await readImpdLogSince(thirdFrom);
+
+  const third = findAsleepLine(thirdLog, name);
+
+  await runImp('wake', name);
+
+  const afterThird = await runShellInImp(name, 'sha256sum /run/dirty/blob && cat /run/dirty/note');
+
+  await checkMemoryProof(proof);
+
+  invariant(second);
+  invariant(third);
+  writeMetric('diffSleepMs', second.ms);
+
+  expect(second.steps).toContainKey('copyBase');
+  expect(third.steps).toContainKey('copyBase');
+  expect(afterSecond).toBe(written);
+  expect(afterThird).toBe(`${written}\nagain`);
 });
 
 test('it gives memory the guest frees back to the host', async () => {

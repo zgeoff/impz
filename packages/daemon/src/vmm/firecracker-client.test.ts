@@ -36,7 +36,7 @@ test('it gives up on a snapshot that never finishes after the snapshot timeout',
   const client = createFirecrackerClient(ctx.socket, { requestMs: 50, snapshotMs: 100 });
 
   expect(
-    client.createSnapshot({ snapshotPath: '/i1/vmstate', memFilePath: '/i1/mem' }),
+    client.createSnapshot({ snapshotPath: '/i1/vmstate', memFilePath: '/i1/mem' }, 'Full'),
   ).rejects.toThrowWithMessage(Error, 'firecracker PUT /snapshot/create: no answer within 100 ms');
 });
 
@@ -232,10 +232,10 @@ test('it takes a full snapshot that syncs its files', async () => {
   const ctx = setupTest();
   const api = startStubFirecrackerApi(ctx.socket);
 
-  await createFirecrackerClient(ctx.socket).createSnapshot({
-    snapshotPath: '/i1/vmstate',
-    memFilePath: '/i1/mem',
-  });
+  await createFirecrackerClient(ctx.socket).createSnapshot(
+    { snapshotPath: '/i1/vmstate', memFilePath: '/i1/mem' },
+    'Full',
+  );
 
   expect(api.calls).toStrictEqual([
     {
@@ -249,6 +249,89 @@ test('it takes a full snapshot that syncs its files', async () => {
       },
     },
   ]);
+});
+
+test('it takes a diff snapshot that syncs its files', async () => {
+  const ctx = setupTest();
+  const api = startStubFirecrackerApi(ctx.socket);
+
+  await createFirecrackerClient(ctx.socket).createSnapshot(
+    { snapshotPath: '/i1/vmstate.new', memFilePath: '/i1/mem.new' },
+    'Diff',
+  );
+
+  expect(api.calls).toStrictEqual([
+    {
+      method: 'PUT',
+      path: '/snapshot/create',
+      body: {
+        snapshot_type: 'Diff',
+        snapshot_path: '/i1/vmstate.new',
+        mem_file_path: '/i1/mem.new',
+        sync_snapshot_files: true,
+      },
+    },
+  ]);
+});
+
+test('it loads a snapshot that tracks the pages the guest dirties', async () => {
+  const ctx = setupTest();
+  const api = startStubFirecrackerApi(ctx.socket);
+
+  await createFirecrackerClient(ctx.socket).loadSnapshot(
+    { snapshotPath: '/i1/vmstate', memFilePath: '/i1/mem' },
+    { resumeVm: false, isTrackingDirtyPages: true },
+  );
+
+  expect(api.calls).toStrictEqual([
+    {
+      method: 'PUT',
+      path: '/snapshot/load',
+      body: {
+        snapshot_path: '/i1/vmstate',
+        mem_backend: { backend_type: 'File', backend_path: '/i1/mem' },
+        resume_vm: false,
+        track_dirty_pages: true,
+      },
+    },
+  ]);
+});
+
+test('it reads that a loaded VM tracks its dirty pages', async () => {
+  const ctx = setupTest();
+
+  startStubFirecrackerApi(ctx.socket, {
+    answers: {
+      'GET /machine-config': {
+        status: 200,
+        body: {
+          vcpu_count: 2,
+          mem_size_mib: 2048,
+          smt: false,
+          track_dirty_pages: true,
+          huge_pages: 'None',
+        },
+      },
+    },
+  });
+
+  const config = await createFirecrackerClient(ctx.socket).getMachineConfig();
+
+  expect(config).toStrictEqual({ isTrackingDirtyPages: true });
+});
+
+test('it reads no dirty page tracking from a machine config without the field', async () => {
+  const ctx = setupTest();
+
+  startStubFirecrackerApi(ctx.socket, {
+    answers: {
+      'GET /machine-config': { status: 200, body: { vcpu_count: 2, mem_size_mib: 2048 } },
+    },
+  });
+
+  const config = await createFirecrackerClient(ctx.socket).getMachineConfig();
+
+  expect(config).toStrictEqual({ isTrackingDirtyPages: false });
 });
 
 test('it loads a snapshot with the tap and vsock socket of the snapshot', async () => {

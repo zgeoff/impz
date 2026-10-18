@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isFirecrackerAlive } from '../vmm/firecracker-process';
@@ -18,7 +18,113 @@ function setupTest() {
 test('it builds a command that names the API socket after --api-sock', () => {
   const argv = buildStubFirecrackerArgv({ apiSocket: '/r/api.sock', logPath: '/r/log' });
 
-  expect(argv.slice(-5)).toStrictEqual(['--api-sock', '/r/api.sock', '/r/log', 'none', 'lines']);
+  expect(argv.slice(-6)).toStrictEqual([
+    '--api-sock',
+    '/r/api.sock',
+    '/r/log',
+    'none',
+    'lines',
+    'none',
+  ]);
+});
+
+test('it answers that its guest tracks the pages it dirties', async () => {
+  const ctx = setupTest();
+
+  await startStubFirecracker({
+    apiSocket: ctx.apiSocket,
+    logPath: ctx.logPath,
+    memory: { pages: 'ab', dirtyPages: [], isTrackingDirtyPages: true },
+  });
+
+  const response = await fetch('http://localhost/machine-config', { unix: ctx.apiSocket });
+  const body: unknown = await response.json();
+
+  expect(body).toStrictEqual({
+    vcpu_count: 1,
+    mem_size_mib: 128,
+    smt: false,
+    track_dirty_pages: true,
+    huge_pages: 'None',
+  });
+});
+
+test('it writes every page of its guest on a full snapshot', async () => {
+  const ctx = setupTest();
+
+  await startStubFirecracker({
+    apiSocket: ctx.apiSocket,
+    logPath: ctx.logPath,
+    memory: { pages: 'aBc', dirtyPages: [1], isTrackingDirtyPages: true },
+  });
+
+  await fetch('http://localhost/snapshot/create', {
+    unix: ctx.apiSocket,
+    method: 'PUT',
+    body: JSON.stringify({
+      snapshot_type: 'Full',
+      snapshot_path: join(ctx.dir, 'vmstate'),
+      mem_file_path: join(ctx.dir, 'mem'),
+    }),
+  });
+
+  expect(readFileSync(join(ctx.dir, 'mem'), 'latin1')).toBe(
+    `${'a'.repeat(4096)}${'B'.repeat(4096)}${'c'.repeat(4096)}`,
+  );
+
+  expect(readFileSync(join(ctx.dir, 'vmstate'), 'utf8')).toBe('vmstate');
+});
+
+test('it writes only the dirty pages over a mem file of the guest size on a diff snapshot', async () => {
+  const ctx = setupTest();
+
+  writeFileSync(join(ctx.dir, 'mem'), 'x'.repeat(3 * 4096));
+
+  await startStubFirecracker({
+    apiSocket: ctx.apiSocket,
+    logPath: ctx.logPath,
+    memory: { pages: 'aBc', dirtyPages: [1], isTrackingDirtyPages: true },
+  });
+
+  await fetch('http://localhost/snapshot/create', {
+    unix: ctx.apiSocket,
+    method: 'PUT',
+    body: JSON.stringify({
+      snapshot_type: 'Diff',
+      snapshot_path: join(ctx.dir, 'vmstate'),
+      mem_file_path: join(ctx.dir, 'mem'),
+    }),
+  });
+
+  expect(readFileSync(join(ctx.dir, 'mem'), 'latin1')).toBe(
+    `${'x'.repeat(4096)}${'B'.repeat(4096)}${'x'.repeat(4096)}`,
+  );
+});
+
+test('it empties a mem file of another size before a diff snapshot', async () => {
+  const ctx = setupTest();
+
+  writeFileSync(join(ctx.dir, 'mem'), 'x'.repeat(4096));
+
+  await startStubFirecracker({
+    apiSocket: ctx.apiSocket,
+    logPath: ctx.logPath,
+    memory: { pages: 'aB', dirtyPages: [1], isTrackingDirtyPages: true },
+  });
+
+  await fetch('http://localhost/snapshot/create', {
+    unix: ctx.apiSocket,
+    method: 'PUT',
+    body: JSON.stringify({
+      snapshot_type: 'Diff',
+      snapshot_path: join(ctx.dir, 'vmstate'),
+      mem_file_path: join(ctx.dir, 'mem'),
+    }),
+  });
+
+  expect(readFileSync(join(ctx.dir, 'mem'), 'latin1')).toBe(
+    `${'\0'.repeat(4096)}${'B'.repeat(4096)}`,
+  );
 });
 
 test('it runs as a process the liveness check takes for a Firecracker', async () => {

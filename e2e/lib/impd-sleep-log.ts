@@ -3,6 +3,9 @@ export interface AsleepLine {
 
   // what stayed plugged through the sleep; null for an imp without elastic memory
   readonly pluggedMib: number | null;
+
+  // the milliseconds of each step the line ends with, as `pause=3ms`
+  readonly steps: Readonly<Record<string, number>>;
 }
 
 // The newest `impd: <name>: asleep in` line in an impd log (imp-vm-ops.ts
@@ -23,5 +26,12 @@ export function findAsleepLine(log: string, name: string): AsleepLine | null {
     throw new Error(`no duration in ${JSON.stringify(line)}`);
   }
 
-  return { ms: Number(ms), pluggedMib: plugged === undefined ? null : Number(plugged) };
+  const steps = Object.fromEntries(
+    [...line.matchAll(/ (?<step>\w+)=(?<stepMs>\d+)ms/gv)].map((match) => [
+      match.groups?.['step'] ?? '',
+      Number(match.groups?.['stepMs']),
+    ]),
+  );
+
+  return { ms: Number(ms), pluggedMib: plugged === undefined ? null : Number(plugged), steps };
 }
