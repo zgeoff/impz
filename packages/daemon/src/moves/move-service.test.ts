@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { findImageByName } from '../db/images';
-import { findImpByName, updateImpExposure, updateImpMove } from '../db/imps';
+import { findImpByName, listImps, updateImpExposure, updateImpMove } from '../db/imps';
 import { TEST_TOKEN, buildTestApp } from '../imps/test-imps';
 import { buildMockMoveTicketRow } from '../test-utils/build-mock-move-ticket-row';
 import { buildStubClock } from '../test-utils/build-stub-clock';
@@ -1711,20 +1711,8 @@ test('it refuses a stream that does not start with its header', async () => {
   expect(staged).toBeUndefined();
 });
 
-test('it refuses a stream whose header names another imp than its ticket', async () => {
-  const ctx = await setupTest({
-    hook: buildStubMoveStreamRewrite((frames) =>
-      frames.map((frame) => {
-        if (frame.type !== MOVE_FRAMES.header) {
-          return frame;
-        }
-
-        const header = MoveHeaderSchema.parse(readJsonPayload(frame.payload));
-
-        return buildJsonMoveFrame(frame.type, { ...header, imp: { ...header.imp, name: 'other' } });
-      }),
-    ),
-  });
+test("it takes a stream whose header names its ticket's imp", async () => {
+  const ctx = await setupTest({ hook: buildStubMoveStreamRewrite((frames) => frames) });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1734,8 +1722,46 @@ test('it refuses a stream whose header names another imp than its ticket', async
 
   const status = await ctx.runMove('dev');
 
-  expect(status.error).toContain('the ticket is for dev, not other');
+  expect(status.error).toBeNull();
 });
+
+// the target's answer comes back trimmed
+test.each([
+  ['a different name', 'other', 'not other'],
+  ['a case variant', 'Dev', 'not Dev'],
+  ['an empty name', '', 'not'],
+  ['a name with whitespace', 'dev ', 'not dev'],
+  ['a unicode look-alike', 'd\u0435v', 'not d\u0435v'],
+])(
+  "it refuses a stream whose header names %s for its ticket's imp",
+  async (_kind, name, refusal) => {
+    const ctx = await setupTest({
+      hook: buildStubMoveStreamRewrite((frames) =>
+        frames.map((frame) => {
+          if (frame.type !== MOVE_FRAMES.header) {
+            return frame;
+          }
+
+          const header = MoveHeaderSchema.parse(readJsonPayload(frame.payload));
+
+          return buildJsonMoveFrame(frame.type, { ...header, imp: { ...header.imp, name } });
+        }),
+      ),
+    });
+
+    await createUbuntuImage(ctx.source);
+    await createUbuntuImage(ctx.target);
+
+    await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+    await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+    const status = await ctx.runMove('dev');
+    const staged = await listImps(ctx.target.db);
+
+    expect(status.error).toBe(`receive: the target answered 403 the ticket is for dev, ${refusal}`);
+    expect(staged).toStrictEqual([]);
+  },
+);
 
 test('it refuses a stream for an imp id the target has', async () => {
   const taken = { id: '' };
