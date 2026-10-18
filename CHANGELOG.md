@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.0](https://github.com/zgeoff/impz/compare/v2.4.1...v2.5.0) (2026-10-18)
+
+
+### Features
+
+* **geo-367:** give the client every impd wire protocol ([#469](https://github.com/zgeoff/impz/issues/469)) ([0681219](https://github.com/zgeoff/impz/commit/068121940c93f6cebf3de54e9d906f15b107566e))
+* **geo-367:** run the cli on gunshi ([#472](https://github.com/zgeoff/impz/issues/472)) ([11cc460](https://github.com/zgeoff/impz/commit/11cc460a621e0e768b422409f564e565b08cde06))
+
 ## [2.4.1](https://github.com/zgeoff/impz/compare/v2.4.0...v2.4.1) (2026-10-17)
 
 ### Bug Fixes
