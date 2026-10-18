@@ -16,7 +16,8 @@ import { buildStubBrokerTokenEndpoint } from '../test-utils/build-stub-broker-to
 import { createTestDatabase } from '../test-utils/create-test-database';
 import { startStubBrokerTlsUpstream } from '../test-utils/start-stub-broker-tls-upstream';
 import { loadOrCreateBrokerCa } from './broker-ca';
-import { createOAuthRefresher, isDue } from './oauth-refresher';
+import { isDue } from './is-due';
+import { createOAuthRefresher } from './oauth-refresher';
 import { buildPendingState, formatOAuthState, parseOAuthState } from './oauth-state';
 import { buildValueFile, createSecretFiles } from './secret-files';
 

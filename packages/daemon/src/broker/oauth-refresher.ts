@@ -1,5 +1,4 @@
 import type { OAuthConfig } from '@impz/api';
-import * as z from 'zod';
 import type { ImpDatabase } from '../db/open-database';
 import { findSecret, listSecrets } from '../db/secrets';
 import type { SecretRecord } from '../db/secrets';
@@ -8,8 +7,11 @@ import { createKeyedMutex } from '../process/keyed-mutex';
 import { createSingleFlight } from '../process/single-flight';
 import { readErrorMessage } from '../read-error-message';
 import type { Upstream } from './forward-request';
-import { formatOAuthState, isHeaderSafeToken, parseOAuthState, readJwtExpiry } from './oauth-state';
+import { isDue } from './is-due';
+import { formatOAuthState, parseOAuthState, readJwtExpiry } from './oauth-state';
 import type { OAuthStateFile } from './oauth-state';
+import { parseTokenAnswer } from './parse-token-answer';
+import type { Classified, TokenResponse } from './parse-token-answer';
 import type { SecretFiles } from './secret-files';
 
 // Keeps each oauth secret's access token fresh (docs/guides/connectors.md
@@ -75,38 +77,12 @@ interface OAuthRefresherDeps {
   readonly tickMs?: number;
 }
 
-const HOUR_MS = 60 * 60 * 1000;
-const MAX_LEAD_MS = 24 * HOUR_MS;
-
-// at least one 60 s tick and one 30 s token call before the expiry, with room
-// to spare, so a short-lived token is refreshed before it runs out
-const MIN_LEAD_MS = 3 * 60_000;
 const BACKOFF_BASE_MS = 60_000;
 const BACKOFF_CAP_MS = 30 * 60_000;
 
 // the youngest token a 401 refreshes: at most one such refresh per secret
 // in this time, whatever a guest sends
 const REJECTION_FLOOR_MS = 5 * 60_000;
-
-// error codes that mean the refresh token is dead
-const PERMANENT_CODES = new Set([
-  'invalid_grant',
-  'refresh_token_expired',
-  'refresh_token_reused',
-  'refresh_token_invalidated',
-]);
-
-interface TokenResponse {
-  readonly accessToken: string | null;
-  readonly refreshToken: string | null;
-  readonly idToken: string | null;
-  readonly expiresInMs: number | null;
-}
-
-type Classified =
-  | { readonly kind: 'ok'; readonly tokens: TokenResponse }
-  | { readonly kind: 'transient'; readonly error: string }
-  | { readonly kind: 'permanent'; readonly error: string };
 
 export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
   const now = deps.now ?? Date.now;
@@ -218,7 +194,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
       };
     }
 
-    return parseAnswer(response.status, text);
+    return parseTokenAnswer(response.status, text);
   };
 
   const runRefresh = async (name: string, force: boolean): Promise<RefreshOutcome> => {
@@ -571,118 +547,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
       await Promise.allSettled([...unsaved.keys()].map((name) => writeUnsaved(name)));
     },
   };
-}
-
-// Due now without an access token, never for needs_login; else with less
-// than min(24 h, half the lifetime) left, and never less than MIN_LEAD_MS, so
-// an impd stopped for a day never hands out an expired token.
-export function isDue(state: Readonly<OAuthStateFile>, at: number): boolean {
-  if (state.status === 'needs_login') {
-    return false;
-  }
-
-  if (state.status === 'pending' || state.accessToken === null) {
-    return true;
-  }
-
-  if (state.expiresAt === null) {
-    return state.refreshedAt === null || at - state.refreshedAt > HOUR_MS;
-  }
-
-  const remaining = state.expiresAt - at;
-
-  if (state.refreshedAt === null) {
-    return remaining < MIN_LEAD_MS;
-  }
-
-  const lifetime = state.expiresAt - state.refreshedAt;
-
-  return remaining < Math.max(MIN_LEAD_MS, Math.min(MAX_LEAD_MS, lifetime / 2));
-}
-
-// the error of a token endpoint's answer: a string, or an object with a
-// `code` or an `error` string
-const ErrorObjectSchema = z.object({ code: z.string().nullish(), error: z.string().nullish() });
-const ErrorAnswerSchema = z.object({ error: z.union([z.string(), ErrorObjectSchema]) });
-
-const TokenAnswerSchema = z.object({
-  access_token: z.string().nullish(),
-  refresh_token: z.string().nullish(),
-  id_token: z.string().nullish(),
-  expires_in: z.number().nullish(),
-});
-
-// a code a log line and an API answer may carry: short and plain
-function readErrorCode(body: unknown): string | null {
-  const parsed = ErrorAnswerSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return null;
-  }
-
-  const error = parsed.data.error;
-  const code = typeof error === 'string' ? error : (error.code ?? error.error);
-
-  return code !== null && code !== undefined && /^[A-Za-z0-9_.-]{1,64}$/u.test(code) ? code : null;
-}
-
-function parseAnswer(status: number, text: string): Classified {
-  let body: unknown = null;
-
-  try {
-    body = JSON.parse(text);
-  } catch {
-    body = null;
-  }
-
-  const code = readErrorCode(body);
-
-  if (code !== null && PERMANENT_CODES.has(code)) {
-    return { kind: 'permanent', error: code };
-  }
-
-  if (status === 401) {
-    return { kind: 'permanent', error: code ?? 'HTTP 401' };
-  }
-
-  if (status < 200 || status >= 300) {
-    return { kind: 'transient', error: `HTTP ${String(status)}` };
-  }
-
-  return readTokens(body);
-}
-
-function readTokens(body: unknown): Classified {
-  const parsed = TokenAnswerSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return { kind: 'transient', error: 'invalid response' };
-  }
-
-  const accessToken = parsed.data.access_token ?? null;
-  const refreshToken = parsed.data.refresh_token ?? null;
-  const idToken = parsed.data.id_token ?? null;
-
-  // a token goes into a header or a file: one that could split a header is
-  // not one
-  const unusable = [accessToken, refreshToken, idToken].some(
-    (token) => token !== null && !isHeaderSafeToken(token),
-  );
-
-  if (unusable) {
-    return { kind: 'transient', error: 'invalid response' };
-  }
-
-  // a 200 that carries no token refreshed nothing
-  if (accessToken === null && refreshToken === null) {
-    return { kind: 'transient', error: 'no token in the response' };
-  }
-
-  // 0 or less is a token that is already due, not an unknown expiry
-  const expiresIn = parsed.data.expires_in ?? null;
-  const expiresInMs = expiresIn === null ? null : Math.max(0, expiresIn) * 1000;
-
-  return { kind: 'ok', tokens: { accessToken, refreshToken, idToken, expiresInMs } };
 }
 
 // a time in ms that a Date can hold

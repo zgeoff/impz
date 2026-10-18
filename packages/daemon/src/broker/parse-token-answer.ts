@@ -1,0 +1,107 @@
+import * as z from 'zod';
+import { isHeaderSafeToken } from './oauth-state';
+
+// error codes that mean the refresh token is dead
+const PERMANENT_CODES = new Set([
+  'invalid_grant',
+  'refresh_token_expired',
+  'refresh_token_reused',
+  'refresh_token_invalidated',
+]);
+
+export interface TokenResponse {
+  readonly accessToken: string | null;
+  readonly refreshToken: string | null;
+  readonly idToken: string | null;
+  readonly expiresInMs: number | null;
+}
+
+export type Classified =
+  | { readonly kind: 'ok'; readonly tokens: TokenResponse }
+  | { readonly kind: 'transient'; readonly error: string }
+  | { readonly kind: 'permanent'; readonly error: string };
+
+// the error of a token endpoint's answer: a string, or an object with a
+// `code` or an `error` string
+const ErrorObjectSchema = z.object({ code: z.string().nullish(), error: z.string().nullish() });
+const ErrorAnswerSchema = z.object({ error: z.union([z.string(), ErrorObjectSchema]) });
+
+const TokenAnswerSchema = z.object({
+  access_token: z.string().nullish(),
+  refresh_token: z.string().nullish(),
+  id_token: z.string().nullish(),
+  expires_in: z.number().nullish(),
+});
+
+export function parseTokenAnswer(status: number, text: string): Classified {
+  let body: unknown = null;
+
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = null;
+  }
+
+  const code = readErrorCode(body);
+
+  if (code !== null && PERMANENT_CODES.has(code)) {
+    return { kind: 'permanent', error: code };
+  }
+
+  if (status === 401) {
+    return { kind: 'permanent', error: code ?? 'HTTP 401' };
+  }
+
+  if (status < 200 || status >= 300) {
+    return { kind: 'transient', error: `HTTP ${String(status)}` };
+  }
+
+  return readTokens(body);
+}
+
+// a code a log line and an API answer may carry: short and plain
+function readErrorCode(body: unknown): string | null {
+  const parsed = ErrorAnswerSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return null;
+  }
+
+  const error = parsed.data.error;
+  const code = typeof error === 'string' ? error : (error.code ?? error.error);
+
+  return code !== null && code !== undefined && /^[A-Za-z0-9_.-]{1,64}$/u.test(code) ? code : null;
+}
+
+function readTokens(body: unknown): Classified {
+  const parsed = TokenAnswerSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return { kind: 'transient', error: 'invalid response' };
+  }
+
+  const accessToken = parsed.data.access_token ?? null;
+  const refreshToken = parsed.data.refresh_token ?? null;
+  const idToken = parsed.data.id_token ?? null;
+
+  // a token goes into a header or a file: one that could split a header is
+  // not one
+  const unusable = [accessToken, refreshToken, idToken].some(
+    (token) => token !== null && !isHeaderSafeToken(token),
+  );
+
+  if (unusable) {
+    return { kind: 'transient', error: 'invalid response' };
+  }
+
+  // a 200 that carries no token refreshed nothing
+  if (accessToken === null && refreshToken === null) {
+    return { kind: 'transient', error: 'no token in the response' };
+  }
+
+  // 0 or less is a token that is already due, not an unknown expiry
+  const expiresIn = parsed.data.expires_in ?? null;
+  const expiresInMs = expiresIn === null ? null : Math.max(0, expiresIn) * 1000;
+
+  return { kind: 'ok', tokens: { accessToken, refreshToken, idToken, expiresInMs } };
+}
