@@ -1,11 +1,10 @@
-import { Resolver } from 'node:dns/promises';
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
 import { ORPCError } from '@orpc/server';
-import { buildMovingError, buildNotFoundError } from '../api-errors';
+import { buildNotFoundError } from '../api-errors';
 import { REFUSED_RANGES } from '../broker/tunnel-target';
 import type { Config } from '../config';
-import { listEgressSlots, readEgressPolicy, writeEgressPolicy } from '../db/egress';
+import { listEgressSlots, readEgressPolicy } from '../db/egress';
 import type { EgressSlot } from '../db/egress';
 import { findImpByName } from '../db/imps';
 import { listNetworkMembers, listNetworkNames } from '../db/networks';
@@ -22,6 +21,9 @@ import { BLOCKED_RANGES6, DOCUMENTATION_RANGES6, RESERVED_RANGES6 } from '../net
 import { createKeyedMutex } from '../process/keyed-mutex';
 import { startInterval } from '../process/start-interval';
 import { readErrorMessage } from '../read-error-message';
+import { checkDenyList } from './check-deny-list';
+import { checkPeerAccept } from './check-peer-accept';
+import { createExactResolver } from './create-exact-resolver';
 import { createDnsForward } from './dns-upstream';
 import type { DnsForward } from './dns-upstream';
 import { runConntrackFlush, runForwardRulesList, runPairFlush } from './egress-commands';
@@ -29,13 +31,18 @@ import { createNftWriter, formatNftError, runNft } from './egress-firewall';
 import type { NftRunner } from './egress-firewall';
 import { createQueryHandler, startResolverServer } from './egress-resolver';
 import type { QueryVerdict, RateLimit, ResolverServer } from './egress-resolver';
-import { buildAllowRules, isNameAllowed, isTunnelAllowed, listExactNames } from './egress-rules';
+import { buildAllowRules, isNameAllowed, listExactNames } from './egress-rules';
 import type { AllowRules } from './egress-rules';
 import { buildElementChange, buildRuleset } from './egress-ruleset';
-import type { NetworkPeer } from './egress-ruleset';
 import { createEgressSets } from './egress-sets';
 import type { AddressAnswer, HeldAnswer } from './egress-sets';
+import { listPeerGroups } from './list-peer-groups';
+import { makeChangeNetworks } from './make-change-networks';
+import type { NetworkChange } from './make-change-networks';
+import { makeSetPolicy } from './make-set-policy';
 import { resolveNetworkName } from './network-names';
+import { readHostNetwork } from './read-host-network';
+import type { HostNetwork } from './read-host-network';
 
 // impd's clamp on an answer's TTL, and the size of a box imp's set
 const MIN_TTL_S = 300;
@@ -116,30 +123,9 @@ export interface EgressService {
   readonly readAnswers: (slot: number) => readonly HeldAnswer[];
 }
 
-// A table nft refuses runs `undo`, so the rows and the table agree. Imps the
-// change parts lose their connections to each other.
-interface NetworkChange<T> {
-  readonly write: () => Promise<T>;
-  readonly undo: (written: T) => Promise<void>;
-}
-
 interface SlotView {
   readonly entry: EgressSlot;
   readonly rules: AllowRules;
-}
-
-// the host container's networks and default routes, read for a table build
-// No interface: a public imp's traffic leaves by none
-const NO_UPLINKS: Uplinks = { ipv4: [], ipv6: [] };
-
-interface HostNetwork {
-  readonly connected4: readonly string[];
-  readonly connected6: readonly string[];
-  readonly uplinks: Uplinks;
-
-  // a read that failed while some imp is public; its imps then reach
-  // nothing, and none starts
-  readonly error: string | null;
 }
 
 export function createEgressService(deps: EgressDeps): EgressService {
@@ -151,9 +137,15 @@ export function createEgressService(deps: EgressDeps): EgressService {
   const readForwardRules = deps.readForwardRules ?? (() => runForwardRulesList());
   const forward = deps.forward ?? createDnsForward(deps.config.dns);
   const ipv6 = deps.ipv6 ?? null;
-  const readConnected6 = deps.readConnected6 ?? readConnectedPrefixes6;
-  const readConnected4 = deps.readConnected4 ?? readConnectedPrefixes4;
-  const readHostUplinks = deps.readUplinks ?? readUplinks;
+
+  const hostReaders = {
+    hasIpv6: ipv6 !== null,
+    readConnected6: deps.readConnected6 ?? readConnectedPrefixes6,
+    readConnected4: deps.readConnected4 ?? readConnectedPrefixes4,
+    readUplinks: deps.readUplinks ?? readUplinks,
+    log: deps.log,
+  };
+
   const resolveExact = deps.resolveExact ?? createExactResolver(deps.config.dns, ipv6 !== null);
   const sets = createEgressSets({ minTtlS: MIN_TTL_S, maxTtlS: MAX_TTL_S, maxPerSlot: SET_SIZE });
   const mutex = createKeyedMutex();
@@ -259,75 +251,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
     });
   };
 
-  // The container's own links, read now: a network can join it later. The
-  // IPv4 side and the uplinks only matter while some imp is public. A read
-  // that fails then leaves public imps no uplink: the table refuses them all.
-  const readHostNetwork = async (views: ReadonlyMap<number, SlotView>): Promise<HostNetwork> => {
-    const hasPublic = [...views.values()].some(
-      (view) => EGRESS_MODE_TRAITS[view.entry.policy.mode].isPublic,
-    );
-
-    try {
-      return {
-        connected6: ipv6 === null ? [] : await readConnected6(),
-        connected4: hasPublic ? await readConnected4() : [],
-        uplinks: hasPublic ? await readHostUplinks() : NO_UPLINKS,
-        error: null,
-      };
-    } catch (error) {
-      const message = readErrorMessage(error);
-
-      deps.log(`impd: egress: reading the host container's routes: ${message}`);
-
-      return {
-        connected6: [],
-        connected4: [],
-        uplinks: NO_UPLINKS,
-        error: hasPublic ? message : null,
-      };
-    }
-  };
-
-  // the Docker host's own networks, missing for a public imp: logged once
-  // each time one appears with IMP_HOST_ADDRESSES empty, whatever
-  // IMP_EGRESS_DENY holds (it always holds IMP_PUBLIC_IP)
-  const checkDenyList = (views: ReadonlyMap<number, SlotView>): void => {
-    const hasPublic = [...views.values()].some(
-      (view) => EGRESS_MODE_TRAITS[view.entry.policy.mode].isPublic,
-    );
-
-    const isMissing = hasPublic && deps.config.hostAddresses.length === 0;
-
-    if (isMissing && !state.denyListMissing) {
-      deps.log(
-        "impd: egress: WARNING: a public imp exists and IMP_HOST_ADDRESSES is empty, so only IMP_EGRESS_DENY keeps it from the Docker host's own addresses and networks; the systemd unit and the NixOS module fill it at each start, compose does not (docs/architecture/network/egress.md#public)",
-      );
-    }
-
-    state.denyListMissing = isMissing;
-  };
-
-  // Setup-net.sh's ACCEPT for marked traffic between imps, checked after each
-  // table with members: without it the imp-to-imp DROP takes every packet.
-  // Logged once until it is back.
-  const checkPeerAccept = async (): Promise<void> => {
-    try {
-      const rules = await readForwardRules();
-
-      const present = rules.split('\n').some((rule) => isPeerAccept(rule));
-
-      if (!present && !state.peerAcceptMissing) {
-        deps.log(
-          "impd: egress: setup-net.sh's imp-network ACCEPT is missing from FORWARD; imps on a network cannot reach each other until the host container starts again",
-        );
-      }
-
-      state.peerAcceptMissing = !present;
-    } catch (error) {
-      deps.log(`impd: egress: reading FORWARD: ${readErrorMessage(error)}`);
-    }
-  };
-
   // the slots from the database, then the whole table in one transaction;
   // impd's view of the slots changes only once nft has taken it
   const applyTable = (): Promise<void> =>
@@ -349,7 +272,11 @@ export function createEgressService(deps: EgressDeps): EgressService {
       const networkNames = await listNetworkNames(deps.db);
 
       if (state.unenforced === null) {
-        const host = await readHostNetwork(slots);
+        const hasPublic = [...slots.values()].some(
+          (view) => EGRESS_MODE_TRAITS[view.entry.policy.mode].isPublic,
+        );
+
+        const host = await readHostNetwork(hasPublic, hostReaders);
 
         await write(buildScript(slots, host, members));
 
@@ -358,7 +285,12 @@ export function createEgressService(deps: EgressDeps): EgressService {
         state.isScreened = createRangeChecker(public4, public6);
         state.publicUnenforced = host.error;
 
-        checkDenyList(slots);
+        state.denyListMissing = checkDenyList({
+          hasPublic,
+          hostAddresses: deps.config.hostAddresses,
+          wasMissing: state.denyListMissing,
+          log: deps.log,
+        });
       }
 
       for (const slot of state.slots.keys()) {
@@ -371,7 +303,11 @@ export function createEgressService(deps: EgressDeps): EgressService {
       state.members = members;
 
       if (state.unenforced === null && members.length > 0) {
-        await checkPeerAccept();
+        state.peerAcceptMissing = await checkPeerAccept({
+          readForwardRules,
+          wasMissing: state.peerAcceptMissing,
+          log: deps.log,
+        });
       }
 
       state.networkNames = new Set(networkNames);
@@ -476,24 +412,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
     }
   };
 
-  // an undo, tried twice; false when both throw, so the rows may still hold
-  // the change
-  const tryUndo = async (undo: () => Promise<void>): Promise<boolean> => {
-    for (const attempt of [1, 2]) {
-      try {
-        await undo();
-
-        return true;
-      } catch (error) {
-        deps.log(
-          `impd: egress: undoing a network change (try ${String(attempt)}): ${readErrorMessage(error)}`,
-        );
-      }
-    }
-
-    return false;
-  };
-
   const requireFirewall = (policy: EgressPolicy): void => {
     if (EGRESS_MODE_TRAITS[policy.mode].needsRuleset && state.unenforced !== null) {
       throw new ORPCError('PRECONDITION_FAILED', {
@@ -511,6 +429,28 @@ export function createEgressService(deps: EgressDeps): EgressService {
       });
     }
   };
+
+  const changeNetworks = makeChangeNetworks({
+    mutex,
+    log: deps.log,
+    applyTable,
+    tryApplyTable,
+    flushPair,
+    readMembers: () => state.members,
+  });
+
+  const setPolicy = makeSetPolicy({
+    db: deps.db,
+    mutex,
+    sets,
+    requireFirewall,
+    requirePolicy,
+    applyTable,
+    tryApplyTable,
+    closeTunnels: deps.closeTunnels,
+    flushConnections,
+    resolveExactNames,
+  });
 
   return {
     start: async () => {
@@ -612,50 +552,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
         await applyTable();
       }),
 
-    changeNetworks: (change) =>
-      mutex.runExclusive('policy', async () => {
-        const before = listPeerPairs(state.members);
-
-        const result = await change.write();
-
-        // The rows go back, then the table is built again from whatever the
-        // rows say: an undo that throws leaves the change in the rows, and the
-        // table follows them, so a failed leave never keeps a pair connected.
-        try {
-          await applyTable();
-        } catch (error) {
-          const undone = await tryUndo(() => change.undo(result));
-
-          await tryApplyTable();
-
-          if (!undone) {
-            throw new Error(
-              `${readErrorMessage(error)}; the network change could not be undone and may have applied`,
-              { cause: error },
-            );
-          }
-
-          throw error;
-        }
-
-        // the table refuses their next packet already; this drops the flows
-        // conntrack still holds for them
-        const after = listPeerPairs(state.members);
-
-        for (const pair of before) {
-          if (!after.has(pair)) {
-            const [first = '', second = ''] = pair.split(' ');
-
-            try {
-              await flushPair(first, second);
-            } catch (error) {
-              deps.log(`impd: egress: ${pair}: ${readErrorMessage(error)}`);
-            }
-          }
-        }
-
-        return result;
-      }),
+    changeNetworks,
 
     readPolicy: async (name) => {
       const imp = await findImpByName(deps.db, name);
@@ -669,66 +566,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
       return policy;
     },
 
-    // one change at a time, slots included, so a rollback never undoes a
-    // later change
-    setPolicy: (name, policy) =>
-      mutex.runExclusive('policy', async () => {
-        // the routes a public policy needs are read with the table, below
-        requireFirewall(policy);
-
-        const imp = await findImpByName(deps.db, name);
-
-        const previous = imp === undefined ? undefined : await readEgressPolicy(deps.db, imp.id);
-
-        if (imp === undefined || previous === undefined) {
-          throw buildNotFoundError('imp', name);
-        }
-
-        // a send carries the policy it read at its start
-        if (imp.moveState !== null) {
-          throw buildMovingError(name);
-        }
-
-        await writeEgressPolicy(deps.db, imp.id, policy);
-
-        const rules = buildAllowRules(policy.allow);
-
-        if (EGRESS_MODE_TRAITS[policy.mode].hasAllowList) {
-          sets.prune(imp.slot, (allowed) => isNameAllowed(rules, allowed));
-        } else {
-          sets.clear(imp.slot);
-        }
-
-        // the row goes back, and the table is built again from it, so nft
-        // and the database agree whichever table nft last took; a public
-        // policy whose routes could not be read goes back too
-        try {
-          await applyTable();
-
-          requirePolicy(policy);
-        } catch (error) {
-          await writeEgressPolicy(deps.db, imp.id, previous);
-          await tryApplyTable();
-
-          throw error;
-        }
-
-        // the guest's own flows the new policy may deny, and the broker's
-        // tunnels, which conntrack does not see. A tunnel is kept by its
-        // host, and one that becomes public was dialled under fewer checks.
-        const isNewlyPublic =
-          EGRESS_MODE_TRAITS[policy.mode].isPublic && !EGRESS_MODE_TRAITS[previous.mode].isPublic;
-
-        deps.closeTunnels(imp.id, (host) => !isNewlyPublic && isTunnelAllowed(policy, host));
-
-        if (EGRESS_MODE_TRAITS[policy.mode].needsRuleset) {
-          await flushConnections(imp.ip);
-        }
-
-        void resolveExactNames(imp.slot);
-
-        return policy;
-      }),
+    setPolicy,
 
     checkName,
     writeAnswers,
@@ -751,73 +589,4 @@ function isForwardedFreely(view: SlotView | undefined): boolean {
 // a box imp: its allow-list's sets are the ones to keep
 function hasAllowList(view: SlotView | undefined): boolean {
   return view !== undefined && EGRESS_MODE_TRAITS[view.entry.policy.mode].hasAllowList;
-}
-
-// each network's members, by the tap each sends from
-function listPeerGroups(members: readonly NetworkMember[]): NetworkPeer[][] {
-  const byNetwork = Map.groupBy(members, (member) => member.network);
-
-  return [...byNetwork.values()].map((group) =>
-    group.map((member) => ({ tap: `imp${String(member.slot)}`, guestIp: member.guestIp })),
-  );
-}
-
-// every two addresses that share a network, as `low high`
-function listPeerPairs(members: readonly NetworkMember[]): Set<string> {
-  const pairs = new Set<string>();
-
-  for (const group of Map.groupBy(members, (member) => member.network).values()) {
-    for (const first of group) {
-      for (const second of group) {
-        if (first.guestIp < second.guestIp) {
-          pairs.add(`${first.guestIp} ${second.guestIp}`);
-        }
-      }
-    }
-  }
-
-  return pairs;
-}
-
-// setup-net.sh's rule, as `iptables -S FORWARD` prints it
-function isPeerAccept(rule: string): boolean {
-  return (
-    rule.includes('--comment imp-network') &&
-    rule.includes('--mark 0x1000000/0x1000000') &&
-    rule.endsWith('-j ACCEPT')
-  );
-}
-
-// A records, and with IPv6 AAAA too; a name with no AAAA still resolves
-function createExactResolver(
-  servers: readonly string[],
-  ipv6: boolean,
-): (name: string) => Promise<readonly AddressAnswer[]> {
-  const resolver = new Resolver({ timeout: 2000, tries: 2 });
-
-  resolver.setServers([...servers]);
-
-  const resolveAaaa = async (name: string): Promise<readonly AddressAnswer[]> => {
-    try {
-      const records = await resolver.resolve6(name, { ttl: true });
-
-      return records.map((record) => ({ address: record.address, ttlS: record.ttl }));
-    } catch {
-      return [];
-    }
-  };
-
-  return async (name) => {
-    const records = await resolver.resolve4(name, { ttl: true });
-
-    const answers = records.map((record) => ({ address: record.address, ttlS: record.ttl }));
-
-    if (!ipv6) {
-      return answers;
-    }
-
-    const answers6 = await resolveAaaa(name);
-
-    return [...answers, ...answers6];
-  };
 }
