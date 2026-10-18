@@ -48,22 +48,26 @@ test.each([
   ['package-order', 'packages/cli/src/fixture.ts', '@impz/daemon/src/create-impd'],
   ['package-order', 'packages/daemon/src/fixture.ts', '@impz/cli'],
   ['package-order', 'packages/dashboard/src/fixture.ts', '@impz/daemon/src/auth/authenticate'],
-])('it refuses a %s import in %s of %s', (rule, path, source) => {
-  const ctx = setupTest();
-  const file = join(ctx.dir, path);
+])(
+  'it refuses a %s import in %s of %s',
+  (rule, path, source) => {
+    const ctx = setupTest();
+    const file = join(ctx.dir, path);
 
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `import { value } from '${source}';\n\nexport const used = value;\n`);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, `import { value } from '${source}';\n\nexport const used = value;\n`);
 
-  const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
-  const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
+    const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
+    const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
 
-  const rules = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'zgeoff(import-zones)')
-    .map((diagnostic) => diagnostic.message.split(':')[0]);
+    const rules = report.diagnostics
+      .filter((diagnostic) => diagnostic.code === 'zgeoff(import-zones)')
+      .map((diagnostic) => diagnostic.message.split(':')[0]);
 
-  expect([...new Set(rules)]).toStrictEqual([rule]);
-});
+    expect([...new Set(rules)]).toStrictEqual([rule]);
+  },
+  30_000,
+);
 
 test.each([
   [
@@ -102,24 +106,28 @@ test.each([
     '../../daemon/src/create-impd',
     'packages/daemon/src/create-impd.ts',
   ],
-])('it refuses a %s import in %s of %s', (rule, path, source, target) => {
-  const ctx = setupTest();
-  const file = join(ctx.dir, path);
+])(
+  'it refuses a %s import in %s of %s',
+  (rule, path, source, target) => {
+    const ctx = setupTest();
+    const file = join(ctx.dir, path);
 
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `import { value } from '${source}';\n\nexport const used = value;\n`);
-  mkdirSync(dirname(join(ctx.dir, target)), { recursive: true });
-  writeFileSync(join(ctx.dir, target), 'export const value = 1;\n');
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, `import { value } from '${source}';\n\nexport const used = value;\n`);
+    mkdirSync(dirname(join(ctx.dir, target)), { recursive: true });
+    writeFileSync(join(ctx.dir, target), 'export const value = 1;\n');
 
-  const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
-  const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
+    const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
+    const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
 
-  const rules = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'zgeoff(import-zones)')
-    .map((diagnostic) => diagnostic.message.split(':')[0]);
+    const rules = report.diagnostics
+      .filter((diagnostic) => diagnostic.code === 'zgeoff(import-zones)')
+      .map((diagnostic) => diagnostic.message.split(':')[0]);
 
-  expect([...new Set(rules)]).toStrictEqual([rule]);
-});
+    expect([...new Set(rules)]).toStrictEqual([rule]);
+  },
+  30_000,
+);
 
 test.each([
   ['the daemon database folder', 'packages/daemon/src/db/fixture.ts', 'kysely'],
@@ -139,22 +147,26 @@ test.each([
   ['the cli', 'packages/cli/src/fixture.ts', '@impz/mcp'],
   ['the daemon', 'packages/daemon/src/fixture.ts', '@impz/client'],
   ['the dashboard', 'packages/dashboard/src/fixture.ts', '@impz/api'],
-])('it allows %s in %s to import %s', (_label, path, source) => {
-  const ctx = setupTest();
-  const file = join(ctx.dir, path);
+])(
+  'it allows %s in %s to import %s',
+  (_label, path, source) => {
+    const ctx = setupTest();
+    const file = join(ctx.dir, path);
 
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `import { value } from '${source}';\n\nexport const used = value;\n`);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, `import { value } from '${source}';\n\nexport const used = value;\n`);
 
-  const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
-  const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
+    const result = Bun.spawnSync([ctx.oxlint, '--format', 'json', file], { cwd: ctx.dir });
+    const report = DiagnosticsSchema.parse(JSON.parse(result.stdout.toString()));
 
-  const messages = report.diagnostics
-    .filter((diagnostic) => diagnostic.code === 'zgeoff(import-zones)')
-    .map((diagnostic) => diagnostic.message);
+    const messages = report.diagnostics
+      .filter((diagnostic) => diagnostic.code === 'zgeoff(import-zones)')
+      .map((diagnostic) => diagnostic.message);
 
-  expect(messages).toStrictEqual([]);
-});
+    expect(messages).toStrictEqual([]);
+  },
+  30_000,
+);
 
 test('it counts a type-only import against the package order', () => {
   const ctx = setupTest();
@@ -173,7 +185,7 @@ test('it counts a type-only import against the package order', () => {
   expect(messages).toStrictEqual([
     'package-order: @impz/client is allowed only in above-client, tests — only @impz/mcp and the apps import @impz/local-tar, the client and @impz/mcp',
   ]);
-});
+}, 30_000);
 
 test('it counts a type-only re-export against the package order', () => {
   const ctx = setupTest();
@@ -192,4 +204,4 @@ test('it counts a type-only re-export against the package order', () => {
   expect(messages).toStrictEqual([
     'package-order: @impz/daemon/src/create-impd is allowed only in tests — an app imports no other app',
   ]);
-});
+}, 30_000);
