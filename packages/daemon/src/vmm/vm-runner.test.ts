@@ -310,12 +310,44 @@ test('#sleepVm writes a woken VM into another slot over a copy of the memory fil
   const vm = await startStubFirecracker({
     apiSocket: paths.apiSocket,
     logPath: ctx.logPath,
+    isLoggingBodies: true,
     memory: { pages: 'aB', dirtyPages: [1], isTrackingDirtyPages: true },
   });
 
   await createVmRunner(buildStubJails().jails).sleepVm(vm.pid, paths, null, slot);
 
   expect(readFileSync(slot.memFile, 'latin1')).toBe(`${'a'.repeat(4096)}${'B'.repeat(4096)}`);
+
+  expect(readFileSync(ctx.logPath, 'utf8').trim().split('\n')).toStrictEqual([
+    'GET /machine-config',
+    'PATCH /vm {"state":"Paused"}',
+    `PUT /snapshot/create {"snapshot_type":"Diff","snapshot_path":"${slot.vmstate}.new","mem_file_path":"${slot.memFile}.new","sync_snapshot_files":true}`,
+  ]);
+});
+
+test('#sleepVm takes a full snapshot of a VM that does not track its dirty pages, though a memory file is there to copy', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+
+  mkdirSync(paths.snapshotDir, { recursive: true });
+  writeFileSync(paths.memFile, `${'a'.repeat(4096)}${'b'.repeat(4096)}`);
+
+  const vm = await startStubFirecracker({
+    apiSocket: paths.apiSocket,
+    logPath: ctx.logPath,
+    isLoggingBodies: true,
+    memory: { pages: 'aB', dirtyPages: [1], isTrackingDirtyPages: false },
+  });
+
+  const timings = await createVmRunner(buildStubJails().jails).sleepVm(vm.pid, paths, null, paths);
+
+  expect(readFileSync(ctx.logPath, 'utf8').trim().split('\n')).toStrictEqual([
+    'GET /machine-config',
+    'PATCH /vm {"state":"Paused"}',
+    `PUT /snapshot/create {"snapshot_type":"Full","snapshot_path":"${paths.vmstate}.new","mem_file_path":"${paths.memFile}.new","sync_snapshot_files":true}`,
+  ]);
+
+  expect(timings).not.toContainKey('copyBase');
 });
 
 test('#sleepVm takes a full snapshot of a VM that does not track its dirty pages', async () => {

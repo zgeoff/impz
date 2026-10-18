@@ -102,7 +102,7 @@ export interface FirecrackerClient {
   readonly putMachineConfig: (config: MachineConfig) => Promise<void>;
 
   // a loaded VM answers with what its load set
-  readonly getMachineConfig: () => Promise<MachineState>;
+  readonly loadMachineConfig: () => Promise<MachineState>;
   readonly putDrive: (drive: Drive) => Promise<void>;
 
   // after boot: Firecracker reads the file's size again and tells the guest
@@ -210,7 +210,7 @@ export function createFirecrackerClient(
       }),
     putMachineConfig: (config) =>
       sendPut('/machine-config', { vcpu_count: config.vcpuCount, mem_size_mib: config.memSizeMib }),
-    getMachineConfig: async () => {
+    loadMachineConfig: async () => {
       const text = await sendRequest('GET', '/machine-config');
 
       const parsed = MachineConfigSchema.parse(JSON.parse(text));

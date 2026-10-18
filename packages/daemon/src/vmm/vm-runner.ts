@@ -622,7 +622,7 @@ async function writeSnapshotBase(
   base: string,
   memFile: string,
 ): Promise<'copyBase' | 'copyBaseFailed' | null> {
-  const config = await api.getMachineConfig().catch(() => null);
+  const config = await api.loadMachineConfig().catch(() => null);
 
   // a VM that does not track its dirty pages takes a Full snapshot
   if (config?.isTrackingDirtyPages !== true) {

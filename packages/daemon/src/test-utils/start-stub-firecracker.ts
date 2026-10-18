@@ -2,6 +2,7 @@ import { expect, onTestFinished } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
+import type { StubGuestMemory } from './stub-guest-memory-schema';
 
 interface StubFirecrackerOptions {
   readonly apiSocket: string;
@@ -15,14 +16,8 @@ interface StubFirecrackerOptions {
   // true: log each call's body after its path
   readonly isLoggingBodies?: boolean;
 
-  // the guest memory a snapshot writes, one fill character per 4 KiB page,
-  // and the pages the guest wrote since its load; without it a snapshot
-  // writes no files
-  readonly memory?: {
-    readonly pages: string;
-    readonly dirtyPages: readonly number[];
-    readonly isTrackingDirtyPages: boolean;
-  };
+  // the guest memory a snapshot writes; without it a snapshot writes no files
+  readonly memory?: Readonly<StubGuestMemory>;
 }
 
 // The command that runs run-stub-firecracker.ts in place of Firecracker,

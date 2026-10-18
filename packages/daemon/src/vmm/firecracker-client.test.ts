@@ -315,7 +315,7 @@ test('it reads that a loaded VM tracks its dirty pages', async () => {
     },
   });
 
-  const config = await createFirecrackerClient(ctx.socket).getMachineConfig();
+  const config = await createFirecrackerClient(ctx.socket).loadMachineConfig();
 
   expect(config).toStrictEqual({ isTrackingDirtyPages: true });
 });
@@ -329,7 +329,7 @@ test('it reads no dirty page tracking from a machine config without the field', 
     },
   });
 
-  const config = await createFirecrackerClient(ctx.socket).getMachineConfig();
+  const config = await createFirecrackerClient(ctx.socket).loadMachineConfig();
 
   expect(config).toStrictEqual({ isTrackingDirtyPages: false });
 });

@@ -12,20 +12,15 @@ import {
   writeSync,
 } from 'node:fs';
 import * as z from 'zod';
+import { StubGuestMemorySchema } from './stub-guest-memory-schema';
+import type { StubGuestMemory } from './stub-guest-memory-schema';
 
 const [apiSocket = '', log = '', fail = 'none', mode = 'lines', memoryArg = 'none'] =
   process.argv.slice(-5);
 
 const failures = fail === 'none' ? [] : fail.split(',');
 const vm = { state: 'Running' };
-
-const MemorySchema = z.object({
-  pages: z.string(),
-  dirtyPages: z.array(z.number()),
-  isTrackingDirtyPages: z.boolean(),
-});
-
-const memory = memoryArg === 'none' ? null : MemorySchema.parse(JSON.parse(memoryArg));
+const memory = memoryArg === 'none' ? null : StubGuestMemorySchema.parse(JSON.parse(memoryArg));
 
 const SnapshotCreateSchema = z.object({
   snapshot_type: z.enum(['Full', 'Diff']),
@@ -89,7 +84,7 @@ Bun.serve({
 // truncate, emptied only when its size is not the guest's, and a Diff of a VM
 // that tracks its pages writes only the dirty ones, each in its place.
 function writeSnapshot(
-  guest: Readonly<z.infer<typeof MemorySchema>>,
+  guest: Readonly<StubGuestMemory>,
   params: Readonly<z.infer<typeof SnapshotCreateSchema>>,
 ): void {
   writeFileSync(params.snapshot_path, 'vmstate');
