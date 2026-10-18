@@ -600,6 +600,8 @@ test('it removes a moved imp’s service once the target holds a verified copy',
 
   await names.runSync();
 
+  // a send's mark, then its receipt
+  await updateImpMove(ctx.db, imp.id, 'sending');
   await updateImpMove(ctx.db, imp.id, 'moved');
 
   await names.runSync();

@@ -1,6 +1,7 @@
 import type { EgressPolicy, ImpKind, ImpState, MoveState, PublicAuth } from '@impz/api';
 import { sql } from 'kysely';
 import { requireTransition } from '../imps/imp-transitions';
+import { MOVE_TRANSITIONS } from '../moves/move-transitions';
 import { readErrorMessage } from '../read-error-message';
 import { allocateSlot } from './allocate-slot';
 import { ImpClashError } from './imp-clash-error';
@@ -386,18 +387,38 @@ export async function claimTrustPending(db: ImpDatabase, id: string): Promise<bo
   return taken !== undefined;
 }
 
-// sets or clears the move mark (moves/); the change goes out as `updated`
+// Sets or clears the move mark (moves/) along MOVE_TRANSITIONS, and refuses
+// a change the table does not list; the change goes out as `updated`.
 export async function updateImpMove(
   db: ImpDatabase,
   id: string,
   moveState: MoveState | null,
 ): Promise<ImpRecord> {
-  const row = await db
-    .updateTable('imps')
-    .set({ move_state: moveState })
-    .where('id', '=', id)
-    .returningAll()
-    .executeTakeFirstOrThrow();
+  const row = await db.transaction().execute(async (trx) => {
+    const current = await trx
+      .selectFrom('imps')
+      .select('move_state')
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
+
+    const from = current.move_state;
+
+    // a write that keeps the mark is no move: an abort's clear may find none
+    const isListed = MOVE_TRANSITIONS.some(([each, next]) => each === from && next === moveState);
+
+    if (from !== moveState && !isListed) {
+      throw new Error(
+        `imp ${id}: the move mark cannot go from ${String(from)} to ${String(moveState)}`,
+      );
+    }
+
+    return trx
+      .updateTable('imps')
+      .set({ move_state: moveState })
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  });
 
   const imp = toImpRecord(row);
 
