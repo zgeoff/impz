@@ -12,9 +12,8 @@ import { ORPCError, onError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { StrictGetMethodPlugin } from '@orpc/server/plugins';
 import { Elysia } from 'elysia';
-import * as z from 'zod';
 import type { ListenSpec } from './agent-client/listener-stream';
-import { MOVING_RETRY_AFTER_S, buildForbiddenError } from './api-errors';
+import { buildForbiddenError } from './api-errors';
 import { withAuditedOpen } from './audit/api-audit';
 import { resolveCaller } from './auth/authenticate';
 import type { CallerSources } from './auth/authenticate';
@@ -34,14 +33,17 @@ import type { ExecSession } from './exec/exec-session';
 import { createExecTickets, isCallerLive } from './exec/exec-tickets';
 import { createInProcessSocket } from './exec/in-process-socket';
 import type { BuildContextRoute } from './images/build-context-route';
+import { isPublicCrossOrigin } from './is-public-cross-origin';
 import { createMcpEndpoint } from './mcp/mcp-endpoint';
 import type { MoveService } from './moves/move-service';
 import { getImpdLogger } from './process/get-impd-logger';
 import { readPeerAddress } from './proxy/forwarded-peers';
 import type { ForwardedPeers } from './proxy/forwarded-peers';
+import { readBufferedAmount } from './read-buffered-amount';
 import { createReverseForwards } from './reverse/reverse-forwards';
 import { createTunnelLimits, createTunnelSession } from './tunnel/tunnel-session';
 import type { TunnelSession } from './tunnel/tunnel-session';
+import { withRetryAfter } from './with-retry-after';
 
 // Bun pings an idle exec socket and closes it when no answer comes, so a
 // client that vanished without a close (a laptop lid, dropped Wi-Fi) lets
@@ -560,8 +562,6 @@ export function buildApp(deps: AppDeps) {
   };
 }
 
-// A browser names the page a request comes from in Sec-Fetch-Site or
-// Origin; on the public route only the route's own origin may call
 // what /health tells an operator beside `ready`; empty while all is well
 function buildHealthWarnings(
   rebootReason: string | null,
@@ -572,57 +572,7 @@ function buildHealthWarnings(
   return [...reboot, ...storageWarnings];
 }
 
-function isPublicCrossOrigin(request: Request, origin: string): boolean {
-  const site = request.headers.get('sec-fetch-site');
-  const from = request.headers.get('origin');
-
-  if (site === null && from === null) {
-    return false;
-  }
-
-  return from !== origin || (site !== null && site !== 'same-origin');
-}
-
 // a reverse forward's socket path, for its audit row
 function readListenPath(spec: ListenSpec): string {
   return spec.network === 'unix' ? (spec.path ?? 'auto') : spec.network;
-}
-
-// Bun's ServerWebSocket has getBufferedAmount; Elysia's type leaves it out
-function readBufferedAmount(socket: object): number {
-  const read: unknown = Reflect.get(socket, 'getBufferedAmount');
-
-  if (typeof read !== 'function') {
-    return 0;
-  }
-
-  const amount: unknown = Reflect.apply(read, socket, []);
-
-  return typeof amount === 'number' ? amount : 0;
-}
-
-const MovingBodySchema = z.object({ json: z.object({ code: z.literal('MOVING') }) });
-
-// A MOVING error says when to ask again in its data and, for a client that
-// reads only HTTP, in Retry-After
-async function withRetryAfter(response: Response): Promise<Response> {
-  if (response.status !== 409) {
-    return response;
-  }
-
-  try {
-    const body: unknown = await response.clone().json();
-
-    if (!MovingBodySchema.safeParse(body).success) {
-      return response;
-    }
-  } catch {
-    return response;
-  }
-
-  const headers = new Headers(response.headers);
-
-  headers.set('retry-after', String(MOVING_RETRY_AFTER_S));
-
-  return new Response(response.body, { status: response.status, headers });
 }

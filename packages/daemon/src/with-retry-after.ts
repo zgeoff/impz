@@ -1,0 +1,28 @@
+import * as z from 'zod';
+import { MOVING_RETRY_AFTER_S } from './api-errors';
+
+const MovingBodySchema = z.object({ json: z.object({ code: z.literal('MOVING') }) });
+
+// A MOVING error says when to ask again in its data and, for a client that
+// reads only HTTP, in Retry-After
+export async function withRetryAfter(response: Response): Promise<Response> {
+  if (response.status !== 409) {
+    return response;
+  }
+
+  try {
+    const body: unknown = await response.clone().json();
+
+    if (!MovingBodySchema.safeParse(body).success) {
+      return response;
+    }
+  } catch {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+
+  headers.set('retry-after', String(MOVING_RETRY_AFTER_S));
+
+  return new Response(response.body, { status: response.status, headers });
+}
