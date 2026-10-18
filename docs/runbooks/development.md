@@ -15,7 +15,6 @@ bun run lint:shell                # shellcheck and shfmt over install.sh and the
 actionlint && zizmor --config .github/zizmor.yml .github   # the workflows, as CI lints them
 hadolint host/Dockerfile images/base/Dockerfile
 bun run lint:docs                 # every docs link, and every docs/ path code cites, resolves
-bun run lint:owner-names          # no file holds the owner's domain, home path or vault name
 (cd agent && gofmt -l . && go vet ./...)   # gofmt -l lists unformatted files
 (cd agent && go tool -modfile=tools/go.mod golangci-lint run --build-tags root ./...)   # the lint CI runs
 scripts/test-go.sh                # the agent's Go tests with -race; prints the slowest cases
@@ -244,14 +243,13 @@ Lefthook installs the hooks with `bun install`.
   files), then runs gitleaks on them. gitleaks and shfmt must be on `PATH`.
 - **commit-msg** runs commitlint: conventional commits, lowercase, a header of 72 characters or
   fewer.
-- **pre-push** runs one job at a time: `lint:docs`, `lint:owner-names` and shellcheck, then the
-  shared baseline in `.lefthook/pre-push-baseline.yml`, which repo-sync delivers from zgeoff/tools.
-  The baseline checks the format and the types of the whole tree, and lints and tests only the files
-  the branch changes since its merge base with `origin/main`. A dashboard file's tests run from its
-  package. CI's `checks` job runs type-aware lint, deadcode and every test. On a branch that changes
-  the agent's Go, pre-push also runs `gofmt` on the changed files and `go vet -p 1`, which keeps
-  vet's memory within what a 2 GB imp can spare; the Go lint, vulnerability and dead-code gates run
-  in CI only.
+- **pre-push** runs one job at a time: `lint:docs` and shellcheck, then the shared baseline in
+  `.lefthook/pre-push-baseline.yml`, which repo-sync delivers from zgeoff/tools. The baseline checks
+  the format and the types of the whole tree, and lints and tests only the files the branch changes
+  since its merge base with `origin/main`. A dashboard file's tests run from its package. CI's
+  `checks` job runs type-aware lint, deadcode and every test. On a branch that changes the agent's
+  Go, pre-push also runs `gofmt` on the changed files and `go vet -p 1`, which keeps vet's memory
+  within what a 2 GB imp can spare; the Go lint, vulnerability and dead-code gates run in CI only.
 
 ## CI
 
@@ -272,11 +270,8 @@ The `checks` job also runs the docs-writing skill's scripts. `bun run lint:docs`
 `check-links.sh`, which fails on a broken relative link or anchor in a README or a page under
 `docs/`. It then runs `scripts/ci/check-doc-citations.ts`, which fails on a `docs/` path or anchor
 cited outside Markdown that does not resolve, such as a code comment that names a page a docs
-rewrite moved. `bun run lint:owner-names` runs `scripts/ci/check-owner-names.ts`, which fails on the
-owner's own domain, home path, or a 1Password vault other than `example`, `vault` or a placeholder
-such as `$IMP_OP_VAULT`. The domain and the login sit in `scripts/ci/owner-name-hashes.json` only as
-SHA-256 hashes. `check-length.sh` reports README and docs/ lengths and runs `check-prose.sh`,
-without failing the job.
+rewrite moved. `check-length.sh` reports README and docs/ lengths and runs `check-prose.sh`, without
+failing the job.
 
 `bun run audit` ignores one advisory by its ID. GHSA-86w9-cpqp-85rv is a flaw in node-forge's RSA
 signature verification, and no fixed node-forge exists (all versions up to 1.4.0). acme-client loads

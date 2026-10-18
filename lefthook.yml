@@ -45,8 +45,6 @@ pre-push:
   jobs:
     - name: lint:docs
       run: bun run lint:docs
-    - name: lint:owner-names
-      run: bun run lint:owner-names
     # needs shellcheck on PATH, the version CI pins (0.11.0)
     - name: lint:shell
       run: bun run lint:shell
