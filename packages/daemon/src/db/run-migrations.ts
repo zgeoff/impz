@@ -888,7 +888,6 @@ export const MIGRATIONS: Record<string, Migration> = {
 
   // better-auth's tables for the public MCP route (GEO-1060), as 1.7.7 with
   // its MCP plugin and imp's three user fields lays them out, names and all.
-  // 035 drops the oauth_* tables this leaves.
   '034_add_better_auth': {
     async up(db: Kysely<NoTables>) {
       await db.transaction().execute(async (trx) => {
