@@ -418,11 +418,11 @@ test('#runMigrations keeps every OAuth token in the token cascade migration', as
     VALUES ('access', 'grant', 'access', 'ha', 1, 2, NULL),
       ('refresh', 'grant', 'refresh', 'hr', 3, 4, 5)`.execute(db);
 
-  await runMigrations(db);
+  await runMigrationsTo(db, '028_cascade_oauth_tokens');
 
-  const rows = await db.selectFrom('oauth_tokens').selectAll().orderBy('id').execute();
+  const rows = await sql`SELECT * FROM oauth_tokens ORDER BY id`.execute(db);
 
-  expect(rows).toStrictEqual([
+  expect(rows.rows).toStrictEqual([
     {
       id: 'access',
       grant_id: 'grant',
@@ -465,19 +465,19 @@ test('#runMigrations makes a grant’s delete remove its tokens in the token cas
     VALUES ('gone-access', 'gone', 'access', 'h1', 0, 1, NULL),
       ('kept-access', 'kept', 'access', 'h2', 0, 1, NULL)`.execute(db);
 
-  await runMigrations(db);
+  await runMigrationsTo(db, '028_cascade_oauth_tokens');
 
-  await db.deleteFrom('oauth_grants').where('id', '=', 'gone').execute();
+  await sql`DELETE FROM oauth_grants WHERE id = 'gone'`.execute(db);
 
-  const rows = await db.selectFrom('oauth_tokens').select('id').execute();
+  const rows = await sql`SELECT id FROM oauth_tokens`.execute(db);
 
-  expect(rows).toStrictEqual([{ id: 'kept-access' }]);
+  expect(rows.rows).toStrictEqual([{ id: 'kept-access' }]);
 });
 
 test('#runMigrations keeps the OAuth token indexes in the token cascade migration', async () => {
   const db = createUnmigratedDatabase();
 
-  await runMigrations(db);
+  await runMigrationsTo(db, '028_cascade_oauth_tokens');
 
   const indexes = await sql<{ name: string; sql: string }>`
     SELECT name, sql FROM sqlite_master
@@ -711,7 +711,7 @@ test('#runMigrations adds only better-auth’s tables in the better-auth migrati
     SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name
   `.execute(db);
 
-  await runMigrations(db);
+  await runMigrationsTo(db, '034_add_better_auth');
 
   const after = await sql<{ name: string }>`
     SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name
@@ -749,6 +749,56 @@ test('#runMigrations refuses a second OAuth client with a name another holds', a
       VALUES ('c2', 'impc_two', 'conn', '[]')
     `.execute(db),
   ).rejects.toThrowWithMessage(Error, /UNIQUE constraint failed: oauthClient\.name/u);
+});
+
+test('#runMigrations drops the old OAuth tables, rows and all', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '034_add_better_auth');
+
+  // rows as an impd at 034 kept them from the OAuth server before better-auth
+  await sql`INSERT INTO tokens (id, name, secret_hash, scope, imps, created_at, grantable)
+    VALUES ('tok', 'laptop', 'h', 'manage', NULL, 0, '{}')`.execute(db);
+
+  await sql`INSERT INTO oauth_clients (id, name, redirect_uris, created_at)
+    VALUES ('client', 'conn', '[]', 0)`.execute(db);
+
+  await sql`INSERT INTO oauth_grants (id, client_id, token_id, scope, imps, resource, created_at)
+    VALUES ('grant', 'client', 'tok', 'manage', NULL, 'https://impd.test/mcp', 0)`.execute(db);
+
+  await sql`INSERT INTO oauth_tokens (id, grant_id, kind, secret_hash, created_at, expires_at)
+    VALUES ('access', 'grant', 'access', 'ha', 0, 1)`.execute(db);
+
+  await runMigrations(db);
+
+  const tables = await sql<{ name: string }>`
+    SELECT name FROM sqlite_master
+    WHERE type = 'table' AND name IN ('oauth_clients', 'oauth_grants', 'oauth_tokens')
+  `.execute(db);
+
+  expect(tables.rows).toStrictEqual([]);
+});
+
+test('#runMigrations lets a token that approved an old OAuth grant be removed', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '034_add_better_auth');
+
+  // a token and the grant it approved under the OAuth server before better-auth
+  await sql`INSERT INTO tokens (id, name, secret_hash, scope, imps, created_at, grantable)
+    VALUES ('tok', 'laptop', 'h', 'manage', NULL, 0, '{}')`.execute(db);
+
+  await sql`INSERT INTO oauth_clients (id, name, redirect_uris, created_at)
+    VALUES ('client', 'conn', '[]', 0)`.execute(db);
+
+  await sql`INSERT INTO oauth_grants (id, client_id, token_id, scope, imps, resource, created_at)
+    VALUES ('grant', 'client', 'tok', 'manage', NULL, 'https://impd.test/mcp', 0)`.execute(db);
+
+  await runMigrations(db);
+
+  const removed = await db.deleteFrom('tokens').where('id', '=', 'tok').executeTakeFirst();
+
+  expect(removed.numDeletedRows).toBe(1n);
 });
 
 test('#runMigrations leaves better-auth no table or column to add', async () => {
