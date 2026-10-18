@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.2](https://github.com/zgeoff/impz/compare/v2.5.1...v2.5.2) (2026-10-18)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/moby/buildkit to v0.34.0 ([#504](https://github.com/zgeoff/impz/issues/504)) ([4028170](https://github.com/zgeoff/impz/commit/4028170668d978fec5aeb904b08a317077a3cb49))
+* **deps:** update module golang.org/x/sys to v0.49.0 ([#505](https://github.com/zgeoff/impz/issues/505)) ([063f81e](https://github.com/zgeoff/impz/commit/063f81e1d02e5d4b49b81ea34db04cc3127ce497))
+
 ## [2.5.1](https://github.com/zgeoff/impz/compare/v2.5.0...v2.5.1) (2026-10-18)
 
 ### Performance Improvements
