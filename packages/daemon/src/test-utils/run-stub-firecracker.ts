@@ -104,7 +104,10 @@ function writeSnapshot(
   ftruncateSync(fd, sizeBytes);
 
   const isDiff = params.snapshot_type === 'Diff' && guest.isTrackingDirtyPages;
-  const pages = isDiff ? guest.dirtyPages : [...guest.pages].map((_, page) => page);
+
+  const pages = isDiff
+    ? guest.dirtyPages
+    : Array.from({ length: guest.pages.length }, (_, page) => page);
 
   for (const page of pages) {
     writeSync(
