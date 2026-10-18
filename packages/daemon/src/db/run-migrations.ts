@@ -888,7 +888,6 @@ export const MIGRATIONS: Record<string, Migration> = {
 
   // better-auth's tables for the public MCP route (GEO-1060), as 1.7.7 with
   // its MCP plugin and imp's three user fields lays them out, names and all.
-  // The oauth_* tables stay, unused.
   '034_add_better_auth': {
     async up(db: Kysely<NoTables>) {
       await db.transaction().execute(async (trx) => {
@@ -1131,6 +1130,19 @@ export const MIGRATIONS: Record<string, Migration> = {
         );
 
         await sql`CREATE INDEX "oauthConsent_userId_idx" ON "oauthConsent" ("userId")`.execute(trx);
+      });
+    },
+  },
+
+  // The OAuth server better-auth replaced kept its clients, grants and tokens
+  // here. No code reads them, and a grant row would block its token's removal.
+  '035_drop_old_oauth': {
+    async up(db: Kysely<NoTables>) {
+      await db.transaction().execute(async (trx) => {
+        // each table before the one it references
+        await trx.schema.dropTable('oauth_tokens').execute();
+        await trx.schema.dropTable('oauth_grants').execute();
+        await trx.schema.dropTable('oauth_clients').execute();
       });
     },
   },

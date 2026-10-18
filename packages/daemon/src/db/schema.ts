@@ -251,13 +251,6 @@ export interface OauthClientResource {
   resourceId: string;
 }
 
-export interface OauthClients {
-  created_at: number;
-  id: string;
-  name: string;
-  redirect_uris: string;
-}
-
 export interface OauthConsent {
   clientId: string;
   createdAt: string;
@@ -268,17 +261,6 @@ export interface OauthConsent {
   scopes: string;
   updatedAt: string;
   userId: string | null;
-}
-
-export interface OauthGrants {
-  client_id: string;
-  created_at: number;
-  id: string;
-  imps: string | null;
-  last_used_at: number | null;
-  resource: string;
-  scope: Scope;
-  token_id: string;
 }
 
 export interface OauthRefreshToken {
@@ -318,16 +300,6 @@ export interface OauthResource {
   signingAlgorithm: string | null;
   signingKeyId: string | null;
   updatedAt: string | null;
-}
-
-export interface OauthTokens {
-  created_at: number;
-  expires_at: number;
-  grant_id: string;
-  id: string;
-  kind: "access" | "refresh";
-  secret_hash: string;
-  spent_at: number | null;
 }
 
 export interface SecretFileRemovals {
@@ -413,9 +385,6 @@ export interface DB {
   move_tickets: MoveTickets;
   network_members: NetworkMembers;
   networks: Networks;
-  oauth_clients: OauthClients;
-  oauth_grants: OauthGrants;
-  oauth_tokens: OauthTokens;
   oauthAccessToken: OauthAccessToken;
   oauthClient: OauthClient;
   oauthClientAssertion: OauthClientAssertion;

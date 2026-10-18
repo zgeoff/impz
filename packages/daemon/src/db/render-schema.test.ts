@@ -24,6 +24,6 @@ test('it reads a text primary key as never null', async () => {
   const rendered = await renderSchema();
 
   expect(rendered).toInclude(
-    'export interface OauthTokens {\n  created_at: number;\n  expires_at: number;\n  grant_id: string;\n  id: string;\n',
+    'export interface TokenSshKeys {\n  comment: string;\n  created_at: number;\n  fingerprint: string;\n  id: string;\n',
   );
 });

@@ -46,11 +46,6 @@ const COLUMN_OVERRIDES = {
   'move_sends.mode': new GenericExpressionNode('Generated', [
     new UnionExpressionNode([new LiteralNode('files'), new LiteralNode('zfs')]),
   ]),
-  'oauth_grants.scope': new IdentifierNode('Scope'),
-  'oauth_tokens.kind': new UnionExpressionNode([
-    new LiteralNode('access'),
-    new LiteralNode('refresh'),
-  ]),
   'tokens.scope': new IdentifierNode('Scope'),
 };
 
