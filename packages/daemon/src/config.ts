@@ -1,10 +1,11 @@
 import { BlockList } from 'node:net';
 import { join } from 'node:path';
 import * as z from 'zod';
-import { TailnetRulesSchema } from './auth/tailnet-identity';
+import { parseTailnetRules } from './auth/parse-tailnet-rules';
 import type { TailnetRule } from './auth/tailnet-identity';
 import { loadBackupConfig } from './backup/backup-config';
 import type { BackupConfig } from './backup/backup-config';
+import { checkPublicPorts } from './https/check-public-ports';
 import { HttpsEnvSchema, listHttpsWarnings, parseHttpsConfig } from './https/https-config';
 import type { HttpsConfig } from './https/https-config';
 import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from './images/build-image';
@@ -527,39 +528,6 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
   };
 }
 
-// The public listeners bind every address in the host container, so a port
-// any other listener holds would make one of them fail at start.
-function checkPublicPorts(
-  ports: Readonly<{ httpsPort: number; httpPort: number }>,
-  others: readonly (readonly [string, number])[],
-  slotPorts: readonly [number, number],
-): void {
-  const [first, last] = slotPorts;
-
-  const publics = [
-    ['IMP_PUBLIC_HTTPS_PORT', ports.httpsPort],
-    ['IMP_PUBLIC_HTTP_PORT', ports.httpPort],
-  ] as const;
-
-  if (ports.httpsPort === ports.httpPort) {
-    throw new Error('IMP_PUBLIC_HTTPS_PORT and IMP_PUBLIC_HTTP_PORT must differ');
-  }
-
-  for (const [name, port] of publics) {
-    const clash = others.find(([, other]) => other === port);
-
-    if (clash !== undefined) {
-      throw new Error(`${name} ${String(port)} is also ${clash[0]}; give it a port of its own`);
-    }
-
-    if (port >= first && port <= last) {
-      throw new Error(
-        `${name} ${String(port)} is one of the imps' ports, ${String(first)} to ${String(last)}`,
-      );
-    }
-  }
-}
-
 function parseKsmConfig(
   parsed: Readonly<
     Pick<z.infer<typeof EnvSchema>, 'IMP_KSM' | 'IMP_KSM_EXEC' | 'IMP_KSM_HEADROOM_PERCENT'>
@@ -578,28 +546,4 @@ function parseKsmConfig(
   }
 
   return { execBin: parsed.IMP_KSM_EXEC, headroomPercent: headroom.data };
-}
-
-// IMP_TAILNET_IDENTITIES is a JSON array of rules, such as
-// [{"match":"user:me@example.com","scope":"manage"}]
-function parseTailnetRules(text: string | undefined): readonly TailnetRule[] | null {
-  if (text === undefined) {
-    return null;
-  }
-
-  let json: unknown;
-
-  try {
-    json = JSON.parse(text);
-  } catch {
-    throw new Error('IMP_TAILNET_IDENTITIES is not JSON');
-  }
-
-  const rules = TailnetRulesSchema.safeParse(json);
-
-  if (!rules.success) {
-    throw new Error(`IMP_TAILNET_IDENTITIES: ${z.prettifyError(rules.error)}`);
-  }
-
-  return rules.data;
 }
