@@ -1,4 +1,4 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -2427,6 +2427,151 @@ test('it logs at most its cap of generations for a forged agent that lists many'
 
   expect(logs.listLogs(imp)).toHaveLength(8);
   expect(ctx.calls).toHaveLength(8);
+});
+
+test('it says at most once a minute that an imp has its cap of live logs', async () => {
+  const ctx = await setupTest();
+
+  const log = mock<(message: string) => void>(() => {});
+  const clock = buildStubClock({ startMs: 100_000 });
+
+  const imp: SessionLogImp = {
+    id: 'imp-1',
+    state: 'running',
+    vsockPath: '/nonexistent/vsock.sock',
+    sessionLogsDir: ctx.sessionLogsDir,
+  };
+
+  const logs = createSessionLogs({
+    limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 1, maxAgeMs: 1000 },
+    requireRoom: () => Promise.resolve(),
+    now: clock.now,
+    log,
+    startTimer: clock.startTimer,
+    openTap: ctx.openTap,
+    onLookDone: ctx.onLookDone,
+  });
+
+  ctx.stack.defer(() => {
+    logs.forgetImp(imp.id);
+  });
+
+  const tap = buildStubTapStream(
+    buildMockSessionOutput({
+      executionGeneration: '0d6f3a2b9c8e4f1a7b5c3d2e1f0a9b8c',
+      bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+      bufferStart: 0,
+      end: 0,
+      offset: 0,
+    }),
+  );
+
+  ctx.answers.push(() => Promise.resolve(tap.stream));
+
+  const sessions = [
+    buildMockAgentSession({
+      name: 'main',
+      executionGeneration: '0d6f3a2b9c8e4f1a7b5c3d2e1f0a9b8c',
+      bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+      log: true,
+    }),
+    buildMockAgentSession({
+      name: 'side',
+      executionGeneration: '7e2a9c4b1d8f3e6a5b0c9d2e4f1a8b3c',
+      bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+      log: true,
+    }),
+  ];
+
+  logs.observe(imp, sessions);
+
+  await waitFor(() => {
+    expect(ctx.looks.done).toBe(1);
+  });
+
+  clock.runFor(59_999);
+  logs.observe(imp, sessions);
+
+  await waitFor(() => {
+    expect(ctx.looks.done).toBe(2);
+  });
+
+  expect(log.mock.calls).toStrictEqual([
+    ['impd: imp imp-1: logs no more sessions: it has 1 live logs'],
+  ]);
+});
+
+test('it says again that an imp has its cap of live logs once a minute has passed', async () => {
+  const ctx = await setupTest();
+
+  const log = mock<(message: string) => void>(() => {});
+  const clock = buildStubClock({ startMs: 100_000 });
+
+  const imp: SessionLogImp = {
+    id: 'imp-1',
+    state: 'running',
+    vsockPath: '/nonexistent/vsock.sock',
+    sessionLogsDir: ctx.sessionLogsDir,
+  };
+
+  const logs = createSessionLogs({
+    limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 1, maxAgeMs: 1000 },
+    requireRoom: () => Promise.resolve(),
+    now: clock.now,
+    log,
+    startTimer: clock.startTimer,
+    openTap: ctx.openTap,
+    onLookDone: ctx.onLookDone,
+  });
+
+  ctx.stack.defer(() => {
+    logs.forgetImp(imp.id);
+  });
+
+  const tap = buildStubTapStream(
+    buildMockSessionOutput({
+      executionGeneration: '0d6f3a2b9c8e4f1a7b5c3d2e1f0a9b8c',
+      bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+      bufferStart: 0,
+      end: 0,
+      offset: 0,
+    }),
+  );
+
+  ctx.answers.push(() => Promise.resolve(tap.stream));
+
+  const sessions = [
+    buildMockAgentSession({
+      name: 'main',
+      executionGeneration: '0d6f3a2b9c8e4f1a7b5c3d2e1f0a9b8c',
+      bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+      log: true,
+    }),
+    buildMockAgentSession({
+      name: 'side',
+      executionGeneration: '7e2a9c4b1d8f3e6a5b0c9d2e4f1a8b3c',
+      bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+      log: true,
+    }),
+  ];
+
+  logs.observe(imp, sessions);
+
+  await waitFor(() => {
+    expect(ctx.looks.done).toBe(1);
+  });
+
+  clock.runFor(60_000);
+  logs.observe(imp, sessions);
+
+  await waitFor(() => {
+    expect(ctx.looks.done).toBe(2);
+  });
+
+  expect(log.mock.calls).toStrictEqual([
+    ['impd: imp imp-1: logs no more sessions: it has 1 live logs'],
+    ['impd: imp imp-1: logs no more sessions: it has 1 live logs'],
+  ]);
 });
 
 test('it keeps the imp under its limit while its logs roll past their first segment', async () => {

@@ -1,6 +1,7 @@
-import type { LiveLog, SessionLogState } from './create-session-log-state';
+import type { SessionLogState } from './create-session-log-state';
 import { countLogBytes } from './generation-log';
 import { readImpMetas, removeGenerationDir } from './session-log-files';
+import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp, SessionLogLimits } from './session-log-service';
 
 // what an imp's limit reads besides the state
@@ -18,10 +19,7 @@ export function makeApplyImpLimit(
       `impd: imp ${imp.id}: stopped the log of session ${entry.session}: its logs reached IMP_SESSION_LOG_IMP_MAX_MIB`,
     );
 
-    if (ctx.isCurrent(entry)) {
-      ctx.dropped.add(entry.key);
-      ctx.stopTap(entry.key);
-    }
+    ctx.send({ type: 'log.stop', entry });
 
     await entry.log.stop('imp_limit');
   };
@@ -79,7 +77,7 @@ export function makeApplyImpLimit(
         // the newest by start, and of two that started at once the later one
         const newest = ctx
           .listLive(imp.id)
-          .filter((entry) => !ctx.dropped.has(entry.key))
+          .filter((entry) => !ctx.isDropped(entry.key))
           .reduce<LiveLog | undefined>(
             (found, entry) =>
               found === undefined ||
