@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.0](https://github.com/zgeoff/impz/compare/v2.6.0...v2.7.0) (2026-10-19)
+
+
+### Features
+
+* **client:** take an abort signal in the server version check ([#537](https://github.com/zgeoff/impz/issues/537)) ([0fc3621](https://github.com/zgeoff/impz/commit/0fc36217b0245f7a428ff3b463777184649abf31))
+
 ## [2.6.0](https://github.com/zgeoff/impz/compare/v2.5.5...v2.6.0) (2026-10-19)
 
 ### Features
