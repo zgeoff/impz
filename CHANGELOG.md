@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.0](https://github.com/zgeoff/impz/compare/v2.7.0...v2.8.0) (2026-10-19)
+
+
+### Features
+
+* **agent:** time the guest's boot steps, skip a no-op grow ([#540](https://github.com/zgeoff/impz/issues/540)) ([592da9e](https://github.com/zgeoff/impz/commit/592da9edf52d9fd31f4593b63f30e8091966cc7c))
+
 ## [2.7.0](https://github.com/zgeoff/impz/compare/v2.6.0...v2.7.0) (2026-10-19)
 
 ### Features
