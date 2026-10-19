@@ -1,7 +1,8 @@
 import type { ExecStream } from '../agent-client/exec-stream';
 import { isDiskFullError } from '../api-errors';
-import type { LiveLog, SessionLogState } from './create-session-log-state';
+import type { SessionLogState } from './create-session-log-state';
 import { readGenerationBounds } from './generation-log';
+import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp } from './session-log-service';
 
 // what a tap's copy reads besides the state
@@ -19,10 +20,7 @@ export function makeRunTap(
       `impd: imp ${imp.id}: stopped the log of session ${entry.session}: the disk reached its reserve`,
     );
 
-    if (ctx.isCurrent(entry)) {
-      ctx.dropped.add(entry.key);
-      ctx.stopTap(entry.key);
-    }
+    ctx.send({ type: 'log.stop', entry });
 
     await entry.log.stop('disk_full');
   };
@@ -46,16 +44,16 @@ export function makeRunTap(
           await entry.log.append(event.data);
 
           const start = entry.log.readMeta().segments.at(-1)?.start;
-          const unchecked = (ctx.uncheckedBytes.get(imp.id) ?? 0) + event.data.byteLength;
+          const unchecked = ctx.readUncheckedBytes(imp.id) + event.data.byteLength;
 
           if (start !== newest || unchecked >= ctx.limitCheckBytes) {
             newest = start;
 
-            ctx.uncheckedBytes.set(imp.id, 0);
+            ctx.send({ type: 'bytes.clear', impId: imp.id });
 
             await deps.applyImpLimit(imp, life);
           } else {
-            ctx.uncheckedBytes.set(imp.id, unchecked);
+            ctx.send({ type: 'bytes.add', impId: imp.id, bytes: event.data.byteLength });
           }
         } else if (event.type === 'exit') {
           const end = readGenerationBounds(entry.log.readMeta()).logEnd;
@@ -70,9 +68,7 @@ export function makeRunTap(
         ctx.printError(imp, error);
       }
     } finally {
-      if (ctx.taps.get(entry.key) === tap) {
-        ctx.stopTap(entry.key);
-      }
+      ctx.send({ type: 'tap.end', key: entry.key, tap });
     }
   };
 

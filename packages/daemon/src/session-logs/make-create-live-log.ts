@@ -1,20 +1,17 @@
 import { isAgentLogIdentity } from '../agent-client/agent-ids';
 import { buildLogKey } from './build-log-key';
-import type { LiveLog, SessionLogState } from './create-session-log-state';
+import type { SessionLogState } from './create-session-log-state';
 import type { GenerationLog, createGenerationLog } from './generation-log';
 import { hasTombstone, removeEmptyDirs, removeGenerationDir } from './session-log-files';
+import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp, SessionLogLimits } from './session-log-service';
 
 // what a new live log reads besides the state
 interface CreateLiveLogDeps {
   readonly limits: SessionLogLimits;
   readonly now: () => number;
-  readonly log: (message: string) => void;
   readonly createLog: typeof createGenerationLog;
 }
-
-// how often an imp at its cap of live logs says so
-const CAP_NOTICE_MS = 60_000;
 
 export function makeCreateLiveLog(
   ctx: SessionLogState,
@@ -26,9 +23,6 @@ export function makeCreateLiveLog(
   bootId: string,
   life: number,
 ) => Promise<LiveLog | null> {
-  const countCreating = (impId: string) =>
-    [...ctx.creating].filter((key) => key.startsWith(`${impId}/`)).length;
-
   // a log for a generation impd has not logged: null when the imp has its
   // cap of live logs, the generation was deleted, or the imp is destroyed
   const createLiveLog = async (
@@ -48,21 +42,13 @@ export function makeCreateLiveLog(
       return null;
     }
 
-    if (ctx.listLive(imp.id).length + countCreating(imp.id) >= deps.limits.impMaxLive) {
-      const last = ctx.capNotices.get(imp.id) ?? 0;
-
-      if (deps.now() - last >= CAP_NOTICE_MS) {
-        ctx.capNotices.set(imp.id, deps.now());
-
-        deps.log(
-          `impd: imp ${imp.id}: logs no more sessions: it has ${String(deps.limits.impMaxLive)} live logs`,
-        );
-      }
+    if (ctx.listLive(imp.id).length + ctx.countCreating(imp.id) >= deps.limits.impMaxLive) {
+      ctx.send({ type: 'cap.refuse', impId: imp.id, at: deps.now() });
 
       return null;
     }
 
-    ctx.creating.add(key);
+    ctx.send({ type: 'creation.start', key });
 
     let log: GenerationLog;
 
@@ -73,7 +59,7 @@ export function makeCreateLiveLog(
         bootId,
       });
     } finally {
-      ctx.creating.delete(key);
+      ctx.send({ type: 'creation.end', key });
     }
 
     // destroyed while the directory was made: it goes again, unless the imp
@@ -81,7 +67,7 @@ export function makeCreateLiveLog(
     if (ctx.isForgotten(imp.id, life)) {
       log.abandon();
 
-      if (ctx.forgotten.has(imp.id)) {
+      if (ctx.isDestroyed(imp.id)) {
         removeGenerationDir(imp.sessionLogsDir, generation);
         removeEmptyDirs(imp.sessionLogsDir);
       }
