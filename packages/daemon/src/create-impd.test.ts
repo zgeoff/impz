@@ -12,6 +12,7 @@ import { buildMockNewImage } from '../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../testing/imps/build-mock-new-imp';
 import { createStubDockerCli } from '../testing/imps/create-stub-docker-cli';
 import { readNoTailscale } from '../testing/network/read-no-tailscale';
+import { buildQueryGate } from '../testing/platform/build-query-gate';
 import { buildStubTickerTimer } from '../testing/platform/build-stub-ticker-timer';
 import { findFreePorts } from '../testing/platform/find-free-ports';
 import { startTestImpd } from '../testing/start-test-impd';
@@ -23,6 +24,7 @@ import { createImpd } from './create-impd';
 import { createImage } from './db/images';
 import { createImp, listImps } from './db/imps';
 import { openDatabase } from './db/open-database';
+import type { ImpDatabase } from './db/open-database';
 import { HOST_ADD_WARNING } from './images/create-image-adds';
 import { HOST_BUILD_WARNING } from './images/create-image-builds';
 import type { ImpdBoundaries } from './impd-deps';
@@ -39,6 +41,9 @@ interface SetupOptions {
     ImpdBoundaries,
     'keepaliveMs' | 'keepaliveRepeat' | 'readProcStatus' | 'images'
   >;
+
+  // the database impd gets, in place of the one the test reads
+  readonly wrapDatabase?: (db: ImpDatabase) => ImpDatabase;
 }
 
 function setupTest(options: SetupOptions = {}) {
@@ -224,6 +229,26 @@ test('it opens no proxy port for an imp written to its database after it stops',
   });
 
   expect(stopped.proxy.readImpPort(imp.id)).toBeNull();
+});
+
+test('it waits for the grant sync an imp write started before it stops', async () => {
+  const grantReads = buildQueryGate('grants');
+
+  const ctx = await setupTest({ wrapDatabase: grantReads.wrap });
+
+  const image = await createImage(
+    ctx.db,
+    buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
+  );
+
+  grantReads.arm();
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'late', imageId: image.id }));
+  await grantReads.reached;
+
+  const steps = await ctx.impd.stop({ sleepImps: false, stepMaxMs: 50 });
+
+  expect(steps[0]).toStrictEqual({ step: 'db-writes', outcome: 'timed-out' });
 });
 
 test('it removes a system drive that no imp uses when it boots', async () => {
