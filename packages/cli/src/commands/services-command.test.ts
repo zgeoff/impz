@@ -27,7 +27,7 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { UsageError } from '../cli/errors';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
-import { buildServiceDef, createLogPrinter, formatLogEvent } from './services';
+import { buildServiceDef, createLogPrinter, formatLogEvent } from './services-command';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
