@@ -140,7 +140,10 @@ test('it runs a ticker only when the test fires it', async () => {
 
   const harness = await startTestImpd(stack);
 
-  expect(harness.tickers.readDelays()).toMatchObject({ idle: 2000, governor: expect.any(Number) });
+  expect(harness.tickers.readDelays()).toMatchObject({
+    idle: 2000,
+    governor: expect.any(Number) as unknown,
+  });
 });
 
 test('it re-adopts a running VM in the impd that restartImpd starts', async () => {
@@ -343,7 +346,7 @@ test('it never waits for the template build of an impd that restartImpd replaced
   expect(existsSync(harness.dataDir)).toBeFalse();
 });
 
-test('it finishes the template build of a replaced impd that got past its VM call', async () => {
+test('it settles the template build of a replaced impd before it closes the database', async () => {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -367,14 +370,18 @@ test('it finishes the template build of a replaced impd that got past its VM cal
     expect(harness.fake.templateBuilds).toHaveLength(1);
   });
 
-  // the build's VM call came back to a live impd, so the rest of it runs
+  // the build's VM call came back to a live impd, so the rest of it runs.
+  // It is built, or it fails when the next impd's startup removes its work
+  // dir as a build cut short, as a crash leaves it.
   await harness.restartImpd();
   await stack.disposeAsync();
 
-  const builtAt = logs.findIndex((line) => /^impd: boot template \w+ built in/u.test(line));
+  const settledAt = logs.findIndex((line) =>
+    /^impd: boot template \w+ (?:built in|build failed)/u.test(line),
+  );
 
-  expect(builtAt).toBeGreaterThanOrEqual(0);
-  expect(builtAt).toBeLessThan(logs.indexOf('test harness: database closed'));
+  expect(settledAt).toBeGreaterThanOrEqual(0);
+  expect(settledAt).toBeLessThan(logs.indexOf('test harness: database closed'));
   expect(existsSync(harness.dataDir)).toBeFalse();
 });
 
