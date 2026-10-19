@@ -18,7 +18,7 @@ import { startImpdHost } from '../test-utils/start-impd-host';
 import { startStubNewerImpd } from '../test-utils/start-stub-newer-impd';
 import { startStubOlderImpd } from '../test-utils/start-stub-older-impd';
 import { startStubSilentHost } from '../test-utils/start-stub-silent-host';
-import { listAllImps, listForkWarnings, pickConsoleSession } from './imps';
+import { listAllImps, listForkWarnings, pickConsoleSession } from './imps-command';
 
 // The CLI's home, where config.json keeps the saved hosts, so none of this
 // machine's reaches it; each impd host a test starts releases into `stack`
