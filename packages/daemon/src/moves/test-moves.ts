@@ -144,7 +144,7 @@ export async function createMoveHosts(
       { timeoutMs: options.moveTimeoutMs ?? 5000 },
     );
 
-  // a whole move, as `impz move` runs it (packages/cli/src/commands/move.ts):
+  // a whole move, as `impz move` runs it (packages/cli/src/commands/move-command.ts):
   // ZFS streams to a ZFS target, and the memory too when the facts match;
   // a stop forces, as --stop does
   const runMove = async (name: string, stop = false): Promise<MoveStatus> => {

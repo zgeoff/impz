@@ -1,0 +1,16 @@
+export const IMP_HEADER = [
+  'NAME',
+  'STATE',
+  'IMAGE',
+  'VCPUS',
+  'MEMORY',
+  'RAM',
+  'DISK',
+  'USED',
+  'SHARED',
+  'CPU',
+  'SESSIONS',
+  'IP',
+  'URL',
+  'NOTE',
+] as const;

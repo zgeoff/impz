@@ -8,15 +8,15 @@ import {
   BackupRunSchema,
   BackupStatusSchema,
 } from '../schemas/backup-schema';
+import { CheckpointRefSchema } from '../schemas/checkpoint-ref-schema';
 import { CheckpointSchema } from '../schemas/checkpoint-schema';
-import { EgressPolicySchema } from '../schemas/egress-schema';
+import { EmptySchema } from '../schemas/empty-schema';
 import { ImpEventSchema } from '../schemas/event-schema';
-import { ExposeInputSchema, ExposeResultSchema } from '../schemas/exposure-schema';
 import { FileContentSchema, FilePathSchema } from '../schemas/file-schema';
 import { ImageBuildRunSchema } from '../schemas/image-build-run-schema';
 import { ImageRefSchema } from '../schemas/image-ref-schema';
 import { ImageSchema } from '../schemas/image-schema';
-import { ForkResultSchema, ImpSchema } from '../schemas/imp-schema';
+import { ImpSchema } from '../schemas/imp-schema';
 import { LeaseLabelSchema, LeaseSchema, LeaseTtlSchema } from '../schemas/lease-schema';
 import {
   MovePlanSchema,
@@ -26,8 +26,9 @@ import {
   WarmHostSchema,
   WarmMoveSchema,
 } from '../schemas/move-schema';
+import { NameInputSchema } from '../schemas/name-input-schema';
 import { NameSchema } from '../schemas/name-schema';
-import { MAX_CREATE_NETWORKS, NetworkJoinSchema, NetworkSchema } from '../schemas/network-schema';
+import { NetworkJoinSchema, NetworkSchema } from '../schemas/network-schema';
 import {
   ApprovalCodeSchema,
   GrantPatternSchema,
@@ -66,29 +67,12 @@ import {
 import { SessionNameSchema, SessionSchema } from '../schemas/session-schema';
 import { DatabaseCopySchema, StorageGcSchema } from '../schemas/storage-schema';
 import { SystemFeaturesInfoSchema, SystemInfoSchema } from '../schemas/system-info-schema';
-import {
-  GrantableSchema,
-  GrantableUpdateSchema,
-  IdentitySchema,
-  ImageRefPrefixSchema,
-  ImpPatternSchema,
-  MAX_SSH_KEYS,
-  ScopeSchema,
-  SshKeySchema,
-  SshPublicKeySchema,
-  TokenSchema,
-} from '../schemas/token-schema';
+import { ScopeSchema } from '../schemas/token-schema';
 import { IMP_ERRORS } from './imp-errors';
+import { impsContract } from './imps-contract';
+import { tokensContract } from './tokens-contract';
 
 const base = oc.errors(IMP_ERRORS);
-const NameInputSchema = z.object({ name: NameSchema });
-
-// a checkpoint is addressed by its id or by its label
-const CheckpointRefSchema = z.string().min(1);
-const EmptySchema = z.object({});
-
-// a sleep or stop that ends the imp's leases rather than fail with LEASED
-const ForceInputSchema = z.object({ name: NameSchema, force: z.boolean().optional() });
 
 // `hold` is the label `imps.hold` writes, which never blocks a sleep: a lease
 // with it would not lease anything
@@ -97,19 +81,6 @@ const LeaseInputSchema = z.object({
   label: LeaseLabelSchema.refine((label) => label !== 'hold', 'hold is the label imps.hold writes'),
   ttlSeconds: LeaseTtlSchema,
 });
-
-// cores; below 0.1 the VMM thread starves and a boot times out. impd also
-// refuses more than the host has.
-const CpuLimitSchema = z.number().min(0.1);
-
-// the guest's cores, which the host's limit then shares out
-const VcpusSchema = z.int().min(1).max(32);
-
-// a TCP port in the guest
-const PortSchema = z.int().min(1).max(65_535);
-
-// cgroup v2 cpu.weight; 100 is the default share
-const CpuWeightSchema = z.int().min(1).max(10_000);
 
 // a docker image ref, or an imp whose disk becomes a template
 const ImageAddInputSchema = z.union([
@@ -130,39 +101,6 @@ const ImageBuildInputSchema = z.object({
   logs: z.boolean().optional(),
 });
 
-// imps.create's input, which the MCP tool imp_create picks its fields from
-export const ImpCreateInputSchema = z.object({
-  name: NameSchema.optional(),
-  image: NameSchema.optional(),
-  vcpus: VcpusSchema.optional(),
-  memoryMib: z.int().min(128).optional(),
-
-  // what the guest may grow to under memory pressure, at most 4 ×
-  // memoryMib; memoryMib by default, which never grows
-  maxMemoryMib: z.int().min(128).optional(),
-
-  // at least the image's filesystem; IMP_DEFAULT_DISK_GIB by default
-  diskMib: z.int().min(1024).optional(),
-
-  // the guest port the wake proxy forwards HTTP to (default 8080)
-  httpPort: PortSchema.optional(),
-
-  // what the imp may reach directly (default open)
-  policy: EgressPolicySchema.optional(),
-
-  // null, the default, is no limit
-  cpuLimit: CpuLimitSchema.nullable().optional(),
-  cpuWeight: CpuWeightSchema.optional(),
-
-  // networks it joins, which must exist; host-wide callers only
-  networks: z.array(NameSchema).max(MAX_CREATE_NETWORKS).optional(),
-
-  // false leaves the imp's disk and checkpoints out of every backup
-  // run, for its life (default true); an impd without
-  // features.backupOptOut ignores it, so check that first
-  backup: z.boolean().optional(),
-});
-
 // checkpoints.create's input, which the MCP tool imp_checkpoint builds on
 export const CheckpointCreateInputSchema = z.object({
   name: NameSchema,
@@ -170,104 +108,7 @@ export const CheckpointCreateInputSchema = z.object({
 });
 
 export const impContract = {
-  imps: {
-    create: base.input(ImpCreateInputSchema).output(ImpSchema),
-
-    // image builders only with `builders`; an impd from before them
-    // ignores it
-    list: base
-      .input(z.object({ builders: z.boolean().optional() }).optional())
-      .output(z.array(ImpSchema)),
-
-    get: base.input(NameInputSchema).output(ImpSchema),
-
-    destroy: base.input(NameInputSchema).output(EmptySchema),
-
-    // cold boot of a stopped imp; a running imp is returned as it is
-    start: base.input(NameInputSchema).output(ImpSchema),
-
-    // agent shutdown, then SIGKILL after a timeout; memory is lost. LEASED
-    // on an imp with a lease from `leases.*`, unless `force` ends them.
-    stop: base.input(ForceInputSchema).output(ImpSchema),
-
-    // LEASED as for stop
-    sleep: base.input(ForceInputSchema).output(ImpSchema),
-
-    // restartError: false refuses an imp in error with INVALID_STATE instead
-    // of booting it again
-    wake: base
-      .input(z.object({ name: NameSchema, restartError: z.boolean().optional() }))
-      .output(ImpSchema),
-
-    // the caller's lease labelled `hold`, which never blocks a sleep or a
-    // stop; seconds = 0 releases it and a hold from before leases
-    hold: base
-      .input(z.object({ name: NameSchema, seconds: z.int().nonnegative() }))
-      .output(ImpSchema),
-
-    // grows the disk; a running guest grows its filesystem at once, a
-    // sleeping one when it wakes, a stopped one when it boots
-    resizeDisk: base
-      .input(z.object({ name: NameSchema, diskMib: z.int().min(1024) }))
-      .output(ImpSchema),
-
-    url: base.input(NameInputSchema).output(
-      z.object({
-        local: z.url(),
-        https: z.url().nullable(),
-
-        // https://<name>.<domain> from the internet, while the imp is public
-        public: z.url().nullable(),
-
-        // the imp's own name on the tailnet, once impd serves it
-        service: z.url().nullable(),
-        tailnet: z.url().nullable(),
-      }),
-    ),
-
-    // the egress policy; a change applies at once, whatever the imp's state
-    policy: base.input(NameInputSchema).output(EgressPolicySchema),
-
-    setPolicy: base
-      .input(z.object({ name: NameSchema, policy: EgressPolicySchema }))
-      .output(EgressPolicySchema),
-
-    // serves the imp to the internet at https://<name>.<domain>; an imp
-    // already public gets a new credential. PRECONDITION_FAILED without
-    // IMP_PUBLIC_IP.
-    expose: base.input(ExposeInputSchema).output(ExposeResultSchema),
-
-    // back to the tailnet only, at once
-    unexpose: base.input(NameInputSchema).output(ImpSchema),
-
-    // disk only, with the source's egress policy, and the source's grants
-    // the caller could make; CONFLICT when the source goes, or another imp
-    // takes its name, before the disk copy
-    fork: base
-      .input(
-        z.object({
-          source: NameSchema,
-          name: NameSchema,
-          checkpoint: CheckpointRefSchema.optional(),
-        }),
-      )
-      .output(ForkResultSchema),
-
-    // a running VM takes a new CPU limit or weight at once, a sleeping or
-    // stopped one when it next starts; vcpus only while stopped. A null
-    // cpuLimit removes the limit. httpPort applies to the next request.
-    update: base
-      .input(
-        z.object({
-          name: NameSchema,
-          cpuLimit: CpuLimitSchema.nullable().optional(),
-          cpuWeight: CpuWeightSchema.optional(),
-          vcpus: VcpusSchema.optional(),
-          httpPort: PortSchema.optional(),
-        }),
-      )
-      .output(ImpSchema),
-  },
+  imps: impsContract,
 
   // Each caller's own hold on an imp (docs/guides/leases.md). Only the
   // caller's leases are touched; the label `hold` is the one `imps.hold` writes.
@@ -692,71 +533,7 @@ export const impContract = {
     },
   },
 
-  // named API tokens (docs/guides/tokens.md); the root token in
-  // <dataDir>/token is not one of them
-  tokens: {
-    list: base.output(z.array(TokenSchema)),
-
-    // the secret is in the answer once and never again
-    create: base
-      .input(
-        z.object({
-          name: NameSchema,
-          scope: ScopeSchema,
-          imps: z.array(ImpPatternSchema).min(1).max(32).optional(),
-          sshKeys: z.array(SshPublicKeySchema).min(1).max(MAX_SSH_KEYS).optional(),
-
-          // existing secrets it may grant to its imps; needs manage and imps
-          grantable: GrantableSchema.optional(),
-
-          // the ref start of the images it may add under its imp patterns,
-          // pinned by digest (docs/guides/tokens.md#adding-images); needs
-          // manage and imps
-          imageRefPrefix: ImageRefPrefixSchema.optional(),
-        }),
-      )
-      .output(z.object({ token: TokenSchema, secret: z.string() })),
-
-    // sets its grantable list, its image ref prefix (null for none), or both;
-    // the rest stays (docs/guides/tokens.md#change-the-list). BAD_REQUEST for
-    // either without manage and imps; NOT_FOUND for the token or a secret.
-    update: base
-      .input(
-        z
-          .object({
-            name: NameSchema,
-            grantable: GrantableUpdateSchema.optional(),
-
-            // an older impd needs `grantable`: check features.tokenImageAdd
-            // before leaving it out
-            imageRefPrefix: ImageRefPrefixSchema.nullable().optional(),
-          })
-          .refine(
-            (input) => input.grantable !== undefined || input.imageRefPrefix !== undefined,
-            'must set grantable, imageRefPrefix or both',
-          ),
-      )
-      .output(TokenSchema),
-
-    // ends its dashboard sessions, event streams, sockets and ssh logins too;
-    // CONFLICT while authorized_keys lists one of its keys
-    delete: base.input(NameInputSchema).output(EmptySchema),
-
-    // binds an SSH key, so a login with it runs as the token; CONFLICT for a
-    // key bound to any token or listed in authorized_keys
-    addKey: base
-      .input(z.object({ name: NameSchema, key: SshPublicKeySchema }))
-      .output(SshKeySchema),
-
-    // ends the ssh logins made with the key; CONFLICT while authorized_keys
-    // lists it, since unbinding would hand it every imp
-    removeKey: base
-      .input(z.object({ name: NameSchema, fingerprint: z.string() }))
-      .output(EmptySchema),
-
-    // who the caller is, and what it may do
-    whoami: base.output(IdentitySchema),
-  },
+  tokens: tokensContract,
 };
 
 export type ImpContract = typeof impContract;
