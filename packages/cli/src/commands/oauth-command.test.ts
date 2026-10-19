@@ -17,7 +17,7 @@ import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
 import * as z from 'zod';
 import { UsageError } from '../cli/errors';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
-import { runApprove } from './oauth';
+import { runApprove } from './oauth-command';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

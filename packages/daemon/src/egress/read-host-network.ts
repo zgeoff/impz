@@ -14,7 +14,7 @@ export interface HostNetwork {
 
 // what the read reaches the host through
 export interface HostNetworkReaders {
-  readonly hasIpv6: boolean;
+  readonly hasIPv6: boolean;
   readonly readConnected6: () => Promise<readonly string[]>;
   readonly readConnected4: () => Promise<readonly string[]>;
   readonly readUplinks: () => Promise<Uplinks>;
@@ -33,7 +33,7 @@ export async function readHostNetwork(
 ): Promise<HostNetwork> {
   try {
     return {
-      connected6: readers.hasIpv6 ? await readers.readConnected6() : [],
+      connected6: readers.hasIPv6 ? await readers.readConnected6() : [],
       connected4: hasPublic ? await readers.readConnected4() : [],
       uplinks: hasPublic ? await readers.readUplinks() : NO_UPLINKS,
       error: null,

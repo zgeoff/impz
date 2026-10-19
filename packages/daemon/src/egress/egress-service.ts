@@ -139,7 +139,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
   const ipv6 = deps.ipv6 ?? null;
 
   const hostReaders = {
-    hasIpv6: ipv6 !== null,
+    hasIPv6: ipv6 !== null,
     readConnected6: deps.readConnected6 ?? readConnectedPrefixes6,
     readConnected4: deps.readConnected4 ?? readConnectedPrefixes4,
     readUplinks: deps.readUplinks ?? readUplinks,

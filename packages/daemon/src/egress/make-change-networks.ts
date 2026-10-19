@@ -21,7 +21,6 @@ interface ChangeNetworksDeps {
   readonly readMembers: () => readonly NetworkMember[];
 }
 
-// the changeNetworks of EgressService
 export function makeChangeNetworks(
   deps: ChangeNetworksDeps,
 ): <T>(change: NetworkChange<T>) => Promise<T> {
