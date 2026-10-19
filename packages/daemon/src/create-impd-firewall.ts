@@ -15,6 +15,7 @@ import {
 } from './net/ipv6-plan';
 import type { Ipv6Plan } from './net/ipv6-plan';
 import { printLog } from './process/print-log';
+import type { ImpdStopParts } from './stop-impd';
 
 export interface ImpdFirewall {
   readonly ipv6: Ipv6Plan | null;
@@ -23,12 +24,13 @@ export interface ImpdFirewall {
 }
 
 // The host's IPv6 plan, the credential broker and the egress firewall with
-// its resolver, started: before any VM is adopted, booted or woken. The
-// broker shares `secretFiles` with the GC, which removes what it kept aside.
+// its resolver, started before any VM runs; each goes on `plan` once made.
+// The broker shares `secretFiles` with the GC, which removes what it set aside.
 export async function createImpdFirewall(
   config: Config,
   deps: Readonly<ImpdDeps>,
   secretFiles: SecretFiles,
+  plan: Pick<ImpdStopParts, 'broker' | 'egress'>,
 ): Promise<ImpdFirewall> {
   const log = deps.log ?? printLog;
 
@@ -54,6 +56,8 @@ export async function createImpdFirewall(
     ...deps.broker,
   });
 
+  plan.broker = broker;
+
   const egress = createEgressService({
     config,
     db: deps.db,
@@ -64,6 +68,8 @@ export async function createImpdFirewall(
     ...(deps.now !== undefined && { now: deps.now }),
     ...deps.egress,
   });
+
+  plan.egress = egress;
 
   await egress.start();
 

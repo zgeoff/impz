@@ -17,27 +17,28 @@ interface Stoppable {
   readonly stop: () => Promise<void>;
 }
 
-// What impd takes out of service, each part as createImpd started it; null
-// for a part the config leaves off
+// What impd takes out of service: createImpd sets each part as its startup
+// step acquires it, so a startup that fails stops what it has. A part not
+// acquired yet, or null as the config leaves it off, is skipped.
 export interface ImpdStopParts {
   // the database writes impd follows, and the work a write started
-  readonly dbWrites: Stoppable;
-  readonly diskUsage: { readonly stop: () => void };
-  readonly tickers: readonly Ticker[];
-  readonly https: Stoppable | null;
-  readonly proxy: Stoppable;
-  readonly broker: Stoppable;
-  readonly egress: { readonly stop: () => void };
-  readonly ssh: Stoppable | null;
-  readonly closeExecSessions: () => void;
-  readonly publicMcp: Stoppable | null;
-  readonly api: { readonly stop: (closeActiveConnections: boolean) => Promise<void> };
-  readonly imps: Pick<Imps, 'sleepAllImps' | 'waitForLifecycle' | 'bootTemplates'>;
-  readonly storage: Stoppable;
-  readonly stopTelemetry: (() => Promise<void>) | null;
+  dbWrites?: Stoppable;
+  diskUsage?: { readonly stop: () => void };
+  tickers?: readonly Ticker[];
+  https?: Stoppable | null;
+  proxy?: Stoppable;
+  broker?: Stoppable;
+  egress?: { readonly stop: () => void };
+  ssh?: Stoppable | null;
+  closeExecSessions?: () => void;
+  publicMcp?: Stoppable | null;
+  api?: { readonly stop: (closeActiveConnections: boolean) => Promise<void> };
+  imps?: Pick<Imps, 'sleepAllImps' | 'waitForLifecycle' | 'bootTemplates'>;
+  storage?: Stoppable;
+  stopTelemetry?: (() => Promise<void>) | null;
 
   // the database createImpd opened; null leaves a caller's database open
-  readonly db: { readonly destroy: () => Promise<void> } | null;
+  db?: { readonly destroy: () => Promise<void> } | null;
   readonly log: (message: string) => void;
 }
 
@@ -98,71 +99,113 @@ export async function stopImpd(
   };
 
   // first: a write after this point starts no proxy, grant or name sync
-  await runStep('db-writes', readStepMs(), () => parts.dbWrites.stop());
+  const dbWrites = parts.dbWrites;
 
-  await runStep('disk-usage', readStepMs(), () => {
-    parts.diskUsage.stop();
-  });
+  if (dbWrites !== undefined) {
+    await runStep('db-writes', readStepMs(), () => dbWrites.stop());
+  }
 
-  await runStep('tickers', readStepMs(), () =>
-    Promise.all(parts.tickers.map((ticker) => ticker.stop())),
-  );
+  const diskUsage = parts.diskUsage;
+
+  if (diskUsage !== undefined) {
+    await runStep('disk-usage', readStepMs(), () => {
+      diskUsage.stop();
+    });
+  }
+
+  const tickers = parts.tickers;
+
+  if (tickers !== undefined) {
+    await runStep('tickers', readStepMs(), () =>
+      Promise.all(tickers.map((ticker) => ticker.stop())),
+    );
+  }
 
   const https = parts.https;
 
-  if (https !== null) {
+  if (https !== undefined && https !== null) {
     await runStep('https', readStepMs(), () => https.stop());
   }
 
-  await runStep('proxy', readStepMs(), () => parts.proxy.stop());
-  await runStep('broker', Math.min(STOP_BROKER_MAX_MS, readLeftMs()), () => parts.broker.stop());
+  const proxy = parts.proxy;
 
-  await runStep('egress', readStepMs(), () => {
-    parts.egress.stop();
-  });
+  if (proxy !== undefined) {
+    await runStep('proxy', readStepMs(), () => proxy.stop());
+  }
+
+  const broker = parts.broker;
+
+  if (broker !== undefined) {
+    await runStep('broker', Math.min(STOP_BROKER_MAX_MS, readLeftMs()), () => broker.stop());
+  }
+
+  const egress = parts.egress;
+
+  if (egress !== undefined) {
+    await runStep('egress', readStepMs(), () => {
+      egress.stop();
+    });
+  }
 
   // before the sleep pass, as exec sessions are: a client sees its
   // connection end instead of hanging while its imp sleeps
   const ssh = parts.ssh;
 
-  if (ssh !== null) {
+  if (ssh !== undefined && ssh !== null) {
     await runStep('ssh', readStepMs(), () => ssh.stop());
   }
 
-  await runStep('exec-sessions', readStepMs(), () => {
-    parts.closeExecSessions();
-  });
+  const closeExecSessions = parts.closeExecSessions;
+
+  if (closeExecSessions !== undefined) {
+    await runStep('exec-sessions', readStepMs(), () => {
+      closeExecSessions();
+    });
+  }
 
   const publicMcp = parts.publicMcp;
 
-  if (publicMcp !== null) {
+  if (publicMcp !== undefined && publicMcp !== null) {
     await runStep('public-mcp', readStepMs(), () => publicMcp.stop());
   }
 
-  await runStep('api', readStepMs(), () => parts.api.stop(true));
+  const api = parts.api;
+
+  if (api !== undefined) {
+    await runStep('api', readStepMs(), () => api.stop(true));
+  }
 
   // either way, a wake or boot under way finishes first: one cut short
   // leaves a Firecracker that no record knows
-  const settled = options.sleepImps
-    ? await runStep('sleep', readLeftMs(), () => parts.imps.sleepAllImps())
-    : await runStep('lifecycle', readLeftMs(), () => parts.imps.waitForLifecycle());
+  const imps = parts.imps;
+  const state = { settled: true };
 
-  // a build cut short leaves a Firecracker no record knows
-  await runStep('templates', readStepMs(), () => parts.imps.bootTemplates?.stop());
+  if (imps !== undefined) {
+    state.settled = options.sleepImps
+      ? await runStep('sleep', readLeftMs(), () => imps.sleepAllImps())
+      : await runStep('lifecycle', readLeftMs(), () => imps.waitForLifecycle());
 
-  if (options.sleepImps) {
-    const sleptMs = Math.round(performance.now() - started);
+    // a build cut short leaves a Firecracker no record knows
+    await runStep('templates', readStepMs(), () => imps.bootTemplates?.stop());
 
-    parts.log(`impd: every imp asleep in ${String(sleptMs)}ms`);
+    if (options.sleepImps) {
+      const sleptMs = Math.round(performance.now() - started);
+
+      parts.log(`impd: every imp asleep in ${String(sleptMs)}ms`);
+    }
   }
 
   // a reclaim pass left running would race the next impd's start
-  await runStep('storage', readStepMs(), () => parts.storage.stop());
+  const storage = parts.storage;
+
+  if (storage !== undefined) {
+    await runStep('storage', readStepMs(), () => storage.stop());
+  }
 
   // sends what the sleep pass recorded; its gauges still read the database
   const stopTelemetry = parts.stopTelemetry;
 
-  if (stopTelemetry !== null) {
+  if (stopTelemetry !== undefined && stopTelemetry !== null) {
     await runStep('telemetry', readStepMs(), stopTelemetry);
   }
 
@@ -170,7 +213,7 @@ export async function stopImpd(
   // under it would fail that write. The next start finds its snapshot.
   const db = parts.db;
 
-  if (settled && db !== null) {
+  if (state.settled && db !== undefined && db !== null) {
     await runStep('database', readStepMs(), () => db.destroy());
   }
 

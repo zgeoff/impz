@@ -37,7 +37,7 @@ import { setupSshDir } from './ssh/host-key';
 import { startImpdListeners } from './start-impd-listeners';
 import { startImpdTickers } from './start-impd-tickers';
 import { stopImpd } from './stop-impd';
-import type { ImpdStopOptions, ImpdStopStep } from './stop-impd';
+import type { ImpdStopOptions, ImpdStopParts, ImpdStopStep } from './stop-impd';
 import { createStorageBackend } from './storage/create-storage-backend';
 import { createDataDirs } from './storage/data-layout';
 import { CHANGES_USAGE } from './storage/disk-usage-cache';
@@ -50,19 +50,17 @@ import { loadOrCreateToken } from './token';
 import { checkKsmHost, readKsmHostStats } from './vmm/ksm';
 
 // impd as a host runs it: each of IMPD_STARTUP_STEPS in order, recorded in
-// `startup`. A step that throws first releases what the steps before it
+// `startup`. A step that throws first stops what the steps before it
 // acquired. main.ts loads the config and wires the signals to `stop`.
 export async function createImpd(config: Config, boundaries: Readonly<ImpdBoundaries> = {}) {
-  const rollback = new AsyncDisposableStack();
+  // what the stop takes out of service, filled as each step acquires it
+  const plan: ImpdStopParts = { log: boundaries.log ?? printLog };
 
   try {
-    const impd = await startImpdParts(config, boundaries, rollback);
-
-    rollback.move();
-
-    return impd;
+    return await startImpdParts(config, boundaries, plan);
   } catch (error) {
-    await rollback.disposeAsync();
+    // as a restart in place stops: the VMs keep running
+    await stopImpd(plan, { sleepImps: false });
 
     throw error;
   }
@@ -70,11 +68,11 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
 
 export type Impd = Awaited<ReturnType<typeof createImpd>>;
 
-// every startup step; each release goes on `rollback` once its part runs
+// every startup step; each sets its part on `plan` once it has it
 async function startImpdParts(
   config: Config,
   boundaries: Readonly<ImpdBoundaries>,
-  rollback: AsyncDisposableStack,
+  plan: ImpdStopParts,
 ) {
   const log = boundaries.log ?? printLog;
   const now = boundaries.now ?? Date.now;
@@ -114,9 +112,7 @@ async function startImpdParts(
     startOtlpExport(process.env, packageJson.version),
   );
 
-  if (stopTelemetry !== null) {
-    rollback.defer(stopTelemetry);
-  }
+  plan.stopTelemetry = stopTelemetry;
 
   const systemFiles = await runStep('data-dir', async () => {
     createDataDirs(config.dataDir);
@@ -138,9 +134,7 @@ async function startImpdParts(
     () => boundaries.db ?? openDatabase(join(config.dataDir, 'db', 'imp.sqlite')),
   );
 
-  if (boundaries.db === undefined) {
-    rollback.defer(() => db.destroy());
-  }
+  plan.db = boundaries.db === undefined ? db : null;
 
   // one watch of the taint flag: the imps' hold and storage's reclaim log
   const kernelOops = boundaries.imps?.kernelOops ?? createKernelOopsWatch();
@@ -165,14 +159,12 @@ async function startImpdParts(
     await storage.start(live);
   });
 
-  rollback.defer(() => storage.stop());
+  plan.storage = storage;
 
   const stored = buildImpdStorage(config, deps);
   const diskUsage = stored.diskUsage;
 
-  rollback.defer(() => {
-    diskUsage.stop();
-  });
+  plan.diskUsage = diskUsage;
 
   if (config.build.isolation === 'host') {
     log(HOST_BUILD_WARNING);
@@ -182,15 +174,12 @@ async function startImpdParts(
   // the broker's and the GC's: the GC lists and removes what the broker kept aside
   const secretFiles = createSecretFiles(config.dataDir);
 
-  const firewall = await runStep('firewall', () => createImpdFirewall(config, deps, secretFiles));
+  const firewall = await runStep('firewall', () =>
+    createImpdFirewall(config, deps, secretFiles, plan),
+  );
 
   const broker = firewall.broker;
   const egress = firewall.egress;
-
-  rollback.defer(() => {
-    egress.stop();
-  });
-
   const proxyHolder: { proxy: WakeProxy | null } = { proxy: null };
   const publicRecords = createPublicRecordsLink();
   const dnsTokenSource = config.https?.dns.token ?? null;
@@ -212,6 +201,8 @@ async function startImpdParts(
   const imps = governed.imps;
   const governor = governed.governor;
   const identity = governed.identity;
+
+  plan.imps = imps;
 
   // the syncs a write started, which the stop waits for
   const writeWork = new Set<Promise<unknown>>();
@@ -253,7 +244,7 @@ async function startImpdParts(
     },
   };
 
-  rollback.defer(() => dbWrites.stop());
+  plan.dbWrites = dbWrites;
 
   await runStep('reconcile', () => imps.reconcileImps());
 
@@ -399,6 +390,8 @@ async function startImpdParts(
     ...(deps.keepaliveMs !== undefined && { keepaliveMs: deps.keepaliveMs }),
   });
 
+  plan.closeExecSessions = api.closeExecSessions;
+
   const listeners = await startImpdListeners(
     config,
     deps,
@@ -416,7 +409,7 @@ async function startImpdParts(
       tailnetNames,
       proxyHolder,
     },
-    { runStep, rollback },
+    { runStep, plan },
   );
 
   const idle = createIdleLoop({ config, db, imps, log });
@@ -440,6 +433,8 @@ async function startImpdParts(
       { log, ...(deps.tickerTimer !== undefined && { timer: deps.tickerTimer }) },
     ),
   );
+
+  plan.tickers = tickers;
 
   // a caller's log takes a failed seed too; the image logger by default
   const printSeedFailure = (error: unknown): void => {
@@ -492,27 +487,7 @@ async function startImpdParts(
     // takes impd out of service; the process exits after it. A database
     // the caller passed stays open.
     stop: (options: Readonly<ImpdStopOptions>): Promise<readonly ImpdStopStep[]> =>
-      stopImpd(
-        {
-          dbWrites,
-          diskUsage,
-          tickers,
-          https: listeners.https,
-          proxy: listeners.proxy,
-          broker,
-          egress,
-          ssh: listeners.ssh,
-          closeExecSessions: api.closeExecSessions,
-          publicMcp: listeners.publicMcp,
-          api: { stop: listeners.stopApi },
-          imps,
-          storage,
-          stopTelemetry,
-          db: boundaries.db === undefined ? db : null,
-          log,
-        },
-        options,
-      ),
+      stopImpd(plan, options),
   };
 }
 

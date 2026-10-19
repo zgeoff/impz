@@ -19,6 +19,7 @@ import { startWakeProxy } from './proxy/wake-proxy';
 import type { WakeProxy } from './proxy/wake-proxy';
 import type { AuthorizedKeys } from './ssh/authorized-keys';
 import { startSsh } from './ssh/start-ssh';
+import type { ImpdStopParts } from './stop-impd';
 import type { TailnetNames } from './tailnet-names/tailnet-names';
 
 export interface ImpdListenerParts {
@@ -38,10 +39,10 @@ export interface ImpdListenerParts {
   readonly proxyHolder: { proxy: WakeProxy | null };
 }
 
-// how createImpd runs a step, and where each opened port's release goes
+// how createImpd runs a step, and the stop plan each opened port goes on
 interface ImpdListenerStartup {
   readonly runStep: RunImpdStartupStep;
-  readonly rollback: AsyncDisposableStack;
+  readonly plan: Pick<ImpdStopParts, 'api' | 'publicMcp' | 'proxy' | 'https' | 'ssh'>;
 }
 
 // Every port impd serves, each opened in its own startup step: the API,
@@ -54,7 +55,7 @@ export async function startImpdListeners(
   startup: Readonly<ImpdListenerStartup>,
 ) {
   const runStep = startup.runStep;
-  const rollback = startup.rollback;
+  const plan = startup.plan;
   const log = deps.log ?? printLog;
   const db = deps.db;
 
@@ -85,7 +86,7 @@ export async function startImpdListeners(
     return { app: listening, stop };
   });
 
-  rollback.defer(() => api.stop(true));
+  plan.api = { stop: api.stop };
 
   // off unless the operator names the route's origin
   const publicMcp = runStep('public-mcp', () =>
@@ -97,9 +98,7 @@ export async function startImpdListeners(
         ),
   );
 
-  if (publicMcp !== null) {
-    rollback.defer(() => publicMcp.stop());
-  }
+  plan.publicMcp = publicMcp;
 
   const proxy = await runStep('proxy', async () => {
     const started = startWakeProxy({
@@ -112,8 +111,7 @@ export async function startImpdListeners(
     });
 
     parts.proxyHolder.proxy = started;
-
-    rollback.defer(() => started.stop());
+    plan.proxy = started;
 
     await started.syncListeners();
 
@@ -137,7 +135,8 @@ export async function startImpdListeners(
 
     parts.publicRecords.attach(service);
     service.start();
-    rollback.defer(() => service.stop());
+
+    plan.https = service;
 
     return service;
   });
@@ -149,8 +148,6 @@ export async function startImpdListeners(
 
   const brokerPort = await runStep('broker', async () => {
     const port = await parts.broker.listen(config.brokerPort);
-
-    rollback.defer(() => parts.broker.stop());
 
     getImpdLogger('broker').info("credential broker on :{port} of every imp's gateway", { port });
 
@@ -170,6 +167,8 @@ export async function startImpdListeners(
       now: Date.now,
     }),
   );
+
+  plan.ssh = ssh;
 
   return { app: api.app, stopApi: api.stop, publicMcp, proxy, https, brokerPort, ssh };
 }
