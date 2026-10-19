@@ -21,18 +21,6 @@ export type Classified =
   | { readonly kind: 'transient'; readonly error: string }
   | { readonly kind: 'permanent'; readonly error: string };
 
-// the error of a token endpoint's answer: a string, or an object with a
-// `code` or an `error` string
-const ErrorObjectSchema = z.object({ code: z.string().nullish(), error: z.string().nullish() });
-const ErrorAnswerSchema = z.object({ error: z.union([z.string(), ErrorObjectSchema]) });
-
-const TokenAnswerSchema = z.object({
-  access_token: z.string().nullish(),
-  refresh_token: z.string().nullish(),
-  id_token: z.string().nullish(),
-  expires_in: z.number().nullish(),
-});
-
 export function parseTokenAnswer(status: number, text: string): Classified {
   let body: unknown = null;
 
@@ -59,6 +47,11 @@ export function parseTokenAnswer(status: number, text: string): Classified {
   return readTokens(body);
 }
 
+// the error of a token endpoint's answer: a string, or an object with a
+// `code` or an `error` string
+const ErrorObjectSchema = z.object({ code: z.string().nullish(), error: z.string().nullish() });
+const ErrorAnswerSchema = z.object({ error: z.union([z.string(), ErrorObjectSchema]) });
+
 // a code a log line and an API answer may carry: short and plain
 function readErrorCode(body: unknown): string | null {
   const parsed = ErrorAnswerSchema.safeParse(body);
@@ -72,6 +65,13 @@ function readErrorCode(body: unknown): string | null {
 
   return code !== null && code !== undefined && /^[A-Za-z0-9_.-]{1,64}$/u.test(code) ? code : null;
 }
+
+const TokenAnswerSchema = z.object({
+  access_token: z.string().nullish(),
+  refresh_token: z.string().nullish(),
+  id_token: z.string().nullish(),
+  expires_in: z.number().nullish(),
+});
 
 function readTokens(body: unknown): Classified {
   const parsed = TokenAnswerSchema.safeParse(body);
