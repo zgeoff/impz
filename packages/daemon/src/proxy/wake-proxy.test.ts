@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { startStubCutStream } from '../../testing/network/start-stub-cut-stream';
 import { startStubHeaderEcho } from '../../testing/network/start-stub-header-echo';
 import { startStubSilentOrigin } from '../../testing/network/start-stub-silent-origin';
 import { buildStubClock } from '../../testing/platform/build-stub-clock';
@@ -1052,6 +1053,131 @@ test('it stops the request to the imp when the client goes away', async () => {
       ),
     },
   ]);
+});
+
+// Bun prints a response body's unhandled error to the process's stderr, out
+// of reach of the test runner, so the proxy runs in a child Bun whose stderr
+// the test reads
+test('it logs one impd.proxy line that names the imp, and nothing unhandled, when the imp’s server closes a stream', async () => {
+  const child = Bun.spawn(
+    [process.execPath, join(import.meta.dir, '../../testing/network/run-cut-proxied-stream.ts')],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+
+  onTestFinished(() => {
+    child.kill();
+  });
+
+  const [stdout, stderr] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+
+  expect(stdout).toBe(
+    'WARNING impd.proxy imp=web the upstream closed GET /rpc/records/follow mid-stream: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()\n' +
+      '{"client":"ECONNRESET"}\n',
+  );
+
+  expect(stderr).toBe('');
+}, 30_000);
+
+test('it warns through its logger, naming the imp, when the imp’s server closes a stream', async () => {
+  const ctx = await setupTest();
+
+  const upstream = startStubCutStream(ctx.stack, 'data: first\n\n');
+  const warning = mock();
+
+  const proxy = startWakeProxy({
+    config: ctx.config,
+    db: ctx.db,
+    imps: ctx.impd.imps,
+    log: () => {},
+    logger: { warning },
+    peers: createForwardedPeers(Date.now),
+    ports: { proxy: 0, slot: () => 0 },
+  });
+
+  ctx.stack.defer(() => proxy.stop());
+
+  const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
+
+  // the imp's address is the upstream's
+  await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
+  await proxy.syncListeners();
+
+  const response = await fetch(
+    `http://127.0.0.1:${String(proxy.readImpPort(imp.id))}/rpc/records/follow`,
+  );
+
+  invariant(response.body);
+
+  const reader = response.body.getReader();
+
+  await reader.read();
+
+  upstream.cut();
+
+  await Promise.allSettled([reader.read()]);
+
+  expect(warning).toHaveBeenCalledExactlyOnceWith(
+    'the upstream closed {method} {path} mid-stream: {reason}',
+    {
+      imp: 'web',
+      method: 'GET',
+      path: '/rpc/records/follow',
+      reason: expect.toStartWith('The socket connection was closed unexpectedly.'),
+    },
+  );
+});
+
+test('it keeps serving an imp after the imp’s server closes a stream', async () => {
+  const ctx = await setupTest();
+
+  const upstream = startStubCutStream(ctx.stack, 'data: first\n\n');
+
+  const proxy = startWakeProxy({
+    config: ctx.config,
+    db: ctx.db,
+    imps: ctx.impd.imps,
+    log: () => {},
+    peers: createForwardedPeers(Date.now),
+    ports: { proxy: 0, slot: () => 0 },
+  });
+
+  ctx.stack.defer(() => proxy.stop());
+
+  const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
+
+  // the imp's address is the upstream's
+  await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
+  await proxy.syncListeners();
+
+  const url = `http://127.0.0.1:${String(proxy.readImpPort(imp.id))}/rpc/records/follow`;
+
+  const cutResponse = await fetch(url);
+
+  invariant(cutResponse.body);
+
+  const cutReader = cutResponse.body.getReader();
+
+  await cutReader.read();
+
+  upstream.cut();
+
+  await Promise.allSettled([cutReader.read()]);
+
+  const response = await fetch(url);
+
+  invariant(response.body);
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+
+  // before the servers stop, or their reset of the answer goes unhandled
+  ctx.stack.defer(() => reader.cancel());
+
+  const first = await reader.read();
+
+  expect(first.value).toBe('data: first\n\n');
 });
 
 test('it answers a 502 that names the port when nothing answers on the imp’s HTTP port', async () => {

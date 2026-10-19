@@ -325,9 +325,9 @@ interface FollowContext extends WaitContext {
   readonly restart: { readonly started: boolean };
 }
 
-// A follow never wakes the imp: while it does not run, the follow says so
-// once and waits; once it runs, the streams go on from each service's
-// cursor, so no line comes twice.
+// A follow never wakes the imp: while it does not run, the follow says so,
+// and again when it goes on to sleep or stop, and waits; once it runs, the
+// streams go on from each service's cursor, so no line comes twice.
 async function* readFollowedLogs(
   context: FollowContext,
   name: string,
@@ -338,7 +338,9 @@ async function* readFollowedLogs(
 
   const decoders = createLogDecoders();
   const signal = control.signal;
-  let paused = false;
+
+  // the state the follow last said while the imp did not run
+  let said: ImpRecord['state'] | null = null;
   let failures = 0;
 
   for (;;) {
@@ -359,8 +361,12 @@ async function* readFollowedLogs(
       if (found.vsockPath === null) {
         failures = 0;
 
-        if (!paused) {
-          paused = true;
+        // a wake under way holds the imp running, which the follow has
+        // nothing new to say about
+        const changed = found.imp.state !== said && found.imp.state !== 'running';
+
+        if (said === null || changed) {
+          said = found.imp.state;
           yield { type: 'sleeping', state: found.imp.state };
         }
 
@@ -395,8 +401,8 @@ async function* readFollowedLogs(
       }
     }
 
-    if (paused) {
-      paused = false;
+    if (said !== null) {
+      said = null;
       yield { type: 'awake' };
     }
 
