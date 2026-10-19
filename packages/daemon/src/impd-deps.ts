@@ -157,6 +157,9 @@ export interface ImpdDeps {
   readonly hostKernelRelease?: string;
   readonly readKsmHostStats?: () => KsmHostStats | null;
 
+  // /proc/self/status, whose CapEff shows whether impd holds CAP_SETFCAP
+  readonly readProcStatus?: () => string;
+
   // the timers impd's tickers wait on; the runtime's own by default
   readonly tickerTimer?: TickerTimer;
 

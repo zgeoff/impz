@@ -99,7 +99,7 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
         : boundaries.systemFiles;
 
     // a start-time hint; an image with a file capability still fails its build
-    const setfcapWarning = readSetfcapWarning();
+    const setfcapWarning = readSetfcapWarning(boundaries.readProcStatus?.());
 
     if (setfcapWarning !== null) {
       log(setfcapWarning);

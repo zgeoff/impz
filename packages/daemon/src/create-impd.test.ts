@@ -34,7 +34,7 @@ interface SetupOptions {
   readonly cgroups?: CpuCgroups;
 
   // the progress events of a streamed image call
-  readonly boundaries?: Pick<ImpdBoundaries, 'keepaliveMs' | 'keepaliveRepeat'>;
+  readonly boundaries?: Pick<ImpdBoundaries, 'keepaliveMs' | 'keepaliveRepeat' | 'readProcStatus'>;
 }
 
 function setupTest(options: SetupOptions = {}) {
@@ -106,6 +106,16 @@ test('it says no jailed VM can start on a jailed host without a cpu controller',
 
   expect(ctx.logs).toContain(
     'impd: no cpu controller under /sys/fs/cgroup/imps; no jailed VM can start (IMP_JAILER=false runs them unjailed, with no limits)',
+  );
+});
+
+test('it warns at start that an image with a file capability fails without CAP_SETFCAP', async () => {
+  const ctx = await setupTest({
+    boundaries: { readProcStatus: () => 'CapEff:\t00000000082810fb\n' },
+  });
+
+  expect(ctx.logs).toContain(
+    'impd: warning: no CAP_SETFCAP, so an image add or build fails on an image with a file capability; imp-host needs CAP_SETFCAP (docs/architecture/host.md#privileges)',
   );
 });
 
@@ -543,6 +553,9 @@ test('it logs to stdout when no log is given', async () => {
         guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
         systemDrive: { sha256: 'b'.repeat(64) },
       })} },
+
+      // a CapEff with CAP_SETFCAP, so no capability warning comes first
+      readProcStatus: () => 'CapEff:\\t00000000882810fb\\n',
 
       // the host warnings come before the IPv6 plan; the boot ends there
       resolveIpv6: () => process.exit(0),
