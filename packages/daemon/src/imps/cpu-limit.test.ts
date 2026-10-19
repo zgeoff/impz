@@ -8,7 +8,8 @@ import { hasSnapshot } from '../sleep/snapshot-meta';
 import { buildImpPaths } from '../storage/data-layout';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { createCpuCgroups } from '../vmm/cpu-cgroups';
-import { buildTestApp, createImpTest } from './test-imps';
+import { buildTestApp } from './build-test-app';
+import { createImpTest } from './test-imps';
 import type { ImpTestOptions } from './test-imps';
 
 // impd over the stub VMM with the cgroups and host a test passes, and a

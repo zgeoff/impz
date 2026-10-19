@@ -8,14 +8,7 @@ import invariant from 'tiny-invariant';
 import { listImps } from '../db/imps';
 import { hasSnapshot, readSnapshotMeta } from '../sleep/snapshot-meta';
 import { buildImpPaths } from '../storage/data-layout';
-import { StubVmError } from '../test-utils/build-stub-vmm';
-import {
-  buildTestApp,
-  createImpTest,
-  findBrokenInvariants,
-  waitForOutcome,
-  writeTestSnapshot,
-} from './test-imps';
+import { createImpTest, writeTestSnapshot } from './test-imps';
 
 test('#createImpTest boots imps on the stub VMM', async () => {
   const stack = new AsyncDisposableStack();
@@ -255,79 +248,6 @@ test('#createImpTest finishes the template build of a replaced impd that got pas
   expect(existsSync(harness.dataDir)).toBeFalse();
 });
 
-test('#buildTestApp serves the API over the harness', async () => {
-  const stack = new AsyncDisposableStack();
-
-  onTestFinished(() => stack.disposeAsync());
-
-  const harness = await createImpTest(stack);
-
-  await harness.createTestImage('ubuntu');
-  await harness.imps.createImp({ name: 'dev' });
-
-  const app = buildTestApp(harness, harness);
-
-  const imps = await app.client.imps.list({});
-
-  expect(imps.map((imp) => imp.name)).toStrictEqual(['dev']);
-});
-
-test('#buildTestApp records an unexpected RPC failure in the harness', async () => {
-  const stack = new AsyncDisposableStack();
-
-  onTestFinished(() => stack.disposeAsync());
-
-  const harness = await createImpTest(stack);
-
-  await harness.createTestImage('ubuntu');
-
-  const app = buildTestApp(harness, harness);
-
-  harness.fake.queue('boot', 'fail');
-
-  expect(app.client.imps.create({ name: 'dev' })).rejects.toMatchObject({
-    code: 'INTERNAL_SERVER_ERROR',
-  });
-
-  expect(harness.rpcFailures).toStrictEqual([expect.any(StubVmError)]);
-});
-
-test('#buildTestApp logs an unexpected RPC failure to the harness log', async () => {
-  const stack = new AsyncDisposableStack();
-
-  onTestFinished(() => stack.disposeAsync());
-
-  const harness = await createImpTest(stack);
-
-  await harness.createTestImage('ubuntu');
-
-  const app = buildTestApp(harness, harness);
-
-  harness.fake.queue('boot', 'fail');
-
-  expect(app.client.imps.create({ name: 'dev' })).rejects.toMatchObject({
-    code: 'INTERNAL_SERVER_ERROR',
-  });
-
-  expect(harness.logs).toSatisfyAny(
-    (line: string) =>
-      line.startsWith('impd: rpc failed: ') && line.includes('StubVmError: boot failed: no agent'),
-  );
-});
-
-test('#buildTestApp records no failure the API returns as an expected error', async () => {
-  const stack = new AsyncDisposableStack();
-
-  onTestFinished(() => stack.disposeAsync());
-
-  const harness = await createImpTest(stack);
-
-  const app = buildTestApp(harness, harness);
-
-  expect(app.client.imps.get({ name: 'missing' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
-  expect(harness.rpcFailures).toBeEmpty();
-});
-
 test('#createImpTest moves a frozen clock when the test advances it', async () => {
   const stack = new AsyncDisposableStack();
 
@@ -361,56 +281,6 @@ test('#createImpTest moves a frozen clock by the pauses of a young guest wait', 
   expect(harness.now()).toBe(1_000_200);
 });
 
-test('#findBrokenInvariants finds nothing wrong with a running imp and its VM', async () => {
-  const stack = new AsyncDisposableStack();
-
-  onTestFinished(() => stack.disposeAsync());
-
-  const harness = await createImpTest(stack);
-
-  await harness.createTestImage('ubuntu');
-  await harness.imps.createImp({ name: 'dev' });
-
-  const broken = await findBrokenInvariants(harness, true);
-
-  expect(broken).toStrictEqual([]);
-});
-
-test('#findBrokenInvariants reports a VM that runs for no running imp', async () => {
-  const stack = new AsyncDisposableStack();
-
-  onTestFinished(() => stack.disposeAsync());
-
-  const harness = await createImpTest(stack);
-
-  const pid = harness.fake.spawnOrphan();
-
-  const broken = await findBrokenInvariants(harness, true);
-
-  expect(broken).toStrictEqual([`VM ${String(pid)} runs for no running imp`]);
-});
-
-test('#findBrokenInvariants reports a running imp whose VM died once liveness ran', async () => {
-  const stack = new AsyncDisposableStack();
-
-  onTestFinished(() => stack.disposeAsync());
-
-  const harness = await createImpTest(stack);
-
-  await harness.createTestImage('ubuntu');
-  await harness.imps.createImp({ name: 'dev' });
-
-  const [imp] = await listImps(harness.db);
-
-  invariant(typeof imp?.pid === 'number');
-
-  harness.fake.alive.delete(imp.pid);
-
-  const broken = await findBrokenInvariants(harness, true);
-
-  expect(broken).toStrictEqual(['dev (running): its VM is dead']);
-});
-
 test('#writeTestSnapshot writes the files and the meta a wake loads', async () => {
   const stack = new AsyncDisposableStack();
 
@@ -440,31 +310,4 @@ test('#writeTestSnapshot writes the files and the meta a wake loads', async () =
     memoryMib: 2048,
     ramMib: 300,
   });
-});
-
-test('#waitForOutcome reports done for a promise that resolves', async () => {
-  const outcome = await waitForOutcome(Promise.resolve('fine'), 1000);
-
-  expect(outcome).toBe('done');
-});
-
-test('#waitForOutcome reports failed for a promise that rejects', async () => {
-  const outcome = await waitForOutcome(Promise.reject(new Error('boom')), 1000);
-
-  expect(outcome).toBe('failed');
-});
-
-test('#waitForOutcome reports hung for a promise still pending at its deadline', async () => {
-  const clock = { nowMs: 0 };
-
-  const outcome = await waitForOutcome(new Promise(() => {}), 1000, {
-    now: () => clock.nowMs,
-    wait: (ms) => {
-      clock.nowMs += ms;
-
-      return Promise.resolve();
-    },
-  });
-
-  expect(outcome).toBe('hung');
 });

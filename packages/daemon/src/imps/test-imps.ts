@@ -1,25 +1,16 @@
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
-import type { ImpContract } from '@impz/api';
-import { waitFor } from '@impz/test-utils/wait-for'; // oxlint-disable-line zgeoff/import-zones -- a test harness outside test-utils/; GEO-363 moves it to @impz/daemon/testing
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
 import type { InstallBundle } from '../broker/guest-trust';
 import type { OAuthFetch } from '../broker/oauth-refresher';
 import { createSecretFiles } from '../broker/secret-files';
 import { TunnelRefusedError } from '../broker/tunnel-target';
-import type { AppDeps } from '../build-app';
 import { loadConfig } from '../config';
 import type { Config } from '../config';
 import {
-  buildImpdApp,
   buildImpdEgress,
-  buildImpdServices,
   buildImpdStorage,
   createImpdBroker,
-  createImpdMoves,
   loadImpdAccess,
   startGovernedImps,
   startImpdBuilders,
@@ -27,21 +18,13 @@ import {
 import type { GovernedParts, ImpdDeps } from '../create-impd';
 import { createImage } from '../db/images';
 import type { ImageRecord } from '../db/images';
-import { listImps } from '../db/imps';
 import { openDatabase } from '../db/open-database';
-import type { ImpDatabase } from '../db/open-database';
-import { createDnsToken } from '../https/dns/dns-token';
-import { createPublicRecordsLink } from '../https/public-records-link';
-import { BUILD_KEEPALIVE_MS } from '../images/build-event-stream';
-import type { MoveServiceDeps } from '../moves/move-service';
 import type { Uplinks } from '../net/host-routes';
 import type { Ipv6Plan } from '../net/ipv6-plan';
-import type { TailscaleStatus } from '../net/tailscale-status';
-import { createForwardedPeers } from '../proxy/forwarded-peers';
-import { hasSnapshot, writeSnapshotMeta } from '../sleep/snapshot-meta';
+import { writeSnapshotMeta } from '../sleep/snapshot-meta';
 import type { SnapshotIdentity } from '../sleep/snapshot-meta';
 import type { HostIdentity } from '../sleep/vm-identity';
-import { buildImpPaths, buildSystemDrivePath, buildSystemDrivesDir } from '../storage/data-layout';
+import { buildSystemDrivePath, buildSystemDrivesDir } from '../storage/data-layout';
 import type { ImpPaths } from '../storage/data-layout';
 import type { StorageBackend } from '../storage/storage-backend';
 import { createXfsBackend } from '../storage/xfs-backend';
@@ -51,16 +34,9 @@ import type { CpuCgroups } from '../vmm/cpu-cgroups';
 import type { Jails } from '../vmm/jail';
 import type { KsmHostStats } from '../vmm/ksm';
 import { readThreadIds } from '../vmm/vm-stats';
-import type { ImpService } from './imp-service';
+import { buildTestDeps } from './build-test-deps';
 import { NO_KERNEL_OOPS, createKernelOopsWatch } from './kernel-oops-watch';
-
-export const TEST_TOKEN = 'test-token';
-
-// what system.info reports about the guest kernel and the system drive
-const TEST_SYSTEM_FILES = {
-  guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-  systemDrive: { sha256: 'b'.repeat(64) },
-};
+import { readNoTailscale } from './read-no-tailscale';
 
 // every awake fake VM owns this much, as the governor measures it
 const FAKE_VM_RAM_MIB = 300;
@@ -68,15 +44,6 @@ const FAKE_VM_RSS_MIB = 340;
 
 // the sha256 of the system drive every test impd starts with
 const TEST_DRIVE = 'd1'.repeat(32);
-
-// the freeze a checkpoint or a template asks of the guest; the fake VMs
-// run no agent to ask
-const NO_FREEZER = { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() };
-
-// tailscaled, as on a host that is not on a tailnet
-function readNoTailscale(): Promise<TailscaleStatus> {
-  return Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] });
-}
 
 // what a host with `drive` installed in `dataDir` boots imps with
 function buildTestIdentity(dataDir: string, drive: string): HostIdentity {
@@ -89,36 +56,6 @@ function buildTestIdentity(dataDir: string, drive: string): HostIdentity {
     systemDrivePath: buildSystemDrivePath(dataDir, drive),
     cpuModel: 'Test CPU',
     cpuFlags: 'test-flags',
-  };
-}
-
-// The boundaries a test impd reaches through createImpd's deps: the
-// database, the clock, the log, and what the shim's recorders stand in for
-function buildTestDeps(
-  ctx: Readonly<{
-    db: ImpDatabase;
-    dataDir: string;
-    storage: StorageBackend;
-    systemDrivePath: string;
-    now: () => number;
-    log: (message: string) => void;
-    logRpcFailure: (failure: unknown) => void;
-  }>,
-): ImpdDeps {
-  return {
-    db: ctx.db,
-    rootToken: TEST_TOKEN,
-    storage: ctx.storage,
-    systemFiles: {
-      kernelPath: `${ctx.dataDir}/system/vmlinux`,
-      systemDrivePath: ctx.systemDrivePath,
-      info: TEST_SYSTEM_FILES,
-    },
-    log: ctx.log,
-    logRpcFailure: ctx.logRpcFailure,
-    now: ctx.now,
-    readTailscale: readNoTailscale,
-    freezer: NO_FREEZER,
   };
 }
 
@@ -560,154 +497,6 @@ export async function createImpTest(
 
 export type ImpTest = Awaited<ReturnType<typeof createImpTest>>;
 
-type Impd = ReturnType<ImpTest['restartImpd']>;
-
-type AppParts = Pick<
-  ImpTest,
-  | 'config'
-  | 'db'
-  | 'images'
-  | 'storage'
-  | 'storageGate'
-  | 'diskBudget'
-  | 'now'
-  | 'log'
-  | 'logRpcFailure'
-  | 'broker'
-  | 'tokens'
-  | 'revocations'
-  | 'oauth'
-  | 'egress'
-  | 'readIdentity'
-  | 'readKsmHostStats'
->;
-
-// The HTTP app over `impd` (the harness's or a restarted one), an oRPC client
-// that calls it without a socket, a no-op freeze and thaw, and `openExec` in
-// place of the guest agent, which the fake VMs do not run.
-export function buildTestApp(
-  ctx: Readonly<AppParts>,
-  impd: Readonly<Impd>,
-  token = TEST_TOKEN,
-
-  // a fake agent's streams in place of the VM's
-  agent: Partial<Pick<ImpService, 'openExec' | 'openAttach'>> = {},
-
-  // tailnet identity, off by default
-  tailnet: AppDeps['tailnet'] = null,
-
-  // a move test's fetch to the other host, and its hooks
-  moveOptions: Partial<
-    Pick<
-      MoveServiceDeps,
-      | 'fetch'
-      | 'startPeerDeadline'
-      | 'releaseName'
-      | 'onCommitted'
-      | 'partBytes'
-      | 'readWarmHost'
-      | 'readTapMac'
-    >
-  > = {},
-
-  // the gap between the progress events of a streamed image call
-  buildKeepaliveMs = BUILD_KEEPALIVE_MS,
-) {
-  const identity = ctx.readIdentity();
-
-  const deps = buildTestDeps({
-    db: ctx.db,
-    dataDir: ctx.config.dataDir,
-    storage: ctx.storage,
-    systemDrivePath: identity.systemDrivePath,
-    now: ctx.now,
-    log: ctx.log,
-    logRpcFailure: ctx.logRpcFailure,
-  });
-
-  // the services under the API log nowhere, as before the shim
-  const quiet: ImpdDeps = { ...deps, log: () => {} };
-
-  const storage = {
-    storageGate: ctx.storageGate,
-    diskBudget: ctx.diskBudget,
-    images: ctx.images,
-  };
-
-  const services = buildImpdServices(ctx.config, quiet, {
-    storage,
-    imps: impd.imps,
-    egress: ctx.egress,
-    secretFiles: createSecretFiles(ctx.config.dataDir),
-  });
-
-  const peers = createForwardedPeers(ctx.now);
-
-  const moves = createImpdMoves(
-    ctx.config,
-    quiet,
-    {
-      storage,
-      imps: impd.imps,
-      broker: ctx.broker,
-      egress: ctx.egress,
-      audit: services.audit,
-      readIdentity: ctx.readIdentity,
-    },
-    {
-      readTailnetIp: () => Promise.resolve(null),
-      releaseName: () => Promise.resolve(),
-      onCommitted: () => {},
-      ...moveOptions,
-    },
-  );
-
-  // the DNS API token as main reads it, for system info
-  const dnsTokenSource = ctx.config.https?.dns.token ?? null;
-  const dnsToken = dnsTokenSource === null ? null : createDnsToken(dnsTokenSource, ctx.now);
-
-  const built = buildImpdApp(ctx.config, deps, {
-    storage,
-    access: { tokens: ctx.tokens, revocations: ctx.revocations, oauth: ctx.oauth },
-    services,
-    imps: { ...impd.imps, ...agent },
-    governor: impd.governor,
-    broker: ctx.broker,
-    egress: ctx.egress,
-
-    // every test VM reports this Firecracker, whatever identity a restart took
-    identity: { ...identity, firecrackerVersion: 'v1.17.0' },
-    peers,
-    tailnet,
-    backups: null,
-    moves,
-    publicRecords: createPublicRecordsLink(),
-    checkDnsToken: dnsToken?.check ?? null,
-    readTailscale: readNoTailscale,
-    readTailnetNames: null,
-    isReady: () => true,
-    keepaliveMs: buildKeepaliveMs,
-    ...(ctx.readKsmHostStats !== null && { readKsmHostStats: ctx.readKsmHostStats }),
-  });
-
-  const link = new RPCLink({
-    url: 'http://impd.test/rpc',
-    headers: { authorization: `Bearer ${token}` },
-    fetch: (request) => built.app.handle(request),
-  });
-
-  const client: ContractRouterClient<ImpContract> = createORPCClient(link);
-
-  return {
-    app: built.app,
-    publicMcp: built.publicMcp,
-    closeExecSessions: built.closeExecSessions,
-    client,
-    peers,
-    moves,
-  };
-}
-
 // a memory snapshot as a sleep at `createdAt` by a VM with `identity`
 // leaves it
 export function writeTestSnapshot(
@@ -725,105 +514,4 @@ export function writeTestSnapshot(
     memoryMib: 2048,
     ramMib: FAKE_VM_RAM_MIB,
   });
-}
-
-interface InvariantParts {
-  readonly db: ImpDatabase;
-  readonly dataDir: string;
-  readonly fake: {
-    readonly alive: ReadonlySet<number>;
-    readonly usedSnapshots: ReadonlySet<string>;
-  };
-}
-
-// What is wrong with the records once all work stopped, read raw: a service
-// read repairs a dead VM or a lost snapshot and would hide the bug. Until
-// `livenessRan`, a running record may still name a VM that died.
-export async function findBrokenInvariants(
-  ctx: Readonly<InvariantParts>,
-  livenessRan: boolean,
-): Promise<string[]> {
-  const imps = await listImps(ctx.db);
-
-  const broken: string[] = [];
-
-  const owned = new Set<number>();
-
-  for (const imp of imps) {
-    const where = `${imp.name} (${imp.state})`;
-
-    if (imp.state === 'creating') {
-      broken.push(`${where}: still creating`);
-    }
-
-    // an error record keeps the pid of a VM that would not stop, to retry
-    if (imp.state === 'error' && imp.pid !== null) {
-      owned.add(imp.pid);
-    } else if (imp.state !== 'running' && imp.pid !== null) {
-      broken.push(`${where}: keeps pid ${String(imp.pid)}`);
-    }
-
-    const paths = buildImpPaths(ctx.dataDir, imp.id);
-
-    if (imp.state === 'sleeping' && !hasSnapshot(paths)) {
-      broken.push(`${where}: no snapshot to wake from`);
-    }
-
-    if (imp.state === 'sleeping' && ctx.fake.usedSnapshots.has(paths.snapshotDir)) {
-      broken.push(`${where}: its snapshot was loaded once and no longer matches the disk`);
-    }
-
-    if (imp.state === 'running') {
-      if (imp.pid === null) {
-        broken.push(`${where}: no pid`);
-      } else if (livenessRan && !ctx.fake.alive.has(imp.pid)) {
-        broken.push(`${where}: its VM is dead`);
-      } else if (owned.has(imp.pid)) {
-        broken.push(`${where}: shares pid ${String(imp.pid)}`);
-      } else {
-        owned.add(imp.pid);
-      }
-    }
-  }
-
-  for (const pid of ctx.fake.alive) {
-    if (!owned.has(pid)) {
-      broken.push(`VM ${String(pid)} runs for no running imp`);
-    }
-  }
-
-  return broken;
-}
-
-// 'done' or 'failed' once the promise settles, 'hung' when it is still
-// pending after `ms` of polling its state, read on `clock`
-export async function waitForOutcome(
-  promise: Promise<unknown>,
-  ms: number,
-  clock: Readonly<{ now?: () => number; wait?: (ms: number) => Promise<void> }> = {},
-): Promise<string> {
-  const settled = (async () => {
-    try {
-      await promise;
-
-      return 'done';
-    } catch {
-      return 'failed';
-    }
-  })();
-
-  try {
-    await waitFor(
-      () => {
-        if (Bun.peek.status(settled) === 'pending') {
-          throw new Error('still pending');
-        }
-      },
-      { ...clock, timeoutMs: ms },
-    );
-  } catch {
-    return 'hung';
-  }
-
-  return settled;
 }

@@ -16,8 +16,9 @@ import { startStubAgent } from '../test-utils/start-stub-agent';
 import { startStubInnerAgent } from '../test-utils/start-stub-inner-agent';
 import { startStubSessionAgent } from '../test-utils/start-stub-session-agent';
 import { createJails } from '../vmm/jail';
-import { createImpTest, waitForOutcome } from './test-imps';
+import { createImpTest } from './test-imps';
 import type { ImpTestOptions } from './test-imps';
+import { waitForOutcome } from './wait-for-outcome';
 
 // `installBundle`: the broker's CA install in the guest, which a test fails
 // or holds

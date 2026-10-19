@@ -7,8 +7,9 @@ import { runChecked } from '../process/run-command';
 import { buildImpPaths } from '../storage/data-layout';
 import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
 import { buildStubDiskTools } from '../test-utils/build-stub-disk-tools';
+import { buildTestApp } from './build-test-app';
 import { growFilesystem } from './imp-disk';
-import { buildTestApp, createImpTest } from './test-imps';
+import { createImpTest } from './test-imps';
 
 // impd over the stub VMM, a client of its API, and an empty disk file of
 // its own for the host's grow

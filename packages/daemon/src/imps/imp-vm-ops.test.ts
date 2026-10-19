@@ -12,13 +12,10 @@ import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
 import { StubVmError } from '../test-utils/build-stub-vmm';
 import type { VmOutcome } from '../test-utils/build-stub-vmm';
 import { runWithStack } from '../test-utils/run-with-stack';
-import {
-  buildTestApp,
-  createImpTest,
-  findBrokenInvariants,
-  waitForOutcome,
-  writeTestSnapshot,
-} from './test-imps';
+import { buildTestApp } from './build-test-app';
+import { findBrokenInvariants } from './find-broken-invariants';
+import { createImpTest, writeTestSnapshot } from './test-imps';
+import { waitForOutcome } from './wait-for-outcome';
 
 // Whole-service tests through the oRPC router, with VM steps that fail, die
 // or hang, and impd restarts over the same database and VMs.

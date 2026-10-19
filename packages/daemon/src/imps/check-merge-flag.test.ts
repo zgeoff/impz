@@ -1,7 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readSnapshotMeta } from '../sleep/snapshot-meta';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildTestApp, createImpTest } from './test-imps';
+import { buildTestApp } from './build-test-app';
+import { createImpTest } from './test-imps';
 import type { ImpTestOptions } from './test-imps';
 
 // impd over the stub VMM with the KSM readers a test passes, and a client of
