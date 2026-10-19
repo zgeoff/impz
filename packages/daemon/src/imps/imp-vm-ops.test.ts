@@ -771,7 +771,9 @@ test(
 
                 // impd stopping: every imp to sleep, and no boot after that
                 .with({ kind: 'sigterm' }, () => ctx.imps.sleepAllImps())
-                .with({ kind: 'tick' }, () => ctx.advance(40_000))
+                .with({ kind: 'tick' }, () => {
+                  ctx.advance(40_000);
+                })
                 .exhaustive();
             };
 
