@@ -11,10 +11,19 @@ export interface ServerCheck {
   readonly compatible: boolean;
 }
 
+export interface CheckServerOptions {
+  // ends the system.info call, such as on a connection that never answers
+  readonly signal?: Readonly<AbortSignal>;
+}
+
 export async function checkServer(
   rpc: Readonly<ContractRouterClient<ImpContract>>,
+  options: Readonly<CheckServerOptions> = {},
 ): Promise<ServerCheck> {
-  const info = await rpc.system.info();
+  const signal = options.signal;
+  const callOptions = signal === undefined ? {} : { signal };
+
+  const info = await rpc.system.info(undefined, callOptions);
 
   return {
     clientVersion: CLIENT_VERSION,

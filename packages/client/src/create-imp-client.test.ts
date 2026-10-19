@@ -466,6 +466,28 @@ test('#checkServer reports both versions and that they are compatible', async ()
   });
 });
 
+test('#checkServer rejects at the abort of its signal when impd never answers', async () => {
+  const ctx = await setupTest();
+
+  // a half-open connection: impd takes the call and never answers it
+  const answer = mock(() => Promise.withResolvers<Response>().promise);
+
+  server.use(http.post('http://impd.test/rpc/system/info', answer));
+
+  const stopped = new AbortController();
+  const reason = new Error('gave up');
+
+  const check = ctx.client.checkServer({ signal: stopped.signal });
+
+  await waitFor(() => {
+    expect(answer).toHaveBeenCalledOnce();
+  });
+
+  stopped.abort(reason);
+
+  expect(check).rejects.toBe(reason);
+});
+
 test('#images.addStream hands on each progress event, then the image', async () => {
   const ctx = await setupTest();
 

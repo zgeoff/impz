@@ -17,7 +17,7 @@ export async function runReadmeExample(): Promise<Imp> {
     throw new Error(`needs ${String(createError.data.requestedMib)} MiB`);
   }
 
-  const check = await imp.checkServer();
+  const check = await imp.checkServer({ signal: AbortSignal.timeout(5000) });
   const result = await imp.run('dev', ['uname', '-a'], { stdin: 'hi' });
   const shell = await imp.openConsole('dev', { cols: 80, rows: 24 });
 
