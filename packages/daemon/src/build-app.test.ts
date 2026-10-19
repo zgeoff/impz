@@ -205,18 +205,6 @@ test('it answers a conflict that is not a move without Retry-After', async () =>
   expect(response.headers.get('retry-after')).toBeNull();
 });
 
-test('it answers /health without a token, not ready before the default image is seeded', async () => {
-  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
-
-  // as before the default image's seed ends, which the harness waits for
-  ctx.impd.state.ready = false;
-
-  const response = await ctx.impd.api.app.handle(new Request('http://impd.test/health'));
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({ status: 'ok', ready: false, warnings: [] });
-});
-
 test('it answers /health with the reboot a kernel oops needs', async () => {
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
 
@@ -264,11 +252,9 @@ test('it serves the reboot a kernel oops needs in system.info', async () => {
 });
 
 test('it answers /health as ready once impd marks itself ready', async () => {
+  // its startup marks it once the default image is seeded, which the
+  // harness waits for
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
-
-  // as main.ts marks it once the default image is seeded
-  ctx.impd.state.ready = true;
-
   const response = await ctx.impd.api.app.handle(new Request('http://impd.test/health'));
   const body: unknown = await response.json();
 

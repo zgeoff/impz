@@ -5,10 +5,12 @@ import { join } from 'node:path';
 import { IMAGE_BUILD_STREAM_TYPE } from '@impz/api';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
+import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildStubRepeat } from '../../mcp/src/test-utils/build-stub-repeat';
 import { buildMockNewImage } from '../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../testing/imps/build-mock-new-imp';
+import { createStubDockerCli } from '../testing/imps/create-stub-docker-cli';
 import { buildStubTickerTimer } from '../testing/platform/build-stub-ticker-timer';
 import { findFreePorts } from '../testing/platform/find-free-ports';
 import { startTestImpd } from '../testing/start-test-impd';
@@ -315,6 +317,144 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
   );
 
   expect(acquired.lease.until?.getTime()).toBeWithin(startedMs + 30_000, Date.now() + 30_001);
+});
+
+// The harness waits for the default image's seed, so this boot is
+// createImpd's own, with a seed whose pull holds.
+test('it answers /health without a token, not ready before the default image is seeded', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const dataDir = await mkdtemp(join(tmpdir(), 'create-impd-'));
+
+  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
+
+  // docker on the host, where a first start pulls the seed; the pull holds
+  // until the stub's dir goes
+  const dockerDir = await mkdtemp(join(tmpdir(), 'create-impd-docker-'));
+
+  const docker = createStubDockerCli({
+    dir: dockerDir,
+    images: [
+      {
+        refs: ['seed.test/ubuntu:24.04'],
+        inspects: [{ Id: `sha256:${'c'.repeat(64)}` }],
+        isOnHost: false,
+        pull: 'hang',
+      },
+    ],
+  });
+
+  updateEnv('PATH', docker.path);
+
+  const db = await openDatabase(':memory:');
+
+  stack.defer(() => db.destroy());
+
+  // no jailer, no boot template, no SSH; the API, the broker and the
+  // resolver each take a free port below the imps' port range
+  const ports = findFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+
+  const config = {
+    ...loadConfig({
+      IMP_DATA_DIR: dataDir,
+      IMP_JAILER: 'false',
+      IMP_BOOT_TEMPLATES: 'false',
+      IMP_BUILD_ISOLATION: 'host',
+      IMP_SSH_PORT: '0',
+      IMP_API_PORT: String(ports.take()),
+      IMP_BROKER_PORT: String(ports.take()),
+      IMP_EGRESS_DNS_PORT: String(ports.take()),
+    }),
+    defaultDiskBytes: 0,
+  };
+
+  // the system drive impd boots imps with, as setupSystemFiles installs it
+  const drive = 'd1'.repeat(32);
+  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
+
+  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
+  await writeFile(systemDrivePath, drive);
+
+  const vmm = buildStubVmm();
+
+  const impd = await createImpd(config, {
+    db,
+    rootToken: TEST_TOKEN,
+    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+    systemFiles: {
+      kernelPath: join(dataDir, 'system', 'vmlinux'),
+      systemDrivePath,
+      info: {
+        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
+        systemDrive: { sha256: drive },
+      },
+    },
+    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
+    log: () => {},
+    readIdentity: (files, ipv6Prefix) => ({
+      firecrackerVersion: 'v1.17.0',
+      snapshotVersion: 'v12.0.0',
+      hostKernel: 'test',
+      guestKernel: files.info.guestKernel.sha256,
+      systemDrive: files.info.systemDrive.sha256,
+      systemDrivePath: files.systemDrivePath,
+      cpuModel: 'Test CPU',
+      cpuFlags: 'test-flags',
+      ipv6Prefix,
+    }),
+    resolveIpv6: () => Promise.resolve(null),
+    readTailscale: () =>
+      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
+    cgroups: buildStubCpuCgroups().cgroups,
+    vms: vmm.startGeneration(),
+    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
+    broker: {
+      installBundle: () => Promise.resolve(),
+      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
+      runOAuthTimer: false,
+    },
+    egress: {
+      runNft: () => Promise.resolve(),
+      flushConnections: () => Promise.resolve(),
+      flushPair: () => Promise.resolve(),
+      readForwardRules: () => Promise.resolve(''),
+      forward: () => Promise.reject(new Error('no upstream in tests')),
+      resolveExact: () => Promise.resolve([]),
+      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
+      readConnected6: () => Promise.resolve([]),
+      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
+    },
+    imps: {
+      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
+      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
+      growFilesystem: () => Promise.resolve(false),
+      hostCpus: 8,
+    },
+    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
+
+    // no ticker runs on its own, and the wake proxy takes any free port
+    tickerTimer: buildStubTickerTimer().timer,
+    proxyPorts: { proxy: 0, slot: () => 0 },
+    images: { seedRef: 'seed.test/ubuntu:24.04' },
+  });
+
+  stack.defer(async () => {
+    await impd.stop({ sleepImps: false });
+  });
+
+  // the held pull ends first, so the seed fails before impd stops
+  stack.defer(() => rm(dockerDir, { recursive: true, force: true }));
+
+  await waitFor(() => {
+    expect(docker.readCalls()).toContainEqual(expect.toStartWith('pull'));
+  });
+
+  const response = await impd.api.app.handle(new Request('http://impd.test/health'));
+  const body: unknown = await response.json();
+
+  expect(body).toStrictEqual({ status: 'ok', ready: false, warnings: [] });
 });
 
 test('it sends a streamed build its progress at the keepalive gap it is given', async () => {
