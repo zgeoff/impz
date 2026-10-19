@@ -231,6 +231,7 @@ test('it serves system.info from config and the database', async () => {
     firecrackerVersion: 'v1.17.0',
     guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
     systemDrive: { sha256: 'd1'.repeat(32) },
+    guest: { scratchDir: '/tmp', isClearedOnBoot: false },
     tailscale: { enabled: false, state: null, hostname: null, ip: null, names: null },
 
     // the stub cgroup tree has a cpu controller
@@ -263,6 +264,7 @@ test('it serves system.info from config and the database', async () => {
       grantFilters: true,
       readOnlyFiles: true,
       execDropSysAdmin: true,
+      guestScratch: true,
     },
     ksm: null,
   });

@@ -18,6 +18,7 @@ test('it accepts the system info of a host with every part turned on', () => {
     firecrackerVersion: '1.12.0',
     guestKernel: { version: '6.1.102', sha256: 'abc123' },
     systemDrive: { sha256: 'def456' },
+    guest: { scratchDir: '/var/scratch', isClearedOnBoot: true },
     storage: {
       backend: 'xfs',
       usedBytes: 1_000_000,
@@ -82,6 +83,7 @@ test('it accepts the system info of a host with every part turned on', () => {
       grantFilters: true,
       readOnlyFiles: true,
       execDropSysAdmin: true,
+      guestScratch: true,
     },
   } as const;
 
@@ -171,6 +173,45 @@ test('it accepts a null ksm, public and https', () => {
   const result = SystemInfoSchema.safeParse(payload);
 
   expect(result.data).toStrictEqual(payload);
+});
+
+test('it rejects a guest without its boot guarantee', () => {
+  const result = SystemInfoSchema.safeParse({
+    version: '0.40.0',
+    ramBudgetMib: 8192,
+    ramUsedMib: 2048,
+    ramReservedMib: 256,
+    ramCommittedMib: 3072,
+    awakeCount: 2,
+    impCount: 5,
+    sessionCount: 3,
+    bootStatus: {
+      coldBoots: 1,
+      outdated: { firecracker: 0, kernel: 1, agent: 0 },
+    },
+    firecrackerVersion: '1.12.0',
+    guestKernel: { version: '6.1.102', sha256: 'abc123' },
+    systemDrive: { sha256: 'def456' },
+    guest: { scratchDir: '/var/scratch' },
+    storage: {
+      backend: 'xfs',
+      usedBytes: 1_000_000,
+      availableBytes: 9_000_000,
+      reserveBytes: 500_000,
+      pendingBytes: 0,
+      isLow: false,
+      impDiskBytes: 20_000_000,
+    },
+    tailscale: {
+      enabled: false,
+      state: null,
+      hostname: null,
+      ip: null,
+      names: null,
+    },
+  });
+
+  expect(result.error?.issues).toPartiallyContain({ path: ['guest', 'isClearedOnBoot'] });
 });
 
 test('it rejects a negative RAM budget', () => {

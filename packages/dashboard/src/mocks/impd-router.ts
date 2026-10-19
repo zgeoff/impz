@@ -496,6 +496,7 @@ async function readSystemInfo(): Promise<SystemInfo> {
     firecrackerVersion: host.firecrackerVersion,
     guestKernel: host.guestKernel,
     systemDrive: host.systemDrive,
+    guest: { scratchDir: '/tmp', isClearedOnBoot: false },
     storage: {
       backend: host.backend,
       ...host.disk,

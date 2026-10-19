@@ -7,6 +7,7 @@ type MergedKey =
   | 'bootStatus'
   | 'guestKernel'
   | 'systemDrive'
+  | 'guest'
   | 'storage'
   | 'tailscale'
   | 'cpu'
@@ -37,6 +38,8 @@ export function buildMockSystemInfo(overrides: SystemInfoOverrides = {}): System
   const systemDrive: SystemInfo['systemDrive'] = {
     sha256: faker.string.hexadecimal({ length: 64, casing: 'lower', prefix: '' }),
   };
+
+  const guest: NonNullable<SystemInfo['guest']> = { scratchDir: '/tmp', isClearedOnBoot: false };
 
   const storage: SystemInfo['storage'] = {
     backend: 'xfs',
@@ -83,6 +86,7 @@ export function buildMockSystemInfo(overrides: SystemInfoOverrides = {}): System
     firecrackerVersion: `v${faker.system.semver()}`,
     guestKernel,
     systemDrive,
+    guest,
     storage,
     tailscale,
     ksm: null,
@@ -100,6 +104,7 @@ export function buildMockSystemInfo(overrides: SystemInfoOverrides = {}): System
     bootStatus: { ...bootStatus, ...overrides.bootStatus },
     guestKernel: { ...guestKernel, ...overrides.guestKernel },
     systemDrive: { ...systemDrive, ...overrides.systemDrive },
+    guest: { ...guest, ...overrides.guest },
     storage: { ...storage, ...overrides.storage },
     tailscale: { ...tailscale, ...overrides.tailscale },
     cpu: { ...cpu, ...overrides.cpu },
