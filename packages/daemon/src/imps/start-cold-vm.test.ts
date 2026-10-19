@@ -5,9 +5,8 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import invariant from 'tiny-invariant';
 import { buildStubDiskTools } from '../../testing/imps/build-stub-disk-tools';
-import { buildTestApp } from '../../testing/imps/build-test-app';
 import { findBrokenInvariants } from '../../testing/imps/find-broken-invariants';
-import { createImpTest } from '../../testing/start-test-impd';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
 import { findImpByName } from '../db/imps';
 import { buildTemplateKey } from '../templates/boot-templates';
@@ -34,7 +33,7 @@ async function setupTest(
   // the host's clone and filesystem grow, which a test fails or holds
   const disk = buildStubDiskTools();
 
-  const harness = await createImpTest(stack, {
+  const harness = await startTestImpd(stack, {
     ...(isJailed && { cgroups: cgroups.cgroups }),
     env: {
       IMP_BOOT_TEMPLATES: 'true',
@@ -51,7 +50,8 @@ async function setupTest(
 
   invariant(templates, 'IMP_BOOT_TEMPLATES is on, but impd has no templates');
 
-  return { ...harness, client: buildTestApp(harness, harness).client, templates, disk, stack };
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, { templates, disk, stack });
 }
 
 test('it boots the kernel for the first boot of a shape and builds no template', async () => {
