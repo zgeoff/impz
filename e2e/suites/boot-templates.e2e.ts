@@ -390,6 +390,7 @@ test('it times impz new from a template: the wall time and its spans', async () 
     grow: 10,
     network: 10,
     inner: 10,
+    root: 10,
     services: 10,
     ready: 10,
   });

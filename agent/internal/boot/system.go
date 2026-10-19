@@ -121,8 +121,9 @@ func Run() error {
 	// with the container down, the image config stays at its defaults
 	// until it starts
 	mgr.Launch()
-	prepareRoot(root, params, image)
 	steps.mark("inner")
+	prepareRoot(root, params, image)
+	steps.mark("root")
 	identityReset := ""
 	if params.ResetIdentity {
 		identityReset = resetIdentity(mgr, root, image.Get().Env)
