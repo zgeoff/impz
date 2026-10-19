@@ -16,7 +16,6 @@ interface CreateLiveLogDeps {
 // how often an imp at its cap of live logs says so
 const CAP_NOTICE_MS = 60_000;
 
-// the createLiveLog of createSessionLogs
 export function makeCreateLiveLog(
   ctx: SessionLogState,
   deps: CreateLiveLogDeps,

@@ -9,7 +9,6 @@ interface ImpLimitDeps {
   readonly log: (message: string) => void;
 }
 
-// the applyImpLimit of createSessionLogs
 export function makeApplyImpLimit(
   ctx: SessionLogState,
   deps: ImpLimitDeps,
