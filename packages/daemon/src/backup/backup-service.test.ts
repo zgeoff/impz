@@ -24,7 +24,7 @@ import { buildMockBackupConfig } from '../test-utils/build-mock-backup-config';
 import { buildMockNewCheckpoint } from '../test-utils/build-mock-new-checkpoint';
 import { buildStubRestic } from '../test-utils/build-stub-restic';
 import { BackupManifestSchema } from './backup-manifest';
-import { buildBackupsOffError, buildDigestTag, createBackupService } from './backup-service';
+import { buildBackupsOffError, createBackupService } from './backup-service';
 import type { BackupServiceDeps } from './backup-service';
 import { ResticError } from './restic';
 
@@ -692,13 +692,6 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
   expect(spare).toMatchObject({ source: 'imp', sourceImp: 'dev' });
   expect(copy.isIdentityResetPending).toBeTrue();
   expect(readFileSync(buildImpPaths(fresh.dataDir, copy.id).disk, 'utf8')).toBe('now');
-});
-
-test.each([
-  ['sha256:9f2c1a0b77', '9f2c1a0b'],
-  ['imp-0199a3b4-5c6d-7e8f-9a0b-1c2d3e4f5a6b', '3e4f5a6b'],
-])('#buildDigestTag tags %s as %s', (digest, tag) => {
-  expect(buildDigestTag(digest)).toBe(tag);
 });
 
 test('#buildBackupsOffError tells the caller to set a repository', () => {

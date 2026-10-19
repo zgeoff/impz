@@ -1,10 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { MoveState } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { findImageByName } from '../db/images';
-import { findImpByName, updateImpExposure, updateImpMove } from '../db/imps';
+import type { ImpWrite } from '../db/imp-write-feed';
+import { findImpByName, listImps, updateImpExposure, updateImpMove } from '../db/imps';
 import { TEST_TOKEN, buildTestApp } from '../imps/test-imps';
 import { buildMockMoveTicketRow } from '../test-utils/build-mock-move-ticket-row';
 import { buildStubClock } from '../test-utils/build-stub-clock';
@@ -25,6 +27,7 @@ import {
   readReceipt,
   readTicketHeader,
 } from './move-tickets';
+import { MOVE_TRANSITIONS } from './move-transitions';
 import {
   SOURCE_PEER,
   TARGET_URL,
@@ -1711,20 +1714,8 @@ test('it refuses a stream that does not start with its header', async () => {
   expect(staged).toBeUndefined();
 });
 
-test('it refuses a stream whose header names another imp than its ticket', async () => {
-  const ctx = await setupTest({
-    hook: buildStubMoveStreamRewrite((frames) =>
-      frames.map((frame) => {
-        if (frame.type !== MOVE_FRAMES.header) {
-          return frame;
-        }
-
-        const header = MoveHeaderSchema.parse(readJsonPayload(frame.payload));
-
-        return buildJsonMoveFrame(frame.type, { ...header, imp: { ...header.imp, name: 'other' } });
-      }),
-    ),
-  });
+test("it takes a stream whose header names its ticket's imp", async () => {
+  const ctx = await setupTest({ hook: buildStubMoveStreamRewrite((frames) => frames) });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1734,8 +1725,46 @@ test('it refuses a stream whose header names another imp than its ticket', async
 
   const status = await ctx.runMove('dev');
 
-  expect(status.error).toContain('the ticket is for dev, not other');
+  expect(status.error).toBeNull();
 });
+
+// the target's answer comes back trimmed
+test.each([
+  ['a different name', 'other', 'not other'],
+  ['a case variant', 'Dev', 'not Dev'],
+  ['an empty name', '', 'not'],
+  ['a name with whitespace', 'dev ', 'not dev'],
+  ['a unicode look-alike', 'd\u0435v', 'not d\u0435v'],
+])(
+  "it refuses a stream whose header names %s for its ticket's imp",
+  async (_kind, name, refusal) => {
+    const ctx = await setupTest({
+      hook: buildStubMoveStreamRewrite((frames) =>
+        frames.map((frame) => {
+          if (frame.type !== MOVE_FRAMES.header) {
+            return frame;
+          }
+
+          const header = MoveHeaderSchema.parse(readJsonPayload(frame.payload));
+
+          return buildJsonMoveFrame(frame.type, { ...header, imp: { ...header.imp, name } });
+        }),
+      ),
+    });
+
+    await createUbuntuImage(ctx.source);
+    await createUbuntuImage(ctx.target);
+
+    await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+    await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+    const status = await ctx.runMove('dev');
+    const staged = await listImps(ctx.target.db);
+
+    expect(status.error).toBe(`receive: the target answered 403 the ticket is for dev, ${refusal}`);
+    expect(staged).toStrictEqual([]);
+  },
+);
 
 test('it refuses a stream for an imp id the target has', async () => {
   const taken = { id: '' };
@@ -2305,5 +2334,60 @@ test('it moves an imp from an XFS host to a ZFS host as files, its checkpoints a
 
   expect(targetZfs.readPool().listSnapshots()).toContain(
     `tank/imp/disks/${created.id}@${checkpoints[0].id}`,
+  );
+});
+
+test('it writes each move mark MOVE_TRANSITIONS holds, and no other, on both hosts', async () => {
+  const ctx = await setupTest({ hook: buildStubDroppedCommit() });
+
+  // each imp's last mark on each host, and every change a write made to it
+  const marks = new Map<string, MoveState | null>();
+
+  const written: (readonly [MoveState | null, MoveState | null])[] = [];
+
+  const makeRecorder =
+    (host: string) =>
+    (write: ImpWrite): void => {
+      if (write.kind === 'added' || write.kind === 'changed') {
+        const key = `${host}/${write.imp.id}`;
+        const from = marks.get(key) ?? null;
+
+        if (from !== write.imp.moveState) {
+          written.push([from, write.imp.moveState]);
+        }
+
+        marks.set(key, write.imp.moveState);
+      }
+    };
+
+  const stopSource = ctx.source.db.writes.subscribe(makeRecorder('source'));
+  const stopTarget = ctx.target.db.writes.subscribe(makeRecorder('target'));
+
+  onTestFinished(() => {
+    stopSource();
+    stopTarget();
+  });
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  // an abort before the stream
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+  await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
+  await ctx.sourceApp.client.moves.abort({ name: 'dev' });
+
+  // a stream to its receipt, a dropped commit, then an abort
+  await ctx.runMove('dev');
+  await ctx.sourceApp.client.moves.abort({ name: 'dev' });
+
+  // a whole move
+  await ctx.sourceApp.client.imps.create({ name: 'web', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'web' });
+  await ctx.runMove('web');
+
+  // every mark these moves write is in the table, and each the table holds is written
+  expect(new Set(written.map(([from, to]) => `${String(from)} → ${String(to)}`))).toStrictEqual(
+    new Set(MOVE_TRANSITIONS.map(([from, to]) => `${String(from)} → ${String(to)}`)),
   );
 });
