@@ -18,11 +18,11 @@ export interface OpeningTap {
 }
 
 // a live log's tap, or its opening's marker while one is on its way
-export type TapSlot = Readonly<ExecStream> | OpeningTap;
+type TapSlot = Readonly<ExecStream> | OpeningTap;
 
 // what impd holds of the session logs while it runs; the files on disk are
 // generation-log.ts's
-export interface SessionLogContext {
+interface SessionLogContext {
   readonly live: ReadonlyMap<string, LiveLog>;
   readonly taps: ReadonlyMap<string, TapSlot>;
 
@@ -154,7 +154,7 @@ interface BytesClearEvent {
   readonly impId: string;
 }
 
-export type SessionLogEvent =
+type SessionLogEvent =
   | ImpRecoverEvent
   | ImpForgetEvent
   | ImpAdmitEvent
@@ -174,7 +174,7 @@ export type SessionLogEvent =
 
 // what the machine tells its owner: the imp refused a log for its cap, and
 // has not said so in the last CAP_NOTICE_MS
-export interface CapNoticeEvent {
+interface CapNoticeEvent {
   readonly type: 'cap.notice';
   readonly impId: string;
 }
