@@ -1,7 +1,7 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import type { Imp } from '@impz/api';
 import { EVENT_VERSION } from '@impz/api';
-import { buildStubClock } from '@impz/daemon/testing';
+import { buildStubClock } from '@impz/daemon/testing/build-stub-clock';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { buildMockImp } from '../test-utils/build-mock-imp';
 import { buildMockImpChangedEvent } from '../test-utils/build-mock-imp-changed-event';
