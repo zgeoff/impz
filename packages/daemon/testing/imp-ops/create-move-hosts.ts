@@ -163,14 +163,19 @@ export async function createMoveHosts(
     return waitForMove(name);
   };
 
-  // the names of the moves the target committed, in order
+  // the names of the moves the target committed, in order; a commit marks
+  // every ticket of its imp, a reissued one too, so it counts once
   const readCommits = async (): Promise<string[]> => {
     const tickets = await listMoveTickets(target.db);
 
-    return tickets
-      .filter((ticket) => ticket.committed_at !== null)
-      .toSorted((first, second) => (first.committed_at ?? 0) - (second.committed_at ?? 0))
-      .map((ticket) => ticket.name);
+    const commits = new Map(
+      tickets
+        .filter((ticket) => ticket.committed_at !== null)
+        .toSorted((first, second) => (first.committed_at ?? 0) - (second.committed_at ?? 0))
+        .map((ticket) => [`${ticket.imp_id ?? ''} ${String(ticket.committed_at)}`, ticket.name]),
+    );
+
+    return [...commits.values()];
   };
 
   return {

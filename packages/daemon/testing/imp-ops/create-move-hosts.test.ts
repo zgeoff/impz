@@ -4,6 +4,7 @@ import { findImageByName } from '../../src/db/images';
 import { MOVE_PATHS } from '../../src/moves/move-header';
 import { buildImagePaths } from '../../src/storage/data-layout';
 import { buildStubZfsStorage } from '../vm/build-stub-zfs-storage';
+import { buildStubDroppedCommit } from './build-stub-dropped-commit';
 import {
   TARGET_URL,
   createMoveHosts,
@@ -26,6 +27,25 @@ test('#setupMoveHosts moves a stopped imp from the source to the target', async 
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(moved.state).toBe('stopped');
+
+  const commits = await hosts.readCommits();
+
+  expect(commits).toStrictEqual(['dev']);
+});
+
+test('#setupMoveHosts reads a commit on a reissued ticket as one commit', async () => {
+  const hosts = await setupMoveHosts({ hook: buildStubDroppedCommit() });
+
+  await createUbuntuImage(hosts.source);
+  await createUbuntuImage(hosts.target);
+
+  await hosts.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await hosts.sourceApp.client.imps.stop({ name: 'dev' });
+  await hosts.runMove('dev');
+
+  const ticket = await hosts.targetApp.client.moves.reissue({ name: 'dev' });
+
+  await hosts.sourceApp.client.moves.resume({ name: 'dev', ticket: ticket.ticket });
 
   const commits = await hosts.readCommits();
 

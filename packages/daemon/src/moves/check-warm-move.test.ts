@@ -777,7 +777,7 @@ test('it commits a verified warm move warm when the source restarts', async () =
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
   await ctx.runMove('dev');
-  await ctx.sourceApp.moves.recover();
+  await ctx.source.moves.recover();
 
   await waitFor(async () => {
     const gone = await findImpByName(ctx.source.db, 'dev');

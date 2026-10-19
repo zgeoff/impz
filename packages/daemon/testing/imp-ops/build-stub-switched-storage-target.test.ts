@@ -21,7 +21,7 @@ test('it names the given storage in the real target offer reply', async () => {
 
   const response = await buildStubSwitchedStorageTarget('zfs')(
     request,
-    (replacement) => ctx.targetApp.moves.handle(replacement ?? request, SOURCE_PEER),
+    (replacement) => ctx.target.moves.handle(replacement ?? request, SOURCE_PEER),
     ctx,
   );
 
@@ -51,7 +51,7 @@ test('it passes the answer of another route through unchanged', async () => {
 
   const response = await buildStubSwitchedStorageTarget('xfs')(
     request,
-    (replacement) => ctx.targetApp.moves.handle(replacement ?? request, SOURCE_PEER),
+    (replacement) => ctx.target.moves.handle(replacement ?? request, SOURCE_PEER),
     ctx,
   );
 

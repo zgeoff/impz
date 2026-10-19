@@ -21,7 +21,7 @@ test('it leaves the named field out of the real target offer reply', async () =>
 
   const response = await buildStubOlderMoveTarget('keepsMaxMemory')(
     request,
-    (replacement) => ctx.targetApp.moves.handle(replacement ?? request, SOURCE_PEER),
+    (replacement) => ctx.target.moves.handle(replacement ?? request, SOURCE_PEER),
     ctx,
   );
 
@@ -50,7 +50,7 @@ test('it passes the answer of another route through unchanged', async () => {
 
   const response = await buildStubOlderMoveTarget('keepsLeases')(
     request,
-    (replacement) => ctx.targetApp.moves.handle(replacement ?? request, SOURCE_PEER),
+    (replacement) => ctx.target.moves.handle(replacement ?? request, SOURCE_PEER),
     ctx,
   );
 

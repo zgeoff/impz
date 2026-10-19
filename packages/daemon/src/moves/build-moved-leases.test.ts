@@ -665,8 +665,8 @@ test("it removes a staged imp's leases with it when the target restarts before t
 
   // a crash before the receipt: the stream counts as cut short
   await ctx.target.db.updateTable('move_tickets').set({ receipt: null }).execute();
-  await ctx.targetApp.moves.recover();
-  await ctx.targetApp.moves.waitForRecovery();
+  await ctx.target.moves.recover();
+  await ctx.target.moves.waitForRecovery();
 
   const gone = await findImpByName(ctx.target.db, 'dev');
   const left = await ctx.target.db.selectFrom('imp_leases').selectAll().execute();
@@ -705,8 +705,8 @@ test('it keeps the leases of a committed imp when the target restarts', async ()
   await writeLease(ctx.source.db, hold, { at: sourceNow, reason: null });
 
   await ctx.runMove('dev');
-  await ctx.targetApp.moves.recover();
-  await ctx.targetApp.moves.waitForRecovery();
+  await ctx.target.moves.recover();
+  await ctx.target.moves.waitForRecovery();
 
   const leases = await listLeases(ctx.target.db, ctx.target.now(), [created.id]);
 
