@@ -16,7 +16,7 @@ import {
   updateImpActivity,
   updateImpDisk,
 } from '../db/imps';
-import type { ImpStateChange } from '../db/imps';
+import type { ImpStateChange } from '../db/update-imp-state';
 import { shrinkGuest } from '../memory/shrink-guest';
 import { createSemaphore } from '../process/semaphore';
 import { readErrorMessage } from '../read-error-message';

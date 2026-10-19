@@ -1,23 +1,12 @@
-import { PublicAuthSchema } from '@impz/api';
-import type {
-  ColdBootCause,
-  EgressPolicy,
-  ImpChangeReason,
-  ImpEventDetail,
-  ImpKind,
-  ImpState,
-  MoveState,
-  PublicAuth,
-} from '@impz/api';
+import type { EgressPolicy, ImpKind, ImpState, MoveState, PublicAuth } from '@impz/api';
 import { sql } from 'kysely';
-import type { Selectable, Updateable } from 'kysely';
 import { requireTransition } from '../imps/imp-transitions';
 import { readErrorMessage } from '../read-error-message';
+import { allocateSlot } from './allocate-slot';
 import { ImpClashError } from './imp-clash-error';
 import type { ImpDatabase, ImpQueries } from './open-database';
-import type { DB } from './schema';
-
-type ImpRow = Selectable<DB['imps']>;
+import { SlotTakenError } from './slot-taken-error';
+import { toImpRecord } from './to-imp-record';
 
 export interface ImpRecord {
   readonly id: string;
@@ -122,34 +111,6 @@ export interface NewImp {
   readonly kind?: ImpKind;
 }
 
-export interface ImpStateChange {
-  // why, for the event stream
-  readonly reason: ImpChangeReason;
-  readonly detail?: ImpEventDetail;
-  readonly state: ImpState;
-  readonly error?: string | null;
-
-  // set with the error it comes with: an error write without it ends the
-  // hold, as a new error replaced the hold's text before the hold had its
-  // own column
-  readonly hasOopsHold?: boolean;
-  readonly oopsBootId?: string | null;
-  readonly pid?: number | null;
-  readonly sleptAt?: Date | null;
-  readonly firecrackerVersion?: string | null;
-
-  // a cold boot that stands in for a wake counts as one, as a `woke` does
-  readonly countsWake?: boolean;
-
-  // when a running imp's awake span ends; now by default. A repair passes
-  // the last time anything saw the VM alive.
-  readonly awakeUntil?: Date;
-
-  // the cause the next cold boot records, whichever path boots it: a repair
-  // knows it before that boot (docs/architecture/guest/sessions.md#generations-boots-and-offsets)
-  readonly nextBootCause?: Extract<ColdBootCause, 'recovery' | 'wake_fallback'>;
-}
-
 // The uids jailed Firecrackers run as, one per imp, gid the same: far above
 // any account in the host image, and kept for the imp's life
 export const JAIL_UIDS = { first: 900_000, count: 65_536 } as const;
@@ -181,61 +142,6 @@ async function allocateJailUid(db: ImpQueries): Promise<number> {
   }
 
   return uid;
-}
-
-// The slots imps hold, and those that a warm move's live ticket keeps for
-// the imp it brings (docs/architecture/storage/moves.md#warm-moves): until the
-// commit, once its stream started, else until the stream's start window ends
-async function listTakenSlots(db: ImpQueries, now: number): Promise<Set<number>> {
-  const imps = await db.selectFrom('imps').select('slot').execute();
-
-  const held = await db
-    .selectFrom('move_tickets')
-    .select('slot')
-    .where('slot', 'is not', null)
-    .where('committed_at', 'is', null)
-    .where((row) => row.or([row('stream_used_at', 'is not', null), row('stream_by', '>', now)]))
-    .execute();
-
-  return new Set([...imps.map((row) => row.slot), ...held.flatMap((row) => row.slot ?? [])]);
-}
-
-// The lowest slot no imp or ticket holds. Run it in the same transaction as
-// the insert that takes the slot; the unique index on `slot` backs that up.
-export async function allocateSlot(
-  db: ImpQueries,
-  slotCount: number,
-  now: number = Date.now(),
-): Promise<number> {
-  const taken = await listTakenSlots(db, now);
-
-  let slot = 0;
-
-  while (taken.has(slot)) {
-    slot += 1;
-  }
-
-  if (slot >= slotCount) {
-    throw new Error(`every one of the ${String(slotCount)} slots is taken`);
-  }
-
-  return slot;
-}
-
-// whether a warm move may keep `slot`: no imp and no live ticket holds it
-export async function isSlotFree(db: ImpQueries, slot: number, now: number): Promise<boolean> {
-  const taken = await listTakenSlots(db, now);
-
-  return !taken.has(slot);
-}
-
-// A slot a warm move asks for, free of imps; its own ticket holds it
-export class SlotTakenError extends Error {
-  override name = 'SlotTakenError';
-
-  constructor(slot: number) {
-    super(`slot ${String(slot)} is taken on this host`);
-  }
 }
 
 export async function createImp(db: ImpDatabase, imp: NewImp): Promise<ImpRecord> {
@@ -383,115 +289,6 @@ export async function countImpsByState(db: ImpDatabase): Promise<Map<ImpState, n
     .execute();
 
   return new Map(rows.map((row) => [row.state, row.count]));
-}
-
-// what a compare-and-set state write expects the row to hold
-interface ImpStateExpected {
-  readonly state: ImpState;
-  readonly pid: number | null;
-}
-
-// The one writer of an imp's state; a field the change leaves out keeps its
-// value, null clears one. With `expected` it is a compare-and-set, which
-// gives undefined when something else changed the row first.
-export async function updateImpState(
-  db: ImpDatabase,
-  id: string,
-  change: Readonly<ImpStateChange>,
-): Promise<ImpRecord>;
-
-export async function updateImpState(
-  db: ImpDatabase,
-  id: string,
-  change: Readonly<ImpStateChange>,
-  expected: Readonly<ImpStateExpected>,
-): Promise<ImpRecord | undefined>;
-
-export async function updateImpState(
-  db: ImpDatabase,
-  id: string,
-  change: Readonly<ImpStateChange>,
-  expected?: Readonly<ImpStateExpected>,
-): Promise<ImpRecord | undefined> {
-  const values: Updateable<DB['imps']> = { state: change.state };
-
-  if (change.error !== undefined) {
-    values.error = change.error;
-  }
-
-  if (change.error !== undefined || change.hasOopsHold !== undefined) {
-    values.oops_hold = change.hasOopsHold === true ? 1 : 0;
-  }
-
-  if (change.oopsBootId !== undefined) {
-    values.oops_boot_id = change.oopsBootId;
-  }
-
-  if (change.pid !== undefined) {
-    values.pid = change.pid;
-  }
-
-  if (change.sleptAt !== undefined) {
-    values.slept_at = change.sleptAt === null ? null : change.sleptAt.getTime();
-  }
-
-  if (change.firecrackerVersion !== undefined) {
-    values.firecracker_version = change.firecrackerVersion;
-  }
-
-  let query = db
-    .updateTable('imps')
-    .set({ ...values, ...buildAwakeValues(change), ...buildBootCauseValues(change) })
-    .where('id', '=', id);
-
-  if (expected !== undefined) {
-    // an unlocked repair's move passes the lifecycle table too
-    if (change.state !== expected.state) {
-      requireTransition(expected.state, change.state, `move to ${change.state}`);
-    }
-
-    const pidOperator = expected.pid === null ? 'is' : '=';
-
-    query = query.where('state', '=', expected.state).where('pid', pidOperator, expected.pid);
-  }
-
-  const returning = query.returningAll();
-
-  // an unguarded write to a missing row throws, as it always has
-  const row =
-    expected === undefined
-      ? await returning.executeTakeFirstOrThrow()
-      : await returning.executeTakeFirst();
-
-  return row === undefined ? undefined : emitChange(db, toImpRecord(row), change);
-}
-
-// Awake time, in the same write as the state: a running imp's span opens
-// once (a re-adopt keeps it), and any other state closes it, a liveness
-// repair after a crash included, so the time still counts. A wake counts.
-function buildAwakeValues(change: Readonly<ImpStateChange>) {
-  const now = Date.now();
-
-  if (change.state === 'running') {
-    const isWake = change.reason === 'woke' || change.countsWake === true;
-
-    return {
-      awake_since: sql<number>`coalesce(awake_since, ${now})`,
-      ...(isWake && { wake_count: sql<number>`wake_count + 1` }),
-    };
-  }
-
-  const until = change.awakeUntil?.getTime() ?? now;
-
-  // max() is null while no span is open; an end before the start adds nothing
-  return {
-    awake_ms: sql<number>`awake_ms + coalesce(max(0, ${until} - awake_since), 0)`,
-    awake_since: null,
-  };
-}
-
-function buildBootCauseValues(change: Readonly<ImpStateChange>) {
-  return change.nextBootCause === undefined ? {} : { next_boot_cause: change.nextBootCause };
 }
 
 // what imps.update changes; the caller applies a new CPU limit or weight
@@ -712,21 +509,6 @@ export async function removeImp(db: ImpDatabase, id: string): Promise<boolean> {
   return true;
 }
 
-function emitChange(
-  db: ImpDatabase,
-  imp: Readonly<ImpRecord>,
-  change: Readonly<ImpStateChange>,
-): ImpRecord {
-  db.writes.publish({
-    kind: 'changed',
-    imp,
-    reason: change.reason,
-    ...(change.detail !== undefined && { detail: change.detail }),
-  });
-
-  return imp;
-}
-
 // after the first cold boot of an imp from a template
 export async function removeIdentityReset(db: ImpDatabase, id: string): Promise<ImpRecord> {
   const row = await db
@@ -737,54 +519,6 @@ export async function removeIdentityReset(db: ImpDatabase, id: string): Promise<
     .executeTakeFirstOrThrow();
 
   return toImpRecord(row);
-}
-
-function toImpRecord(row: Readonly<ImpRow>): ImpRecord {
-  return {
-    id: row.id,
-    name: row.name,
-    imageId: row.image_id,
-    state: row.state,
-    kind: row.kind,
-    vcpus: row.vcpus,
-    memoryMib: row.memory_mib,
-    maxMemoryMib: row.max_memory_mib ?? row.memory_mib,
-    slot: row.slot,
-    ip: row.ip,
-    createdAt: new Date(row.created_at),
-    lastActiveAt: new Date(row.last_active_at),
-    sleptAt: toDate(row.slept_at),
-    holdUntil: toDate(row.hold_until),
-    error: row.error,
-    hasOopsHold: row.oops_hold === 1,
-    oopsBootId: row.oops_boot_id,
-    pid: row.pid,
-    firecrackerVersion: row.firecracker_version,
-    httpPort: row.http_port,
-    diskBytes: row.disk_bytes,
-    isDiskGrowPending: row.disk_grow_pending === 1,
-    cpu: { limit: row.cpu_limit, weight: row.cpu_weight },
-    wakeCount: row.wake_count,
-    awakeMs: row.awake_ms,
-    awakeSince: toDate(row.awake_since),
-    isIdentityResetPending: row.identity_reset_pending === 1,
-    isTrustPending: row.trust_pending === 1,
-    isBackedUp: row.backup !== 0,
-    publicAuth: readPublicAuth(row),
-    moveState: row.move_state,
-    jailUid: row.jail_uid,
-  };
-}
-
-// a value impd did not write reads as tailnet-only: closed, never open
-function readPublicAuth(row: Readonly<ImpRow>): PublicAuth | null {
-  const auth = PublicAuthSchema.safeParse(row.public_auth);
-
-  return row.exposure === 'public' && auth.success ? auth.data : null;
-}
-
-function toDate(ms: number | null): Date | null {
-  return ms === null ? null : new Date(ms);
 }
 
 export async function countImpsUsingImage(db: ImpDatabase, imageId: string): Promise<number> {

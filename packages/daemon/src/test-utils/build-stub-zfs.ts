@@ -1,35 +1,21 @@
-import * as z from 'zod';
 import type { CommandResult } from '../process/run-command';
-import type { StreamRunner } from '../process/run-stream';
+import { buildStubZfsStreams } from './build-stub-zfs-streams';
 
 // the `creation` of txg 0: 2026-10-03T00:00:00Z
 export const STUB_EPOCH_S = 1_790_985_600;
 
-interface FakeDataset {
+export interface FakeDataset {
   origin: string | null;
   readonly txg: number;
   readonly properties?: Readonly<Record<string, string>>;
 }
 
-interface FakeSnapshot {
+export interface FakeSnapshot {
   readonly txg: number;
   deferDestroy: boolean;
 
   // what a send stream names it by, through renames and across pools
   readonly guid: string;
-}
-
-// what the fake's `zfs send` writes: the snapshot and the one it is
-// incremental from
-const FakeStreamSchema = z.object({ guid: z.string(), baseGuid: z.string().nullable() });
-
-// a whole fake stream, or undefined while its end has not come
-function readFakeStream(text: string): z.infer<typeof FakeStreamSchema> | undefined {
-  try {
-    return FakeStreamSchema.parse(JSON.parse(text));
-  } catch {
-    return undefined;
-  }
 }
 
 interface FakeZfsOptions {
@@ -513,94 +499,7 @@ export function buildStubZfs(options: FakeZfsOptions) {
     return buildFailure(`fake zfs: unknown command ${argv.join(' ')}`);
   };
 
-  // zfs send [-i <base>] <snapshot>: the stream names both by guid
-  const openSend = (argv: readonly string[]) => {
-    const snapshot = snapshots.get(argv.at(-1) ?? '');
-    const baseIndex = argv.indexOf('-i');
-    const base = baseIndex === -1 ? null : snapshots.get(argv[baseIndex + 1] ?? '');
-
-    if (snapshot === undefined || base === undefined) {
-      throw new Error(`fake zfs: ${argv.join(' ')}: no such snapshot`);
-    }
-
-    const stream = { guid: snapshot.guid, baseGuid: base?.guid ?? null };
-
-    return Response.json(stream).body ?? new ReadableStream();
-  };
-
-  // zfs recv -u [-o origin=<snapshot>] <dataset>@<snapshot>, as real ZFS
-  // takes a full, an incremental or a clone stream
-  const runReceive = (argv: readonly string[], stream: z.infer<typeof FakeStreamSchema>) => {
-    const target = argv.at(-1) ?? '';
-    const [dataset = '', snapshotName = ''] = target.split('@');
-    const originArg = argv.find((arg) => arg.startsWith('origin='));
-    const origin = originArg?.slice('origin='.length) ?? null;
-    const exists = datasets.has(dataset);
-
-    if (stream.baseGuid === null) {
-      if (exists) {
-        throw new Error(`cannot receive new filesystem stream: destination '${dataset}' exists`);
-      }
-
-      datasets.set(dataset, { origin: null, txg: state.txg++ });
-    } else if (exists) {
-      const latest = findSnapshotsOf(dataset)
-        .toSorted((a, b) => (snapshots.get(a)?.txg ?? 0) - (snapshots.get(b)?.txg ?? 0))
-        .at(-1);
-
-      if (latest === undefined || snapshots.get(latest)?.guid !== stream.baseGuid) {
-        throw new Error(
-          `cannot receive incremental stream: most recent snapshot of ${dataset} does not match incremental source`,
-        );
-      }
-    } else {
-      if (origin === null || snapshots.get(origin)?.guid !== stream.baseGuid) {
-        throw new Error(`cannot receive: local origin for clone ${dataset} does not exist`);
-      }
-
-      datasets.set(dataset, { origin, txg: state.txg++ });
-    }
-
-    snapshots.set(`${dataset}@${snapshotName}`, {
-      txg: state.txg++,
-      deferDestroy: false,
-      guid: stream.guid,
-    });
-  };
-
-  const streams: StreamRunner = {
-    readFrom: (argv) => {
-      commands.push(argv.join(' '));
-
-      return { stdout: openSend(argv), done: Promise.resolve(), stop: () => Promise.resolve() };
-    },
-
-    // As real ZFS, the receive commits once the stream's end record (here
-    // the JSON's last byte) is in, whether or not the input fails after it
-    writeTo: async (argv, input) => {
-      commands.push(argv.join(' '));
-
-      const decoder = new TextDecoder();
-
-      const read = { text: '', isCommitted: false };
-
-      for await (const chunk of input) {
-        read.text += decoder.decode(chunk, { stream: true });
-
-        const stream = read.isCommitted ? undefined : readFakeStream(read.text);
-
-        if (stream !== undefined) {
-          runReceive(argv, stream);
-
-          read.isCommitted = true;
-        }
-      }
-
-      if (!read.isCommitted) {
-        throw new Error('cannot receive: the stream ended early');
-      }
-    },
-  };
+  const streams = buildStubZfsStreams({ datasets, snapshots, state, commands, findSnapshotsOf });
 
   return {
     commands,

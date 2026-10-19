@@ -5,22 +5,12 @@ import {
   OAuthConfigSchema,
   SecretKindSchema,
 } from '@impz/api';
-import type {
-  BrokerRule,
-  EgressPolicy,
-  Grant,
-  GrantFilter,
-  GrantNotCopied,
-  OAuthConfig,
-  SecretKind,
-} from '@impz/api';
+import type { BrokerRule, Grant, GrantFilter, OAuthConfig, SecretKind } from '@impz/api';
 import type { Selectable } from 'kysely';
 import * as z from 'zod';
-import { parseStoredPolicy } from './egress';
 import type { ImpDatabase, ImpQueries } from './open-database';
 import type { DB } from './schema';
 import { readTokenGrantable } from './tokens';
-import type { GrantableSecret } from './tokens';
 
 // Secrets and grants: what the credential broker may add, and for which
 // imps. Values are not here; broker/secret-files.ts keeps them.
@@ -107,13 +97,6 @@ export type ReplaceOutcome =
     }
   | { readonly kind: 'binding-changed' };
 
-// the imp behind a broker connection
-export interface BrokerPeer {
-  readonly id: string;
-  readonly name: string;
-  readonly egress: EgressPolicy;
-}
-
 const RulesSchema = z.array(BrokerRuleSchema);
 
 // Insert a new secret with a new generation; null when the name is taken.
@@ -143,33 +126,6 @@ export async function createSecret(
 // createRestoredSecrets on another host.
 export function listSecretRows(db: ImpDatabase): Promise<SecretRow[]> {
   return db.selectFrom('secrets').selectAll().orderBy('name').execute();
-}
-
-// A backup's secret rows with their generation and value file, so grantable
-// lists still name them and a replace keeps both. A name this host has keeps
-// its own row. Returns the names written.
-export function createRestoredSecrets(
-  db: ImpDatabase,
-  rows: readonly SecretRow[],
-): Promise<string[]> {
-  return db.transaction().execute(async (trx) => {
-    const written: string[] = [];
-
-    for (const row of rows) {
-      const inserted = await trx
-        .insertInto('secrets')
-        .values(row)
-        .onConflict((conflict) => conflict.column('name').doNothing())
-        .returning('name')
-        .executeTakeFirst();
-
-      if (inserted !== undefined) {
-        written.push(inserted.name);
-      }
-    }
-
-    return written;
-  });
 }
 
 // The value file, and with rebind the kind and rules, in one write: a
@@ -382,76 +338,6 @@ export async function listValueFiles(db: ImpDatabase): Promise<Set<string>> {
   return new Set(rows.map((row) => row.value_file));
 }
 
-// A fork's copy through a caller with imp patterns: only the secrets its
-// grantable list names, at the generation the list holds, while its token
-// exists (docs/guides/tokens.md#imp-patterns). Null for a host-wide caller.
-export interface ForkAuthority {
-  readonly tokenId: string | null;
-  readonly grantable: readonly GrantableSecret[];
-}
-
-// what a fork's copy did: the source's grants it skipped, or that the
-// caller's token was gone and it copied none
-export type ForkGrantsOutcome =
-  | { readonly kind: 'copied'; readonly notCopied: readonly GrantNotCopied[] }
-  | { readonly kind: 'no-token' };
-
-// A fork gets its source's grants, checked in one transaction: one the
-// authority could not make, or one that clashes with a grant made on the
-// fork since, is skipped (a null authority makes any).
-export function createForkGrants(
-  db: ImpDatabase,
-  fromImpId: string,
-  toImpId: string,
-  authority: Readonly<ForkAuthority> | null,
-): Promise<ForkGrantsOutcome> {
-  return db.transaction().execute(async (trx) => {
-    const grants = await listGrants(trx, fromImpId);
-
-    // an empty list copies nothing whatever the token, so it needs no read
-    // and never reports no-token: each grant is not-grantable instead
-    const current =
-      authority === null || authority.grantable.length === 0 || authority.tokenId === null
-        ? null
-        : await readTokenGrantable(trx, authority.tokenId);
-
-    if (authority !== null && authority.grantable.length > 0 && current === null) {
-      return { kind: 'no-token' };
-    }
-
-    const notCopied: GrantNotCopied[] = [];
-
-    for (const grant of grants) {
-      const name = grant.secret;
-
-      const secret = await findSecret(trx, name);
-
-      // on the caller's list and on the token's now: a tokens.update since
-      // the call began may have taken it off
-      const entry = authority?.grantable.find(
-        (each) =>
-          each.name === name &&
-          current?.some((now) => now.name === name && now.generation === each.generation) === true,
-      );
-
-      if (authority !== null && (entry === undefined || secret?.generation !== entry.generation)) {
-        notCopied.push({ secret: name, reason: 'not-grantable' });
-      } else if (secret === undefined) {
-        // listGrants joins the live secret in this transaction, so none
-        // is gone today; the reason stays in the contract all the same
-        notCopied.push({ secret: name, reason: 'no-secret' });
-      } else if ((await findClash(trx, toImpId, name, secret.rules)) === null) {
-        // the fork's grant is as narrow as its source's
-        await writeGrant(trx, toImpId, secret, grant.filter ?? undefined);
-      } else {
-        notCopied.push({ secret: name, reason: 'clash' });
-      }
-    }
-
-    return { kind: 'copied', notCopied };
-  });
-}
-
 // every rule of every secret granted to the imp
 export async function listGrantedRules(db: ImpQueries, impId: string): Promise<GrantedRule[]> {
   const rows = await useLiveGrants(db)
@@ -487,28 +373,9 @@ export async function listAllGrantedRules(
   return rows.flatMap((row) => parseRules(row.rules).map((rule) => ({ impId: row.imp_id, rule })));
 }
 
-export async function findBrokerPeer(
-  db: ImpDatabase,
-  slot: number,
-): Promise<BrokerPeer | undefined> {
-  const row = await db
-    .selectFrom('imps')
-    .select(['id', 'name', 'egress_policy', 'egress_allow'])
-    .where('slot', '=', slot)
-    .executeTakeFirst();
-
-  return row === undefined
-    ? undefined
-    : {
-        id: row.id,
-        name: row.name,
-        egress: parseStoredPolicy(row.egress_policy, row.egress_allow),
-      };
-}
-
 // A host has one credential per imp: two would leave the header
 // ambiguous. The imp's other grant that covers one of the hosts, or null.
-async function findClash(
+export async function findClash(
   db: ImpQueries,
   impId: string,
   secretName: string,
@@ -564,7 +431,7 @@ async function checkAuthority(
 
 // A grant made again takes the secret's generation now, and the filter
 // when one is given; without one it keeps its own.
-async function writeGrant(
+export async function writeGrant(
   db: ImpQueries,
   impId: string,
   secret: Readonly<SecretRecord>,

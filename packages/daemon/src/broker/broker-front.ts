@@ -3,7 +3,7 @@ import type { Server, Socket } from 'node:net';
 import { pipeline } from 'node:stream';
 import type { AuditRefusal, EgressMode } from '@impz/api';
 import type { NewAuditEntry } from '../db/broker-audit';
-import type { BrokerPeer } from '../db/secrets';
+import type { BrokerPeer } from '../db/find-broker-peer';
 import { isTunnelAllowed } from '../egress/egress-rules';
 import { findPeerSlot } from '../net/addressing';
 import type { Subnet } from '../net/addressing';

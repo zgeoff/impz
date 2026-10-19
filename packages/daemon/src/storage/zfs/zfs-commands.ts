@@ -287,6 +287,23 @@ export function readSnapshotId(name: string): string {
   return name.slice(name.indexOf('@') + 1);
 }
 
+export const CHECKPOINT_SNAPSHOT = /@cp-[^@]+$/u;
+
+// `tank/imp/disks/<id>` → `<id>`
+export function readChildId(name: string, parent: string): string {
+  return name.slice(parent.length + 1);
+}
+
+// the direct child filesystems of `parent`
+export function listChildren(entries: readonly ZfsEntry[], parent: string): ZfsEntry[] {
+  return entries.filter(
+    (entry) =>
+      entry.type === 'filesystem' &&
+      entry.name.startsWith(`${parent}/`) &&
+      !entry.name.slice(parent.length + 1).includes('/'),
+  );
+}
+
 // Checkpoint ids are global, so the snapshot is found by name wherever it is:
 // a restore or a promote moves it to another dataset.
 export function listCheckpointSnapshots(

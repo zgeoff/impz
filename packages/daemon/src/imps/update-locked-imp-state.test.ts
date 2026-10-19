@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { createImp, findImpById, updateImpState } from '../db/imps';
+import { createImp, findImpById } from '../db/imps';
+import { updateImpState } from '../db/update-imp-state';
 import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
 import { createImpContext } from './imp-context';
 import { createImpLock } from './imp-lock';

@@ -1,9 +1,10 @@
 import { SecretNameSchema } from '@impz/api';
 import type { BackupRestore } from '@impz/api';
 import type { TokenStore } from '../auth/token-store';
+import { createRestoredSecrets } from '../db/create-restored-secrets';
 import { openDatabase } from '../db/open-database';
 import type { ImpDatabase } from '../db/open-database';
-import { createRestoredSecrets, listSecretRows } from '../db/secrets';
+import { listSecretRows } from '../db/secrets';
 import type { SecretRow } from '../db/secrets';
 import { listTokenRecords, listTokenSshKeyRecords } from '../db/tokens';
 
