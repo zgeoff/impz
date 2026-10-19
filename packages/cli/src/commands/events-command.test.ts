@@ -21,7 +21,7 @@ import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
 import invariant from 'tiny-invariant';
 import { buildStubBackoffClock } from '../test-utils/build-stub-backoff-clock';
 import { buildStubOlderImpdFetch } from '../test-utils/build-stub-older-impd-fetch';
-import { printEvents } from './events';
+import { printEvents } from './events-command';
 
 // impd's real app, listening on a loopback port for the spawned CLI, and an
 // in-process client of it

@@ -1,15 +1,19 @@
 import { lazy } from 'gunshi';
-import { backupCommand } from '../commands/backup';
-import { checkpointCommand, checkpointsCommand, restoreCommand } from '../commands/checkpoints';
-import { cpCommand } from '../commands/cp';
-import { setCommand, topCommand } from '../commands/cpu';
-import { dbCommand } from '../commands/db';
-import { diskCommand } from '../commands/disk';
-import { eventsCommand } from '../commands/events';
-import { exposeCommand, unexposeCommand } from '../commands/expose';
-import { gcCommand } from '../commands/gc';
-import { hostCommand, hostsCommand, loginCommand } from '../commands/hosts';
-import { imageCommand, templateCommand } from '../commands/image';
+import { backupCommand } from '../commands/backup-command';
+import {
+  checkpointCommand,
+  checkpointsCommand,
+  restoreCommand,
+} from '../commands/checkpoints-command';
+import { cpCommand } from '../commands/cp-command';
+import { setCommand, topCommand } from '../commands/cpu-command';
+import { dbCommand } from '../commands/db-command';
+import { diskCommand } from '../commands/disk-command';
+import { eventsCommand } from '../commands/events-command';
+import { exposeCommand, unexposeCommand } from '../commands/expose-command';
+import { gcCommand } from '../commands/gc-command';
+import { hostCommand, hostsCommand, loginCommand } from '../commands/hosts-command';
+import { imageCommand, templateCommand } from '../commands/image-command';
 import {
   consoleCommand,
   execCommand,
@@ -23,24 +27,24 @@ import {
   stopCommand,
   urlCommand,
   wakeCommand,
-} from '../commands/imps';
-import { infoCommand } from '../commands/info';
-import { mcpCommand } from '../commands/mcp';
-import { moveCommand } from '../commands/move';
-import { netCommand } from '../commands/networks';
-import { newCommand } from '../commands/new';
-import { oauthCommand } from '../commands/oauth';
-import { proxyCommand } from '../commands/proxy';
+} from '../commands/imps-command';
+import { infoCommand } from '../commands/info-command';
+import { mcpCommand } from '../commands/mcp-command';
+import { moveCommand } from '../commands/move-command';
+import { netCommand } from '../commands/networks-command';
+import { newCommand } from '../commands/new-command';
+import { oauthCommand } from '../commands/oauth-command';
+import { proxyCommand } from '../commands/proxy-command';
 import {
   auditCommand,
   grantCommand,
   grantsCommand,
   revokeCommand,
   secretCommand,
-} from '../commands/secrets';
-import { logsCommand, serviceCommand } from '../commands/services';
-import { attachCommand, sessionsCommand } from '../commands/sessions';
-import { tokenCommand } from '../commands/tokens';
+} from '../commands/secrets-command';
+import { logsCommand, serviceCommand } from '../commands/services-command';
+import { attachCommand, sessionsCommand } from '../commands/sessions-command';
+import { tokenCommand } from '../commands/tokens-command';
 import { defineGroup } from './define-command';
 
 // Every imp command. `completion` walks this tree to write its scripts, so
@@ -95,7 +99,7 @@ export const subCommands = {
   hosts: hostsCommand,
   completion: lazy(
     async () => {
-      const completion = await import('../commands/completion');
+      const completion = await import('../commands/completion-command');
 
       return completion.completionCommand;
     },

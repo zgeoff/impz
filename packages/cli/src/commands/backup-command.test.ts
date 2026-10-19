@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { UsageError } from '../cli/errors';
-import { parseUtcTime } from './backup';
+import { parseUtcTime } from './backup-command';
 
 test.each([
   ['2026-10-02T06:00', '2026-10-02T06:00:00.000Z'],
