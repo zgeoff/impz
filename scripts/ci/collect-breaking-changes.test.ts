@@ -454,41 +454,44 @@ test.each([
     ['procedure imps.create input .vcpus: lower bound >= 1 → > 1'],
   ],
   ['an exclusive minimum below the old minimum', { minimum: undefined, exclusiveMinimum: 0 }, []],
-])('#collectBreakingChanges judges %s on an input number', (_label, bounds, expected) => {
-  const base = {
-    procedures: {
-      'imps.create': {
-        input: {
-          type: 'object',
-          properties: { vcpus: { type: 'integer', minimum: 1, maximum: 32 } },
+])(
+  '#collectBreakingChanges reports a bound of an input number only when it tightens, given %s',
+  (_label, bounds, expected) => {
+    const base = {
+      procedures: {
+        'imps.create': {
+          input: {
+            type: 'object',
+            properties: { vcpus: { type: 'integer', minimum: 1, maximum: 32 } },
+          },
+          output: { type: 'object' },
+          stream: false,
         },
-        output: { type: 'object' },
-        stream: false,
       },
-    },
-    messages: {},
-    errors: {},
-    constants: {},
-  };
+      messages: {},
+      errors: {},
+      constants: {},
+    };
 
-  const head = {
-    procedures: {
-      'imps.create': {
-        input: {
-          type: 'object',
-          properties: { vcpus: { type: 'integer', minimum: 1, maximum: 32, ...bounds } },
+    const head = {
+      procedures: {
+        'imps.create': {
+          input: {
+            type: 'object',
+            properties: { vcpus: { type: 'integer', minimum: 1, maximum: 32, ...bounds } },
+          },
+          output: { type: 'object' },
+          stream: false,
         },
-        output: { type: 'object' },
-        stream: false,
       },
-    },
-    messages: {},
-    errors: {},
-    constants: {},
-  };
+      messages: {},
+      errors: {},
+      constants: {},
+    };
 
-  expect(collectBreakingChanges(base, head)).toStrictEqual(expected);
-});
+    expect(collectBreakingChanges(base, head)).toStrictEqual(expected);
+  },
+);
 
 test.each([
   [
@@ -508,38 +511,41 @@ test.each([
     ['procedure secrets.add input .value: pattern none → "^[a-z]+$"'],
   ],
   ['a format', { format: 'email' }, ['procedure secrets.add input .value: format none → "email"']],
-])('#collectBreakingChanges judges %s on an input string', (_label, constraints, expected) => {
-  const base = {
-    procedures: {
-      'secrets.add': {
-        input: { type: 'object', properties: { value: { type: 'string', maxLength: 64 } } },
-        output: { type: 'object' },
-        stream: false,
-      },
-    },
-    messages: {},
-    errors: {},
-    constants: {},
-  };
-
-  const head = {
-    procedures: {
-      'secrets.add': {
-        input: {
-          type: 'object',
-          properties: { value: { type: 'string', maxLength: 64, ...constraints } },
+])(
+  '#collectBreakingChanges reports a constraint of an input string only when it tightens or is new, given %s',
+  (_label, constraints, expected) => {
+    const base = {
+      procedures: {
+        'secrets.add': {
+          input: { type: 'object', properties: { value: { type: 'string', maxLength: 64 } } },
+          output: { type: 'object' },
+          stream: false,
         },
-        output: { type: 'object' },
-        stream: false,
       },
-    },
-    messages: {},
-    errors: {},
-    constants: {},
-  };
+      messages: {},
+      errors: {},
+      constants: {},
+    };
 
-  expect(collectBreakingChanges(base, head)).toStrictEqual(expected);
-});
+    const head = {
+      procedures: {
+        'secrets.add': {
+          input: {
+            type: 'object',
+            properties: { value: { type: 'string', maxLength: 64, ...constraints } },
+          },
+          output: { type: 'object' },
+          stream: false,
+        },
+      },
+      messages: {},
+      errors: {},
+      constants: {},
+    };
+
+    expect(collectBreakingChanges(base, head)).toStrictEqual(expected);
+  },
+);
 
 test('#collectBreakingChanges reports a value that an input enum drops', () => {
   const base = {

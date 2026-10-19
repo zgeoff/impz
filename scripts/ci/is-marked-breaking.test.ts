@@ -61,6 +61,9 @@ test.each([
     false,
   ],
   ['a plain feat', 'feat: add imps.list', ['feat: add imps.list'], '', false],
-])('it judges %s', (_label, title, commits, body, expected) => {
-  expect(isMarkedBreaking({ number: 5, title, body, commits })).toBe(expected);
-});
+])(
+  'it marks a PR breaking exactly when release-please reads its squash message so, given %s',
+  (_label, title, commits, body, expected) => {
+    expect(isMarkedBreaking({ number: 5, title, body, commits })).toBe(expected);
+  },
+);
