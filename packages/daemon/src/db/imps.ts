@@ -387,8 +387,7 @@ export async function claimTrustPending(db: ImpDatabase, id: string): Promise<bo
   return taken !== undefined;
 }
 
-// Sets or clears the move mark (moves/) along MOVE_TRANSITIONS, and refuses
-// a change the table does not list; the change goes out as `updated`.
+// Sets or clears the move mark (moves/); the change goes out as `updated`.
 export async function updateImpMove(
   db: ImpDatabase,
   id: string,

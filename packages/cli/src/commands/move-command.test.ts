@@ -23,7 +23,7 @@ import { UsageError } from '../cli/errors';
 import { buildStubOlderImpdFetch } from '../test-utils/build-stub-older-impd-fetch';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startWarmMoveHosts } from '../test-utils/start-warm-move-hosts';
-import { runMove } from './move';
+import { runMove } from './move-command';
 
 // two impds, a and b, each with the image its imps boot from
 async function setupTest() {
