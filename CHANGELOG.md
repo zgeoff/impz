@@ -2,11 +2,14 @@
 
 ## [2.8.1](https://github.com/zgeoff/impz/compare/v2.8.0...v2.8.1) (2026-10-19)
 
-
 ### Bug Fixes
 
-* **daemon:** log a proxied stream that the imp closes through logtape ([#544](https://github.com/zgeoff/impz/issues/544)) ([5db1ff5](https://github.com/zgeoff/impz/commit/5db1ff5f52cb6c3a95e86fe3dabaf386d71e290f))
-* **daemon:** say a follow's imp sleeps after a step held it running ([#543](https://github.com/zgeoff/impz/issues/543)) ([315caaf](https://github.com/zgeoff/impz/commit/315caaf74ed601c2f2966fbbe742cc73cbc694ea))
+- **daemon:** log a proxied stream that the imp closes through logtape
+  ([#544](https://github.com/zgeoff/impz/issues/544))
+  ([5db1ff5](https://github.com/zgeoff/impz/commit/5db1ff5f52cb6c3a95e86fe3dabaf386d71e290f))
+- **daemon:** say a follow's imp sleeps after a step held it running
+  ([#543](https://github.com/zgeoff/impz/issues/543))
+  ([315caaf](https://github.com/zgeoff/impz/commit/315caaf74ed601c2f2966fbbe742cc73cbc694ea))
 
 ## [2.8.0](https://github.com/zgeoff/impz/compare/v2.7.0...v2.8.0) (2026-10-19)
 
