@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { loadConfig } from '../config';
 import { openDatabase } from '../db/open-database';
 import { createActivityTracker } from '../imps/activity-tracker';
+import { getImpdLogger } from '../process/get-impd-logger';
 import { setupLogging } from '../process/setup-logging';
 import { createForwardedPeers } from '../proxy/forwarded-peers';
 import { startWakeProxy } from '../proxy/wake-proxy';
@@ -37,6 +38,7 @@ const proxy = startWakeProxy({
     recordActivity: () => Promise.resolve(),
   },
   log: () => {},
+  logger: getImpdLogger('proxy'),
   peers: createForwardedPeers(Date.now),
   ports: { proxy: 0, slot: () => 0 },
 });

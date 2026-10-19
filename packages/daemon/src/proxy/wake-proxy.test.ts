@@ -1194,6 +1194,55 @@ test('it logs one impd.proxy line that names the imp, and nothing unhandled, whe
   expect(stderr).toBe('');
 }, 30_000);
 
+test('it warns through its logger, naming the imp, when the imp’s server closes a stream', async () => {
+  const ctx = await setupTest();
+
+  const upstream = startStubCutStream(ctx.stack, 'data: first\n\n');
+  const warning = mock();
+
+  const proxy = startWakeProxy({
+    config: ctx.config,
+    db: ctx.db,
+    imps: ctx.impd.imps,
+    log: () => {},
+    logger: { warning },
+    peers: createForwardedPeers(Date.now),
+    ports: { proxy: 0, slot: () => 0 },
+  });
+
+  ctx.stack.defer(() => proxy.stop());
+
+  const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
+
+  // the imp's address is the upstream's
+  await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
+  await proxy.syncListeners();
+
+  const response = await fetch(
+    `http://127.0.0.1:${String(proxy.readImpPort(imp.id))}/rpc/records/follow`,
+  );
+
+  invariant(response.body);
+
+  const reader = response.body.getReader();
+
+  await reader.read();
+
+  upstream.cut();
+
+  await Promise.allSettled([reader.read()]);
+
+  expect(warning).toHaveBeenCalledExactlyOnceWith(
+    'the upstream closed {method} {path} mid-stream: {reason}',
+    {
+      imp: 'web',
+      method: 'GET',
+      path: '/rpc/records/follow',
+      reason: expect.toStartWith('The socket connection was closed unexpectedly.'),
+    },
+  );
+});
+
 test('it keeps serving an imp after the imp’s server closes a stream', async () => {
   const ctx = await setupTest();
 

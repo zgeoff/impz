@@ -1,3 +1,4 @@
+import type { Logger } from '@logtape/logtape';
 import { ORPCError } from '@orpc/server';
 import type { Server, WebSocketHandler } from 'bun';
 import { MOVING_RETRY_AFTER_S } from '../api-errors';
@@ -49,6 +50,10 @@ interface WakeProxyDeps {
   readonly db: ImpDatabase;
   readonly imps: Pick<ImpRuntime, 'requireRunning' | 'tracker' | 'recordActivity'>;
   readonly log: (message: string) => void;
+
+  // structured lines, with the imp a line is about in its `imp` property;
+  // impd.proxy by default
+  readonly logger?: Pick<Logger, 'warning'>;
   readonly peers: ForwardedPeers;
 
   // the Host-routed port and each slot's port; the config's unless a test
@@ -137,6 +142,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
 
   const upstreamSocketTimeoutMs = deps.upstreamSocketTimeoutMs ?? UPSTREAM_SOCKET_TIMEOUT_MS;
   const startTimer = deps.startTimer ?? startRealTimer;
+  const logger = deps.logger ?? getImpdLogger('proxy');
   const syncSlot = createSemaphore(1);
 
   const websocket: WebSocketHandler<SocketData> = {
@@ -333,15 +339,13 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
         headers.set('x-imp-wake-ms', String(wokeMs));
       }
 
-      const proxyLogger = getImpdLogger('proxy');
-      const logger = options.imp === null ? proxyLogger : proxyLogger.with({ imp: options.imp });
-
       // an upstream that exits mid-stream, such as a dev server that restarts
       const body =
         upstream.body === null
           ? null
           : buildTrackedBody(upstream.body, release, (failure) => {
               logger.warning('the upstream closed {method} {path} mid-stream: {reason}', {
+                ...(options.imp !== null && { imp: options.imp }),
                 method: request.method,
                 path: url.pathname,
                 reason: readErrorMessage(failure),
