@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findFreePorts } from '../../packages/daemon/testing/platform/find-free-ports';
+import { findFreePorts } from '../../packages/daemon/testing';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { createInstanceClient, runImp, runImpWith, runShellInImp } from '../lib/imp-cli';
