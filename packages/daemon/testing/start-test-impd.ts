@@ -423,7 +423,7 @@ export async function startTestImpd(
     fake.releaseHangs();
 
     await impd.stop({ sleepImps: false, deadlineMs: 0 });
-    await Promise.all([impd.app.stop(true), impd.proxy.stop(), impd.broker.stop()]);
+    await Promise.all([impd.app.server?.stop(true), impd.proxy.stop(), impd.broker.stop()]);
   };
 
   const startImpd = async (identity: HostIdentity): Promise<Impd> => {
