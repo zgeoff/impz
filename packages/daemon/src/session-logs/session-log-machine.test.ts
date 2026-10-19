@@ -7,6 +7,7 @@ import { buildMockSessionOutput } from '../test-utils/build-mock-session-output'
 import { buildStubTapStream } from '../test-utils/build-stub-tap-stream';
 import { createGenerationLog } from './generation-log';
 import { sessionLogMachine } from './session-log-machine';
+import type { OpeningTap } from './session-log-machine';
 
 async function setupTest() {
   const root = await mkdtemp(join(tmpdir(), 'imp-session-log-machine-'));
@@ -25,8 +26,8 @@ async function setupTest() {
 test('it gives a key one tap slot, to the first opening', async () => {
   const ctx = await setupTest();
 
-  const first = { opening: true } as const;
-  const second = { opening: true } as const;
+  const first: OpeningTap = { opening: true };
+  const second: OpeningTap = { opening: true };
 
   ctx.actor.send({ type: 'tap.open', key: 'imp-1/a3f1', slot: first });
   ctx.actor.send({ type: 'tap.open', key: 'imp-1/a3f1', slot: second });
@@ -37,8 +38,8 @@ test('it gives a key one tap slot, to the first opening', async () => {
 test('it frees a tap slot only for the owner that holds it', async () => {
   const ctx = await setupTest();
 
-  const stale = { opening: true } as const;
-  const current = { opening: true } as const;
+  const stale: OpeningTap = { opening: true };
+  const current: OpeningTap = { opening: true };
 
   ctx.actor.send({ type: 'tap.open', key: 'imp-1/a3f1', slot: current });
   ctx.actor.send({ type: 'tap.release', key: 'imp-1/a3f1', owner: stale });

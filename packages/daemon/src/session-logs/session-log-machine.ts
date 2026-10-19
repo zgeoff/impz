@@ -205,13 +205,18 @@ interface CapParams {
   readonly at: number;
 }
 
+// the types setup infers from: xstate reads only their types, never a value
+interface SessionLogTypes {
+  readonly context?: SessionLogContext;
+  readonly events?: SessionLogEvent;
+  readonly emitted?: CapNoticeEvent;
+}
+
+const types: SessionLogTypes = {};
+
 // the in-process state of the session logs, which only its events change
 export const sessionLogMachine = setup({
-  types: {
-    context: {} as SessionLogContext,
-    events: {} as SessionLogEvent,
-    emitted: {} as CapNoticeEvent,
-  },
+  types,
   guards: {
     // a log from an earlier life of the imp, or ended, owns neither the
     // key's slot nor its place
@@ -354,7 +359,7 @@ export const sessionLogMachine = setup({
         params: (args) => ({ impId: args.event.impId, at: args.event.at }),
       },
       actions: [
-        emit((args) => ({ type: 'cap.notice' as const, impId: args.event.impId })),
+        emit((args): CapNoticeEvent => ({ type: 'cap.notice', impId: args.event.impId })),
         assign({
           capNotices: (args) =>
             buildMapWith(args.context.capNotices, args.event.impId, args.event.at),
