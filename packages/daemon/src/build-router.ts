@@ -1,40 +1,27 @@
-import { EVENT_VERSION, hasScope, impContract, isImpAllowed } from '@impz/api';
-import type { Image, ImageBuildPhase, Imp, ImpEvent, Scope } from '@impz/api';
-import { implement } from '@orpc/server';
-import { buildBuilderError, buildForbiddenError } from './api-errors';
-import { readImpName } from './audit/api-audit';
+import { EVENT_VERSION, hasScope, isImpAllowed } from '@impz/api';
+import type { Imp, ImpEvent } from '@impz/api';
+import { buildForbiddenError } from './api-errors';
 import type { ApiAudit } from './audit/api-audit';
-import {
-  checkAccess,
-  findAccess,
-  findForkAuthority,
-  findGrantAuthority,
-  isAuditedProcedure,
-  isRefusalAudited,
-} from './auth/access-policy';
-import { readChangedImps } from './auth/builder-calls';
+import { findForkAuthority } from './auth/access-policy';
 import { formatCaller, isCallerAllowed } from './auth/caller';
 import type { Caller } from './auth/caller';
-import {
-  isLeaseVisible,
-  requireLeaseHolder,
-  toApiLease,
-  toCallerError,
-  toLeaseSummary,
-} from './auth/caller-view';
+import { isLeaseVisible, requireLeaseHolder, toApiLease, toLeaseSummary } from './auth/caller-view';
 import type { TokenStore } from './auth/token-store';
 import { buildBackupsOffError } from './backup/backup-service';
 import type { BackupService } from './backup/backup-service';
 import type { Broker } from './broker/broker-service';
+import { buildAuditRoutes } from './build-audit-routes';
+import { buildGrantRoutes } from './build-grant-routes';
+import { buildImageRoutes } from './build-image-routes';
+import { buildImplementer } from './build-implementer';
+import { buildNetworkRoutes } from './build-network-routes';
+import { buildOAuthRoutes } from './build-oauth-routes';
+import { buildSecretRoutes } from './build-secret-routes';
 import { buildSystemRoutes } from './build-system-routes';
 import { buildTokenRoutes } from './build-token-routes';
 import type { CheckpointService } from './checkpoints/checkpoint-service';
 import type { Config } from './config';
-import { listApiCalls } from './db/api-audit';
-import type { ImageRecord } from './db/images';
-import { findImpByName } from './db/imps';
 import type { ImpDatabase } from './db/open-database';
-import { findSecret } from './db/secrets';
 import type { EgressService } from './egress/egress-service';
 import { createEventCheck } from './events/event-check';
 import { openEventStream } from './events/event-stream';
@@ -44,25 +31,22 @@ import type { DnsTokenStatus } from './https/dns/dns-token';
 import { createExposureService } from './https/exposure-service';
 import type { PublicRecordsLink } from './https/public-records-link';
 import type { Repeat } from './images/build-event-stream';
-import { runImageOp } from './images/image-op-stream';
-import type { ImageOpStreamOptions } from './images/image-op-stream';
 import type { ImageService } from './images/image-service';
 import type { TemplateService } from './images/template-service';
 import { readPresentedLeases } from './imps/imp-presenter';
 import type { ImpService } from './imps/imp-service';
+import { mergeSignals } from './merge-signals';
 import type { MoveService } from './moves/move-service';
 import type { TailscaleStatus } from './net/tailscale-status';
 import type { NetworkService } from './networks/network-service';
 import type { McpAuth } from './oauth/create-mcp-auth';
+import { requireNamedImp } from './require-named-imp';
 import type { DiskBudget } from './storage/disk-budget';
 import type { StorageBackend } from './storage/storage-backend';
 import type { StorageGcService } from './storage/storage-gc';
 import type { SystemFileInfo } from './storage/system-file-info';
 import type { TailnetNamesStatus } from './tailnet-names/tailnet-names';
 import type { KsmHostStats } from './vmm/ksm';
-
-// audit rows `audit.list` gives when the caller names no limit
-const AUDIT_LIMIT = 100;
 
 // log lines `services.logs` sends first when the caller names no count
 const DEFAULT_LOG_LINES = 100;
@@ -116,26 +100,6 @@ export interface RouterDeps {
   readonly oauth: McpAuth;
 }
 
-// what a streamed image call's options are made from
-interface ImageOpCall {
-  readonly context: RpcContext & { readonly auditDetail: Readonly<AuditDetail> };
-  readonly input: unknown;
-  readonly signal?: AbortSignal | undefined;
-}
-
-// what each call gets from build-app: who made it, and a signal that aborts
-// when what it authenticated with ends (a logout, a removed token); null
-// for nothing that can end
-interface RpcContext {
-  readonly caller: Caller;
-  readonly ends: AbortSignal | null;
-}
-
-// what a handler resolved that the call's audit row keeps
-interface AuditDetail {
-  value: string | null;
-}
-
 export function buildRouter(deps: RouterDeps) {
   const exposure = createExposureService({
     db: deps.db,
@@ -152,38 +116,6 @@ export function buildRouter(deps: RouterDeps) {
     const at = new Date(deps.now());
 
     return imps.map((imp) => ({ v: EVENT_VERSION, at, ev: 'ImpAdded', reason: 'snapshot', imp }));
-  };
-
-  // A streamed image call audits itself as its work ends, so the row holds
-  // the outcome rather than the stream's opening (access-policy.ts)
-  const buildImageOpOptions = (
-    call: Readonly<ImageOpCall>,
-    procedure: string,
-    firstPhase: ImageBuildPhase,
-  ): ImageOpStreamOptions => {
-    const startedAt = deps.now();
-
-    return {
-      firstPhase,
-      signal: call.signal ?? new AbortController().signal,
-      keepaliveMs: deps.imageKeepaliveMs,
-      ...(deps.imageKeepaliveRepeat !== undefined && { repeat: deps.imageKeepaliveRepeat }),
-      now: deps.now,
-      record: (failure) => {
-        const impName = readImpName(procedure, call.input, null);
-
-        deps.audit.record(
-          {
-            procedure,
-            actor: call.context.caller,
-            impName,
-            startedAt,
-            detail: call.context.auditDetail.value,
-          },
-          failure,
-        );
-      },
-    };
   };
 
   // one for every stream: each event is checked once, whoever reads it
@@ -466,94 +398,7 @@ export function buildRouter(deps: RouterDeps) {
         return {};
       }),
     },
-    images: {
-      list: os.images.list.handler(async () => {
-        const images = await deps.images.listImages();
-
-        return images.map((image) => toApiImage(image));
-      }),
-
-      // a client that goes, or whose token ends, ends a pull and its builder
-      add: os.images.add.handler(async (context) => {
-        const input = context.input;
-        const signal = mergeSignals(context.signal, context.context.ends);
-
-        // the reference the pull resolved goes in the audit row
-        const onResolved = (reference: string): void => {
-          context.context.auditDetail.value = reference;
-        };
-
-        const image =
-          'imp' in input
-            ? await deps.templates.createTemplate(input.imp, input.name)
-            : await deps.images.addImage(input.ref, input.name, { signal, onResolved });
-
-        return toApiImage(image);
-      }),
-      addStream: os.images.addStream.handler((context) => {
-        const input = context.input;
-        const firstPhase = 'imp' in input ? 'copy' : 'pull';
-
-        // the reference the pull resolved goes in the audit row, as for add
-        const onResolved = (reference: string): void => {
-          context.context.auditDetail.value = reference;
-        };
-
-        return runImageOp(
-          async (signal, report) => {
-            // a template copies an imp's disk under its lock: no client
-            // stops it, as with images.add
-            const image =
-              'imp' in input
-                ? await deps.templates.createTemplate(input.imp, input.name)
-                : await deps.images.addImage(input.ref, input.name, {
-                    signal,
-                    setPhase: report.setPhase,
-                    onResolved,
-                  });
-
-            return toApiImage(image);
-          },
-          buildImageOpOptions(context, 'images.addStream', firstPhase),
-        );
-      }),
-      buildStream: os.images.buildStream.handler((context) =>
-        runImageOp(
-          async (signal, report) => {
-            const image = await deps.images.buildImage(
-              context.input.contextDir,
-              context.input.name,
-              context.input.dockerfile,
-              { signal, setPhase: report.setPhase, output: report.output },
-            );
-
-            return toApiImage(image);
-          },
-          {
-            ...buildImageOpOptions(context, 'images.buildStream', 'pack'),
-            logs: context.input.logs === true,
-          },
-        ),
-      ),
-      builds: os.images.builds.handler(() => deps.images.listBuildRuns()),
-      build: os.images.build.handler(async (context) => {
-        // a client that goes stops the build on the engine, which may run
-        // past any fetch limit
-        const image = await deps.images.buildImage(
-          context.input.contextDir,
-          context.input.name,
-          context.input.dockerfile,
-          { ...(context.signal !== undefined && { signal: context.signal }) },
-        );
-
-        return toApiImage(image);
-      }),
-      delete: os.images.delete.handler(async (context) => {
-        await deps.images.removeImage(context.input.name);
-
-        return {};
-      }),
-    },
+    images: buildImageRoutes(os, deps),
     exec: {
       // NOT_FOUND now, rather than at the socket's start
       ticket: os.exec.ticket.handler(async (context) => {
@@ -625,132 +470,10 @@ export function buildRouter(deps: RouterDeps) {
         deps.imps.removeFile(context.input.name, context.input.path),
       ),
     },
-    secrets: {
-      add: os.secrets.add.handler((context) => deps.broker.addSecret(context.input)),
-
-      // a caller limited to some imps sees the grants to those only
-      list: os.secrets.list.handler(async (context) => {
-        const patterns = context.context.caller.imps;
-
-        const secrets = await deps.broker.listSecrets();
-
-        return secrets.map((secret) => ({
-          name: secret.name,
-          kind: secret.kind,
-          rules: secret.rules,
-          imps: secret.imps.filter((name) => isImpAllowed(patterns, name)),
-          createdAt: secret.createdAt,
-          oauth: secret.oauth,
-        }));
-      }),
-      refresh: os.secrets.refresh.handler((context) =>
-        deps.broker.refreshSecret(context.input.name),
-      ),
-      delete: os.secrets.delete.handler(async (context) => {
-        await deps.broker.deleteSecret(context.input.name);
-
-        return {};
-      }),
-    },
-    networks: {
-      // a caller limited to some imps sees those members only
-      list: os.networks.list.handler(async (context) => {
-        const patterns = context.context.caller.imps;
-
-        const networks = await deps.networks.listNetworks();
-
-        return networks.map((network) => ({
-          name: network.name,
-          imps: network.imps.filter((name) => isImpAllowed(patterns, name)),
-          createdAt: network.createdAt,
-        }));
-      }),
-      create: os.networks.create.handler((context) =>
-        deps.networks.createNetwork(context.input.name),
-      ),
-      delete: os.networks.delete.handler(async (context) => {
-        await deps.networks.deleteNetwork(context.input.name);
-
-        return {};
-      }),
-      join: os.networks.join.handler((context) =>
-        deps.networks.joinNetwork(context.input.network, context.input.name),
-      ),
-      leave: os.networks.leave.handler((context) =>
-        deps.networks.leaveNetwork(context.input.network, context.input.name),
-      ),
-      warnings: os.networks.warnings.handler((context) =>
-        deps.networks.readTrustWarnings(context.input.name),
-      ),
-    },
-    grants: {
-      // a caller for some imps grants the secret its list names, checked
-      // again in the grant's transaction: it could be deleted and made
-      // again since the access check
-      add: os.grants.add.handler(async (context) => {
-        const input = context.input;
-
-        await deps.broker.addGrant(
-          input.name,
-          input.secret,
-          findGrantAuthority(context.context.caller, input.secret),
-          input.filter,
-        );
-
-        return {};
-      }),
-      delete: os.grants.delete.handler(async (context) => {
-        const input = context.input;
-
-        await deps.broker.removeGrant(
-          input.name,
-          input.secret,
-          findGrantAuthority(context.context.caller, input.secret),
-        );
-
-        return {};
-      }),
-      list: os.grants.list.handler((context) => deps.broker.listGrants(context.input.name)),
-      details: os.grants.details.handler((context) =>
-        deps.broker.listGrantDetails(context.input.name),
-      ),
-    },
-    audit: {
-      list: os.audit.list.handler((context) => {
-        const caller = context.context.caller;
-
-        requireNamedImp(caller, context.input.name);
-
-        return deps.broker.listAudit(
-          context.input.name ?? null,
-          context.input.limit ?? AUDIT_LIMIT,
-          caller.imps,
-        );
-      }),
-      refused: os.audit.refused.handler((context) => {
-        const caller = context.context.caller;
-
-        requireNamedImp(caller, context.input.name);
-
-        return deps.broker.listRefused(
-          context.input.name ?? null,
-          context.input.limit ?? AUDIT_LIMIT,
-          caller.imps,
-        );
-      }),
-      calls: os.audit.calls.handler((context) => {
-        const caller = context.context.caller;
-
-        requireNamedImp(caller, context.input.name);
-
-        return listApiCalls(
-          deps.db,
-          context.input.name ?? null,
-          context.input.limit ?? AUDIT_LIMIT,
-          caller.imps,
-        );
-      }),
-    },
+    secrets: buildSecretRoutes(os, deps),
+    networks: buildNetworkRoutes(os, deps),
+    grants: buildGrantRoutes(os, deps),
+    audit: buildAuditRoutes(os, deps),
     events: {
       // a dashboard's stream ends when its session expires or at a logout;
       // any stream ends when its token is removed
@@ -773,170 +496,11 @@ export function buildRouter(deps: RouterDeps) {
       }),
     },
     system: buildSystemRoutes(os, deps),
-    oauth: {
-      clients: {
-        list: os.oauth.clients.list.handler(() => deps.oauth.listClients()),
-        add: os.oauth.clients.add.handler((context) =>
-          deps.oauth.addClient(context.input.name, context.input.redirectUris),
-        ),
-        update: os.oauth.clients.update.handler((context) =>
-          deps.oauth.updateClient(context.input.name, context.input.redirectUris),
-        ),
-        delete: os.oauth.clients.delete.handler(async (context) => {
-          await deps.oauth.removeClient(context.input.name);
-
-          return {};
-        }),
-      },
-      grants: {
-        list: os.oauth.grants.list.handler(() => deps.oauth.listGrants()),
-        delete: os.oauth.grants.delete.handler(async (context) => {
-          await deps.oauth.removeGrant(context.input.id);
-
-          return {};
-        }),
-      },
-      approvals: {
-        get: os.oauth.approvals.get.handler((context) =>
-          deps.oauth.readApproval(context.input.code, context.context.caller),
-        ),
-        approve: os.oauth.approvals.approve.handler((context) => {
-          deps.oauth.approve(
-            context.input.code,
-            context.context.caller,
-            context.input.scope,
-            context.input.imps,
-          );
-
-          return {};
-        }),
-      },
-    },
+    oauth: buildOAuthRoutes(os, deps),
     tokens: buildTokenRoutes(os, deps),
   });
 }
 
-// the implementer every procedure is built on, which a topic's routes take
-// (build-system-routes.ts, build-token-routes.ts)
-export type RpcImplementer = ReturnType<typeof buildImplementer>;
-
-function buildImplementer(deps: RouterDeps) {
-  // read at each grant or revoke, never cached: the secret by a name can be
-  // another one than a token was given
-  const readGeneration = async (name: string): Promise<string | null> => {
-    const secret = await findSecret(deps.db, name);
-
-    return secret?.generation ?? null;
-  };
-
-  // every call is checked against its access rule (auth/access-policy.ts);
-  // every call that changes something, refused or not, leaves an audit row
-  // after its answer
-  return implement(impContract)
-    .$context<RpcContext>()
-    .use(async (options, input) => {
-      const procedure = options.path.join('.');
-      const caller = options.context.caller;
-
-      const requireAccess = async (): Promise<void> => {
-        const access = findAccess(procedure);
-
-        const refusal = await checkAccess(access, caller, input, readGeneration);
-
-        if (refusal !== null) {
-          throw buildForbiddenError(refusal.message, refusal.reason);
-        }
-
-        for (const name of readChangedImps(procedure, access, input)) {
-          const imp = await findImpByName(deps.db, name);
-
-          if (imp?.kind === 'builder') {
-            throw buildBuilderError(name);
-          }
-        }
-      };
-
-      // what a handler resolved for the audit row, such as an add's pull
-      const auditDetail: AuditDetail = { value: null };
-      const startedAt = deps.now();
-
-      const buildCall = (output: unknown) => ({
-        procedure,
-        actor: caller,
-        impName: readImpName(procedure, input, output),
-        startedAt,
-        detail: auditDetail.value,
-      });
-
-      if (!isAuditedProcedure(procedure)) {
-        try {
-          await requireAccess();
-        } catch (error) {
-          if (isRefusalAudited(procedure)) {
-            deps.audit.record(buildCall(null), error);
-          }
-
-          throw toCallerError(error, caller);
-        }
-
-        try {
-          return await options.next({ context: { auditDetail } });
-        } catch (error) {
-          throw toCallerError(error, caller);
-        }
-      }
-
-      try {
-        await requireAccess();
-
-        const result = await options.next({ context: { auditDetail } });
-
-        deps.audit.record(buildCall(result.output), null);
-
-        return result;
-      } catch (error) {
-        deps.audit.record(buildCall(null), error);
-
-        // a refusal names only the leases and imps the caller may see
-        throw toCallerError(error, caller);
-      }
-    });
-}
-
-export function toApiImage(image: ImageRecord): Image {
-  return {
-    id: image.id,
-    name: image.name,
-    ref: image.ref,
-    digest: image.digest,
-    source: image.source,
-    createdAt: image.createdAt,
-    sizeBytes: image.sizeBytes,
-  };
-}
-
-// an audit or lease list may name one imp, which must be the caller's
-function requireNamedImp(
-  caller: Readonly<Caller>,
-  name: string | undefined,
-  scope: Scope = 'read',
-): void {
-  if (name !== undefined && !isCallerAllowed(caller, scope, name)) {
-    throw buildForbiddenError(`${formatCaller(caller)} may not touch imp ${name}`);
-  }
-}
-
 function readEventImpName(event: ImpEvent): string {
   return 'imp' in event ? event.imp.name : event.name;
-}
-
-function mergeSignals(
-  request: AbortSignal | undefined,
-  ends: AbortSignal | null,
-): AbortSignal | undefined {
-  if (ends === null) {
-    return request;
-  }
-
-  return request === undefined ? ends : AbortSignal.any([request, ends]);
 }

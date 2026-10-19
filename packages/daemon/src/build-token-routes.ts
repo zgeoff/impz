@@ -1,5 +1,6 @@
 import { toIdentity } from './auth/caller';
-import type { RouterDeps, RpcImplementer } from './build-router';
+import type { RpcImplementer } from './build-implementer';
+import type { RouterDeps } from './build-router';
 
 // `tokens.*`: the API tokens, their lists and their SSH keys
 export function buildTokenRoutes(os: RpcImplementer, deps: RouterDeps) {

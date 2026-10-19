@@ -33,8 +33,11 @@ test.each([
     false,
   ],
   ['an empty line', '', false],
-])('#isPeerAccept judges %s', (_kind, rule, expected) => {
-  const isAccept = isPeerAccept(rule);
+])(
+  'it counts only setup-net.sh’s exact rule as the peer accept, given %s',
+  (_kind, rule, expected) => {
+    const isAccept = isPeerAccept(rule);
 
-  expect(isAccept).toBe(expected);
-});
+    expect(isAccept).toBe(expected);
+  },
+);

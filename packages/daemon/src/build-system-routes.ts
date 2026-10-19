@@ -1,7 +1,8 @@
 import { SYSTEM_FEATURES } from '@impz/api';
 import type { SystemInfo } from '@impz/api';
 import packageJson from '../package.json' with { type: 'json' };
-import type { RouterDeps, RpcImplementer } from './build-router';
+import type { RpcImplementer } from './build-implementer';
+import type { RouterDeps } from './build-router';
 import type { Config } from './config';
 import { writeDatabaseCopy } from './db/database-copy';
 import { listImps } from './db/imps';
