@@ -3,9 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { buildTestApp } from '../../testing/imps/build-test-app';
-import { createImpTest } from '../../testing/start-test-impd';
-import type { ImpTestOptions } from '../../testing/start-test-impd';
+import { startTestImpd } from '../../testing/start-test-impd';
+import type { TestImpdOptions } from '../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
 import { findImpByName, updateImpActivity } from '../db/imps';
 import { hasSnapshot } from '../sleep/snapshot-meta';
@@ -15,20 +14,18 @@ import { createCpuCgroups } from '../vmm/cpu-cgroups';
 // impd over the stub VMM with the cgroups and host a test passes, and a
 // client of its API
 async function setupTest(
-  options: Pick<ImpTestOptions, 'env' | 'cgroups' | 'hostCpus' | 'frozenClockMs'> = {},
+  options: Pick<TestImpdOptions, 'env' | 'cgroups' | 'hostCpus' | 'frozenClockMs'> = {},
 ) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await createImpTest(stack, options);
+  const harness = await startTestImpd(stack, options);
 
   // every create boots an image row; the default image is ubuntu
   await harness.createTestImage('ubuntu');
 
-  const app = buildTestApp(harness, harness);
-
-  return { ...harness, client: app.client };
+  return harness;
 }
 
 test('it boots a new imp with the limit and weight it was given', async () => {
@@ -235,7 +232,7 @@ test('it shows RAM but no CPU share from the first sampler pass', async () => {
 
   invariant(first.resources?.sample);
 
-  // createImpTest's VMs each own 300 MiB while alive, as the governor reads them
+  // startTestImpd's VMs each own 300 MiB while alive, as the governor reads them
   expect(first.ramMib).toBe(300);
   expect(first.resources.sample.cpuPercent).toBeUndefined();
 });

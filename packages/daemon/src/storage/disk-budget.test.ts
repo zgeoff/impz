@@ -1,26 +1,25 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import invariant from 'tiny-invariant';
-import { buildTestApp } from '../../testing/imps/build-test-app';
-import { createImpTest } from '../../testing/start-test-impd';
-import type { ImpTestOptions } from '../../testing/start-test-impd';
+import { startTestImpd } from '../../testing/start-test-impd';
+import type { TestImpdOptions } from '../../testing/start-test-impd';
 import { findImpByName } from '../db/imps';
 import { buildImpPaths } from './data-layout';
 import { createDiskBudget } from './disk-budget';
 
 // impd over the stub VMM, whose disk a test fills past what impd is asked
 // to write, and a client of its API
-async function setupTest(options: ImpTestOptions = {}) {
+async function setupTest(options: TestImpdOptions = {}) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await createImpTest(stack, options);
+  const harness = await startTestImpd(stack, options);
 
   // the image every imp boots from
   await harness.createTestImage('ubuntu');
 
-  return { ...harness, client: buildTestApp(harness, harness).client };
+  return harness;
 }
 
 test('it allows a write that leaves the reserve free', async () => {

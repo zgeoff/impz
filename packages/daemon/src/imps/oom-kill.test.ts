@@ -1,15 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { createImpTest } from '../../testing/start-test-impd';
-import type { ImpTestOptions } from '../../testing/start-test-impd';
+import { startTestImpd } from '../../testing/start-test-impd';
+import type { TestImpdOptions } from '../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
 import { OOM_KILL_TRIGGER, startOomWatch } from './oom-kill';
 
-async function setupTest(options: ImpTestOptions = {}) {
+async function setupTest(options: TestImpdOptions = {}) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await createImpTest(stack, options);
+  const harness = await startTestImpd(stack, options);
 
   // the image every imp boots from
   await harness.createTestImage('ubuntu');

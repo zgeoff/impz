@@ -1,7 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { buildTestApp } from '../../testing/imps/build-test-app';
-import { createImpTest } from '../../testing/start-test-impd';
-import type { ImpTestOptions } from '../../testing/start-test-impd';
+import { startTestImpd } from '../../testing/start-test-impd';
+import type { TestImpdOptions } from '../../testing/start-test-impd';
 import { readSnapshotMeta } from '../sleep/snapshot-meta';
 import { buildImpPaths } from '../storage/data-layout';
 
@@ -9,7 +8,7 @@ import { buildImpPaths } from '../storage/data-layout';
 // its API
 async function setupTest(
   options: Pick<
-    ImpTestOptions,
+    TestImpdOptions,
     'env' | 'readUnsharedRamMib' | 'checkGuestMerge' | 'readKsmProfitMib' | 'readKsmHostStats'
   > = {},
 ) {
@@ -17,14 +16,12 @@ async function setupTest(
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await createImpTest(stack, options);
+  const harness = await startTestImpd(stack, options);
 
   // every create boots an image row; the default image is base
   await harness.createTestImage('base');
 
-  const app = buildTestApp(harness, harness);
-
-  return { ...harness, client: app.client };
+  return harness;
 }
 
 test('it reports no KSM in system info without IMP_KSM', async () => {
@@ -134,7 +131,7 @@ test('it logs an adopted VM that keeps the merge flag without IMP_KSM once', asy
   await ctx.client.imps.create({ name: 'dev' });
 
   // an impd with IMP_KSM started the VM; this one adopts it
-  await ctx.restartImpd().imps.reconcileImps();
+  await ctx.restartImpd();
 
   expect(ctx.logs.filter((line) => line.includes('keeps the KSM merge flag'))).toStrictEqual([
     'impd: dev: its VM keeps the KSM merge flag with IMP_KSM off, until the imp restarts',

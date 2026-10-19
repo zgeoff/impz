@@ -13,7 +13,7 @@ interface HoldGate {
   readonly reached: () => void;
 }
 
-// createImpTest's `cloneDisk` and `growFilesystem`: a clone copies the file,
+// startTestImpd's `cloneDisk` and `growFilesystem`: a clone copies the file,
 // as an XFS reflink ends with the same bytes, and a grow reports success
 // unless a test set the filesystem unclean.
 export function buildStubDiskTools() {

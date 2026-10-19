@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { createImpTest } from '../../testing/start-test-impd';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { startStubSessionAgent } from '../../testing/vm/start-stub-session-agent';
 import { readVmIdentity, writeVmIdentity } from '../sleep/vm-identity';
 import { buildImpPaths } from '../storage/data-layout';
@@ -16,12 +16,13 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await createImpTest(stack);
+  const harness = await startTestImpd(stack);
 
   // every create boots an image row; the default image is base
   await harness.createTestImage('base');
 
-  return { ...harness, stack };
+  // assigned, not spread: the harness's parts follow a restarted impd
+  return Object.assign(harness, { stack });
 }
 
 test('it refuses to start a session that requires the broker without a grant', async () => {
@@ -193,9 +194,7 @@ test('it passes an attach that requires the broker after an impd restart', async
   started.close();
 
   // a new impd adopts the running VM and its sessions
-  const restarted = ctx.restartImpd();
-
-  await restarted.imps.reconcileImps();
+  const restarted = await ctx.restartImpd();
 
   const resumed = await restarted.imps.openExec('dev', {
     argv: ['sh'],
@@ -237,9 +236,7 @@ test('it refuses an attach that requires the broker to a session a cold boot sta
 
   started.close();
 
-  const restarted = ctx.restartImpd();
-
-  await restarted.imps.reconcileImps();
+  const restarted = await ctx.restartImpd();
 
   // a cold boot: the guest's sessions are gone, and one started without
   // the requirement takes the name
