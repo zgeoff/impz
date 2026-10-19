@@ -3,6 +3,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { waitFor } from '@impz/test-utils/wait-for';
 import fc from 'fast-check';
 import invariant from 'tiny-invariant';
+import { match } from 'ts-pattern';
 import { createImp, findImpByName, listImps, updateImpActivity } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
 import { updateImpState } from '../db/update-imp-state';
@@ -695,12 +696,12 @@ test(
 
               // a sleep the governor did, as impd logs it
               onLog: (message) => {
-                const match =
+                const asleep =
                   /^impd: (?<name>\S+): asleep in \d+ms \((?:to make room for \S+|RAM over budget)\)/u.exec(
                     message,
                   );
 
-                const name = match?.groups?.['name'];
+                const name = asleep?.groups?.['name'];
 
                 if (name !== undefined) {
                   governorSleeps.push(readSleep(name, holder.now()));
@@ -734,58 +735,30 @@ test(
             // the interpreter: each generated op through the API or, for a
             // host event, through the stand-in that impd reads it from
             const runOp = async (op: (typeof ops)[number]): Promise<void> => {
-              switch (op.kind) {
-                case 'create': {
-                  await client.imps.create({ name: op.name });
-
-                  break;
-                }
-                case 'sleep': {
-                  await client.imps.sleep({ name: op.name });
-
-                  break;
-                }
-                case 'wake': {
-                  await client.imps.wake({ name: op.name });
-
-                  break;
-                }
-                case 'start': {
-                  await client.imps.start({ name: op.name });
-
-                  break;
-                }
-                case 'stop': {
-                  await client.imps.stop({ name: op.name });
-
-                  break;
-                }
-                case 'restore': {
-                  await client.checkpoints.restore({ name: op.name, checkpoint: 'base' });
-
-                  break;
-                }
-                case 'hold': {
-                  await client.imps.hold({ name: op.name, seconds: 30 });
-
-                  break;
-                }
-                case 'destroy': {
-                  await client.imps.destroy({ name: op.name });
-
-                  break;
-                }
-                case 'crash': {
-                  const imp = await findImpByName(ctx.db, op.name);
+              await match(op)
+                .returnType<unknown>()
+                .with({ kind: 'create' }, (create) => client.imps.create({ name: create.name }))
+                .with({ kind: 'sleep' }, (sleep) => client.imps.sleep({ name: sleep.name }))
+                .with({ kind: 'wake' }, (wake) => client.imps.wake({ name: wake.name }))
+                .with({ kind: 'start' }, (start) => client.imps.start({ name: start.name }))
+                .with({ kind: 'stop' }, (stop) => client.imps.stop({ name: stop.name }))
+                .with({ kind: 'restore' }, (restore) =>
+                  client.checkpoints.restore({ name: restore.name, checkpoint: 'base' }),
+                )
+                .with({ kind: 'hold' }, (hold) =>
+                  client.imps.hold({ name: hold.name, seconds: 30 }),
+                )
+                .with({ kind: 'destroy' }, (destroy) => client.imps.destroy({ name: destroy.name }))
+                .with({ kind: 'crash' }, async (crash) => {
+                  const imp = await findImpByName(ctx.db, crash.name);
 
                   ctx.fake.alive.delete(imp?.pid ?? 0);
-                  break;
-                }
-                case 'outdate': {
+                })
+                .with({ kind: 'outdate' }, async (outdate) => {
                   // firecracker changed under the snapshot: its wake boots
                   // cold. Only the version moves, as on a real upgrade; an imp
                   // with no snapshot makes this a no-op.
-                  const imp = await findImpByName(ctx.db, op.name);
+                  const imp = await findImpByName(ctx.db, outdate.name);
 
                   const paths = buildImpPaths(ctx.dataDir, imp?.id ?? '');
                   const meta = readSnapshotMeta(paths);
@@ -793,25 +766,13 @@ test(
                   if (meta !== null) {
                     writeSnapshotMeta(paths, { ...meta, firecrackerVersion: 'v0.1.0' });
                   }
+                })
+                .with({ kind: 'enforce' }, () => ctx.governor.enforce())
 
-                  break;
-                }
-                case 'enforce': {
-                  await ctx.governor.enforce();
-
-                  break;
-                }
-                case 'sigterm': {
-                  // impd stopping: every imp to sleep, and no boot after that
-                  await ctx.imps.sleepAllImps();
-
-                  break;
-                }
-                case 'tick': {
-                  ctx.advance(40_000);
-                  break;
-                }
-              }
+                // impd stopping: every imp to sleep, and no boot after that
+                .with({ kind: 'sigterm' }, () => ctx.imps.sleepAllImps())
+                .with({ kind: 'tick' }, () => ctx.advance(40_000))
+                .exhaustive();
             };
 
             // every op starts where the scheduler lets it; a rejection is kept

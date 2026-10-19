@@ -33,6 +33,7 @@
     "lru-cache": "catalog:",
     "reflect-metadata": "catalog:",
     "ssh2": "catalog:",
+    "ts-pattern": "catalog:",
     "xstate": "catalog:",
     "zod": "catalog:"
   },

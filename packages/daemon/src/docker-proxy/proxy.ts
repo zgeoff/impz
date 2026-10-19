@@ -2,6 +2,7 @@
 // rebuilt. It closes the Docker socket path only; SYS_ADMIN still lets root
 // out of imp-host (docs/architecture/host.md#the-docker-socket).
 
+import { P, match } from 'ts-pattern';
 import { z } from 'zod';
 import { formatEngineFailure, formatRefusal } from './refusal';
 import { findRequestRoute, formatQuery } from './router';
@@ -397,43 +398,24 @@ export function createDockerProxy(
       return buildRefusal(request, path, checked.reason);
     }
 
-    const route = routed.route;
     const prefix = routed.versionPrefix;
 
-    switch (route.kind) {
-      case 'ping': {
-        return sendAndRelay(prefix, { method: request.method, path: '/_ping' });
-      }
-
-      case 'version': {
-        return sendAndRelay(prefix, { method: 'GET', path: '/version' });
-      }
-
-      case 'image-inspect': {
-        return sendAndRelay(prefix, { method: 'GET', path: `/images/${route.name}/json` });
-      }
-
-      case 'pull': {
-        return handlePull(request, routed, path);
-      }
-
-      case 'build': {
-        return handleBuild(request, routed, path);
-      }
-
-      case 'create': {
-        return handleCreate(request, prefix, path);
-      }
-
-      case 'export':
-      case 'remove': {
-        return handleOwnContainer(request, prefix, path, route.id);
-      }
-
-      default: {
-        return buildRefusal(request, path, 'no handler for this route');
-      }
-    }
+    return match(routed.route)
+      .returnType<Promise<Response> | Response>()
+      .with({ kind: 'ping' }, () =>
+        sendAndRelay(prefix, { method: request.method, path: '/_ping' }),
+      )
+      .with({ kind: 'version' }, () => sendAndRelay(prefix, { method: 'GET', path: '/version' }))
+      .with({ kind: 'image-inspect' }, (inspect) =>
+        sendAndRelay(prefix, { method: 'GET', path: `/images/${inspect.name}/json` }),
+      )
+      .with({ kind: 'pull' }, () => handlePull(request, routed, path))
+      .with({ kind: 'build' }, () => handleBuild(request, routed, path))
+      .with({ kind: 'create' }, () => handleCreate(request, prefix, path))
+      .with({ kind: P.union('export', 'remove') }, (owned) =>
+        handleOwnContainer(request, prefix, path, owned.id),
+      )
+      .exhaustive();
   };
 
   return async (request) => {
