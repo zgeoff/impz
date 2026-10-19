@@ -1,26 +1,15 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { CLIENT_VERSION, ORPCError, createImpClient } from '@impz/client';
-import { loadConfig } from '@impz/daemon/src/config';
-import { createImpd } from '@impz/daemon/src/create-impd';
 import { createImage } from '@impz/daemon/src/db/images';
-import { openDatabase } from '@impz/daemon/src/db/open-database';
 import {
   buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '@impz/daemon/src/storage/data-layout';
-import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
-import { buildMockNewImage } from '@impz/daemon/testing/imps/build-mock-new-image';
-import { findFreePorts } from '@impz/daemon/testing/platform/find-free-ports';
-import { buildStubCpuCgroups } from '@impz/daemon/testing/vm/build-stub-cpu-cgroups';
-import { buildStubVmm } from '@impz/daemon/testing/vm/build-stub-vmm';
+  buildMockNewImage,
+  buildStubImpdReleaseFetch,
+  startTestImpd,
+} from '@impz/daemon/testing';
 import invariant from 'tiny-invariant';
 import { buildStubBackoffClock } from '../test-utils/build-stub-backoff-clock';
-import { buildStubOlderImpdFetch } from '../test-utils/build-stub-older-impd-fetch';
 import { printEvents } from './events-command';
 
 // impd's real app, listening on a loopback port for the spawned CLI, and an
@@ -30,114 +19,16 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'cli-events-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-  });
-
-  // the system drive impd boots with
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
   // impd boots with a root bearer; each test reads it back for its client
   const rootToken = faker.string.alphanumeric(32);
 
-  const impd = await createImpd(config, {
-    db,
-    rootToken,
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
+  const harness = await startTestImpd(stack, { rootToken });
 
-    // the host's free space, so boot never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
+  const impd = harness.impd;
+  const port = harness.config.apiPort;
 
-    // Firecracker and the CPU, which the test host may not have
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-
-    // no IPv6 routes, tailnet, cgroups, taps or VMs on the test host
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-
-    // no broker bundle, tunnel or OAuth timer without a guest network
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-
-    // nft, conntrack and the uplinks belong to the host, not the test
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-
-    // the VMs' memory as /proc would show it
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  });
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
-  });
-
-  const port = findFreePorts(1).take();
-
-  // each listen registers the stop of its own server; a Bun server that a
-  // test stopped already stops again as a no-op
+  // each listen after impd's own registers the stop of its own server; a
+  // Bun server that a test stopped already stops again as a no-op
   const startListener = (): void => {
     impd.api.app.listen({ port, hostname: '127.0.0.1' });
 
@@ -148,8 +39,6 @@ async function setupTest() {
     stack.defer(() => server.stop(true));
   };
 
-  startListener();
-
   const sendRequest = (request: Request) => impd.api.app.handle(request);
 
   return {
@@ -157,9 +46,9 @@ async function setupTest() {
     sendRequest,
     rootToken,
     client: createImpClient({ url: 'http://impd.test', token: rootToken, fetch: sendRequest }),
-    db,
-    dataDir,
-    url: `http://127.0.0.1:${String(port)}`,
+    db: harness.db,
+    dataDir: harness.dataDir,
+    url: harness.url,
     stopListener: () => impd.api.app.stop(true),
     startListener,
   };
@@ -399,7 +288,8 @@ test('it says to upgrade an impd that has no stream procedure, without retrying'
   const older = createImpClient({
     url: 'http://impd.test',
     token: ctx.rootToken,
-    fetch: buildStubOlderImpdFetch(ctx.sendRequest, { withoutProcedures: ['events/stream'] }).fetch,
+    fetch: buildStubImpdReleaseFetch(ctx.sendRequest, { withoutProcedures: ['events/stream'] })
+      .fetch,
   });
 
   const info = await ctx.client.system.info();
