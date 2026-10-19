@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.0](https://github.com/zgeoff/impz/compare/v2.5.5...v2.6.0) (2026-10-19)
+
+
+### Features
+
+* **api:** declare the guest scratch folder in system.info ([#534](https://github.com/zgeoff/impz/issues/534)) ([3600483](https://github.com/zgeoff/impz/commit/360048324346352369e0a35f4d167a793c4aa82c))
+
 ## [2.5.5](https://github.com/zgeoff/impz/compare/v2.5.4...v2.5.5) (2026-10-19)
 
 ### Bug Fixes
