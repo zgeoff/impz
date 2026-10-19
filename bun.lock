@@ -20,6 +20,7 @@
         "@zgeoff/bun-test-extended": "catalog:",
         "@zgeoff/format-codemod": "catalog:",
         "@zgeoff/oxlint-config": "catalog:",
+        "@zgeoff/skill-gate": "catalog:",
         "dns-packet": "catalog:",
         "knip": "catalog:",
         "lefthook": "catalog:",
@@ -282,6 +283,7 @@
     "@zgeoff/bun-test-react": "0.2.1",
     "@zgeoff/format-codemod": "0.1.1",
     "@zgeoff/oxlint-config": "0.2.5",
+    "@zgeoff/skill-gate": "0.1.0",
     "acme-client": "5.4.0",
     "better-auth": "1.7.7",
     "dns-packet": "5.6.1",
@@ -1136,6 +1138,10 @@
     "@zgeoff/format-codemod": ["@zgeoff/format-codemod@0.1.1", "", { "dependencies": { "gunshi": "1.0.0-rc.1", "oxc-parser": "0.153.0" }, "bin": { "format-codemod": "dist/cli.js" } }, "sha512-jr4ZKTO8VS4vAycIkfFamtQc+iVK8A/WzyUDfU/heYlA7qXXoL/HW/GytMBvFczeC5usioqsHvazx6bGzd0nGA=="],
 
     "@zgeoff/oxlint-config": ["@zgeoff/oxlint-config@0.2.5", "", { "dependencies": { "@stylistic/eslint-plugin": "5.10.0" }, "peerDependencies": { "oxlint": ">=1.71.0" } }, "sha512-kyispUuOzb6Ycajcc2FlewaC8UdrMxEffRpfoeeeTmfh4sTdnyUkdeOq0ZouGqucctX8+qx4DpBG/dbyMuyKdA=="],
+
+    "@zgeoff/skill-gate": ["@zgeoff/skill-gate@0.1.0", "", { "dependencies": { "@zgeoff/std": "0.1.1", "ts-pattern": "5.9.0" } }, "sha512-2I44eXFaE9iOWIWRNvmhe1/NmfuLOqOflMcLo9X9cGiolI1/aUIws213g+oKTIst7Iaf6IlCXPat7wARDS9jpw=="],
+
+    "@zgeoff/std": ["@zgeoff/std@0.1.1", "", {}, "sha512-biQNiV/m+rMjglO+jegpPPFU5qYSpSrqsrbiRYwUSdgT3Mzpw+N/52H05bDbcdkETaG60XD0Ti4a3MpDub+tRw=="],
 
     "acme-client": ["acme-client@5.4.0", "", { "dependencies": { "@peculiar/x509": "^1.11.0", "asn1js": "^3.0.5", "axios": "^1.7.2", "debug": "^4.3.5", "node-forge": "^1.3.1" } }, "sha512-mORqg60S8iML6XSmVjqjGHJkINrCGLMj2QvDmFzI9vIlv1RGlyjmw3nrzaINJjkNsYXC41XhhD5pfy7CtuGcbA=="],
 

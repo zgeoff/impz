@@ -4,7 +4,9 @@
   "ignoreDependencies": [
     "@stylistic/eslint-plugin",
     "@zgeoff/oxlint-config",
-    "@bufbuild/protoc-gen-es"
+    "@bufbuild/protoc-gen-es",
+    // the synced skill-gate hook in .claude/ imports it, outside every project pattern
+    "@zgeoff/skill-gate"
   ],
   // POSIX tools the tests run through Bun's shell, and the Go toolchain's
   // gofmt, which the go:fmt-vet pre-push job runs
