@@ -1,14 +1,6 @@
 import * as z from 'zod';
 import { isHeaderSafeToken } from './oauth-state';
 
-// error codes that mean the refresh token is dead
-const PERMANENT_CODES = new Set([
-  'invalid_grant',
-  'refresh_token_expired',
-  'refresh_token_reused',
-  'refresh_token_invalidated',
-]);
-
 export interface TokenResponse {
   readonly accessToken: string | null;
   readonly refreshToken: string | null;
@@ -31,6 +23,14 @@ export function parseTokenAnswer(status: number, text: string): Classified {
   }
 
   const code = readErrorCode(body);
+
+  // error codes that mean the refresh token is dead
+  const PERMANENT_CODES = new Set([
+    'invalid_grant',
+    'refresh_token_expired',
+    'refresh_token_reused',
+    'refresh_token_invalidated',
+  ]);
 
   if (code !== null && PERMANENT_CODES.has(code)) {
     return { kind: 'permanent', error: code };
