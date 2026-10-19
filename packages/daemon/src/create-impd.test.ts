@@ -3,167 +3,49 @@ import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IMAGE_BUILD_STREAM_TYPE } from '@impz/api';
-import type { ImpContract } from '@impz/api';
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
+import { readImpEnv } from '@impz/test-utils/read-imp-env';
+import { updateEnv } from '@impz/test-utils/update-env';
 import invariant from 'tiny-invariant';
 import { buildStubRepeat } from '../../mcp/src/test-utils/build-stub-repeat';
 import { buildMockNewImage } from '../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../testing/imps/build-mock-new-imp';
+import { buildStubTickerTimer } from '../testing/platform/build-stub-ticker-timer';
 import { findFreePorts } from '../testing/platform/find-free-ports';
+import { startTestImpd } from '../testing/start-test-impd';
+import { TEST_TOKEN } from '../testing/test-token';
 import { buildStubCpuCgroups } from '../testing/vm/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../testing/vm/build-stub-vmm';
 import { loadConfig } from './config';
 import { createImpd } from './create-impd';
-import type { ImpdDeps } from './create-impd';
 import { createImage } from './db/images';
 import { createImp, listImps } from './db/imps';
 import { openDatabase } from './db/open-database';
 import { HOST_ADD_WARNING } from './images/create-image-adds';
 import { HOST_BUILD_WARNING } from './images/create-image-builds';
+import type { ImpdBoundaries } from './impd-deps';
 import { buildSystemDrivePath, buildSystemDrivesDir } from './storage/data-layout';
 import { createXfsBackend } from './storage/xfs-backend';
+import type { CpuCgroups } from './vmm/cpu-cgroups';
 
-async function setupTest() {
+interface SetupOptions {
+  // the host's cgroup tree; one that enforces CPU limits by default
+  readonly cgroups?: CpuCgroups;
+
+  // the progress events of a streamed image call
+  readonly boundaries?: Pick<ImpdBoundaries, 'keepaliveMs' | 'keepaliveRepeat'>;
+}
+
+function setupTest(options: SetupOptions = {}) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'create-impd-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-  const cgroups = buildStubCpuCgroups();
-  const logs: string[] = [];
-
   // a frozen clock, far from the wall clock, that moves only with advance
-  const clock = { nowMs: Date.UTC(2026, 0, 1) };
-
-  const deps: ImpdDeps = {
-    db,
-
-    // the bearer the test's client sends
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: (message) => {
-      logs.push(message);
-    },
-    now: () => clock.nowMs,
-
-    // Firecracker, the kernel and the CPU as this host reports them, which a
-    // snapshot must match to load
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: cgroups.cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  };
-
-  const impd = await createImpd(config, deps);
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
+  return startTestImpd(stack, {
+    env: readImpEnv(),
+    frozenClockMs: Date.UTC(2026, 0, 1),
+    ...options,
   });
-
-  stack.defer(() => {
-    impd.diskUsage.stop();
-  });
-
-  const link = new RPCLink({
-    url: 'http://impd.test/rpc',
-    headers: { authorization: 'Bearer root-token' },
-    fetch: (request) => impd.api.app.handle(request),
-  });
-
-  const client: ContractRouterClient<ImpContract> = createORPCClient(link);
-
-  return {
-    config,
-    db,
-    dataDir,
-    deps,
-    vmm,
-    cgroups,
-    logs,
-    impd,
-    client,
-    advance: (ms: number) => {
-      clock.nowMs += ms;
-    },
-    stack,
-  };
 }
 
 test('it creates a running imp through the API it serves', async () => {
@@ -197,51 +79,18 @@ test('it adopts a running VM through the new runner when it boots again', async 
 
   invariant(typeof before?.pid === 'number');
 
-  // the first impd still holds its resolver's port in this process
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    { ...ctx.deps, vms: ctx.vmm.startGeneration() },
-  );
+  await ctx.restartImpd();
 
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-  });
-
-  ctx.stack.defer(() => {
-    restarted.diskUsage.stop();
-  });
-
-  const slept = await restarted.imps.sleepImp('dev');
+  const slept = await ctx.imps.sleepImp('dev');
 
   expect(slept.state).toBe('sleeping');
-  expect(ctx.vmm.boots).toHaveLength(1);
-  expect(ctx.vmm.stops).toStrictEqual([]);
-  expect(ctx.vmm.alive.has(before.pid)).toBeFalse();
+  expect(ctx.fake.boots).toHaveLength(1);
+  expect(ctx.fake.stops).toStrictEqual([]);
+  expect(ctx.fake.alive.has(before.pid)).toBeFalse();
 });
 
 test('it says CPU limits are kept on a host without a cpu controller', async () => {
-  const ctx = await setupTest();
-
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    {
-      ...ctx.deps,
-      cgroups: buildStubCpuCgroups({ isEnforced: false }).cgroups,
-      vms: ctx.vmm.startGeneration(),
-    },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-  });
-
-  ctx.stack.defer(() => {
-    restarted.diskUsage.stop();
-  });
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups({ isEnforced: false }).cgroups });
 
   expect(ctx.logs).toContain(
     'impd: no cpu controller under /sys/fs/cgroup/imps; CPU limits are kept, not applied',
@@ -249,26 +98,9 @@ test('it says CPU limits are kept on a host without a cpu controller', async () 
 });
 
 test('it says no jailed VM can start on a jailed host without a cpu controller', async () => {
-  const ctx = await setupTest();
+  updateEnv('IMP_JAILER', 'true');
 
-  const restarted = await createImpd(
-    { ...ctx.config, jailerBin: 'jailer', egressDnsPort: findFreePorts(1).take() },
-    {
-      ...ctx.deps,
-      cgroups: buildStubCpuCgroups({ isEnforced: false }).cgroups,
-      vms: ctx.vmm.startGeneration(),
-    },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-  });
-
-  ctx.stack.defer(() => {
-    restarted.diskUsage.stop();
-  });
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups({ isEnforced: false }).cgroups });
 
   expect(ctx.logs).toContain(
     'impd: no cpu controller under /sys/fs/cgroup/imps; no jailed VM can start (IMP_JAILER=false runs them unjailed, with no limits)',
@@ -282,20 +114,7 @@ test('it removes a system drive that no imp uses when it boots', async () => {
 
   await writeFile(stale, 'stale');
 
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    { ...ctx.deps, vms: ctx.vmm.startGeneration() },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-  });
-
-  ctx.stack.defer(() => {
-    restarted.diskUsage.stop();
-  });
+  await ctx.restartImpd();
 
   expect(Bun.file(stale).exists()).resolves.toBeFalse();
 });
@@ -313,20 +132,7 @@ test('it removes a builder that a stopped impd left when it boots', async () => 
     buildMockNewImp({ name: 'imp-build-left', imageId: image.id, kind: 'builder' }),
   );
 
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    { ...ctx.deps, vms: ctx.vmm.startGeneration() },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-  });
-
-  ctx.stack.defer(() => {
-    restarted.diskUsage.stop();
-  });
+  await ctx.restartImpd();
 
   expect(ctx.logs).toContain('impd: removing builder imp-build-left, which a stopped impd left');
   expect(listImps(ctx.db)).resolves.toStrictEqual([]);
@@ -353,20 +159,7 @@ test('it drops a move ticket whose stream never came when it boots', async () =>
     })
     .execute();
 
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    { ...ctx.deps, vms: ctx.vmm.startGeneration() },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-  });
-
-  ctx.stack.defer(() => {
-    restarted.diskUsage.stop();
-  });
+  await ctx.restartImpd();
 
   const tickets = await ctx.db.selectFrom('move_tickets').select('id').execute();
 
@@ -396,38 +189,125 @@ test('it ends a lease once its clock passes the lease end', async () => {
   expect(left).toStrictEqual([]);
 });
 
+// The harness always gives impd a clock, so this boot is createImpd's own,
+// with no `now` among its boundaries.
 test('it sets a lease end from the wall clock when no clock is given', async () => {
-  const ctx = await setupTest();
+  const stack = new AsyncDisposableStack();
 
-  const { now: _frozen, ...wallClockDeps } = ctx.deps;
+  onTestFinished(() => stack.disposeAsync());
 
-  await Bun.write(join(ctx.dataDir, 'images', 'ubuntu', 'rootfs.ext4'), 'rootfs');
+  const dataDir = await mkdtemp(join(tmpdir(), 'create-impd-'));
+
+  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
+
+  const db = await openDatabase(':memory:');
+
+  stack.defer(() => db.destroy());
+
+  // no jailer, no boot template, no SSH; the API, the broker and the
+  // resolver each take a free port below the imps' port range
+  const ports = findFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+
+  const config = {
+    ...loadConfig({
+      IMP_DATA_DIR: dataDir,
+      IMP_JAILER: 'false',
+      IMP_BOOT_TEMPLATES: 'false',
+      IMP_SSH_PORT: '0',
+      IMP_API_PORT: String(ports.take()),
+      IMP_BROKER_PORT: String(ports.take()),
+      IMP_EGRESS_DNS_PORT: String(ports.take()),
+    }),
+    defaultDiskBytes: 0,
+  };
+
+  // the system drive impd boots imps with, as setupSystemFiles installs it
+  const drive = 'd1'.repeat(32);
+  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
+
+  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
+  await writeFile(systemDrivePath, drive);
+
+  const vmm = buildStubVmm();
+
+  const impd = await createImpd(config, {
+    db,
+    rootToken: TEST_TOKEN,
+    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+    systemFiles: {
+      kernelPath: join(dataDir, 'system', 'vmlinux'),
+      systemDrivePath,
+      info: {
+        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
+        systemDrive: { sha256: drive },
+      },
+    },
+    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
+    log: () => {},
+    readIdentity: (files, ipv6Prefix) => ({
+      firecrackerVersion: 'v1.17.0',
+      snapshotVersion: 'v12.0.0',
+      hostKernel: 'test',
+      guestKernel: files.info.guestKernel.sha256,
+      systemDrive: files.info.systemDrive.sha256,
+      systemDrivePath: files.systemDrivePath,
+      cpuModel: 'Test CPU',
+      cpuFlags: 'test-flags',
+      ipv6Prefix,
+    }),
+    resolveIpv6: () => Promise.resolve(null),
+    readTailscale: () =>
+      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
+    cgroups: buildStubCpuCgroups().cgroups,
+    vms: vmm.startGeneration(),
+    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
+    broker: {
+      installBundle: () => Promise.resolve(),
+      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
+      runOAuthTimer: false,
+    },
+    egress: {
+      runNft: () => Promise.resolve(),
+      flushConnections: () => Promise.resolve(),
+      flushPair: () => Promise.resolve(),
+      readForwardRules: () => Promise.resolve(''),
+      forward: () => Promise.reject(new Error('no upstream in tests')),
+      resolveExact: () => Promise.resolve([]),
+      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
+      readConnected6: () => Promise.resolve([]),
+      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
+    },
+    imps: {
+      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
+      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
+      growFilesystem: () => Promise.resolve(false),
+      hostCpus: 8,
+    },
+    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
+
+    // no ticker runs on its own, the wake proxy takes any free port, and a
+    // first start pulls no default image
+    tickerTimer: buildStubTickerTimer().timer,
+    proxyPorts: { proxy: 0, slot: () => 0 },
+    images: { seedRef: null },
+  });
+
+  stack.defer(async () => {
+    await impd.stop({ sleepImps: false });
+  });
+
+  await Bun.write(join(dataDir, 'images', 'ubuntu', 'rootfs.ext4'), 'rootfs');
 
   await createImage(
-    ctx.db,
+    db,
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
-  await ctx.client.imps.create({ name: 'dev' });
-
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    { ...wallClockDeps, vms: ctx.vmm.startGeneration() },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-  });
-
-  ctx.stack.defer(() => {
-    restarted.diskUsage.stop();
-  });
+  await impd.imps.createImp({ name: 'dev' });
 
   const startedMs = Date.now();
 
-  const acquired = await restarted.imps.acquireLease(
+  const acquired = await impd.imps.acquireLease(
     'dev',
     { principal: 'root', display: 'root' },
     'job',
@@ -438,26 +318,9 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
 });
 
 test('it sends a streamed build its progress at the keepalive gap it is given', async () => {
-  const ctx = await setupTest();
-
   const repeat = buildStubRepeat();
 
-  const quick = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    {
-      ...ctx.deps,
-      vms: ctx.vmm.startGeneration(),
-      keepaliveMs: 20,
-      keepaliveRepeat: repeat.repeat,
-    },
-  );
-
-  ctx.stack.defer(() => quick.broker.stop());
-
-  ctx.stack.defer(() => {
-    quick.egress.stop();
-    quick.diskUsage.stop();
-  });
+  const ctx = await setupTest({ boundaries: { keepaliveMs: 20, keepaliveRepeat: repeat.repeat } });
 
   // an upload that has not ended, so the build waits in its upload phase
   const upload = Promise.withResolvers<ReadableStreamDefaultController<Uint8Array>>();
@@ -478,7 +341,7 @@ test('it sends a streamed build its progress at the keepalive gap it is given', 
   const init: RequestInit & { readonly duplex: 'half' } = {
     method: 'POST',
     headers: {
-      authorization: 'Bearer root-token',
+      authorization: `Bearer ${TEST_TOKEN}`,
       'content-type': 'application/x-tar',
       accept: IMAGE_BUILD_STREAM_TYPE,
     },
@@ -486,7 +349,7 @@ test('it sends a streamed build its progress at the keepalive gap it is given', 
     duplex: 'half',
   };
 
-  const response = await quick.api.app.handle(
+  const response = await ctx.impd.api.app.handle(
     new Request('http://impd.test/images/build?name=web', init),
   );
 
