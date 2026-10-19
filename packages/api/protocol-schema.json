@@ -12084,6 +12084,22 @@
             ],
             "additionalProperties": false
           },
+          "guest": {
+            "type": "object",
+            "properties": {
+              "scratchDir": {
+                "type": "string"
+              },
+              "isClearedOnBoot": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "scratchDir",
+              "isClearedOnBoot"
+            ],
+            "additionalProperties": false
+          },
           "storage": {
             "type": "object",
             "properties": {
@@ -12523,6 +12539,9 @@
               },
               "execDropSysAdmin": {
                 "type": "boolean"
+              },
+              "guestScratch": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -12627,6 +12646,9 @@
                 "type": "boolean"
               },
               "execDropSysAdmin": {
+                "type": "boolean"
+              },
+              "guestScratch": {
                 "type": "boolean"
               }
             },

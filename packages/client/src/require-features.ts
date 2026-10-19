@@ -31,6 +31,7 @@ const FEATURE_GAPS = {
   grantFilters: 'has no grant filters',
   readOnlyFiles: 'has no read-only files',
   execDropSysAdmin: 'cannot drop CAP_SYS_ADMIN from a command',
+  guestScratch: 'does not name the guest scratch folder',
 } as const satisfies Record<ImpdFeature, string>;
 
 // the feature calls of a client: any client of impd passes

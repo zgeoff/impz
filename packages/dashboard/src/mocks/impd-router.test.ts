@@ -1555,6 +1555,7 @@ test('#system.info answers every part impd does', async () => {
     'firecrackerVersion',
     'guestKernel',
     'systemDrive',
+    'guest',
     'storage',
     'tailscale',
     'cpu',

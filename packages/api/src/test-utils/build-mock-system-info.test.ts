@@ -24,6 +24,7 @@ test('it builds a default system info', () => {
       sha256: expect.stringMatching(/^[0-9a-f]{64}$/u) as unknown,
     },
     systemDrive: { sha256: expect.stringMatching(/^[0-9a-f]{64}$/u) as unknown },
+    guest: { scratchDir: '/tmp', isClearedOnBoot: false },
     storage: {
       backend: 'xfs',
       usedBytes: expect.any(Number) as unknown,
@@ -66,11 +67,18 @@ test('it builds a default system info', () => {
       grantFilters: true,
       readOnlyFiles: true,
       execDropSysAdmin: true,
+      guestScratch: true,
     },
   });
 
   expect(parsed).toStrictEqual(info);
   expect(info.defaults?.memoryMib).toBeLessThanOrEqual(info.ramBudgetMib);
+});
+
+test('it merges a guest override into the default guest', () => {
+  const info = buildMockSystemInfo({ guest: { scratchDir: '/var/scratch' } });
+
+  expect(info.guest).toStrictEqual({ scratchDir: '/var/scratch', isClearedOnBoot: false });
 });
 
 test('it applies overrides on top of the defaults', () => {
@@ -97,6 +105,7 @@ test('it applies overrides on top of the defaults', () => {
       sha256: expect.stringMatching(/^[0-9a-f]{64}$/u) as unknown,
     },
     systemDrive: { sha256: expect.stringMatching(/^[0-9a-f]{64}$/u) as unknown },
+    guest: { scratchDir: '/tmp', isClearedOnBoot: false },
     storage: {
       backend: 'xfs',
       usedBytes: expect.any(Number) as unknown,
@@ -139,6 +148,7 @@ test('it applies overrides on top of the defaults', () => {
       grantFilters: true,
       readOnlyFiles: true,
       execDropSysAdmin: true,
+      guestScratch: true,
     },
   });
 });

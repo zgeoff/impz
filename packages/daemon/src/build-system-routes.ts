@@ -50,6 +50,9 @@ export function buildSystemRoutes(os: RpcImplementer, deps: RouterDeps) {
   };
 }
 
+// the base image's /tmp, on the imp's disk: a cold boot keeps its files
+const GUEST_INFO: NonNullable<SystemInfo['guest']> = { scratchDir: '/tmp', isClearedOnBoot: false };
+
 // RAM used is measured (what awake Firecrackers own); committed is the memory
 // the awake imps were given
 // (docs/architecture/lifecycle/ram-governor.md#what-it-measures).
@@ -79,6 +82,7 @@ async function readSystemInfo(deps: RouterDeps): Promise<SystemInfo> {
     firecrackerVersion: deps.firecrackerVersion,
     guestKernel: deps.systemFiles.guestKernel,
     systemDrive: deps.systemFiles.systemDrive,
+    guest: GUEST_INFO,
     storage: {
       backend: deps.storage.kind,
       ...storage,

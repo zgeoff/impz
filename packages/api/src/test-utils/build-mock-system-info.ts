@@ -7,6 +7,7 @@ type MergedKey =
   | 'bootStatus'
   | 'guestKernel'
   | 'systemDrive'
+  | 'guest'
   | 'storage'
   | 'tailscale'
   | 'cpu'
@@ -20,9 +21,9 @@ type SystemInfoOverrides = {
     : Exclude<SystemInfo[K], undefined>;
 };
 
-// A current impd's answer with every optional part present: all features on,
-// egress enforced, storage not low, KSM, public IP and HTTPS off, and a RAM
-// budget that fits the default memory. Nested overrides merge into defaults.
+// A current impd's answer with every optional part present: all features on, egress enforced,
+// storage not low, KSM, public IP and HTTPS off, /tmp as a scratch folder that a cold boot keeps,
+// and a RAM budget that fits the default memory. Nested overrides merge into defaults.
 export function buildMockSystemInfo(overrides: SystemInfoOverrides = {}): SystemInfo {
   const bootStatus: SystemInfo['bootStatus'] = {
     coldBoots: 0,
@@ -37,6 +38,8 @@ export function buildMockSystemInfo(overrides: SystemInfoOverrides = {}): System
   const systemDrive: SystemInfo['systemDrive'] = {
     sha256: faker.string.hexadecimal({ length: 64, casing: 'lower', prefix: '' }),
   };
+
+  const guest: NonNullable<SystemInfo['guest']> = { scratchDir: '/tmp', isClearedOnBoot: false };
 
   const storage: SystemInfo['storage'] = {
     backend: 'xfs',
@@ -83,6 +86,7 @@ export function buildMockSystemInfo(overrides: SystemInfoOverrides = {}): System
     firecrackerVersion: `v${faker.system.semver()}`,
     guestKernel,
     systemDrive,
+    guest,
     storage,
     tailscale,
     ksm: null,
@@ -100,6 +104,7 @@ export function buildMockSystemInfo(overrides: SystemInfoOverrides = {}): System
     bootStatus: { ...bootStatus, ...overrides.bootStatus },
     guestKernel: { ...guestKernel, ...overrides.guestKernel },
     systemDrive: { ...systemDrive, ...overrides.systemDrive },
+    guest: { ...guest, ...overrides.guest },
     storage: { ...storage, ...overrides.storage },
     tailscale: { ...tailscale, ...overrides.tailscale },
     cpu: { ...cpu, ...overrides.cpu },

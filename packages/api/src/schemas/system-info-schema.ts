@@ -122,6 +122,17 @@ const SystemFeaturesSchema = z.object({
   // an `/exec` start takes `dropSysAdmin`, which an older impd drops unread
   // and would run the command with CAP_SYS_ADMIN
   execDropSysAdmin: z.boolean().optional(),
+
+  // system.info carries `guest`, the guest's scratch folder
+  guestScratch: z.boolean().optional(),
+});
+
+// a folder in the guest that every user may write scratch files to, in the
+// images imp ships. `isClearedOnBoot` says whether a cold boot empties it:
+// /tmp sits on the imp's disk, so its files outlast a cold boot
+const GuestInfoSchema = z.object({
+  scratchDir: z.string(),
+  isClearedOnBoot: z.boolean(),
 });
 
 export const SystemInfoSchema = z.object({
@@ -156,6 +167,9 @@ export const SystemInfoSchema = z.object({
   // the kernel image has no version banner
   guestKernel: z.object({ version: z.string().nullable(), sha256: z.string() }),
   systemDrive: z.object({ sha256: z.string() }),
+
+  // where the guest keeps scratch files; optional for an impd from before it
+  guest: GuestInfoSchema.optional(),
 
   // the filesystem or pool that holds disks, checkpoints and images
   storage: z.object({
