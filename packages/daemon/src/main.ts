@@ -127,7 +127,14 @@ async function main(): Promise<void> {
           printLog,
         );
 
-  const proxy = startWakeProxy({ config, db, imps: impd.imps, log: printLog, peers: impd.peers });
+  const proxy = startWakeProxy({
+    config,
+    db,
+    imps: impd.imps,
+    log: printLog,
+    logger: getImpdLogger('proxy'),
+    peers: impd.peers,
+  });
 
   impd.proxyHolder.proxy = proxy;
 
