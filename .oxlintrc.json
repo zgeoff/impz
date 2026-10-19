@@ -174,8 +174,8 @@
       }
     },
     {
-      // the dashboard's stand-in for impd's router, which goes when GEO-365
-      // runs the dashboard on the real router
+      // the dashboard's stand-in for impd's router answers the whole contract in
+      // one module, so its line count runs past the limit
       "files": ["packages/dashboard/src/mocks/impd-router.ts"],
       "rules": { "max-lines": "off" }
     },
