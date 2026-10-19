@@ -163,6 +163,9 @@ export interface ImpdDeps {
   // the wake proxy's Host-routed port and each slot's port; the config's
   // by default
   readonly proxyPorts?: { readonly proxy: number; readonly slot: (slot: number) => number };
+
+  // how long the API lets a request idle; Elysia's 30 s by default
+  readonly apiIdleTimeoutS?: number;
 }
 
 // What createImpd takes: the host's database, root token, storage and

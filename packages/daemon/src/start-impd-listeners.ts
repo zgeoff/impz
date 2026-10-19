@@ -51,7 +51,7 @@ export async function startImpdListeners(
   const db = deps.db;
 
   const app = runStep('api', () => {
-    const listening = parts.api.app.listen(buildApiListenOptions(config));
+    const listening = parts.api.app.listen(buildApiListenOptions(config, deps.apiIdleTimeoutS));
 
     getImpdLogger('api').info('api on :{port}, data in {dataDir}', {
       port: config.apiPort,
