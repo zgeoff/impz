@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDialStream } from '@impz/daemon/src/agent-client/dial-stream';
 import { openAccept, openListener } from '@impz/daemon/src/agent-client/listener-stream';
-import { startStubAgent } from '@impz/daemon/src/test-utils/start-stub-agent';
+import { startStubAgent } from '@impz/daemon/testing/vm/start-stub-agent';
 import { buildStubForwardAgent } from './build-stub-forward-agent';
 
 // the stub on a socket in a temp dir, as impd's agent client reaches it

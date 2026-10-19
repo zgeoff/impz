@@ -7,6 +7,11 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../testing/imps/build-mock-new-image';
+import { findFreePorts } from '../testing/platform/find-free-ports';
+import { tryExecSocket } from '../testing/surface/try-impd-sockets';
+import { buildStubCpuCgroups } from '../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../testing/vm/build-stub-vmm';
 import { buildApiListenOptions } from './api-listen-options';
 import { loadConfig } from './config';
 import { createImpd } from './create-impd';
@@ -14,11 +19,6 @@ import { createImage } from './db/images';
 import { openDatabase } from './db/open-database';
 import { buildImagePaths, buildSystemDrivePath, buildSystemDrivesDir } from './storage/data-layout';
 import { createXfsBackend } from './storage/xfs-backend';
-import { buildMockNewImage } from './test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from './test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from './test-utils/build-stub-vmm';
-import { findFreePorts } from './test-utils/find-free-ports';
-import { tryExecSocket } from './test-utils/try-impd-sockets';
 
 // impd's real app on stub VMs, serving an empty dashboard dir, reached in
 // process and on a loopback port for its sockets

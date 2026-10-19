@@ -17,6 +17,13 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { buildMockCaller } from '../../testing/identity/build-mock-caller';
+import { buildStubTracedBuild } from '../../testing/imps/build-stub-traced-build';
+import { createStubDockerCli } from '../../testing/imps/create-stub-docker-cli';
+import { startStubDockerEngine } from '../../testing/imps/start-stub-docker-engine';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
 import { createApiAudit } from '../audit/api-audit';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
@@ -33,13 +40,6 @@ import {
   buildUploadsDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockCaller } from '../test-utils/build-mock-caller';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubTracedBuild } from '../test-utils/build-stub-traced-build';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { startStubDockerEngine } from '../test-utils/start-stub-docker-engine';
 import { toApiImage } from '../to-api-image';
 import { createBuildContextRoute } from './build-context-route';
 import { PIN_INSPECT_FORMAT } from './image-pin';

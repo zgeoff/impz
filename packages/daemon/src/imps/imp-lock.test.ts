@@ -1,9 +1,9 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { createImpTest } from '../../testing/start-test-impd';
 import { createImp, updateImpMove } from '../db/imps';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
 import { createImpContext } from './imp-context';
 import { createImpLock } from './imp-lock';
-import { createImpTest } from './test-imps';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

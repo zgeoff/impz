@@ -1,10 +1,10 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import invariant from 'tiny-invariant';
+import { buildTestApp } from '../../testing/imps/build-test-app';
+import { createImpTest } from '../../testing/start-test-impd';
+import type { ImpTestOptions } from '../../testing/start-test-impd';
 import { findImpByName } from '../db/imps';
-import { buildTestApp } from '../imps/build-test-app';
-import { createImpTest } from '../imps/test-imps';
-import type { ImpTestOptions } from '../imps/test-imps';
 import { buildImpPaths } from './data-layout';
 import { createDiskBudget } from './disk-budget';
 

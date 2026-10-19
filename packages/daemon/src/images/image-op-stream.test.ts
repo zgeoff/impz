@@ -10,6 +10,13 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { createStubDockerCli } from '../../testing/imps/create-stub-docker-cli';
+import { startStubDockerEngine } from '../../testing/imps/start-stub-docker-engine';
+import { buildStubRepeat } from '../../testing/platform/build-stub-repeat';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import type { ImpdDeps } from '../create-impd';
@@ -24,13 +31,6 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubRepeat } from '../test-utils/build-stub-repeat';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { startStubDockerEngine } from '../test-utils/start-stub-docker-engine';
 import { runImageOp } from './image-op-stream';
 
 async function setupTest() {

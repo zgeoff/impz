@@ -5,14 +5,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rootCertificates } from 'node:tls';
 import invariant from 'tiny-invariant';
+import { buildStubExecReplies } from '../../testing/vm/build-stub-exec-replies';
+import { startStubAgent } from '../../testing/vm/start-stub-agent';
 import {
   FRAME_TYPES,
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
 } from '../agent-client/frame-codec';
-import { buildStubExecReplies } from '../test-utils/build-stub-exec-replies';
-import { startStubAgent } from '../test-utils/start-stub-agent';
 import {
   buildBrokerEnv,
   buildInstallArgv,

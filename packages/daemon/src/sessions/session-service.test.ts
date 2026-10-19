@@ -8,6 +8,11 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
+import { startStubSessionAgent } from '../../testing/vm/start-stub-session-agent';
 import { sendActivity } from '../agent-client/agent-requests';
 import { openExecStream } from '../agent-client/exec-stream';
 import { loadConfig } from '../config';
@@ -23,11 +28,6 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { startStubSessionAgent } from '../test-utils/start-stub-session-agent';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

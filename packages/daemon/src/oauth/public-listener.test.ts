@@ -22,6 +22,15 @@ import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { readMcpAnswer } from '../../../mcp/src/test-utils/read-mcp-answer';
+import { createPendingSignIn } from '../../testing/identity/create-pending-sign-in';
+import { runOAuthSignIn } from '../../testing/identity/run-oauth-sign-in';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubMcpTransport } from '../../testing/surface/build-stub-mcp-transport';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubExecGuest } from '../../testing/vm/build-stub-exec-guest';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
+import { startStubExecAgent } from '../../testing/vm/start-stub-exec-agent';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { listApiCalls } from '../db/api-audit';
@@ -35,15 +44,6 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubExecGuest } from '../test-utils/build-stub-exec-guest';
-import { buildStubMcpTransport } from '../test-utils/build-stub-mcp-transport';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { createPendingSignIn } from '../test-utils/create-pending-sign-in';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { runOAuthSignIn } from '../test-utils/run-oauth-sign-in';
-import { startStubExecAgent } from '../test-utils/start-stub-exec-agent';
 import { createPublicHandler, startPublicListener } from './public-listener';
 
 async function setupTest() {

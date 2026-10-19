@@ -1,10 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { createImpTest } from '../imps/test-imps';
+import { createImpTest } from '../../testing/start-test-impd';
+import { startStubSessionAgent } from '../../testing/vm/start-stub-session-agent';
 import { readVmIdentity, writeVmIdentity } from '../sleep/vm-identity';
 import { buildImpPaths } from '../storage/data-layout';
-import { startStubSessionAgent } from '../test-utils/start-stub-session-agent';
 
 // A start that requires the broker and names a session passes only to a
 // session whose run started with the requirement.

@@ -4,6 +4,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import {
+  STUB_BUILDER_CONTAINER,
+  buildStubImageBuilder,
+} from '../../testing/imps/build-stub-image-builder';
+import { createBuilderImage } from '../../testing/imps/create-builder-image';
+import { buildStubClock } from '../../testing/platform/build-stub-clock';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubGuest } from '../../testing/vm/build-stub-guest';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import type { ImpdDeps } from '../create-impd';
@@ -16,17 +27,6 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubClock } from '../test-utils/build-stub-clock';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubGuest } from '../test-utils/build-stub-guest';
-import {
-  STUB_BUILDER_CONTAINER,
-  buildStubImageBuilder,
-} from '../test-utils/build-stub-image-builder';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { createBuilderImage } from '../test-utils/create-builder-image';
-import { findFreePorts } from '../test-utils/find-free-ports';
 import { createBuilders } from './builder-imps';
 import { writeGuestTree } from './guest-build';
 

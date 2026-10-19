@@ -9,6 +9,10 @@ import { createImpClient } from '@impz/client';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import packageJson from '../package.json' with { type: 'json' };
+import { buildMockNewImage } from '../testing/imps/build-mock-new-image';
+import { findFreePorts } from '../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../testing/vm/build-stub-vmm';
 import { loadConfig } from './config';
 import { createImpd } from './create-impd';
 import { listApiCalls } from './db/api-audit';
@@ -17,10 +21,6 @@ import { openDatabase } from './db/open-database';
 import { MIGRATIONS } from './db/run-migrations';
 import { buildImagePaths, buildSystemDrivePath, buildSystemDrivesDir } from './storage/data-layout';
 import { createXfsBackend } from './storage/xfs-backend';
-import { buildMockNewImage } from './test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from './test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from './test-utils/build-stub-vmm';
-import { findFreePorts } from './test-utils/find-free-ports';
 
 // system.features, and system.copyDatabase through the API
 // (docs/guides/operations.md#database-copy-and-restore)

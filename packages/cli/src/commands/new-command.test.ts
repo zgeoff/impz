@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createImage } from '@impz/daemon/src/db/images';
 import { findImpByName } from '@impz/daemon/src/db/imps';
 import { buildImagePaths } from '@impz/daemon/src/storage/data-layout';
-import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
+import { buildMockNewImage } from '@impz/daemon/testing/imps/build-mock-new-image';
 import { writeHostConfig } from '../config/host-store';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';

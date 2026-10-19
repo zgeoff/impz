@@ -1,11 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { createImpTest } from '../../testing/start-test-impd';
 import { createImp, findImpById } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
 import { createImpContext } from './imp-context';
 import { createImpLock } from './imp-lock';
-import { createImpTest } from './test-imps';
 import { updateLockedImpState } from './update-locked-imp-state';
 
 async function setupTest() {

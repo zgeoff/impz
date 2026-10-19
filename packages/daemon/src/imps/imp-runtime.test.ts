@@ -4,21 +4,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { buildMockLeaseRecord } from '../../testing/imps/build-mock-lease-record';
+import { waitForOutcome } from '../../testing/imps/wait-for-outcome';
+import { createImpTest } from '../../testing/start-test-impd';
+import type { ImpTestOptions } from '../../testing/start-test-impd';
+import { buildStubMounts } from '../../testing/vm/build-stub-mounts';
+import { buildStubUidProcesses } from '../../testing/vm/build-stub-uid-processes';
+import { startStubAgent } from '../../testing/vm/start-stub-agent';
+import { startStubInnerAgent } from '../../testing/vm/start-stub-inner-agent';
+import { startStubSessionAgent } from '../../testing/vm/start-stub-session-agent';
 import { FRAME_TYPES, decodeJsonPayload, encodeJsonFrame } from '../agent-client/frame-codec';
 import { findImpByName, updateImpActivity } from '../db/imps';
 import { writeLease } from '../db/leases';
 import { readVmIdentity, writeVmIdentity } from '../sleep/vm-identity';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildMockLeaseRecord } from '../test-utils/build-mock-lease-record';
-import { buildStubMounts } from '../test-utils/build-stub-mounts';
-import { buildStubUidProcesses } from '../test-utils/build-stub-uid-processes';
-import { startStubAgent } from '../test-utils/start-stub-agent';
-import { startStubInnerAgent } from '../test-utils/start-stub-inner-agent';
-import { startStubSessionAgent } from '../test-utils/start-stub-session-agent';
 import { createJails } from '../vmm/jail';
-import { createImpTest } from './test-imps';
-import type { ImpTestOptions } from './test-imps';
-import { waitForOutcome } from './wait-for-outcome';
 
 // `installBundle`: the broker's CA install in the guest, which a test fails
 // or holds

@@ -14,13 +14,13 @@ import {
   buildSystemDrivesDir,
 } from '@impz/daemon/src/storage/data-layout';
 import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
-import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
-import { buildStubTracedBuild } from '@impz/daemon/src/test-utils/build-stub-traced-build';
-import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { createStubDockerCli } from '@impz/daemon/src/test-utils/create-stub-docker-cli';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
-import { startStubDockerEngine } from '@impz/daemon/src/test-utils/start-stub-docker-engine';
+import { buildMockNewImage } from '@impz/daemon/testing/imps/build-mock-new-image';
+import { buildStubTracedBuild } from '@impz/daemon/testing/imps/build-stub-traced-build';
+import { createStubDockerCli } from '@impz/daemon/testing/imps/create-stub-docker-cli';
+import { startStubDockerEngine } from '@impz/daemon/testing/imps/start-stub-docker-engine';
+import { findFreePorts } from '@impz/daemon/testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '@impz/daemon/testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '@impz/daemon/testing/vm/build-stub-vmm';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';

@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { startStubAgent } from '../test-utils/start-stub-agent';
-import { startStubDialAgent } from '../test-utils/start-stub-dial-agent';
+import { startStubAgent } from '../../testing/vm/start-stub-agent';
+import { startStubDialAgent } from '../../testing/vm/start-stub-dial-agent';
 import { openDialStream } from './dial-stream';
 import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from './frame-codec';
 

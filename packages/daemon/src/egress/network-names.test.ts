@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
+import { buildMockNetworkMember } from '../../testing/network/build-mock-network-member';
 import { parseSubnet } from '../net/addressing';
-import { buildMockNetworkMember } from '../test-utils/build-mock-network-member';
 import { resolveNetworkName } from './network-names';
 
 test('it answers a peer by its name under the network', () => {

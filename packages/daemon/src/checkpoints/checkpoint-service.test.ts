@@ -5,6 +5,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Imp } from '@impz/api';
 import invariant from 'tiny-invariant';
+import { buildMockNewCheckpoint } from '../../testing/imp-ops/build-mock-new-checkpoint';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { buildQueryGate } from '../../testing/platform/build-query-gate';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
+import { buildStubZfs } from '../../testing/vm/build-stub-zfs';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { createCheckpoint, listCheckpoints } from '../db/checkpoints';
@@ -21,14 +29,6 @@ import {
 import { CheckpointIdTakenError } from '../storage/storage-backend';
 import { createXfsBackend } from '../storage/xfs-backend';
 import { createZfsBackend } from '../storage/zfs/zfs-backend';
-import { buildMockNewCheckpoint } from '../test-utils/build-mock-new-checkpoint';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { buildQueryGate } from '../test-utils/build-query-gate';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { buildStubZfs } from '../test-utils/build-stub-zfs';
-import { findFreePorts } from '../test-utils/find-free-ports';
 import {
   buildCheckpointId,
   createCheckpointService,

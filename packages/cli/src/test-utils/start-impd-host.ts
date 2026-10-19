@@ -9,9 +9,9 @@ import { openDatabase } from '@impz/daemon/src/db/open-database';
 import { createIdleLoop } from '@impz/daemon/src/idle/idle-loop';
 import { buildSystemDrivePath, buildSystemDrivesDir } from '@impz/daemon/src/storage/data-layout';
 import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
-import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { findFreePorts } from '@impz/daemon/testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '@impz/daemon/testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '@impz/daemon/testing/vm/build-stub-vmm';
 import invariant from 'tiny-invariant';
 
 interface ImpdHostOptions {

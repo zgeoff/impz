@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { startStubAgent } from '../test-utils/start-stub-agent';
-import { startStubEchoExecAgent } from '../test-utils/start-stub-echo-exec-agent';
+import { startStubAgent } from '../../testing/vm/start-stub-agent';
+import { startStubEchoExecAgent } from '../../testing/vm/start-stub-echo-exec-agent';
 import { openAttachStream, openExecStream, openTapStream } from './exec-stream';
 import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from './frame-codec';
 

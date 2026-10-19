@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { createTestDatabase } from '../test-utils/create-test-database';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import {
   countImageDigestUses,
   createImage,

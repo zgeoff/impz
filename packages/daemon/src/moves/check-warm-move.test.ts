@@ -4,6 +4,14 @@ import { create } from '@bufbuild/protobuf';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
+import {
+  buildJsonMoveFrame,
+  buildStubMoveStreamRewrite,
+} from '../../testing/imp-ops/build-stub-move-stream-rewrite';
+import { createUbuntuImage, setupMoveHosts } from '../../testing/imp-ops/create-move-hosts';
+import type { MoveHostsOptions } from '../../testing/imp-ops/create-move-hosts';
+import { buildMockAgentSession } from '../../testing/imps/build-mock-agent-session';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
 import { ServicesListSchema } from '../agent-client/agent-protocol';
 import { listColdBoots, writeUnknownBoot } from '../db/cold-boots';
 import { JAIL_UIDS, findImpByName, updateImpDisk } from '../db/imps';
@@ -11,12 +19,6 @@ import { isSlotFree } from '../db/is-slot-free';
 import { writeMember, writeNetwork } from '../db/networks';
 import { readSnapshotMeta, writeSnapshotMeta } from '../sleep/snapshot-meta';
 import { VmIdentitySchema } from '../sleep/vm-identity';
-import { buildMockAgentSession } from '../test-utils/build-mock-agent-session';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import {
-  buildJsonMoveFrame,
-  buildStubMoveStreamRewrite,
-} from '../test-utils/build-stub-move-stream-rewrite';
 import { MOVE_FRAMES, readJsonPayload } from './move-frames';
 import {
   MOVE_PART_HEADER,
@@ -24,8 +26,6 @@ import {
   MoveHeaderSchema,
   MoveOfferReplySchema,
 } from './move-header';
-import { createUbuntuImage, setupMoveHosts } from './test-moves';
-import type { MoveHostsOptions } from './test-moves';
 
 // Two impds, each with the image a create reads
 async function setupTest(
@@ -750,7 +750,10 @@ test('it commits a warm move whose commit was lost on resume, with a reissued ti
   expect(moved).toMatchObject({ slot: created.slot, state: 'sleeping', moveState: null });
   expect(woken.state).toBe('running');
   expect(ctx.target.fake.wakes).toHaveLength(1);
-  expect(ctx.commits).toStrictEqual(['dev']);
+
+  const commits = await ctx.readCommits();
+
+  expect(commits).toStrictEqual(['dev']);
 });
 
 test('it commits a verified warm move warm when the source restarts', async () => {

@@ -15,10 +15,10 @@ import {
   buildSystemDrivesDir,
 } from '../../packages/daemon/src/storage/data-layout';
 import { createXfsBackend } from '../../packages/daemon/src/storage/xfs-backend';
-import { buildMockNewImage } from '../../packages/daemon/src/test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../../packages/daemon/src/test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../../packages/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '../../packages/daemon/src/test-utils/find-free-ports';
+import { buildMockNewImage } from '../../packages/daemon/testing/imps/build-mock-new-image';
+import { findFreePorts } from '../../packages/daemon/testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../packages/daemon/testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../packages/daemon/testing/vm/build-stub-vmm';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
 import { createInstance } from './instance';
 import {

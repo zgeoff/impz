@@ -14,11 +14,11 @@ import {
   buildSystemDrivesDir,
 } from '@impz/daemon/src/storage/data-layout';
 import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
-import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
-import { buildStubBrokerTokenEndpoint } from '@impz/daemon/src/test-utils/build-stub-broker-token-endpoint';
-import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { buildMockNewImage } from '@impz/daemon/testing/imps/build-mock-new-image';
+import { buildStubBrokerTokenEndpoint } from '@impz/daemon/testing/network/build-stub-broker-token-endpoint';
+import { findFreePorts } from '@impz/daemon/testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '@impz/daemon/testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '@impz/daemon/testing/vm/build-stub-vmm';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';

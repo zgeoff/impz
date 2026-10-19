@@ -4,19 +4,19 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import fc from 'fast-check';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { buildTestApp } from '../../testing/imps/build-test-app';
+import { findBrokenInvariants } from '../../testing/imps/find-broken-invariants';
+import { waitForOutcome } from '../../testing/imps/wait-for-outcome';
+import { runWithStack } from '../../testing/platform/run-with-stack';
+import { createImpTest, writeTestSnapshot } from '../../testing/start-test-impd';
+import { StubVmError } from '../../testing/vm/build-stub-vmm';
+import type { VmOutcome } from '../../testing/vm/build-stub-vmm';
 import { createImp, findImpByName, listImps, updateImpActivity } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
 import { updateImpState } from '../db/update-imp-state';
 import { readSnapshotMeta, writeSnapshotMeta } from '../sleep/snapshot-meta';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { StubVmError } from '../test-utils/build-stub-vmm';
-import type { VmOutcome } from '../test-utils/build-stub-vmm';
-import { runWithStack } from '../test-utils/run-with-stack';
-import { buildTestApp } from './build-test-app';
-import { findBrokenInvariants } from './find-broken-invariants';
-import { createImpTest, writeTestSnapshot } from './test-imps';
-import { waitForOutcome } from './wait-for-outcome';
 
 // Whole-service tests through the oRPC router, with VM steps that fail, die
 // or hang, and impd restarts over the same database and VMs.

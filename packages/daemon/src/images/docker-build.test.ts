@@ -3,10 +3,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
+import { startStubDockerEngine } from '../../testing/imps/start-stub-docker-engine';
+import { startStubSilentBuildEngine } from '../../testing/imps/start-stub-silent-build-engine';
 import { parseQuery } from '../docker-proxy/router';
 import { checkBuildQuery } from '../docker-proxy/rules';
-import { startStubDockerEngine } from '../test-utils/start-stub-docker-engine';
-import { startStubSilentBuildEngine } from '../test-utils/start-stub-silent-build-engine';
 import {
   DockerBuildError,
   readBuiltImageId,

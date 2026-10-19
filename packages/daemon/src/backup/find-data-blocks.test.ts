@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { closeSync, mkdtempSync, openSync, rmSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildStubLseek } from '../test-utils/build-stub-lseek';
+import { buildStubLseek } from '../../testing/vm/build-stub-lseek';
 import { findDataBlocks } from './find-data-blocks';
 
 function setupTest() {

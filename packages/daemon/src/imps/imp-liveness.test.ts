@@ -3,12 +3,12 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
+import { createImpTest, writeTestSnapshot } from '../../testing/start-test-impd';
+import type { ImpTestOptions } from '../../testing/start-test-impd';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
 import { findImpByName } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { createImpTest, writeTestSnapshot } from './test-imps';
-import type { ImpTestOptions } from './test-imps';
 
 async function setupTest(options: ImpTestOptions = {}) {
   const stack = new AsyncDisposableStack();

@@ -1,6 +1,6 @@
 import { createImpClient } from '@impz/client';
-import { TEST_TOKEN } from '@impz/daemon/src/imps/test-token';
-import { createMoveHosts, createUbuntuImage } from '@impz/daemon/src/moves/test-moves';
+import { createMoveHosts, createUbuntuImage } from '@impz/daemon/testing/imp-ops/create-move-hosts';
+import { TEST_TOKEN } from '@impz/daemon/testing/test-token';
 import invariant from 'tiny-invariant';
 
 // Two impds that can take a warm move, with the ubuntu image, on loopback

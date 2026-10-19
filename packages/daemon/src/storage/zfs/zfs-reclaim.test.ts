@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildMockZfsEntry } from '../../test-utils/build-mock-zfs-entry';
+import { buildMockZfsEntry } from '../../../testing/vm/build-mock-zfs-entry';
 import { planReclaimStep } from './zfs-reclaim';
 
 test('it destroys a retired dataset that holds no snapshots', () => {

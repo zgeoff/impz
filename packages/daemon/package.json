@@ -4,6 +4,12 @@
   "private": true,
   "description": "impd: the imp host daemon",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./testing/index.ts",
+    "./package.json": "./package.json",
+    "./src/*": "./src/*.ts"
+  },
   "scripts": {
     "start": "bun src/main.ts"
   },

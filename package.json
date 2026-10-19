@@ -102,7 +102,7 @@
     "test": "bun test",
     "check": "bun run check:static && bun test",
     "check:static": "bun run deadcode && bun run format:check && bun run lint:full && bun run lint:docs && bun run typecheck",
-    "test:host": "bun test ./packages/daemon/src/egress/egress-ruleset.test.ts ./host/scripts/setup-net.test.ts ./packages/daemon/src/test-utils/run-in-netns.test.ts ./packages/daemon/src/test-utils/build-stub-public-network.test.ts",
+    "test:host": "bun test ./packages/daemon/src/egress/egress-ruleset.test.ts ./host/scripts/setup-net.test.ts ./packages/daemon/testing/host-net/run-in-netns.test.ts ./packages/daemon/testing/network/build-stub-public-network.test.ts",
     "test:pebble": "bun scripts/dev/pull-pebble-images.ts && bun test ./packages/daemon/src/https/acme/acme-issuer.pebble.ts",
     "test:dashboard": "bun run --cwd packages/dashboard test",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p packages/dashboard/tsconfig.json --noEmit",

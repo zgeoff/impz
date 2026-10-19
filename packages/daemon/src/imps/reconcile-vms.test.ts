@@ -2,6 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { buildTestApp } from '../../testing/imps/build-test-app';
+import { findBrokenInvariants } from '../../testing/imps/find-broken-invariants';
+import { createImpTest } from '../../testing/start-test-impd';
+import type { ImpTestOptions } from '../../testing/start-test-impd';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
 import { findImpByName } from '../db/imps';
 import {
   readLoadingMeta,
@@ -10,11 +15,6 @@ import {
   writeSnapshotMeta,
 } from '../sleep/snapshot-meta';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildTestApp } from './build-test-app';
-import { findBrokenInvariants } from './find-broken-invariants';
-import { createImpTest } from './test-imps';
-import type { ImpTestOptions } from './test-imps';
 
 // impd killed at the points a sleep, a wake or a start can be cut, and the
 // next impd's reconcile

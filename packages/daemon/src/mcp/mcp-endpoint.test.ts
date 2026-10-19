@@ -9,6 +9,13 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import invariant from 'tiny-invariant';
 import { readMcpAnswer } from '../../../mcp/src/test-utils/read-mcp-answer';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildStubTailscale } from '../../testing/network/build-stub-tailscale';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubExecGuest } from '../../testing/vm/build-stub-exec-guest';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
+import { startStubExecAgent } from '../../testing/vm/start-stub-exec-agent';
 import { buildApiListenOptions } from '../api-listen-options';
 import { runWhois } from '../auth/tailnet-identity';
 import { loadConfig } from '../config';
@@ -26,13 +33,6 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubExecGuest } from '../test-utils/build-stub-exec-guest';
-import { buildStubTailscale } from '../test-utils/build-stub-tailscale';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { startStubExecAgent } from '../test-utils/start-stub-exec-agent';
 
 interface SetupOptions {
   // the `tailscale` CLI that impd's whois runs; its peers are the test's

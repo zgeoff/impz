@@ -24,6 +24,14 @@ import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { startStubBrokerGuestSocket } from '../../testing/network/start-stub-broker-guest-socket';
+import { startStubBrokerReplyTarget } from '../../testing/network/start-stub-broker-reply-target';
+import { buildMockNewAuditEntry } from '../../testing/platform/build-mock-new-audit-entry';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { runSql } from '../../testing/platform/run-sql';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import {
@@ -43,14 +51,6 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewAuditEntry } from '../test-utils/build-mock-new-audit-entry';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { runSql } from '../test-utils/run-sql';
-import { startStubBrokerGuestSocket } from '../test-utils/start-stub-broker-guest-socket';
-import { startStubBrokerReplyTarget } from '../test-utils/start-stub-broker-reply-target';
 import { createBroker } from './broker-service';
 
 async function setupTest() {

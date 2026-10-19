@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
+import { buildMockCaller } from '../../testing/identity/build-mock-caller';
 import { ROOT_TOKEN_ID } from '../auth/token-store';
-import { buildMockCaller } from '../test-utils/build-mock-caller';
 import { createSignIns } from './create-sign-ins';
 
 test('it starts a sign-in with an 8-symbol code that ends in 10 minutes', () => {

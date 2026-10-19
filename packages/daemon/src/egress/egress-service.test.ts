@@ -11,6 +11,13 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { buildStubHostRoutes } from '../../testing/host-net/build-stub-host-routes';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildStubNft } from '../../testing/network/build-stub-nft';
+import { startStubEchoServer } from '../../testing/network/start-stub-echo-server';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import type { ImpdDeps } from '../create-impd';
@@ -26,13 +33,6 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubHostRoutes } from '../test-utils/build-stub-host-routes';
-import { buildStubNft } from '../test-utils/build-stub-nft';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { startStubEchoServer } from '../test-utils/start-stub-echo-server';
 import type { EgressDeps } from './egress-service';
 
 // the stand-ins a test wires in place of the default host's

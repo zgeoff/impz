@@ -9,6 +9,12 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
+import { buildStubZfs } from '../../testing/vm/build-stub-zfs';
 import { createSecretFiles } from '../broker/secret-files';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
@@ -16,12 +22,6 @@ import type { ImpdDeps } from '../create-impd';
 import { createImage } from '../db/images';
 import { openDatabase } from '../db/open-database';
 import { runChecked } from '../process/run-command';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { buildStubZfs } from '../test-utils/build-stub-zfs';
-import { createTestDatabase } from '../test-utils/create-test-database';
-import { findFreePorts } from '../test-utils/find-free-ports';
 import {
   buildImagePaths,
   buildImpPaths,

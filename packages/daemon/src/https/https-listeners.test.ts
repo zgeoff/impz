@@ -5,6 +5,12 @@ import { join } from 'node:path';
 import { connect } from 'node:tls';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildMockCertificate } from '../../testing/network/build-mock-certificate';
+import { startStubHeaderEcho } from '../../testing/network/start-stub-header-echo';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { findPublicImp } from '../db/exposure';
@@ -19,12 +25,6 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockCertificate } from '../test-utils/build-mock-certificate';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { startStubHeaderEcho } from '../test-utils/start-stub-header-echo';
 import { createHttpsListeners } from './https-listeners';
 import { buildCredentialHash, createPublicScope } from './public-auth';
 import { createPublicLimits } from './public-limits';

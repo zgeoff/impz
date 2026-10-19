@@ -4,21 +4,29 @@ import { join } from 'node:path';
 import type { MoveState } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { findImageByName } from '../db/images';
-import type { ImpWrite } from '../db/imp-write-feed';
-import { findImpByName, listImps, updateImpExposure, updateImpMove } from '../db/imps';
-import { buildTestApp } from '../imps/build-test-app';
-import { TEST_TOKEN } from '../imps/test-token';
-import { buildMockMoveTicketRow } from '../test-utils/build-mock-move-ticket-row';
-import { buildStubClock } from '../test-utils/build-stub-clock';
-import { buildStubDroppedCommit } from '../test-utils/build-stub-dropped-commit';
+import { buildMockMoveTicketRow } from '../../testing/imp-ops/build-mock-move-ticket-row';
+import { buildStubDroppedCommit } from '../../testing/imp-ops/build-stub-dropped-commit';
 import {
   buildJsonMoveFrame,
   buildStubMoveStreamRewrite,
-} from '../test-utils/build-stub-move-stream-rewrite';
-import { buildStubOlderMoveTarget } from '../test-utils/build-stub-older-move-target';
-import { buildStubSwitchedStorageTarget } from '../test-utils/build-stub-switched-storage-target';
-import { buildStubZfsStorage } from '../test-utils/build-stub-zfs-storage';
+} from '../../testing/imp-ops/build-stub-move-stream-rewrite';
+import { buildStubOlderMoveTarget } from '../../testing/imp-ops/build-stub-older-move-target';
+import { buildStubSwitchedStorageTarget } from '../../testing/imp-ops/build-stub-switched-storage-target';
+import {
+  SOURCE_PEER,
+  TARGET_URL,
+  createUbuntuImage,
+  createZfsUbuntuImage,
+  setupMoveHosts,
+} from '../../testing/imp-ops/create-move-hosts';
+import type { MoveHostsOptions } from '../../testing/imp-ops/create-move-hosts';
+import { buildTestApp } from '../../testing/imps/build-test-app';
+import { buildStubClock } from '../../testing/platform/build-stub-clock';
+import { TEST_TOKEN } from '../../testing/test-token';
+import { buildStubZfsStorage } from '../../testing/vm/build-stub-zfs-storage';
+import { findImageByName } from '../db/images';
+import type { ImpWrite } from '../db/imp-write-feed';
+import { findImpByName, listImps, updateImpExposure, updateImpMove } from '../db/imps';
 import { FileEndSchema, MOVE_FRAMES, MoveFileSchema, readJsonPayload } from './move-frames';
 import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MOVE_PATHS, MoveHeaderSchema } from './move-header';
 import {
@@ -29,14 +37,6 @@ import {
   readTicketHeader,
 } from './move-tickets';
 import { MOVE_TRANSITIONS } from './move-transitions';
-import {
-  SOURCE_PEER,
-  TARGET_URL,
-  createUbuntuImage,
-  createZfsUbuntuImage,
-  setupMoveHosts,
-} from './test-moves';
-import type { MoveHostsOptions } from './test-moves';
 
 // two impds, the source's move routes reaching the target's in process
 function setupTest(config: Readonly<MoveHostsOptions> = {}) {
@@ -81,7 +81,10 @@ test('it moves a stopped imp with its id, its checkpoint and its disk', async ()
   expect(disk).toStartWith('world');
   expect(checkpointDisk).toStartWith('hello');
   expect(left).toBeUndefined();
-  expect(ctx.commits).toStrictEqual(['dev']);
+
+  const commits = await ctx.readCommits();
+
+  expect(commits).toStrictEqual(['dev']);
 });
 
 test('it refuses a start of a marked imp with MOVING and a retry after 30 s', async () => {
@@ -196,7 +199,9 @@ test('it lets an imp start again once an abort before the stream undoes its mark
   expect(started.state).toBe('running');
 
   // nothing reached the target, so it counted nothing
-  expect(ctx.commits).toStrictEqual([]);
+  const commits = await ctx.readCommits();
+
+  expect(commits).toStrictEqual([]);
 });
 
 test('it refuses to move a public imp', async () => {
@@ -719,7 +724,10 @@ test('it reports the commit on the target once when a commit whose answer was lo
 
   expect(failed.error).toContain('dropped the answer');
   expect(resumed.isDone).toBe(true);
-  expect(ctx.commits).toStrictEqual(['dev']);
+
+  const commits = await ctx.readCommits();
+
+  expect(commits).toStrictEqual(['dev']);
 });
 
 test('it destroys the source copy on an abort after the target committed', async () => {
@@ -743,7 +751,9 @@ test('it destroys the source copy on an abort after the target committed', async
   expect(target.move).toBeUndefined();
 
   // the target's one commit counted the disk; the abort counts nothing more
-  expect(ctx.commits).toStrictEqual(['dev']);
+  const commits = await ctx.readCommits();
+
+  expect(commits).toStrictEqual(['dev']);
 });
 
 test('it refuses a ticket in the URL in place of the header', async () => {

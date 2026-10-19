@@ -2,20 +2,20 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { Imp } from '@impz/api';
 import invariant from 'tiny-invariant';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { buildTestApp } from '../../testing/imps/build-test-app';
+import { findBrokenInvariants } from '../../testing/imps/find-broken-invariants';
+import { waitForOutcome } from '../../testing/imps/wait-for-outcome';
+import { createImpTest } from '../../testing/start-test-impd';
+import type { ImpTestOptions } from '../../testing/start-test-impd';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { STUB_AGENT_VERSION } from '../../testing/vm/build-stub-vmm';
 import { createImp, findImpByName } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
 import { readSnapshotMeta, writeSnapshotMeta } from '../sleep/snapshot-meta';
 import { readVmIdentity } from '../sleep/vm-identity';
 import { buildImpPaths, buildSystemDrivePath } from '../storage/data-layout';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { STUB_AGENT_VERSION } from '../test-utils/build-stub-vmm';
-import { buildTestApp } from './build-test-app';
-import { findBrokenInvariants } from './find-broken-invariants';
 import { removeUnusedDrives } from './remove-unused-drives';
-import { createImpTest } from './test-imps';
-import type { ImpTestOptions } from './test-imps';
-import { waitForOutcome } from './wait-for-outcome';
 
 // An upgrade as imp-host does it: SIGTERM sleeps every awake imp, and a new
 // impd starts on a new system drive (an agent change), over the same data,

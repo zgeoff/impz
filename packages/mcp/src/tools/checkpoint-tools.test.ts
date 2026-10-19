@@ -13,10 +13,10 @@ import {
   buildSystemDrivesDir,
 } from '@impz/daemon/src/storage/data-layout';
 import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
-import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { buildMockNewImage } from '@impz/daemon/testing/imps/build-mock-new-image';
+import { findFreePorts } from '@impz/daemon/testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '@impz/daemon/testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '@impz/daemon/testing/vm/build-stub-vmm';
 import * as z from 'zod';
 import { createImpGuard } from '../imp-guard';
 import { createMcpServer } from '../test-utils/create-mcp-server';

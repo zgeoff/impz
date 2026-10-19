@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { canUnshare } from '../../packages/daemon/src/test-utils/can-unshare';
-import { runInNetns } from '../../packages/daemon/src/test-utils/run-in-netns';
+import { canUnshare } from '../../packages/daemon/testing/host-net/can-unshare';
+import { runInNetns } from '../../packages/daemon/testing/host-net/run-in-netns';
 
 // setup-net.sh runs as root in a fresh network namespace, through a user
 // namespace when not root, with a dummy uplink. Each test skips where that or

@@ -8,15 +8,15 @@ import { updateEnv } from '@impz/test-utils/update-env';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
+import { createStubDockerCli } from '../../testing/imps/create-stub-docker-cli';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { openDatabase } from '../db/open-database';
 import { buildSystemDrivePath, buildSystemDrivesDir } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
-import { findFreePorts } from '../test-utils/find-free-ports';
 
 // A token limited to some imps that adds images under its own names from
 // the registry path it was given (docs/guides/tokens.md#adding-images),

@@ -7,6 +7,10 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../testing/imps/build-mock-new-image';
+import { findFreePorts } from '../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../testing/vm/build-stub-vmm';
 import { loadConfig } from './config';
 import { createImpd } from './create-impd';
 import type { ImpdDeps } from './create-impd';
@@ -17,10 +21,6 @@ import { findSecret } from './db/secrets';
 import { listTokenRecords } from './db/tokens';
 import { buildSystemDrivePath, buildSystemDrivesDir } from './storage/data-layout';
 import { createXfsBackend } from './storage/xfs-backend';
-import { buildMockNewImage } from './test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from './test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from './test-utils/build-stub-vmm';
-import { findFreePorts } from './test-utils/find-free-ports';
 
 // tokens.update: a token's grantable list changed in place
 // (docs/guides/tokens.md#change-the-list), through the API as a client calls it.

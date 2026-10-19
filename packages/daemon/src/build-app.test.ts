@@ -12,6 +12,13 @@ import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
 import packageJson from '../package.json' with { type: 'json' };
+import { buildMockNewImage } from '../testing/imps/build-mock-new-image';
+import { createStubDockerCli } from '../testing/imps/create-stub-docker-cli';
+import { findFreePorts } from '../testing/platform/find-free-ports';
+import { tryExecSocket, tryTunnelSocket } from '../testing/surface/try-impd-sockets';
+import { buildStubCpuCgroups } from '../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../testing/vm/build-stub-vmm';
+import { buildStubZfsStorage } from '../testing/vm/build-stub-zfs-storage';
 import { buildApiListenOptions } from './api-listen-options';
 import { loadConfig } from './config';
 import { createImpd } from './create-impd';
@@ -23,13 +30,6 @@ import { createKernelOopsWatch } from './imps/kernel-oops-watch';
 import { buildImagePaths, buildSystemDrivePath, buildSystemDrivesDir } from './storage/data-layout';
 import type { StorageBackend } from './storage/storage-backend';
 import { createXfsBackend } from './storage/xfs-backend';
-import { buildMockNewImage } from './test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from './test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from './test-utils/build-stub-vmm';
-import { buildStubZfsStorage } from './test-utils/build-stub-zfs-storage';
-import { createStubDockerCli } from './test-utils/create-stub-docker-cli';
-import { findFreePorts } from './test-utils/find-free-ports';
-import { tryExecSocket, tryTunnelSocket } from './test-utils/try-impd-sockets';
 import type { CpuCgroups } from './vmm/cpu-cgroups';
 
 interface SetupOptions {

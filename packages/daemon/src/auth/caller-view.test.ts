@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { ORPCError } from '@orpc/server';
+import { buildMockCaller } from '../../testing/identity/build-mock-caller';
+import { buildMockLeaseRecord } from '../../testing/imps/build-mock-lease-record';
 import { buildLeasedError, buildRamBudgetError } from '../api-errors';
-import { buildMockCaller } from '../test-utils/build-mock-caller';
-import { buildMockLeaseRecord } from '../test-utils/build-mock-lease-record';
 import {
   isLeaseVisible,
   requireLeaseHolder,

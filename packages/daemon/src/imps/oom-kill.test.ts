@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
+import { createImpTest } from '../../testing/start-test-impd';
+import type { ImpTestOptions } from '../../testing/start-test-impd';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
 import { OOM_KILL_TRIGGER, startOomWatch } from './oom-kill';
-import { createImpTest } from './test-imps';
-import type { ImpTestOptions } from './test-imps';
 
 async function setupTest(options: ImpTestOptions = {}) {
   const stack = new AsyncDisposableStack();

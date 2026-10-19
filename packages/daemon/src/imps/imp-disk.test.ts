@@ -2,14 +2,14 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync, statSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { buildStubDiskTools } from '../../testing/imps/build-stub-disk-tools';
+import { buildTestApp } from '../../testing/imps/build-test-app';
+import { createImpTest } from '../../testing/start-test-impd';
 import { createImp, findImpByName } from '../db/imps';
 import { runChecked } from '../process/run-command';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { buildStubDiskTools } from '../test-utils/build-stub-disk-tools';
-import { buildTestApp } from './build-test-app';
 import { growFilesystem } from './imp-disk';
-import { createImpTest } from './test-imps';
 
 // impd over the stub VMM, a client of its API, and an empty disk file of
 // its own for the host's grow

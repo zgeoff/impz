@@ -6,9 +6,9 @@ import { join } from 'node:path';
 import { readAgentFixture } from '@impz/test-utils/read-agent-fixture';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
+import { buildMockHostIdentity } from '../../testing/vm/build-mock-host-identity';
+import { buildStubTemplateVm } from '../../testing/vm/build-stub-template-vm';
 import { createDiskBudget } from '../storage/disk-budget';
-import { buildMockHostIdentity } from '../test-utils/build-mock-host-identity';
-import { buildStubTemplateVm } from '../test-utils/build-stub-template-vm';
 import { TEMPLATE_BOOT_ARGS, buildTemplateKey, createBootTemplates } from './boot-templates';
 import type { BootTemplateDeps } from './boot-templates';
 

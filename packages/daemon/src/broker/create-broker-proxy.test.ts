@@ -13,6 +13,19 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import { HttpResponse, http } from 'msw';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildStubBrokerGuest } from '../../testing/network/build-stub-broker-guest';
+import { buildStubBrokerTokenEndpoint } from '../../testing/network/build-stub-broker-token-endpoint';
+import { startStubBrokerGuestSocket } from '../../testing/network/start-stub-broker-guest-socket';
+import { startStubBrokerHoldTarget } from '../../testing/network/start-stub-broker-hold-target';
+import { startStubBrokerPlainUpstream } from '../../testing/network/start-stub-broker-plain-upstream';
+import { startStubBrokerReplyTarget } from '../../testing/network/start-stub-broker-reply-target';
+import { startStubBrokerTlsUpstream } from '../../testing/network/start-stub-broker-tls-upstream';
+import { startStubBrokerTunnel } from '../../testing/network/start-stub-broker-tunnel';
+import { buildStubHeldAnswer } from '../../testing/platform/build-stub-held-answer';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { listAuditEntries } from '../db/broker-audit';
@@ -26,19 +39,6 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubBrokerGuest } from '../test-utils/build-stub-broker-guest';
-import { buildStubBrokerTokenEndpoint } from '../test-utils/build-stub-broker-token-endpoint';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubHeldAnswer } from '../test-utils/build-stub-held-answer';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { startStubBrokerGuestSocket } from '../test-utils/start-stub-broker-guest-socket';
-import { startStubBrokerHoldTarget } from '../test-utils/start-stub-broker-hold-target';
-import { startStubBrokerPlainUpstream } from '../test-utils/start-stub-broker-plain-upstream';
-import { startStubBrokerReplyTarget } from '../test-utils/start-stub-broker-reply-target';
-import { startStubBrokerTlsUpstream } from '../test-utils/start-stub-broker-tls-upstream';
-import { startStubBrokerTunnel } from '../test-utils/start-stub-broker-tunnel';
 import { loadOrCreateBrokerCa } from './broker-ca';
 
 // The broker end to end on loopback: with IMP_SUBNET 127.0.0.0/16, curl

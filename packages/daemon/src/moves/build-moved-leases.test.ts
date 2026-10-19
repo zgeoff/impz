@@ -4,17 +4,17 @@ import { copyFile } from 'node:fs/promises';
 import type { ImpEvent } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { buildStubDroppedCommit } from '../../testing/imp-ops/build-stub-dropped-commit';
+import { buildStubOlderMoveTarget } from '../../testing/imp-ops/build-stub-older-move-target';
+import { createUbuntuImage, setupMoveHosts } from '../../testing/imp-ops/create-move-hosts';
+import type { MoveHostsOptions } from '../../testing/imp-ops/create-move-hosts';
+import { buildMockLeaseRecord } from '../../testing/imps/build-mock-lease-record';
+import { buildStubStorageFaults } from '../../testing/vm/build-stub-storage-faults';
 import { findImpByName, updateImpActivity, updateImpExposure } from '../db/imps';
 import { listLeases, writeLease } from '../db/leases';
 import { createIdleLoop } from '../idle/idle-loop';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockLeaseRecord } from '../test-utils/build-mock-lease-record';
-import { buildStubDroppedCommit } from '../test-utils/build-stub-dropped-commit';
-import { buildStubOlderMoveTarget } from '../test-utils/build-stub-older-move-target';
-import { buildStubStorageFaults } from '../test-utils/build-stub-storage-faults';
 import { MOVE_PART_HEADER } from './move-header';
-import { createUbuntuImage, setupMoveHosts } from './test-moves';
-import type { MoveHostsOptions } from './test-moves';
 
 // Two impds. The source's storage is XFS on plain files, as the harness's,
 // with faults a test can set.

@@ -8,6 +8,12 @@ import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { buildMockLeaseRecord } from '../../testing/imps/build-mock-lease-record';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildQueryGate } from '../../testing/platform/build-query-gate';
+import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { createImage } from '../db/images';
@@ -19,12 +25,6 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockLeaseRecord } from '../test-utils/build-mock-lease-record';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildQueryGate } from '../test-utils/build-query-gate';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
 
 // impd's real app on stub VMs, on a clock the test steps, with every event
 // it emits and a root client that reaches the app in process
