@@ -23,5 +23,29 @@ export function spawnSparseFilesTar(dir: string, sizes: Readonly<Record<string, 
     tar.kill();
   });
 
-  return { stdout: tar.stdout, exited: tar.exited };
+  return { stdout: splitChunks(tar.stdout, CHUNK_BYTES), exited: tar.exited };
+}
+
+// the size of every chunk but the last, so what a reader sees at each chunk
+// never depends on how the pipe split tar's writes
+const CHUNK_BYTES = 1024 ** 2;
+
+async function* splitChunks(
+  stream: ReadableStream<Uint8Array>,
+  bytes: number,
+): AsyncGenerator<Uint8Array, void, undefined> {
+  let pending = new Uint8Array(0);
+
+  for await (const data of stream) {
+    pending = Buffer.concat([pending, data]);
+
+    while (pending.byteLength >= bytes) {
+      yield pending.subarray(0, bytes);
+      pending = pending.subarray(bytes);
+    }
+  }
+
+  if (pending.byteLength > 0) {
+    yield pending;
+  }
 }

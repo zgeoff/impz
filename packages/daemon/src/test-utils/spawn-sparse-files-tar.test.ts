@@ -12,16 +12,34 @@ async function setupTest() {
   return { dir };
 }
 
-test('it streams a tar of each file at its size, as zeros', async () => {
+test('it streams a tar of each file at its size', async () => {
   const ctx = await setupTest();
 
   const tar = spawnSparseFilesTar(ctx.dir, { big: 3 * 1024 ** 2, small: 10 });
 
+  const chunks = await Array.fromAsync(tar.stdout);
+
   const listed = Bun.spawnSync(['tar', '-t', '-v', '-f', '-'], {
-    stdin: await new Response(tar.stdout).bytes(),
+    stdin: Buffer.concat(chunks),
   }).stdout.toString();
 
   expect(listed).toMatch(/ 3145728 .* big\n.* 10 .* small\n$/v);
+});
+
+test('it sends the archive in 1 MiB chunks, then the rest', async () => {
+  const ctx = await setupTest();
+
+  const tar = spawnSparseFilesTar(ctx.dir, { big: 3 * 1024 ** 2 });
+
+  const chunks = await Array.fromAsync(tar.stdout);
+
+  // the header, 3 MiB and the end blocks, padded to whole 10 KiB records
+  expect(chunks.map((chunk) => chunk.byteLength)).toStrictEqual([
+    1024 ** 2,
+    1024 ** 2,
+    1024 ** 2,
+    8192,
+  ]);
 });
 
 test('it writes each file as a hole that takes no disk', async () => {
@@ -29,7 +47,7 @@ test('it writes each file as a hole that takes no disk', async () => {
 
   const tar = spawnSparseFilesTar(ctx.dir, { big: 64 * 1024 ** 2 });
 
-  await new Response(tar.stdout).arrayBuffer();
+  await Array.fromAsync(tar.stdout);
 
   const du = Bun.spawnSync(['du', '-s', '--block-size=1', ctx.dir]).stdout.toString();
 

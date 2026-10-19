@@ -357,7 +357,7 @@ test('it stops the export at the step the free disk refuses', async () => {
 
   expect(building).rejects.toMatchObject({ code: 'DISK_FULL' });
 
-  // the first chunk's 256 MiB step, then, once tar lists the 200 MiB file,
+  // the first 1 MiB chunk's 256 MiB step, then, once tar lists the 200 MiB file,
   // twice that and the rootfs's journal in 256 MiB steps, which 600 MiB
   // refuses; no step after it
   expect(ctx.grows).toStrictEqual([256 * 1024 ** 2, 768 * 1024 ** 2]);
