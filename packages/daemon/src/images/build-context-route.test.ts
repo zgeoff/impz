@@ -10,36 +10,21 @@ import {
   ImageBuildEventSchema,
   ImageBuildResultSchema,
 } from '@impz/api';
-import type { ImpContract } from '@impz/api';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
 import { buildMockCaller } from '../../testing/identity/build-mock-caller';
 import { buildStubTracedBuild } from '../../testing/imps/build-stub-traced-build';
 import { createStubDockerCli } from '../../testing/imps/create-stub-docker-cli';
 import { startStubDockerEngine } from '../../testing/imps/start-stub-docker-engine';
-import { findFreePorts } from '../../testing/platform/find-free-ports';
-import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { createApiAudit } from '../audit/api-audit';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
-import type { ImpdDeps } from '../create-impd';
 import { listApiCalls } from '../db/api-audit';
-import { openDatabase } from '../db/open-database';
 import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
 import { runChecked } from '../process/run-command';
 import { createForwardedPeers } from '../proxy/forwarded-peers';
 import { startWakeProxy } from '../proxy/wake-proxy';
-import {
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-  buildUploadsDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
+import { buildUploadsDir } from '../storage/data-layout';
 import { toApiImage } from '../to-api-image';
 import { createBuildContextRoute } from './build-context-route';
 import { PIN_INSPECT_FORMAT } from './image-pin';
@@ -53,137 +38,30 @@ async function setupTest() {
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the engine a host build sends its context to
+  // the engine a host build sends its context to; it stops after impd
   const engine = startStubDockerEngine({ dir: dataDir });
 
   stack.defer(() => engine.stop());
 
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one; adds
-  // and builds run on the host's engine, the stubs
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_BUILD_ISOLATION: 'host',
-    DOCKER_HOST: engine.dockerHost,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
   // impd boots with a root bearer; each test reads it back to send it
   const rootToken = faker.string.alphanumeric(32);
 
-  const deps: ImpdDeps = {
-    db,
+  // adds and builds run on the host's engine, the stub
+  const harness = await startTestImpd(stack, {
+    dataDir,
     rootToken,
+    env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: engine.dockerHost },
 
     // a sparse copy for a reflink: the temp dir is not XFS
-    storage: createXfsBackend({
-      dataDir,
-      cloneFile: async (source, target) => {
-        await runChecked(['cp', '--sparse=always', source, target]);
-      },
-    }),
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
+    cloneDisk: async (source, target) => {
+      await runChecked(['cp', '--sparse=always', source, target]);
     },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-
-    // Firecracker, the kernel and the CPU as this host reports them
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  };
-
-  const impd = await createImpd(config, deps);
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
   });
 
-  // the root bearer's client, against impd's own app
-  const client: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${rootToken}` },
-      fetch: (request) => impd.api.app.handle(request),
-    }),
-  );
-
-  return {
-    // a release deferred here runs before impd stops and its database closes
-    stack,
-    rootToken,
-    config,
-    db,
-    dataDir,
-    engine,
-    impd,
-    client,
-  };
+  // assigned, not spread: a spread reads the harness's parts once. A
+  // release deferred on `stack` runs before impd stops and its database
+  // closes
+  return Object.assign(harness, { stack, rootToken, engine });
 }
 
 test('it builds an uploaded context and answers the image', async () => {
@@ -576,16 +454,7 @@ test('it sends a progress line through the proxy before the upload ends', async 
 
   updateEnv('PATH', docker.path);
 
-  ctx.impd.api.app.listen({ port: 0, hostname: '127.0.0.1' });
-
-  // the listeners close before impd stops and its database and dir go
-  ctx.stack.defer(async () => {
-    await ctx.impd.api.app.stop(true);
-  });
-
-  const apiPort = ctx.impd.api.app.server?.port;
-
-  invariant(apiPort !== undefined);
+  const apiPort = Number(new URL(ctx.url).port);
 
   // the proxy forwards the API to the port the app took
   const proxy = startWakeProxy({
