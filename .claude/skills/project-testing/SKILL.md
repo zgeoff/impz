@@ -39,16 +39,17 @@ each; open one when the task touches its area.
   need a real stand-in server.
 - **Reuse a stand-in before writing one.** imp has a tested stand-in for nearly every boundary;
   [stand-ins.md](./references/stand-ins.md) sorts them by kind and links each package's folder. To
-  boot a real impd, use [`createImpd`](../../../packages/daemon/src/create-impd.ts) on the stubs, or
-  [`createImpTest`](../../../packages/daemon/src/imps/test-imps.ts) for the governed-imps harness.
-- **`createImpd` disks are 32 GiB.** A test whose storage clones with `copyFile` sets
-  `defaultDiskBytes` to 0, or each checkpoint copy or fork takes minutes.
+  boot a real impd, use [`startTestImpd`](../../../packages/daemon/testing/start-test-impd.ts),
+  which runs production's startup through `createImpd` on the stubs.
+- **A new disk is 32 GiB unless the config says otherwise.** `startTestImpd` sets `defaultDiskBytes`
+  to 0, because its storage clones with `copyFile` and a full-size disk makes each checkpoint copy
+  or fork take minutes.
 - **`createImpd`'s `now` does not reach every clock.** Some services stay on the wall clock;
   [Booting impd](./references/stand-ins.md#booting-impd) lists the gaps and the clocks those
   components take instead.
-- **Ports come from [`findFreePorts`](../../../packages/daemon/src/test-utils/find-free-ports.ts).**
-  It claims each port until the test ends, so parallel test processes never share one. A fixed port
-  collides.
+- **Ports come from
+  [`findFreePorts`](../../../packages/daemon/testing/platform/find-free-ports.ts).** It claims each
+  port until the test ends, so parallel test processes never share one. A fixed port collides.
 - **tmpfs lacks disk features.** `tmpdir()` is a tmpfs on some hosts; a test that needs FIEMAP or
   similar makes its directory under `/var/tmp`, never in the checkout.
 - **Git hooks leak `GIT_DIR`.** A test that runs git spawns it through the helpers in

@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rootCertificates } from 'node:tls';
-import { createUpstreamResolver } from './test-upstreams';
+import { createUpstreamResolver } from './create-upstream-resolver';
 
 async function setupTest() {
   const dir = await mkdtemp(join(tmpdir(), 'imp-upstreams-'));

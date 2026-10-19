@@ -1,11 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
-import { createImpTest } from '../../testing/start-test-impd';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { createImp, findImpById } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
+import { createCpuCgroups } from '../vmm/cpu-cgroups';
 import { createImpContext } from './imp-context';
 import { createImpLock } from './imp-lock';
+import { NO_KERNEL_OOPS } from './kernel-oops-watch';
 import { updateLockedImpState } from './update-locked-imp-state';
 
 async function setupTest() {
@@ -13,7 +15,7 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await createImpTest(stack, {});
+  const harness = await startTestImpd(stack, {});
 
   // every imp row names an image
   const image = await harness.createTestImage('ubuntu');
@@ -23,13 +25,25 @@ async function setupTest() {
     db: harness.db,
     images: harness.images,
 
-    // the lock never brings a tap up
+    // the lock never brings a tap up, reads a VM or waits
     taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
     vms: harness.fake.startGeneration(),
     storage: harness.storage,
     identity: harness.readIdentity(),
     log: harness.log,
     storageGate: harness.storageGate,
+    cgroups: createCpuCgroups({ root: '/nonexistent', log: harness.log }),
+    hostCpus: 8,
+    readRamMib: () => null,
+    readRssMib: () => null,
+    readVmMemory: () => ({ ramMib: null, rssMib: null }),
+    readUnsharedRamMib: () => null,
+    checkGuestMerge: () => Promise.resolve(null),
+    growFilesystem: () => Promise.resolve(false),
+    sleep: () => Promise.resolve(),
+    sleepTiming: { now: () => 0, sleep: () => Promise.resolve() },
+    kernelOops: NO_KERNEL_OOPS,
+    readThreadIds: () => null,
   });
 
   return { db: harness.db, image, lock: createImpLock(context) };
