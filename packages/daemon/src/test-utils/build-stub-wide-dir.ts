@@ -35,7 +35,7 @@ export function buildStubWideDir(dir: string, count: number) {
   return { readDir };
 }
 
-// every entry shares one copy of each test method
+// shared methods, as a closure each for 700,000 entries costs hundreds of MiB
 function buildDirEntry(parentPath: string, name: string): Dirent {
   return {
     name,

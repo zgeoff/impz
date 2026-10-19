@@ -8,7 +8,6 @@ export interface StubRun {
 }
 
 export interface StubAnswer {
-  // chunks in a list, or a stream that sends them as a process writes them
   readonly stdout?: string | readonly Uint8Array[] | AsyncIterable<Uint8Array>;
   readonly stderr?: string;
   readonly code?: number;
@@ -77,7 +76,8 @@ async function* readFakeEvents(
   yield { type: 'exit', code: answered.code ?? 0, signal: 0 };
 }
 
-// a list and a stream of chunks as one async iterator
+// a list has no next() to race against the close, which for await hides
+// from a stream; this gives both one
 async function* readChunks(
   source: readonly Uint8Array[] | AsyncIterable<Uint8Array>,
 ): AsyncGenerator<Uint8Array, void, undefined> {
