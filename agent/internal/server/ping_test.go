@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -67,4 +68,18 @@ func TestPingReportsTheBootID(t *testing.T) {
 
 	assert.NilError(t, err)
 	assert.Equal(t, resp.(*proto.Ping).GetBootId(), "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
+}
+
+// impd logs the boot's steps beside its own restore spans.
+func TestPingReportsTheBootStepsInOrder(t *testing.T) {
+	s := &Server{BootSteps: []*proto.BootStep{{Name: "mount", Ms: 41}, {Name: "grow", Ms: 0}, {Name: "ready", Ms: 3}}}
+
+	resp, err := s.unary(&proto.Request{Op: proto.OpPing})
+
+	assert.NilError(t, err)
+	var steps []string
+	for _, step := range resp.(*proto.Ping).GetBootSteps() {
+		steps = append(steps, fmt.Sprintf("%s=%d", step.GetName(), step.GetMs()))
+	}
+	assert.DeepEqual(t, steps, []string{"mount=41", "grow=0", "ready=3"})
 }

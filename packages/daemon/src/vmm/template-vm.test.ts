@@ -162,6 +162,39 @@ test('#loadTemplateVm fails a restore whose drive patch fails as a fault of the 
   expect(restoring).rejects.toMatchObject({ isTemplateFault: false });
 });
 
+test('#loadTemplateVm returns the steps the claimed guest reports for its boot', async () => {
+  const ctx = setupTest();
+  const paths = buildImpPaths(ctx.dir, 'i1');
+
+  mkdirSync(paths.runDir, { recursive: true });
+  writeFileSync(paths.disk, '');
+
+  const stub = buildStubJails({
+    argv: buildStubFirecrackerArgv({ apiSocket: paths.apiSocket, logPath: ctx.logPath }),
+  });
+
+  const restoring = loadTemplateVm(
+    buildMockTemplateRestorePlan({ paths, jail: { uid: 900_001, gid: 900_001 } }),
+    stub.jails,
+  );
+
+  await waitFor(() => {
+    expect(existsSync(paths.apiSocket)).toBeTrue();
+  });
+
+  const pid = Number(readFileSync(paths.pidFile, 'utf8'));
+
+  onTestFinished(() => {
+    stopPid(pid);
+  });
+
+  await startStubParkedAgent(paths.vsockSocket);
+
+  const vm = await restoring;
+
+  expect(vm.guestSteps).toStrictEqual({ claim: 3, mount: 40, ready: 2 });
+});
+
 test('#loadTemplateVm kills the VM and releases the jail of a restore that fails', () => {
   const ctx = setupTest();
   const paths = buildImpPaths(ctx.dir, 'i1');

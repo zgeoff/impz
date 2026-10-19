@@ -1,5 +1,10 @@
 import { expect, test } from 'bun:test';
-import { findU32Span, parseLoggedSteps, pickPercentile } from './boot-template-timing';
+import {
+  findU32Span,
+  parseLoggedGuestSteps,
+  parseLoggedSteps,
+  pickPercentile,
+} from './boot-template-timing';
 
 test('#findU32Span measures the distance between two values', () => {
   expect(findU32Span(1000, 250)).toBe(750);
@@ -30,6 +35,41 @@ test('#parseLoggedSteps adds the total of a created line', () => {
     boot: 40,
     total: 48,
   });
+});
+
+test('#parseLoggedSteps leaves out the guest steps of a line', () => {
+  const log =
+    'impd: e2e-bt-t0: restored boot template 0123456789ab as pid 7 claim=4ms agent=90ms; guest claim=3ms mount=40ms\n';
+
+  expect(parseLoggedSteps(log, 'e2e-bt-t0', 'restored boot template')).toStrictEqual({
+    claim: 4,
+    agent: 90,
+  });
+});
+
+test('#parseLoggedGuestSteps reads the guest steps of the last line that names the imp', () => {
+  const log = [
+    'impd: e2e-bt-t1: restored boot template 0123456789ab as pid 9 agent=80ms; guest claim=2ms ready=1ms',
+    'impd: e2e-bt-t1: restored boot template 0123456789ab as pid 11 claim=4ms agent=90ms; guest claim=3ms mount=40ms ready=2ms',
+  ].join('\n');
+
+  expect(parseLoggedGuestSteps(log, 'e2e-bt-t1', 'restored boot template')).toStrictEqual({
+    claim: 3,
+    mount: 40,
+    ready: 2,
+  });
+});
+
+test('#parseLoggedGuestSteps reads a line from an agent without guest steps as none', () => {
+  const log = 'impd: e2e-bt-t0: restored boot template 0123456789ab as pid 7 agent=90ms\n';
+
+  expect(parseLoggedGuestSteps(log, 'e2e-bt-t0', 'restored boot template')).toStrictEqual({});
+});
+
+test('#parseLoggedGuestSteps reads a log without the imp as no steps', () => {
+  expect(
+    parseLoggedGuestSteps('impd: e2e-bt-t0: booted pid 7\n', 'e2e-bt-t1', 'booted pid'),
+  ).toStrictEqual({});
 });
 
 test('#parseLoggedSteps reads a log without the imp as no steps', () => {

@@ -3,6 +3,7 @@ package disk
 import (
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -14,19 +15,22 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// fakeDisk stands in for the device size file and the resize ioctl.
+// fakeDisk stands in for the device size file and the resize ioctl. Its
+// device file is missing until a test makes a filesystem there.
 type fakeDisk struct {
-	sizePath string
-	resized  []uint64
+	sizePath   string
+	devicePath string
+	resized    []uint64
 }
 
 func installFakeDisk(t *testing.T, sectors int64) *fakeDisk {
 	t.Helper()
-	f := &fakeDisk{sizePath: filepath.Join(t.TempDir(), "size")}
+	dir := t.TempDir()
+	f := &fakeDisk{sizePath: filepath.Join(dir, "size"), devicePath: filepath.Join(dir, "vda")}
 	assert.NilError(t, f.setSectors(sectors))
-	prevPath, prevResize, prevBlock := SizePath, resizeFS, blockSize
-	t.Cleanup(func() { SizePath, resizeFS, blockSize = prevPath, prevResize, prevBlock })
-	SizePath = f.sizePath
+	prevPath, prevDevice, prevResize, prevBlock := SizePath, DevicePath, resizeFS, blockSize
+	t.Cleanup(func() { SizePath, DevicePath, resizeFS, blockSize = prevPath, prevDevice, prevResize, prevBlock })
+	SizePath, DevicePath = f.sizePath, f.devicePath
 	resizeFS = func(_ string, blocks uint64) error {
 		f.resized = append(f.resized, blocks)
 		return nil
@@ -67,6 +71,45 @@ func TestGrowResizesTheFilesystemToFillTheDevice(t *testing.T) {
 
 	assert.NilError(t, err)
 	assert.DeepEqual(t, f.resized, []uint64{8 << 30 / 4096})
+}
+
+// makeExt4 makes a real ext4 filesystem of blocks 4 KiB blocks at path.
+func makeExt4(t *testing.T, path string, blocks int64) {
+	t.Helper()
+	out, err := exec.Command("mkfs.ext4", "-q", "-F", "-b", "4096", path, strconv.FormatInt(blocks, 10)).CombinedOutput()
+	assert.NilError(t, err, "mkfs.ext4: %s", out)
+}
+
+// The no-op ioctl flushes the journal, which held up each boot.
+func TestGrowSkipsTheResizeWhenTheFilesystemFillsTheDevice(t *testing.T) {
+	f := installFakeDisk(t, 64<<11) // 64 MiB
+	makeExt4(t, f.devicePath, 64<<8)
+
+	err := Grow("/")
+
+	assert.NilError(t, err)
+	assert.Check(t, cmp.Len(f.resized, 0))
+}
+
+func TestGrowResizesAFilesystemSmallerThanTheDevice(t *testing.T) {
+	f := installFakeDisk(t, 96<<11) // 96 MiB
+	makeExt4(t, f.devicePath, 64<<8)
+
+	err := Grow("/")
+
+	assert.NilError(t, err)
+	assert.DeepEqual(t, f.resized, []uint64{96 << 8})
+}
+
+// A device with no ext4 superblock leaves the size to the ioctl.
+func TestGrowResizesWhenTheDeviceHoldsNoExt4Superblock(t *testing.T) {
+	f := installFakeDisk(t, 64<<11)
+	assert.NilError(t, os.WriteFile(f.devicePath, make([]byte, 4096), 0o644))
+
+	err := Grow("/")
+
+	assert.NilError(t, err)
+	assert.DeepEqual(t, f.resized, []uint64{64 << 8})
 }
 
 func TestGrowReportsTheIoctlError(t *testing.T) {

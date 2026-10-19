@@ -132,15 +132,25 @@ stands.
 
 The RESPONSE to ping.
 
-| Field            | Type                        | Presence | Description                                                                                                  |
-| ---------------- | --------------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
-| `ok`             | bool                        | always   |                                                                                                              |
-| `version`        | string                      | always   | the agent protocol version                                                                                   |
-| `uptime_ms`      | double                      | when set | unset when the guest clock cannot be read: impd then skips its young-guest wait before a sleep               |
-| `identity_reset` | string                      | when set | set on a boot that reset a template copy's identity: ok, or failed when impd must ask again on the next boot |
-| `stage`          | string                      | when set | "template" while the agent waits for a claim; unset once it serves                                           |
-| `inner`          | [InnerStatus](#innerstatus) | when set | the inner container's state; unset by an agent before 0.14.0                                                 |
-| `boot_id`        | string                      | when set | the guest kernel's boot_id: a wake from memory keeps it, every cold boot changes it                          |
+| Field            | Type                          | Presence | Description                                                                                                                                                                  |
+| ---------------- | ----------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ok`             | bool                          | always   |                                                                                                                                                                              |
+| `version`        | string                        | always   | the agent protocol version                                                                                                                                                   |
+| `uptime_ms`      | double                        | when set | unset when the guest clock cannot be read: impd then skips its young-guest wait before a sleep                                                                               |
+| `identity_reset` | string                        | when set | set on a boot that reset a template copy's identity: ok, or failed when impd must ask again on the next boot                                                                 |
+| `stage`          | string                        | when set | "template" while the agent waits for a claim; unset once it serves                                                                                                           |
+| `inner`          | [InnerStatus](#innerstatus)   | when set | the inner container's state; unset by an agent before 0.14.0                                                                                                                 |
+| `boot_id`        | string                        | when set | the guest kernel's boot_id: a wake from memory keeps it, every cold boot changes it                                                                                          |
+| `boot_steps`     | list of [BootStep](#bootstep) | list     | how long each step of this boot took, in order, for impd's log: from the claim on a boot template, from the agent's start on a cold boot. Empty from an agent before 0.21.0. |
+
+## BootStep
+
+One step of the agent's boot: its name and its milliseconds since the step before it.
+
+| Field  | Type   | Presence | Description |
+| ------ | ------ | -------- | ----------- |
+| `name` | string | always   |             |
+| `ms`   | uint32 | always   |             |
 
 ## InnerStatus
 

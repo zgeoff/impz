@@ -8,7 +8,12 @@ import {
   removeShapeTemplates,
   waitForShapeTemplate,
 } from '../lib/boot-template-guest';
-import { findU32Span, parseLoggedSteps, pickPercentile } from '../lib/boot-template-timing';
+import {
+  findU32Span,
+  parseLoggedGuestSteps,
+  parseLoggedSteps,
+  pickPercentile,
+} from '../lib/boot-template-timing';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { createInstanceClient, requireImp, runImp, runInImp, runShellInImp } from '../lib/imp-cli';
@@ -286,6 +291,7 @@ test('it times impz new from a template: the wall time and its spans', async () 
   const spare = `${ctx.prefix}time-x`;
   const walls: number[] = [];
   const spans: Record<string, number[]> = {};
+  const guestSpans: Record<string, number[]> = {};
 
   // the shape's template must be this test's own build, and goes after the
   // imps that boot it
@@ -342,6 +348,14 @@ test('it times impz new from a template: the wall time and its spans', async () 
       spans[step] = [...(spans[step] ?? []), ms];
     }
 
+    // the guest's own steps after the claim, which run inside impd's claim
+    // and agent spans
+    const guestSteps = parseLoggedGuestSteps(log, name, 'restored boot template');
+
+    for (const [step, ms] of Object.entries(guestSteps)) {
+      guestSpans[step] = [...(guestSpans[step] ?? []), ms];
+    }
+
     await runImp('rm', name);
   }
 
@@ -357,6 +371,26 @@ test('it times impz new from a template: the wall time and its spans', async () 
 
   writeMetric('bootTemplateNewSpansP50Ms', medians);
 
-  // every create restored the template: each has the agent's span
+  writeMetric(
+    'bootTemplateNewGuestStepsP50Ms',
+    Object.fromEntries(
+      Object.entries(guestSpans).map(([step, values]) => [step, pickPercentile(values, 0.5)]),
+    ),
+  );
+
+  // every create restored the template: each has the agent's span, and
+  // the guest's steps after its claim
   expect(spans['agent']).toHaveLength(10);
+
+  expect(
+    Object.fromEntries(Object.entries(guestSpans).map(([step, values]) => [step, values.length])),
+  ).toMatchObject({
+    claim: 10,
+    mount: 10,
+    grow: 10,
+    network: 10,
+    inner: 10,
+    services: 10,
+    ready: 10,
+  });
 });

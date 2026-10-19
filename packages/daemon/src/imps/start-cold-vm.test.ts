@@ -94,6 +94,37 @@ test('it builds the template on the second boot of a shape, and the next restore
   );
 });
 
+test('it logs the guest steps after the host steps of a restore', async () => {
+  const ctx = await setupTest();
+
+  await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
+  await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
+  await ctx.templates.stop();
+
+  ctx.fake.setGuestBootSteps({ claim: 3, mount: 40, grow: 0, ready: 2 });
+
+  await ctx.client.imps.create({ name: 'second', vcpus: 1, memoryMib: 256 });
+
+  expect(ctx.logs).toSatisfyAny(
+    (line: string) =>
+      line.includes('second: restored boot template') &&
+      line.endsWith('; guest claim=3ms mount=40ms grow=0ms ready=2ms'),
+  );
+});
+
+test('it logs the guest steps after the host steps of a kernel boot', async () => {
+  const ctx = await setupTest();
+
+  ctx.fake.setGuestBootSteps({ world: 9, mount: 35, ready: 1 });
+
+  await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
+
+  expect(ctx.logs).toSatisfyAny(
+    (line: string) =>
+      line.includes('once: booted pid') && line.endsWith('; guest world=9ms mount=35ms ready=1ms'),
+  );
+});
+
 test('it leaves no broken record behind once a restored imp settles', async () => {
   const ctx = await setupTest();
 

@@ -29,7 +29,9 @@ container over the user disk.
    so that the kernel never picks it, and makes the cgroup for user code, with a memory limit a
    little under the guest's memory. A [boot template](../lifecycle/boot-templates.md) parks here and
    takes its claim's values from then on.
-2. It mounts the user disk, and grows its filesystem when the host grew the disk.
+2. It mounts the user disk, and grows its filesystem when the host grew the disk. It compares the
+   size in the filesystem's superblock with the disk's first, because an online resize flushes the
+   journal even when the size stays the same.
 3. It sets the hostname and brings up loopback and the network device.
 4. It starts the inner container, writes the container's hostname, hosts and resolver files, and
    reads the image's config for the default environment. On the first boot of an imp made from a
@@ -38,6 +40,10 @@ container over the user disk.
 
 The agent never execs itself on the way, because on a restored template a new runtime would fault in
 every page it touches.
+
+The agent times each of these steps, from its claim on a restored template, and returns the times in
+its ping. impd logs them after its own spans of the boot or the restore, so the log shows where the
+guest's part of a create goes.
 
 ## The inner container
 

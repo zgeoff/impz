@@ -59,6 +59,10 @@ export interface StartedVm {
   // milliseconds per step, for the create-time breakdown in the log
   readonly timings: Readonly<Record<string, number>>;
 
+  // milliseconds per step of the guest's own boot, from its first ping;
+  // absent from a wake, whose agent reports the boot it woke into
+  readonly guestSteps?: Readonly<Record<string, number>> | undefined;
+
   // what a boot with isIdentityReset reported; absent for any other start
   readonly identityReset?: string | undefined;
 
@@ -309,6 +313,9 @@ export function createVmRunner(
           firecrackerVersion,
           agentVersion: ping.version,
           timings: timer.marks,
+          guestSteps: Object.fromEntries(
+            ping.bootSteps.map((bootStep) => [bootStep.name, bootStep.ms]),
+          ),
           identityReset: ping.identityReset,
           bootId: ping.bootId,
         };

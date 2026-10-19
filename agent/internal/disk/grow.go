@@ -4,6 +4,8 @@
 package disk
 
 import (
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -22,6 +24,10 @@ const pollInterval = 20 * time.Millisecond
 // SizePath is the user disk's size in 512-byte sectors.
 var SizePath = "/sys/block/vda/size"
 
+// DevicePath is the user disk, whose ext4 superblock holds the filesystem's
+// size in blocks.
+var DevicePath = "/dev/vda"
+
 // resizeFS and blockSize are variables so tests can run without an ext4 root.
 var (
 	resizeFS  = ioctlResize
@@ -29,7 +35,6 @@ var (
 )
 
 // Grow resizes the ext4 filesystem mounted at mountpoint to fill the device.
-// ext4 does nothing when the size is the same.
 func Grow(mountpoint string) error {
 	bytes, err := readDeviceBytes()
 	if err != nil {
@@ -58,12 +63,19 @@ func WaitAndGrow(mountpoint string, target int64, timeout time.Duration) error {
 	}
 }
 
+// growTo skips the resize when the filesystem fills the device already: the
+// ioctl keeps the size then, but flushes the journal all the same, and that
+// held up every boot. A superblock it cannot read leaves the call to ext4.
 func growTo(mountpoint string, bytes int64) error {
 	size, err := blockSize(mountpoint)
 	if err != nil {
 		return err
 	}
-	if err := resizeFS(mountpoint, uint64(bytes/size)); err != nil {
+	blocks := uint64(bytes / size)
+	if have, err := readFSBlocks(DevicePath); err == nil && have == blocks {
+		return nil
+	}
+	if err := resizeFS(mountpoint, blocks); err != nil {
 		return fmt.Errorf("EXT4_IOC_RESIZE_FS to %d bytes: %w", bytes, err)
 	}
 	return nil
@@ -101,4 +113,36 @@ func ioctlResize(mountpoint string, blocks uint64) error {
 		return errno
 	}
 	return nil
+}
+
+// The fields of the ext4 superblock that give the filesystem's size; the
+// superblock starts 1024 bytes into the device.
+const (
+	superblockOffset = 1024
+	superblockBytes  = 1024
+	ext4Magic        = 0xef53
+	incompat64Bit    = 0x80
+)
+
+// readFSBlocks reads the filesystem's size in blocks from the superblock on
+// dev. The read goes through the device's page cache, which holds the
+// mounted filesystem's own superblock buffer, so it sees a grow at once.
+func readFSBlocks(dev string) (uint64, error) {
+	f, err := os.Open(dev)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	sb := make([]byte, superblockBytes)
+	if _, err := f.ReadAt(sb, superblockOffset); err != nil {
+		return 0, fmt.Errorf("%s: superblock: %w", dev, err)
+	}
+	if binary.LittleEndian.Uint16(sb[0x38:]) != ext4Magic {
+		return 0, errors.New(dev + ": no ext4 superblock")
+	}
+	blocks := uint64(binary.LittleEndian.Uint32(sb[0x04:]))
+	if binary.LittleEndian.Uint32(sb[0x60:])&incompat64Bit != 0 {
+		blocks |= uint64(binary.LittleEndian.Uint32(sb[0x150:])) << 32
+	}
+	return blocks, nil
 }

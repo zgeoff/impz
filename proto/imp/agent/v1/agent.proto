@@ -197,6 +197,17 @@ message Ping {
   // the guest kernel's boot_id: a wake from memory keeps it, every cold boot
   // changes it
   optional string boot_id = 7;
+  // how long each step of this boot took, in order, for impd's log: from the
+  // claim on a boot template, from the agent's start on a cold boot. Empty
+  // from an agent before 0.21.0.
+  repeated BootStep boot_steps = 8;
+}
+
+// One step of the agent's boot: its name and its milliseconds since the step
+// before it.
+message BootStep {
+  string name = 1;
+  uint32 ms = 2;
 }
 
 // The inner container's state: whether it runs, how often it started again

@@ -3,9 +3,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
+import { waitFor } from '@impz/test-utils/wait-for';
 import { PingSchema } from '../agent-client/agent-protocol';
 import { sendPing } from '../agent-client/agent-requests';
 import { FRAME_TYPES, encodeJsonFrame } from '../agent-client/frame-codec';
+import { deriveSlotAddress, parseSubnet } from '../net/addressing';
 import { stopPid } from '../process/proc';
 import { buildImpPaths, buildSnapshotPaths } from '../storage/data-layout';
 import { buildStubJails } from '../test-utils/build-stub-jails';
@@ -301,6 +303,58 @@ test('#readGuestUptimeMs reads no uptime from an agent that cannot read its cloc
   const uptime = await createVmRunner(buildStubJails().jails).readGuestUptimeMs(paths);
 
   expect(uptime).toBeNull();
+});
+
+test('#startVm returns the steps the guest reports for its boot', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const argv = buildStubFirecrackerArgv({ apiSocket: paths.apiSocket, logPath: ctx.logPath });
+
+  const starting = createVmRunner(buildStubJails({ argv }).jails).startVm({
+    firecrackerBin: 'firecracker',
+    kernelPath: '/data/system/vmlinux',
+    systemDrivePath: '/data/system/drives/system.squashfs',
+    paths,
+    address: deriveSlotAddress(3, { subnet: parseSubnet('10.66.0.0/16'), portBase: 20_000 }),
+    impId: 'vm',
+    hostname: 'dev',
+    vcpus: 1,
+    memoryMib: 256,
+    maxMemoryMib: 256,
+    dns: ['1.1.1.1'],
+    cgroup: null,
+    isIdentityReset: false,
+    jail: { uid: 900_000, gid: 900_000 },
+  });
+
+  // the spawn removes a stale agent socket, so the agent comes after it
+  await waitFor(() => {
+    expect(existsSync(paths.apiSocket)).toBeTrue();
+  });
+
+  const pid = Number(readFileSync(paths.pidFile, 'utf8'));
+
+  onTestFinished(() => {
+    stopPid(pid);
+  });
+
+  await startStubAgent(paths.vsockSocket, (socket) => {
+    socket.end(
+      encodeJsonFrame(FRAME_TYPES.response, {
+        ok: true,
+        version: '0.1.0',
+        boot_steps: [
+          { name: 'world', ms: 9 },
+          { name: 'mount', ms: 35 },
+          { name: 'ready', ms: 1 },
+        ],
+      }),
+    );
+  });
+
+  const vm = await starting;
+
+  expect(vm.guestSteps).toStrictEqual({ world: 9, mount: 35, ready: 1 });
 });
 
 test('#readVmState reads the VM state from the API', async () => {
