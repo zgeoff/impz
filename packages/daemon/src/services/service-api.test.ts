@@ -1076,6 +1076,146 @@ test('it looks again after the short retry, not the long recheck, while a lifecy
   expect(resumed.value).toStrictEqual({ type: 'awake' });
 });
 
+test('it says the imp sleeps when it goes to sleep after a step held it running', async () => {
+  const ctx = await setupTest();
+
+  // an agent with the services API, which each boot and wake reports
+  ctx.vmm.agent.version = '0.10.0';
+
+  const imp = await ctx.client.imps.create({ name: 'dev' });
+
+  const agent = await startStubServiceAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
+    knowsServices: true,
+    stack: ctx.stack,
+  });
+
+  await ctx.client.services.add({ name: 'dev', service: { name: 'web', argv: ['httpd'] } });
+
+  const timers = buildStubClock();
+
+  // impd's own services API over its runtime, with timers the test fires
+  const api = createServiceApi({
+    runtime: ctx.impd.imps,
+    events: ctx.impd.imps.events,
+    readSleptServices: (record) =>
+      readSnapshotMeta(buildImpPaths(ctx.dataDir, record.id))?.services,
+    startTimer: timers.startTimer,
+  });
+
+  const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
+
+  // before impd and its database go
+  ctx.stack.defer(async () => {
+    await stream.return?.();
+  });
+
+  // a step such as a checkpoint holds the running imp until released
+  const release = Promise.withResolvers<void>();
+  const held = ctx.impd.imps.lockImp('dev', () => release.promise);
+
+  agent.stopFollows();
+
+  const pausing = stream.next();
+
+  // the dropped connection's retry, then the look that finds the imp held
+  await waitFor(() => {
+    expect(timers.readPendingMs()).not.toBeEmpty();
+  });
+
+  timers.firePending();
+
+  const paused = await pausing;
+
+  const sleeping = stream.next();
+
+  await waitFor(() => {
+    expect(timers.readPendingMs()).not.toBeEmpty();
+  });
+
+  release.resolve();
+
+  await held;
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  timers.firePending();
+
+  const asleep = await sleeping;
+
+  expect(paused.value).toStrictEqual({ type: 'sleeping', state: 'running' });
+  expect(asleep.value).toStrictEqual({ type: 'sleeping', state: 'sleeping' });
+});
+
+test('it says the imp stopped when it stops after a step held it running', async () => {
+  const ctx = await setupTest();
+
+  // an agent with the services API, which each boot and wake reports
+  ctx.vmm.agent.version = '0.10.0';
+
+  const imp = await ctx.client.imps.create({ name: 'dev' });
+
+  const agent = await startStubServiceAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
+    knowsServices: true,
+    stack: ctx.stack,
+  });
+
+  await ctx.client.services.add({ name: 'dev', service: { name: 'web', argv: ['httpd'] } });
+
+  const timers = buildStubClock();
+
+  // impd's own services API over its runtime, with timers the test fires
+  const api = createServiceApi({
+    runtime: ctx.impd.imps,
+    events: ctx.impd.imps.events,
+    readSleptServices: (record) =>
+      readSnapshotMeta(buildImpPaths(ctx.dataDir, record.id))?.services,
+    startTimer: timers.startTimer,
+  });
+
+  const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
+
+  // before impd and its database go
+  ctx.stack.defer(async () => {
+    await stream.return?.();
+  });
+
+  // a step such as a checkpoint holds the running imp until released
+  const release = Promise.withResolvers<void>();
+  const held = ctx.impd.imps.lockImp('dev', () => release.promise);
+
+  agent.stopFollows();
+
+  const pausing = stream.next();
+
+  // the dropped connection's retry, then the look that finds the imp held
+  await waitFor(() => {
+    expect(timers.readPendingMs()).not.toBeEmpty();
+  });
+
+  timers.firePending();
+
+  const paused = await pausing;
+
+  const stopping = stream.next();
+
+  await waitFor(() => {
+    expect(timers.readPendingMs()).not.toBeEmpty();
+  });
+
+  release.resolve();
+
+  await held;
+
+  await ctx.client.imps.stop({ name: 'dev' });
+
+  timers.firePending();
+
+  const stopped = await stopping;
+
+  expect(paused.value).toStrictEqual({ type: 'sleeping', state: 'running' });
+  expect(stopped.value).toStrictEqual({ type: 'sleeping', state: 'stopped' });
+});
+
 test('it goes on with a follow when the wake’s event comes before the wake lets go', async () => {
   const ctx = await setupTest();
 
