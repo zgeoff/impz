@@ -1,6 +1,6 @@
 import { isAgentLogIdentity } from '../agent-client/agent-ids';
+import { buildLogKey } from './build-log-key';
 import type { LiveLog, SessionLogState } from './create-session-log-state';
-import { findLogKey } from './find-log-key';
 import type { GenerationLog, createGenerationLog } from './generation-log';
 import { hasTombstone, removeEmptyDirs, removeGenerationDir } from './session-log-files';
 import type { SessionLogImp, SessionLogLimits } from './session-log-service';
@@ -38,7 +38,7 @@ export function makeCreateLiveLog(
     bootId: string,
     life: number,
   ): Promise<LiveLog | null> => {
-    const key = findLogKey(imp.id, generation);
+    const key = buildLogKey(imp.id, generation);
 
     if (!isAgentLogIdentity({ generation, session, bootId })) {
       return null;
