@@ -459,14 +459,12 @@ test('#checkServer reports both versions, that they are compatible, and the info
 
   const check = await ctx.client.checkServer();
 
-  expect(check).toStrictEqual({
+  // the info holds impd's state, so the test pins only the parts it knows
+  expect(check).toMatchObject({
     clientVersion: CLIENT_VERSION,
     serverVersion: CLIENT_VERSION,
     compatible: true,
-    info: expect.objectContaining({
-      version: CLIENT_VERSION,
-      features: expect.objectContaining({ leases: true }),
-    }),
+    info: { version: CLIENT_VERSION, features: { leases: true } },
   });
 });
 
