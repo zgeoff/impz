@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import type { RamGovernor, RamGovernorDeps } from '../governor/ram-governor';
 import { createLockFreeSleep } from '../imps/lock-free-sleep';
 import type { SleepOutcome } from '../imps/lock-free-sleep';
@@ -232,38 +233,31 @@ export function buildStubGovernedHost(options: Readonly<StubGovernedHostOptions>
 
       const imp = findImp(change.id);
 
-      switch (change.kind) {
-        case 'rss': {
-          imp.rssMib = change.mib;
-          break;
-        }
-        case 'hold': {
-          imp.held = change.on;
-          break;
-        }
-        case 'busy': {
-          imp.busy = change.on;
-          break;
-        }
-        case 'failSleep': {
-          imp.failsSleep = change.on;
-          break;
-        }
-        case 'spare': {
-          imp.spareMib = change.mib;
-          break;
-        }
-        case 'touch': {
+      match(change)
+        .with({ kind: 'rss' }, (rss) => {
+          imp.rssMib = rss.mib;
+        })
+        .with({ kind: 'hold' }, (hold) => {
+          imp.held = hold.on;
+        })
+        .with({ kind: 'busy' }, (busy) => {
+          imp.busy = busy.on;
+        })
+        .with({ kind: 'failSleep' }, (failSleep) => {
+          imp.failsSleep = failSleep.on;
+        })
+        .with({ kind: 'spare' }, (spare) => {
+          imp.spareMib = spare.mib;
+        })
+        .with({ kind: 'touch' }, () => {
           imp.lastActiveAt = clock.now;
-          break;
-        }
-        case 'stop': {
+        })
+        .with({ kind: 'stop' }, (stop) => {
           imp.awake = false;
 
-          governor.release(change.id);
-          break;
-        }
-      }
+          governor.release(stop.id);
+        })
+        .exhaustive();
     },
   };
 }

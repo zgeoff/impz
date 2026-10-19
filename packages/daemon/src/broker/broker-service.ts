@@ -11,6 +11,7 @@ import type {
   SecretAdded,
 } from '@impz/api';
 import { ORPCError } from '@orpc/server';
+import { match } from 'ts-pattern';
 import {
   buildConflictError,
   buildForbiddenError,
@@ -277,23 +278,16 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
 
       const outcome = await createCheckedGrant(db, imp.id, secretName, authority ?? null, filter);
 
-      switch (outcome.kind) {
-        case 'granted': {
-          return;
-        }
-        case 'no-secret': {
-          throw buildNotFoundError('secret', secretName);
-        }
-        case 'no-token': {
-          throw buildTokenGoneError();
-        }
-        case 'not-grantable': {
-          throw buildStaleError(secretName);
-        }
-        case 'clash': {
-          throw buildClashError(impName, secretName, outcome.clash);
-        }
+      if (outcome.kind === 'granted') {
+        return;
       }
+
+      throw match(outcome)
+        .with({ kind: 'no-secret' }, () => buildNotFoundError('secret', secretName))
+        .with({ kind: 'no-token' }, () => buildTokenGoneError())
+        .with({ kind: 'not-grantable' }, () => buildStaleError(secretName))
+        .with({ kind: 'clash' }, (refused) => buildClashError(impName, secretName, refused.clash))
+        .exhaustive();
     },
 
     removeGrant: async (impName, secretName, authority = null) => {

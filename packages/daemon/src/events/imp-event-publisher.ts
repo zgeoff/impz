@@ -1,5 +1,6 @@
 import { EVENT_VERSION } from '@impz/api';
 import type { Imp, ImpEvent } from '@impz/api';
+import { P, match } from 'ts-pattern';
 import { toApiCheckpoint } from '../db/checkpoints';
 import type { ImpWrite } from '../db/imp-write-feed';
 import { findImpById } from '../db/imps';
@@ -50,42 +51,45 @@ export function startImpEventPublisher(deps: PublisherDeps): () => void {
   });
 }
 
-async function buildEvent(
-  deps: PublisherDeps,
-  write: Readonly<ImpWrite>,
-): Promise<ImpEvent | null> {
+function buildEvent(deps: PublisherDeps, write: Readonly<ImpWrite>): Promise<ImpEvent | null> {
   const envelope = { v: EVENT_VERSION, at: new Date(deps.now()) } as const;
 
-  switch (write.kind) {
-    case 'added': {
-      return { ...envelope, ev: 'ImpAdded', reason: 'created', imp: await deps.toApi(write.imp) };
-    }
-    case 'changed': {
-      return {
-        ...envelope,
-        ev: 'ImpChanged',
-        reason: write.reason,
-        imp: await deps.toApi(write.imp),
-        ...(write.detail !== undefined && { detail: write.detail }),
-      };
-    }
-    case 'removed': {
-      return { ...envelope, ev: 'ImpRemoved', imp: await deps.toApi(write.imp) };
-    }
-    case 'checkpointAdded':
-    case 'checkpointRemoved': {
-      const imp = await findImpById(deps.db, write.checkpoint.impId);
+  return match(write)
+    .returnType<Promise<ImpEvent | null>>()
+    .with({ kind: 'added' }, async (added) => ({
+      ...envelope,
+      ev: 'ImpAdded',
+      reason: 'created',
+      imp: await deps.toApi(added.imp),
+    }))
+    .with({ kind: 'changed' }, async (changed) => ({
+      ...envelope,
+      ev: 'ImpChanged',
+      reason: changed.reason,
+      imp: await deps.toApi(changed.imp),
+      ...(changed.detail !== undefined && { detail: changed.detail }),
+    }))
+    .with({ kind: 'removed' }, async (removed) => ({
+      ...envelope,
+      ev: 'ImpRemoved',
+      imp: await deps.toApi(removed.imp),
+    }))
+    .with({ kind: P.union('checkpointAdded', 'checkpointRemoved') }, async (checkpointWrite) => {
+      const imp = await findImpById(deps.db, checkpointWrite.checkpoint.impId);
 
       if (imp === undefined) {
         return null;
       }
 
-      const ev = write.kind === 'checkpointAdded' ? 'CheckpointAdded' : 'CheckpointRemoved';
+      const ev =
+        checkpointWrite.kind === 'checkpointAdded' ? 'CheckpointAdded' : 'CheckpointRemoved';
 
-      return { ...envelope, ev, name: imp.name, checkpoint: toApiCheckpoint(write.checkpoint) };
-    }
-    default: {
-      return null;
-    }
-  }
+      return {
+        ...envelope,
+        ev,
+        name: imp.name,
+        checkpoint: toApiCheckpoint(checkpointWrite.checkpoint),
+      };
+    })
+    .exhaustive();
 }

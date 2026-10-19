@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import type { Bound, Side } from './bound';
 import { isWithin } from './is-within';
 import { readBranches } from './read-branches';
@@ -34,27 +35,13 @@ export function isValueAccepted(schemaRef: Schema, value: unknown, root: Schema)
 }
 
 function isOfType(value: unknown, type: string): boolean {
-  switch (type) {
-    case 'integer': {
-      return Number.isInteger(value);
-    }
-
-    case 'null': {
-      return value === null;
-    }
-
-    case 'array': {
-      return Array.isArray(value);
-    }
-
-    case 'object': {
-      return typeof value === 'object' && value !== null && !Array.isArray(value);
-    }
-
-    default: {
-      return typeof value === type;
-    }
-  }
+  // a schema's type is any string, so the match ends in the typeof check
+  return match(type)
+    .with('integer', () => Number.isInteger(value))
+    .with('null', () => value === null)
+    .with('array', () => Array.isArray(value))
+    .with('object', () => typeof value === 'object' && value !== null && !Array.isArray(value))
+    .otherwise(() => typeof value === type);
 }
 
 function isStringAccepted(schema: SchemaObject, value: string): boolean {
