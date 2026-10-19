@@ -11,8 +11,12 @@ import type { HostIdentity } from './sleep/vm-identity';
 
 // A move's reach past impd: the other host, the deadline on each request to
 // it, the part size, the warm facts and the source's taps
+// onCommitted hears each commit after impd's own hook, never in its place
 export type ImpdMoveBoundaries = Partial<
-  Pick<MoveServiceDeps, 'fetch' | 'startPeerDeadline' | 'partBytes' | 'readWarmHost' | 'readTapMac'>
+  Pick<
+    MoveServiceDeps,
+    'fetch' | 'startPeerDeadline' | 'partBytes' | 'readWarmHost' | 'readTapMac' | 'onCommitted'
+  >
 >;
 
 // The moves to and from other hosts
@@ -43,6 +47,10 @@ export function createImpdMoves(
     readIdentity: parts.readIdentity,
     ...hooks,
     ...deps.moves,
+    onCommitted: (name) => {
+      hooks.onCommitted(name);
+      deps.moves?.onCommitted?.(name);
+    },
     now: deps.now ?? Date.now,
     log: deps.log ?? printLog,
   });

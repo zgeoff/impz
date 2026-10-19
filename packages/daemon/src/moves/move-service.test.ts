@@ -80,10 +80,7 @@ test('it moves a stopped imp with its id, its checkpoint and its disk', async ()
   expect(disk).toStartWith('world');
   expect(checkpointDisk).toStartWith('hello');
   expect(left).toBeUndefined();
-
-  const commits = await ctx.readCommits();
-
-  expect(commits).toStrictEqual(['dev']);
+  expect(ctx.commits).toStrictEqual(['dev']);
 });
 
 test('it refuses a start of a marked imp with MOVING and a retry after 30 s', async () => {
@@ -198,9 +195,7 @@ test('it lets an imp start again once an abort before the stream undoes its mark
   expect(started.state).toBe('running');
 
   // nothing reached the target, so it counted nothing
-  const commits = await ctx.readCommits();
-
-  expect(commits).toStrictEqual([]);
+  expect(ctx.commits).toStrictEqual([]);
 });
 
 test('it refuses to move a public imp', async () => {
@@ -723,10 +718,7 @@ test('it reports the commit on the target once when a commit whose answer was lo
 
   expect(failed.error).toContain('dropped the answer');
   expect(resumed.isDone).toBe(true);
-
-  const commits = await ctx.readCommits();
-
-  expect(commits).toStrictEqual(['dev']);
+  expect(ctx.commits).toStrictEqual(['dev']);
 });
 
 test('it destroys the source copy on an abort after the target committed', async () => {
@@ -750,9 +742,7 @@ test('it destroys the source copy on an abort after the target committed', async
   expect(target.move).toBeUndefined();
 
   // the target's one commit counted the disk; the abort counts nothing more
-  const commits = await ctx.readCommits();
-
-  expect(commits).toStrictEqual(['dev']);
+  expect(ctx.commits).toStrictEqual(['dev']);
 });
 
 test('it refuses a ticket in the URL in place of the header', async () => {

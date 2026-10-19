@@ -169,6 +169,9 @@ export interface ImpdDeps {
 
   // how long the API lets a request idle; Elysia's 30 s by default
   readonly apiIdleTimeoutS?: number;
+
+  // the one interface the API listens on; every interface by default
+  readonly apiHostname?: string;
 }
 
 // What createImpd takes: the host's database, root token, storage and

@@ -40,22 +40,19 @@ import { buildStubVmm } from './vm/build-stub-vmm';
 export interface TestImpdOptions {
   readonly env?: Readonly<Record<string, string>>;
 
-  // a data dir the caller made and removes, such as a mounted dataset; a
-  // fresh temp dir that the dispose removes by default
+  // a data dir the caller owns; a temp dir that the dispose removes by default
   readonly dataDir?: string;
 
   // a plain copy by default: the test tmpdir is not XFS
   readonly cloneDisk?: (source: string, target: string) => Promise<void>;
 
-  // the host's grow of a new disk's filesystem, after the harness records it;
-  // grown at once by default
+  // the host's grow of a new disk's filesystem, once recorded; at once by default
   readonly growFilesystem?: (disk: string) => Promise<boolean>;
 
   // sees each log line as impd writes it
   readonly onLog?: (message: string) => void;
 
-  // the broker's CA install into a guest; by default it records the imp's
-  // vsock path and succeeds
+  // the broker's CA install into a guest; records the vsock path by default
   readonly installBundle?: InstallBundle;
 
   // where the broker's plain tunnels dial, in place of DNS and its checks;
@@ -82,8 +79,7 @@ export interface TestImpdOptions {
   // `advance` and a young guest wait's pauses, which take no real time
   readonly frozenClockMs?: number;
 
-  // the storage backend over the data dir, for each impd the harness
-  // starts; XFS on plain files by default
+  // each impd's storage backend over the data dir; XFS on plain files by default
   readonly createStorage?: (dataDir: string) => StorageBackend;
 
   // files that stand for /proc/sys/kernel/tainted, read on the harness's
@@ -96,8 +92,7 @@ export interface TestImpdOptions {
     readonly pidNamespacePath: string;
   };
 
-  // a dir that stands for /proc, where the sampler reads each VM's threads
-  // from <pid>/task; no VM has a thread without it
+  // a /proc stand-in with each VM's <pid>/task; no VM has a thread without it
   readonly procRoot?: string;
 
   // CPU limits: none enforced, and 8 cores, by default
@@ -149,8 +144,7 @@ const TEST_SYSTEM_FILES = {
 // run no agent to ask
 const NO_FREEZER = { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() };
 
-// a kernel that keeps KSM's merge flag across exec, and a ksmd that runs
-// and has merged nothing, for a test that turns IMP_KSM on
+// for IMP_KSM: a kernel that keeps KSM's merge flag, and an idle ksmd
 const KSM_KERNEL = '6.12.0';
 const IDLE_KSM: KsmHostStats = { running: true, sharedMib: 0, profitMib: 0, zeroMib: 0 };
 
@@ -232,8 +226,7 @@ export async function startTestImpd(
     options.onLog?.(message);
   };
 
-  // each unexpected failure the API's router hit, as impd would log it to
-  // stderr; the stub VMM makes plenty on purpose
+  // each unexpected failure the API's router hit; the stub VMM makes plenty
   const rpcFailures: unknown[] = [];
 
   const printRpcFailure = (failure: unknown): void => {
@@ -281,14 +274,18 @@ export async function startTestImpd(
   const cgroups = options.cgroups ?? createCpuCgroups({ root: '/nonexistent', log: printTestLog });
   const extra = options.boundaries ?? {};
 
-  const buildBoundaries = (identity: HostIdentity, runner: VmRunner): ImpdBoundaries => {
+  const buildBoundaries = (
+    identity: HostIdentity,
+    runner: VmRunner,
+    storage: StorageBackend,
+  ): ImpdBoundaries => {
     const jails = options.jails;
 
     return {
       ...extra,
       db: options.wrapDatabase?.(db) ?? db,
       rootToken: options.rootToken ?? TEST_TOKEN,
-      storage: createStorage(),
+      storage,
       systemFiles: {
         kernelPath: `${dataDir}/system/vmlinux`,
         systemDrivePath: identity.systemDrivePath,
@@ -317,6 +314,9 @@ export async function startTestImpd(
 
       // any free port: the imps' ports are the config's to hand out
       proxyPorts: extra.proxyPorts ?? { proxy: 0, slot: () => 0 },
+
+      // loopback only, as TEST_TOKEN is root to anyone who reaches the API
+      apiHostname: '127.0.0.1',
       images: { seedRef: null, ...extra.images },
       taps: extra.taps ?? {
         setupTap: (address) => {
@@ -433,10 +433,8 @@ export async function startTestImpd(
     await Promise.all([impd.app.server?.stop(true), impd.proxy.stop(), impd.broker.stop()]);
   };
 
-  const startImpd = async (identity: HostIdentity): Promise<Impd> => {
-    const runner = fake.startGeneration();
-
-    const impd = await createImpd(config, buildBoundaries(identity, runner));
+  const startImpd = async (identity: HostIdentity, runner: VmRunner): Promise<Impd> => {
+    const impd = await createImpd(config, buildBoundaries(identity, runner, createStorage()));
 
     // a template build still running would write into the data dir after
     // its removal. A hung build is released first; one a replacement parked
@@ -458,7 +456,7 @@ export async function startTestImpd(
     return impd;
   };
 
-  const current: { impd: Impd } = { impd: await startImpd(host.identity) };
+  const current = { impd: await startImpd(host.identity, fake.startGeneration()) };
 
   const buildClient = (token: string): ContractRouterClient<ImpContract> =>
     createORPCClient(
@@ -564,11 +562,14 @@ export async function startTestImpd(
     // a new impd on this one's database, data dir and VMs, after this one
     // stops as a crash would; with `identity`, as an upgrade would
     restartImpd: async (identity: HostIdentity = host.identity): Promise<Impd> => {
+      // first, so a hung call the stop releases parks instead of finishing
+      const runner = fake.startGeneration();
+
       await stopImpd(current.impd);
 
       host.identity = identity;
 
-      current.impd = await startImpd(identity);
+      current.impd = await startImpd(identity, runner);
 
       return current.impd;
     },

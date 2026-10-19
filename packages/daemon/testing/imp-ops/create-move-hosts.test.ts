@@ -27,13 +27,10 @@ test('#setupMoveHosts moves a stopped imp from the source to the target', async 
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(moved.state).toBe('stopped');
-
-  const commits = await hosts.readCommits();
-
-  expect(commits).toStrictEqual(['dev']);
+  expect(hosts.commits).toStrictEqual(['dev']);
 });
 
-test('#setupMoveHosts reads a commit on a reissued ticket as one commit', async () => {
+test('#setupMoveHosts records one commit report for a move resumed on a reissued ticket', async () => {
   const hosts = await setupMoveHosts({ hook: buildStubDroppedCommit() });
 
   await createUbuntuImage(hosts.source);
@@ -47,9 +44,7 @@ test('#setupMoveHosts reads a commit on a reissued ticket as one commit', async 
 
   await hosts.sourceApp.client.moves.resume({ name: 'dev', ticket: ticket.ticket });
 
-  const commits = await hosts.readCommits();
-
-  expect(commits).toStrictEqual(['dev']);
+  expect(hosts.commits).toStrictEqual(['dev']);
 });
 
 test('#setupMoveHosts hands its hook each request to the target, with both hosts', async () => {

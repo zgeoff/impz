@@ -31,6 +31,7 @@ import { getImpdLogger } from './process/get-impd-logger';
 import { printLog } from './process/print-log';
 import { createForwardedPeers } from './proxy/forwarded-peers';
 import type { WakeProxy } from './proxy/wake-proxy';
+import { readErrorMessage } from './read-error-message';
 import { createAuthorizedKeys } from './ssh/authorized-keys';
 import { setupSshDir } from './ssh/host-key';
 import { startImpdListeners } from './start-impd-listeners';
@@ -49,9 +50,32 @@ import { loadOrCreateToken } from './token';
 import { checkKsmHost, readKsmHostStats } from './vmm/ksm';
 
 // impd as a host runs it: each of IMPD_STARTUP_STEPS in order, recorded in
-// `startup`, from the data dir to the tickers. main.ts loads the config and
-// wires the signals to `stop`.
+// `startup`. A step that throws first releases what the steps before it
+// acquired. main.ts loads the config and wires the signals to `stop`.
 export async function createImpd(config: Config, boundaries: Readonly<ImpdBoundaries> = {}) {
+  const rollback = new AsyncDisposableStack();
+
+  try {
+    const impd = await startImpdParts(config, boundaries, rollback);
+
+    rollback.move();
+
+    return impd;
+  } catch (error) {
+    await rollback.disposeAsync();
+
+    throw error;
+  }
+}
+
+export type Impd = Awaited<ReturnType<typeof createImpd>>;
+
+// every startup step; each release goes on `rollback` once its part runs
+async function startImpdParts(
+  config: Config,
+  boundaries: Readonly<ImpdBoundaries>,
+  rollback: AsyncDisposableStack,
+) {
   const log = boundaries.log ?? printLog;
   const now = boundaries.now ?? Date.now;
   const startup: ImpdStartupStep[] = [];
@@ -90,6 +114,10 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
     startOtlpExport(process.env, packageJson.version),
   );
 
+  if (stopTelemetry !== null) {
+    rollback.defer(stopTelemetry);
+  }
+
   const systemFiles = await runStep('data-dir', async () => {
     createDataDirs(config.dataDir);
 
@@ -109,6 +137,10 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
     'database',
     () => boundaries.db ?? openDatabase(join(config.dataDir, 'db', 'imp.sqlite')),
   );
+
+  if (boundaries.db === undefined) {
+    rollback.defer(() => db.destroy());
+  }
 
   // one watch of the taint flag: the imps' hold and storage's reclaim log
   const kernelOops = boundaries.imps?.kernelOops ?? createKernelOopsWatch();
@@ -133,8 +165,14 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
     await storage.start(live);
   });
 
+  rollback.defer(() => storage.stop());
+
   const stored = buildImpdStorage(config, deps);
   const diskUsage = stored.diskUsage;
+
+  rollback.defer(() => {
+    diskUsage.stop();
+  });
 
   if (config.build.isolation === 'host') {
     log(HOST_BUILD_WARNING);
@@ -148,6 +186,11 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
 
   const broker = firewall.broker;
   const egress = firewall.egress;
+
+  rollback.defer(() => {
+    egress.stop();
+  });
+
   const proxyHolder: { proxy: WakeProxy | null } = { proxy: null };
   const publicRecords = createPublicRecordsLink();
   const dnsTokenSource = config.https?.dns.token ?? null;
@@ -170,8 +213,25 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
   const governor = governed.governor;
   const identity = governed.identity;
 
+  // the syncs a write started, which the stop waits for
+  const writeWork = new Set<Promise<unknown>>();
+
+  const runWriteWork = async (work: Promise<unknown> | undefined): Promise<void> => {
+    if (work === undefined) {
+      return;
+    }
+
+    writeWork.add(work);
+
+    try {
+      await work;
+    } finally {
+      writeWork.delete(work);
+    }
+  };
+
   // an imp that comes or goes opens or closes its proxy port and its grants
-  db.writes.subscribe((write) => {
+  const unsubscribeWrites = db.writes.subscribe((write) => {
     // storage comes or goes with an imp or a checkpoint, and changes when
     // its disk grows or a stop or sleep writes it out
     if (write.kind !== 'changed' || CHANGES_USAGE.has(write.reason)) {
@@ -179,11 +239,21 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
     }
 
     if (isImpSetWrite(write)) {
-      void proxyHolder.proxy?.syncListeners();
-      void broker.applyGrants();
-      void namesHolder.names?.runSync();
+      void runWriteWork(proxyHolder.proxy?.syncListeners());
+      void runWriteWork(broker.applyGrants());
+      void runWriteWork(namesHolder.names?.runSync());
     }
   });
+
+  const dbWrites = {
+    stop: async (): Promise<void> => {
+      unsubscribeWrites();
+
+      await Promise.allSettled(writeWork);
+    },
+  };
+
+  rollback.defer(() => dbWrites.stop());
 
   await runStep('reconcile', () => imps.reconcileImps());
 
@@ -346,7 +416,7 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
       tailnetNames,
       proxyHolder,
     },
-    runStep,
+    { runStep, rollback },
   );
 
   const idle = createIdleLoop({ config, db, imps, log });
@@ -371,9 +441,18 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
     ),
   );
 
+  // a caller's log takes a failed seed too; the image logger by default
+  const printSeedFailure = (error: unknown): void => {
+    if (boundaries.log === undefined) {
+      getImpdLogger('image').error('could not add the default image: {error}', { error });
+    } else {
+      log(`impd: could not add the default image: ${readErrorMessage(error)}`);
+    }
+  };
+
   // ready either way: a failed seed leaves `impz image add` to the user
   const ready = runStep('default-image', async () => {
-    await setupDefaultImage(config, stored.images, log);
+    await setupDefaultImage(config, stored.images, { log, printSeedFailure });
 
     state.ready = true;
   });
@@ -415,6 +494,7 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
     stop: (options: Readonly<ImpdStopOptions>): Promise<readonly ImpdStopStep[]> =>
       stopImpd(
         {
+          dbWrites,
           diskUsage,
           tickers,
           https: listeners.https,
@@ -436,14 +516,15 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
   };
 }
 
-export type Impd = Awaited<ReturnType<typeof createImpd>>;
-
 // The default image on a first start, and a warning when the configured
 // one is missing; a failure is logged, never thrown
 async function setupDefaultImage(
   config: Config,
   images: Readonly<ImpdStorage['images']>,
-  log: (message: string) => void,
+  output: Readonly<{
+    log: (message: string) => void;
+    printSeedFailure: (error: unknown) => void;
+  }>,
 ): Promise<void> {
   try {
     await images.seedDefaultImage();
@@ -451,11 +532,11 @@ async function setupDefaultImage(
     const existing = await images.listImages();
 
     if (!existing.some((image) => image.name === config.defaultImage)) {
-      log(
+      output.log(
         `impd: warning: no image named ${config.defaultImage} (IMP_DEFAULT_IMAGE); impz new uses ubuntu until \`impz image add <ref> --name ${config.defaultImage}\` adds it`,
       );
     }
   } catch (error) {
-    getImpdLogger('image').error('could not add the default image: {error}', { error });
+    output.printSeedFailure(error);
   }
 }

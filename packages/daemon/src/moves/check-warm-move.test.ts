@@ -750,10 +750,7 @@ test('it commits a warm move whose commit was lost on resume, with a reissued ti
   expect(moved).toMatchObject({ slot: created.slot, state: 'sleeping', moveState: null });
   expect(woken.state).toBe('running');
   expect(ctx.target.fake.wakes).toHaveLength(1);
-
-  const commits = await ctx.readCommits();
-
-  expect(commits).toStrictEqual(['dev']);
+  expect(ctx.commits).toStrictEqual(['dev']);
 });
 
 test('it commits a verified warm move warm when the source restarts', async () => {

@@ -38,6 +38,12 @@ export interface ImpdListenerParts {
   readonly proxyHolder: { proxy: WakeProxy | null };
 }
 
+// how createImpd runs a step, and where each opened port's release goes
+interface ImpdListenerStartup {
+  readonly runStep: RunImpdStartupStep;
+  readonly rollback: AsyncDisposableStack;
+}
+
 // Every port impd serves, each opened in its own startup step: the API,
 // the public MCP route, the wake proxy, HTTPS, the broker and SSH. A part
 // the config leaves off is null.
@@ -45,8 +51,10 @@ export async function startImpdListeners(
   config: Config,
   deps: Readonly<ImpdDeps>,
   parts: Readonly<ImpdListenerParts>,
-  runStep: RunImpdStartupStep,
+  startup: Readonly<ImpdListenerStartup>,
 ) {
+  const runStep = startup.runStep;
+  const rollback = startup.rollback;
   const log = deps.log ?? printLog;
   const db = deps.db;
 
@@ -55,7 +63,10 @@ export async function startImpdListeners(
     // the stop removes it, so a stopped impd leaves nothing reachable
     const exitListeners = new Set(process.listeners('beforeExit'));
 
-    const listening = parts.api.app.listen(buildApiListenOptions(config, deps.apiIdleTimeoutS));
+    const listening = parts.api.app.listen(
+      buildApiListenOptions(config, deps.apiIdleTimeoutS, deps.apiHostname),
+    );
+
     const added = process.listeners('beforeExit').filter((item) => !exitListeners.has(item));
 
     getImpdLogger('api').info('api on :{port}, data in {dataDir}', {
@@ -74,6 +85,8 @@ export async function startImpdListeners(
     return { app: listening, stop };
   });
 
+  rollback.defer(() => api.stop(true));
+
   // off unless the operator names the route's origin
   const publicMcp = runStep('public-mcp', () =>
     config.publicMcp === null
@@ -83,6 +96,10 @@ export async function startImpdListeners(
           log,
         ),
   );
+
+  if (publicMcp !== null) {
+    rollback.defer(() => publicMcp.stop());
+  }
 
   const proxy = await runStep('proxy', async () => {
     const started = startWakeProxy({
@@ -95,6 +112,8 @@ export async function startImpdListeners(
     });
 
     parts.proxyHolder.proxy = started;
+
+    rollback.defer(() => started.stop());
 
     await started.syncListeners();
 
@@ -118,6 +137,7 @@ export async function startImpdListeners(
 
     parts.publicRecords.attach(service);
     service.start();
+    rollback.defer(() => service.stop());
 
     return service;
   });
@@ -129,6 +149,8 @@ export async function startImpdListeners(
 
   const brokerPort = await runStep('broker', async () => {
     const port = await parts.broker.listen(config.brokerPort);
+
+    rollback.defer(() => parts.broker.stop());
 
     getImpdLogger('broker').info("credential broker on :{port} of every imp's gateway", { port });
 

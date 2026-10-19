@@ -11,6 +11,7 @@ import { buildStubRepeat } from '../../mcp/src/test-utils/build-stub-repeat';
 import { buildMockNewImage } from '../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../testing/imps/build-mock-new-imp';
 import { createStubDockerCli } from '../testing/imps/create-stub-docker-cli';
+import { readNoTailscale } from '../testing/network/read-no-tailscale';
 import { buildStubTickerTimer } from '../testing/platform/build-stub-ticker-timer';
 import { findFreePorts } from '../testing/platform/find-free-ports';
 import { startTestImpd } from '../testing/start-test-impd';
@@ -34,7 +35,10 @@ interface SetupOptions {
   readonly cgroups?: CpuCgroups;
 
   // the progress events of a streamed image call
-  readonly boundaries?: Pick<ImpdBoundaries, 'keepaliveMs' | 'keepaliveRepeat' | 'readProcStatus'>;
+  readonly boundaries?: Pick<
+    ImpdBoundaries,
+    'keepaliveMs' | 'keepaliveRepeat' | 'readProcStatus' | 'images'
+  >;
 }
 
 function setupTest(options: SetupOptions = {}) {
@@ -133,6 +137,95 @@ test('it leaves no process exit listener behind once it stops', async () => {
   expect(process.listenerCount('beforeExit')).toBe(exitListeners);
 });
 
+test('it writes a failed default image seed to the log it is given', async () => {
+  const dockerDir = await mkdtemp(join(tmpdir(), 'create-impd-docker-'));
+
+  onTestFinished(() => rm(dockerDir, { recursive: true, force: true }));
+
+  const docker = createStubDockerCli({
+    dir: dockerDir,
+    images: [
+      {
+        refs: ['seed.test/ubuntu:24.04'],
+        inspects: [{ Id: `sha256:${'c'.repeat(64)}` }],
+        isOnHost: false,
+        pull: { stderr: 'pull access denied for seed.test/ubuntu' },
+      },
+    ],
+  });
+
+  updateEnv('PATH', docker.path);
+  updateEnv('IMP_BUILD_ISOLATION', 'host');
+
+  const ctx = await setupTest({ boundaries: { images: { seedRef: 'seed.test/ubuntu:24.04' } } });
+
+  await ctx.impd.ready;
+
+  expect(ctx.logs).toContainEqual(expect.toStartWith('impd: could not add the default image: '));
+});
+
+test('it closes the ports it opened when a later startup step fails', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  // below the imps' port range, which the config keeps impd's own ports out of
+  const free = findFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+  const apiPort = free.take();
+  const dnsPort = free.take();
+  const taken = Bun.listen({ hostname: '0.0.0.0', port: free.take(), socket: { data: () => {} } });
+
+  onTestFinished(() => {
+    taken.stop(true);
+  });
+
+  expect(
+    startTestImpd(stack, {
+      env: {
+        IMP_API_PORT: String(apiPort),
+        IMP_EGRESS_DNS_PORT: String(dnsPort),
+        IMP_BROKER_PORT: String(taken.port),
+      },
+    }),
+  ).rejects.toThrow();
+
+  const api = Bun.listen({ hostname: '0.0.0.0', port: apiPort, socket: { data: () => {} } });
+
+  onTestFinished(() => {
+    api.stop(true);
+  });
+
+  const dns = await Bun.udpSocket({ hostname: '0.0.0.0', port: dnsPort });
+
+  onTestFinished(() => {
+    dns.close();
+  });
+
+  expect(api.port).toBe(apiPort);
+  expect(dns.port).toBe(dnsPort);
+});
+
+test('it opens no proxy port for an imp written to its database after it stops', async () => {
+  const ctx = await setupTest();
+
+  const image = await createImage(
+    ctx.db,
+    buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
+  );
+
+  const stopped = ctx.impd;
+
+  await ctx.restartImpd();
+
+  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'late', imageId: image.id }));
+
+  await waitFor(() => {
+    expect(ctx.impd.proxy.readImpPort(imp.id)).not.toBeNull();
+  });
+
+  expect(stopped.proxy.readImpPort(imp.id)).toBeNull();
+});
+
 test('it removes a system drive that no imp uses when it boots', async () => {
   const ctx = await setupTest();
 
@@ -217,6 +310,107 @@ test('it ends a lease once its clock passes the lease end', async () => {
 
 // The harness always gives impd a clock, so this boot is createImpd's own,
 // with no `now` among its boundaries.
+test('it closes the database it opened itself when it stops', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const dataDir = await mkdtemp(join(tmpdir(), 'create-impd-'));
+
+  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
+
+  // no jailer, no boot template, no SSH; the API, the broker and the
+  // resolver each take a free port below the imps' port range
+  const ports = findFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+
+  const config = {
+    ...loadConfig({
+      IMP_DATA_DIR: dataDir,
+      IMP_JAILER: 'false',
+      IMP_BOOT_TEMPLATES: 'false',
+      IMP_SSH_PORT: '0',
+      IMP_API_PORT: String(ports.take()),
+      IMP_BROKER_PORT: String(ports.take()),
+      IMP_EGRESS_DNS_PORT: String(ports.take()),
+    }),
+    defaultDiskBytes: 0,
+  };
+
+  // the system drive impd boots imps with, as setupSystemFiles installs it
+  const drive = 'd1'.repeat(32);
+  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
+
+  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
+  await writeFile(systemDrivePath, drive);
+
+  const vmm = buildStubVmm();
+
+  // no db: impd opens the one in its data dir
+  const impd = await createImpd(config, {
+    rootToken: TEST_TOKEN,
+    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+    systemFiles: {
+      kernelPath: join(dataDir, 'system', 'vmlinux'),
+      systemDrivePath,
+      info: {
+        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
+        systemDrive: { sha256: drive },
+      },
+    },
+    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
+    log: () => {},
+    readIdentity: (files, ipv6Prefix) => ({
+      firecrackerVersion: 'v1.17.0',
+      snapshotVersion: 'v12.0.0',
+      hostKernel: 'test',
+      guestKernel: files.info.guestKernel.sha256,
+      systemDrive: files.info.systemDrive.sha256,
+      systemDrivePath: files.systemDrivePath,
+      cpuModel: 'Test CPU',
+      cpuFlags: 'test-flags',
+      ipv6Prefix,
+    }),
+    resolveIpv6: () => Promise.resolve(null),
+    readTailscale: readNoTailscale,
+    cgroups: buildStubCpuCgroups().cgroups,
+    vms: vmm.startGeneration(),
+    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
+    broker: {
+      installBundle: () => Promise.resolve(),
+      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
+      runOAuthTimer: false,
+    },
+    egress: {
+      runNft: () => Promise.resolve(),
+      flushConnections: () => Promise.resolve(),
+      flushPair: () => Promise.resolve(),
+      readForwardRules: () => Promise.resolve(''),
+      forward: () => Promise.reject(new Error('no upstream in tests')),
+      resolveExact: () => Promise.resolve([]),
+      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
+      readConnected6: () => Promise.resolve([]),
+      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
+    },
+    imps: {
+      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
+      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
+      growFilesystem: () => Promise.resolve(false),
+      hostCpus: 8,
+    },
+    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
+
+    // no ticker runs on its own, the wake proxy takes any free port, and a
+    // first start pulls no default image
+    tickerTimer: buildStubTickerTimer().timer,
+    proxyPorts: { proxy: 0, slot: () => 0 },
+    images: { seedRef: null },
+  });
+
+  await impd.stop({ sleepImps: false });
+
+  expect(impd.db.selectFrom('imps').select('id').execute()).rejects.toThrow();
+});
+
 test('it sets a lease end from the wall clock when no clock is given', async () => {
   const stack = new AsyncDisposableStack();
 
@@ -282,8 +476,7 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
       ipv6Prefix,
     }),
     resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
+    readTailscale: readNoTailscale,
     cgroups: buildStubCpuCgroups().cgroups,
     vms: vmm.startGeneration(),
     taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
@@ -429,8 +622,7 @@ test('it answers /health without a token, not ready before the default image is 
       ipv6Prefix,
     }),
     resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
+    readTailscale: readNoTailscale,
     cgroups: buildStubCpuCgroups().cgroups,
     vms: vmm.startGeneration(),
     taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },

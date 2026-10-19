@@ -1,12 +1,17 @@
 import { expect, mock, test } from 'bun:test';
+import { waitFor } from '@impz/test-utils/wait-for';
 import { stopImpd } from './stop-impd';
 import type { ImpdStopParts } from './stop-impd';
 
 // every part as a recorder that stops at once
 function setupTest() {
+  const firstTicker = { stop: mock(() => Promise.resolve()) };
+  const secondTicker = { stop: mock(() => Promise.resolve()) };
+
   const parts = {
+    dbWrites: { stop: mock(() => Promise.resolve()) },
     diskUsage: { stop: mock(() => {}) },
-    tickers: [{ stop: mock(() => Promise.resolve()) }, { stop: mock(() => Promise.resolve()) }],
+    tickers: [firstTicker, secondTicker],
     https: { stop: mock(() => Promise.resolve()) },
     proxy: { stop: mock(() => Promise.resolve()) },
     broker: { stop: mock(() => Promise.resolve()) },
@@ -26,7 +31,7 @@ function setupTest() {
     log: mock(() => {}),
   } satisfies ImpdStopParts;
 
-  return { parts };
+  return { parts, firstTicker, secondTicker };
 }
 
 test('it stops every part in order, sleeps the imps, then closes the database', async () => {
@@ -35,6 +40,7 @@ test('it stops every part in order, sleeps the imps, then closes the database', 
   const steps = await stopImpd(ctx.parts, { sleepImps: true });
 
   expect(steps).toStrictEqual([
+    { step: 'db-writes', outcome: 'stopped' },
     { step: 'disk-usage', outcome: 'stopped' },
     { step: 'tickers', outcome: 'stopped' },
     { step: 'https', outcome: 'stopped' },
@@ -51,6 +57,62 @@ test('it stops every part in order, sleeps the imps, then closes the database', 
     { step: 'telemetry', outcome: 'stopped' },
     { step: 'database', outcome: 'stopped' },
   ]);
+});
+
+test('it calls the stop of every part once, in order', async () => {
+  const ctx = setupTest();
+
+  await stopImpd(ctx.parts, { sleepImps: true });
+
+  expect(ctx.parts.dbWrites.stop).toHaveBeenCalledOnce();
+  expect(ctx.parts.diskUsage.stop).toHaveBeenCalledOnce();
+  expect(ctx.firstTicker.stop).toHaveBeenCalledOnce();
+  expect(ctx.secondTicker.stop).toHaveBeenCalledOnce();
+  expect(ctx.parts.https.stop).toHaveBeenCalledOnce();
+  expect(ctx.parts.proxy.stop).toHaveBeenCalledOnce();
+  expect(ctx.parts.broker.stop).toHaveBeenCalledOnce();
+  expect(ctx.parts.egress.stop).toHaveBeenCalledOnce();
+  expect(ctx.parts.ssh.stop).toHaveBeenCalledOnce();
+  expect(ctx.parts.closeExecSessions).toHaveBeenCalledOnce();
+  expect(ctx.parts.publicMcp.stop).toHaveBeenCalledOnce();
+  expect(ctx.parts.api.stop).toHaveBeenCalledOnce();
+  expect(ctx.parts.imps.sleepAllImps).toHaveBeenCalledOnce();
+  expect(ctx.parts.storage.stop).toHaveBeenCalledOnce();
+  expect(ctx.parts.stopTelemetry).toHaveBeenCalledOnce();
+  expect(ctx.parts.db.destroy).toHaveBeenCalledOnce();
+  expect(ctx.parts.dbWrites.stop).toHaveBeenCalledBefore(ctx.parts.diskUsage.stop);
+  expect(ctx.parts.diskUsage.stop).toHaveBeenCalledBefore(ctx.firstTicker.stop);
+  expect(ctx.secondTicker.stop).toHaveBeenCalledBefore(ctx.parts.https.stop);
+  expect(ctx.parts.https.stop).toHaveBeenCalledBefore(ctx.parts.proxy.stop);
+  expect(ctx.parts.proxy.stop).toHaveBeenCalledBefore(ctx.parts.broker.stop);
+  expect(ctx.parts.broker.stop).toHaveBeenCalledBefore(ctx.parts.egress.stop);
+  expect(ctx.parts.egress.stop).toHaveBeenCalledBefore(ctx.parts.ssh.stop);
+  expect(ctx.parts.ssh.stop).toHaveBeenCalledBefore(ctx.parts.closeExecSessions);
+  expect(ctx.parts.closeExecSessions).toHaveBeenCalledBefore(ctx.parts.publicMcp.stop);
+  expect(ctx.parts.publicMcp.stop).toHaveBeenCalledBefore(ctx.parts.api.stop);
+  expect(ctx.parts.api.stop).toHaveBeenCalledBefore(ctx.parts.imps.sleepAllImps);
+  expect(ctx.parts.storage.stop).toHaveBeenCalledBefore(ctx.parts.stopTelemetry);
+  expect(ctx.parts.stopTelemetry).toHaveBeenCalledBefore(ctx.parts.db.destroy);
+});
+
+test('it waits for a stop under way before it stops the next part', async () => {
+  const ctx = setupTest();
+  const held = Promise.withResolvers<void>();
+  const proxy = { stop: mock(() => held.promise) };
+  const stopping = stopImpd({ ...ctx.parts, proxy }, { sleepImps: true });
+
+  await waitFor(() => {
+    expect(proxy.stop).toHaveBeenCalledOnce();
+  });
+
+  const brokerStopsWhileHeld = ctx.parts.broker.stop.mock.calls.length;
+
+  held.resolve();
+
+  await stopping;
+
+  expect(brokerStopsWhileHeld).toBe(0);
+  expect(ctx.parts.broker.stop).toHaveBeenCalledOnce();
 });
 
 test('it ends every open connection when it stops the api', async () => {
@@ -87,6 +149,7 @@ test('it skips the parts the config leaves off, and leaves a caller database ope
   );
 
   expect(steps.map((entry) => entry.step)).toStrictEqual([
+    'db-writes',
     'disk-usage',
     'tickers',
     'proxy',

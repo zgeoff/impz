@@ -4,7 +4,6 @@ import type { MoveStatus } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { createImage } from '../../src/db/images';
-import { listMoveTickets } from '../../src/db/move-tickets';
 import { readWarmHost } from '../../src/moves/warm-facts';
 import { deriveSlotAddress } from '../../src/net/addressing';
 import type { StartTimer } from '../../src/process/clock';
@@ -72,9 +71,21 @@ export async function createMoveHosts(
   stack: Readonly<AsyncDisposableStack>,
   options: MoveHostsOptions = {},
 ) {
+  // the name of each move the target's commit hook heard, in order
+  const commits: string[] = [];
+
   const target = await startTestImpd(stack, {
     ...options.target,
     env: { IMP_PEER_URL: TARGET_URL, ...options.target?.env },
+    boundaries: {
+      ...options.target?.boundaries,
+      moves: {
+        ...options.target?.boundaries?.moves,
+        onCommitted: (name) => {
+          commits.push(name);
+        },
+      },
+    },
   });
 
   const facts = readWarmHost(target.config, target.readIdentity(), target.storage.kind);
@@ -163,27 +174,12 @@ export async function createMoveHosts(
     return waitForMove(name);
   };
 
-  // the names of the moves the target committed, in order; a commit marks
-  // every ticket of its imp, a reissued one too, so it counts once
-  const readCommits = async (): Promise<string[]> => {
-    const tickets = await listMoveTickets(target.db);
-
-    const commits = new Map(
-      tickets
-        .filter((ticket) => ticket.committed_at !== null)
-        .toSorted((first, second) => (first.committed_at ?? 0) - (second.committed_at ?? 0))
-        .map((ticket) => [`${ticket.imp_id ?? ''} ${String(ticket.committed_at)}`, ticket.name]),
-    );
-
-    return [...commits.values()];
-  };
-
   return {
     source,
     target,
     sourceApp,
     targetApp,
-    readCommits,
+    commits,
     runMove,
     waitForMove,
   };

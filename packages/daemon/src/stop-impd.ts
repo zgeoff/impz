@@ -20,6 +20,8 @@ interface Stoppable {
 // What impd takes out of service, each part as createImpd started it; null
 // for a part the config leaves off
 export interface ImpdStopParts {
+  // the database writes impd follows, and the work a write started
+  readonly dbWrites: Stoppable;
   readonly diskUsage: { readonly stop: () => void };
   readonly tickers: readonly Ticker[];
   readonly https: Stoppable | null;
@@ -47,7 +49,6 @@ export interface ImpdStopOptions {
   // the limits above by default
   readonly deadlineMs?: number;
   readonly stepMaxMs?: number;
-  readonly brokerMaxMs?: number;
 }
 
 export type ImpdStopOutcome = 'stopped' | 'timed-out' | 'failed';
@@ -66,7 +67,6 @@ export async function stopImpd(
 ): Promise<readonly ImpdStopStep[]> {
   const deadlineMs = options.deadlineMs ?? STOP_DEADLINE_MS;
   const stepMaxMs = options.stepMaxMs ?? STOP_STEP_MAX_MS;
-  const brokerMaxMs = options.brokerMaxMs ?? STOP_BROKER_MAX_MS;
   const started = performance.now();
   const readLeftMs = () => Math.max(0, deadlineMs - (performance.now() - started));
   const readStepMs = () => Math.min(stepMaxMs, readLeftMs());
@@ -97,6 +97,9 @@ export async function stopImpd(
     }
   };
 
+  // first: a write after this point starts no proxy, grant or name sync
+  await runStep('db-writes', readStepMs(), () => parts.dbWrites.stop());
+
   await runStep('disk-usage', readStepMs(), () => {
     parts.diskUsage.stop();
   });
@@ -112,7 +115,7 @@ export async function stopImpd(
   }
 
   await runStep('proxy', readStepMs(), () => parts.proxy.stop());
-  await runStep('broker', Math.min(brokerMaxMs, readLeftMs()), () => parts.broker.stop());
+  await runStep('broker', Math.min(STOP_BROKER_MAX_MS, readLeftMs()), () => parts.broker.stop());
 
   await runStep('egress', readStepMs(), () => {
     parts.egress.stop();

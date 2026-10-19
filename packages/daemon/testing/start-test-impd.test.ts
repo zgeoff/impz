@@ -287,6 +287,41 @@ test('it finishes a running template build before it removes its data dir', asyn
   expect(existsSync(harness.dataDir)).toBeFalse();
 });
 
+test('it serves the API on loopback only', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const harness = await startTestImpd(stack);
+
+  expect(harness.impd.app.server?.hostname).toBe('127.0.0.1');
+});
+
+test('it parks a boot the replaced impd had hung, so the boot never finishes', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const harness = await startTestImpd(stack);
+
+  await harness.createTestImage('ubuntu');
+
+  harness.fake.queue('boot', 'hang');
+
+  // never settles: its boot parks once the impd is replaced
+  void Promise.allSettled([harness.imps.createImp({ name: 'dev' })]);
+
+  await waitFor(() => {
+    expect(harness.fake.countHungCalls()).toBe(1);
+  });
+
+  await harness.restartImpd();
+
+  await waitFor(() => {
+    expect(harness.fake.countParkedCalls()).toBe(1);
+  });
+});
+
 test('it releases a hung template build before it waits for the build', async () => {
   const stack = new AsyncDisposableStack();
 
