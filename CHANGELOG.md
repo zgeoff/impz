@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.5](https://github.com/zgeoff/impz/compare/v2.5.4...v2.5.5) (2026-10-19)
+
+
+### Bug Fixes
+
+* **daemon:** refuse a move mark change the transition table lacks ([#519](https://github.com/zgeoff/impz/issues/519)) ([49ebd4f](https://github.com/zgeoff/impz/commit/49ebd4fb16cbb1b182849fd5e0134d18cc4d2b27))
+
 ## [2.5.4](https://github.com/zgeoff/impz/compare/v2.5.3...v2.5.4) (2026-10-18)
 
 ### Bug Fixes
