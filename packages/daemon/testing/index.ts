@@ -18,6 +18,8 @@ export { buildMockNewImp } from './imps/build-mock-new-imp';
 export { buildStubTracedBuild } from './imps/build-stub-traced-build';
 export { buildStubBrokerTokenEndpoint } from './network/build-stub-broker-token-endpoint';
 export { buildStubCloudflareApi } from './network/build-stub-cloudflare-api';
+export { startStubSilentOrigin } from './network/start-stub-silent-origin';
+export { buildQueryGate } from './platform/build-query-gate';
 export { buildStubClock } from './platform/build-stub-clock';
 export { findFreePorts } from './platform/find-free-ports';
 export { buildStubExecGuest } from './vm/build-stub-exec-guest';

@@ -1,7 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { startStubSilentOrigin } from '@impz/daemon/testing/network/start-stub-silent-origin';
-import { buildStubClock } from '@impz/daemon/testing/platform/build-stub-clock';
+import { buildStubClock, startStubSilentOrigin } from '@impz/daemon/testing';
 import invariant from 'tiny-invariant';
 import { createImpClient } from './create-imp-client';
 

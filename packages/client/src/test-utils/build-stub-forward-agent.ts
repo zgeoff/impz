@@ -5,7 +5,7 @@ import {
   encodeFrame,
   encodeJsonFrame,
 } from '@impz/daemon/src/agent-client/frame-codec';
-import type { StubAgentHandler } from '@impz/daemon/testing/vm/start-stub-agent';
+import type { StubAgentHandler } from '@impz/daemon/testing';
 import * as z from 'zod';
 
 // what a listen or an accept asks the agent, in its wire form

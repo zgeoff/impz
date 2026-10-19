@@ -3,9 +3,7 @@ import type {
   ExecEvent,
   ExecStream,
 } from '@impz/daemon/src/agent-client/exec-stream';
-import { buildTestApp } from '@impz/daemon/testing/imps/build-test-app';
-import { createImpTest } from '@impz/daemon/testing/start-test-impd';
-import { TEST_TOKEN } from '@impz/daemon/testing/test-token';
+import { TEST_TOKEN, startTestImpd } from '@impz/daemon/testing';
 import type { Server } from 'bun';
 
 // impd's own app with a fake agent and one imp, `smoke`, for smoke.ts.
@@ -42,25 +40,18 @@ async function stopAndExit(): Promise<void> {
 
 async function startStubImpd() {
   // only impd's unexpected RPC failures reach stderr, as on a host
-  const harness = await createImpTest(stack, {
+  const harness = await startTestImpd(stack, {
     onLog: (message) => {
       if (message.startsWith('impd: rpc failed: ')) {
         console.error(message);
       }
     },
+    boundaries: {
+      agent: { openExec: (_name, request) => Promise.resolve(buildFakeStream(request)) },
+    },
   });
 
-  const built = buildTestApp(harness, harness, TEST_TOKEN, {
-    openExec: (_name, request) => Promise.resolve(buildFakeStream(request)),
-  });
-
-  const app = built.app.listen({ hostname: '127.0.0.1', port: 0 });
-
-  stack.defer(async () => {
-    await app.stop();
-  });
-
-  const url = `http://127.0.0.1:${String(app.server?.port)}`;
+  const url = harness.url;
   const proxy = startPrefixProxy(url);
 
   stack.defer(() => proxy.stop(true));
@@ -68,7 +59,7 @@ async function startStubImpd() {
   const closedUrl = await findClosedUrl();
 
   await harness.createTestImage('ubuntu');
-  await built.client.imps.create({ name: 'smoke' });
+  await harness.client.imps.create({ name: 'smoke' });
 
   return { url, prefixedUrl: `${proxy.url.origin}${PREFIX}/`, closedUrl, token: TEST_TOKEN };
 }

@@ -6,7 +6,7 @@ import {
   encodeJsonFrame,
 } from '@impz/daemon/src/agent-client/frame-codec';
 import type { AgentFrame } from '@impz/daemon/src/agent-client/frame-codec';
-import type { StubAgentHandler } from '@impz/daemon/testing/vm/start-stub-agent';
+import type { StubAgentHandler } from '@impz/daemon/testing';
 import * as z from 'zod';
 
 // the bytes `big` writes to each of stdout and stderr
