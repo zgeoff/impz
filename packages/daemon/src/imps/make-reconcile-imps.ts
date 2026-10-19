@@ -19,7 +19,6 @@ interface ReconcileParts {
   readonly ops: ImpVmOps;
 }
 
-// the runtime's reconcileImps (ImpRuntime in imp-runtime.ts)
 export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
   const context = parts.context;
   const lock = parts.lock;
