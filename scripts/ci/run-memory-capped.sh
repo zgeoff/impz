@@ -16,7 +16,8 @@ mib=$1
 shift
 
 # runs inside the scope: the command, then the scope's own counters, read
-# while this shell still holds the scope open
+# while this shell still holds the scope open; that shell expands it
+# shellcheck disable=SC2016
 report='
 cgroup="/sys/fs/cgroup$(sed -n "s/^0:://p" /proc/self/cgroup)"
 status=0
