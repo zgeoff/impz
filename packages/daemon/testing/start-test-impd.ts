@@ -107,8 +107,7 @@ export interface TestImpdOptions {
   // IPv6 for imps, as impd resolved it; none by default
   readonly ipv6?: Ipv6Plan;
 
-  // the host container's default-route interfaces; eth0 in each family by
-  // default
+  // the host's default-route interfaces; eth0 in each family by default
   readonly readUplinks?: () => Promise<Uplinks>;
 
   // IMP_KSM's readers: the unshared size a sleep records, the merge flag, and
@@ -118,8 +117,7 @@ export interface TestImpdOptions {
   readonly readKsmProfitMib?: (pid: number) => Promise<number | null>;
   readonly readKsmHostStats?: () => KsmHostStats | null;
 
-  // the jailer that releases and removes a stopped VM's jail, as
-  // createVmRunner wires it; nothing to release by default
+  // the jailer that releases a stopped VM's jail; none by default
   readonly jails?: Jails;
 
   // the root token the client sends; TEST_TOKEN by default
@@ -180,7 +178,10 @@ export async function startTestImpd(
   });
 
   // the API's and the broker's ports, below the imps' port range
-  const ports = findFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+  const ports = findFreePorts(3, {
+    pick: () => 10_000 + Math.floor(Math.random() * 10_000),
+    onRelease: (release) => stack.defer(release),
+  });
 
   // a new disk stays the size of its image: the fake clone copies every byte
   const config: Config = {

@@ -247,3 +247,41 @@ test('it picks two ports and holds them until released', async () => {
   expect(firstExit).toBe(0);
   expect(secondExit).toBe(0);
 });
+
+test('it frees its claims when the release that onRelease got runs', () => {
+  // past 65535 no socket can hold them; the pid keeps other runs' claims off them
+  const claimed = 65_536 + process.pid * 4 + 2;
+  const releases: (() => void)[] = [];
+  const earlierPicks = [claimed];
+
+  findFreePorts(1, {
+    pick: () => {
+      const port = earlierPicks.shift();
+
+      invariant(port !== undefined, 'the earlier picks ran out');
+
+      return port;
+    },
+    onRelease: (release) => {
+      releases.push(release);
+    },
+  });
+
+  for (const release of releases) {
+    release();
+  }
+
+  const picks = [claimed];
+
+  const free = findFreePorts(1, {
+    pick: () => {
+      const port = picks.shift();
+
+      invariant(port !== undefined, 'the picks ran out');
+
+      return port;
+    },
+  });
+
+  expect(free.take()).toBe(claimed);
+});

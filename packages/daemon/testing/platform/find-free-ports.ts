@@ -51,18 +51,23 @@ function claimPort(port: number) {
 interface FindFreePortsOptions {
   // the next port to try; a random one from just below the ephemeral range by default
   readonly pick?: () => number;
+
+  // registers the release of the claims; onTestFinished by default, a
+  // stack's defer for a caller outside the test runner
+  readonly onRelease?: (release: () => void) => void;
 }
 
 // `count` distinct free ports from just below the ephemeral range, claimed
-// until the test ends so no picker in another process hands one out again. A
-// process that binds such a port without a claim can still race the test.
+// until their release runs, so no picker in another process hands one out
+// again. A process that binds such a port without a claim can still race.
 export function findFreePorts(count: number, options: FindFreePortsOptions = {}) {
   const top = readEphemeralStart();
   const pick = options.pick ?? (() => randomInt(top - PICK_SPAN, top));
   const claims: NonNullable<ReturnType<typeof claimPort>>[] = [];
   const ports: number[] = [];
+  const onRelease = options.onRelease ?? onTestFinished;
 
-  onTestFinished(() => {
+  onRelease(() => {
     for (const claim of claims) {
       claim.stop(true);
     }
