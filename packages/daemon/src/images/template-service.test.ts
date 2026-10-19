@@ -1,26 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, readdirSync } from 'node:fs';
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
-import { findFreePorts } from '../../testing/platform/find-free-ports';
 import { runSql } from '../../testing/platform/run-sql';
-import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { createImage, findImageByName } from '../db/images';
 import { createImp, findImpByName } from '../db/imps';
-import { openDatabase } from '../db/open-database';
-import {
-  buildImagePaths,
-  buildImpPaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
+import { buildImagePaths, buildImpPaths } from '../storage/data-layout';
 import { BUILDER_IMAGE } from './builder-imps';
 
 async function setupTest() {
@@ -28,125 +17,39 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
+  // made here, so each clone's source reads relative to it
   const dataDir = await mkdtemp(join(tmpdir(), 'template-service-'));
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  // a new disk stays the size of its image, since the clone copies every byte
-  const config = {
-    ...loadConfig({
-      IMP_DATA_DIR: dataDir,
-      IMP_JAILER: 'false',
-      IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-    }),
-    defaultDiskBytes: 0,
-  };
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
   // the freezes, thaws and clones of disks, in the order they happen
   const events: string[] = [];
 
-  const impd = await createImpd(config, {
-    db,
-    rootToken: 'root-token',
-    storage: createXfsBackend({
-      dataDir,
-      cloneFile: async (source, target) => {
-        await copyFile(source, target);
+  const harness = await startTestImpd(stack, {
+    dataDir,
+    cloneDisk: async (source, target) => {
+      await copyFile(source, target);
 
-        events.push(`clone ${source.slice(dataDir.length)}`);
-      },
-    }),
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
+      events.push(`clone ${source.slice(dataDir.length)}`);
     },
+    boundaries: {
+      freezer: {
+        freeze: () => {
+          events.push('freeze');
 
-    // the host's free space, so a template never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
+          return Promise.resolve();
+        },
+        thaw: () => {
+          events.push('thaw');
 
-    // Firecracker, the kernel and the CPU as this host reports them
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: {
-      freeze: () => {
-        events.push('freeze');
-
-        return Promise.resolve();
-      },
-      thaw: () => {
-        events.push('thaw');
-
-        return Promise.resolve();
+          return Promise.resolve();
+        },
       },
     },
   });
 
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
-  });
-
-  return { dataDir, db, vmm, events, impd };
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, { events });
 }
 
 test('it freezes a running imp around the clone of its disk', async () => {
@@ -249,7 +152,7 @@ test('it wakes a sleeping imp and freezes it before the clone', async () => {
 
   await ctx.impd.templates.createTemplate('dev', 'woken');
 
-  expect(ctx.vmm.wakes).toHaveLength(1);
+  expect(ctx.fake.wakes).toHaveLength(1);
   expect(ctx.events[before]).toBe('freeze');
 });
 
@@ -351,11 +254,11 @@ test('it boots an imp from a template with an identity reset', async () => {
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
   await ctx.impd.templates.createTemplate('dev', 'tools');
 
-  const before = ctx.vmm.boots.length;
+  const before = ctx.fake.boots.length;
 
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools' });
 
-  expect(ctx.vmm.boots.slice(before)).toStrictEqual([{ hostname: 'copy', isIdentityReset: true }]);
+  expect(ctx.fake.boots.slice(before)).toStrictEqual([{ hostname: 'copy', isIdentityReset: true }]);
 });
 
 test('it clears the pending reset once the first boot reports it done', async () => {
@@ -390,11 +293,13 @@ test('it boots a template copy without a reset after its first boot', async () =
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools' });
   await ctx.impd.imps.stopImp('copy');
 
-  const before = ctx.vmm.boots.length;
+  const before = ctx.fake.boots.length;
 
   await ctx.impd.imps.startImp('copy');
 
-  expect(ctx.vmm.boots.slice(before)).toStrictEqual([{ hostname: 'copy', isIdentityReset: false }]);
+  expect(ctx.fake.boots.slice(before)).toStrictEqual([
+    { hostname: 'copy', isIdentityReset: false },
+  ]);
 });
 
 test('it boots an imp from a docker image without a reset', async () => {
@@ -408,7 +313,7 @@ test('it boots an imp from a docker image without a reset', async () => {
 
   await ctx.impd.imps.createImp({ name: 'plain', image: 'base' });
 
-  expect(ctx.vmm.boots).toStrictEqual([{ hostname: 'plain', isIdentityReset: false }]);
+  expect(ctx.fake.boots).toStrictEqual([{ hostname: 'plain', isIdentityReset: false }]);
 });
 
 test('it marks a template copy made stopped as owing the reset', async () => {
@@ -442,11 +347,11 @@ test('it resets a template copy made stopped on its first boot', async () => {
   await ctx.impd.templates.createTemplate('dev', 'tools');
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools', start: false });
 
-  const before = ctx.vmm.boots.length;
+  const before = ctx.fake.boots.length;
 
   await ctx.impd.imps.startImp('copy');
 
-  expect(ctx.vmm.boots.slice(before)).toStrictEqual([{ hostname: 'copy', isIdentityReset: true }]);
+  expect(ctx.fake.boots.slice(before)).toStrictEqual([{ hostname: 'copy', isIdentityReset: true }]);
 });
 
 test('it moves a template made again to a new disk under the same image and drops the old disk', async () => {
@@ -625,11 +530,11 @@ test('it resets a fork of a template copy that never booted', async () => {
   await ctx.impd.templates.createTemplate('dev', 'tools');
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools', start: false });
 
-  const before = ctx.vmm.boots.length;
+  const before = ctx.fake.boots.length;
 
   await ctx.impd.checkpoints.forkImp({ source: 'copy', name: 'fork' });
 
-  expect(ctx.vmm.boots.slice(before)).toStrictEqual([{ hostname: 'fork', isIdentityReset: true }]);
+  expect(ctx.fake.boots.slice(before)).toStrictEqual([{ hostname: 'fork', isIdentityReset: true }]);
 });
 
 // a fork of a booted copy holds that copy's new identity already
@@ -646,11 +551,11 @@ test('it boots a fork of a booted template copy without a reset', async () => {
   await ctx.impd.templates.createTemplate('dev', 'tools');
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools' });
 
-  const before = ctx.vmm.boots.length;
+  const before = ctx.fake.boots.length;
 
   await ctx.impd.checkpoints.forkImp({ source: 'copy', name: 'later' });
 
-  expect(ctx.vmm.boots.slice(before)).toStrictEqual([
+  expect(ctx.fake.boots.slice(before)).toStrictEqual([
     { hostname: 'later', isIdentityReset: false },
   ]);
 });
@@ -667,7 +572,7 @@ test('it keeps the reset pending when the boot reports it failed', async () => {
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
   await ctx.impd.templates.createTemplate('dev', 'tools');
 
-  ctx.vmm.setIdentityReset('failed');
+  ctx.fake.setIdentityReset('failed');
 
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools' });
 
@@ -688,12 +593,12 @@ test('it keeps the reset pending when a boot reports nothing of it', async () =>
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
   await ctx.impd.templates.createTemplate('dev', 'tools');
 
-  ctx.vmm.setIdentityReset('failed');
+  ctx.fake.setIdentityReset('failed');
 
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools' });
   await ctx.impd.imps.stopImp('copy');
 
-  ctx.vmm.setIdentityReset(undefined);
+  ctx.fake.setIdentityReset(undefined);
 
   await ctx.impd.imps.startImp('copy');
 
@@ -714,12 +619,12 @@ test('it clears a pending reset once a later boot reports it done', async () => 
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
   await ctx.impd.templates.createTemplate('dev', 'tools');
 
-  ctx.vmm.setIdentityReset('failed');
+  ctx.fake.setIdentityReset('failed');
 
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools' });
   await ctx.impd.imps.stopImp('copy');
 
-  ctx.vmm.setIdentityReset('ok');
+  ctx.fake.setIdentityReset('ok');
 
   await ctx.impd.imps.startImp('copy');
 

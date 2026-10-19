@@ -1,7 +1,4 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { ImpEvent } from '@impz/api';
 import { createImpClient } from '@impz/client';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
@@ -11,20 +8,11 @@ import invariant from 'tiny-invariant';
 import { buildMockLeaseRecord } from '../../testing/imps/build-mock-lease-record';
 import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
 import { buildQueryGate } from '../../testing/platform/build-query-gate';
-import { findFreePorts } from '../../testing/platform/find-free-ports';
-import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
+import { startTestImpd } from '../../testing/start-test-impd';
+import { TEST_TOKEN } from '../../testing/test-token';
 import { createImage } from '../db/images';
 import { listLeases, writeLease } from '../db/leases';
-import { openDatabase } from '../db/open-database';
-import {
-  buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
+import { buildImagePaths } from '../storage/data-layout';
 
 // impd's real app on stub VMs, on a clock the test steps, with every event
 // it emits and a root client that reaches the app in process
@@ -33,120 +21,19 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'build-app-leases-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-    ...readImpEnv(),
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  // the clock leases and holds run on; it moves only when a test moves it
-  const clock = { nowMs: Date.now() };
-  const vmm = buildStubVmm();
-
-  // each unexpected failure behind an RPC, which impd logs to stderr
-  const rpcFailures: unknown[] = [];
-
   // holds impd's next read of the leases once a test arms it
   const leaseReads = buildQueryGate('imp_leases');
 
-  const impd = await createImpd(config, {
-    db: leaseReads.wrap(db),
-
-    // the bearer the root client sends
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-    logRpcFailure: (failure) => {
-      rpcFailures.push(failure);
-    },
-    now: () => clock.nowMs,
-
-    // Firecracker, the kernel and the CPU as this host reports them
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      // 300 MiB per awake imp, as the governor measures it
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  });
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
+  // the clock leases and holds run on; it moves only when a test moves it
+  const harness = await startTestImpd(stack, {
+    env: readImpEnv(),
+    frozenClockMs: Date.now(),
+    wrapDatabase: leaseReads.wrap,
   });
 
   const events: ImpEvent[] = [];
 
-  const unsubscribe = impd.imps.events.subscribe((event) => {
+  const unsubscribe = harness.imps.events.subscribe((event) => {
     events.push(event);
   });
 
@@ -155,23 +42,19 @@ async function setupTest() {
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   // the image every imps.create boots when it names none
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
+  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
-  await createImage(db, image);
+  await createImage(harness.db, image);
 
-  const sendToImpd = (request: Request) => impd.api.app.handle(request);
+  const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
 
-  return {
-    db,
-    impd,
-    vmm,
-    clock,
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, {
     events,
-    rpcFailures,
     leaseReads,
     sendToImpd,
-    client: createImpClient({ url: 'http://impd.test', token: 'root-token', fetch: sendToImpd }),
-  };
+    client: createImpClient({ url: 'http://impd.test', token: TEST_TOKEN, fetch: sendToImpd }),
+  });
 }
 
 test('it answers an acquire with the lease’s owner and end', async () => {
@@ -196,7 +79,7 @@ test('it answers an acquire with the lease’s owner and end', async () => {
       display: 'a',
       label: 'job',
     },
-    until: new Date(ctx.clock.nowMs + 60_000),
+    until: new Date(ctx.now() + 60_000),
   });
 });
 
@@ -311,7 +194,7 @@ test('it names every lease on the imp to root and holds it until the longest end
   const imp = await ctx.client.imps.get({ name: 'dev' });
 
   expect(imp.leases?.otherCount).toBe(0);
-  expect(imp.holdUntil).toStrictEqual(new Date(ctx.clock.nowMs + 120_000));
+  expect(imp.holdUntil).toStrictEqual(new Date(ctx.now() + 120_000));
 });
 
 test('it releases only the caller’s own lease', async () => {
@@ -362,11 +245,11 @@ test('it moves the end of a live lease on a renew', async () => {
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 30 });
 
-  ctx.clock.nowMs += 20_000;
+  ctx.advance(20_000);
 
   const renewed = await ctx.client.leases.renew({ name: 'dev', label: 'job', ttlSeconds: 30 });
 
-  expect(renewed.until).toStrictEqual(new Date(ctx.clock.nowMs + 30_000));
+  expect(renewed.until).toStrictEqual(new Date(ctx.now() + 30_000));
 });
 
 test('it never shortens a lease on a renew with a shorter ttl', async () => {
@@ -386,7 +269,7 @@ test('it refuses a renew of an ended lease and wakes nothing', async () => {
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 30 });
 
-  ctx.clock.nowMs += 30_000;
+  ctx.advance(30_000);
 
   await ctx.client.imps.sleep({ name: 'dev' });
 
@@ -535,7 +418,7 @@ test('it ends every lease on a forced sleep and keeps the holds', async () => {
   const leases = await ctx.client.leases.list({ name: 'dev' });
 
   expect(asleep.state).toBe('sleeping');
-  expect(asleep.holdUntil).toStrictEqual(new Date(ctx.clock.nowMs + 600_000));
+  expect(asleep.holdUntil).toStrictEqual(new Date(ctx.now() + 600_000));
   expect(leases.map((lease) => lease.owner.label)).toStrictEqual(['hold']);
 });
 
@@ -603,7 +486,7 @@ test('it stops a held imp and keeps the hold', async () => {
   const stopped = await ctx.client.imps.stop({ name: 'dev' });
 
   expect(stopped.state).toBe('stopped');
-  expect(stopped.holdUntil).toStrictEqual(new Date(ctx.clock.nowMs + 600_000));
+  expect(stopped.holdUntil).toStrictEqual(new Date(ctx.now() + 600_000));
 });
 
 test('it releases the caller’s hold and a legacy one on hold 0, and keeps the others', async () => {
@@ -628,6 +511,8 @@ test('it releases the caller’s hold and a legacy one on hold 0, and keeps the 
   await b.imps.hold({ name: 'dev', seconds: 900 });
   await b.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
 
+  const at = ctx.now();
+
   // a hold from before holds had owners
   await writeLease(
     ctx.db,
@@ -635,14 +520,14 @@ test('it releases the caller’s hold and a legacy one on hold 0, and keeps the 
       impId: created.id,
       principal: 'legacy',
       label: 'hold',
-      until: new Date(ctx.clock.nowMs + 300_000),
+      until: new Date(at + 300_000),
     }),
-    { at: ctx.clock.nowMs, reason: null },
+    { at, reason: null },
   );
 
   await a.imps.hold({ name: 'dev', seconds: 0 });
 
-  const left = await listLeases(ctx.db, ctx.clock.nowMs);
+  const left = await listLeases(ctx.db, ctx.now());
 
   const callerB = ctx.impd.tokens.authenticate(madeB.secret);
 
@@ -772,9 +657,9 @@ test('it sleeps a leased imp in the shutdown pass and keeps its lease', async ()
   await ctx.client.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
   await ctx.impd.imps.sleepAllImps();
 
-  const leases = await listLeases(ctx.db, ctx.clock.nowMs);
+  const leases = await listLeases(ctx.db, ctx.now());
 
-  expect(ctx.vmm.alive.size).toBe(0);
+  expect(ctx.fake.alive.size).toBe(0);
   expect(leases.map((lease) => lease.label)).toStrictEqual(['job']);
 });
 
@@ -865,7 +750,7 @@ test('it holds the imp until the longest of its leases ends', async () => {
 
   const imp = await ctx.client.imps.get({ name: 'dev' });
 
-  expect(imp.holdUntil).toStrictEqual(new Date(ctx.clock.nowMs + 600_000));
+  expect(imp.holdUntil).toStrictEqual(new Date(ctx.now() + 600_000));
 });
 
 test('it moves the imp’s hold out when a renew makes a lease the longest', async () => {
@@ -878,7 +763,7 @@ test('it moves the imp’s hold out when a renew makes a lease the longest', asy
 
   const imp = await ctx.client.imps.get({ name: 'dev' });
 
-  expect(imp.holdUntil).toStrictEqual(new Date(ctx.clock.nowMs + 900_000));
+  expect(imp.holdUntil).toStrictEqual(new Date(ctx.now() + 900_000));
 });
 
 test('it moves the imp’s hold in when the longest lease is released', async () => {
@@ -891,7 +776,7 @@ test('it moves the imp’s hold in when the longest lease is released', async ()
 
   const imp = await ctx.client.imps.get({ name: 'dev' });
 
-  expect(imp.holdUntil).toStrictEqual(new Date(ctx.clock.nowMs + 600_000));
+  expect(imp.holdUntil).toStrictEqual(new Date(ctx.now() + 600_000));
 });
 
 test('it keeps the imp held by its leases when the caller’s hold is released', async () => {
@@ -904,7 +789,7 @@ test('it keeps the imp held by its leases when the caller’s hold is released',
 
   const imp = await ctx.client.imps.get({ name: 'dev' });
 
-  expect(imp.holdUntil).toStrictEqual(new Date(ctx.clock.nowMs + 600_000));
+  expect(imp.holdUntil).toStrictEqual(new Date(ctx.now() + 600_000));
 });
 
 test('it holds the imp by root’s hold alone after a forced sleep ends its leases', async () => {
@@ -922,7 +807,7 @@ test('it holds the imp by root’s hold alone after a forced sleep ends its leas
 
   const imp = await ctx.client.imps.get({ name: 'dev' });
 
-  expect(imp.holdUntil).toStrictEqual(new Date(ctx.clock.nowMs + 30_000));
+  expect(imp.holdUntil).toStrictEqual(new Date(ctx.now() + 30_000));
 });
 
 test('it keeps the leases and emits no release when a forced sleep fails', async () => {
@@ -931,7 +816,7 @@ test('it keeps the leases and emits no release when a forced sleep fails', async
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
 
-  ctx.vmm.queue('sleep', 'fail');
+  ctx.fake.queue('sleep', 'fail');
 
   const failure = await ctx.client.imps.sleep({ name: 'dev', force: true }).then(
     () => null,
@@ -950,7 +835,7 @@ test('it keeps the leases and emits no release when a forced sleep fails', async
 
   expect(failure).toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
   expect(leases.map((lease) => lease.owner.label)).toStrictEqual(['job']);
-  expect(imp.holdUntil).toStrictEqual(new Date(ctx.clock.nowMs + 60_000));
+  expect(imp.holdUntil).toStrictEqual(new Date(ctx.now() + 60_000));
   expect(ctx.events).not.toPartiallyContain({ ev: 'ImpChanged', reason: 'released' });
   expect(ctx.rpcFailures).toMatchObject([{ message: 'snapshot failed' }]);
 });
@@ -975,6 +860,8 @@ test('it answers a stop of a stopped imp another owner leases and keeps the leas
 
   await ctx.client.imps.stop({ name: 'dev' });
 
+  const at = ctx.now();
+
   // a lease another owner holds on the stopped imp
   await writeLease(
     ctx.db,
@@ -982,13 +869,13 @@ test('it answers a stop of a stopped imp another owner leases and keeps the leas
       impId: created.id,
       principal: 'token:other',
       label: 'job',
-      until: new Date(ctx.clock.nowMs + 600_000),
+      until: new Date(at + 600_000),
     }),
-    { at: ctx.clock.nowMs, reason: null },
+    { at, reason: null },
   );
 
   const stopped = await ctx.client.imps.stop({ name: 'dev' });
-  const leases = await listLeases(ctx.db, ctx.clock.nowMs);
+  const leases = await listLeases(ctx.db, ctx.now());
 
   expect(stopped.state).toBe('stopped');
   expect(leases.map((lease) => lease.principal)).toStrictEqual(['token:other']);
