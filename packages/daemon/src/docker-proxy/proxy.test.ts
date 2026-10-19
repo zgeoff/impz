@@ -1083,7 +1083,7 @@ test('it passes on a pull and an export that stay silent past Bun’s idle limit
   const child = Bun.spawn(
     [
       process.execPath,
-      join(import.meta.dir, '../test-utils/run-idle-limited-requests.ts'),
+      join(import.meta.dir, '../../testing/surface/run-idle-limited-requests.ts'),
       JSON.stringify({ via: 'docker-proxy', socket }),
     ],
     {

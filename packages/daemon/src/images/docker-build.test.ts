@@ -477,7 +477,7 @@ test('#runDockerBuild gets the image of a build silent past the idle limit, whic
   const child = Bun.spawn(
     [
       process.execPath,
-      join(import.meta.dir, '../test-utils/run-idle-limited-docker-build.ts'),
+      join(import.meta.dir, '../../testing/imps/run-idle-limited-docker-build.ts'),
       JSON.stringify({
         dir: ctx.dir,
         buildEngine: join(ctx.dir, 'build-engine.sock'),
