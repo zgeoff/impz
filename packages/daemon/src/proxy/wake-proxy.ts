@@ -9,6 +9,7 @@ import type { ImpDatabase } from '../db/open-database';
 import type { ImpRuntime } from '../imps/imp-runtime';
 import { deriveSlotAddress } from '../net/addressing';
 import type { StartTimer } from '../process/clock';
+import { getImpdLogger } from '../process/get-impd-logger';
 import { createSemaphore } from '../process/semaphore';
 import { startRealTimer } from '../process/start-real-timer';
 import { readErrorMessage } from '../read-error-message';
@@ -102,6 +103,9 @@ interface UpstreamOptions {
   // for its tailnet identity; an imp must never get either
   readonly toApi: boolean;
   readonly public: PublicRequest | null;
+
+  // the imp a log line about the request names; null for impd's own API
+  readonly imp: string | null;
 }
 
 export interface WakeProxy {
@@ -201,6 +205,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
         formatFailure: (reason) => `impd's API did not answer (${reason}).`,
         toApi: true,
         public: null,
+        imp: null,
       });
     }
 
@@ -254,6 +259,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
           : 'This site did not answer.',
       toApi: false,
       public: publicRequest,
+      imp: name,
     });
   };
 
@@ -327,7 +333,20 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
         headers.set('x-imp-wake-ms', String(wokeMs));
       }
 
-      const body = upstream.body === null ? null : buildTrackedBody(upstream.body, release);
+      const proxyLogger = getImpdLogger('proxy');
+      const logger = options.imp === null ? proxyLogger : proxyLogger.with({ imp: options.imp });
+
+      // an upstream that exits mid-stream, such as a dev server that restarts
+      const body =
+        upstream.body === null
+          ? null
+          : buildTrackedBody(upstream.body, release, (failure) => {
+              logger.warning('the upstream closed {method} {path} mid-stream: {reason}', {
+                method: request.method,
+                path: url.pathname,
+                reason: readErrorMessage(failure),
+              });
+            });
 
       if (body === null) {
         release();
