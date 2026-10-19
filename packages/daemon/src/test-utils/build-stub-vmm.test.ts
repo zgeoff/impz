@@ -91,6 +91,7 @@ test('#buildStubVmm starts a running VM with a boot id from its pid on a boot', 
     firecrackerVersion: 'v1.17.0',
     agentVersion: '0.1.0',
     timings: {},
+    guestSteps: {},
     bootId: buildStubBootId(1001),
   });
 
@@ -281,6 +282,7 @@ test('#buildStubVmm reports an absent identity reset for an agent that leaves it
     firecrackerVersion: 'v1.17.0',
     agentVersion: '0.1.0',
     timings: {},
+    guestSteps: {},
     bootId: buildStubBootId(1001),
     identityReset: undefined,
   });
@@ -309,6 +311,31 @@ test('#buildStubVmm leaves the boot id out once guests stop reporting one', asyn
   });
 
   expect(vm.bootId).toBeUndefined();
+});
+
+test('#buildStubVmm reports the boot steps a test sets on a boot', async () => {
+  const ctx = await setupTest();
+
+  ctx.fake.setGuestBootSteps({ world: 8, mount: 30, ready: 1 });
+
+  const vm = await ctx.runner.startVm({
+    firecrackerBin: '/usr/bin/firecracker',
+    kernelPath: '/images/vmlinux',
+    systemDrivePath: '/images/system.ext4',
+    paths: ctx.paths,
+    address: deriveSlotAddress(1, { subnet: parseSubnet('10.100.0.0/16'), portBase: 20_000 }),
+    impId: 'imp-1',
+    hostname: 'alpha',
+    vcpus: 1,
+    memoryMib: 512,
+    maxMemoryMib: 512,
+    dns: ['1.1.1.1'],
+    cgroup: null,
+    isIdentityReset: false,
+    jail: null,
+  });
+
+  expect(vm.guestSteps).toStrictEqual({ world: 8, mount: 30, ready: 1 });
 });
 
 test('#buildStubVmm keeps the boot id of the socket last boot on a wake', async () => {
@@ -1429,6 +1456,7 @@ test('#buildStubVmm starts a running VM and records the claim on a template rest
     firecrackerVersion: 'v1.17.0',
     agentVersion: '0.1.0',
     timings: {},
+    guestSteps: {},
   });
 
   expect(ctx.runner.isVmAlive(1001, ctx.paths)).toBeTrue();

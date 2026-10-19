@@ -1,10 +1,24 @@
 {
   "ok": true,
-  "version": "0.20.0",
+  "version": "0.21.0",
   "uptime_ms": 5321,
   "inner": {
     "up": true,
     "restarts": 0
   },
-  "boot_id": "6f1c2a9e-3b7d-4e58-9a10-2c4b8d7e5f31"
+  "boot_id": "6f1c2a9e-3b7d-4e58-9a10-2c4b8d7e5f31",
+  "boot_steps": [
+    {
+      "name": "claim",
+      "ms": 4
+    },
+    {
+      "name": "mount",
+      "ms": 38
+    },
+    {
+      "name": "ready",
+      "ms": 1
+    }
+  ]
 }

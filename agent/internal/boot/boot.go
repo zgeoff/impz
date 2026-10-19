@@ -64,9 +64,8 @@ func setupAgentWorld() error {
 	return nil
 }
 
-// mountUserDisk mounts the user disk at UserRoot and grows it. A boot
-// template does this only after its claim, so the disk it never read is the
-// copy's own.
+// mountUserDisk mounts the user disk at UserRoot. A boot template does this
+// only after its claim, so the disk it never read is the copy's own.
 func mountUserDisk() error {
 	// noinit_itable: the disk is a sparse file, so the inode tables of a grown
 	// disk read as zeros already; zeroing them in the background would only
@@ -74,12 +73,16 @@ func mountUserDisk() error {
 	if err := unix.Mount(userDisk, inner.UserRoot, "ext4", unix.MS_RELATIME, "noinit_itable"); err != nil {
 		return fmt.Errorf("mount %s: %w", userDisk, err)
 	}
-	// the host may have grown the disk since the last boot; a failed grow
-	// leaves the filesystem as it was, so the boot goes on
+	return nil
+}
+
+// growUserDisk grows the mounted user disk to its device: the host may have
+// grown it since the last boot. A failed grow leaves the filesystem as it
+// was, so the boot goes on.
+func growUserDisk() {
 	if err := disk.Grow(inner.UserRoot); err != nil {
 		log.Printf("boot: grow %s: %v", userDisk, err)
 	}
-	return nil
 }
 
 // protectAgent keeps the OOM killer off the agent: a user process that eats

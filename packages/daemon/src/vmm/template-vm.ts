@@ -336,6 +336,9 @@ export async function loadTemplateVm(
       firecrackerVersion,
       agentVersion: ping.version,
       timings: marks.marks,
+      guestSteps: Object.fromEntries(
+        ping.bootSteps.map((bootStep) => [bootStep.name, bootStep.ms]),
+      ),
       identityReset: ping.identityReset,
       bootId: ping.bootId,
     };

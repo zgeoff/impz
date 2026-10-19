@@ -96,7 +96,7 @@ export async function startColdVm(
       context.templates?.reportRestored(template);
 
       context.log(
-        `impd: ${imp.name}: restored boot template ${template.key.slice(0, 12)} as pid ${String(vm.pid)} ${formatTimings({ ...hostSteps, ...vm.timings })}`,
+        `impd: ${imp.name}: restored boot template ${template.key.slice(0, 12)} as pid ${String(vm.pid)} ${formatTimings({ ...hostSteps, ...vm.timings })}${formatGuestSteps(vm.guestSteps)}`,
       );
 
       return vm;
@@ -136,8 +136,16 @@ export async function startColdVm(
   });
 
   context.log(
-    `impd: ${imp.name}: booted pid ${String(vm.pid)} ${formatTimings({ ...hostSteps, ...vm.timings })}`,
+    `impd: ${imp.name}: booted pid ${String(vm.pid)} ${formatTimings({ ...hostSteps, ...vm.timings })}${formatGuestSteps(vm.guestSteps)}`,
   );
 
   return vm;
+}
+
+// The guest's own steps after impd's, which they overlap: a template's run
+// inside the claim's and the agent's spans, a cold boot's inside the agent's.
+function formatGuestSteps(steps: Readonly<Record<string, number>> | undefined): string {
+  return steps === undefined || Object.keys(steps).length === 0
+    ? ''
+    : `; guest ${formatTimings(steps)}`;
 }

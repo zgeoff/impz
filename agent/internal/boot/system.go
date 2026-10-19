@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/mdlayher/vsock"
 	"golang.org/x/sys/unix"
@@ -41,6 +42,7 @@ import (
 // network, starts services, and serves the host on vsock. It returns only on
 // failure.
 func Run() error {
+	steps := newBootSteps(time.Now)
 	r := reaper.New()
 
 	if err := setupAgentWorld(); err != nil {
@@ -62,15 +64,24 @@ func Run() error {
 	// cmdline
 	claimed := params.Template
 	if params.Template {
-		claim, err := parkForClaim(listenVsock, applyClaim)
+		claim, err := parkForClaim(listenVsock, func(c *proto.Claim) error {
+			steps.restart()
+			return applyClaim(c)
+		})
 		if err != nil {
 			return err
 		}
 		params = claimParams(claim)
+		steps.mark("claim")
+	} else {
+		steps.mark("world")
 	}
 	if err := mountUserDisk(); err != nil {
 		return err
 	}
+	steps.mark("mount")
+	growUserDisk()
+	steps.mark("grow")
 	// Problems below are logged, not fatal: an agent that answers on vsock
 	// with a broken network or a dead container is still reachable to debug.
 	if params.Hostname != "" {
@@ -84,6 +95,7 @@ func Run() error {
 	if err := netcfg.Up6("eth0", params.IP6, params.GW6); err != nil {
 		log.Printf("network (IPv6): %v", err)
 	}
+	steps.mark("network")
 
 	mgr := inner.New(r, inner.Config{RunSize: innerRunSize()})
 	root := mgr.Root()
@@ -109,14 +121,18 @@ func Run() error {
 	// with the container down, the image config stays at its defaults
 	// until it starts
 	mgr.Launch()
+	steps.mark("inner")
 	prepareRoot(root, params, image)
+	steps.mark("root")
 	identityReset := ""
 	if params.ResetIdentity {
 		identityReset = resetIdentity(mgr, root, image.Get().Env)
+		steps.mark("identity")
 	}
 	if err := sup.Load(); err != nil {
 		log.Printf("services: %v", err)
 	}
+	steps.mark("services")
 
 	// Each non-tty exec gets a cgroup leaf, so a stop kills its escapees too
 	// (docs/architecture/guest/agent.md#execs-and-services).
@@ -183,6 +199,8 @@ func Run() error {
 		powerOff()
 	}, nil)
 
+	steps.mark("ready")
+	srv.BootSteps = steps.steps
 	return srv.Serve(listenVsock)
 }
 

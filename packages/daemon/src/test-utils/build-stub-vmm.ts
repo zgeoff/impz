@@ -99,11 +99,13 @@ export function buildStubVmm() {
   const counter = { nextPid: 1000, generation: 0 };
 
   // what every fake agent reports as its uptime: old enough to sleep at once
-  // hasBootId false: a guest whose agent could not read its boot_id
+  // hasBootId false: a guest whose agent could not read its boot_id; no
+  // boot steps: an agent from before them
   const guest = {
     uptimeMs: 60_000,
     identityReset: 'ok' as 'ok' | 'failed' | undefined,
     hasBootId: true,
+    bootSteps: {} as Readonly<Record<string, number>>,
   };
 
   // elastic guests by imp dir: what each holds, and how far down it can
@@ -272,7 +274,7 @@ export function buildStubVmm() {
 
           // each cold boot is a new guest kernel, with its own boot_id
           const bootId = guest.hasBootId ? buildStubBootId(started.pid) : undefined;
-          const vm = { ...started, bootId };
+          const vm = { ...started, bootId, guestSteps: guest.bootSteps };
 
           if (bootId !== undefined) {
             bootIds.set(plan.paths.apiSocket, bootId);
@@ -471,7 +473,11 @@ export function buildStubVmm() {
             memFile: plan.memFile,
           });
 
-          return plan.claim.isIdentityReset ? { ...vm, identityReset: guest.identityReset } : vm;
+          const claimed = { ...vm, guestSteps: guest.bootSteps };
+
+          return plan.claim.isIdentityReset
+            ? { ...claimed, identityReset: guest.identityReset }
+            : claimed;
         }),
       readGuestMemory: (paths) =>
         runInGeneration(() => {
@@ -573,6 +579,11 @@ export function buildStubVmm() {
     // whether the guests booted from now on report a boot_id
     setGuestBootId: (hasBootId: boolean) => {
       guest.hasBootId = hasBootId;
+    },
+
+    // the steps every later boot and restore reports for its guest's boot
+    setGuestBootSteps: (steps: Readonly<Record<string, number>>) => {
+      guest.bootSteps = steps;
     },
 
     // what every later boot that asks for an identity reset reports;

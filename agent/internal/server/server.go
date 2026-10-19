@@ -45,6 +45,8 @@ type Server struct {
 	IdentityReset string
 	// BootID is the guest's boot_id, for ping
 	BootID string
+	// BootSteps is how long each step of this boot took, for ping
+	BootSteps []*proto.BootStep
 	// Inner reports the inner container for ping; nil leaves it out
 	Inner func() *proto.InnerStatus
 
@@ -203,6 +205,7 @@ func (s *Server) unary(req *proto.Request) (protoreflect.ProtoMessage, error) {
 		if s.BootID != "" {
 			ping.BootId = new(s.BootID)
 		}
+		ping.BootSteps = s.BootSteps
 		if s.Inner != nil {
 			ping.Inner = s.Inner()
 		}
