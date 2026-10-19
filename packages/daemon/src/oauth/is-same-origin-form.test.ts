@@ -17,10 +17,13 @@ test.each([
   ['an origin that differs only in case', { origin: 'https://IMP.example.test' }, false],
   ['an origin with a trailing slash', { origin: `${ORIGIN}/` }, false],
   ['an empty origin', { origin: '' }, false],
-])('#isSameOriginForm judges %s', (_kind, headers, expected) => {
-  const request = new Request(`${ORIGIN}/consent`, { method: 'POST', headers });
+])(
+  'it takes a consent form only from the route’s own origin, given %s',
+  (_kind, headers, expected) => {
+    const request = new Request(`${ORIGIN}/consent`, { method: 'POST', headers });
 
-  const isSame = isSameOriginForm(request, ORIGIN);
+    const isSame = isSameOriginForm(request, ORIGIN);
 
-  expect(isSame).toBe(expected);
-});
+    expect(isSame).toBe(expected);
+  },
+);

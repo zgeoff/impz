@@ -14,10 +14,13 @@ test.each([
   ['an origin with a trailing slash', { origin: `${ORIGIN}/` }, true],
   ['an origin with another port', { origin: `${ORIGIN}:8443` }, true],
   ['the null origin', { origin: 'null' }, true],
-])('#isPublicCrossOrigin judges %s', (_kind, headers, expected) => {
-  const request = new Request(`${ORIGIN}/mcp`, { headers });
+])(
+  'it counts a request as cross-origin unless the route’s own origin sent it, given %s',
+  (_kind, headers, expected) => {
+    const request = new Request(`${ORIGIN}/mcp`, { headers });
 
-  const isCross = isPublicCrossOrigin(request, ORIGIN);
+    const isCross = isPublicCrossOrigin(request, ORIGIN);
 
-  expect(isCross).toBe(expected);
-});
+    expect(isCross).toBe(expected);
+  },
+);
