@@ -10,7 +10,6 @@ interface RunTapDeps {
   readonly applyImpLimit: (imp: SessionLogImp, life: number) => Promise<void>;
 }
 
-// the runTap of createSessionLogs
 export function makeRunTap(
   ctx: SessionLogState,
   deps: RunTapDeps,

@@ -6,9 +6,9 @@ import type { SessionInfo } from '../agent-client/agent-protocol';
 import { openTapStream } from '../agent-client/exec-stream';
 import type { ExecStream } from '../agent-client/exec-stream';
 import { isAgentError } from '../agent-client/is-agent-error';
+import { buildLogKey } from './build-log-key';
 import { createSessionLogState } from './create-session-log-state';
 import type { LiveLog, OpeningTap } from './create-session-log-state';
-import { findLogKey } from './find-log-key';
 import {
   createGenerationLog,
   loadGenerationLog,
@@ -146,7 +146,7 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
     ctx.recovered.add(imp.id);
 
     for (const meta of readImpMetas(imp.sessionLogsDir, ctx.readLive(imp.id))) {
-      const key = findLogKey(imp.id, meta.executionGeneration);
+      const key = buildLogKey(imp.id, meta.executionGeneration);
 
       if (meta.state === 'live' && !ctx.live.has(key)) {
         const options = ctx.buildOptions(imp, meta.executionGeneration);
@@ -210,7 +210,7 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
       return;
     }
 
-    const key = findLogKey(imp.id, output.executionGeneration);
+    const key = buildLogKey(imp.id, output.executionGeneration);
     const dir = findGenerationDir(imp.sessionLogsDir, output.executionGeneration);
 
     if (ctx.isTapped(key) || ctx.dropped.has(key) || readGenerationMeta(dir) !== null) {
@@ -350,7 +350,7 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
       return;
     }
 
-    const key = findLogKey(imp.id, generation);
+    const key = buildLogKey(imp.id, generation);
 
     if (ctx.dropped.has(key) || ctx.isTapped(key)) {
       return;
@@ -574,7 +574,7 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
       );
 
       for (const meta of doomed) {
-        const key = findLogKey(imp.id, meta.executionGeneration);
+        const key = buildLogKey(imp.id, meta.executionGeneration);
         const entry = ctx.live.get(key);
 
         if (entry !== undefined) {

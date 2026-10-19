@@ -22,7 +22,6 @@ interface SetPolicyDeps {
   readonly resolveExactNames: (slot: number) => Promise<void>;
 }
 
-// the setPolicy of EgressService
 export function makeSetPolicy(
   deps: SetPolicyDeps,
 ): (name: string, policy: EgressPolicy) => Promise<EgressPolicy> {

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { buildMockImp } from '@impz/api/test-utils/build-mock-imp';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
-import { formatTop } from './cpu';
+import { formatTop } from './cpu-command';
 
 test('#formatTop lists the busiest imp first, with disk use, traffic, wakes and awake time', () => {
   const { diskUsage, ...idle } = buildMockImp({

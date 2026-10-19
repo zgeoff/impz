@@ -1,6 +1,6 @@
 import type { ExecStream } from '../agent-client/exec-stream';
 import { readErrorMessage } from '../read-error-message';
-import { findLogKey } from './find-log-key';
+import { buildLogKey } from './build-log-key';
 import type { GenerationEnd, GenerationLog, GenerationLogOptions } from './generation-log';
 import { findGenerationDir } from './session-log-files';
 import type { SessionLogImp, SessionLogLimits } from './session-log-service';
@@ -96,7 +96,7 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
   });
 
   const readLive = (impId: string) => (generation: string) =>
-    live.get(findLogKey(impId, generation))?.log.readMeta() ?? null;
+    live.get(buildLogKey(impId, generation))?.log.readMeta() ?? null;
 
   const listLive = (impId: string) => [...live.values()].filter((entry) => entry.impId === impId);
   const isTapped = (key: string) => taps.has(key);
@@ -117,7 +117,7 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
 
   const setLive = (imp: SessionLogImp, generation: string, session: string, log: GenerationLog) => {
     const entry: LiveLog = {
-      key: findLogKey(imp.id, generation),
+      key: buildLogKey(imp.id, generation),
       impId: imp.id,
       session,
       generation,
