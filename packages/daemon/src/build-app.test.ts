@@ -561,7 +561,7 @@ test('it counts exposed imps in system.info, with no token check for a token fro
   expect(info.public).toStrictEqual({
     ip: '203.0.113.7',
     imps: 1,
-    records: { at: expect.any(Date) as Date, isOk: true, error: null },
+    records: { at: expect.toBeValidDate(), isOk: true, error: null },
   });
 
   expect(info.https).toStrictEqual({ domain: 'imp.example.com', dnsToken: null });

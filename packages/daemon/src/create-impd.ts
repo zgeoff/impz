@@ -93,10 +93,7 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
   const systemFiles = await runStep('data-dir', async () => {
     createDataDirs(config.dataDir);
 
-    const files =
-      boundaries.systemFiles === undefined
-        ? await setupSystemFiles(config)
-        : boundaries.systemFiles;
+    const files = await (boundaries.systemFiles ?? setupSystemFiles(config));
 
     // a start-time hint; an image with a file capability still fails its build
     const setfcapWarning = readSetfcapWarning(boundaries.readProcStatus?.());

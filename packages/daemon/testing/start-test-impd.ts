@@ -180,7 +180,7 @@ export async function startTestImpd(
   // the API's and the broker's ports, below the imps' port range
   const ports = findFreePorts(3, {
     pick: () => 10_000 + Math.floor(Math.random() * 10_000),
-    onRelease: (release) => stack.defer(release),
+    onRelease: stack.defer.bind(stack),
   });
 
   // a new disk stays the size of its image: the fake clone copies every byte
