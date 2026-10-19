@@ -5,8 +5,9 @@ import { buildStubGuest } from './build-stub-guest';
 import type { StubAnswer, StubRun } from './build-stub-guest';
 
 export interface StubImageBuilderOptions {
-  // the chunks `docker export` streams, as a builder sends its tree
-  readonly exported: readonly Uint8Array[];
+  // the chunks `docker export` streams, as a builder sends its tree: a list,
+  // or a stream such as a running tar's output, which one export reads
+  readonly exported: readonly Uint8Array[] | AsyncIterable<Uint8Array>;
 
   // the registry digest every image the engine inspects reports
   readonly repoDigest: string;

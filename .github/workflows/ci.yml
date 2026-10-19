@@ -82,10 +82,15 @@ jobs:
       - name: Bun Pin
         run: scripts/ci/check-bun-pin.sh
 
-      # the whole-tree gates: dead code, format, type-aware lint, doc links,
-      # types and every test, as package.json's check script lists them
+      # the whole-tree gates: dead code, format, type-aware lint, doc links and
+      # types, as package.json's check:static script lists them
       - name: Check
-        run: bun run check
+        run: bun run check:static
+
+      # every test, in a cgroup capped below an imp's 2 GiB with no swap, so
+      # the suite fails here before it outgrows the imps it runs on
+      - name: Test
+        run: scripts/ci/run-memory-capped.sh 1536 bun test
 
       # Some READMEs and docs/ pages fail the shared length or prose rules, so this step reports
       # its findings without failing the run.

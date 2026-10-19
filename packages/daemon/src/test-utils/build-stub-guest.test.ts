@@ -28,6 +28,27 @@ test('it sends each stdout chunk in order', async () => {
   ]);
 });
 
+test('it sends each chunk of a stdout stream in order', async () => {
+  const guest = buildStubGuest(() => ({
+    stdout: new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        controller.enqueue(new Uint8Array([4, 5]));
+        controller.enqueue(new Uint8Array([6]));
+        controller.close();
+      },
+    }),
+  }));
+
+  const stream = await guest.open({ argv: ['cat'], tty: false });
+  const events = await Array.fromAsync(stream.events());
+
+  expect(events).toStrictEqual([
+    { type: 'stdout', data: new Uint8Array([4, 5]) },
+    { type: 'stdout', data: new Uint8Array([6]) },
+    { type: 'exit', code: 0, signal: 0 },
+  ]);
+});
+
 test('it sends stderr after stdout', async () => {
   const guest = buildStubGuest(() => ({ stdout: 'out', stderr: 'err' }));
 

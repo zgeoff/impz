@@ -54,6 +54,14 @@ test('it lists any other directory as readdir does', async () => {
   expect(entries.map((entry) => entry.name)).toStrictEqual(['tools']);
 });
 
+test('it rejects a name that only looks generated as readdir does', async () => {
+  const ctx = await setupTest();
+
+  expect(buildStubWideDir(ctx.dir, 3).readDir(join(ctx.dir, 'sub-01'))).rejects.toMatchObject({
+    code: 'ENOENT',
+  });
+});
+
 test('it rejects a directory past the generated range as readdir does', async () => {
   const ctx = await setupTest();
 

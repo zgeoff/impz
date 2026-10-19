@@ -3,13 +3,19 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // countTreeBytes' readDir over a real tree, where `dir` also lists `count`
-// empty subdirectories, `sub-0` on, that are on no disk: a directory too wide
-// for a test to make. Every other directory lists as readdir does.
+// empty subdirectories, `sub-0` on, held as no state each: a directory too
+// wide to make. Every other directory lists as readdir does.
 export function buildStubWideDir(dir: string, count: number) {
-  const generated = new Set(Array.from({ length: count }, (_, index) => join(dir, `sub-${index}`)));
+  const prefix = join(dir, 'sub-');
+
+  const isGenerated = (path: string): boolean => {
+    const index = path.slice(prefix.length);
+
+    return path.startsWith(prefix) && /^(?:0|[1-9]\d*)$/v.test(index) && Number(index) < count;
+  };
 
   const readDir = async (path: string): Promise<Dirent[]> => {
-    if (generated.has(path)) {
+    if (isGenerated(path)) {
       return [];
     }
 
@@ -20,7 +26,7 @@ export function buildStubWideDir(dir: string, count: number) {
     }
 
     for (let index = 0; index < count; index++) {
-      entries.push(buildDirEntry(dir, `sub-${index}`));
+      entries.push(buildDirEntry(dir, `sub-${String(index)}`));
     }
 
     return entries;
@@ -29,16 +35,25 @@ export function buildStubWideDir(dir: string, count: number) {
   return { readDir };
 }
 
+// every entry shares one copy of each test method
 function buildDirEntry(parentPath: string, name: string): Dirent {
   return {
     name,
     parentPath,
-    isFile: () => false,
-    isDirectory: () => true,
-    isBlockDevice: () => false,
-    isCharacterDevice: () => false,
-    isSymbolicLink: () => false,
-    isFIFO: () => false,
-    isSocket: () => false,
+    isFile: isFalse,
+    isDirectory: isTrue,
+    isBlockDevice: isFalse,
+    isCharacterDevice: isFalse,
+    isSymbolicLink: isFalse,
+    isFIFO: isFalse,
+    isSocket: isFalse,
   };
+}
+
+function isTrue(): boolean {
+  return true;
+}
+
+function isFalse(): boolean {
+  return false;
 }

@@ -8,7 +8,8 @@ export interface StubRun {
 }
 
 export interface StubAnswer {
-  readonly stdout?: string | readonly Uint8Array[];
+  // chunks in a list, or a stream that sends them as a process writes them
+  readonly stdout?: string | readonly Uint8Array[] | AsyncIterable<Uint8Array>;
   readonly stderr?: string;
   readonly code?: number;
 
@@ -42,7 +43,7 @@ async function* readFakeEvents(
   const stdout =
     typeof answered.stdout === 'string' ? [encoder.encode(answered.stdout)] : answered.stdout;
 
-  for (const data of stdout ?? []) {
+  for await (const data of stdout ?? []) {
     if (isClosed()) {
       return;
     }
