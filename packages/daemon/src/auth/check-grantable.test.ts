@@ -3,7 +3,7 @@ import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ImpSchema } from '@impz/api';
-import type { GrantNotCopied, ImpContract } from '@impz/api';
+import type { ImpContract } from '@impz/api';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
@@ -2311,17 +2311,20 @@ test('it copies nothing of a secret taken off the list after the access check', 
   expect(devBGrants).toStrictEqual([]);
 });
 
-// the source's one grant, skipped
-const GH_NOT_GRANTABLE: readonly GrantNotCopied[] = [{ secret: 'gh', reason: 'not-grantable' }];
-
 test.each([
   ['its exact name and generation', 'gh', '', [], ['gh']],
-  ['a case variant of its name', 'GH', '', GH_NOT_GRANTABLE, []],
-  ['its name with whitespace', 'gh ', '', GH_NOT_GRANTABLE, []],
-  ['a unicode look-alike of its name', 'g\u04BB', '', GH_NOT_GRANTABLE, []],
-  ['an empty name', '', '', GH_NOT_GRANTABLE, []],
-  ['another generation', 'gh', '-old', GH_NOT_GRANTABLE, []],
-])(
+  ['a case variant of its name', 'GH', '', [{ secret: 'gh', reason: 'not-grantable' }], []],
+  ['its name with whitespace', 'gh ', '', [{ secret: 'gh', reason: 'not-grantable' }], []],
+  [
+    'a unicode look-alike of its name',
+    'g\u04BB',
+    '',
+    [{ secret: 'gh', reason: 'not-grantable' }],
+    [],
+  ],
+  ['an empty name', '', '', [{ secret: 'gh', reason: 'not-grantable' }], []],
+  ['another generation', 'gh', '-old', [{ secret: 'gh', reason: 'not-grantable' }], []],
+] as const)(
   'it copies a fork’s grant to the destination only for a list entry with %s',
   async (_kind, name, generationSuffix, notCopied, granted) => {
     const ctx = await setupTest();
@@ -2357,6 +2360,6 @@ test.each([
     const devBGrants = await ctx.client.grants.list({ name: 'dev-b' });
 
     expect(outcome).toStrictEqual({ kind: 'copied', notCopied });
-    expect(devBGrants).toStrictEqual(granted);
+    expect(devBGrants).toStrictEqual([...granted]);
   },
 );
