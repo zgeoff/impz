@@ -21,9 +21,9 @@ type SystemInfoOverrides = {
     : Exclude<SystemInfo[K], undefined>;
 };
 
-// A current impd's answer with every optional part present: all features on,
-// egress enforced, storage not low, KSM, public IP and HTTPS off, and a RAM
-// budget that fits the default memory. Nested overrides merge into defaults.
+// A current impd's answer with every optional part present: all features on, egress enforced,
+// storage not low, KSM, public IP and HTTPS off, /tmp as a scratch folder that a cold boot keeps,
+// and a RAM budget that fits the default memory. Nested overrides merge into defaults.
 export function buildMockSystemInfo(overrides: SystemInfoOverrides = {}): SystemInfo {
   const bootStatus: SystemInfo['bootStatus'] = {
     coldBoots: 0,

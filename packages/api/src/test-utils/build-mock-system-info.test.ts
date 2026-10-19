@@ -75,6 +75,12 @@ test('it builds a default system info', () => {
   expect(info.defaults?.memoryMib).toBeLessThanOrEqual(info.ramBudgetMib);
 });
 
+test('it merges a guest override into the default guest', () => {
+  const info = buildMockSystemInfo({ guest: { scratchDir: '/var/scratch' } });
+
+  expect(info.guest).toStrictEqual({ scratchDir: '/var/scratch', isClearedOnBoot: false });
+});
+
 test('it applies overrides on top of the defaults', () => {
   const info: unknown = buildMockSystemInfo({
     ramBudgetMib: 2048,

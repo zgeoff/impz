@@ -44,6 +44,25 @@ test('#requireFeatures refuses naming what the impd without the feature would do
   });
 });
 
+test('#requireFeatures refuses an impd that leaves out the guest scratch folder', () => {
+  const { guestScratch: _absent, ...features } = SYSTEM_FEATURES;
+  const answer: SystemFeaturesInfo = { version: '2.5.5', features };
+
+  const source = {
+    system: {
+      features: () => Promise.resolve(answer),
+      info: () => Promise.reject(new Error('not read')),
+    },
+  };
+
+  expect(requireFeatures(source, { guestScratch: 'guess the folder' })).rejects.toMatchObject({
+    name: 'MissingFeatureError',
+    feature: 'guestScratch',
+    gap: 'does not name the guest scratch folder',
+    outcome: 'guess the folder',
+  });
+});
+
 test('#requireFeatures reads the features once for several needs', async () => {
   const answer: SystemFeaturesInfo = { version: '2.4.1', features: SYSTEM_FEATURES };
   const features = mock(() => Promise.resolve(answer));
