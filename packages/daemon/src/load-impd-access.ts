@@ -1,7 +1,7 @@
 import { createRevocations } from './auth/revocations';
 import { loadTokenStore } from './auth/token-store';
 import type { Config } from './config';
-import type { ImpdDeps } from './create-impd';
+import type { ImpdDeps } from './impd-deps';
 import { createMcpAuth } from './oauth/create-mcp-auth';
 import { printLog } from './process/print-log';
 

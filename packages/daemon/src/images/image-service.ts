@@ -52,6 +52,9 @@ export interface ImageServiceDeps {
   // the environment of images.add's docker calls; impd's own by default
   readonly dockerEnv?: Readonly<Record<string, string>>;
 
+  // the image impd's first start pulls as the default; null pulls none
+  readonly seedRef?: string | null;
+
   // the start time of each build images.builds lists; Date.now by default
   readonly now?: () => number;
 }
