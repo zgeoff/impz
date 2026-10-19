@@ -15,6 +15,7 @@ import type { Impd } from '../src/create-impd';
 import { createImage } from '../src/db/images';
 import type { ImageRecord } from '../src/db/images';
 import { openDatabase } from '../src/db/open-database';
+import type { ImpDatabase } from '../src/db/open-database';
 import type { ImpdBoundaries } from '../src/impd-deps';
 import { NO_KERNEL_OOPS, createKernelOopsWatch } from '../src/imps/kernel-oops-watch';
 import type { Uplinks } from '../src/net/host-routes';
@@ -124,7 +125,12 @@ export interface TestImpdOptions {
   // the root token the client sends; TEST_TOKEN by default
   readonly rootToken?: string;
 
-  // any other boundary createImpd takes, over the harness's own
+  // the database impd queries, made from the harness's own, such as one a
+  // query gate wraps; the harness's own by default
+  readonly wrapDatabase?: (db: ImpDatabase) => ImpDatabase;
+
+  // any other boundary createImpd takes, over the harness's own; `taps`
+  // replaces the harness's tap recorders
   readonly boundaries?: Partial<ImpdBoundaries>;
 }
 
@@ -279,7 +285,7 @@ export async function startTestImpd(
 
     return {
       ...extra,
-      db,
+      db: options.wrapDatabase?.(db) ?? db,
       rootToken: options.rootToken ?? TEST_TOKEN,
       storage: createStorage(),
       systemFiles: {
@@ -311,7 +317,7 @@ export async function startTestImpd(
       // any free port: the imps' ports are the config's to hand out
       proxyPorts: extra.proxyPorts ?? { proxy: 0, slot: () => 0 },
       images: { seedRef: null, ...extra.images },
-      taps: {
+      taps: extra.taps ?? {
         setupTap: (address) => {
           taps.push(address.tap);
 
