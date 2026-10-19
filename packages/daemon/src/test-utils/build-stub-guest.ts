@@ -43,12 +43,21 @@ async function* readFakeEvents(
   const stdout =
     typeof answered.stdout === 'string' ? [encoder.encode(answered.stdout)] : answered.stdout;
 
-  for await (const data of stdout ?? []) {
-    if (isClosed()) {
+  const chunks = readChunks(stdout ?? []);
+
+  // a close ends the output while a stream still owes its next chunk
+  for (;;) {
+    const next = await Promise.race([chunks.next(), closing]);
+
+    if (next === null || isClosed()) {
       return;
     }
 
-    yield { type: 'stdout', data };
+    if (next.done === true) {
+      break;
+    }
+
+    yield { type: 'stdout', data: next.value };
   }
 
   if (answered.stderr !== undefined) {
@@ -66,6 +75,13 @@ async function* readFakeEvents(
   }
 
   yield { type: 'exit', code: answered.code ?? 0, signal: 0 };
+}
+
+// a list and a stream of chunks as one async iterator
+async function* readChunks(
+  source: readonly Uint8Array[] | AsyncIterable<Uint8Array>,
+): AsyncGenerator<Uint8Array, void, undefined> {
+  yield* source;
 }
 
 // A builder's agent for tests: each exec gets `answer`'s output, then its

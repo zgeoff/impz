@@ -326,7 +326,6 @@ test('it refuses with DISK_FULL an export that outgrows the free disk', async ()
 test('it stops the export at the step the free disk refuses', async () => {
   const ctx = await setupTest();
 
-  // 600 MiB free
   ctx.usage.availableBytes = 600 * 1024 ** 2;
 
   const builder = buildStubImageBuilder({

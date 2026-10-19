@@ -117,6 +117,30 @@ test('it ends a stalled exec with no exit once it is closed', async () => {
   expect(result).toStrictEqual({ done: true, value: undefined });
 });
 
+test('it ends the output once the exec is closed while a stream owes its next chunk', async () => {
+  const guest = buildStubGuest(() => ({
+    stdout: new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        controller.enqueue(new Uint8Array([7]));
+      },
+    }),
+  }));
+
+  const stream = await guest.open({ argv: ['export'], tty: false });
+
+  const iterator = stream.events();
+
+  await iterator.next();
+
+  const next = iterator.next();
+
+  stream.close();
+
+  const result = await next;
+
+  expect(result).toStrictEqual({ done: true, value: undefined });
+});
+
 test('it sends nothing when the exec closes before the answer', async () => {
   const guest = buildStubGuest(() => Promise.withResolvers<{ code: number }>().promise);
 
