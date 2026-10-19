@@ -5,7 +5,7 @@ import type { ContractRouterClient } from '@orpc/contract';
 import { buildImage } from './build-image';
 import type { BuildContext, BuildImageOptions } from './build-image';
 import { checkServer } from './check-server';
-import type { ServerCheck } from './check-server';
+import type { CheckServerOptions, ServerCheck } from './check-server';
 import { openAttach, openConsole, openExec, runCommand } from './exec/open-exec';
 import type {
   AttachOptions,
@@ -51,7 +51,7 @@ export interface ImpClient extends RpcClient {
   readonly requireAwake: (name: string, options?: RequireAwakeOptions) => Promise<Imp>;
 
   // whether impd speaks this client's version of the API
-  readonly checkServer: () => Promise<ServerCheck>;
+  readonly checkServer: (options?: CheckServerOptions) => Promise<ServerCheck>;
 
   // builds an image from a tar of its build context, uploaded from here;
   // `images.build` takes a directory on the impd host instead
@@ -161,7 +161,7 @@ export function createImpClient(options: Readonly<ImpClientOptions>): ImpClient 
     openAttach: (name, session, attachOptions) =>
       openAttach(execDeps, name, session, attachOptions),
     requireAwake: (name, awakeOptions) => requireAwake(rpc, name, awakeOptions),
-    checkServer: () => checkServer(rpc),
+    checkServer: (checkOptions) => checkServer(rpc, checkOptions),
     buildImage: (name, context, buildOptions) => buildImage(execDeps, name, context, buildOptions),
   };
 }

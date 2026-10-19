@@ -15,7 +15,7 @@ const MAX_BACKOFF_MS = 15_000;
 // what printEvents needs of the client and the clock, so a test can script
 // the stream
 export interface EventSource extends ClientEventSource {
-  readonly checkServer: () => Promise<ServerCheck>;
+  readonly checkServer: () => Promise<Pick<ServerCheck, 'clientVersion' | 'serverVersion'>>;
   readonly now: () => number;
   readonly wait: (ms: number) => Promise<void>;
 

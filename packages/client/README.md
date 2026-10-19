@@ -237,9 +237,11 @@ same way with `reason: 'impd_outdated'` before it sends the start. See
 
 The client and impd are released together with the same version. `imp.checkServer()` tells whether
 impd speaks this client's API: the major version must match, and before 1.0 the minor version too.
+Its optional `signal` ends the call, and the check rejects with the signal's reason. `check.info`
+holds the `system.info` answer it read, features included.
 
 ```ts
-const check = await imp.checkServer();
+const check = await imp.checkServer({ signal: AbortSignal.timeout(5000) });
 
 if (!check.compatible) {
   throw new Error(`impd ${check.serverVersion} does not match client ${check.clientVersion}`);

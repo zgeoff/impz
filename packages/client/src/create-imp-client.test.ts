@@ -452,18 +452,42 @@ test('#requireAwake rejects with the reason of a signal that already aborted', a
   );
 });
 
-test('#checkServer reports both versions and that they are compatible', async () => {
+test('#checkServer reports both versions, that they are compatible, and the info it read', async () => {
   const ctx = await setupTest();
 
   await ctx.startImpd();
 
   const check = await ctx.client.checkServer();
 
-  expect(check).toStrictEqual({
+  // the info holds impd's state, so the test pins only the parts it knows
+  expect(check).toMatchObject({
     clientVersion: CLIENT_VERSION,
     serverVersion: CLIENT_VERSION,
     compatible: true,
+    info: { version: CLIENT_VERSION, features: { leases: true } },
   });
+});
+
+test('#checkServer rejects at the abort of its signal when impd never answers', async () => {
+  const ctx = await setupTest();
+
+  // a half-open connection: impd takes the call and never answers it
+  const answer = mock(() => Promise.withResolvers<Response>().promise);
+
+  server.use(http.post('http://impd.test/rpc/system/info', answer));
+
+  const stopped = new AbortController();
+  const reason = new Error('gave up');
+
+  const check = ctx.client.checkServer({ signal: stopped.signal });
+
+  await waitFor(() => {
+    expect(answer).toHaveBeenCalledOnce();
+  });
+
+  stopped.abort(reason);
+
+  expect(check).rejects.toBe(reason);
 });
 
 test('#images.addStream hands on each progress event, then the image', async () => {

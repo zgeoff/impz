@@ -1,4 +1,4 @@
-import type { ImpContract } from '@impz/api';
+import type { ImpContract, SystemInfo } from '@impz/api';
 import type { ContractRouterClient } from '@orpc/contract';
 import packageJson from '../package.json' with { type: 'json' };
 
@@ -9,17 +9,31 @@ export interface ServerCheck {
   readonly clientVersion: string;
   readonly serverVersion: string;
   readonly compatible: boolean;
+
+  // the system.info answer the check read, so a caller that needs impd's
+  // features makes no second call
+  readonly info: SystemInfo;
+}
+
+export interface CheckServerOptions {
+  // ends the system.info call, such as on a connection that never answers
+  readonly signal?: Readonly<AbortSignal>;
 }
 
 export async function checkServer(
   rpc: Readonly<ContractRouterClient<ImpContract>>,
+  options: Readonly<CheckServerOptions> = {},
 ): Promise<ServerCheck> {
-  const info = await rpc.system.info();
+  const signal = options.signal;
+  const callOptions = signal === undefined ? {} : { signal };
+
+  const info = await rpc.system.info(undefined, callOptions);
 
   return {
     clientVersion: CLIENT_VERSION,
     serverVersion: info.version,
     compatible: isCompatibleVersion(CLIENT_VERSION, info.version),
+    info,
   };
 }
 
