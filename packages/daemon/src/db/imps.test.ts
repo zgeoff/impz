@@ -21,6 +21,7 @@ import {
   updateImpActivity,
   updateImpCommitted,
   updateImpDisk,
+  updateImpMove,
   updateImpSettings,
 } from './imps';
 import { SlotTakenError } from './slot-taken-error';
@@ -666,4 +667,42 @@ test('#removeImp reports an imp that is gone already as not removed', async () =
   const isRemoved = await removeImp(ctx.db, 'missing');
 
   expect(isRemoved).toBeFalse();
+});
+
+test.each([
+  ['an unmarked imp to sending', {}, 'sending'],
+  ['a sending imp back to unmarked', { moveState: 'sending' }, null],
+  ['a sending imp to moved', { moveState: 'sending' }, 'moved'],
+  ['a moved imp back to unmarked', { moveState: 'moved' }, null],
+  ['an unmarked imp to receiving', {}, 'receiving'],
+  ['a receiving imp to unmarked', { moveState: 'receiving' }, null],
+  ['an unmarked imp, left unmarked', {}, null],
+  ['a sending imp, left sending', { moveState: 'sending' }, 'sending'],
+] as const)('#updateImpMove takes %s', async (_kind, start, to) => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage());
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id, ...start }));
+  const updated = await updateImpMove(ctx.db, imp.id, to);
+
+  expect(updated.moveState).toBe(to);
+});
+
+test.each([
+  ['an unmarked imp straight to moved', {}, 'moved', 'null to moved'],
+  ['a moved imp back to sending', { moveState: 'moved' }, 'sending', 'moved to sending'],
+  ['a moved imp to receiving', { moveState: 'moved' }, 'receiving', 'moved to receiving'],
+  ['a sending imp to receiving', { moveState: 'sending' }, 'receiving', 'sending to receiving'],
+  ['a receiving imp to moved', { moveState: 'receiving' }, 'moved', 'receiving to moved'],
+] as const)('#updateImpMove refuses %s and keeps the mark', async (_kind, start, to, change) => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage());
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id, ...start }));
+
+  expect(updateImpMove(ctx.db, imp.id, to)).rejects.toThrow(
+    `imp ${imp.id}: the move mark cannot go from ${change}`,
+  );
+
+  const kept = await findImpById(ctx.db, imp.id);
+
+  expect(kept?.moveState).toBe(imp.moveState);
 });
