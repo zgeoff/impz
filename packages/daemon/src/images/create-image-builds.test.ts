@@ -32,6 +32,7 @@ import {
 import { buildTreeTar } from '../test-utils/build-tree-tar';
 import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
 import { createStubImageMkfs } from '../test-utils/create-stub-image-mkfs';
+import { spawnSparseFilesTar } from '../test-utils/spawn-sparse-files-tar';
 import { startDiskSampler } from '../test-utils/start-disk-sampler';
 import { normalizeDockerfilePath } from './create-image-builds';
 import { createImageService } from './image-service';
@@ -296,7 +297,7 @@ test('it refuses with DISK_FULL an export that outgrows the free disk', async ()
   ctx.usage.availableBytes = 256 * 1024 ** 2;
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { big: 'x'.repeat(200 * 1024 ** 2) })],
+    exported: spawnSparseFilesTar(ctx.dir, { big: 200 * 1024 ** 2 }).stdout,
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -325,11 +326,10 @@ test('it refuses with DISK_FULL an export that outgrows the free disk', async ()
 test('it stops the export at the step the free disk refuses', async () => {
   const ctx = await setupTest();
 
-  // 256 MiB free
-  ctx.usage.availableBytes = 256 * 1024 ** 2;
+  ctx.usage.availableBytes = 600 * 1024 ** 2;
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { big: 'x'.repeat(200 * 1024 ** 2) })],
+    exported: spawnSparseFilesTar(ctx.dir, { big: 200 * 1024 ** 2 }).stdout,
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -356,9 +356,10 @@ test('it stops the export at the step the free disk refuses', async () => {
 
   expect(building).rejects.toMatchObject({ code: 'DISK_FULL' });
 
-  // the stub sends its export as one chunk: twice 200 MiB and the rootfs's
-  // journal, in 256 MiB steps
-  expect(ctx.grows).toStrictEqual([768 * 1024 ** 2]);
+  // the first 1 MiB chunk's 256 MiB step, then, once tar lists the 200 MiB file,
+  // twice that and the rootfs's journal in 256 MiB steps, which 600 MiB
+  // refuses; no step after it
+  expect(ctx.grows).toStrictEqual([256 * 1024 ** 2, 768 * 1024 ** 2]);
   expect(builder.guest.runs.at(-1)?.closed).toBe(true);
 });
 
@@ -479,7 +480,7 @@ test('it releases the disk hold when the free disk refuses the export', async ()
   ctx.usage.availableBytes = 256 * 1024 ** 2;
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { big: 'x'.repeat(200 * 1024 ** 2) })],
+    exported: spawnSparseFilesTar(ctx.dir, { big: 200 * 1024 ** 2 }).stdout,
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 

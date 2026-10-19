@@ -28,6 +28,27 @@ test('it sends each stdout chunk in order', async () => {
   ]);
 });
 
+test('it sends each chunk of a stdout stream in order', async () => {
+  const guest = buildStubGuest(() => ({
+    stdout: new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        controller.enqueue(new Uint8Array([4, 5]));
+        controller.enqueue(new Uint8Array([6]));
+        controller.close();
+      },
+    }),
+  }));
+
+  const stream = await guest.open({ argv: ['cat'], tty: false });
+  const events = await Array.fromAsync(stream.events());
+
+  expect(events).toStrictEqual([
+    { type: 'stdout', data: new Uint8Array([4, 5]) },
+    { type: 'stdout', data: new Uint8Array([6]) },
+    { type: 'exit', code: 0, signal: 0 },
+  ]);
+});
+
 test('it sends stderr after stdout', async () => {
   const guest = buildStubGuest(() => ({ stdout: 'out', stderr: 'err' }));
 
@@ -82,6 +103,30 @@ test('it ends a stalled exec with no exit once it is closed', async () => {
   const guest = buildStubGuest(() => ({ stdout: 'up', stall: true }));
 
   const stream = await guest.open({ argv: ['serve'], tty: false });
+
+  const iterator = stream.events();
+
+  await iterator.next();
+
+  const next = iterator.next();
+
+  stream.close();
+
+  const result = await next;
+
+  expect(result).toStrictEqual({ done: true, value: undefined });
+});
+
+test('it ends the output once the exec is closed while a stream owes its next chunk', async () => {
+  const guest = buildStubGuest(() => ({
+    stdout: new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        controller.enqueue(new Uint8Array([7]));
+      },
+    }),
+  }));
+
+  const stream = await guest.open({ argv: ['export'], tty: false });
 
   const iterator = stream.events();
 

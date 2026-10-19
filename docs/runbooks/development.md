@@ -23,10 +23,12 @@ e2e/test-e2e.sh --clean       # end to end, from a clean state
 
 `bun run check` runs the whole-tree gates of CI's `checks` job: dead code, format, the type-aware
 lint, doc links, types and every test. It needs more memory than a small host has, so run it on a
-large one, or leave it to CI. `bun run lint:shell` needs shellcheck 0.11.0 and shfmt 3.14.1 on
-`PATH`, the versions CI pins; the shellcheck job in `.github/workflows/ci.yml` pins actionlint,
-zizmor and hadolint too. Run the end-to-end harness against a real instance when a change touches
-the lifecycle, the agent or the host.
+large one, or leave it to CI. CI runs `bun test` alone in a cgroup capped at 1536 MiB with no swap,
+through `scripts/ci/run-memory-capped.sh`, so the suite fails there before it outgrows a 2 GiB imp.
+`bun run lint:shell` needs shellcheck 0.11.0 and shfmt 3.14.1 on `PATH`, the versions CI pins; the
+shellcheck job in `.github/workflows/ci.yml` pins actionlint, zizmor and hadolint too. Run the
+end-to-end harness against a real instance when a change touches the lifecycle, the agent or the
+host.
 
 ## End-to-end tests
 
@@ -258,7 +260,7 @@ Lefthook installs the hooks with `bun install`.
 | Job          | Required | What it runs                                                                                                                                                                                                      |
 | ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `gitleaks`   | yes      | A secret scan over the history.                                                                                                                                                                                   |
-| `checks`     | yes      | `bun run audit`, the Bun pin check, `bun run check`, `test:pebble`, and the dashboard's tests and build.                                                                                                          |
+| `checks`     | yes      | `bun run audit`, the Bun pin check, `bun run check:static`, `bun test` capped at 1536 MiB with no swap, `test:pebble`, and the dashboard's tests and build.                                                       |
 | `go`         | yes      | In `agent/`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, `scripts/test-go.sh`, then the suite again as root with the `root` build tag. Also `gofmt`, vet and lint on the Dockerfile difftest module. |
 | `shellcheck` | yes      | `bun run lint:shell`, actionlint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                               |
 | `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                         |
