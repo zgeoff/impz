@@ -1,4 +1,4 @@
-import type { ImpContract } from '@impz/api';
+import type { ImpContract, SystemInfo } from '@impz/api';
 import type { ContractRouterClient } from '@orpc/contract';
 import packageJson from '../package.json' with { type: 'json' };
 
@@ -9,6 +9,10 @@ export interface ServerCheck {
   readonly clientVersion: string;
   readonly serverVersion: string;
   readonly compatible: boolean;
+
+  // the system.info answer the check read, so a caller that needs impd's
+  // features makes no second call
+  readonly info: SystemInfo;
 }
 
 export interface CheckServerOptions {
@@ -29,6 +33,7 @@ export async function checkServer(
     clientVersion: CLIENT_VERSION,
     serverVersion: info.version,
     compatible: isCompatibleVersion(CLIENT_VERSION, info.version),
+    info,
   };
 }
 

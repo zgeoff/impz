@@ -452,7 +452,7 @@ test('#requireAwake rejects with the reason of a signal that already aborted', a
   );
 });
 
-test('#checkServer reports both versions and that they are compatible', async () => {
+test('#checkServer reports both versions, that they are compatible, and the info it read', async () => {
   const ctx = await setupTest();
 
   await ctx.startImpd();
@@ -463,6 +463,10 @@ test('#checkServer reports both versions and that they are compatible', async ()
     clientVersion: CLIENT_VERSION,
     serverVersion: CLIENT_VERSION,
     compatible: true,
+    info: expect.objectContaining({
+      version: CLIENT_VERSION,
+      features: expect.objectContaining({ leases: true }),
+    }),
   });
 });
 
