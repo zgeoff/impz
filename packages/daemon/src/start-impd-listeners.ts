@@ -50,15 +50,28 @@ export async function startImpdListeners(
   const log = deps.log ?? printLog;
   const db = deps.db;
 
-  const app = runStep('api', () => {
+  const api = runStep('api', () => {
+    // Elysia's listen adds a process beforeExit listener that holds the app;
+    // the stop removes it, so a stopped impd leaves nothing reachable
+    const exitListeners = new Set(process.listeners('beforeExit'));
+
     const listening = parts.api.app.listen(buildApiListenOptions(config, deps.apiIdleTimeoutS));
+    const added = process.listeners('beforeExit').filter((item) => !exitListeners.has(item));
 
     getImpdLogger('api').info('api on :{port}, data in {dataDir}', {
       port: config.apiPort,
       dataDir: config.dataDir,
     });
 
-    return listening;
+    const stop = async (closeActive: boolean): Promise<void> => {
+      await listening.stop(closeActive);
+
+      for (const listener of added) {
+        process.off('beforeExit', listener);
+      }
+    };
+
+    return { app: listening, stop };
   });
 
   // off unless the operator names the route's origin
@@ -136,5 +149,5 @@ export async function startImpdListeners(
     }),
   );
 
-  return { app, publicMcp, proxy, https, brokerPort, ssh };
+  return { app: api.app, stopApi: api.stop, publicMcp, proxy, https, brokerPort, ssh };
 }

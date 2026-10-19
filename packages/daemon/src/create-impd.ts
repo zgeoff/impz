@@ -424,11 +424,7 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
           ssh: listeners.ssh,
           closeExecSessions: api.closeExecSessions,
           publicMcp: listeners.publicMcp,
-          api: {
-            stop: async (closeActive) => {
-              await listeners.app.stop(closeActive);
-            },
-          },
+          api: { stop: listeners.stopApi },
           imps,
           storage,
           stopTelemetry,

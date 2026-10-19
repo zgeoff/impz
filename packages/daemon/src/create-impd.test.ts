@@ -119,6 +119,20 @@ test('it warns at start that an image with a file capability fails without CAP_S
   );
 });
 
+test('it leaves no process exit listener behind once it stops', async () => {
+  const exitListeners = process.listenerCount('beforeExit');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  await startTestImpd(stack);
+
+  await stack.disposeAsync();
+
+  expect(process.listenerCount('beforeExit')).toBe(exitListeners);
+});
+
 test('it removes a system drive that no imp uses when it boots', async () => {
   const ctx = await setupTest();
 
