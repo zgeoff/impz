@@ -1,7 +1,4 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
@@ -12,27 +9,17 @@ import { readMcpAnswer } from '../../../mcp/src/test-utils/read-mcp-answer';
 import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
 import { buildStubTailscale } from '../../testing/network/build-stub-tailscale';
 import { findFreePorts } from '../../testing/platform/find-free-ports';
-import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { startTestImpd } from '../../testing/start-test-impd';
+import { TEST_TOKEN } from '../../testing/test-token';
 import { buildStubExecGuest } from '../../testing/vm/build-stub-exec-guest';
-import { buildStubVmm } from '../../testing/vm/build-stub-vmm';
 import { startStubExecAgent } from '../../testing/vm/start-stub-exec-agent';
-import { buildApiListenOptions } from '../api-listen-options';
 import { runWhois } from '../auth/tailnet-identity';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
 import { listApiCalls } from '../db/api-audit';
 import { createImage } from '../db/images';
 import { findImpByName } from '../db/imps';
-import { openDatabase } from '../db/open-database';
 import { PEER_HEADER } from '../proxy/forwarded-peers';
 import { startWakeProxy } from '../proxy/wake-proxy';
-import {
-  buildImagePaths,
-  buildImpPaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
+import { buildImagePaths, buildImpPaths } from '../storage/data-layout';
 
 interface SetupOptions {
   // the `tailscale` CLI that impd's whois runs; its peers are the test's
@@ -49,134 +36,26 @@ async function setupTest(options: SetupOptions) {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'mcp-endpoint-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-    ...readImpEnv(),
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
-  const impd = await createImpd(config, {
-    db,
-
-    // the bearer the root client sends
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
+  const harness = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: {
+      whois: (address) => runWhois(address, options.tailscale.run),
+      ...(options.idleTimeoutS !== undefined && { apiIdleTimeoutS: options.idleTimeoutS }),
     },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-
-    // Firecracker, the kernel and the CPU as this host reports them
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    whois: (address) => runWhois(address, options.tailscale.run),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  });
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
-  });
-
-  // as main.ts listens, on a free loopback port
-  const server = impd.api.app.listen({
-    ...buildApiListenOptions(config, options.idleTimeoutS),
-    port: 0,
-    hostname: '127.0.0.1',
-  });
-
-  stack.defer(async () => {
-    await server.stop(true);
   });
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   // the image every imps.create boots when it names none
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
+  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
-  await createImage(db, image);
+  await createImage(harness.db, image);
 
-  const url = `http://127.0.0.1:${String(server.server?.port)}`;
-
-  return {
-    db,
-    dataDir,
-    config,
-    impd,
-    url,
-    client: createImpClient({ url, token: 'root-token' }),
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, {
+    client: createImpClient({ url: harness.url, token: TEST_TOKEN }),
     stack,
-  };
+  });
 }
 
 test('it names a nameless create under the one prefix its token may touch', async () => {
@@ -1021,7 +900,7 @@ test.each([
   const response = await fetch(`${ctx.url}/mcp`, {
     method: 'POST',
     headers: {
-      authorization: 'Bearer root-token',
+      authorization: `Bearer ${TEST_TOKEN}`,
       host: 'impd.example',
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
@@ -1066,7 +945,7 @@ test('it answers a tool call through the wake proxy’s API route', async () => 
   const opened = await fetch(`${via}/mcp`, {
     method: 'POST',
     headers: {
-      authorization: 'Bearer root-token',
+      authorization: `Bearer ${TEST_TOKEN}`,
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
     },
@@ -1089,7 +968,7 @@ test('it answers a tool call through the wake proxy’s API route', async () => 
   const response = await fetch(`${via}/mcp`, {
     method: 'POST',
     headers: {
-      authorization: 'Bearer root-token',
+      authorization: `Bearer ${TEST_TOKEN}`,
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
       'mcp-session-id': session,
@@ -1170,7 +1049,7 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
 
   await client.connect(
     new StreamableHTTPClientTransport(new URL(`${via}/mcp`), {
-      requestInit: { headers: { authorization: 'Bearer root-token' } },
+      requestInit: { headers: { authorization: `Bearer ${TEST_TOKEN}` } },
       fetch: async (url, init) => {
         const response = await fetch(url, init);
 
@@ -1256,7 +1135,7 @@ test('it keeps a call answered as server-sent events open through the wake proxy
   const opened = await fetch(`${via}/mcp`, {
     method: 'POST',
     headers: {
-      authorization: 'Bearer root-token',
+      authorization: `Bearer ${TEST_TOKEN}`,
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
     },
@@ -1279,7 +1158,7 @@ test('it keeps a call answered as server-sent events open through the wake proxy
   const call = fetch(`${via}/mcp`, {
     method: 'POST',
     headers: {
-      authorization: 'Bearer root-token',
+      authorization: `Bearer ${TEST_TOKEN}`,
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
       'mcp-session-id': session,
@@ -1300,7 +1179,7 @@ test('it keeps a call answered as server-sent events open through the wake proxy
   // comes every 5 s, as the MCP stream's does, so the deadline ends it first
   const control = await fetch(`${ctx.url}/rpc/events/stream`, {
     method: 'POST',
-    headers: { authorization: 'Bearer root-token', 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${TEST_TOKEN}`, 'content-type': 'application/json' },
     body: '{}',
   });
 
