@@ -151,10 +151,10 @@ test('it backs off restarts, then stops at three an hour', async () => {
 
   // silent for good: each restart's new agent goes silent too, and each
   // silence is two looks this far apart
-  for (const ms of [60_000, 30_000, 30_000, 120_000, 200_000, 60_000]) {
+  for (const durationMs of [60_000, 30_000, 30_000, 120_000, 200_000, 60_000]) {
     watchdog.observe(imp, false);
 
-    ctx.clock.nowMs += ms;
+    ctx.clock.nowMs += durationMs;
 
     watchdog.observe(imp, false);
 

@@ -57,18 +57,16 @@ export interface StubUpstream {
   readonly stop: () => Promise<void>;
 }
 
-const CGI_HEADER_END = /\r?\n\r?\n/u;
-
 export async function startStubUpstream(address: string, token: string): Promise<StubUpstream> {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-e2e-upstream-'));
-  const repos = join(dir, 'repos');
+  const directory = mkdtempSync(join(tmpdir(), 'imp-e2e-upstream-'));
+  const repos = join(directory, 'repos');
   const expected = `Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
   const bearer = `Bearer ${token}`;
   const seen: SeenRequest[] = [];
 
   mkdirSync(repos);
 
-  await createCertificates(dir, address);
+  await createCertificates(directory, address);
 
   const oauthState = {
     refreshTokens: [`e2e-refresh-${randomUUID()}`],
@@ -179,7 +177,10 @@ export async function startStubUpstream(address: string, token: string): Promise
   const server = Bun.serve({
     hostname: '0.0.0.0',
     port: 0,
-    tls: { cert: readFileSync(join(dir, 'leaf.pem')), key: readFileSync(join(dir, 'leaf.key')) },
+    tls: {
+      cert: readFileSync(join(directory, 'leaf.pem')),
+      key: readFileSync(join(directory, 'leaf.key')),
+    },
     maxRequestBodySize: 256 * 1024 ** 2,
     idleTimeout: 60,
     fetch: readRequest,
@@ -197,7 +198,7 @@ export async function startStubUpstream(address: string, token: string): Promise
       exchange: (refreshToken) => runTokenExchange(refreshToken).status,
     },
     origin: `https://${address}:${String(server.port)}`,
-    caPem: readFileSync(join(dir, 'ca.pem'), 'utf8'),
+    caPem: readFileSync(join(directory, 'ca.pem'), 'utf8'),
     plainOrigin: `http://${address}:${String(plainServer.port)}`,
     seen,
     createRepo: async (path) => {
@@ -212,16 +213,16 @@ export async function startStubUpstream(address: string, token: string): Promise
       await server.stop(true);
       await plainServer.stop(true);
 
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(directory, { recursive: true, force: true });
     },
   };
 }
 
 // a CA and a leaf for the address, by openssl on this machine
-async function createCertificates(dir: string, address: string): Promise<void> {
-  const ca = join(dir, 'ca');
-  const leaf = join(dir, 'leaf');
-  const ext = join(dir, 'leaf.ext');
+async function createCertificates(directory: string, address: string): Promise<void> {
+  const ca = join(directory, 'ca');
+  const leaf = join(directory, 'leaf');
+  const ext = join(directory, 'leaf.ext');
 
   writeFileSync(
     ext,
@@ -293,6 +294,8 @@ async function createCertificates(dir: string, address: string): Promise<void> {
 function runOpenssl(argv: readonly string[]): Promise<string> {
   return runChecked(['openssl', ...argv]);
 }
+
+const CGI_HEADER_END = /\r?\n\r?\n/u;
 
 // `git http-backend` writes CGI: headers, a blank line, the body
 function parseCgiOutput(output: Uint8Array): Response {

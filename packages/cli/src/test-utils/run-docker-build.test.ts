@@ -6,17 +6,17 @@ import invariant from 'tiny-invariant';
 import { checkDockerBuildx, runDockerBuild } from './run-docker-build';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'run-docker-build-'));
+  const directory = await mkdtemp(join(tmpdir(), 'run-docker-build-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#checkDockerBuildx answers yes for a docker whose buildx version succeeds', async () => {
   const ctx = await setupTest();
 
-  const docker = join(ctx.dir, 'docker');
+  const docker = join(ctx.directoryPath, 'docker');
 
   await writeFile(docker, '#!/bin/sh\n[ "$1 $2" = "buildx version" ]\n', { mode: 0o755 });
 
@@ -26,7 +26,7 @@ test('#checkDockerBuildx answers yes for a docker whose buildx version succeeds'
 test('#checkDockerBuildx answers no for a docker without buildx', async () => {
   const ctx = await setupTest();
 
-  const docker = join(ctx.dir, 'docker');
+  const docker = join(ctx.directoryPath, 'docker');
 
   await writeFile(docker, '#!/bin/sh\necho "unknown command: docker buildx" >&2\nexit 1\n', {
     mode: 0o755,
@@ -38,7 +38,7 @@ test('#checkDockerBuildx answers no for a docker without buildx', async () => {
 test('#checkDockerBuildx answers no when there is no docker at all', async () => {
   const ctx = await setupTest();
 
-  expect(checkDockerBuildx(join(ctx.dir, 'docker'))).toBeFalse();
+  expect(checkDockerBuildx(join(ctx.directoryPath, 'docker'))).toBeFalse();
 });
 
 test.skipIf(!checkDockerBuildx())(
@@ -46,7 +46,7 @@ test.skipIf(!checkDockerBuildx())(
   async () => {
     const ctx = await setupTest();
 
-    const context = join(ctx.dir, 'context');
+    const context = join(ctx.directoryPath, 'context');
 
     await mkdir(context);
     await writeFile(join(context, 'Dockerfile'), 'FROM scratch\nCOPY . /\n');
@@ -54,11 +54,11 @@ test.skipIf(!checkDockerBuildx())(
 
     runDockerBuild({
       dockerfile: join(context, 'Dockerfile'),
-      context: { dir: context },
-      dest: join(ctx.dir, 'out'),
+      context: { directory: context },
+      destination: join(ctx.directoryPath, 'out'),
     });
 
-    expect(readFile(join(ctx.dir, 'out', 'app.js'), 'utf8')).resolves.toBe('app');
+    expect(readFile(join(ctx.directoryPath, 'out', 'app.js'), 'utf8')).resolves.toBe('app');
   },
   120_000,
 );
@@ -68,8 +68,8 @@ test.skipIf(!checkDockerBuildx())(
   async () => {
     const ctx = await setupTest();
 
-    const context = join(ctx.dir, 'context');
-    const tarPath = join(ctx.dir, 'context.tar');
+    const context = join(ctx.directoryPath, 'context');
+    const tarPath = join(ctx.directoryPath, 'context.tar');
 
     await mkdir(context);
     await writeFile(join(context, 'Dockerfile'), 'FROM scratch\nCOPY . /\n');
@@ -83,10 +83,12 @@ test.skipIf(!checkDockerBuildx())(
       // a path inside the tar, as docker reads the Dockerfile from the context
       dockerfile: 'Dockerfile',
       context: { tarPath },
-      dest: join(ctx.dir, 'out'),
+      destination: join(ctx.directoryPath, 'out'),
     });
 
-    expect(readFile(join(ctx.dir, 'out', 'app.js'), 'utf8')).resolves.toBe('from the tar');
+    expect(readFile(join(ctx.directoryPath, 'out', 'app.js'), 'utf8')).resolves.toBe(
+      'from the tar',
+    );
   },
   120_000,
 );
@@ -96,7 +98,7 @@ test.skipIf(!checkDockerBuildx())(
   async () => {
     const ctx = await setupTest();
 
-    const context = join(ctx.dir, 'context');
+    const context = join(ctx.directoryPath, 'context');
 
     await mkdir(context);
     await writeFile(join(context, 'Dockerfile'), 'NOT A DOCKERFILE\n');
@@ -104,8 +106,8 @@ test.skipIf(!checkDockerBuildx())(
     expect(() => {
       runDockerBuild({
         dockerfile: join(context, 'Dockerfile'),
-        context: { dir: context },
-        dest: join(ctx.dir, 'out'),
+        context: { directory: context },
+        destination: join(ctx.directoryPath, 'out'),
       });
     }).toThrowWithMessage(Error, /^docker buildx build --quiet -f .+unknown instruction/su);
   },

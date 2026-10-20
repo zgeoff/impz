@@ -2,7 +2,7 @@ import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
 import { buildMovingError, buildNotFoundError } from '../api-errors';
 import { readEgressPolicy, writeEgressPolicy } from '../db/egress';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
 import type { KeyedMutex } from '../process/keyed-mutex';
 import { buildAllowRules, isNameAllowed, isTunnelAllowed } from './egress-rules';
@@ -32,7 +32,7 @@ export function makeSetPolicy(
       // the routes a public policy needs are read with the table, below
       deps.requireFirewall(policy);
 
-      const imp = await findImpByName(deps.db, name);
+      const imp = await readImpByName(deps.db, name);
 
       const previous = imp === undefined ? undefined : await readEgressPolicy(deps.db, imp.id);
 

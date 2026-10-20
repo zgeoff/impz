@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { buildMockCertificate } from './build-mock-certificate';
 import { buildStubProxyListen } from './build-stub-proxy-listen';
+import { createMockCertificate } from './create-mock-certificate';
 
 test('it answers a request with the address it listens on', async () => {
   const proxy = buildStubProxyListen();
@@ -22,7 +22,7 @@ test('it answers a request with the address it listens on', async () => {
 test('it serves the TLS certificate it is given', async () => {
   const proxy = buildStubProxyListen();
 
-  const certificate = await buildMockCertificate({ names: ['imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test'] });
 
   const listener = proxy.startListener({
     port: 0,

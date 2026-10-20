@@ -10,11 +10,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-run-docker-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-run-docker-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#readRefusalError reads the proxy refusal in the CLI output as the client BAD_REQUEST', () => {
@@ -38,7 +38,7 @@ test('#readRefusalError reads no refusal in output the proxy did not write', () 
 test('#runDocker answers a failed call with its exit code and output', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir });
+  const docker = createStubDockerCli({ directory: ctx.directoryPath });
 
   const result = await runDocker(['run', 'busybox'], { env: { PATH: docker.path } });
 
@@ -53,7 +53,7 @@ test('#runDocker throws the proxy refusal of a call as the client BAD_REQUEST', 
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [
       {
         refs: ['localhost:5320/x:1'],
@@ -77,7 +77,10 @@ test('#runDocker throws the proxy refusal of a call as the client BAD_REQUEST', 
 test('#runDockerChecked gives the output of a checked call that succeeds', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir, create: { id: 'c'.repeat(64) } });
+  const docker = createStubDockerCli({
+    directory: ctx.directoryPath,
+    create: { id: 'c'.repeat(64) },
+  });
 
   const stdout = await runDockerChecked(['create', 'busybox', '/bin/true'], {
     env: { PATH: docker.path },
@@ -89,7 +92,10 @@ test('#runDockerChecked gives the output of a checked call that succeeds', async
 test('#runDockerChecked throws a checked call that exits non-zero with its argv and stderr', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir, create: { stderr: 'no space left' } });
+  const docker = createStubDockerCli({
+    directory: ctx.directoryPath,
+    create: { stderr: 'no space left' },
+  });
 
   expect(
     runDockerChecked(['create', 'busybox', '/bin/true'], { env: { PATH: docker.path } }),
@@ -100,7 +106,7 @@ test('#runDocker ends a call when its signal aborts', async () => {
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [{ refs: ['slow:1'], inspects: [{ Id: 'sha256:1' }], pull: 'hang' }],
   });
 

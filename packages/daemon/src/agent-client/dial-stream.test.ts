@@ -9,13 +9,13 @@ import { openDialStream } from './dial-stream';
 import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from './frame-codec';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-dial-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-dial-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { vsockPath: join(dir, 'vsock.sock') };
+  return { vsockPath: join(directory, 'vsock.sock') };
 }
 
 test('it asks the agent to dial the target', async () => {

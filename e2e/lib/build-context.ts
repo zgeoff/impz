@@ -9,18 +9,18 @@ export async function writeBuildContext(
   name: string,
   dockerfile: string,
 ): Promise<string> {
-  const dir = join(root, name);
+  const directory = join(root, name);
 
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, 'Dockerfile'), dockerfile);
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, 'Dockerfile'), dockerfile);
 
-  return dir;
+  return directory;
 }
 
 export interface RawBuild {
   readonly apiUrl: string;
   readonly token: string;
-  readonly dir: string;
+  readonly directoryPath: string;
 
   // the context's files, relative to dir, as the tar holds them
   readonly files: readonly string[];
@@ -31,7 +31,7 @@ export interface RawBuild {
 // sends it: the CLI packs only the Dockerfile it was told to, so the
 // frontend's fallbacks need a tar of our own.
 export async function sendRawBuild(build: Readonly<RawBuild>): Promise<Response> {
-  const tar = Bun.spawn(['tar', '-C', build.dir, '-cf', '-', ...build.files], {
+  const tar = Bun.spawn(['tar', '-C', build.directoryPath, '-cf', '-', ...build.files], {
     stdout: 'pipe',
     stderr: 'pipe',
   });

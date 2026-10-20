@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
-import { getThroughProxy } from '../lib/http';
+import { readThroughProxy } from '../lib/http';
 import {
   assertState,
   createInstanceClient,
@@ -11,12 +11,12 @@ import {
   tryImp,
 } from '../lib/imp-cli';
 import { holdImp, readGuestFile, waitForExec, writeGuestFile } from '../lib/imps';
-import { checkHealthReady, findImpdPid, runDevScript } from '../lib/instance';
+import { checkHealthReady, readImpdPid, runDevScript } from '../lib/instance';
 import { checkMemoryProof, startMemoryProof } from '../lib/memory-proof';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { buildKeptScaleFleet, listAwakeImps, readInventory } from '../lib/restart-inventory';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -32,7 +32,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('restart'), stack, client };
+  return { prefix: getSuitePrefix('restart'), stack, client };
 }
 
 test('it re-adopts running VMs across an impd restart, wakes a sleeper and restores a checkpoint, then sleeps every imp across a reboot', async () => {
@@ -77,7 +77,7 @@ test('it re-adopts running VMs across an impd restart, wakes a sleeper and resto
   await runImp('stop', stopped);
 
   const beforeRestart = await readInventory();
-  const oldPid = await findImpdPid();
+  const oldPid = await readImpdPid();
 
   console.log(`    ${String(beforeRestart.length)} imps before the restart`);
 
@@ -95,7 +95,7 @@ test('it re-adopts running VMs across an impd restart, wakes a sleeper and resto
   const newPid = await waitFor(
     'a new impd process',
     async () => {
-      const pid = await findImpdPid();
+      const pid = await readImpdPid();
 
       if (pid === null || pid === oldPid) {
         throw new Error(`impd pid ${String(pid)}, was ${String(oldPid)}`);
@@ -137,7 +137,7 @@ test('it re-adopts running VMs across an impd restart, wakes a sleeper and resto
   expect(stoppedState).toBe('stopped');
 
   // the sleeper wakes with its memory after the restart
-  const woken = await getThroughProxy(mem);
+  const woken = await readThroughProxy(mem);
 
   expect(woken).toBe(proof.token);
 
@@ -173,7 +173,7 @@ test('it re-adopts running VMs across an impd restart, wakes a sleeper and resto
   expect(memState).toBe('sleeping');
   expect(stoppedAfterReboot).toBe('stopped');
 
-  const body = await getThroughProxy(mem);
+  const body = await readThroughProxy(mem);
 
   expect(body).toBe(proof.token);
 

@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import { createImage } from '@impz/daemon/src/db/images';
-import { findImpByName } from '@impz/daemon/src/db/imps';
+import { readImpByName } from '@impz/daemon/src/db/imps';
 import {
   buildImagePaths,
   buildImpPaths,
@@ -11,7 +11,7 @@ import {
   startTestImpd,
 } from '@impz/daemon/testing';
 import invariant from 'tiny-invariant';
-import { createImpGuard } from '../imp-guard';
+import { buildImpGuard } from '../imp-guard';
 import { createMcpServer } from '../test-utils/create-mcp-server';
 
 // impd's real app on a loopback port for an exec's socket, a root client,
@@ -65,7 +65,7 @@ test('it writes a file with the path as one argument of the write script', async
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -88,7 +88,7 @@ test('it writes a file with the path as one argument of the write script', async
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -129,7 +129,7 @@ test('it reads a file with head, asking for one byte past maxBytes', async () =>
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -154,7 +154,7 @@ test('it reads a file with head, asking for one byte past maxBytes', async () =>
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -189,7 +189,7 @@ test('it writes bytes given as base64', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -212,7 +212,7 @@ test('it writes bytes given as base64', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -239,7 +239,7 @@ test('it refuses to read bytes that are not UTF-8 as utf8', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -261,7 +261,7 @@ test('it refuses to read bytes that are not UTF-8 as utf8', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -291,7 +291,7 @@ test('it reads bytes that are not UTF-8 as base64', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -316,7 +316,7 @@ test('it reads bytes that are not UTF-8 as base64', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -341,7 +341,7 @@ test('it refuses base64 content that does not decode, before anything runs', asy
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -364,7 +364,7 @@ test('it refuses base64 content that does not decode, before anything runs', asy
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -390,7 +390,7 @@ test('it reads a file exactly maxBytes long', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -412,7 +412,7 @@ test('it reads a file exactly maxBytes long', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -437,7 +437,7 @@ test('it fails a file larger than maxBytes instead of cutting it', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -459,7 +459,7 @@ test('it fails a file larger than maxBytes instead of cutting it', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -489,7 +489,7 @@ test("it answers a read that fails in the guest with an isError result holding t
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -509,7 +509,7 @@ test("it answers a read that fails in the guest with an isError result holding t
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -539,7 +539,7 @@ test("it answers a write that fails in the guest with an isError result holding 
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -562,7 +562,7 @@ test("it answers a write that fails in the guest with an isError result holding 
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -592,7 +592,7 @@ test('it refuses a relative path before anything runs', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -612,7 +612,7 @@ test('it refuses a relative path before anything runs', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -646,7 +646,7 @@ test.each([
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -670,7 +670,7 @@ test.each([
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -698,7 +698,7 @@ test.each([
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -722,7 +722,7 @@ test.each([
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );

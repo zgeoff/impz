@@ -17,12 +17,12 @@ import {
   PEBBLE_DOMAIN,
   PUBLIC_HTTPS_PORT,
   buildPebbleEnv,
-  isPebbleRunning,
+  probePebbleRunning,
   writePebbleRoot,
 } from '../lib/pebble';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -37,10 +37,10 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('https'), stack, client };
+  return { prefix: getSuitePrefix('https'), stack, client };
 }
 
-test.skipIf(!isPebbleRunning())(
+test.skipIf(!probePebbleRunning())(
   'it gets a wildcard certificate from Pebble, serves and wakes imps at https://<name>.<domain>, and redirects plain http there',
   async () => {
     const ctx = await setupTest();
@@ -155,7 +155,7 @@ test.skipIf(!isPebbleRunning())(
   },
 );
 
-test.skipIf(!isPebbleRunning())(
+test.skipIf(!probePebbleRunning())(
   'it serves a public imp on the public listener behind its token, wakes it only with the token, and no other imp there',
   async () => {
     const ctx = await setupTest();

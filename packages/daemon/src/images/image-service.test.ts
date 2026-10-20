@@ -68,7 +68,7 @@ test.each(['--help', '-v/:/host', 'ubuntu --privileged', ''])(
   },
 );
 
-test('#buildImage refuses a context path that docker could read as a flag', async () => {
+test('#runImageBuild refuses a context path that docker could read as a flag', async () => {
   const ctx = await setupTest();
 
   const images = createImageService({
@@ -81,7 +81,7 @@ test('#buildImage refuses a context path that docker could read as a flag', asyn
     log: () => {},
   });
 
-  const building = images.buildImage('--file=/etc/passwd', 'x');
+  const building = images.runImageBuild('--file=/etc/passwd', 'x');
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
@@ -97,7 +97,7 @@ test('#addImage answers a proxy refusal of the pull as BAD_REQUEST with its mess
   const refusal = "imp-docker-proxy: registry localhost:5320 is the host's own";
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['registry.example/pulled:1'],
@@ -131,7 +131,7 @@ test('#addImage answers a proxy refusal of the create as BAD_REQUEST with its me
   const refusal = "imp-docker-proxy: registry localhost:5320 is the host's own";
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['registry.example/local:1'],
@@ -164,7 +164,7 @@ test('#addImage leaves no work directory behind when the create fails', async ()
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['registry.example/local:1'],
@@ -291,7 +291,7 @@ test('#buildImageFromContext refuses the name imp-builder, which is impd’s', a
   });
 });
 
-test('#buildImage refuses a context that is not on the impd host', async () => {
+test('#runImageBuild refuses a context that is not on the impd host', async () => {
   const ctx = await setupTest();
 
   const images = createImageService({
@@ -304,7 +304,7 @@ test('#buildImage refuses a context that is not on the impd host', async () => {
     log: () => {},
   });
 
-  const building = images.buildImage(join(ctx.dataDir, 'no-such-dir'), 'x');
+  const building = images.runImageBuild(join(ctx.dataDir, 'no-such-dir'), 'x');
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
@@ -312,7 +312,7 @@ test('#buildImage refuses a context that is not on the impd host', async () => {
   });
 });
 
-test('#buildImage refuses a context on the impd host with no Dockerfile', async () => {
+test('#runImageBuild refuses a context on the impd host with no Dockerfile', async () => {
   const ctx = await setupTest();
 
   const images = createImageService({
@@ -325,7 +325,7 @@ test('#buildImage refuses a context on the impd host with no Dockerfile', async 
     log: () => {},
   });
 
-  const building = images.buildImage(ctx.dataDir, 'x');
+  const building = images.runImageBuild(ctx.dataDir, 'x');
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
@@ -333,7 +333,7 @@ test('#buildImage refuses a context on the impd host with no Dockerfile', async 
   });
 });
 
-test('#buildImage refuses a context over IMP_BUILD_CONTEXT_MAX_MIB before it is sent', async () => {
+test('#runImageBuild refuses a context over IMP_BUILD_CONTEXT_MAX_MIB before it is sent', async () => {
   const ctx = await setupTest();
 
   const contextDir = join(ctx.dataDir, 'context');
@@ -352,7 +352,7 @@ test('#buildImage refuses a context over IMP_BUILD_CONTEXT_MAX_MIB before it is 
     log: () => {},
   });
 
-  const building = images.buildImage(contextDir, 'x');
+  const building = images.runImageBuild(contextDir, 'x');
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
@@ -362,11 +362,11 @@ test('#buildImage refuses a context over IMP_BUILD_CONTEXT_MAX_MIB before it is 
   });
 });
 
-test('#buildImage refuses a Dockerfile image that is not an image reference', async () => {
+test('#runImageBuild refuses a Dockerfile image that is not an image reference', async () => {
   const ctx = await setupTest();
 
   const contextDir = join(ctx.dataDir, 'context');
-  const docker = createStubDockerCli({ dir: ctx.dataDir });
+  const docker = createStubDockerCli({ directory: ctx.dataDir });
 
   updateEnv('PATH', docker.path);
   mkdirSync(contextDir);
@@ -382,7 +382,7 @@ test('#buildImage refuses a Dockerfile image that is not an image reference', as
     log: () => {},
   });
 
-  const building = images.buildImage(contextDir, 'x');
+  const building = images.runImageBuild(contextDir, 'x');
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
@@ -392,13 +392,13 @@ test('#buildImage refuses a Dockerfile image that is not an image reference', as
 
 // a registry digest with words after it would add words to the FROM line,
 // which the pinned copy's round trip refuses
-test('#buildImage answers BAD_REQUEST when the pinned Dockerfile does not parse back', async () => {
+test('#runImageBuild answers BAD_REQUEST when the pinned Dockerfile does not parse back', async () => {
   const ctx = await setupTest();
 
   const contextDir = join(ctx.dataDir, 'context');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['busybox:1'],
@@ -426,7 +426,7 @@ test('#buildImage answers BAD_REQUEST when the pinned Dockerfile does not parse 
     log: () => {},
   });
 
-  const building = images.buildImage(contextDir, 'x');
+  const building = images.runImageBuild(contextDir, 'x');
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',

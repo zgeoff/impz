@@ -1,5 +1,5 @@
 import { listCheckpoints } from '../db/checkpoints';
-import { findImageById } from '../db/images';
+import { readImageById } from '../db/images';
 import type { ImpRecord } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
 import type { StreamedCommand } from '../process/run-stream';
@@ -70,7 +70,7 @@ async function openDiskParts(
   mode: MoveMode,
   isImageIncluded: boolean,
 ): Promise<OpenedParts> {
-  const image = await findImageById(deps.db, imp.imageId);
+  const image = await readImageById(deps.db, imp.imageId);
 
   if (image === undefined) {
     throw new Error(`${imp.name} has no image row`);

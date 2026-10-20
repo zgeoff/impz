@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { getErrorMessage } from '../get-error-message';
 import type { SlotAddress } from '../net/addressing';
 import { GATEWAY_IP6 } from '../net/addressing6';
-import { readErrorMessage } from '../read-error-message';
 import type { ImpPaths } from '../storage/data-layout';
 import type { ImpCgroup } from '../vmm/cpu-cgroups';
 import { TemplateRestoreError } from '../vmm/template-vm';
@@ -44,7 +44,7 @@ export async function startColdVm(
   const template =
     imp.maxMemoryMib > imp.memoryMib
       ? null
-      : context.templates?.find({ vcpus: imp.vcpus, memoryMib: imp.memoryMib });
+      : context.templates?.requestTemplate({ vcpus: imp.vcpus, memoryMib: imp.memoryMib });
 
   // a disk that fails is the create's failure, not the template's
   const disk = { isFailed: false };
@@ -106,7 +106,7 @@ export async function startColdVm(
       }
 
       context.log(
-        `impd: ${imp.name}: boot template ${template.key.slice(0, 12)} failed, booting the kernel: ${readErrorMessage(error)}`,
+        `impd: ${imp.name}: boot template ${template.key.slice(0, 12)} failed, booting the kernel: ${getErrorMessage(error)}`,
       );
 
       // a failure of the imp's own (its disk, its claim) leaves the template

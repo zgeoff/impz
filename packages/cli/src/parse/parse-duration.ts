@@ -1,4 +1,10 @@
-const UNIT_SECONDS: Readonly<Record<string, number>> = { s: 1, m: 60, h: 3600, d: 86_400 };
+// keyed by the unit letter a user types
+const UNIT_SECONDS: ReadonlyMap<string, number> = new Map([
+  ['s', 1],
+  ['m', 60],
+  ['h', 3600],
+  ['d', 86_400],
+]);
 
 // `90`, `90s`, `15m`, `2h`, `1d` → seconds
 export function parseDuration(text: string): number {
@@ -10,5 +16,5 @@ export function parseDuration(text: string): number {
     throw new Error(`not a duration: ${text} (try 90s, 15m, 2h)`);
   }
 
-  return Number(amount) * (UNIT_SECONDS[unit] ?? 1);
+  return Number(amount) * (UNIT_SECONDS.get(unit) ?? 1);
 }

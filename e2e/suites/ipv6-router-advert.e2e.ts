@@ -19,7 +19,7 @@ import {
 } from '../lib/ipv6-topology';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // A guest's router advertisement (docs/architecture/network/networking.md#ipv6), on
@@ -34,7 +34,7 @@ async function setupTest() {
   const client = await createInstanceClient();
 
   return {
-    prefix: readSuitePrefix('ipv6'),
+    prefix: getSuitePrefix('ipv6'),
     stack,
     client,
     plan: buildV6Plan(instance.portOffset),

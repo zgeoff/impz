@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 export interface CountTreeBytesDeps {
   // the real listing by default; tests list a directory too wide to make
-  readonly readDir?: (dir: string) => Promise<Dirent[]>;
+  readonly readDir?: (directory: string) => Promise<Dirent[]>;
 }
 
 // The disk a tree's files take, less the 512-byte dnode slot ZFS shows in a
@@ -18,20 +18,22 @@ export async function countTreeBytes(root: string, deps: CountTreeBytesDeps = {}
   const dirs = [root];
 
   // off the event loop, one directory's entries at a time
-  for (let dir = dirs.pop(); dir !== undefined; dir = dirs.pop()) {
-    const entries = await readEntries(readDir, dir);
+  for (let directory = dirs.pop(); directory !== undefined; directory = dirs.pop()) {
+    const entries = await readEntries(readDir, directory);
 
     // one at a time, as a spread of a wide directory's subdirectories passes
     // the engine's argument limit
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        dirs.push(join(dir, entry.name));
+        dirs.push(join(directory, entry.name));
       }
     }
 
     const files = entries.filter((entry) => entry.isFile());
 
-    const stats = await Promise.all(files.map((entry) => readFileStats(join(dir, entry.name))));
+    const stats = await Promise.all(
+      files.map((entry) => readFileStats(join(directory, entry.name))),
+    );
 
     for (const stat of stats) {
       if (stat !== undefined) {
@@ -43,17 +45,17 @@ export async function countTreeBytes(root: string, deps: CountTreeBytesDeps = {}
   return [...inodes.values()].reduce((sum, bytes) => sum + bytes, 0);
 }
 
-function readDirEntries(dir: string): Promise<Dirent[]> {
-  return readdir(dir, { withFileTypes: true });
+function readDirEntries(directory: string): Promise<Dirent[]> {
+  return readdir(directory, { withFileTypes: true });
 }
 
 // a directory gone since its listing, or never made, holds nothing
 async function readEntries(
-  readDir: (dir: string) => Promise<Dirent[]>,
-  dir: string,
+  readDir: (directoryPath: string) => Promise<Dirent[]>,
+  directory: string,
 ): Promise<Dirent[]> {
   try {
-    return await readDir(dir);
+    return await readDir(directory);
   } catch (error) {
     if (isMissing(error)) {
       return [];
@@ -61,6 +63,10 @@ async function readEntries(
 
     throw error;
   }
+}
+
+function isMissing(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
 
 // a file gone since its listing counts nothing
@@ -74,8 +80,4 @@ async function readFileStats(path: string): Promise<Stats | undefined> {
 
     throw error;
   }
-}
-
-function isMissing(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }

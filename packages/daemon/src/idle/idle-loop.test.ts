@@ -3,7 +3,7 @@ import { buildMockLeaseRecord } from '../../testing/imps/build-mock-lease-record
 import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../testing/start-test-impd';
 import { createImage } from '../db/images';
-import { findImpByName, updateImpActivity } from '../db/imps';
+import { readImpByName, updateImpActivity } from '../db/imps';
 import { writeLease } from '../db/leases';
 import { buildImagePaths } from '../storage/data-layout';
 import { createIdleLoop } from './idle-loop';
@@ -45,7 +45,7 @@ test('it holds the imp until the end of its earlier lease once the later lease i
 
   await ctx.impd.imps.releaseLease('dev', { principal: 'token:a', display: 'a' }, 'late');
 
-  const held = await findImpByName(ctx.db, 'dev');
+  const held = await readImpByName(ctx.db, 'dev');
 
   expect(held?.holdUntil).toStrictEqual(new Date(at + 60_000));
 });
@@ -126,7 +126,7 @@ test('it keeps an idle imp awake while the earlier of its leases runs', async ()
 
   await idle.runCheck();
 
-  const checked = await findImpByName(ctx.db, 'dev');
+  const checked = await readImpByName(ctx.db, 'dev');
 
   expect(checked?.state).toBe('running');
 });
@@ -175,7 +175,7 @@ test('it sleeps an idle imp once the earlier of its leases has ended', async () 
 
   await idle.runCheck();
 
-  const checked = await findImpByName(ctx.db, 'dev');
+  const checked = await readImpByName(ctx.db, 'dev');
 
   expect(checked?.state).toBe('sleeping');
 });

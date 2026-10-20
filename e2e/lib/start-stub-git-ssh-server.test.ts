@@ -7,12 +7,12 @@ import { runCommand } from './instance';
 import { startStubGitSshServer } from './start-stub-git-ssh-server';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-git-ssh-test-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-git-ssh-test-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   // a commit to push, made the way a user's checkout would hold one
-  const work = join(dir, 'work');
+  const work = join(directory, 'work');
 
   const gitEnv = {
     GIT_AUTHOR_NAME: 'e2e',
@@ -30,20 +30,29 @@ async function setupTest() {
 
   const head = await runGitCommand(['git', '-C', work, 'rev-parse', 'main'], { env: gitEnv });
 
-  return { dir, work, gitEnv, head: head.stdout.trim() };
+  return { directoryPath: directory, work, gitEnv, head: head.stdout.trim() };
 }
 
 test('it lands a push signed by the key it allows, from a client that checks its host key', async () => {
   const ctx = await setupTest();
 
-  await runCommand(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', join(ctx.dir, 'laptop')]);
+  await runCommand([
+    'ssh-keygen',
+    '-q',
+    '-t',
+    'ed25519',
+    '-N',
+    '',
+    '-f',
+    join(ctx.directoryPath, 'laptop'),
+  ]);
 
-  const allowed = await readFile(join(ctx.dir, 'laptop.pub'), 'utf8');
-  const server = await startStubGitSshServer('127.0.0.1', ctx.dir, allowed);
+  const allowed = await readFile(join(ctx.directoryPath, 'laptop.pub'), 'utf8');
+  const server = await startStubGitSshServer('127.0.0.1', ctx.directoryPath, allowed);
 
   onTestFinished(() => server.stop());
 
-  const knownHosts = join(ctx.dir, 'known_hosts');
+  const knownHosts = join(ctx.directoryPath, 'known_hosts');
 
   await writeFile(knownHosts, `[127.0.0.1]:${String(server.port)} ${server.hostKey}\n`);
 
@@ -61,7 +70,7 @@ test('it lands a push signed by the key it allows, from a client that checks its
       env: {
         ...ctx.gitEnv,
         SSH_AUTH_SOCK: '',
-        GIT_SSH_COMMAND: `ssh -F /dev/null -i ${join(ctx.dir, 'laptop')} -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o LogLevel=ERROR -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${knownHosts}`,
+        GIT_SSH_COMMAND: `ssh -F /dev/null -i ${join(ctx.directoryPath, 'laptop')} -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o LogLevel=ERROR -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${knownHosts}`,
       },
     },
   );
@@ -76,15 +85,34 @@ test('it lands a push signed by the key it allows, from a client that checks its
 test('it refuses a key other than the one it allows', async () => {
   const ctx = await setupTest();
 
-  await runCommand(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', join(ctx.dir, 'laptop')]);
-  await runCommand(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', join(ctx.dir, 'other')]);
+  await runCommand([
+    'ssh-keygen',
+    '-q',
+    '-t',
+    'ed25519',
+    '-N',
+    '',
+    '-f',
+    join(ctx.directoryPath, 'laptop'),
+  ]);
 
-  const allowed = await readFile(join(ctx.dir, 'laptop.pub'), 'utf8');
-  const server = await startStubGitSshServer('127.0.0.1', ctx.dir, allowed);
+  await runCommand([
+    'ssh-keygen',
+    '-q',
+    '-t',
+    'ed25519',
+    '-N',
+    '',
+    '-f',
+    join(ctx.directoryPath, 'other'),
+  ]);
+
+  const allowed = await readFile(join(ctx.directoryPath, 'laptop.pub'), 'utf8');
+  const server = await startStubGitSshServer('127.0.0.1', ctx.directoryPath, allowed);
 
   onTestFinished(() => server.stop());
 
-  const knownHosts = join(ctx.dir, 'known_hosts');
+  const knownHosts = join(ctx.directoryPath, 'known_hosts');
 
   await writeFile(knownHosts, `[127.0.0.1]:${String(server.port)} ${server.hostKey}\n`);
 
@@ -102,7 +130,7 @@ test('it refuses a key other than the one it allows', async () => {
       env: {
         ...ctx.gitEnv,
         SSH_AUTH_SOCK: '',
-        GIT_SSH_COMMAND: `ssh -F /dev/null -i ${join(ctx.dir, 'other')} -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o LogLevel=ERROR -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${knownHosts}`,
+        GIT_SSH_COMMAND: `ssh -F /dev/null -i ${join(ctx.directoryPath, 'other')} -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o LogLevel=ERROR -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${knownHosts}`,
       },
     },
   );
@@ -126,14 +154,23 @@ test('it refuses a key other than the one it allows', async () => {
 test('it refuses a command other than a push to repo.git', async () => {
   const ctx = await setupTest();
 
-  await runCommand(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', join(ctx.dir, 'laptop')]);
+  await runCommand([
+    'ssh-keygen',
+    '-q',
+    '-t',
+    'ed25519',
+    '-N',
+    '',
+    '-f',
+    join(ctx.directoryPath, 'laptop'),
+  ]);
 
-  const allowed = await readFile(join(ctx.dir, 'laptop.pub'), 'utf8');
-  const server = await startStubGitSshServer('127.0.0.1', ctx.dir, allowed);
+  const allowed = await readFile(join(ctx.directoryPath, 'laptop.pub'), 'utf8');
+  const server = await startStubGitSshServer('127.0.0.1', ctx.directoryPath, allowed);
 
   onTestFinished(() => server.stop());
 
-  const knownHosts = join(ctx.dir, 'known_hosts');
+  const knownHosts = join(ctx.directoryPath, 'known_hosts');
 
   await writeFile(knownHosts, `[127.0.0.1]:${String(server.port)} ${server.hostKey}\n`);
 
@@ -143,7 +180,7 @@ test('it refuses a command other than a push to repo.git', async () => {
       '-F',
       '/dev/null',
       '-i',
-      join(ctx.dir, 'laptop'),
+      join(ctx.directoryPath, 'laptop'),
       '-o',
       'IdentitiesOnly=yes',
       '-o',

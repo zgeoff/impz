@@ -11,9 +11,9 @@ import { startTestImpd } from '../../testing/start-test-impd';
 import { listApiCalls } from '../db/api-audit';
 import { createForkGrants } from '../db/create-fork-grants';
 import { createImage } from '../db/images';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import { listTokenRecords } from '../db/tokens';
-import { createEd25519Key } from '../ssh/host-key';
+import { generateEd25519Key } from '../ssh/host-key';
 import { buildImagePaths } from '../storage/data-layout';
 import { checkAccess, findAccess } from './access-policy';
 
@@ -1443,7 +1443,7 @@ test('it keeps an unchanged grant usable through sleep, wake and a checkpoint re
   await ctx.client.imps.wake({ name: 'dev-a' });
   await ctx.client.checkpoints.restore({ name: 'dev-a', checkpoint: checkpoint.id });
 
-  const imp = await findImpByName(ctx.db, 'dev-a');
+  const imp = await readImpByName(ctx.db, 'dev-a');
 
   invariant(imp);
 
@@ -1464,7 +1464,7 @@ test('it keeps a revoke made after the checkpoint through its restore', async ()
   await ctx.client.grants.delete({ name: 'dev-a', secret: 'gh' });
   await ctx.client.checkpoints.restore({ name: 'dev-a', checkpoint: checkpoint.id });
 
-  const imp = await findImpByName(ctx.db, 'dev-a');
+  const imp = await readImpByName(ctx.db, 'dev-a');
 
   invariant(imp);
 
@@ -1493,7 +1493,7 @@ test('it keeps a rebind made after the checkpoint through its restore', async ()
 
   await ctx.client.checkpoints.restore({ name: 'dev-a', checkpoint: checkpoint.id });
 
-  const imp = await findImpByName(ctx.db, 'dev-a');
+  const imp = await readImpByName(ctx.db, 'dev-a');
 
   invariant(imp);
 
@@ -1540,7 +1540,7 @@ test.each([['imps.fork'], ['moves.prepare'], ['moves.send'], ['moves.resume']])(
 
     await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
-    const key = createEd25519Key().public;
+    const key = generateEd25519Key().public;
     const parsed = utils.parseKey(key);
 
     if (parsed instanceof Error) {
@@ -1948,8 +1948,8 @@ test('it copies to a listed caller’s fork the secrets on its list, and names t
   });
 
   const [token] = await listTokenRecords(ctx.db);
-  const from = await findImpByName(ctx.db, 'dev-a');
-  const to = await findImpByName(ctx.db, 'dev-b');
+  const from = await readImpByName(ctx.db, 'dev-a');
+  const to = await readImpByName(ctx.db, 'dev-b');
 
   invariant(token);
   invariant(from);
@@ -2004,8 +2004,8 @@ test('it copies nothing of a secret whose list entry is from before a rebind', a
 
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
 
-  const from = await findImpByName(ctx.db, 'dev-a');
-  const to = await findImpByName(ctx.db, 'dev-b');
+  const from = await readImpByName(ctx.db, 'dev-a');
+  const to = await readImpByName(ctx.db, 'dev-b');
 
   invariant(from);
   invariant(to);
@@ -2050,8 +2050,8 @@ test('it copies no grant for a token removed after the access check', async () =
 
   await ctx.client.tokens.delete({ name: 'agent' });
 
-  const from = await findImpByName(ctx.db, 'dev-a');
-  const to = await findImpByName(ctx.db, 'dev-b');
+  const from = await readImpByName(ctx.db, 'dev-a');
+  const to = await readImpByName(ctx.db, 'dev-b');
 
   invariant(from);
   invariant(to);
@@ -2094,8 +2094,8 @@ test('it copies nothing of a secret taken off the list after the access check', 
   await ctx.client.tokens.update({ name: 'agent', grantable: ['npm'] });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
 
-  const from = await findImpByName(ctx.db, 'dev-a');
-  const to = await findImpByName(ctx.db, 'dev-b');
+  const from = await readImpByName(ctx.db, 'dev-a');
+  const to = await readImpByName(ctx.db, 'dev-b');
 
   invariant(from);
   invariant(to);
@@ -2149,8 +2149,8 @@ test.each([
     });
 
     const [token] = await listTokenRecords(ctx.db);
-    const from = await findImpByName(ctx.db, 'dev-a');
-    const to = await findImpByName(ctx.db, 'dev-b');
+    const from = await readImpByName(ctx.db, 'dev-a');
+    const to = await readImpByName(ctx.db, 'dev-b');
 
     invariant(token);
     invariant(from);

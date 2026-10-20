@@ -7,8 +7,8 @@ import type { Config } from '../config';
 import {
   countImageDigestUses,
   createImage,
-  findImageById,
-  findImageByName,
+  readImageById,
+  readImageByName,
   updateImage,
 } from '../db/images';
 import type { ImageRecord } from '../db/images';
@@ -58,10 +58,10 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
   });
 
   // the source image's docker config, for a backup's manifest
-  const writeConfig = async (imageId: string, dir: string): Promise<void> => {
-    const image = await findImageById(deps.db, imageId);
+  const writeConfig = async (imageId: string, directory: string): Promise<void> => {
+    const image = await readImageById(deps.db, imageId);
 
-    const target = join(dir, 'config.json');
+    const target = join(directory, 'config.json');
 
     const config =
       image === undefined ? undefined : buildImagePaths(deps.config.dataDir, image.digest).config;
@@ -129,7 +129,7 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
             );
           }
 
-          const existing = await findImageByName(deps.db, name);
+          const existing = await readImageByName(deps.db, name);
 
           // `impz image add` over a template, or this over a docker image,
           // would change what the name is
@@ -146,7 +146,7 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
 
           await storage.createImageFromImp(digest, imp.id, {
             hold: (clone) => withConsistentDisk(imp, 'template', clone),
-            write: (dir) => writeConfig(imp.imageId, dir),
+            write: (directory) => writeConfig(imp.imageId, directory),
           });
 
           const rootfs = buildImagePaths(deps.config.dataDir, digest).rootfs;
@@ -165,9 +165,9 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
 
           await removeReplaced(existing);
 
-          const ms = Math.round(performance.now() - started);
+          const durationMs = Math.round(performance.now() - started);
 
-          log(`impd: ${imp.name}: template ${name} in ${String(ms)}ms`);
+          log(`impd: ${imp.name}: template ${name} in ${String(durationMs)}ms`);
 
           return image;
         }),

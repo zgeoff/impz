@@ -1,13 +1,5 @@
 import type { CommandResult } from '../../src/process/run-command';
 
-// /proc/self/mounts escapes a space, a tab, a newline and a backslash in octal
-function encodeMountPath(path: string): string {
-  return path.replaceAll(
-    /[ \t\n\\]/gu,
-    (char) => `\\${char.codePointAt(0)?.toString(8).padStart(3, '0') ?? ''}`,
-  );
-}
-
 // `mount` and `umount` as the jailer runs them, over a mount table in memory
 // that /proc/self/mounts reads; a bind mounts its last argument, and exit 32
 // is util-linux's failure code
@@ -93,4 +85,12 @@ export function buildStubMounts() {
       failing.set(target, stderr);
     },
   };
+}
+
+// /proc/self/mounts escapes a space, a tab, a newline and a backslash in octal
+function encodeMountPath(path: string): string {
+  return path.replaceAll(
+    /[ \t\n\\]/gu,
+    (char) => `\\${char.codePointAt(0)?.toString(8).padStart(3, '0') ?? ''}`,
+  );
 }

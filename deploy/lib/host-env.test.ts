@@ -8,14 +8,14 @@ import { runSourcedFunction } from '../../scripts/test-utils/run-sourced-functio
 // host-env.sh's functions, sourced as upgrade.sh and the NixOS module source them;
 // deploy/bootstrap.test.ts tests bootstrap.sh's own.
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-host-env-lib-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-host-env-lib-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   return {
-    dir,
+    directoryPath: directory,
   };
 }
 
@@ -125,7 +125,7 @@ test.skipIf(
   const script = new URL('host-env.sh', import.meta.url).pathname;
 
   writeFileSync(
-    join(ctx.dir, 'firewall.nft'),
+    join(ctx.directoryPath, 'firewall.nft'),
     runSourcedFunction({ script, fn: 'render_firewall', args: ['22'] }).stdout,
   );
 
@@ -135,7 +135,7 @@ test.skipIf(
     'nft',
     '-c',
     '-f',
-    join(ctx.dir, 'firewall.nft'),
+    join(ctx.directoryPath, 'firewall.nft'),
   ]);
 
   expect(result.stderr.toString()).toBe('');
@@ -233,7 +233,7 @@ test.each([
 
 test('#network_others names the containers on the network other than imp-host', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', 'echo "imp-host pod-a pod-b "');
+  const docker = createStubBin(ctx.directoryPath, 'docker', 'echo "imp-host pod-a pod-b "');
 
   const result = runSourcedFunction({
     script: new URL('host-env.sh', import.meta.url).pathname,
@@ -248,7 +248,7 @@ test("#host_addresses lists the host's global addresses with their prefixes, com
   const ctx = setupTest();
 
   const ip = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'ip',
     String.raw`printf '%s\n' \
       '2: eth0    inet 192.0.2.10/24 brd 192.0.2.255 scope global eth0' \
@@ -272,7 +272,7 @@ test("#host_addresses lists the host's global addresses with their prefixes, com
 
 test('#create_host_network creates the network with the arguments the unit uses', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker');
+  const docker = createStubBin(ctx.directoryPath, 'docker');
 
   runSourcedFunction({
     script: new URL('host-env.sh', import.meta.url).pathname,
@@ -311,13 +311,13 @@ test('#trim_lines takes off a trailing CR, the blanks around a line and the quot
 test('#trim_lines reads a file it is given', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_A="1"\r\n');
+  writeFileSync(join(ctx.directoryPath, 'imp-host.env'), 'IMP_A="1"\r\n');
 
   expect(
     runSourcedFunction({
       script: new URL('host-env.sh', import.meta.url).pathname,
       fn: 'trim_lines',
-      args: [join(ctx.dir, 'imp-host.env')],
+      args: [join(ctx.directoryPath, 'imp-host.env')],
     }),
   ).toStrictEqual({ exitCode: 0, stdout: 'IMP_A=1\n', stderr: '' });
 });
@@ -329,7 +329,7 @@ test('#trim_lines prints nothing for a file that is missing', () => {
     runSourcedFunction({
       script: new URL('host-env.sh', import.meta.url).pathname,
       fn: 'trim_lines',
-      args: [join(ctx.dir, 'missing.env')],
+      args: [join(ctx.directoryPath, 'missing.env')],
     }),
   ).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 });
@@ -355,16 +355,19 @@ test('#strip_markers takes out the release-please marker lines only', () => {
 test('#check_env_image refuses an env file whose last IMP_HOST_IMAGE is empty, naming the file', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_PORT=7070\nIMP_HOST_IMAGE=\n');
+  writeFileSync(join(ctx.directoryPath, 'imp-host.env'), 'IMP_PORT=7070\nIMP_HOST_IMAGE=\n');
 
   const result = runSourcedFunction({
     script: new URL('host-env.sh', import.meta.url).pathname,
     fn: 'check_env_image',
-    args: [join(ctx.dir, 'imp-host.env')],
+    args: [join(ctx.directoryPath, 'imp-host.env')],
   });
 
   expect(result.exitCode).toBe(1);
-  expect(result.stderr).toStartWith(`${join(ctx.dir, 'imp-host.env')} sets IMP_HOST_IMAGE= empty`);
+
+  expect(result.stderr).toStartWith(
+    `${join(ctx.directoryPath, 'imp-host.env')} sets IMP_HOST_IMAGE= empty`,
+  );
 });
 
 test.each([
@@ -375,12 +378,12 @@ test.each([
 ])('#check_env_image answers the env file %p with exit %d', (env, exitCode) => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), env);
+  writeFileSync(join(ctx.directoryPath, 'imp-host.env'), env);
 
   const result = runSourcedFunction({
     script: new URL('host-env.sh', import.meta.url).pathname,
     fn: 'check_env_image',
-    args: [join(ctx.dir, 'imp-host.env')],
+    args: [join(ctx.directoryPath, 'imp-host.env')],
   });
 
   expect(result.exitCode).toBe(exitCode);
@@ -393,7 +396,7 @@ test('#check_env_image accepts a file that is missing', () => {
     runSourcedFunction({
       script: new URL('host-env.sh', import.meta.url).pathname,
       fn: 'check_env_image',
-      args: [join(ctx.dir, 'missing.env')],
+      args: [join(ctx.directoryPath, 'missing.env')],
     }),
   ).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 });
@@ -404,10 +407,10 @@ test('#write_file writes the content and a newline with the mode it is given', (
   const result = runSourcedFunction({
     script: new URL('host-env.sh', import.meta.url).pathname,
     fn: 'write_file',
-    args: [join(ctx.dir, 'etc/imp/imp-host.env'), '600', 'IMP_A=1'],
+    args: [join(ctx.directoryPath, 'etc/imp/imp-host.env'), '600', 'IMP_A=1'],
   });
 
   expect(result.exitCode).toBe(0);
-  expect(readFileSync(join(ctx.dir, 'etc/imp/imp-host.env'), 'utf8')).toBe('IMP_A=1\n');
-  expect(statSync(join(ctx.dir, 'etc/imp/imp-host.env')).mode & 0o777).toBe(0o600);
+  expect(readFileSync(join(ctx.directoryPath, 'etc/imp/imp-host.env'), 'utf8')).toBe('IMP_A=1\n');
+  expect(statSync(join(ctx.directoryPath, 'etc/imp/imp-host.env')).mode & 0o777).toBe(0o600);
 });

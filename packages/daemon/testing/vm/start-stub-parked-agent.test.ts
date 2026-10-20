@@ -8,19 +8,19 @@ import { sendClaim, sendPing } from '../../src/agent-client/agent-requests';
 import { startStubParkedAgent } from './start-stub-parked-agent';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-parked-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-parked-agent-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it answers a ping as a parked template guest a minute old', async () => {
   const ctx = await setupTest();
 
-  await startStubParkedAgent(join(ctx.dir, 'v.sock'));
+  await startStubParkedAgent(join(ctx.directoryPath, 'v.sock'));
 
-  const ping = await sendPing(join(ctx.dir, 'v.sock'));
+  const ping = await sendPing(join(ctx.directoryPath, 'v.sock'));
 
   expect(ping).toStrictEqual(
     create(PingSchema, { ok: true, version: '0.1.0', uptimeMs: 60_000, stage: 'template' }),
@@ -30,9 +30,9 @@ test('it answers a ping as a parked template guest a minute old', async () => {
 test('it answers a ping as a booted imp once claimed', async () => {
   const ctx = await setupTest();
 
-  await startStubParkedAgent(join(ctx.dir, 'v.sock'));
+  await startStubParkedAgent(join(ctx.directoryPath, 'v.sock'));
 
-  await sendClaim(join(ctx.dir, 'v.sock'), {
+  await sendClaim(join(ctx.directoryPath, 'v.sock'), {
     id: 'i1',
     hostname: 'dev',
     ip: '10.66.0.2/30',
@@ -47,7 +47,7 @@ test('it answers a ping as a booted imp once claimed', async () => {
     isIdentityReset: false,
   });
 
-  const ping = await sendPing(join(ctx.dir, 'v.sock'));
+  const ping = await sendPing(join(ctx.directoryPath, 'v.sock'));
 
   expect(ping.stage).toBeUndefined();
 });
@@ -55,9 +55,9 @@ test('it answers a ping as a booted imp once claimed', async () => {
 test('it reports the steps of its boot after the claim once claimed', async () => {
   const ctx = await setupTest();
 
-  await startStubParkedAgent(join(ctx.dir, 'v.sock'));
+  await startStubParkedAgent(join(ctx.directoryPath, 'v.sock'));
 
-  await sendClaim(join(ctx.dir, 'v.sock'), {
+  await sendClaim(join(ctx.directoryPath, 'v.sock'), {
     id: 'i1',
     hostname: 'dev',
     ip: '10.66.0.2/30',
@@ -72,11 +72,13 @@ test('it reports the steps of its boot after the claim once claimed', async () =
     isIdentityReset: false,
   });
 
-  const ping = await sendPing(join(ctx.dir, 'v.sock'));
+  const ping = await sendPing(join(ctx.directoryPath, 'v.sock'));
 
+  // oxlint-disable zgeoff/no-abbreviated-names -- `ms` is BootStep's field in proto/
   expect(ping.bootSteps).toStrictEqual([
     create(BootStepSchema, { name: 'claim', ms: 3 }),
     create(BootStepSchema, { name: 'mount', ms: 40 }),
     create(BootStepSchema, { name: 'ready', ms: 2 }),
   ]);
+  // oxlint-enable zgeoff/no-abbreviated-names
 });

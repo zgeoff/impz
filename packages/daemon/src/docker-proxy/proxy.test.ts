@@ -16,11 +16,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'docker-proxy-'));
+  const directory = await mkdtemp(join(tmpdir(), 'docker-proxy-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  const engine = startStubDockerEngine({ dir });
+  const engine = startStubDockerEngine({ directoryPath: directory });
 
   stack.defer(() => engine.stop());
 
@@ -29,7 +29,7 @@ async function setupTest() {
   // imp-docker-proxy on a unix socket as its main serves it; the returned
   // send carries a request to it over a real connection
   const startProxy = (options: Readonly<DockerProxyOptions>) => {
-    const socket = join(dir, 'proxy.sock');
+    const socket = join(directory, 'proxy.sock');
 
     // Bun's types leave idleTimeout off unix servers, but it applies there too
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
@@ -54,7 +54,7 @@ async function setupTest() {
   };
 
   return {
-    dir,
+    directoryPath: directory,
     engine,
     logged,
     log: (message: string) => {
@@ -504,11 +504,11 @@ test('it streams a build context whole to the engine as the build body', async (
     log: ctx.log,
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   const context = new Uint8Array(2 * 1024 ** 2).fill(7);
 
@@ -543,11 +543,11 @@ test('it forwards no client header on a build', async () => {
     log: ctx.log,
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   await proxy(
     new Request(`http://docker/v1.55/build?${query.toString()}`, {
@@ -582,11 +582,11 @@ test('it sends a build without a Content-Type to the engine as a tar', async () 
     log: ctx.log,
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   const body = new Blob([new Uint8Array(512)]).stream();
 
@@ -619,11 +619,11 @@ test.each([
     log: ctx.log,
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   const response = await proxy(
     new Request(`http://docker/v1.55/build?${query.toString()}`, {
@@ -659,16 +659,20 @@ test('it refuses a build with a form body as fetch encodes a URLSearchParams', a
     log: ctx.log,
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   const response = await proxy(
     new Request(`http://docker/v1.55/build?${query.toString()}`, {
       method: 'POST',
-      body: new URLSearchParams({ networkmode: 'host', t: 'evil:latest', version: '1' }),
+      body: new URLSearchParams([
+        ['networkmode', 'host'],
+        ['t', 'evil:latest'],
+        ['version', '1'],
+      ]),
     }),
   );
 
@@ -697,11 +701,11 @@ test('it refuses a build with a multipart form body as fetch encodes a FormData'
     log: ctx.log,
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   const form = new FormData();
 
@@ -760,11 +764,11 @@ test('it ends a build on the engine when its client goes', async () => {
     return new Response(null, { status: 499 });
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   const client = new AbortController();
 
@@ -802,11 +806,11 @@ test('it cuts off a chunked build context over the limit', async () => {
     log: ctx.log,
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   const chunk = new Uint8Array(256 * 1024);
 
@@ -846,11 +850,11 @@ test('it answers a chunked build context over the limit with a 413 that names th
     log: ctx.log,
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   const chunk = new Uint8Array(256 * 1024);
 
@@ -1020,11 +1024,11 @@ test('it holds a build, a pull and an export past the control deadline that ends
     return null;
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   const long = [
     proxy(
@@ -1068,7 +1072,7 @@ test('it passes on a pull and an export that stay silent past Bun’s idle limit
 
   onTestFinished(() => stack.disposeAsync());
 
-  const socket = join(ctx.dir, 'silent-engine.sock');
+  const socket = join(ctx.directoryPath, 'silent-engine.sock');
 
   // the export's ownership inspect answers at once; the pull and the export
   // stay silent
@@ -1182,7 +1186,7 @@ test('it answers 502 with the engine failure when the engine is unreachable', as
   const ctx = await setupTest();
 
   const proxy = ctx.startProxy({
-    upstreamSocket: join(ctx.dir, 'no-engine.sock'),
+    upstreamSocket: join(ctx.directoryPath, 'no-engine.sock'),
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
     builderImage: null,
@@ -1328,11 +1332,11 @@ test('it refuses every build under imp isolation', async () => {
     log: ctx.log,
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   const response = await proxy(
     new Request(`http://docker/v1.55/build?${query.toString()}`, {
@@ -1488,12 +1492,12 @@ test('it refuses a build with a param that moves its context', async () => {
     log: ctx.log,
   });
 
-  const query = new URLSearchParams({
-    t: 'imp/x:latest',
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-    remote: 'https://x',
-  });
+  const query = new URLSearchParams([
+    ['t', 'imp/x:latest'],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+    ['remote', 'https://x'],
+  ]);
 
   const response = await proxy(
     new Request(`http://docker/v1.55/build?${query.toString()}`, { method: 'POST' }),

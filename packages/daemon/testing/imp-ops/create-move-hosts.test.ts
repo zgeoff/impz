@@ -1,10 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
-import { findImageByName } from '../../src/db/images';
+import { readImageByName } from '../../src/db/images';
 import { MOVE_PATHS } from '../../src/moves/move-header';
 import { buildImagePaths } from '../../src/storage/data-layout';
 import { buildStubZfsStorage } from '../vm/build-stub-zfs-storage';
-import { buildStubDroppedCommit } from './build-stub-dropped-commit';
 import {
   TARGET_URL,
   createMoveHosts,
@@ -12,6 +11,7 @@ import {
   createZfsUbuntuImage,
   setupMoveHosts,
 } from './create-move-hosts';
+import { makeStubDroppedCommit } from './make-stub-dropped-commit';
 
 test('#setupMoveHosts moves a stopped imp from the source to the target', async () => {
   const hosts = await setupMoveHosts();
@@ -31,7 +31,7 @@ test('#setupMoveHosts moves a stopped imp from the source to the target', async 
 });
 
 test('#setupMoveHosts records one commit report for a move resumed on a reissued ticket', async () => {
-  const hosts = await setupMoveHosts({ hook: buildStubDroppedCommit() });
+  const hosts = await setupMoveHosts({ hook: makeStubDroppedCommit() });
 
   await createUbuntuImage(hosts.source);
   await createUbuntuImage(hosts.target);
@@ -175,7 +175,7 @@ test('#createUbuntuImage makes the ubuntu image with the config a create reads',
 
   await createUbuntuImage(hosts.source);
 
-  const image = await findImageByName(hosts.source.db, 'ubuntu');
+  const image = await readImageByName(hosts.source.db, 'ubuntu');
 
   expect(image?.digest).toBe('sha256:ubuntu');
 
@@ -191,7 +191,7 @@ test('#createZfsUbuntuImage makes the ubuntu image as a dataset on the pool', as
 
   await createZfsUbuntuImage(hosts.source);
 
-  const image = await findImageByName(hosts.source.db, 'ubuntu');
+  const image = await readImageByName(hosts.source.db, 'ubuntu');
 
   expect(image?.digest).toBe('sha256:ubuntu');
   expect(zfs.readPool().listDatasets()).toContain('tank/imp/images/ubuntu');

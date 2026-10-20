@@ -19,7 +19,7 @@ interface KnownHostsDeps {
 }
 
 // the names impd answers to: loopback, the tailnet node's names and
-// addresses, and the domain; an address as readHostName spells it
+// addresses, and the domain; an address as findHostName spells it
 export function createKnownHosts(deps: Readonly<KnownHostsDeps>): KnownHosts {
   return {
     read: async () => {
@@ -34,7 +34,7 @@ export function createKnownHosts(deps: Readonly<KnownHostsDeps>): KnownHosts {
 }
 
 export function isAllowedAmbientRequest(request: Request, hosts: ReadonlySet<string>): boolean {
-  const host = readHostName(request.headers.get('host'));
+  const host = findHostName(request.headers.get('host'));
 
   if (host === null || !hosts.has(host)) {
     return false;
@@ -65,11 +65,11 @@ export function isAllowedAmbientRequest(request: Request, hosts: ReadonlySet<str
 function readAddressHost(ip: string): string | null {
   const host = ip.includes(':') ? `[${ip}]` : ip;
 
-  return readHostName(host);
+  return findHostName(host);
 }
 
 // the Host header without its port, lowercased; null when there is none
-function readHostName(header: string | null): string | null {
+function findHostName(header: string | null): string | null {
   if (header === null || header === '') {
     return null;
   }

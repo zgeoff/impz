@@ -35,49 +35,49 @@ test('it gives nothing to wipe for a data dir that does not exist', async () => 
 test('it wipes a data dir under the repo’s .data', async () => {
   const ctx = await setupTest();
 
-  const dir = join(ctx.repoRoot, '.data', 'dev');
+  const directory = join(ctx.repoRoot, '.data', 'dev');
 
-  await mkdir(dir);
+  await mkdir(directory);
 
   const target = await resolveWipeTarget({
-    path: dir,
+    path: directory,
     repoRoot: ctx.repoRoot,
     storageBackend: undefined,
     zfsRoot: undefined,
     run: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
   });
 
-  expect(target).toStrictEqual({ dir, zfs: null });
+  expect(target).toStrictEqual({ directory, zfs: null });
 });
 
 test('it wipes a data dir elsewhere that holds an imp.xfs', async () => {
   const ctx = await setupTest();
 
-  const dir = join(ctx.root, 'ci');
+  const directory = join(ctx.root, 'ci');
 
-  await mkdir(dir);
-  await writeFile(join(dir, 'imp.xfs'), '');
+  await mkdir(directory);
+  await writeFile(join(directory, 'imp.xfs'), '');
 
   const target = await resolveWipeTarget({
-    path: dir,
+    path: directory,
     repoRoot: ctx.repoRoot,
     storageBackend: undefined,
     zfsRoot: undefined,
     run: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
   });
 
-  expect(target).toStrictEqual({ dir, zfs: null });
+  expect(target).toStrictEqual({ directory, zfs: null });
 });
 
 test('it refuses a data dir elsewhere with no imp.xfs and no ZFS proof', async () => {
   const ctx = await setupTest();
 
-  const dir = join(ctx.root, 'home');
+  const directory = join(ctx.root, 'home');
 
-  await mkdir(dir);
+  await mkdir(directory);
 
   const attempt = resolveWipeTarget({
-    path: dir,
+    path: directory,
     repoRoot: ctx.repoRoot,
     storageBackend: 'zfs',
     zfsRoot: 'impbench7/imp',
@@ -86,24 +86,24 @@ test('it refuses a data dir elsewhere with no imp.xfs and no ZFS proof', async (
 
   await Promise.allSettled([attempt]);
 
-  expect(attempt).rejects.toThrow(`refusing to wipe ${dir}: it is not under`);
+  expect(attempt).rejects.toThrow(`refusing to wipe ${directory}: it is not under`);
 });
 
 test('it empties the proven ZFS root of a data dir outside the repo', async () => {
   const ctx = await setupTest();
 
-  const dir = join(ctx.root, 'data');
+  const directory = join(ctx.root, 'data');
   const vdev = join(ctx.root, 'bench.img');
 
-  await mkdir(dir);
+  await mkdir(directory);
 
   await writeFile(
-    join(dir, ZFS_OWNER_FILE),
+    join(directory, ZFS_OWNER_FILE),
     JSON.stringify({ pool: 'impbench7', root: 'impbench7/imp', vdev }),
   );
 
   const target = await resolveWipeTarget({
-    path: dir,
+    path: directory,
     repoRoot: ctx.repoRoot,
     storageBackend: 'zfs',
     zfsRoot: 'impbench7/imp',
@@ -111,7 +111,7 @@ test('it empties the proven ZFS root of a data dir outside the repo', async () =
   });
 
   expect(target).toStrictEqual({
-    dir,
+    directory,
     zfs: { pool: 'impbench7', root: 'impbench7/imp', vdev },
   });
 });
@@ -119,18 +119,18 @@ test('it empties the proven ZFS root of a data dir outside the repo', async () =
 test('it empties the proven ZFS root of a data dir under the repo’s .data too', async () => {
   const ctx = await setupTest();
 
-  const dir = join(ctx.repoRoot, '.data', 'zfs', 'data');
+  const directory = join(ctx.repoRoot, '.data', 'zfs', 'data');
   const vdev = join(ctx.repoRoot, '.data', 'zfs', 'bench.img');
 
-  await mkdir(dir, { recursive: true });
+  await mkdir(directory, { recursive: true });
 
   await writeFile(
-    join(dir, ZFS_OWNER_FILE),
+    join(directory, ZFS_OWNER_FILE),
     JSON.stringify({ pool: 'impbench7', root: 'impbench7/imp', vdev }),
   );
 
   const target = await resolveWipeTarget({
-    path: dir,
+    path: directory,
     repoRoot: ctx.repoRoot,
     storageBackend: 'zfs',
     zfsRoot: 'impbench7/imp',
@@ -138,7 +138,7 @@ test('it empties the proven ZFS root of a data dir under the repo’s .data too'
   });
 
   expect(target).toStrictEqual({
-    dir,
+    directory,
     zfs: { pool: 'impbench7', root: 'impbench7/imp', vdev },
   });
 });

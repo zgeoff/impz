@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Hash } from 'node:crypto';
 import { open } from 'node:fs/promises';
 import * as z from 'zod';
-import { findDataBlocks } from '../backup/find-data-blocks';
+import { readDataBlocks } from '../backup/read-data-blocks';
 import type { StreamedCommand } from '../process/run-stream';
 
 // The move stream's frames, as docs/architecture/storage/moves.md#the-stream lays
@@ -93,7 +93,7 @@ export async function* encodeFile(
     const hash = createHash('sha256');
     const buffer = Buffer.alloc(MOVE_BLOCK_BYTES);
 
-    for (const block of findDataBlocks(handle.fd, size, MOVE_BLOCK_BYTES)) {
+    for (const block of readDataBlocks(handle.fd, size, MOVE_BLOCK_BYTES)) {
       const offset = block * MOVE_BLOCK_BYTES;
       const length = Math.min(MOVE_BLOCK_BYTES, size - offset);
 
@@ -171,7 +171,7 @@ export async function countDataBytes(path: string): Promise<number> {
     const size = stat.size;
     let bytes = 0;
 
-    for (const block of findDataBlocks(handle.fd, size, MOVE_BLOCK_BYTES)) {
+    for (const block of readDataBlocks(handle.fd, size, MOVE_BLOCK_BYTES)) {
       bytes += Math.min(MOVE_BLOCK_BYTES, size - block * MOVE_BLOCK_BYTES);
     }
 

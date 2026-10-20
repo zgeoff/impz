@@ -3,8 +3,8 @@ import type { ImpEventDetail } from '@impz/api';
 import { sendActivity } from '../agent-client/agent-requests';
 import { sendServicesList } from '../agent-client/service-requests';
 import type { ImpStateChange } from '../db/update-imp-state';
+import { getErrorMessage } from '../get-error-message';
 import { shrinkGuest } from '../memory/shrink-guest';
-import { readErrorMessage } from '../read-error-message';
 import { toSeenSessions } from '../sessions/session-cache';
 import type { SeenSession } from '../sessions/session-cache';
 import { waitForGuestAge } from '../sleep/guest-age';
@@ -90,7 +90,7 @@ export function makeSleepImpVm(
 
       return pluggedMib;
     } catch (error) {
-      context.log(`impd: ${imp.name}: no shrink before the sleep: ${readErrorMessage(error)}`);
+      context.log(`impd: ${imp.name}: no shrink before the sleep: ${getErrorMessage(error)}`);
 
       return readPluggedMib(imp, paths);
     }
@@ -179,13 +179,13 @@ export function makeSleepImpVm(
         `impd: ${imp.name}: asleep in ${String(sleepMs)}ms (${reason})${waited}, ram ${String(ramMib)} MiB${plugged}, mem file ${String(readDiskMib(paths.memFile))} MiB on disk, ${formatTimings(timings)}`,
       );
     } catch (error) {
-      if (context.vms.isVmAlive(pid, paths)) {
+      if (context.vms.probeVmAlive(pid, paths)) {
         throw error;
       }
 
       // a snapshot's page cache counts against the memory limit
       const isOomKill = hasOomKill();
-      const message = readErrorMessage(error);
+      const message = getErrorMessage(error);
       const failure = isOomKill ? `${OOM_KILL_TRIGGER} (${message})` : message;
 
       context.log(`impd: ${imp.name}: sleep failed after firecracker stopped: ${failure}`);
@@ -262,6 +262,11 @@ export function makeSleepImpVm(
   return sleepImpVm;
 }
 
+// a sleeping imp has no client attached: the sleep closed every connection
+function setDetached(session: SeenSession): SeenSession {
+  return { ...session, attached: false };
+}
+
 // allocated size: the mem file is sparse after --dig-holes
 function readDiskMib(path: string): number {
   try {
@@ -269,9 +274,4 @@ function readDiskMib(path: string): number {
   } catch {
     return 0;
   }
-}
-
-// a sleeping imp has no client attached: the sleep closed every connection
-function setDetached(session: SeenSession): SeenSession {
-  return { ...session, attached: false };
 }

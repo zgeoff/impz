@@ -12,17 +12,17 @@ export interface DockerBuildOptions {
   readonly dockerfile: string;
 
   // a context directory, or a context tar piped to `-` on stdin
-  readonly context: { readonly dir: string } | { readonly tarPath: string };
+  readonly context: { readonly directory: string } | { readonly tarPath: string };
 
   // where `-o type=local` exports the image's files
-  readonly dest: string;
+  readonly destination: string;
 }
 
 // Runs the real `docker buildx build` and exports the image's files to
 // dest; a FROM scratch image pulls nothing. Throws with docker's stderr when
 // the build fails.
 export function runDockerBuild(options: Readonly<DockerBuildOptions>): void {
-  const source = 'dir' in options.context ? options.context.dir : '-';
+  const source = 'directory' in options.context ? options.context.directory : '-';
   const stdin = 'tarPath' in options.context ? Bun.file(options.context.tarPath) : 'ignore';
 
   const argv = [
@@ -33,7 +33,7 @@ export function runDockerBuild(options: Readonly<DockerBuildOptions>): void {
     '-f',
     options.dockerfile,
     '-o',
-    `type=local,dest=${options.dest}`,
+    `type=local,dest=${options.destination}`,
     source,
   ];
 

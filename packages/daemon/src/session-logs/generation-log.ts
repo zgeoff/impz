@@ -9,10 +9,10 @@ import {
   AgentSessionNameSchema,
 } from '../agent-client/agent-ids';
 import type { StartTimer } from '../process/clock';
-import { createKeyedMutex } from '../process/keyed-mutex';
+import { buildKeyedMutex } from '../process/keyed-mutex';
 import { startRealTimer } from '../process/start-real-timer';
 import { writeFileDurablyAsync } from '../process/write-file-durably';
-import { readLogBounds } from './plan-log-read';
+import { getLogBounds } from './plan-log-read';
 import type { LogBounds, LogSegment } from './plan-log-read';
 
 // One generation's log (docs/architecture/guest/sessions.md#session-logs): segment
@@ -87,7 +87,7 @@ export interface GenerationLog {
 }
 
 export interface GenerationLogOptions {
-  readonly dir: string;
+  readonly directory: string;
 
   // a log keeps at most maxBytes of segments of segmentBytes each, so at
   // least maxBytes less one segment of its newest output
@@ -108,13 +108,13 @@ type StopReason = NonNullable<StoredMeta['stopped']>;
 
 type MetaChange = Readonly<Partial<Omit<StoredMeta, 'segments'>>>;
 
-export function findSegmentPath(dir: string, start: number): string {
-  return join(dir, `${String(start)}${SEGMENT_SUFFIX}`);
+export function getSegmentPath(directory: string, start: number): string {
+  return join(directory, `${String(start)}${SEGMENT_SUFFIX}`);
 }
 
 // The meta as written; null for a directory without a readable one.
-export function readGenerationMeta(dir: string): GenerationMeta | null {
-  const path = join(dir, META_FILE);
+export function readGenerationMeta(directory: string): GenerationMeta | null {
+  const path = join(directory, META_FILE);
 
   if (!existsSync(path)) {
     return null;
@@ -131,8 +131,8 @@ export function countLogBytes(meta: GenerationMeta): number {
   return meta.segments.reduce((sum, segment) => sum + segment.length, 0);
 }
 
-export function readGenerationBounds(meta: GenerationMeta): LogBounds {
-  return readLogBounds(meta.segments, meta.origin);
+export function getGenerationBounds(meta: GenerationMeta): LogBounds {
+  return getLogBounds(meta.segments, meta.origin);
 }
 
 // A new log for a generation impd has not logged before.
@@ -140,9 +140,9 @@ export async function createGenerationLog(
   options: GenerationLogOptions,
   identity: Readonly<Pick<StoredMeta, 'session' | 'executionGeneration' | 'bootId'>>,
 ): Promise<GenerationLog> {
-  await mkdir(options.dir, { recursive: true, mode: 0o700 });
+  await mkdir(options.directory, { recursive: true, mode: 0o700 });
 
-  const log = buildGenerationLog(options, {
+  const log = startGenerationLog(options, {
     version: 1,
     ...identity,
     startedAt: options.now(),
@@ -165,7 +165,7 @@ export async function loadGenerationLog(
   const kept: LogSegment[] = [];
 
   for (const segment of meta.segments) {
-    const path = findSegmentPath(options.dir, segment.start);
+    const path = getSegmentPath(options.directory, segment.start);
 
     const size = await readFileSize(path);
 
@@ -186,13 +186,13 @@ export async function loadGenerationLog(
 
   const named = new Set(kept.map((segment) => `${String(segment.start)}${SEGMENT_SUFFIX}`));
 
-  for (const file of readdirSync(options.dir)) {
+  for (const file of readdirSync(options.directory)) {
     if (file !== META_FILE && !named.has(file)) {
-      rmSync(join(options.dir, file), { force: true });
+      rmSync(join(options.directory, file), { force: true });
     }
   }
 
-  const log = buildGenerationLog(options, { ...meta, segments: kept });
+  const log = startGenerationLog(options, { ...meta, segments: kept });
 
   await log.commit();
 
@@ -225,7 +225,7 @@ async function stopQuietly(file: FileHandle): Promise<void> {
   }
 }
 
-function buildGenerationLog(options: GenerationLogOptions, initial: GenerationMeta): GenerationLog {
+function startGenerationLog(options: GenerationLogOptions, initial: GenerationMeta): GenerationLog {
   const meta: StoredMeta = {
     ...initial,
     segments: initial.segments.map((segment) => ({ ...segment })),
@@ -247,12 +247,12 @@ function buildGenerationLog(options: GenerationLogOptions, initial: GenerationMe
   };
 
   // every write waits for the one before it, under one key
-  const writes = createKeyedMutex();
+  const writes = buildKeyedMutex();
 
   const runInOrder = <T>(task: () => Promise<T>, fallback: T): Promise<T> =>
     writes.runExclusive(META_FILE, () => (state.abandoned ? Promise.resolve(fallback) : task()));
 
-  const readEnd = (): number => readLogBounds(meta.segments, meta.origin).logEnd;
+  const readEnd = (): number => getLogBounds(meta.segments, meta.origin).logEnd;
 
   const stopFile = async (): Promise<void> => {
     const file = state.file;
@@ -277,7 +277,7 @@ function buildGenerationLog(options: GenerationLogOptions, initial: GenerationMe
   const writeMeta = async (): Promise<void> => {
     await state.file?.datasync();
 
-    await writeFileDurablyAsync(join(options.dir, META_FILE), JSON.stringify(meta), {
+    await writeFileDurablyAsync(join(options.directory, META_FILE), JSON.stringify(meta), {
       mode: 0o600,
     });
   };
@@ -286,12 +286,13 @@ function buildGenerationLog(options: GenerationLogOptions, initial: GenerationMe
     try {
       await runInOrder(writeMeta, undefined);
     } catch (error) {
-      options.log(`impd: session log ${options.dir}: ${String(error)}`);
+      options.log(`impd: session log ${options.directory}: ${String(error)}`);
     }
   };
 
   const startTimer: StartTimer =
-    options.startTimer ?? ((fire, ms) => startRealTimer(fire, ms, { isUnref: true }));
+    options.startTimer ??
+    ((fire, durationMs) => startRealTimer(fire, durationMs, { isUnref: true }));
 
   const startCommitTimer = (): void => {
     if (state.cancelTimer !== null) {
@@ -322,7 +323,7 @@ function buildGenerationLog(options: GenerationLogOptions, initial: GenerationMe
     meta.segments.shift();
 
     await writeMeta();
-    await removeQuietly(findSegmentPath(options.dir, oldest.start));
+    await removeQuietly(getSegmentPath(options.directory, oldest.start));
 
     return true;
   };
@@ -332,7 +333,7 @@ function buildGenerationLog(options: GenerationLogOptions, initial: GenerationMe
 
     await options.requireRoom(options.segmentBytes);
 
-    const path = findSegmentPath(options.dir, start);
+    const path = getSegmentPath(options.directory, start);
 
     // a file the meta never counted is a crash's leftover
     await removeQuietly(path);

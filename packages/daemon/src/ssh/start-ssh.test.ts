@@ -19,7 +19,7 @@ import { listApiCalls } from '../db/api-audit';
 import { createImage } from '../db/images';
 import { createImp } from '../db/imps';
 import { createAuthorizedKeys } from './authorized-keys';
-import { createEd25519Key, readFingerprint } from './host-key';
+import { generateEd25519Key, readFingerprint } from './host-key';
 import { startSsh } from './start-ssh';
 
 // impd's data dir with an owner-only ssh/ the test fills, its database, and
@@ -128,7 +128,7 @@ test('it logs an unreadable host key and leaves the gateway off', async () => {
 test('it logs a key from authorized_keys in to an imp in the database', async () => {
   const ctx = await setupTest();
 
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   // the image the imp row refers to
   const image = await createImage(ctx.db, buildMockNewImage({ name: 'base' }));
@@ -160,7 +160,7 @@ test('it logs a key from authorized_keys in to an imp in the database', async ()
 test('it audits a command an ssh login opens as the key that logged in', async () => {
   const ctx = await setupTest();
 
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   // the image the imp row refers to
   const image = await createImage(ctx.db, buildMockNewImage({ name: 'base' }));
@@ -223,7 +223,7 @@ test('it audits a command an ssh login opens as the key that logged in', async (
 test('it refuses a key from authorized_keys when IMP_SSH_AUTHORIZED_KEYS is false', async () => {
   const ctx = await setupTest();
 
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   // the image the imp row refers to
   const image = await createImage(ctx.db, buildMockNewImage({ name: 'base' }));

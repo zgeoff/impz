@@ -4,7 +4,7 @@ import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
-  findFreePorts,
+  claimFreePorts,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
@@ -12,8 +12,8 @@ import { server } from '@impz/test-utils/mock-server';
 import { http } from 'msw';
 import { createImpClient } from '../create-imp-client';
 import { buildStubExecAgent } from '../test-utils/build-stub-exec-agent';
-import { buildStubImpdWithoutFeature } from '../test-utils/build-stub-impd-without-feature';
 import { createStubUndiciWebSocket } from '../test-utils/create-stub-undici-web-socket';
+import { makeStubImpdWithoutFeature } from '../test-utils/make-stub-impd-without-feature';
 import { startStubImpdSocket } from '../test-utils/start-stub-impd-socket';
 import { openExecSession } from './open-exec-session';
 import type { ExecSession, ExecStarted } from './open-exec-session';
@@ -133,7 +133,7 @@ test('it asks impd before it sends a start that requires anything', async () => 
 
   const calls = mock<(path: string) => void>();
 
-  const older = buildStubImpdWithoutFeature(
+  const older = makeStubImpdWithoutFeature(
     (request) => ctx.impd.api.app.handle(request),
     'execRequire',
   );
@@ -260,7 +260,7 @@ test('it counts stdin held while the start waits on impd toward backpressure', a
 
 test('it reports an impd it cannot reach as unreachable', async () => {
   // nothing listens on a free port
-  const baseUrl = `http://127.0.0.1:${String(findFreePorts(1).take())}`;
+  const baseUrl = `http://127.0.0.1:${String(claimFreePorts(1).take())}`;
 
   const session = openExecSession({
     baseUrl,

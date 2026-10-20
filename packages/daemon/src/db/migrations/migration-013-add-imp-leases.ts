@@ -22,16 +22,18 @@ export const MIGRATION_013_ADD_IMP_LEASES: Migration = {
     // derived for the caller, and a label the caller picked
     await db.schema
       .createTable('imp_leases')
-      .addColumn('imp_id', 'text', (c) => c.notNull().references('imps.id').onDelete('cascade'))
-      .addColumn('principal', 'text', (c) => c.notNull())
-      .addColumn('label', 'text', (c) => c.notNull())
+      .addColumn('imp_id', 'text', (column) =>
+        column.notNull().references('imps.id').onDelete('cascade'),
+      )
+      .addColumn('principal', 'text', (column) => column.notNull())
+      .addColumn('label', 'text', (column) => column.notNull())
 
       // the owner as a person reads it, when the lease was written
-      .addColumn('display', 'text', (c) => c.notNull())
+      .addColumn('display', 'text', (column) => column.notNull())
 
       // null holds with no end
       .addColumn('until', 'integer')
-      .addColumn('created_at', 'integer', (c) => c.notNull())
+      .addColumn('created_at', 'integer', (column) => column.notNull())
       .addPrimaryKeyConstraint('imp_leases_pk', ['imp_id', 'principal', 'label'])
       .execute();
 

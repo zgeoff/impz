@@ -7,7 +7,7 @@ import { buildMockDnsReply } from '../../testing/network/build-mock-dns-reply';
 import { buildMockNetworkMember } from '../../testing/network/build-mock-network-member';
 import { buildStubEgressService } from '../../testing/network/build-stub-egress-service';
 import { startStubDnsUpstream } from '../../testing/network/start-stub-dns-upstream';
-import { findFreePorts } from '../../testing/platform/find-free-ports';
+import { claimFreePorts } from '../../testing/platform/claim-free-ports';
 import { parseSubnet } from '../net/addressing';
 import { createDnsForward } from './dns-upstream';
 import {
@@ -477,7 +477,7 @@ test('#createQueryHandler answers SERVFAIL and logs why when the set cannot take
 });
 
 test('#startResolverServer answers over UDP, through an upstream whose truncated reply goes again over TCP', async () => {
-  const ports = findFreePorts(2);
+  const ports = claimFreePorts(2);
 
   const egress = buildStubEgressService({
     subnet: '127.0.0.0/16',
@@ -543,7 +543,7 @@ test('#startResolverServer answers a TCP query that comes in two writes', async 
   });
 
   const server = await startResolverServer(
-    findFreePorts(1).take(),
+    claimFreePorts(1).take(),
     parseSubnet('127.0.0.0/16'),
     createQueryHandler(egress.deps),
     { log: () => {} },
@@ -597,7 +597,7 @@ test('#startResolverServer answers each of several TCP queries that share one wr
   });
 
   const server = await startResolverServer(
-    findFreePorts(1).take(),
+    claimFreePorts(1).take(),
     parseSubnet('127.0.0.0/16'),
     createQueryHandler(egress.deps),
     { log: () => {} },
@@ -649,7 +649,7 @@ test("#startResolverServer closes at once a TCP client past its slot's cap, and 
 
   // UDP and TCP on one number: a picked port, not 0
   const server = await startResolverServer(
-    findFreePorts(1).take(),
+    claimFreePorts(1).take(),
     parseSubnet('127.0.0.0/16'),
     createQueryHandler(egress.deps),
     { log: () => {}, limits: { idleS: 60, maxPerSlot: 2 } },
@@ -708,7 +708,7 @@ test('#startResolverServer closes at once the 17th TCP client of a slot without 
   });
 
   const server = await startResolverServer(
-    findFreePorts(1).take(),
+    claimFreePorts(1).take(),
     parseSubnet('127.0.0.0/16'),
     createQueryHandler(egress.deps),
     { log: () => {} },
@@ -761,7 +761,7 @@ test('#startResolverServer closes at once the 17th TCP client of a slot without 
 // Bun checks socket deadlines on a sweep of about four seconds, so a 1 s
 // idleS closes the client after four to eight
 test('#startResolverServer closes a TCP client idle past idleS', async () => {
-  const ports = findFreePorts(2);
+  const ports = claimFreePorts(2);
 
   const egress = buildStubEgressService({
     subnet: '127.0.0.0/16',
@@ -840,7 +840,7 @@ test('#startResolverServer closes a TCP client idle past idleS', async () => {
 }, 15_000);
 
 test('#startResolverServer stays up when a guest goes before its reply, and logs the ICMP error', async () => {
-  const ports = findFreePorts(1);
+  const ports = claimFreePorts(1);
   const logs: string[] = [];
   const errors: unknown[] = [];
   const reached = Promise.withResolvers<void>();
@@ -926,7 +926,7 @@ test('#startResolverServer stays up when a guest goes before its reply, and logs
 });
 
 test('#startResolverServer logs a reply that the kernel refuses after a guest went, and answers the next query', async () => {
-  const ports = findFreePorts(1);
+  const ports = claimFreePorts(1);
   const logs: string[] = [];
   const reached: string[] = [];
   const released = Promise.withResolvers<void>();
@@ -1012,7 +1012,7 @@ test('#startResolverServer logs a reply that the kernel refuses after a guest we
 });
 
 test('#startResolverServer reports a TCP query whose handler fails, and answers the next one', async () => {
-  const ports = findFreePorts(1);
+  const ports = claimFreePorts(1);
   const errors: unknown[] = [];
 
   const server = await startResolverServer(

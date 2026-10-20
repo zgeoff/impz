@@ -166,13 +166,13 @@ test('it keeps the wrapped database’s write feed', async () => {
 });
 
 test('it releases a held select when the test finishes', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'query-gate-'));
+  const directory = await mkdtemp(join(tmpdir(), 'query-gate-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   // the gate comes first, so its release runs before the database closes
   const run = runChildTests(
-    dir,
+    directory,
     [
       "import { expect, test } from 'bun:test';",
       `import { buildQueryGate } from ${JSON.stringify(join(import.meta.dir, 'build-query-gate.ts'))};`,

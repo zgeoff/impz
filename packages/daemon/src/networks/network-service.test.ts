@@ -4,7 +4,7 @@ import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
 import { buildStubNft } from '../../testing/network/build-stub-nft';
 import { startTestImpd } from '../../testing/start-test-impd';
 import { createImage } from '../db/images';
-import { findImpByName, listImps, updateImpMove } from '../db/imps';
+import { listImps, readImpByName, updateImpMove } from '../db/imps';
 import { buildImagePaths } from '../storage/data-layout';
 
 async function setupTest() {
@@ -565,7 +565,7 @@ test('it refuses a join of an imp a move marked with MOVING', async () => {
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web' });
 
-  const imp = await findImpByName(ctx.db, 'web');
+  const imp = await readImpByName(ctx.db, 'web');
 
   invariant(imp);
 

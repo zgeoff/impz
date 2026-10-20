@@ -10,10 +10,10 @@ function setupTest() {
   return {
     waits,
     now: () => elapsed,
-    wait: (ms: number) => {
-      waits.push(ms);
+    wait: (durationMs: number) => {
+      waits.push(durationMs);
 
-      elapsed += ms;
+      elapsed += durationMs;
 
       return Promise.resolve();
     },

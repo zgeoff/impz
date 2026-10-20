@@ -8,11 +8,11 @@ import { startStubImpdSocket } from './start-stub-impd-socket';
 
 // a directory for a child test run
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-impd-socket-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-impd-socket-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it answers the first message with the frames it was given, in order', async () => {
@@ -78,7 +78,7 @@ test('it stops when the test finishes', async () => {
   const ctx = await setupTest();
 
   const run = runChildTests(
-    ctx.dir,
+    ctx.directoryPath,
     [
       "import { expect, test } from 'bun:test';",
       `import { startStubImpdSocket } from ${JSON.stringify(join(import.meta.dir, 'start-stub-impd-socket.ts'))};`,

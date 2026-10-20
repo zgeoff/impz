@@ -44,7 +44,7 @@ export function parseManifestRequests(logs: string, repository: string): string[
 }
 
 // the one of an image's RepoDigests (JSON) under the repository
-export function findRepoDigest(digests: string, repository: string): string {
+export function getRepoDigest(digests: string, repository: string): string {
   const own = RepoDigestsSchema.parse(JSON.parse(digests)).find((digest) =>
     digest.startsWith(`${repository}@`),
   );
@@ -58,7 +58,7 @@ export function findRepoDigest(digests: string, repository: string): string {
 
 // what a build asked for besides the pin: the engine may use the host's copy
 // and ask nothing, or ask for the pin, never for the tag
-export function findUnpinnedRequests(pinned: string, seen: readonly string[]): string[] {
+export function collectUnpinnedRequests(pinned: string, seen: readonly string[]): string[] {
   const digest = pinned.slice(pinned.indexOf('@') + 1);
 
   return seen.filter((reference) => reference !== digest);
@@ -99,7 +99,7 @@ export async function startRegistry(
   stack: Readonly<Pick<AsyncDisposableStack, 'defer'>>,
   name: string,
   container: string,
-  dir: string,
+  directory: string,
 ): Promise<Registry> {
   const taken = await runCommand(['docker', 'container', 'inspect', container]);
 
@@ -107,7 +107,7 @@ export async function startRegistry(
     throw new Error(`a container named ${container} is already there`);
   }
 
-  const certs = join(dir, 'certs');
+  const certs = join(directory, 'certs');
 
   mkdirSync(certs, { recursive: true });
 
@@ -210,8 +210,13 @@ export async function removeStaleRegistries(prefix: string): Promise<StaleRegist
 }
 
 // a context directory with this Dockerfile and a file v holding value
-export function writeContext(dir: string, name: string, dockerfile: string, value: string): string {
-  const context = join(dir, name);
+export function writeContext(
+  directory: string,
+  name: string,
+  dockerfile: string,
+  value: string,
+): string {
+  const context = join(directory, name);
 
   mkdirSync(context, { recursive: true });
   writeFileSync(join(context, 'Dockerfile'), dockerfile);
@@ -233,12 +238,12 @@ export async function readBusyboxDigest(): Promise<string> {
     'busybox:1.37',
   ]);
 
-  return findRepoDigest(digests, 'busybox');
+  return getRepoDigest(digests, 'busybox');
 }
 
 // builds the context as tag, for the engine's platform unless given one, and
 // pushes it
-export async function buildPushedImage(
+export async function createPushedImage(
   context: string,
   tag: string,
   platform?: string,
@@ -288,7 +293,7 @@ export async function readHostArch(): Promise<string> {
 export async function createMovedTag(
   stack: Readonly<Pick<AsyncDisposableStack, 'defer'>>,
   registry: Readonly<Registry>,
-  dir: string,
+  directory: string,
   repository: string,
 ): Promise<MovedTag> {
   const busybox = await readBusyboxDigest();
@@ -296,7 +301,7 @@ export async function createMovedTag(
   const tag = `${registry.address}/${repository}:1`;
   const from = `FROM ${busybox}\nCOPY v /v\n`;
 
-  await buildPushedImage(writeContext(dir, `${repository}-old`, from, 'old'), tag);
+  await createPushedImage(writeContext(directory, `${repository}-old`, from, 'old'), tag);
 
   stack.defer(async () => {
     await runCommand(['docker', 'rmi', tag]);
@@ -320,9 +325,9 @@ export async function createMovedTag(
     tag,
   ]);
 
-  const pinned = findRepoDigest(repoDigests, `${registry.address}/${repository}`);
+  const pinned = getRepoDigest(repoDigests, `${registry.address}/${repository}`);
 
-  await buildPushedImage(writeContext(dir, `${repository}-new`, from, 'new'), tag);
+  await createPushedImage(writeContext(directory, `${repository}-new`, from, 'new'), tag);
   await runChecked(['docker', 'tag', kept, tag]);
 
   return { tag, kept, pinned };
@@ -330,9 +335,9 @@ export async function createMovedTag(
 
 // builds the context as name, and returns the manifest references the
 // registry saw during the build
-export async function buildAndListRequests(
+export async function runBuildAndListRequests(
   registry: Readonly<Registry>,
-  dir: string,
+  directory: string,
   repository: string,
   dockerfile: string,
   name: string,
@@ -342,7 +347,7 @@ export async function buildAndListRequests(
   await runImp(
     'image',
     'build',
-    writeContext(dir, `build-${name}`, dockerfile, ''),
+    writeContext(directory, `build-${name}`, dockerfile, ''),
     '--name',
     name,
   );

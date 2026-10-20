@@ -1,7 +1,7 @@
 import { Agent } from 'node:https';
 import * as acme from 'acme-client';
 import type { Challenge } from 'acme-client/types/rfc8555';
-import { readErrorMessage } from '../../read-error-message';
+import { getErrorMessage } from '../../get-error-message';
 import type { DnsProvider, TxtRecord } from '../dns/dns-provider';
 import type { CertStore, Certificate } from './cert-store';
 import type { CertificateInfo } from './renewal-policy';
@@ -179,7 +179,7 @@ async function removeRecords(
     try {
       await options.dns.removeTxt(record);
     } catch (error) {
-      const reason = readErrorMessage(error);
+      const reason = getErrorMessage(error);
 
       options.log(`impd: https: could not remove the TXT record ${record.fqdn}: ${reason}`);
     }
@@ -200,7 +200,7 @@ async function checkDirectory(directoryUrl: string, caPem: string | null): Promi
       throw new Error(`HTTP ${String(response.status)}`);
     }
   } catch (error) {
-    throw new Error(`cannot reach the ACME server at ${directoryUrl}: ${readErrorMessage(error)}`, {
+    throw new Error(`cannot reach the ACME server at ${directoryUrl}: ${getErrorMessage(error)}`, {
       cause: error,
     });
   }
@@ -208,7 +208,7 @@ async function checkDirectory(directoryUrl: string, caPem: string | null): Promi
 
 // the same failure later in the flow, once the directory has answered
 function formatAcmeError(error: unknown): string {
-  const message = readErrorMessage(error);
+  const message = getErrorMessage(error);
 
   if (error instanceof TypeError && message.includes('response.config')) {
     return 'the ACME server did not answer (a connection or TLS failure)';

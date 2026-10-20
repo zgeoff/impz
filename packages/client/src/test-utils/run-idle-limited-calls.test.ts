@@ -6,10 +6,12 @@ function setupTest() {
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: async (request) => {
-      await request.text();
+    routes: {
+      '/*': async (request: Request) => {
+        await request.text();
 
-      return Response.json({ json: { path: new URL(request.url).pathname } });
+        return Response.json({ json: { path: new URL(request.url).pathname } });
+      },
     },
   });
 

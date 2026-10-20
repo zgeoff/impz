@@ -8,13 +8,13 @@ import { FRAME_TYPES, decodeJsonPayload, encodeJsonFrame } from './frame-codec';
 import { openAccept, openListener } from './listener-stream';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-agentfwd-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-agentfwd-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { vsockPath: join(dir, 'vsock.sock') };
+  return { vsockPath: join(directory, 'vsock.sock') };
 }
 
 test('#openListener asks the agent for an ssh-agent socket', async () => {

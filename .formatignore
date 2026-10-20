@@ -7,7 +7,7 @@ kernel/out/**
 .cache/**
 .claude/**
 
-# kysely-codegen writes it (bun run render:db-schema); render-schema.test.ts
+# kysely-codegen writes it (bun run render:db-schema); dump-schema.test.ts
 # compares it byte for byte
 packages/daemon/src/db/schema.ts
 

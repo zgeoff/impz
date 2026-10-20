@@ -1,4 +1,4 @@
-import { readErrorMessage } from '../read-error-message';
+import { getErrorMessage } from '../get-error-message';
 
 export interface Ticker {
   readonly stop: () => Promise<void>;
@@ -7,18 +7,11 @@ export interface Ticker {
 // Waits out a ticker's interval, then calls `run`, which returns the tick it
 // starts so a test that fires it can wait for the tick; `label` names the
 // ticker. The returned function cancels the wait.
-export type TickerTimer = (label: string, run: () => Promise<void>, ms: number) => () => void;
-
-// the runtime's own timers
-function startRuntimeTimer(_label: string, run: () => Promise<void>, ms: number): () => void {
-  const handle = setTimeout(() => {
-    void run();
-  }, ms);
-
-  return () => {
-    clearTimeout(handle);
-  };
-}
+export type TickerTimer = (
+  label: string,
+  run: () => Promise<void>,
+  durationMs: number,
+) => () => void;
 
 // Runs `task` every `intervalMs`, never two at once; a failure is logged and
 // the next tick runs as usual.
@@ -40,7 +33,7 @@ export function startTicker(
     try {
       await task();
     } catch (error) {
-      log(`impd: ${label}: ${readErrorMessage(error)}`);
+      log(`impd: ${label}: ${getErrorMessage(error)}`);
     }
   };
 
@@ -77,5 +70,20 @@ export function startTicker(
 
       await state.running;
     },
+  };
+}
+
+// the runtime's own timers
+function startRuntimeTimer(
+  _label: string,
+  run: () => Promise<void>,
+  durationMs: number,
+): () => void {
+  const handle = setTimeout(() => {
+    void run();
+  }, durationMs);
+
+  return () => {
+    clearTimeout(handle);
   };
 }

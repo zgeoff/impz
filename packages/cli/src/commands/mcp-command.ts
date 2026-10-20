@@ -26,7 +26,7 @@ export const mcpCommand = defineCommand({
 
       // a missing or broken guard is a usage error: exit 2 with the reason
       try {
-        guard = mcp.createImpGuard(readGuardOptions(ctx.values));
+        guard = mcp.buildImpGuard(readGuardOptions(ctx.values));
       } catch (error) {
         throw error instanceof mcp.GuardError ? new UsageError(error.message) : error;
       }

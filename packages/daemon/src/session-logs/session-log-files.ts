@@ -7,8 +7,8 @@ import { ORPCError } from '@orpc/server';
 import { writeFileDurably } from '../process/write-file-durably';
 import {
   countLogBytes,
-  findSegmentPath,
-  readGenerationBounds,
+  getGenerationBounds,
+  getSegmentPath,
   readGenerationMeta,
 } from './generation-log';
 import type { GenerationMeta } from './generation-log';
@@ -36,15 +36,15 @@ function isGenerationName(name: string): boolean {
 // The directory of one generation's log. The generation came from the
 // guest, so it is checked here too: nothing but a child of the imp's
 // session-logs directory is ever a log.
-export function findGenerationDir(sessionLogsDir: string, generation: string): string {
+export function getGenerationDir(sessionLogsDir: string, generation: string): string {
   const root = resolve(sessionLogsDir);
-  const dir = resolve(root, generation);
+  const directory = resolve(root, generation);
 
-  if (!isGenerationName(generation) || dirname(dir) !== root) {
+  if (!isGenerationName(generation) || dirname(directory) !== root) {
     throw new Error(`session log: ${JSON.stringify(generation)} is not a generation`);
   }
 
-  return dir;
+  return directory;
 }
 
 // every log of the imp, live ones as their writers hold them
@@ -57,7 +57,7 @@ export function readImpMetas(sessionLogsDir: string, readLive: LiveMetaReader): 
     .filter((entry) => isGenerationName(entry))
     .flatMap((generation) => {
       const meta =
-        readLive(generation) ?? readGenerationMeta(findGenerationDir(sessionLogsDir, generation));
+        readLive(generation) ?? readGenerationMeta(getGenerationDir(sessionLogsDir, generation));
 
       // a meta that names another generation is not this directory's
       return meta?.executionGeneration === generation ? [meta] : [];
@@ -66,39 +66,41 @@ export function readImpMetas(sessionLogsDir: string, readLive: LiveMetaReader): 
 
 // A deleted live generation leaves a tombstone, `.deleted/<generation>`, so
 // no impd taps it again; it goes once the generation is gone.
-function findTombstonePath(sessionLogsDir: string, generation: string): string {
+function getTombstonePath(sessionLogsDir: string, generation: string): string {
   // the same check as a log's directory, one level down
-  const name = basename(findGenerationDir(sessionLogsDir, generation));
+  const name = basename(getGenerationDir(sessionLogsDir, generation));
 
   return join(sessionLogsDir, TOMBSTONES, name);
 }
 
 export function writeTombstone(sessionLogsDir: string, generation: string): void {
-  const path = findTombstonePath(sessionLogsDir, generation);
+  const path = getTombstonePath(sessionLogsDir, generation);
 
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   writeFileDurably(path, '');
 }
 
-export function hasTombstone(sessionLogsDir: string, generation: string): boolean {
-  return isGenerationName(generation) && existsSync(findTombstonePath(sessionLogsDir, generation));
+export function probeTombstone(sessionLogsDir: string, generation: string): boolean {
+  return isGenerationName(generation) && existsSync(getTombstonePath(sessionLogsDir, generation));
 }
 
 export function listTombstones(sessionLogsDir: string): string[] {
-  const dir = join(sessionLogsDir, TOMBSTONES);
+  const directory = join(sessionLogsDir, TOMBSTONES);
 
-  return existsSync(dir) ? readdirSync(dir).filter((entry) => isGenerationName(entry)) : [];
+  return existsSync(directory)
+    ? readdirSync(directory).filter((entry) => isGenerationName(entry))
+    : [];
 }
 
 export function removeTombstone(sessionLogsDir: string, generation: string): void {
-  rmSync(findTombstonePath(sessionLogsDir, generation), { force: true });
+  rmSync(getTombstonePath(sessionLogsDir, generation), { force: true });
 }
 
 // what a destroy removed, if a log made it again: each only when empty
 export function removeEmptyDirs(sessionLogsDir: string): void {
-  for (const dir of [sessionLogsDir, dirname(sessionLogsDir)]) {
+  for (const directory of [sessionLogsDir, dirname(sessionLogsDir)]) {
     try {
-      rmdirSync(dir);
+      rmdirSync(directory);
     } catch {
       return;
     }
@@ -106,11 +108,11 @@ export function removeEmptyDirs(sessionLogsDir: string): void {
 }
 
 export function removeGenerationDir(sessionLogsDir: string, generation: string): void {
-  rmSync(findGenerationDir(sessionLogsDir, generation), { recursive: true, force: true });
+  rmSync(getGenerationDir(sessionLogsDir, generation), { recursive: true, force: true });
 }
 
 export function toApiSessionLog(meta: GenerationMeta): SessionLog {
-  const bounds = readGenerationBounds(meta);
+  const bounds = getGenerationBounds(meta);
   const bytes = countLogBytes(meta);
 
   // every byte of a generation that ended with an exit impd saw
@@ -134,7 +136,7 @@ export function toApiSessionLog(meta: GenerationMeta): SessionLog {
   };
 }
 
-function findMeta(
+function readMeta(
   sessionLogsDir: string,
   readLive: LiveMetaReader,
   request: SessionLogReadRequest,
@@ -142,7 +144,7 @@ function findMeta(
   const generation = request.executionGeneration;
 
   const fromFile = GENERATION_PATTERN.test(generation)
-    ? readGenerationMeta(findGenerationDir(sessionLogsDir, generation))
+    ? readGenerationMeta(getGenerationDir(sessionLogsDir, generation))
     : null;
 
   const meta = readLive(generation) ?? fromFile;
@@ -203,7 +205,7 @@ async function readRangeOnce(
   readLive: LiveMetaReader,
   request: SessionLogReadRequest,
 ): Promise<SessionLogRead> {
-  const meta = findMeta(sessionLogsDir, readLive, request);
+  const meta = readMeta(sessionLogsDir, readLive, request);
   const limit = Math.min(request.limit ?? SESSION_LOG_READ_MAX_BYTES, SESSION_LOG_READ_MAX_BYTES);
   const plan = planLogRead(meta.segments, meta.origin, request.from, limit);
 
@@ -214,12 +216,16 @@ async function readRangeOnce(
     });
   }
 
-  const dir = findGenerationDir(sessionLogsDir, meta.executionGeneration);
+  const directory = getGenerationDir(sessionLogsDir, meta.executionGeneration);
 
   const data =
     plan.segment === null || plan.length === 0
       ? new Uint8Array(0)
-      : await readSegmentBytes(findSegmentPath(dir, plan.segment.start), plan.skip, plan.length);
+      : await readSegmentBytes(
+          getSegmentPath(directory, plan.segment.start),
+          plan.skip,
+          plan.length,
+        );
 
   return {
     offset: plan.offset,

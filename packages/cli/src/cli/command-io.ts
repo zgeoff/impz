@@ -38,7 +38,7 @@ export interface CommandIO {
 // The process's own streams and environment. Nothing opens stdin until a
 // command asks, as an open stdin keeps the process alive. Raw writes go out
 // whole and at once, so `impz exec` keeps the order of stdout and stderr.
-export function buildProcessIO(): CommandIO {
+export function readProcessIO(): CommandIO {
   const encoder = new TextEncoder();
 
   return {

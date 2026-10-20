@@ -38,6 +38,6 @@ export async function readOkBody(pending: Promise<Response>): Promise<string> {
   return body.trim();
 }
 
-export function getThroughProxy(name: string, path = '/'): Promise<string> {
+export function readThroughProxy(name: string, path = '/'): Promise<string> {
   return readOkBody(sendProxyRequest(name, path));
 }

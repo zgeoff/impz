@@ -9,7 +9,7 @@ test('it finds an imp it holds by name', async () => {
 
   ssh.putImp(imp);
 
-  const found = await ssh.backend.findImp(imp.name);
+  const found = await ssh.backend.readImp(imp.name);
 
   expect(found).toBe(imp);
 });
@@ -17,7 +17,7 @@ test('it finds an imp it holds by name', async () => {
 test('it finds no imp it does not hold', async () => {
   const ssh = buildStubSshBackend();
 
-  const found = await ssh.backend.findImp('nobody');
+  const found = await ssh.backend.readImp('nobody');
 
   expect(found).toBeUndefined();
 });
@@ -25,8 +25,8 @@ test('it finds no imp it does not hold', async () => {
 test('it counts each imp lookup', async () => {
   const ssh = buildStubSshBackend();
 
-  await ssh.backend.findImp('one');
-  await ssh.backend.findImp('two');
+  await ssh.backend.readImp('one');
+  await ssh.backend.readImp('two');
 
   expect(ssh.stub.lookups).toBe(2);
 });
@@ -36,7 +36,7 @@ test('it rejects a lookup with the find error a test sets', () => {
 
   ssh.stub.findError = new Error('database is locked');
 
-  expect(ssh.backend.findImp('box')).rejects.toThrowWithMessage(Error, 'database is locked');
+  expect(ssh.backend.readImp('box')).rejects.toThrowWithMessage(Error, 'database is locked');
 });
 
 test('it answers a wake with the imp as it holds it, already running', async () => {

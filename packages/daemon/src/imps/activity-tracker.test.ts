@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test';
 import type { ConnectionKind } from './activity-tracker';
-import { createActivityTracker } from './activity-tracker';
+import { buildActivityTracker } from './activity-tracker';
 
 test('it counts no connections for an imp that never opened one', () => {
-  const tracker = createActivityTracker();
+  const tracker = buildActivityTracker();
 
   expect(tracker.count('a')).toBe(0);
 });
@@ -11,7 +11,7 @@ test('it counts no connections for an imp that never opened one', () => {
 test.each<ConnectionKind>(['exec', 'proxy', 'ssh', 'tunnel'])(
   'it counts a %s connection under its kind and in the imp total',
   (kind) => {
-    const tracker = createActivityTracker();
+    const tracker = buildActivityTracker();
 
     tracker.open('a', kind);
 
@@ -21,7 +21,7 @@ test.each<ConnectionKind>(['exec', 'proxy', 'ssh', 'tunnel'])(
 );
 
 test('it adds every kind of open connection into the imp total', () => {
-  const tracker = createActivityTracker();
+  const tracker = buildActivityTracker();
 
   tracker.open('a', 'exec');
   tracker.open('a', 'proxy');
@@ -32,7 +32,7 @@ test('it adds every kind of open connection into the imp total', () => {
 });
 
 test('it counts only the connections of the kind asked for', () => {
-  const tracker = createActivityTracker();
+  const tracker = buildActivityTracker();
 
   tracker.open('a', 'exec');
   tracker.open('a', 'proxy');
@@ -42,7 +42,7 @@ test('it counts only the connections of the kind asked for', () => {
 });
 
 test('it keeps the connections of one imp out of another imp total', () => {
-  const tracker = createActivityTracker();
+  const tracker = buildActivityTracker();
 
   tracker.open('a', 'exec');
   tracker.open('b', 'proxy');
@@ -51,7 +51,7 @@ test('it keeps the connections of one imp out of another imp total', () => {
 });
 
 test('it stops counting a connection once it closes', () => {
-  const tracker = createActivityTracker();
+  const tracker = buildActivityTracker();
   const closeExec = tracker.open('a', 'exec');
 
   tracker.open('a', 'proxy');
@@ -62,7 +62,7 @@ test('it stops counting a connection once it closes', () => {
 });
 
 test('it counts no connections once every connection closes', () => {
-  const tracker = createActivityTracker();
+  const tracker = buildActivityTracker();
   const closeExec = tracker.open('a', 'exec');
   const closeProxy = tracker.open('a', 'proxy');
   const closeSsh = tracker.open('a', 'ssh');
@@ -77,7 +77,7 @@ test('it counts no connections once every connection closes', () => {
 });
 
 test('it ignores a second close of the same connection', () => {
-  const tracker = createActivityTracker();
+  const tracker = buildActivityTracker();
   const closeExec = tracker.open('a', 'exec');
 
   tracker.open('a', 'exec');

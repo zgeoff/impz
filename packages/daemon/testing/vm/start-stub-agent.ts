@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { createServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { dirname } from 'node:path';
-import { createFrameDecoder } from '../../src/agent-client/frame-codec';
+import { buildFrameDecoder } from '../../src/agent-client/frame-codec';
 import type { AgentFrame } from '../../src/agent-client/frame-codec';
 
 // gets every frame of a connection in turn: the first is the request
@@ -29,7 +29,7 @@ export async function startStubAgent(
   mkdirSync(dirname(path), { recursive: true });
 
   const server = createServer((socket) => {
-    const decoder = createFrameDecoder();
+    const decoder = buildFrameDecoder();
     const frames: AgentFrame[] = [];
 
     // the bytes of a CONNECT line whose newline has not arrived yet; null

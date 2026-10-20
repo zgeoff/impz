@@ -10,7 +10,7 @@ import { parseWholeNumber } from '../lib/parse-whole-number';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { startStubPrivateService } from '../lib/start-stub-private-service';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -26,7 +26,7 @@ async function setupTest() {
   const client = await createInstanceClient();
   const gateway = await readContainerGateway();
 
-  return { prefix: readSuitePrefix('egress'), stack, client, gateway };
+  return { prefix: getSuitePrefix('egress'), stack, client, gateway };
 }
 
 test('it lets an open imp reach the internet and the private gateway, and no imp the metadata service', async () => {

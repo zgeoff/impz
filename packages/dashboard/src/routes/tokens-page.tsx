@@ -150,6 +150,20 @@ export function TokensPage() {
   );
 }
 
+// `dev-*, ci-*` as a list; empty for every imp
+function readImpPatterns(form: FormData): string[] {
+  return (readText(form, 'imps') ?? '')
+    .split(',')
+    .map((pattern) => pattern.trim())
+    .filter((pattern) => pattern !== '');
+}
+
+function readScope(form: FormData): Scope {
+  const scope = readText(form, 'scope');
+
+  return ScopeSchema.options.find((each) => each === scope) ?? 'read';
+}
+
 interface MadeTokenCardProps {
   readonly made: MadeToken;
 }
@@ -177,20 +191,6 @@ function MadeTokenCard(props: MadeTokenCardProps) {
       </div>
     </section>
   );
-}
-
-function readScope(form: FormData): Scope {
-  const scope = readText(form, 'scope');
-
-  return ScopeSchema.options.find((each) => each === scope) ?? 'read';
-}
-
-// `dev-*, ci-*` as a list; empty for every imp
-function readImpPatterns(form: FormData): string[] {
-  return (readText(form, 'imps') ?? '')
-    .split(',')
-    .map((pattern) => pattern.trim())
-    .filter((pattern) => pattern !== '');
 }
 
 // each key by its comment and fingerprint; `impz token key add` binds them

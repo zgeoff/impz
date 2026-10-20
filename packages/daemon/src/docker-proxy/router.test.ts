@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { findRequestRoute, formatQuery, parseQuery } from './router';
+import { formatQuery, getRequestRoute, parseQuery } from './router';
 import type { RoutedRequest } from './router';
 
 test.each<[string, string, RoutedRequest]>([
@@ -67,12 +67,12 @@ test.each<[string, string, RoutedRequest]>([
       query: new Map([['force', ['1']]]),
     },
   ],
-])('#findRequestRoute routes %s %s, a call impd makes', (method, target, request) => {
-  expect(findRequestRoute(method, target)).toStrictEqual({ isAllowed: true, request });
+])('#getRequestRoute routes %s %s, a call impd makes', (method, target, request) => {
+  expect(getRequestRoute(method, target)).toStrictEqual({ isAllowed: true, request });
 });
 
-test('#findRequestRoute keeps the version prefix and every query value', () => {
-  expect(findRequestRoute('POST', '/v1.55/images/create?fromImage=busybox&tag=1')).toStrictEqual({
+test('#getRequestRoute keeps the version prefix and every query value', () => {
+  expect(getRequestRoute('POST', '/v1.55/images/create?fromImage=busybox&tag=1')).toStrictEqual({
     isAllowed: true,
     request: {
       versionPrefix: '/v1.55',
@@ -85,8 +85,8 @@ test('#findRequestRoute keeps the version prefix and every query value', () => {
   });
 });
 
-test('#findRequestRoute routes a call with no version prefix under an empty prefix', () => {
-  expect(findRequestRoute('GET', '/version')).toStrictEqual({
+test('#getRequestRoute routes a call with no version prefix under an empty prefix', () => {
+  expect(getRequestRoute('GET', '/version')).toStrictEqual({
     isAllowed: true,
     request: { versionPrefix: '', route: { kind: 'version' }, query: new Map() },
   });
@@ -111,15 +111,15 @@ test.each([
   ['POST', '/v1.55/swarm/init', '/swarm/init'],
   ['GET', '/v1.55/images/-x/json', '/images/-x/json'],
   ['POST', '/v1.55/v1.55/containers/create', '/v1.55/containers/create'],
-])('#findRequestRoute refuses %s %s, a call impd does not make', (method, target, path) => {
-  expect(findRequestRoute(method, target)).toStrictEqual({
+])('#getRequestRoute refuses %s %s, a call impd does not make', (method, target, path) => {
+  expect(getRequestRoute(method, target)).toStrictEqual({
     isAllowed: false,
     reason: `${method} ${path} is not a call impd makes`,
   });
 });
 
-test('#findRequestRoute refuses an HTTP/2 preface target as not a plain path', () => {
-  expect(findRequestRoute('PRI', '*')).toStrictEqual({
+test('#getRequestRoute refuses an HTTP/2 preface target as not a plain path', () => {
+  expect(getRequestRoute('PRI', '*')).toStrictEqual({
     isAllowed: false,
     reason: 'path "*" is not a plain path',
   });
@@ -134,8 +134,8 @@ test.each([
   ['/v1.55/containers/./create'],
   [String.raw`/v1.55\containers\create`],
   ['v1.55/containers/create'],
-])('#findRequestRoute refuses the path %s, which is not plain', (target) => {
-  expect(findRequestRoute('POST', target)).toStrictEqual({
+])('#getRequestRoute refuses the path %s, which is not plain', (target) => {
+  expect(getRequestRoute('POST', target)).toStrictEqual({
     isAllowed: false,
     reason: `path ${JSON.stringify(target)} is not a plain path`,
   });

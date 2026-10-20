@@ -15,12 +15,12 @@ export function parseBalloonStats(text: string): BalloonStats {
   }
 
   return {
-    totalMib: readMib(parsed, 'total_memory', text),
-    availableMib: readMib(parsed, 'available_memory', text),
+    totalMib: getMib(parsed, 'total_memory', text),
+    availableMib: getMib(parsed, 'available_memory', text),
   };
 }
 
-function readMib(parsed: object, key: string, text: string): number {
+function getMib(parsed: object, key: string, text: string): number {
   const bytes: unknown = Reflect.get(parsed, key);
 
   if (typeof bytes !== 'number') {

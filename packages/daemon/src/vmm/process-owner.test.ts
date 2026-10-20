@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  isProcessOfUid,
+  probeProcessOfUid,
   readProcessCgroup,
   readProcessUid,
   stopProcessOfUid,
@@ -62,20 +62,20 @@ test('#readProcessCgroup reads no cgroup for a process that is gone', () => {
   expect(readProcessCgroup(4, ctx.procRoot)).toBeNull();
 });
 
-test('#isProcessOfUid finds a process that runs as the uid', () => {
-  expect(isProcessOfUid(process.pid, process.getuid?.() ?? 0)).toBeTrue();
+test('#probeProcessOfUid finds a process that runs as the uid', () => {
+  expect(probeProcessOfUid(process.pid, process.getuid?.() ?? 0)).toBeTrue();
 });
 
-test('#isProcessOfUid refuses a process that runs as another uid', () => {
-  expect(isProcessOfUid(process.pid, 900_001)).toBeFalse();
+test('#probeProcessOfUid refuses a process that runs as another uid', () => {
+  expect(probeProcessOfUid(process.pid, 900_001)).toBeFalse();
 });
 
-test('#isProcessOfUid refuses a process that is gone', async () => {
+test('#probeProcessOfUid refuses a process that is gone', async () => {
   const child = Bun.spawn(['true']);
 
   await child.exited;
 
-  expect(isProcessOfUid(child.pid, process.getuid?.() ?? 0)).toBeFalse();
+  expect(probeProcessOfUid(child.pid, process.getuid?.() ?? 0)).toBeFalse();
 });
 
 test('#stopProcessOfUid kills a process that runs as the uid', async () => {

@@ -13,7 +13,7 @@ done`;
 
 // A jailed Firecracker has the jailer's `--id <imp id>`; an unjailed one
 // (IMP_JAILER=false) only its socket, <data>/imps/<imp id>/run/api.sock.
-export function readImpIdFromArgv(argv: readonly string[]): string | null {
+export function findImpIdFromArgv(argv: readonly string[]): string | null {
   const id = argv.indexOf('--id');
 
   if (id !== -1) {
@@ -67,7 +67,7 @@ export function parseFirecrackerMemory(output: string): FirecrackerMemory {
     ownedKib += anon + shmem;
     count += 1;
 
-    const id = readImpIdFromArgv(words.slice(3));
+    const id = findImpIdFromArgv(words.slice(3));
 
     if (id !== null) {
       ownedByImpMib.set(id, Math.floor((anon + shmem) / KIB_PER_MIB));

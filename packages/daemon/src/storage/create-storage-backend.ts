@@ -10,9 +10,6 @@ import type { ZfsBackendDeps } from './zfs/zfs-backend';
 // names the backend that wrote the data dir; a switch would orphan every disk
 const MARKER_FILE = 'storage-backend';
 
-// as ZFS's <root>/reserve: a destroy still runs on a full filesystem
-const XFS_RESERVE_FILE_BYTES = 1024 ** 3;
-
 // The host boundaries each backend takes; the host's own by default
 interface StorageBoundaries {
   // tests on a tmpfs set 0
@@ -30,7 +27,7 @@ export function createStorageBackend(
 ): StorageBackend {
   checkStorageMarker(config.dataDir, config.storageBackend);
 
-  const backend = buildBackend(config, boundaries);
+  const backend = createBackend(config, boundaries);
 
   return {
     ...backend,
@@ -42,7 +39,10 @@ export function createStorageBackend(
   };
 }
 
-function buildBackend(config: Config, boundaries: Readonly<StorageBoundaries>): StorageBackend {
+// as ZFS's <root>/reserve: a destroy still runs on a full filesystem
+const XFS_RESERVE_FILE_BYTES = 1024 ** 3;
+
+function createBackend(config: Config, boundaries: Readonly<StorageBoundaries>): StorageBackend {
   if (config.storageBackend === 'xfs') {
     return createXfsBackend({
       dataDir: config.dataDir,

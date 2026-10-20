@@ -5,19 +5,19 @@ import { join } from 'node:path';
 import { buildStubRestic } from './build-stub-restic';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'stub-restic-test-'));
+  const directory = mkdtempSync(join(tmpdir(), 'stub-restic-test-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  const repoDir = join(dir, 'repo');
-  const treeDir = join(dir, 'tree');
+  const repoDir = join(directory, 'repo');
+  const treeDir = join(directory, 'tree');
 
   mkdirSync(repoDir);
   mkdirSync(treeDir);
 
-  return { dir, repoDir, treeDir };
+  return { directoryPath: directory, repoDir, treeDir };
 }
 
 test('it lists a backup with its time, its dir and impd’s tag before the given ones', async () => {
@@ -98,8 +98,8 @@ test('it restores a snapshot’s dir into the target and records it', async () =
 
   const hooked: string[] = [];
 
-  restic.state.onRestore = (dir) => {
-    hooked.push(dir);
+  restic.state.onRestore = (directory) => {
+    hooked.push(directory);
 
     return Promise.resolve();
   };
@@ -107,11 +107,11 @@ test('it restores a snapshot’s dir into the target and records it', async () =
   await restic.restic.restore(
     summary.snapshotId,
     join(ctx.treeDir, 'imps', 'i1'),
-    join(ctx.dir, 'out'),
+    join(ctx.directoryPath, 'out'),
     [],
   );
 
-  expect(readFileSync(join(ctx.dir, 'out', 'disk.ext4'), 'utf8')).toBe('disk');
+  expect(readFileSync(join(ctx.directoryPath, 'out', 'disk.ext4'), 'utf8')).toBe('disk');
   expect(restic.restores).toStrictEqual(['imps/i1']);
   expect(hooked).toStrictEqual(['imps/i1']);
 });
@@ -123,7 +123,9 @@ test('it refuses a restore with include patterns', async () => {
   const summary = await restic.restic.backup(ctx.treeDir, []);
 
   expect(
-    restic.restic.restore(summary.snapshotId, ctx.treeDir, join(ctx.dir, 'out'), ['/imps/i1']),
+    restic.restic.restore(summary.snapshotId, ctx.treeDir, join(ctx.directoryPath, 'out'), [
+      '/imps/i1',
+    ]),
   ).rejects.toThrow('the stub restic restores whole dirs, without includes');
 });
 
@@ -132,7 +134,7 @@ test('it rejects a restore of a snapshot that is not there as NOT_FOUND', () => 
   const restic = buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() });
 
   expect(
-    restic.restic.restore('snap9', ctx.treeDir, join(ctx.dir, 'out'), []),
+    restic.restic.restore('snap9', ctx.treeDir, join(ctx.directoryPath, 'out'), []),
   ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'backup snap9 not found' });
 });
 

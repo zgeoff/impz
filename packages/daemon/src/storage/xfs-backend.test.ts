@@ -54,9 +54,9 @@ test('#createImage replaces a directory a crash left with no rootfs', async () =
   mkdirSync(join(ctx.dataDir, 'images', 'abc'), { recursive: true });
   writeFileSync(join(ctx.dataDir, 'images', 'abc', 'config.json'), '{"old":true}');
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
-    await Bun.write(join(dir, 'config.json'), '{}');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
+    await Bun.write(join(directory, 'config.json'), '{}');
   });
 
   expect(readFileSync(join(ctx.dataDir, 'images', 'abc', 'rootfs.ext4'), 'utf8')).toBe('rootfs');
@@ -66,8 +66,8 @@ test('#createImage replaces a directory a crash left with no rootfs', async () =
 test('#createImage removes its staging dir when the write fails', async () => {
   const ctx = await setupTest();
 
-  const created = ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'half');
+  const created = ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'half');
 
     throw new Error('the export failed');
   });
@@ -85,8 +85,8 @@ test('#createImageFromImp makes a clone of the disk the rootfs of the image', as
 
   await ctx.backend.createImageFromImp('sha256:tpl', 'a', {
     hold: (clone) => clone(),
-    write: async (dir) => {
-      await Bun.write(join(dir, 'config.json'), '{}');
+    write: async (directory) => {
+      await Bun.write(join(directory, 'config.json'), '{}');
     },
   });
 
@@ -100,8 +100,8 @@ test('#createImageFromImp makes a clone of the disk the rootfs of the image', as
 test('#removeImage removes the image directory', async () => {
   const ctx = await setupTest();
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
   await ctx.backend.removeImage('sha256:abc');
@@ -127,12 +127,12 @@ test('#start removes image builds a crash cut short', async () => {
 test('#start keeps every imp and image a lost database leaves', async () => {
   const ctx = await setupTest();
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
-  await ctx.backend.createImage('sha256:old', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:old', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:abc' });
@@ -168,12 +168,12 @@ test('#start keeps every imp and image a lost database leaves', async () => {
 test('#start logs each orphan it keeps and each leftover it removes', async () => {
   const ctx = await setupTest();
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
-  await ctx.backend.createImage('sha256:old', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:old', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:abc' });
@@ -226,12 +226,12 @@ test('#start logs each orphan it keeps and each leftover it removes', async () =
 test('#dropUnnamed removes what is provably nothing and keeps each orphan with its size and age', async () => {
   const ctx = await setupTest();
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
-  await ctx.backend.createImage('sha256:old', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:old', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:abc' });
@@ -321,12 +321,12 @@ test('#dropUnnamed removes what is provably nothing and keeps each orphan with i
 test('#dropUnnamed lists each orphan as dropped in a dry run with orphans, and removes nothing', async () => {
   const ctx = await setupTest();
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
-  await ctx.backend.createImage('sha256:old', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:old', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:abc' });
@@ -366,8 +366,8 @@ test('#dropUnnamed lists each orphan as dropped in a dry run with orphans, and r
 test('#dropUnnamed removes each orphan when asked for orphans', async () => {
   const ctx = await setupTest();
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:abc' });
@@ -402,8 +402,8 @@ test('#dropUnnamed keeps the checkpoints and imps an older database does not nam
   const ctx = await setupTest();
 
   for (const digest of ['sha256:abc', 'sha256:old']) {
-    await ctx.backend.createImage(digest, async (dir) => {
-      await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+    await ctx.backend.createImage(digest, async (directory) => {
+      await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
     });
   }
 
@@ -443,8 +443,8 @@ test('#dropUnnamed removes what an older database does not name when asked for o
   const ctx = await setupTest();
 
   for (const digest of ['sha256:abc', 'sha256:old']) {
-    await ctx.backend.createImage(digest, async (dir) => {
-      await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+    await ctx.backend.createImage(digest, async (directory) => {
+      await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
     });
   }
 
@@ -702,9 +702,9 @@ test('#openBackupTree clones the checkpoints and images it names and drops what 
 
   const tree = join(ctx.dataDir, 'backup', 'tree');
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
-    await Bun.write(join(dir, 'config.json'), '{}');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
+    await Bun.write(join(directory, 'config.json'), '{}');
   });
 
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:abc' });
@@ -736,9 +736,9 @@ test('#openBackupTree keeps a clone it made in an earlier run, and drops an imag
   const tree = join(ctx.dataDir, 'backup', 'tree');
   const checkpoint = join(tree, 'imps', 'a', 'checkpoints', 'cp-1', 'rootfs.ext4');
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
-    await Bun.write(join(dir, 'config.json'), '{}');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
+    await Bun.write(join(directory, 'config.json'), '{}');
   });
 
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:abc' });
@@ -831,8 +831,8 @@ test('#measureUsage counts the blocks of each imp and its checkpoints through FI
   // is the disk-backed temp root
   const ctx = await setupTest({ parentDir: '/var/tmp' });
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:abc' });
@@ -869,8 +869,8 @@ test('#measureUsage leaves out the imp a pass cut short at, and the imps after i
 
   const ctx = await setupTest({ readFileExtents: fiemap.readFileExtents });
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:abc' });
@@ -900,8 +900,8 @@ test('#measureUsage starts the next pass at the imp the last one cut short at', 
 
   const ctx = await setupTest({ readFileExtents: fiemap.readFileExtents });
 
-  await ctx.backend.createImage('sha256:abc', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:abc' });

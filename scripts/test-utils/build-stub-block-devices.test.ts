@@ -6,14 +6,14 @@ import { buildStubBlockDevices } from './build-stub-block-devices';
 import { createStubBin } from './create-stub-bin';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-block-devices-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-block-devices-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   return {
-    dir,
+    directoryPath: directory,
   };
 }
 
@@ -25,7 +25,7 @@ test('it answers stat with a block device for the root partition, its disk and e
     devices: { '/dev/vdb': {} },
   });
 
-  const stat = createStubBin(ctx.dir, 'stat', scripts.stat);
+  const stat = createStubBin(ctx.directoryPath, 'stat', scripts.stat);
 
   const result = Bun.spawnSync(
     ['bash', '-c', 'stat -L -c %F /dev/sda2; stat -L -c %F /dev/sda; stat -L -c %F /dev/vdb'],
@@ -45,7 +45,7 @@ test('it fails stat for a path that is no device in the table, as for a missing 
     devices: {},
   });
 
-  const stat = createStubBin(ctx.dir, 'stat', scripts.stat);
+  const stat = createStubBin(ctx.directoryPath, 'stat', scripts.stat);
   const result = Bun.spawnSync([join(stat.bin, 'stat'), '-L', '-c', '%F', '/dev/vdz']);
 
   expect({
@@ -67,7 +67,7 @@ test('it answers findmnt with the root partition as the source of /', () => {
     devices: {},
   });
 
-  const findmnt = createStubBin(ctx.dir, 'findmnt', scripts.findmnt);
+  const findmnt = createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
 
   expect(
     Bun.spawnSync([join(findmnt.bin, 'findmnt'), '-n', '-o', 'SOURCE', '/']).stdout.toString(),
@@ -82,7 +82,7 @@ test('it answers lsblk -s on the root partition with the partition and its disk'
     devices: {},
   });
 
-  const lsblk = createStubBin(ctx.dir, 'lsblk', scripts.lsblk);
+  const lsblk = createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
 
   expect(
     Bun.spawnSync([
@@ -104,7 +104,7 @@ test('it answers lsblk with a blank mount line for a device that is not mounted'
     devices: { '/dev/vdb': {} },
   });
 
-  const lsblk = createStubBin(ctx.dir, 'lsblk', scripts.lsblk);
+  const lsblk = createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
 
   expect(
     Bun.spawnSync([
@@ -125,7 +125,7 @@ test('it answers lsblk with the mount points of a mounted device', () => {
     devices: { '/dev/vdb': { mountpoints: ['/mnt/a', '/mnt/b'] } },
   });
 
-  const lsblk = createStubBin(ctx.dir, 'lsblk', scripts.lsblk);
+  const lsblk = createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
 
   expect(
     Bun.spawnSync([
@@ -146,7 +146,7 @@ test('it answers lsblk with the device and then its partitions', () => {
     devices: { '/dev/vdb': { partitions: ['/dev/vdb1'] } },
   });
 
-  const lsblk = createStubBin(ctx.dir, 'lsblk', scripts.lsblk);
+  const lsblk = createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
 
   expect(
     Bun.spawnSync([join(lsblk.bin, 'lsblk'), '-n', '-o', 'PATH', '/dev/vdb']).stdout.toString(),
@@ -161,7 +161,7 @@ test('it answers blkid with the type and the label of a device', () => {
     devices: { '/dev/vdb': { type: 'zfs_member', label: 'tank' } },
   });
 
-  const blkid = createStubBin(ctx.dir, 'blkid', scripts.blkid);
+  const blkid = createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
 
   const result = Bun.spawnSync(
     ['bash', '-c', 'blkid -p -s TYPE -o value /dev/vdb; blkid -p -s LABEL -o value /dev/vdb'],
@@ -179,7 +179,7 @@ test('it answers the blkid probe of a device with a type with that type', () => 
     devices: { '/dev/vdb': { type: 'ext4' } },
   });
 
-  const blkid = createStubBin(ctx.dir, 'blkid', scripts.blkid);
+  const blkid = createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
   const result = Bun.spawnSync([join(blkid.bin, 'blkid'), '-p', '/dev/vdb']);
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
@@ -196,7 +196,7 @@ test('it answers the blkid probe of a device with a signature and no type with a
     devices: { '/dev/vdb': { signature: true } },
   });
 
-  const blkid = createStubBin(ctx.dir, 'blkid', scripts.blkid);
+  const blkid = createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
   const result = Bun.spawnSync([join(blkid.bin, 'blkid'), '-p', '/dev/vdb']);
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
@@ -213,7 +213,7 @@ test('it exits 2 from blkid for each tag an empty device lacks, as blkid does', 
     devices: { '/dev/vdb': {} },
   });
 
-  const blkid = createStubBin(ctx.dir, 'blkid', scripts.blkid);
+  const blkid = createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
 
   const result = Bun.spawnSync(
     [
@@ -235,10 +235,10 @@ test('it fails each call it does not model as unexpected', () => {
     devices: {},
   });
 
-  createStubBin(ctx.dir, 'findmnt', scripts.findmnt);
-  createStubBin(ctx.dir, 'lsblk', scripts.lsblk);
+  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
+  createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
 
-  const blkid = createStubBin(ctx.dir, 'blkid', scripts.blkid);
+  const blkid = createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
 
   const result = Bun.spawnSync(
     [

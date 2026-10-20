@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { canUnshare } from '../../packages/daemon/testing/host-net/can-unshare';
+import { probeUnshare } from '../../packages/daemon/testing/host-net/probe-unshare';
 import { runInNetns } from '../../packages/daemon/testing/host-net/run-in-netns';
 
 // setup-net.sh runs as root in a fresh network namespace, through a user
@@ -26,7 +26,7 @@ test('it refuses to start without the settings host/entrypoint takes from impd',
 });
 
 test.skipIf(
-  !canUnshare([
+  !probeUnshare([
     'sh',
     '-c',
     'iptables -t raw -S && ip6tables -t raw -S && ip link && command -v sysctl',
@@ -66,7 +66,7 @@ iptables -t raw -S PREROUTING | grep imp-broker
 });
 
 test.skipIf(
-  !canUnshare([
+  !probeUnshare([
     'sh',
     '-c',
     'iptables -t raw -S && ip6tables -t raw -S && ip link && command -v sysctl',
@@ -108,7 +108,7 @@ kill "$LISTENER_PID"
   expect(run).toStrictEqual({ stdout: '7081 124\n7082 0\n', stderr: '', exitCode: 0 });
 });
 
-test.skipIf(!canUnshare(['sh', '-c', 'iptables -t nat -S && ip link && command -v sysctl']))(
+test.skipIf(!probeUnshare(['sh', '-c', 'iptables -t nat -S && ip link && command -v sysctl']))(
   'it refuses to start with IPv4 forwarding off',
   () => {
     const run = runInNetns({
@@ -138,7 +138,7 @@ bash "$SETUP_NET"
   },
 );
 
-test.skipIf(!canUnshare(['sh', '-c', 'iptables -t nat -S && ip link && command -v sysctl']))(
+test.skipIf(!probeUnshare(['sh', '-c', 'iptables -t nat -S && ip link && command -v sysctl']))(
   'it refuses to start without a default route',
   () => {
     const run = runInNetns({
@@ -163,7 +163,7 @@ bash "$SETUP_NET"
 );
 
 test.skipIf(
-  !canUnshare([
+  !probeUnshare([
     'sh',
     '-c',
     'iptables -t raw -S && ip6tables -t raw -S && ip link && command -v sysctl',
@@ -204,7 +204,7 @@ iptables -t raw -S PREROUTING | grep imp-egress-dns
 });
 
 test.skipIf(
-  !canUnshare([
+  !probeUnshare([
     'sh',
     '-c',
     'iptables -t raw -S && ip6tables -t raw -S && ip link && command -v sysctl',
@@ -264,7 +264,7 @@ sysctl -n net.ipv6.conf.up0.accept_ra net.ipv6.conf.default.accept_ra net.ipv6.c
 );
 
 test.skipIf(
-  !canUnshare([
+  !probeUnshare([
     'sh',
     '-c',
     'iptables -t raw -S && ip6tables -t raw -S && ip link && command -v sysctl',

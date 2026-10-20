@@ -9,35 +9,35 @@ import { createStubTailscale } from '../../scripts/test-utils/create-stub-tailsc
 // Each test runs tailscale-up.sh with its output in files, so a wait it
 // leaves in the background holds no pipe open.
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-tailscale-up-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-tailscale-up-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  const resolvConf = join(dir, 'resolv.conf');
+  const resolvConf = join(directory, 'resolv.conf');
 
   // the script reads it at every start; Docker's embedded DNS needs no change
   writeFileSync(resolvConf, 'nameserver 127.0.0.11\n');
 
   return {
-    dir,
+    directoryPath: directory,
     resolvConf,
-    tailscale: createStubTailscale(dir),
-    out: join(dir, 'out'),
-    err: join(dir, 'err'),
+    tailscale: createStubTailscale(directory),
+    out: join(directory, 'out'),
+    err: join(directory, 'err'),
   };
 }
 
 test('it joins again with the key when the saved node holds other tags than it asks for', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
 
   // tailscaled runs already, and the script's waits pass at once
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -62,7 +62,7 @@ test('it joins again with the key when the saved node holds other tags than it a
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
         TAILSCALE_AUTHKEY: 'fake-key',
         IMP_TAILSCALE_TAGS: 'tag:imp-e2e',
@@ -79,10 +79,10 @@ test('it joins again with the key when the saved node holds other tags than it a
 test('it keeps the saved node when it holds the tags it asks for, in any order', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -107,7 +107,7 @@ test('it keeps the saved node when it holds the tags it asks for, in any order',
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
         TAILSCALE_AUTHKEY: 'fake-key',
         IMP_TAILSCALE_TAGS: 'tag:a,tag:b',
@@ -122,10 +122,10 @@ test('it keeps the saved node when it holds the tags it asks for, in any order',
 test('it keeps a saved tag:imp node with the key when no tags are asked for', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -150,7 +150,7 @@ test('it keeps a saved tag:imp node with the key when no tags are asked for', ()
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
         TAILSCALE_AUTHKEY: 'fake-key',
       },
@@ -164,10 +164,10 @@ test('it keeps a saved tag:imp node with the key when no tags are asked for', ()
 test('it takes the saved node down and fails without a key when it holds other tags', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -192,7 +192,7 @@ test('it takes the saved node down and fails without a key when it holds other t
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
         IMP_TAILSCALE_TAGS: 'tag:imp-e2e',
       },
@@ -212,10 +212,10 @@ test('it takes the saved node down and fails without a key when it holds other t
 test('it fails without a key when the saved node needs a login', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'NeedsLogin',
@@ -240,7 +240,7 @@ test('it fails without a key when the saved node needs a login', () => {
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
       },
     },
@@ -258,18 +258,18 @@ test('it fails without a key when the saved node needs a login', () => {
 test('it fails with the log tail when tailscaled does not open its socket', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
 
   // no tailscaled runs yet; the one the script starts logs and exits without
   // a socket, and the script's waits for the socket last until it has logged
-  createStubBin(ctx.dir, 'ps');
-  createStubBin(ctx.dir, 'tailscaled', "echo 'tailscaled: no tun device'");
+  createStubBin(ctx.directoryPath, 'ps');
+  createStubBin(ctx.directoryPath, 'tailscaled', "echo 'tailscaled: no tun device'");
 
   createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'sleep',
-    `[ -s '${join(ctx.dir, 'state', 'tailscaled.log')}' ] || /bin/sleep "$@"`,
+    `[ -s '${join(ctx.directoryPath, 'state', 'tailscaled.log')}' ] || /bin/sleep "$@"`,
   );
 
   const result = Bun.spawnSync(
@@ -285,8 +285,8 @@ test('it fails with the log tail when tailscaled does not open its socket', () =
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_SOCKET: join(ctx.dir, 'run', 'tailscaled.sock'),
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_SOCKET: join(ctx.directoryPath, 'run', 'tailscaled.sock'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
       },
     },
@@ -302,8 +302,8 @@ test('it fails with the log tail when tailscaled does not open its socket', () =
 test('it takes a node in memory down without a key or state when it holds other tags', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -347,8 +347,8 @@ test('it takes a node in memory down without a key or state when it holds other 
 test('it takes a node in memory down without a key or state while it is not Running yet', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -394,8 +394,8 @@ test('it takes a node in memory down without a key or state while it is not Runn
 test('it takes the node down when it is not Running after it joins, when it asks for tags', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -438,8 +438,8 @@ test('it takes the node down when it is not Running after it joins, when it asks
 test('it fails and leaves the node up when it is not Running after it joins, when it asks for no tags', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -477,10 +477,10 @@ test('it fails and leaves the node up when it is not Running after it joins, whe
 test('it exits 0 and waits in the background while the saved node is still Starting', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -507,7 +507,7 @@ test('it exits 0 and waits in the background while the saved node is still Start
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
       },
     },
@@ -523,10 +523,10 @@ test('it exits 0 and waits in the background while the saved node is still Start
 test('it joins again with the key once a slow saved node is Running with other tags', async () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -553,7 +553,7 @@ test('it joins again with the key once a slow saved node is Running with other t
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
         TAILSCALE_AUTHKEY: 'fake-key',
         IMP_TAILSCALE_TAGS: 'tag:imp-e2e',
@@ -586,10 +586,10 @@ test('it joins again with the key once a slow saved node is Running with other t
 test('it takes a slow saved node down without a key once it is Running with other tags', async () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -616,7 +616,7 @@ test('it takes a slow saved node down without a key once it is Running with othe
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
         IMP_TAILSCALE_TAGS: 'tag:imp-e2e',
       },
@@ -642,10 +642,10 @@ test('it takes a slow saved node down without a key once it is Running with othe
 test('it gives up in the background without a key once a slow saved node needs a login', async () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'NeedsLogin',
@@ -672,7 +672,7 @@ test('it gives up in the background without a key once a slow saved node needs a
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
       },
     },
@@ -695,10 +695,10 @@ test('it gives up in the background without a key once a slow saved node needs a
 test('it takes a saved node down that is still not Running after the wait, when it asks for tags', async () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -725,7 +725,7 @@ test('it takes a saved node down that is still not Running after the wait, when 
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
         TAILSCALE_AUTHKEY: 'fake-key',
         IMP_TAILSCALE_TAGS: 'tag:imp-e2e',
@@ -748,10 +748,10 @@ test('it takes a saved node down that is still not Running after the wait, when 
 test('it never puts the key on the command line', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'state'));
-  writeFileSync(join(ctx.dir, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.dir, 'ps', 'echo S');
-  createStubBin(ctx.dir, 'sleep');
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -776,7 +776,7 @@ test('it never puts the key on the command line', () => {
       env: {
         PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
         IMP_RESOLV_CONF: ctx.resolvConf,
-        IMP_TAILSCALE_STATE_DIR: join(ctx.dir, 'state'),
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
         IMP_TAILSCALE_HOSTNAME: 'imp',
         TAILSCALE_AUTHKEY: 'fake-key',
         IMP_TAILSCALE_TAGS: 'tag:imp-e2e',

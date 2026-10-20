@@ -14,7 +14,7 @@ import { runInContainer } from '../lib/instance';
 import { listJailMounts } from '../lib/jail-host';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // A jailed VM's cgroup kills it past memory.max, and impd stops the imp and
@@ -27,7 +27,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('jail'), stack, client };
+  return { prefix: getSuitePrefix('jail'), stack, client };
 }
 
 test('it stops a VM over its memory limit, says why, and leaves no jail mounted', async () => {

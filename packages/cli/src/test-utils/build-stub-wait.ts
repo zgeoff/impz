@@ -1,5 +1,5 @@
 interface StubWaitCall {
-  readonly ms: number;
+  readonly durationMs: number;
   readonly signal: AbortSignal;
 
   // ends the wait, as its time passing would
@@ -12,7 +12,7 @@ interface StubWaitCall {
 export function buildStubWait() {
   const calls: StubWaitCall[] = [];
 
-  const wait = (ms: number, signal: AbortSignal): Promise<void> => {
+  const wait = (durationMs: number, signal: AbortSignal): Promise<void> => {
     const waited = Promise.withResolvers<void>();
 
     signal.addEventListener(
@@ -23,7 +23,7 @@ export function buildStubWait() {
       { once: true },
     );
 
-    calls.push({ ms, signal, release: waited.resolve });
+    calls.push({ durationMs, signal, release: waited.resolve });
 
     return waited.promise;
   };

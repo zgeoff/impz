@@ -14,7 +14,7 @@ import {
   startStubExecAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
-import { canUpdateReadOnly } from '@impz/test-utils/can-update-read-only';
+import { probeUpdateReadOnly } from '@impz/test-utils/probe-update-read-only';
 import { updateReadOnly } from '@impz/test-utils/update-read-only';
 import invariant from 'tiny-invariant';
 import { readHostConfig, resolveConfigPath, writeHostConfig } from '../config/host-store';
@@ -27,12 +27,12 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-login-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-login-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   // the CLI's home: config.json lives under XDG_CONFIG_HOME
-  const env = { HOME: dir, XDG_CONFIG_HOME: dir };
+  const env = { HOME: directory, XDG_CONFIG_HOME: directory };
 
   // impd boots with a root bearer; each test reads it back to log in with it
   const rootToken = faker.string.alphanumeric(32);
@@ -281,7 +281,7 @@ test('#--host sends the saved token over IMP_TOKEN, with a note', async () => {
   });
 });
 
-test.skipIf(!canUpdateReadOnly())(
+test.skipIf(!probeUpdateReadOnly())(
   '#--host reads its saved host when the old token file cannot move, and notes the file it left',
   async () => {
     const ctx = await setupTest();

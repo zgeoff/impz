@@ -98,9 +98,6 @@ export interface ExecDeps {
   readonly connect?: (url: string) => ExecSocket;
 }
 
-const DEFAULT_MAX_UNREAD_BYTES = 8 * 1024 * 1024;
-const TTY_SIGNAL_KEYS: Readonly<Record<string, string>> = { SIGINT: '\u0003', SIGQUIT: '\u001C' };
-
 // The socket authenticates with a single-use exec ticket, which works in a
 // browser and in Node, whose WebSocket sends no custom headers.
 export function openExec(
@@ -153,6 +150,16 @@ export function openAttach(
     ...(options.resumeFrom !== undefined && { resumeFrom: options.resumeFrom }),
     ...(options.wake !== undefined && { wake: options.wake }),
   });
+}
+
+const DEFAULT_MAX_UNREAD_BYTES = 8 * 1024 * 1024;
+
+type Settled<T> = { readonly value: T } | { readonly error: Error };
+
+interface OutputHooks {
+  readonly maxUnreadBytes: number;
+  readonly onOverflow: (channel: 'stdout' | 'stderr') => void;
+  readonly onCancel: () => void;
 }
 
 async function openHandle(
@@ -284,7 +291,7 @@ async function openHandle(
 
   void waitForOutcome();
 
-  return buildHandle(session, {
+  return createHandle(session, {
     started: started.promise,
     ended: ended.promise,
     isEnded: () => state.ended,
@@ -294,7 +301,49 @@ async function openHandle(
   });
 }
 
-type Settled<T> = { readonly value: T } | { readonly error: Error };
+// A stream the session pushes into. The queue counts bytes, so its
+// desiredSize goes below zero once more than maxUnreadBytes wait unread.
+function buildOutputStream(channel: 'stdout' | 'stderr', hooks: Readonly<OutputHooks>) {
+  const state: { controller: ReadableStreamDefaultController<Uint8Array> | null; open: boolean } = {
+    controller: null,
+    open: true,
+  };
+
+  const stream = new ReadableStream<Uint8Array>(
+    {
+      start: (controller) => {
+        state.controller = controller;
+      },
+      cancel: () => {
+        state.open = false;
+
+        hooks.onCancel();
+      },
+    },
+    { highWaterMark: hooks.maxUnreadBytes, size: (chunk) => chunk?.byteLength ?? 0 },
+  );
+
+  return {
+    stream,
+    push: (data: Uint8Array) => {
+      if (!state.open || state.controller === null) {
+        return;
+      }
+
+      state.controller.enqueue(data);
+
+      if ((state.controller.desiredSize ?? 0) < 0) {
+        hooks.onOverflow(channel);
+      }
+    },
+    end: () => {
+      if (state.open) {
+        state.open = false;
+        state.controller?.close();
+      }
+    },
+  };
+}
 
 function readAbortReason(abort: Readonly<AbortSignal> | undefined): Error {
   const reason: unknown = abort?.reason;
@@ -374,7 +423,9 @@ interface HandleParts {
   readonly streams: readonly [ReadableStream<Uint8Array>, ReadableStream<Uint8Array>];
 }
 
-function buildHandle(session: ExecSession, parts: Readonly<HandleParts>): ExecHandle {
+const TTY_SIGNAL_KEYS: Readonly<Record<string, string>> = { SIGINT: '\u0003', SIGQUIT: '\u001C' };
+
+function createHandle(session: ExecSession, parts: Readonly<HandleParts>): ExecHandle {
   const encoder = new TextEncoder();
 
   const waitForStart = async (): Promise<ExecStarted> => {
@@ -488,56 +539,6 @@ async function waitIgnoringRejection(promise: Promise<unknown>): Promise<void> {
   } catch {
     // the caller sees the rejection where it reads the promise
   }
-}
-
-interface OutputHooks {
-  readonly maxUnreadBytes: number;
-  readonly onOverflow: (channel: 'stdout' | 'stderr') => void;
-  readonly onCancel: () => void;
-}
-
-// A stream the session pushes into. The queue counts bytes, so its
-// desiredSize goes below zero once more than maxUnreadBytes wait unread.
-function buildOutputStream(channel: 'stdout' | 'stderr', hooks: Readonly<OutputHooks>) {
-  const state: { controller: ReadableStreamDefaultController<Uint8Array> | null; open: boolean } = {
-    controller: null,
-    open: true,
-  };
-
-  const stream = new ReadableStream<Uint8Array>(
-    {
-      start: (controller) => {
-        state.controller = controller;
-      },
-      cancel: () => {
-        state.open = false;
-
-        hooks.onCancel();
-      },
-    },
-    { highWaterMark: hooks.maxUnreadBytes, size: (chunk) => chunk?.byteLength ?? 0 },
-  );
-
-  return {
-    stream,
-    push: (data: Uint8Array) => {
-      if (!state.open || state.controller === null) {
-        return;
-      }
-
-      state.controller.enqueue(data);
-
-      if ((state.controller.desiredSize ?? 0) < 0) {
-        hooks.onOverflow(channel);
-      }
-    },
-    end: () => {
-      if (state.open) {
-        state.open = false;
-        state.controller?.close();
-      }
-    },
-  };
 }
 
 async function readAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {

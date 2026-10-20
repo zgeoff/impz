@@ -2,11 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { findBrokenInvariants } from '../../testing/imps/find-broken-invariants';
+import { readBrokenInvariants } from '../../testing/imps/read-broken-invariants';
 import { startTestImpd } from '../../testing/start-test-impd';
 import type { TestImpdOptions } from '../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import {
   readLoadingMeta,
   readSnapshotMeta,
@@ -61,8 +61,8 @@ test('it leaves the imp stopped when impd died after a sleep renamed its files, 
   // sees what the sleep left
   await ctx.imps.reconcileImps();
 
-  const imp = await findImpByName(ctx.db, 'dev');
-  const broken = await findBrokenInvariants(ctx, true);
+  const imp = await readImpByName(ctx.db, 'dev');
+  const broken = await readBrokenInvariants(ctx, true);
 
   expect(existsSync(paths.vmstate)).toBeTrue();
   expect(existsSync(paths.snapshotMeta)).toBeFalse();
@@ -82,7 +82,7 @@ test('it drops meta.json on a good wake, so a VM that dies later does not count 
 
   await ctx.client.imps.wake({ name: 'dev' });
 
-  const woken = await findImpByName(ctx.db, 'dev');
+  const woken = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof woken?.pid === 'number');
 
@@ -107,7 +107,7 @@ test('it resumes a VM a cut sleep left paused, and removes the half-written file
 
   await sleeping.reached;
 
-  const running = await findImpByName(ctx.db, 'dev');
+  const running = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof running?.pid === 'number');
 
@@ -120,7 +120,7 @@ test('it resumes a VM a cut sleep left paused, and removes the half-written file
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(paused).toBe('Paused');
   expect(ctx.fake.readState(running.pid)).toBe('Running');
@@ -142,8 +142,8 @@ test('it adopts a VM a cut wake left running with its memory', async () => {
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
-  const broken = await findBrokenInvariants(ctx, true);
+  const imp = await readImpByName(ctx.db, 'dev');
+  const broken = await readBrokenInvariants(ctx, true);
 
   expect(imp).toMatchObject({ state: 'running', pid });
   expect(existsSync(paths.snapshotMeta)).toBeFalse();
@@ -165,7 +165,7 @@ test('it kills a VM a cut wake left before its load, and keeps the snapshot', as
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(ctx.fake.alive.has(pid)).toBeFalse();
   expect(imp?.state).toBe('sleeping');
@@ -187,8 +187,8 @@ test('it kills a VM a cut wake left whose agent does not answer, so the imp boot
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
-  const broken = await findBrokenInvariants(ctx, true);
+  const imp = await readImpByName(ctx.db, 'dev');
+  const broken = await readBrokenInvariants(ctx, true);
 
   expect(ctx.fake.alive.has(pid)).toBeFalse();
   expect(imp?.state).toBe('stopped');
@@ -213,7 +213,7 @@ test('it kills a VM a cut wake left with another agent than the snapshot recorde
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(ctx.fake.alive.has(pid)).toBeFalse();
   expect(imp?.state).toBe('stopped');
@@ -225,7 +225,7 @@ test('it kills a second VM on a running imp socket, and keeps the one on the rec
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  const running = await findImpByName(ctx.db, 'dev');
+  const running = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof running?.pid === 'number');
 
@@ -233,7 +233,7 @@ test('it kills a second VM on a running imp socket, and keeps the one on the rec
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(ctx.fake.alive.has(second)).toBeFalse();
   expect(ctx.fake.alive.has(running.pid)).toBeTrue();
@@ -252,7 +252,7 @@ test('it kills a VM only /proc shows after a start cut before its pid file', asy
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(ctx.fake.alive.has(pid)).toBeFalse();
   expect(imp?.state).toBe('stopped');
@@ -298,8 +298,8 @@ test('it leaves the imp stopped, never on the old snapshot, after a wake cut dur
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
-  const broken = await findBrokenInvariants(ctx, true);
+  const imp = await readImpByName(ctx.db, 'dev');
+  const broken = await readBrokenInvariants(ctx, true);
 
   expect(metaMidLoad).toBeNull();
   expect(loadingMidLoad).not.toBeNull();
@@ -325,7 +325,7 @@ test('it adopts the VM of a wake cut during its load that runs on, and drops its
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(imp).toMatchObject({ state: 'running', pid });
   expect(readLoadingMeta(paths)).toBeNull();
@@ -344,7 +344,7 @@ test('it ignores a VM forged on a sleeping imp socket from another jail, and kee
 
   await ctx.client.imps.sleep({ name: 'dev' });
 
-  const attacker = await findImpByName(ctx.db, 'evil');
+  const attacker = await readImpByName(ctx.db, 'evil');
 
   invariant(typeof attacker?.jailUid === 'number');
 
@@ -357,7 +357,7 @@ test('it ignores a VM forged on a sleeping imp socket from another jail, and kee
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(imp?.state).toBe('sleeping');
   expect(readSnapshotMeta(paths)).not.toBeNull();
@@ -372,8 +372,8 @@ test('it does not kill a VM forged on a running imp socket from another jail as 
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  const attacker = await findImpByName(ctx.db, 'evil');
-  const running = await findImpByName(ctx.db, 'dev');
+  const attacker = await readImpByName(ctx.db, 'evil');
+  const running = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof attacker?.jailUid === 'number');
   invariant(typeof running?.pid === 'number');
@@ -385,7 +385,7 @@ test('it does not kill a VM forged on a running imp socket from another jail as 
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(imp).toMatchObject({ state: 'running', pid: running.pid });
   expect(ctx.fake.alive.has(running.pid)).toBeTrue();
@@ -401,7 +401,7 @@ test('it adopts a jailed VM a cut wake left by its own uid', async () => {
 
   await ctx.client.imps.sleep({ name: 'dev' });
 
-  const dev = await findImpByName(ctx.db, 'dev');
+  const dev = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof dev?.jailUid === 'number');
 
@@ -409,7 +409,7 @@ test('it adopts a jailed VM a cut wake left by its own uid', async () => {
 
   await ctx.restartImpd();
 
-  const adopted = await findImpByName(ctx.db, 'dev');
+  const adopted = await readImpByName(ctx.db, 'dev');
 
   expect(adopted).toMatchObject({ state: 'running', pid: byUid });
 });
@@ -429,7 +429,7 @@ test('it adopts a jailed VM a cut wake left by its own cgroup', async () => {
 
   await ctx.restartImpd();
 
-  const adopted = await findImpByName(ctx.db, 'box');
+  const adopted = await readImpByName(ctx.db, 'box');
 
   expect(adopted).toMatchObject({ state: 'running', pid: byCgroup });
 });
@@ -437,7 +437,7 @@ test('it adopts a jailed VM a cut wake left by its own cgroup', async () => {
 test('it does not kill a VM forged from another jail on the socket of an imp with no record', async () => {
   const ctx = await setupTest();
   const evil = await ctx.client.imps.create({ name: 'evil' });
-  const attacker = await findImpByName(ctx.db, 'evil');
+  const attacker = await readImpByName(ctx.db, 'evil');
 
   invariant(typeof attacker?.jailUid === 'number');
 
@@ -470,8 +470,8 @@ test('it stops an imp whose recycled pid another jail forged, and leaves that pr
 
   await ctx.client.imps.create({ name: 'dev' });
 
-  const attacker = await findImpByName(ctx.db, 'evil');
-  const running = await findImpByName(ctx.db, 'dev');
+  const attacker = await readImpByName(ctx.db, 'evil');
+  const running = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof attacker?.jailUid === 'number');
   invariant(typeof running?.pid === 'number');
@@ -481,7 +481,7 @@ test('it stops an imp whose recycled pid another jail forged, and leaves that pr
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(imp).toMatchObject({ state: 'stopped', pid: null });
   expect(ctx.fake.alive.has(running.pid)).toBeTrue();

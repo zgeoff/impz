@@ -10,7 +10,7 @@ import { buildStubNft } from '../../testing/network/build-stub-nft';
 import { startStubEchoServer } from '../../testing/network/start-stub-echo-server';
 import { startTestImpd } from '../../testing/start-test-impd';
 import { createImage } from '../db/images';
-import { findImpByName, updateImpMove } from '../db/imps';
+import { readImpByName, updateImpMove } from '../db/imps';
 import { removeMember, removeNetwork, writeNetwork } from '../db/networks';
 import type { ImpdDeps } from '../impd-deps';
 import { parsePrefix64 } from '../net/addressing6';
@@ -202,7 +202,7 @@ test('it takes a destroyed imp out of the table while its row still holds the sl
 
   await held.reached;
 
-  const row = await findImpByName(ctx.db, 'dev');
+  const row = await readImpByName(ctx.db, 'dev');
 
   held.release();
 
@@ -853,7 +853,7 @@ test('it builds the table again for a public imp once the routes are back', asyn
 
   routes.restoreUplinks();
 
-  const pub = await findImpByName(ctx.db, 'pub');
+  const pub = await readImpByName(ctx.db, 'pub');
 
   invariant(pub);
 
@@ -953,7 +953,7 @@ test('it leaves nft and the database agreeing when a create meets a failing poli
   const second = ctx.impd.imps.createImp({ name: 'second' });
 
   await waitFor(async () => {
-    const row = await findImpByName(ctx.db, 'second');
+    const row = await readImpByName(ctx.db, 'second');
 
     expect(row).toBeDefined();
   });
@@ -1244,7 +1244,7 @@ test('it rethrows the refusal of nft, and keeps the network, when the undo of a 
   await ctx.impd.imps.createImp({ name: 'web', networkIds: [network.id] });
   await ctx.impd.imps.createImp({ name: 'db', networkIds: [network.id] });
 
-  const dbImp = await findImpByName(ctx.db, 'db');
+  const dbImp = await readImpByName(ctx.db, 'db');
 
   invariant(dbImp);
 

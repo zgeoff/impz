@@ -1,7 +1,5 @@
 import type { OrphanStorage, SweepResult } from './storage-backend';
 
-const MIB = 1024 ** 2;
-
 // how much of the orphans a sweep logs: each and their count, the count
 // alone, or nothing (`impz gc` returns them instead)
 export type OrphanLogging = 'each' | 'count' | 'none';
@@ -33,6 +31,8 @@ export function printSweep(
       '`impz gc --orphans --dry-run` lists what `impz gc --orphans` would retire',
   );
 }
+
+const MIB = 1024 ** 2;
 
 function formatOrphan(orphan: Readonly<OrphanStorage>): string {
   const size = `${(orphan.bytes / MIB).toFixed(1)} MiB`;

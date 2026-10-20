@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs';
 import { writeUnknownBoot } from '../db/cold-boots';
 import { updateImpActivity } from '../db/imps';
-import { readErrorMessage } from '../read-error-message';
+import { getErrorMessage } from '../get-error-message';
 import {
   readLoadingMeta,
   readSnapshotMeta,
@@ -54,7 +54,7 @@ export function createVmReconciler(
   // the pid file a start wrote, and every process on the exact socket: impd
   // can die before the file, and a retried start leaves two. Either is the
   // imp's only when its owner is.
-  const findVms = (imp: LockedImp, paths: ImpPaths): number[] => {
+  const readVms = (imp: LockedImp, paths: ImpPaths): number[] => {
     const pids = new Set(
       context.vms
         .listVms()
@@ -66,13 +66,13 @@ export function createVmReconciler(
 
     if (
       filed !== null &&
-      context.vms.isVmAlive(filed, paths) &&
+      context.vms.probeVmAlive(filed, paths) &&
       isImpVm(context.vms.readVmOwner(filed), imp.id, imp.jailUid)
     ) {
       pids.add(filed);
     }
 
-    return [...pids].toSorted((a, b) => a - b);
+    return [...pids].toSorted((left, right) => left - right);
   };
 
   // false when the VM survived SIGKILL
@@ -84,7 +84,7 @@ export function createVmReconciler(
 
       return true;
     } catch (error) {
-      context.log(`impd: ${name}: could not kill pid ${String(pid)}: ${readErrorMessage(error)}`);
+      context.log(`impd: ${name}: could not kill pid ${String(pid)}: ${getErrorMessage(error)}`);
 
       return false;
     }
@@ -155,7 +155,7 @@ export function createVmReconciler(
       return running;
     } catch (error) {
       context.log(
-        `impd: ${imp.name}: cannot adopt the VM a wake left: ${readErrorMessage(error)}; it boots cold next`,
+        `impd: ${imp.name}: cannot adopt the VM a wake left: ${getErrorMessage(error)}; it boots cold next`,
       );
 
       context.admission?.release(imp.id);
@@ -193,7 +193,7 @@ export function createVmReconciler(
 
       context.log(`impd: ${imp.name}: resumed the VM a cut sleep left paused`);
     } catch (error) {
-      context.log(`impd: ${imp.name}: could not resume its paused VM: ${readErrorMessage(error)}`);
+      context.log(`impd: ${imp.name}: could not resume its paused VM: ${getErrorMessage(error)}`);
     }
   };
 
@@ -205,7 +205,7 @@ export function createVmReconciler(
 
       // a running, creating or failed record owns its pid
       const owned = imp.state === 'sleeping' || imp.state === 'stopped' ? null : imp.pid;
-      const orphans = findVms(imp, paths).filter((pid) => pid !== owned);
+      const orphans = readVms(imp, paths).filter((pid) => pid !== owned);
       const [only] = orphans;
 
       if (imp.state === 'sleeping' && only !== undefined && orphans.length === 1) {
@@ -266,7 +266,7 @@ export function createVmReconciler(
 // what a crash can leave half written: a sleep's new snapshot files, and the
 // next version of a record that is renamed over the old one
 function removePartialFiles(paths: ImpPaths): void {
-  const slot = buildWatchdogSlot(paths.dir);
+  const slot = buildWatchdogSlot(paths.directory);
 
   for (const path of [
     paths.vmstate,

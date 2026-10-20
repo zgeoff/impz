@@ -7,7 +7,7 @@ import { startStubSessionAgent } from '../../testing/vm/start-stub-session-agent
 import { sendActivity } from '../agent-client/agent-requests';
 import { openExecStream } from '../agent-client/exec-stream';
 import { createImage } from '../db/images';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import { readSnapshotMeta } from '../sleep/snapshot-meta';
 import { buildImagePaths, buildImpPaths } from '../storage/data-layout';
 
@@ -159,7 +159,7 @@ test('it records the sessions that the idle loop’s activity read finds', async
     main.close();
   });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 

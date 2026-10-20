@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { rootCertificates } from 'node:tls';
 import { openExecStream } from '../agent-client/exec-stream';
+import { getErrorMessage } from '../get-error-message';
 import type { StartTimer } from '../process/clock';
 import { buildExitError } from '../process/run-command';
 import { startRealTimer } from '../process/start-real-timer';
-import { readErrorMessage } from '../read-error-message';
 import installScript from './install-broker-ca.sh' with { type: 'text' };
 
 // How a guest trusts the broker: an exec builds the CA bundle in the guest
@@ -172,7 +172,7 @@ export function createGuestTrust(
 
           return { installed: true };
         } catch (error) {
-          const detail = readErrorMessage(error);
+          const detail = getErrorMessage(error);
 
           log(
             `impd: ${imp.name}: broker CA not installed, so this exec gets no broker variables: ${detail}`,

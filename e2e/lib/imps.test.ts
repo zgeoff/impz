@@ -6,17 +6,17 @@ import { join } from 'node:path';
 import { buildPathGoneCheck } from './imps';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'imps-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imps-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it reports a unix socket that is still there', async () => {
   const ctx = await setupTest();
 
-  const socket = join(ctx.dir, 'agent.sock');
+  const socket = join(ctx.directoryPath, 'agent.sock');
   const server = createServer();
 
   await new Promise<void>((resolve) => {
@@ -35,7 +35,11 @@ test('it reports a unix socket that is still there', async () => {
 test('it reports a path with nothing at it as gone', async () => {
   const ctx = await setupTest();
 
-  const result = Bun.spawnSync(['sh', '-c', buildPathGoneCheck(join(ctx.dir, 'agent.sock'))]);
+  const result = Bun.spawnSync([
+    'sh',
+    '-c',
+    buildPathGoneCheck(join(ctx.directoryPath, 'agent.sock')),
+  ]);
 
   expect(result.stdout.toString()).toBe('gone\n');
 });

@@ -32,7 +32,7 @@ import {
   removeOAuthClientIfPresent,
   removeTokenIfPresent,
 } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // The public MCP route (docs/guides/mcp.md#public-route), which the suite's
@@ -51,13 +51,13 @@ async function setupTest() {
   const catcher = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: () => new Response('signed in'),
+    routes: { '/*': () => new Response('signed in') },
   });
 
   stack.defer(() => catcher.stop(true));
 
   return {
-    prefix: readSuitePrefix('mcp-oauth'),
+    prefix: getSuitePrefix('mcp-oauth'),
     stack,
     client,
     origin,

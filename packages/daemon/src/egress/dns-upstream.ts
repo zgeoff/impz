@@ -1,7 +1,7 @@
 import { connect } from 'node:net';
+import { getErrorMessage } from '../get-error-message';
 import type { StartTimer } from '../process/clock';
 import { startRealTimer } from '../process/start-real-timer';
-import { readErrorMessage } from '../read-error-message';
 
 // how long one upstream has to answer before the next is asked
 const UPSTREAM_TIMEOUT_MS = 2000;
@@ -57,14 +57,6 @@ function toFreshId(query: Uint8Array): Uint8Array {
   return copy;
 }
 
-function toGuestId(reply: Uint8Array, guestQuery: Uint8Array): Uint8Array {
-  const copy = new Uint8Array(reply);
-
-  copy.set(guestQuery.subarray(0, 2), 0);
-
-  return copy;
-}
-
 interface Upstream {
   readonly server: string;
   readonly port: number;
@@ -91,7 +83,7 @@ async function sendUdp(
       // an upstream that refuses, as ICMP: the next one gets the query.
       // Bun 1.4.2 passes the error alone, not after the socket its types name.
       error: (...args: readonly unknown[]) => {
-        const message = readErrorMessage(args.at(-1));
+        const message = getErrorMessage(args.at(-1));
 
         reply.reject(new Error(message));
       },
@@ -149,4 +141,12 @@ function sendTcp(upstream: Upstream, query: Uint8Array): Promise<Uint8Array> {
   });
 
   return reply.promise;
+}
+
+function toGuestId(reply: Uint8Array, guestQuery: Uint8Array): Uint8Array {
+  const copy = new Uint8Array(reply);
+
+  copy.set(guestQuery.subarray(0, 2), 0);
+
+  return copy;
 }

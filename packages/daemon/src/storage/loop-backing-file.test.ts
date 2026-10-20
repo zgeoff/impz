@@ -3,7 +3,7 @@ import { mkdirSync, realpathSync, statfsSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findLoopBackingFile, readLoopHostFreeBytes } from './loop-backing-file';
+import { readLoopBackingFile, readLoopHostFreeBytes } from './loop-backing-file';
 
 async function setupTest() {
   const made = await mkdtemp(join(tmpdir(), 'loop-backing-file-'));
@@ -25,7 +25,7 @@ async function setupTest() {
   return { root, procDir, sysDir, mountDir };
 }
 
-test('#findLoopBackingFile names the file behind the loop device mounted on a dir', async () => {
+test('#readLoopBackingFile names the file behind the loop device mounted on a dir', async () => {
   const ctx = await setupTest();
 
   writeFileSync(
@@ -36,12 +36,12 @@ test('#findLoopBackingFile names the file behind the loop device mounted on a di
   mkdirSync(join(ctx.sysDir, 'block', 'loop3', 'loop'), { recursive: true });
   writeFileSync(join(ctx.sysDir, 'block', 'loop3', 'loop', 'backing_file'), '/srv/imp/xfs.img\n');
 
-  expect(findLoopBackingFile(ctx.mountDir, { procDir: ctx.procDir, sysDir: ctx.sysDir })).toBe(
+  expect(readLoopBackingFile(ctx.mountDir, { procDir: ctx.procDir, sysDir: ctx.sysDir })).toBe(
     '/srv/imp/xfs.img',
   );
 });
 
-test('#findLoopBackingFile finds nothing behind a mount of a disk that is no loop device', async () => {
+test('#readLoopBackingFile finds nothing behind a mount of a disk that is no loop device', async () => {
   const ctx = await setupTest();
 
   writeFileSync(
@@ -50,11 +50,11 @@ test('#findLoopBackingFile finds nothing behind a mount of a disk that is no loo
   );
 
   expect(
-    findLoopBackingFile(ctx.mountDir, { procDir: ctx.procDir, sysDir: ctx.sysDir }),
+    readLoopBackingFile(ctx.mountDir, { procDir: ctx.procDir, sysDir: ctx.sysDir }),
   ).toBeNull();
 });
 
-test('#findLoopBackingFile finds nothing when the loop driver is unreadable in sysfs', async () => {
+test('#readLoopBackingFile finds nothing when the loop driver is unreadable in sysfs', async () => {
   const ctx = await setupTest();
 
   writeFileSync(
@@ -63,15 +63,15 @@ test('#findLoopBackingFile finds nothing when the loop driver is unreadable in s
   );
 
   expect(
-    findLoopBackingFile(ctx.mountDir, { procDir: ctx.procDir, sysDir: ctx.sysDir }),
+    readLoopBackingFile(ctx.mountDir, { procDir: ctx.procDir, sysDir: ctx.sysDir }),
   ).toBeNull();
 });
 
-test('#findLoopBackingFile finds nothing when mountinfo is unreadable', async () => {
+test('#readLoopBackingFile finds nothing when mountinfo is unreadable', async () => {
   const ctx = await setupTest();
 
   expect(
-    findLoopBackingFile(ctx.mountDir, { procDir: ctx.procDir, sysDir: ctx.sysDir }),
+    readLoopBackingFile(ctx.mountDir, { procDir: ctx.procDir, sysDir: ctx.sysDir }),
   ).toBeNull();
 });
 

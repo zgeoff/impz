@@ -1,6 +1,6 @@
 import type { ApiAudit } from './audit/api-audit';
-import type { ImpdStorage } from './build-impd-storage';
 import type { Config } from './config';
+import type { ImpdStorage } from './create-impd-storage';
 import type { EgressService } from './egress/egress-service';
 import type { ImpdDeps } from './impd-deps';
 import type { Imps } from './imps/imp-service';

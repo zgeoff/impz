@@ -4,19 +4,19 @@ import { create } from '@bufbuild/protobuf';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
-import {
-  buildJsonMoveFrame,
-  buildStubMoveStreamRewrite,
-} from '../../testing/imp-ops/build-stub-move-stream-rewrite';
 import { createUbuntuImage, setupMoveHosts } from '../../testing/imp-ops/create-move-hosts';
 import type { MoveHostsOptions } from '../../testing/imp-ops/create-move-hosts';
+import {
+  buildJsonMoveFrame,
+  makeStubMoveStreamRewrite,
+} from '../../testing/imp-ops/make-stub-move-stream-rewrite';
 import { buildMockAgentSession } from '../../testing/imps/build-mock-agent-session';
 import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
 import { ServicesListSchema } from '../agent-client/agent-protocol';
 import { listColdBoots, writeUnknownBoot } from '../db/cold-boots';
-import { JAIL_UIDS, findImpByName, updateImpDisk } from '../db/imps';
-import { isSlotFree } from '../db/is-slot-free';
+import { JAIL_UIDS, readImpByName, updateImpDisk } from '../db/imps';
 import { writeMember, writeNetwork } from '../db/networks';
+import { probeSlotFree } from '../db/probe-slot-free';
 import { readSnapshotMeta, writeSnapshotMeta } from '../sleep/snapshot-meta';
 import { VmIdentitySchema } from '../sleep/vm-identity';
 import { MOVE_FRAMES, readJsonPayload } from './move-frames';
@@ -53,8 +53,8 @@ test('it moves a sleeping imp with its memory into its own slot', async () => {
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const moved = await findImpByName(ctx.target.db, 'dev');
-  const left = await findImpByName(ctx.source.db, 'dev');
+  const moved = await readImpByName(ctx.target.db, 'dev');
+  const left = await readImpByName(ctx.source.db, 'dev');
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(moved).toMatchObject({ id: created.id, slot: 1, state: 'sleeping', moveState: null });
@@ -82,7 +82,7 @@ test('it sends the sessions and services of a warm move in the form an older imp
     isShared: true,
 
     // passes the stream on as sent, and keeps its header's JSON
-    hook: buildStubMoveStreamRewrite((frames) => {
+    hook: makeStubMoveStreamRewrite((frames) => {
       const header = frames.find((frame) => frame.type === MOVE_FRAMES.header);
 
       invariant(header);
@@ -218,7 +218,7 @@ test('it moves an elastic imp warm with its max memory', async () => {
     .execute();
 
   const status = await ctx.runMove('dev');
-  const moved = await findImpByName(ctx.target.db, 'dev');
+  const moved = await readImpByName(ctx.target.db, 'dev');
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(moved).toMatchObject({ memoryMib: 256, maxMemoryMib: 1024 });
@@ -272,11 +272,11 @@ test("it gives a jailed imp moved warm the target's own jail uid", async () => {
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
   // the source's first imp holds the first uid, so dev's there is the next
-  const before = await findImpByName(ctx.source.db, 'dev');
+  const before = await readImpByName(ctx.source.db, 'dev');
 
   await ctx.runMove('dev');
 
-  const moved = await findImpByName(ctx.target.db, 'dev');
+  const moved = await readImpByName(ctx.target.db, 'dev');
 
   expect(before?.jailUid).toBe(JAIL_UIDS.first + 1);
   expect(moved?.jailUid).toBe(JAIL_UIDS.first);
@@ -338,7 +338,7 @@ test('it refuses a warm move naming each fact the target lacks, and leaves the i
     ]),
   });
 
-  const after = await findImpByName(ctx.source.db, 'dev');
+  const after = await readImpByName(ctx.source.db, 'dev');
 
   expect(after).toMatchObject({ state: 'sleeping', moveState: null });
 });
@@ -434,8 +434,8 @@ test('it refuses a commit with the memory snapshot incomplete, and the source ke
   state.metaPath = ctx.target.storage.resolveImpPaths(created.id).snapshotMeta;
 
   const status = await ctx.runMove('dev');
-  const staged = await findImpByName(ctx.target.db, 'dev');
-  const kept = await findImpByName(ctx.source.db, 'dev');
+  const staged = await readImpByName(ctx.target.db, 'dev');
+  const kept = await readImpByName(ctx.source.db, 'dev');
 
   expect(status.error).toInclude('the received memory snapshot is not complete');
   expect(staged).toMatchObject({ moveState: 'receiving' });
@@ -448,7 +448,7 @@ test('it refuses a warm stream whose header names another slot than its ticket k
     isShared: true,
 
     // a faulty source: the header's slot is one past the slot it was offered
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
           return frame;
@@ -471,7 +471,7 @@ test('it refuses a warm stream whose header names another slot than its ticket k
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const staged = await findImpByName(ctx.target.db, 'dev');
+  const staged = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toInclude(`the ticket keeps slot ${String(created.slot)}, not this one`);
   expect(staged).toBeUndefined();
@@ -482,7 +482,7 @@ test('it refuses a cold stream on the ticket of a warm move', async () => {
     isShared: true,
 
     // a faulty source: the header drops the memory it was offered with
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
           return frame;
@@ -499,7 +499,7 @@ test('it refuses a cold stream on the ticket of a warm move', async () => {
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const staged = await findImpByName(ctx.target.db, 'dev');
+  const staged = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toInclude('the ticket is for a warm move, and the stream is cold');
   expect(staged).toBeUndefined();
@@ -510,7 +510,7 @@ test('it refuses a warm stream whose header names facts the target does not shar
     isShared: true,
 
     // a faulty source: the header's CPU flags are not the ones it offered
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
           return frame;
@@ -537,7 +537,7 @@ test('it refuses a warm stream whose header names facts the target does not shar
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const staged = await findImpByName(ctx.target.db, 'dev');
+  const staged = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toInclude('this host cannot load the memory: the CPU flags differ');
   expect(staged).toBeUndefined();
@@ -548,7 +548,7 @@ test('it refuses a warm stream whose snapshot record the target cannot load', as
     isShared: true,
 
     // a faulty source: the snapshot record names a kernel the move facts do not
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
           return frame;
@@ -571,7 +571,7 @@ test('it refuses a warm stream whose snapshot record the target cannot load', as
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const staged = await findImpByName(ctx.target.db, 'dev');
+  const staged = await readImpByName(ctx.target.db, 'dev');
 
   const kernel = ctx.target.readIdentity().hostKernel;
 
@@ -663,9 +663,9 @@ test('it refuses a system drive the target lacks whose sum is not its name', asy
 
   // the test drive's bytes are not the data its name hashes
   const status = await ctx.runMove('dev');
-  const staged = await findImpByName(ctx.target.db, 'dev');
-  const isFree = await isSlotFree(ctx.target.db, created.slot, ctx.target.now());
-  const kept = await findImpByName(ctx.source.db, 'dev');
+  const staged = await readImpByName(ctx.target.db, 'dev');
+  const isFree = await probeSlotFree(ctx.target.db, created.slot, ctx.target.now());
+  const kept = await readImpByName(ctx.source.db, 'dev');
 
   expect(status.error).toInclude('the system drive does not match its sha256');
   expect(staged).toBeUndefined();
@@ -708,8 +708,8 @@ test("it refuses a snapshot that opens a drive off the target's own path, and fr
   writeFileSync(vmIdentity, JSON.stringify({ ...vm, systemDrivePath: '/etc/shadow' }));
 
   const status = await ctx.runMove('dev');
-  const staged = await findImpByName(ctx.target.db, 'dev');
-  const isFree = await isSlotFree(ctx.target.db, created.slot, ctx.target.now());
+  const staged = await readImpByName(ctx.target.db, 'dev');
+  const isFree = await probeSlotFree(ctx.target.db, created.slot, ctx.target.now());
 
   expect(refusals).toSatisfyAny((body: string) => body.includes("the snapshot's drive is not at"));
   expect(status.error).toInclude('did not confirm the abort');
@@ -742,7 +742,7 @@ test('it commits a warm move whose commit was lost on resume, with a reissued ti
   const dropped = await ctx.runMove('dev');
   const ticket = await ctx.targetApp.client.moves.reissue({ name: 'dev' });
   const resumed = await ctx.sourceApp.client.moves.resume({ name: 'dev', ticket: ticket.ticket });
-  const moved = await findImpByName(ctx.target.db, 'dev');
+  const moved = await readImpByName(ctx.target.db, 'dev');
   const woken = await ctx.targetApp.client.imps.wake({ name: 'dev' });
 
   expect(dropped.error).toInclude('dropped the commit');
@@ -777,12 +777,12 @@ test('it commits a verified warm move warm when the source restarts', async () =
   await ctx.source.moves.recover();
 
   await waitFor(async () => {
-    const gone = await findImpByName(ctx.source.db, 'dev');
+    const gone = await readImpByName(ctx.source.db, 'dev');
 
     expect(gone).toBeUndefined();
   });
 
-  const moved = await findImpByName(ctx.target.db, 'dev');
+  const moved = await readImpByName(ctx.target.db, 'dev');
 
   expect(moved).toMatchObject({ state: 'sleeping', moveState: null });
 });
@@ -804,8 +804,8 @@ test('it frees the slot and removes the memory on the target on an abort after t
   await ctx.runMove('dev');
   await ctx.sourceApp.client.moves.abort({ name: 'dev' });
 
-  const staged = await findImpByName(ctx.target.db, 'dev');
-  const isFree = await isSlotFree(ctx.target.db, created.slot, ctx.target.now());
+  const staged = await readImpByName(ctx.target.db, 'dev');
+  const isFree = await probeSlotFree(ctx.target.db, created.slot, ctx.target.now());
 
   expect(staged).toBeUndefined();
   expect(isFree).toBe(true);
@@ -861,8 +861,8 @@ test('it removes the memory and frees the slot of a warm stream cut short with n
   writeFileSync(ctx.source.storage.resolveImpPaths(created.id).disk, 'x'.repeat(64 * 1024));
 
   const status = await ctx.runMove('dev');
-  const staged = await findImpByName(ctx.target.db, 'dev');
-  const isFree = await isSlotFree(ctx.target.db, created.slot, ctx.target.now());
+  const staged = await readImpByName(ctx.target.db, 'dev');
+  const isFree = await probeSlotFree(ctx.target.db, created.slot, ctx.target.now());
 
   // the target ended the stream on its own; the source still owes the abort
   expect(status.error).toInclude('did not confirm the abort');
@@ -877,7 +877,7 @@ test('it carries a pending disk grow with a warm move', async () => {
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
-  const slept = await findImpByName(ctx.source.db, 'dev');
+  const slept = await readImpByName(ctx.source.db, 'dev');
 
   invariant(slept);
 
@@ -888,7 +888,7 @@ test('it carries a pending disk grow with a warm move', async () => {
 
   await ctx.runMove('dev');
 
-  const moved = await findImpByName(ctx.target.db, 'dev');
+  const moved = await readImpByName(ctx.target.db, 'dev');
 
   expect(moved?.isDiskGrowPending).toBe(true);
 });
@@ -899,7 +899,7 @@ test('it grows the guest at the first wake on the target after a warm move with 
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
-  const slept = await findImpByName(ctx.source.db, 'dev');
+  const slept = await readImpByName(ctx.source.db, 'dev');
 
   invariant(slept);
 
@@ -911,7 +911,7 @@ test('it grows the guest at the first wake on the target after a warm move with 
   await ctx.runMove('dev');
   await ctx.targetApp.client.imps.wake({ name: 'dev' });
 
-  const grown = await findImpByName(ctx.target.db, 'dev');
+  const grown = await readImpByName(ctx.target.db, 'dev');
 
   expect(ctx.target.filesystemGrows).toStrictEqual([
     ctx.target.storage.resolveImpPaths(created.id).disk,

@@ -3,11 +3,11 @@ import { buildStubClock } from '../../testing/platform/build-stub-clock';
 import { buildStubElasticGuest } from '../../testing/vm/build-stub-elastic-guest';
 import { buildStubGuestMemory } from '../../testing/vm/build-stub-guest-memory';
 import { buildImpPaths } from '../storage/data-layout';
-import { findShrinkTargetMib, shrinkGuest } from './shrink-guest';
+import { getShrinkTargetMib, shrinkGuest } from './shrink-guest';
 
 test('#findShrinkTargetMib leaves the guest a step more available than its grow mark', () => {
   expect(
-    findShrinkTargetMib({
+    getShrinkTargetMib({
       pluggedMib: 1024,
       requestedMib: 1024,
       totalMib: 1536,
@@ -18,14 +18,14 @@ test('#findShrinkTargetMib leaves the guest a step more available than its grow 
 
 test('#findShrinkTargetMib never goes below 0', () => {
   expect(
-    findShrinkTargetMib({ pluggedMib: 512, requestedMib: 512, totalMib: 1024, availableMib: 1000 }),
+    getShrinkTargetMib({ pluggedMib: 512, requestedMib: 512, totalMib: 1024, availableMib: 1000 }),
   ).toBe(0);
 });
 
 test('#findShrinkTargetMib keeps 15 % of a large guest free, in whole blocks', () => {
   // (623 + 256) / 0.85 is 1034.1: 1036 in whole 2 MiB blocks, 524 of it plugged
   expect(
-    findShrinkTargetMib({ pluggedMib: 512, requestedMib: 512, totalMib: 1024, availableMib: 401 }),
+    getShrinkTargetMib({ pluggedMib: 512, requestedMib: 512, totalMib: 1024, availableMib: 401 }),
   ).toBe(524);
 });
 

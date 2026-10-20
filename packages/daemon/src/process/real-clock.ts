@@ -5,5 +5,5 @@ import { startRealTimer } from './start-real-timer';
 export const REAL_CLOCK: Clock = {
   now: () => Date.now(),
   startTimer: startRealTimer,
-  sleep: (ms) => Bun.sleep(ms),
+  sleep: (durationMs) => Bun.sleep(durationMs),
 };

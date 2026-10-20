@@ -10,7 +10,7 @@ import {
   startStubInnerAgent,
 } from '@impz/daemon/testing';
 import { writeHostConfig } from '../config/host-store';
-import { parseJsonOutput } from '../test-utils/parse-json-output';
+import { readJsonOutput } from '../test-utils/read-json-output';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';
 
@@ -21,11 +21,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-cli-info-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-cli-info-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { home: { HOME: dir, XDG_CONFIG_HOME: dir }, stack };
+  return { home: { HOME: directory, XDG_CONFIG_HOME: directory }, stack };
 }
 
 test('it shows an awake imp’s inner container as down, with its restarts and last error', async () => {
@@ -115,7 +115,7 @@ test('it prints impd’s --json output in the shape of the committed schema', as
   const shown = await runCLIInProcess({ args: ['info', '--json'], env: ctx.home });
 
   expect(shown.code).toBe(0);
-  expect(parseJsonOutput('info', shown.stdout).data).toStrictEqual(JSON.parse(shown.stdout));
+  expect(readJsonOutput('info', shown.stdout).data).toStrictEqual(JSON.parse(shown.stdout));
 });
 
 test('it prints an imp’s --json output in the shape of the committed schema', async () => {
@@ -138,5 +138,5 @@ test('it prints an imp’s --json output in the shape of the committed schema', 
   const shown = await runCLIInProcess({ args: ['info', 'web', '--json'], env: ctx.home });
 
   expect(shown.code).toBe(0);
-  expect(parseJsonOutput('info <name>', shown.stdout).data).toStrictEqual(JSON.parse(shown.stdout));
+  expect(readJsonOutput('info <name>', shown.stdout).data).toStrictEqual(JSON.parse(shown.stdout));
 });

@@ -18,11 +18,13 @@ export function startStubParkedAgent(vsockSocket: string) {
 
     const boot = claimed.isClaimed
       ? {
+          // oxlint-disable zgeoff/no-abbreviated-names -- `ms` is BootStep's field in proto/
           boot_steps: [
             { name: 'claim', ms: 3 },
             { name: 'mount', ms: 40 },
             { name: 'ready', ms: 2 },
           ],
+          // oxlint-enable zgeoff/no-abbreviated-names
         }
       : { stage: 'template' };
 

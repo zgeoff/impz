@@ -6,13 +6,13 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { startStubFirecrackerApi } from './start-stub-firecracker-api';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-fc-api-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-fc-api-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { socket: join(dir, 'api.sock') };
+  return { socket: join(directory, 'api.sock') };
 }
 
 test('it answers a GET it has no answer for with 200 and a JSON object, as Firecracker does', async () => {

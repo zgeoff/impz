@@ -36,12 +36,8 @@ import {
 
 const JsonSchemaSchema = z.record(z.string(), z.unknown()).readonly();
 
-type JsonSchema = z.infer<typeof JsonSchemaSchema>;
-
 // `toServer`: a client sends it and impd reads it; `toClient`: the reverse
 const MessageDirectionSchema = z.enum(['toServer', 'toClient']);
-
-export type MessageDirection = z.infer<typeof MessageDirectionSchema>;
 
 const ProcedureSchemaSchema = z
   .object({
@@ -76,10 +72,6 @@ export const ProtocolSchemaSchema = z
   .readonly();
 
 export type ProtocolSchema = z.infer<typeof ProtocolSchemaSchema>;
-
-type ProcedureSchema = z.infer<typeof ProcedureSchemaSchema>;
-
-type MessageSchema = z.infer<typeof MessageSchemaSchema>;
 
 // What a client and impd agree on, as JSON Schema, for the breaking-change
 // check: docs/runbooks/releasing.md#breaking-changes.
@@ -125,6 +117,8 @@ export function buildProtocolSchema(): ProtocolSchema {
   };
 }
 
+type ProcedureSchema = z.infer<typeof ProcedureSchemaSchema>;
+
 // a procedure's path is its RPC path, `imps.create` for /rpc/imps/create
 function collectProcedures(
   node: unknown,
@@ -166,10 +160,7 @@ function isProcedure(node: unknown): node is Procedure {
   return isContractProcedure(node);
 }
 
-// A message on the wire is what its reader parses, so it is the schema's input.
-function toMessage(direction: MessageDirection, schema: unknown): MessageSchema {
-  return { direction, schema: buildJsonSchema(schema, 'input') };
-}
+type JsonSchema = z.infer<typeof JsonSchemaSchema>;
 
 // oRPC's serializer carries a Date as itself. A custom type or a transform,
 // which JSON Schema cannot express, becomes any value, tagged with its kind.
@@ -200,4 +191,13 @@ function buildJsonSchema(schema: unknown, io: 'input' | 'output'): JsonSchema {
   });
 
   return json;
+}
+
+export type MessageDirection = z.infer<typeof MessageDirectionSchema>;
+
+type MessageSchema = z.infer<typeof MessageSchemaSchema>;
+
+// A message on the wire is what its reader parses, so it is the schema's input.
+function toMessage(direction: MessageDirection, schema: unknown): MessageSchema {
+  return { direction, schema: buildJsonSchema(schema, 'input') };
 }

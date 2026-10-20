@@ -12,11 +12,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-unpack-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-unpack-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 // GNU tar 1.35 exits 0 when it runs without CAP_SETFCAP, and prints this
@@ -144,15 +144,15 @@ test('#readSetfcapWarning gives the start warning when CapEff lacks CAP_SETFCAP'
 test('#writeExportedTree unpacks the container export into the root', async () => {
   const ctx = await setupTest();
 
-  const tree = join(ctx.dir, 'tree');
-  const root = join(ctx.dir, 'root');
+  const tree = join(ctx.directoryPath, 'tree');
+  const root = join(ctx.directoryPath, 'root');
 
   mkdirSync(join(tree, 'etc'), { recursive: true });
   mkdirSync(root);
   writeFileSync(join(tree, 'etc', 'hostname'), 'imp\n');
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     exportTar: Bun.spawnSync(['tar', '-C', tree, '-c', 'etc']).stdout,
   });
 
@@ -166,12 +166,12 @@ test('#writeExportedTree unpacks the container export into the root', async () =
 test('#writeExportedTree fails the unpack when the export fails', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir });
+  const docker = createStubDockerCli({ directory: ctx.directoryPath });
 
   updateEnv('PATH', docker.path);
 
   // pipefail reports tar's exit, which the empty export fails
-  expect(writeExportedTree('c'.repeat(64), ctx.dir)).rejects.toThrowWithMessage(
+  expect(writeExportedTree('c'.repeat(64), ctx.directoryPath)).rejects.toThrowWithMessage(
     Error,
     /^docker export \| tar exited 2: stub docker: export c{64} is not modelled\n/v,
   );

@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMockGenerationMeta } from '../../testing/imps/build-mock-generation-meta';
 import {
-  findGenerationDir,
-  hasTombstone,
+  getGenerationDir,
+  probeTombstone,
   readSessionLogRange,
   removeGenerationDir,
   removeTombstone,
@@ -22,8 +22,8 @@ async function setupTest() {
   return { root, sessionLogsDir: join(root, 'imps', 'x', 'session-logs') };
 }
 
-test('#findGenerationDir returns the child of the logs directory a generation names', () => {
-  expect(findGenerationDir('/var/lib/imp/imps/x/session-logs', 'd'.repeat(32))).toBe(
+test('#getGenerationDir returns the child of the logs directory a generation names', () => {
+  expect(getGenerationDir('/var/lib/imp/imps/x/session-logs', 'd'.repeat(32))).toBe(
     `/var/lib/imp/imps/x/session-logs/${'d'.repeat(32)}`,
   );
 });
@@ -54,10 +54,11 @@ test.each([
   ['32 letters past f', 'g'.repeat(32)],
   ['a boot id', '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11'],
   ['a generation with a parent step after it', `${'d'.repeat(32)}/..`],
-])('#findGenerationDir refuses %s', (_label, generation) => {
-  expect(() =>
-    findGenerationDir('/var/lib/imp/imps/x/session-logs', generation),
-  ).toThrowWithMessage(Error, `session log: ${JSON.stringify(generation)} is not a generation`);
+])('#getGenerationDir refuses %s', (_label, generation) => {
+  expect(() => getGenerationDir('/var/lib/imp/imps/x/session-logs', generation)).toThrowWithMessage(
+    Error,
+    `session log: ${JSON.stringify(generation)} is not a generation`,
+  );
 });
 
 test.each([
@@ -223,30 +224,30 @@ test.each([
   ['32 uppercase hex digits', 'A'.repeat(32)],
   ['32 letters past f', 'g'.repeat(32)],
   ['a boot id', '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11'],
-])('#hasTombstone answers false for %s', async (_label, generation) => {
+])('#probeTombstone answers false for %s', async (_label, generation) => {
   const ctx = await setupTest();
 
   mkdirSync(join(ctx.sessionLogsDir, '.deleted'), { recursive: true });
   writeFileSync(join(ctx.root, 'evil'), 'kept');
 
-  expect(hasTombstone(ctx.sessionLogsDir, generation)).toBe(false);
+  expect(probeTombstone(ctx.sessionLogsDir, generation)).toBe(false);
 });
 
-test('#hasTombstone finds the tombstone of a deleted generation', async () => {
+test('#probeTombstone finds the tombstone of a deleted generation', async () => {
   const ctx = await setupTest();
 
   writeTombstone(ctx.sessionLogsDir, 'd'.repeat(32));
 
-  expect(hasTombstone(ctx.sessionLogsDir, 'd'.repeat(32))).toBe(true);
+  expect(probeTombstone(ctx.sessionLogsDir, 'd'.repeat(32))).toBe(true);
 });
 
 test('#readSessionLogRange reads a segment the bound removed between the plan and the read as a gap', async () => {
   const ctx = await setupTest();
 
-  const dir = join(ctx.sessionLogsDir, 'd'.repeat(32));
+  const directory = join(ctx.sessionLogsDir, 'd'.repeat(32));
 
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, '100.seg'), 'later');
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, '100.seg'), 'later');
 
   // the first look still counts the segment at 0, whose file has gone
   const fresh = buildMockGenerationMeta({
@@ -321,10 +322,10 @@ test('#readSessionLogRange rejects a read past the end of the log', async () => 
 test('#readSessionLogRange rejects a segment file shorter than its meta counts', async () => {
   const ctx = await setupTest();
 
-  const dir = join(ctx.sessionLogsDir, 'd'.repeat(32));
+  const directory = join(ctx.sessionLogsDir, 'd'.repeat(32));
 
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, '0.seg'), 'abc');
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, '0.seg'), 'abc');
 
   const meta = buildMockGenerationMeta({
     session: 'main',

@@ -19,16 +19,16 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'docker-build-'));
+  const directory = await mkdtemp(join(tmpdir(), 'docker-build-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  const engine = startStubDockerEngine({ dir });
+  const engine = startStubDockerEngine({ directoryPath: directory });
 
   stack.defer(() => engine.stop());
 
   // a release deferred here runs before the engine stops and the dir goes
-  return { stack, dir, engine };
+  return { stack, directoryPath: directory, engine };
 }
 
 test('#readBuiltImageId reads the image ID past the trace messages', async () => {
@@ -56,7 +56,7 @@ test('#readBuiltImageId passes each trace it can decode to onTrace, and goes on 
   );
 
   expect(traces).toStrictEqual([
-    { vertexes: [], logs: [{ vertex: 'sha1', msg: new TextEncoder().encode('hi') }] },
+    { vertexes: [], logs: [{ vertex: 'sha1', message: new TextEncoder().encode('hi') }] },
   ]);
 });
 
@@ -85,7 +85,7 @@ test('#readBuiltImageId fails a stream with no image ID as impd error, not the c
 test('#runDockerBuild sends the context as a tar body, with a query the proxy lets through', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
 
   await Bun.write(tarPath, 'the context');
 
@@ -113,7 +113,7 @@ test('#runDockerBuild sends the context as a tar body, with a query the proxy le
 test('#runDockerBuild returns the image ID the engine built', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
 
   await Bun.write(tarPath, 'the context');
 
@@ -139,7 +139,7 @@ test('#runDockerBuild returns the image ID the engine built', async () => {
 test('#runDockerBuild sends the lines and the step of the engine trace to its output', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
   const lines: string[] = [];
   const steps: string[] = [];
 
@@ -195,7 +195,7 @@ test('#runDockerBuild sends the lines and the step of the engine trace to its ou
 test('#runDockerBuild reads a message split across chunks whole', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
 
   await Bun.write(tarPath, 'the context');
 
@@ -232,7 +232,7 @@ test('#runDockerBuild reads a message split across chunks whole', async () => {
 test('#runDockerBuild fails with the proxy refusal as the client bad request', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
 
   await Bun.write(tarPath, 'the context');
 
@@ -253,7 +253,7 @@ test('#runDockerBuild fails with the proxy refusal as the client bad request', a
 test('#runDockerBuild fails a context over the proxy limit as the client build', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
 
   await Bun.write(tarPath, 'the context');
 
@@ -274,7 +274,7 @@ test('#runDockerBuild fails a context over the proxy limit as the client build',
 test('#runDockerBuild fails a 403 the proxy did not write as impd error', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
 
   await Bun.write(tarPath, 'the context');
 
@@ -300,7 +300,7 @@ test('#runDockerBuild fails a 403 the proxy did not write as impd error', async 
 test('#runDockerBuild fails the proxy engine failure as impd error', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
 
   await Bun.write(tarPath, 'the context');
 
@@ -328,7 +328,7 @@ test('#runDockerBuild fails the proxy engine failure as impd error', async () =>
 test('#runDockerBuild fails an answer that is not JSON with its text', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
 
   await Bun.write(tarPath, 'the context');
 
@@ -349,7 +349,7 @@ test('#runDockerBuild fails an answer that is not JSON with its text', async () 
 test('#runDockerBuild fails a line that is not JSON and names it', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
 
   await Bun.write(tarPath, 'the context');
 
@@ -374,7 +374,7 @@ test('#runDockerBuild fails a line that is not JSON and names it', async () => {
 test('#runDockerBuild fails a line longer than 8 MiB', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
 
   await Bun.write(tarPath, 'the context');
 
@@ -399,7 +399,7 @@ test('#runDockerBuild fails a line longer than 8 MiB', async () => {
 test('#runDockerBuild ends the request when its signal aborts while the build runs', async () => {
   const ctx = await setupTest();
 
-  const tarPath = join(ctx.dir, 'context.tar');
+  const tarPath = join(ctx.directoryPath, 'context.tar');
 
   await Bun.write(tarPath, 'the context');
 
@@ -445,7 +445,7 @@ test('#runDockerBuild gets the image of a build silent past the idle limit, whic
   const ended = Promise.withResolvers<void>();
 
   const control = await startStubSilentBuildEngine({
-    socketPath: join(ctx.dir, 'control-engine.sock'),
+    socketPath: join(ctx.directoryPath, 'control-engine.sock'),
     imageId: `sha256:${'d'.repeat(64)}`,
     holdUntil: () => ended.promise,
   });
@@ -454,7 +454,7 @@ test('#runDockerBuild gets the image of a build silent past the idle limit, whic
 
   // silent until the control's connection is gone, past the limit
   const build = await startStubSilentBuildEngine({
-    socketPath: join(ctx.dir, 'build-engine.sock'),
+    socketPath: join(ctx.directoryPath, 'build-engine.sock'),
     imageId: `sha256:${'c'.repeat(64)}`,
     holdUntil: () => control.closed,
   });
@@ -462,7 +462,7 @@ test('#runDockerBuild gets the image of a build silent past the idle limit, whic
   ctx.stack.defer(() => build.stop());
 
   const cancelled = await startStubSilentBuildEngine({
-    socketPath: join(ctx.dir, 'cancel-engine.sock'),
+    socketPath: join(ctx.directoryPath, 'cancel-engine.sock'),
     imageId: `sha256:${'e'.repeat(64)}`,
     holdUntil: () => ended.promise,
   });
@@ -479,10 +479,10 @@ test('#runDockerBuild gets the image of a build silent past the idle limit, whic
       process.execPath,
       join(import.meta.dir, '../../testing/imps/run-idle-limited-docker-build.ts'),
       JSON.stringify({
-        dir: ctx.dir,
-        buildEngine: join(ctx.dir, 'build-engine.sock'),
-        cancelEngine: join(ctx.dir, 'cancel-engine.sock'),
-        controlEngine: join(ctx.dir, 'control-engine.sock'),
+        directory: ctx.directoryPath,
+        buildEngine: join(ctx.directoryPath, 'build-engine.sock'),
+        cancelEngine: join(ctx.directoryPath, 'cancel-engine.sock'),
+        controlEngine: join(ctx.directoryPath, 'control-engine.sock'),
       }),
     ],
     {

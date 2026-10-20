@@ -14,7 +14,7 @@ import { createStubDockerCli } from '../testing/imps/create-stub-docker-cli';
 import { readNoTailscale } from '../testing/network/read-no-tailscale';
 import { buildQueryGate } from '../testing/platform/build-query-gate';
 import { buildStubTickerTimer } from '../testing/platform/build-stub-ticker-timer';
-import { findFreePorts } from '../testing/platform/find-free-ports';
+import { claimFreePorts } from '../testing/platform/claim-free-ports';
 import { startTestImpd } from '../testing/start-test-impd';
 import { TEST_TOKEN } from '../testing/test-token';
 import { buildStubCpuCgroups } from '../testing/vm/build-stub-cpu-cgroups';
@@ -148,7 +148,7 @@ test('it writes a failed default image seed to the log it is given', async () =>
   onTestFinished(() => rm(dockerDir, { recursive: true, force: true }));
 
   const docker = createStubDockerCli({
-    dir: dockerDir,
+    directory: dockerDir,
     images: [
       {
         refs: ['seed.test/ubuntu:24.04'],
@@ -175,7 +175,7 @@ test('it closes the ports it opened when a later startup step fails', async () =
   onTestFinished(() => stack.disposeAsync());
 
   // below the imps' port range, which the config keeps impd's own ports out of
-  const free = findFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+  const free = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
   const apiPort = free.take();
   const dnsPort = free.take();
   const taken = Bun.listen({ hostname: '0.0.0.0', port: free.take(), socket: { data: () => {} } });
@@ -346,7 +346,7 @@ test('it closes the database it opened itself when it stops', async () => {
 
   // no jailer, no boot template, no SSH; the API, the broker and the
   // resolver each take a free port below the imps' port range
-  const ports = findFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+  const ports = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
 
   const config = {
     ...loadConfig({
@@ -451,7 +451,7 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
 
   // no jailer, no boot template, no SSH; the API, the broker and the
   // resolver each take a free port below the imps' port range
-  const ports = findFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+  const ports = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
 
   const config = {
     ...loadConfig({
@@ -577,7 +577,7 @@ test('it answers /health without a token, not ready before the default image is 
   const dockerDir = await mkdtemp(join(tmpdir(), 'create-impd-docker-'));
 
   const docker = createStubDockerCli({
-    dir: dockerDir,
+    directory: dockerDir,
     images: [
       {
         refs: ['seed.test/ubuntu:24.04'],
@@ -596,7 +596,7 @@ test('it answers /health without a token, not ready before the default image is 
 
   // no jailer, no boot template, no SSH; the API, the broker and the
   // resolver each take a free port below the imps' port range
-  const ports = findFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+  const ports = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
 
   const config = {
     ...loadConfig({

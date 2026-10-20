@@ -12,7 +12,7 @@ export const MIGRATION_033_ADD_IMP_OOPS_HOLD: Migration = {
         .alterTable('imps')
 
         // 1 while a kernel oops holds the imp's disk, until a reboot frees it
-        .addColumn('oops_hold', 'integer', (c) => c.notNull().defaultTo(0))
+        .addColumn('oops_hold', 'integer', (column) => column.notNull().defaultTo(0))
         .execute();
 
       // the text KERNEL_OOPS_TRIGGER held when this migration was written

@@ -3,13 +3,13 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import type { Imp } from '@impz/api';
 import invariant from 'tiny-invariant';
 import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
-import { findBrokenInvariants } from '../../testing/imps/find-broken-invariants';
+import { readBrokenInvariants } from '../../testing/imps/read-broken-invariants';
 import { waitForOutcome } from '../../testing/imps/wait-for-outcome';
 import { startTestImpd } from '../../testing/start-test-impd';
 import type { TestImpdOptions } from '../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
 import { STUB_AGENT_VERSION } from '../../testing/vm/build-stub-vmm';
-import { createImp, findImpByName } from '../db/imps';
+import { createImp, readImpByName } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
 import { readSnapshotMeta, writeSnapshotMeta } from '../sleep/snapshot-meta';
 import { readVmIdentity } from '../sleep/vm-identity';
@@ -112,7 +112,7 @@ test('it wakes a kept imp on the old agent after an agent upgrade', async () => 
 
   const wokenDrive = readVmIdentity(buildImpPaths(ctx.dataDir, asleep.id))?.systemDrive;
 
-  const invariants = await findBrokenInvariants(ctx, true);
+  const invariants = await readBrokenInvariants(ctx, true);
 
   expect(ctx.fake.wakes).toHaveLength(wakesBefore + 1);
   expect(woken).toMatchObject({ state: 'running', outdated: ['agent'] });
@@ -137,7 +137,7 @@ test('it starts a stopped imp on the new agent after an agent upgrade', async ()
 
   const startedDrive = readVmIdentity(buildImpPaths(ctx.dataDir, off.id))?.systemDrive;
 
-  const invariants = await findBrokenInvariants(ctx, true);
+  const invariants = await readBrokenInvariants(ctx, true);
 
   expect(started.state).toBe('running');
   expect(started.outdated).toBeUndefined();
@@ -413,8 +413,8 @@ test('it keeps the disk to a woken VM with the wrong agent that will not stop', 
   const waking = ctx.client.imps.wake({ name: 'dev' });
 
   const outcome = await waitForOutcome(waking, 10_000);
-  const imp = await findImpByName(ctx.db, 'dev');
-  const invariants = await findBrokenInvariants(ctx, true);
+  const imp = await readImpByName(ctx.db, 'dev');
+  const invariants = await readBrokenInvariants(ctx, true);
 
   // no cold boot: the VM that would not stop still has the disk open
   expect(outcome).toBe('failed');

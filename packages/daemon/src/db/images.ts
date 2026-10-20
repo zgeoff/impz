@@ -46,7 +46,7 @@ export async function createImage(db: ImpDatabase, image: NewImage): Promise<Ima
   return toImageRecord(row);
 }
 
-export async function findImageByName(
+export async function readImageByName(
   db: ImpDatabase,
   name: string,
 ): Promise<ImageRecord | undefined> {
@@ -55,7 +55,7 @@ export async function findImageByName(
   return row === undefined ? undefined : toImageRecord(row);
 }
 
-export async function findImageByDigest(
+export async function readImageByDigest(
   db: ImpDatabase,
   digest: string,
 ): Promise<ImageRecord | undefined> {
@@ -70,7 +70,7 @@ export async function findImageByDigest(
   return row === undefined ? undefined : toImageRecord(row);
 }
 
-export async function findImageById(db: ImpDatabase, id: string): Promise<ImageRecord | undefined> {
+export async function readImageById(db: ImpDatabase, id: string): Promise<ImageRecord | undefined> {
   const row = await db.selectFrom('images').selectAll().where('id', '=', id).executeTakeFirst();
 
   return row === undefined ? undefined : toImageRecord(row);

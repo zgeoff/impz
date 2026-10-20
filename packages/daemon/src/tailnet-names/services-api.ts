@@ -19,7 +19,6 @@ export type TailnetService = z.infer<typeof ServiceSchema>;
 
 const ServiceListSchema = z.object({ vipServices: z.array(ServiceSchema).nullable().optional() });
 const TokenSchema = z.object({ access_token: z.string(), expires_in: z.number().positive() });
-const ErrorSchema = z.object({ message: z.string() });
 
 // what the definition of one imp's service says
 export interface ServiceDefinition {
@@ -40,7 +39,7 @@ export interface ServicesApi {
   readonly writeService: (definition: ServiceDefinition) => Promise<void>;
 
   // a service that is already gone counts as deleted
-  readonly deleteService: (name: string) => Promise<void>;
+  readonly removeService: (name: string) => Promise<void>;
 }
 
 class TailscaleApiError extends Error {
@@ -155,7 +154,7 @@ export function createServicesApi(options: ServicesApiOptions): ServicesApi {
     writeService: async (definition) => {
       await sendRequest('PUT', toPath(definition.name), definition);
     },
-    deleteService: async (name) => {
+    removeService: async (name) => {
       try {
         await sendRequest('DELETE', toPath(name));
       } catch (error) {
@@ -167,9 +166,7 @@ export function createServicesApi(options: ServicesApiOptions): ServicesApi {
   };
 }
 
-function toPath(name: string): string {
-  return `/tailnet/-/services/${encodeURIComponent(name)}`;
-}
+const ErrorSchema = z.object({ message: z.string() });
 
 function readErrorText(text: string): string {
   try {
@@ -177,4 +174,8 @@ function readErrorText(text: string): string {
   } catch {
     return text.slice(0, 200);
   }
+}
+
+function toPath(name: string): string {
+  return `/tailnet/-/services/${encodeURIComponent(name)}`;
 }

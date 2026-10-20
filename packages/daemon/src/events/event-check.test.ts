@@ -6,14 +6,14 @@ import { createEventCheck } from './event-check';
 
 function setupTest() {
   const metrics = startInMemoryMetrics();
-  const clock = { ms: 0 };
+  const clock = { durationMs: 0 };
   const logs: string[] = [];
 
   const isValid = createEventCheck({
     log: (message) => {
       logs.push(message);
     },
-    now: () => clock.ms,
+    now: () => clock.durationMs,
   });
 
   return { metrics, clock, logs, isValid };
@@ -53,12 +53,12 @@ test('it logs the drops of one type at most every 5 minutes, with the count sinc
 
   ctx.isValid(buildMockGovernorDecision({ name: 'Bad' }));
 
-  ctx.clock.ms = 60_000;
+  ctx.clock.durationMs = 60_000;
 
   ctx.isValid(buildMockGovernorDecision({ name: 'Worse' }));
   ctx.isValid(buildMockGovernorDecision({ name: '1st' }));
 
-  ctx.clock.ms = 5 * 60_000;
+  ctx.clock.durationMs = 5 * 60_000;
 
   ctx.isValid(buildMockGovernorDecision({ name: 'Last' }));
 

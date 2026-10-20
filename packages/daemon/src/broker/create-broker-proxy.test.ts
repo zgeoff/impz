@@ -11,7 +11,7 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
 import { buildStubBrokerGuest } from '../../testing/network/build-stub-broker-guest';
-import { buildStubBrokerTokenEndpoint } from '../../testing/network/build-stub-broker-token-endpoint';
+import { createStubBrokerTokenEndpoint } from '../../testing/network/create-stub-broker-token-endpoint';
 import { startStubBrokerGuestSocket } from '../../testing/network/start-stub-broker-guest-socket';
 import { startStubBrokerHoldTarget } from '../../testing/network/start-stub-broker-hold-target';
 import { startStubBrokerPlainUpstream } from '../../testing/network/start-stub-broker-plain-upstream';
@@ -22,8 +22,8 @@ import { buildStubHeldAnswer } from '../../testing/platform/build-stub-held-answ
 import { startTestImpd } from '../../testing/start-test-impd';
 import { listAuditEntries } from '../db/broker-audit';
 import { createImage } from '../db/images';
-import { findImpByName } from '../db/imps';
-import { findSecret, listGrantNames, removeCheckedGrant } from '../db/secrets';
+import { readImpByName } from '../db/imps';
+import { listGrantNames, readSecret, removeCheckedGrant } from '../db/secrets';
 import { buildImagePaths } from '../storage/data-layout';
 import { loadOrCreateBrokerCa } from './broker-ca';
 
@@ -51,9 +51,9 @@ async function setupTest() {
   const tunnelAnswers = new Map<string, () => Response>();
 
   const realHost = await startStubBrokerTlsUpstream(stack, {
-    dir: join(dataDir, 'real-host'),
+    directory: join(dataDir, 'real-host'),
     host: 'api.github.com',
-    fetch: (request) => {
+    respond: (request: Request) => {
       const path = new URL(request.url).pathname;
 
       tunnelled.push({
@@ -78,8 +78,8 @@ async function setupTest() {
   const answers = new Map<string, () => Response | Promise<Response>>();
 
   const upstream = await startStubBrokerTlsUpstream(stack, {
-    dir: join(dataDir, 'upstream'),
-    fetch: async (request) => {
+    directory: join(dataDir, 'upstream'),
+    respond: async (request: Request) => {
       const body = await request.arrayBuffer();
 
       const path = new URL(request.url).pathname;
@@ -252,7 +252,7 @@ test('it records the audit row of a request that ends after its imp is destroyed
   const destroy = ctx.client.imps.destroy({ name: 'dev' });
 
   await waitFor(async () => {
-    const imp = await findImpByName(ctx.db, 'dev');
+    const imp = await readImpByName(ctx.db, 'dev');
 
     expect(imp).toBeUndefined();
   });
@@ -870,7 +870,7 @@ test('it never sends a rebound value to the host the secret had before', async (
   // the row has switched and the old file is gone; the replace itself then
   // waits for the held request, as a revoke's prune does
   await waitFor(async () => {
-    const secret = await findSecret(ctx.db, 'api');
+    const secret = await readSecret(ctx.db, 'api');
     const files = await readdir(join(ctx.dataDir, 'secrets'));
 
     expect(secret?.rules[0]?.host).toBe('other.example.com');
@@ -1268,7 +1268,7 @@ test('it sends the current access token to the granted host', async () => {
 
   ctx.answers.set('/v1', () => new Response('from the api'));
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -1312,7 +1312,7 @@ test('it sends the new access token after a refresh that used the rotated refres
 
   ctx.answers.set('/v2', () => new Response('from the api'));
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -1364,7 +1364,7 @@ test('it refreshes an access token the granted host revoked and sends the reques
 
   ctx.answers.set('/v1', () => new Response('from the api', { status: statuses.next() }));
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -1413,7 +1413,7 @@ test('it gives no credential for a secret with no access token', async () => {
   );
 
   // no answer is issued, so the first sign-in gets invalid_grant
-  server.use(buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token').handler);
+  server.use(createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token').handler);
 
   await ctx.client.imps.create({ name: 'dev' });
 
@@ -1448,7 +1448,7 @@ test('it keeps sending the valid access token of a secret that needs a new sign-
 
   ctx.answers.set('/v2', () => new Response('from the api'));
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -1490,7 +1490,7 @@ test('it answers a websocket upgrade 426 and never reaches the upstream', async 
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.example.com': ctx.upstreamOrigin } }),
   );
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
@@ -1532,8 +1532,8 @@ test('it refreshes through a token host that the test-upstreams file routes', as
 
   // the token host over TLS the broker verifies with the file's CA
   const tokenHost = await startStubBrokerTlsUpstream(ctx.stack, {
-    dir: join(ctx.dataDir, 'token-host'),
-    fetch: async (request) => {
+    directory: join(ctx.dataDir, 'token-host'),
+    respond: async (request: Request) => {
       const text = await request.text();
 
       const form = new URLSearchParams(text);

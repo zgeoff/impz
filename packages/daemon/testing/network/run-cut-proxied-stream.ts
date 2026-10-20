@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../../src/config';
 import { openDatabase } from '../../src/db/open-database';
-import { createActivityTracker } from '../../src/imps/activity-tracker';
+import { buildActivityTracker } from '../../src/imps/activity-tracker';
 import { getImpdLogger } from '../../src/process/get-impd-logger';
 import { setupLogging } from '../../src/process/setup-logging';
 import { createForwardedPeers } from '../../src/proxy/forwarded-peers';
@@ -34,7 +34,7 @@ const proxy = startWakeProxy({
   db,
   imps: {
     requireRunning: () => Promise.resolve({ imp, wokeMs: null }),
-    tracker: createActivityTracker(),
+    tracker: buildActivityTracker(),
     recordActivity: () => Promise.resolve(),
   },
   log: () => {},

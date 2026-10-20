@@ -1,7 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, statfsSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, statfsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import * as z from 'zod';
-import { findBootFallbacks } from './lib/boot-fallbacks';
+import { collectBootFallbacks } from './lib/boot-fallbacks';
 import { config } from './lib/config';
 import { createMissingImages } from './lib/fixtures';
 import { createInstanceClient, listImageNames, readInfo, runImp } from './lib/imp-cli';
@@ -18,8 +17,8 @@ import {
   runDevScript,
 } from './lib/instance';
 import {
-  buildHostBFixture,
   buildHostBFixtureDeps,
+  createHostBFixture,
   readHostBZfsRoot,
   readMoveOptions,
   removeMoveLeftovers,
@@ -33,7 +32,7 @@ import { removeDataDir } from './lib/remove-data-dir';
 import { resetBaseline } from './lib/reset-baseline';
 import { resolveDataWipe } from './lib/resolve-data-wipe';
 import { runSuite, stopSuiteGroup } from './lib/run-suite';
-import { checkRunPassed, runSuites } from './lib/run-suites';
+import { hasRunPassed, runSuites } from './lib/run-suites';
 import type { FixtureImage } from './lib/suites';
 import {
   FAST_GROUPS,
@@ -43,6 +42,8 @@ import {
   readSuiteSettings,
 } from './lib/suites';
 import { readTailscaleE2EAuthKey } from './lib/tailscale-key';
+import { writeResults } from './lib/write-results';
+import type { Section } from './lib/write-results';
 
 const USAGE = `imp end-to-end harness: every case drives impd through the CLI.
 
@@ -70,16 +71,6 @@ const PREFIX = 'e2e-';
 const RESULTS_DIR = join(REPO_ROOT, '.cache', 'e2e');
 const RESULTS_FILE = join(RESULTS_DIR, 'results.json');
 const METRICS_FILE = join(RESULTS_DIR, 'metrics.jsonl');
-
-interface Section {
-  readonly index: number;
-  readonly name: string;
-  readonly verdict: 'PASS' | 'FAIL';
-  readonly ms: number;
-}
-
-// one line of the metrics file a suite appends to: {"<key>": <value>}
-const MetricSchema = z.record(z.string(), z.unknown());
 let interrupted = false;
 
 // the pid of the suite process running now, which leads its group, so a
@@ -111,7 +102,7 @@ async function resetInstance(): Promise<void> {
   const targets = [data, hostB].filter((target) => target !== null);
 
   console.log(
-    `    clean reset: tailnet logout, remove ${instance.container}, wipe ${targets.map((target) => target.dir).join(' and ') || 'nothing'}`,
+    `    clean reset: tailnet logout, remove ${instance.container}, wipe ${targets.map((target) => target.directory).join(' and ') || 'nothing'}`,
   );
 
   const container = await runCommand(['docker', 'inspect', instance.container]);
@@ -275,7 +266,7 @@ async function runJourneyProcess(
 }
 
 // a suite's number in the acceptance order, as results.json names it
-function findSuiteIndex(name: string): number {
+function getSuiteIndex(name: string): number {
   return SUITES.findIndex((suite) => suite.name === name) + 1;
 }
 
@@ -295,7 +286,7 @@ async function checkNoBootFallbacks(name: string, since: Readonly<Date>): Promis
     return false;
   }
 
-  const fallbacks = findBootFallbacks(log);
+  const fallbacks = collectBootFallbacks(log);
 
   if (fallbacks.length === 0) {
     return true;
@@ -331,7 +322,7 @@ async function runTimed(
     index,
     name,
     verdict: passed ? 'PASS' : 'FAIL',
-    ms: Date.now() - started,
+    durationMs: Date.now() - started,
   };
 
   console.log(`== ${formatSection(section)}`);
@@ -340,7 +331,7 @@ async function runTimed(
 }
 
 function formatSection(section: Section): string {
-  return `[${String(section.index)}] ${section.name.padEnd(12)} ${section.verdict} ${(section.ms / 1000).toFixed(1).padStart(7)} s`;
+  return `[${String(section.index)}] ${section.name.padEnd(12)} ${section.verdict} ${(section.durationMs / 1000).toFixed(1).padStart(7)} s`;
 }
 
 // a host-B fixture as its suite runs it: B's options, and the suite's prefix
@@ -350,7 +341,7 @@ function readHostBFixture(fixture: string, keep: boolean): HostBFixture {
     const name = suite.fixtures?.find((candidate) => candidate === fixture);
 
     if (name !== undefined) {
-      return buildHostBFixture(readMoveOptions(name), suite.prefix, buildHostBFixtureDeps(keep));
+      return createHostBFixture(readMoveOptions(name), suite.prefix, buildHostBFixtureDeps(keep));
     }
   }
 
@@ -389,35 +380,6 @@ async function removeLeftovers(suites: readonly string[]): Promise<void> {
 
     console.error(`    cleanup failed: ${reason}`);
   }
-}
-
-function writeResults(sections: readonly Section[]): void {
-  const metrics = existsSync(METRICS_FILE)
-    ? readFileSync(METRICS_FILE, 'utf8')
-        .split('\n')
-        .filter((line) => line !== '')
-        .map((line) => MetricSchema.parse(JSON.parse(line)))
-    : [];
-
-  const results: Record<string, unknown> = {
-    runAt: new Date().toISOString(),
-    ramBudgetMib: config.ramBudgetMib,
-    idleTimeoutS: config.idleTimeoutS,
-  };
-
-  for (const section of sections) {
-    results[`section${String(section.index)}`] = {
-      name: section.name,
-      verdict: section.verdict,
-      ms: section.ms,
-    };
-  }
-
-  Object.assign(results, ...metrics);
-
-  writeFileSync(RESULTS_FILE, `${JSON.stringify(results, null, 2)}\n`);
-
-  console.log(`== results: ${RESULTS_FILE}`);
 }
 
 async function main(): Promise<number> {
@@ -522,14 +484,14 @@ async function main(): Promise<number> {
       isInterrupted: () => interrupted,
       now: Date.now,
       onSuiteStart: (name) => {
-        console.log(`== [${String(findSuiteIndex(name))}] ${name}`);
+        console.log(`== [${String(getSuiteIndex(name))}] ${name}`);
       },
       onSuiteEnd: (result) => {
         const section: Section = {
-          index: findSuiteIndex(result.name),
+          index: getSuiteIndex(result.name),
           name: result.name,
           verdict: result.passed ? 'PASS' : 'FAIL',
-          ms: result.ms,
+          durationMs: result.durationMs,
         };
 
         sections.push(section);
@@ -558,15 +520,22 @@ async function main(): Promise<number> {
     await stopPebble();
   }
 
-  writeResults(sections);
+  writeResults(sections, {
+    resultsFile: RESULTS_FILE,
+    metricsFile: METRICS_FILE,
+    ramBudgetMib: config.ramBudgetMib,
+    idleTimeoutS: config.idleTimeoutS,
+    now: () => new Date(),
+  });
 
+  console.log(`== results: ${RESULTS_FILE}`);
   console.log('== summary');
 
   for (const section of sections) {
     console.log(`   ${formatSection(section)}`);
   }
 
-  const passed = checkRunPassed({
+  const passed = hasRunPassed({
     passed: sections.map((section) => section.verdict === 'PASS'),
     stoppedBecause,
     interrupted,

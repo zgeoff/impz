@@ -83,7 +83,7 @@ export interface ResticSummary {
 export interface Restic {
   // creates the repository the first time
   readonly setupRepository: () => Promise<void>;
-  readonly backup: (dir: string, tags: readonly string[]) => Promise<ResticSummary>;
+  readonly backup: (directory: string, tags: readonly string[]) => Promise<ResticSummary>;
   readonly forget: (keep: BackupKeep) => Promise<void>;
   readonly prune: () => Promise<void>;
   readonly check: (readDataSubset: string) => Promise<void>;
@@ -96,7 +96,7 @@ export interface Restic {
   // `<snapshot>:<dir>` into target, sparse, limited to the include patterns
   readonly restore: (
     snapshotId: string,
-    dir: string,
+    directory: string,
     target: string,
     includes: readonly string[],
   ) => Promise<void>;
@@ -171,10 +171,17 @@ export function createRestic(deps: ResticDeps): Restic {
       }
     },
 
-    backup: async (dir, tags) => {
+    backup: async (directory, tags) => {
       const tagArgs = [BACKUP_TAG, ...tags].flatMap((tag) => ['--tag', tag]);
 
-      const stdout = await runChecked(['backup', '--json', '--host', RESTIC_HOST, ...tagArgs, dir]);
+      const stdout = await runChecked([
+        'backup',
+        '--json',
+        '--host',
+        RESTIC_HOST,
+        ...tagArgs,
+        directory,
+      ]);
 
       return parseBackupSummary(stdout);
     },
@@ -218,7 +225,7 @@ export function createRestic(deps: ResticDeps): Restic {
 
     dump: (snapshotId, path) => runForSnapshot(snapshotId, ['dump', '--quiet', snapshotId, path]),
 
-    restore: async (snapshotId, dir, target, includes) => {
+    restore: async (snapshotId, directory, target, includes) => {
       await runForSnapshot(snapshotId, [
         'restore',
         '--quiet',
@@ -226,7 +233,7 @@ export function createRestic(deps: ResticDeps): Restic {
         '--target',
         target,
         ...includes.flatMap((pattern) => ['--include', pattern]),
-        `${snapshotId}:${dir}`,
+        `${snapshotId}:${directory}`,
       ]);
     },
   };
@@ -243,7 +250,7 @@ export function parseSnapshots(stdout: string): ResticSnapshot[] {
       paths: snapshot.paths,
       tags: snapshot.tags ?? [],
     }))
-    .toSorted((a, b) => a.time.getTime() - b.time.getTime());
+    .toSorted((left, right) => left.time.getTime() - right.time.getTime());
 }
 
 // the last line of `restic backup --json`, its summary

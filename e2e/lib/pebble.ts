@@ -124,7 +124,7 @@ export async function startPebble(): Promise<void> {
 }
 
 // true when the harness started the stack for this run
-export function isPebbleRunning(): boolean {
+export function probePebbleRunning(): boolean {
   const names = buildNames(instance.container, HARNESS_MINICA_DIR);
 
   const inspect = Bun.spawnSync(['docker', 'inspect', '-f', '{{.State.Running}}', names.pebble], {

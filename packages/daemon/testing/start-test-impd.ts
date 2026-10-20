@@ -1,4 +1,5 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import type { ImpContract } from '@impz/api';
@@ -33,7 +34,7 @@ import type { VmRunner } from '../src/vmm/vm-runner';
 import { readThreadIds } from '../src/vmm/vm-stats';
 import { readNoTailscale } from './network/read-no-tailscale';
 import { buildStubTickerTimer } from './platform/build-stub-ticker-timer';
-import { findFreePorts } from './platform/find-free-ports';
+import { claimFreePorts } from './platform/claim-free-ports';
 import { TEST_TOKEN } from './test-token';
 import { buildStubVmm } from './vm/build-stub-vmm';
 
@@ -158,9 +159,7 @@ export async function startTestImpd(
   const dataDir = options.dataDir ?? mkdtempSync(`${tmpdir()}/impd-test-`);
 
   if (options.dataDir === undefined) {
-    stack.defer(() => {
-      rmSync(dataDir, { recursive: true, force: true });
-    });
+    stack.defer(() => rm(dataDir, { recursive: true, force: true }));
   }
 
   const db = await openDatabase(':memory:');
@@ -172,7 +171,7 @@ export async function startTestImpd(
   });
 
   // the API's and the broker's ports, below the imps' port range
-  const ports = findFreePorts(3, {
+  const ports = claimFreePorts(3, {
     pick: () => 10_000 + Math.floor(Math.random() * 10_000),
     onRelease: stack.defer.bind(stack),
   });
@@ -411,8 +410,8 @@ export async function startTestImpd(
         ...(frozenAt !== undefined && {
           sleepTiming: {
             now: readClock,
-            sleep: (ms: number) => {
-              clock.offsetMs += ms;
+            sleep: (durationMs: number) => {
+              clock.offsetMs += durationMs;
 
               return Promise.resolve();
             },
@@ -457,13 +456,14 @@ export async function startTestImpd(
   };
 
   const current = { impd: await startImpd(host.identity, fake.startGeneration()) };
+  const sendRequest = (request: Request) => current.impd.api.app.handle(request);
 
   const buildClient = (token: string): ContractRouterClient<ImpContract> =>
     createORPCClient(
       new RPCLink({
         url: 'http://impd.test/rpc',
         headers: { authorization: `Bearer ${token}` },
-        fetch: (request) => current.impd.api.app.handle(request),
+        fetch: sendRequest,
       }),
     );
 
@@ -496,8 +496,8 @@ export async function startTestImpd(
     bundleInstalls,
     diskUsage,
     now: readClock,
-    advance: (ms: number) => {
-      clock.offsetMs += ms;
+    advance: (durationMs: number) => {
+      clock.offsetMs += durationMs;
     },
     createSystemDrive,
     createTestImage,

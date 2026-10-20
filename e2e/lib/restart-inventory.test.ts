@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { buildMockImpRow } from './build-mock-imp-row';
-import { buildInventoryEntry, buildKeptScaleFleet, findAwakeRows } from './restart-inventory';
+import { buildInventoryEntry, buildKeptScaleFleet, collectAwakeRows } from './restart-inventory';
 
 test('#buildKeptScaleFleet names every imp of scale’s fleet when the harness kept it', () => {
   expect(buildKeptScaleFleet(['e2e-scale-'], 3)).toStrictEqual([
@@ -39,7 +39,7 @@ test('#buildInventoryEntry keeps what a restart must keep and leaves out state, 
   });
 });
 
-test('#findAwakeRows lists every imp that is neither sleeping nor stopped, with its state', () => {
+test('#collectAwakeRows lists every imp that is neither sleeping nor stopped, with its state', () => {
   const rows = [
     buildMockImpRow({ name: 'e2e-rs-disk', state: 'running' }),
     buildMockImpRow({ name: 'e2e-rs-mem', state: 'sleeping' }),
@@ -48,7 +48,7 @@ test('#findAwakeRows lists every imp that is neither sleeping nor stopped, with 
     buildMockImpRow({ name: 'e2e-rs-bad', state: 'error' }),
   ];
 
-  expect(findAwakeRows(rows)).toStrictEqual([
+  expect(collectAwakeRows(rows)).toStrictEqual([
     'e2e-rs-disk running',
     'e2e-rs-new creating',
     'e2e-rs-bad error',

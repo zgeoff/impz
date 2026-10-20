@@ -58,7 +58,10 @@ export function buildWarmMove(
 
 // Each fact of a warm move the target does not match; empty when it can
 // take the imp with its memory
-export function findWarmMismatches(move: Readonly<WarmMove>, target: Readonly<WarmHost>): string[] {
+export function collectWarmMismatches(
+  move: Readonly<WarmMove>,
+  target: Readonly<WarmHost>,
+): string[] {
   const found: string[] = [];
   const snapshot = move.snapshot;
 

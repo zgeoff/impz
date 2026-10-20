@@ -14,7 +14,7 @@ export interface PublicImp {
 
 // The public listeners' view of an imp: its stored auth while it is public,
 // undefined for a tailnet-only or unknown imp, which both get the same 404.
-export async function findPublicImp(db: ImpDatabase, name: string): Promise<PublicImp | undefined> {
+export async function readPublicImp(db: ImpDatabase, name: string): Promise<PublicImp | undefined> {
   const row = await db
     .selectFrom('imps')
     .select(['id', 'state', 'exposure', 'public_auth', 'public_user', 'public_hash'])

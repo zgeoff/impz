@@ -6,7 +6,7 @@ import type { TailnetRule } from './auth/tailnet-identity';
 import { loadBackupConfig } from './backup/backup-config';
 import type { BackupConfig } from './backup/backup-config';
 import { checkPublicPorts } from './https/check-public-ports';
-import { HttpsEnvSchema, listHttpsWarnings, parseHttpsConfig } from './https/https-config';
+import { HttpsEnvSchema, listHttpsWarnings, readHttpsConfig } from './https/https-config';
 import type { HttpsConfig } from './https/https-config';
 import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from './images/build-image';
 import { createPeerRanges, readPeerUrlAddress } from './moves/peer-address';
@@ -411,7 +411,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
 
   const hostAddresses = [...new Set(parseCidrList(parsed.IMP_HOST_ADDRESSES))];
   const isTailnetNode = parsed.TAILSCALE_AUTHKEY !== undefined || parsed.IMP_TAILSCALE_NODE === '1';
-  const https = parseHttpsConfig(parsed);
+  const https = readHttpsConfig(parsed);
 
   if (https !== null && https.public !== null) {
     checkPublicPorts(

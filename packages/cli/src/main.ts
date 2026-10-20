@@ -2,7 +2,7 @@
 import { isCommandNotFoundError } from 'gunshi';
 import { cli } from 'gunshi/bone';
 import packageJson from '../package.json' with { type: 'json' };
-import { buildProcessIO } from './cli/command-io';
+import { readProcessIO } from './cli/command-io';
 import type { CommandIO } from './cli/command-io';
 import { mainCommand, subCommands } from './cli/command-tree';
 import { CommandExitError, CommandLineError, UsageError } from './cli/errors';
@@ -96,7 +96,7 @@ function formatRefusal(error: AggregateError, command: string): string | null {
 }
 
 if (import.meta.main) {
-  const outcome = await runCLI(process.argv.slice(2), buildProcessIO());
+  const outcome = await runCLI(process.argv.slice(2), readProcessIO());
 
   if (outcome.mustExit) {
     process.exit(outcome.code);

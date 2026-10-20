@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { createImpGuard } from '../imp-guard';
+import { buildImpGuard } from '../imp-guard';
 import { buildMockMcpPrincipal } from './build-mock-mcp-principal';
 
 test('it builds a default mcp principal', () => {
@@ -17,7 +17,7 @@ test('it builds a default mcp principal', () => {
 
 test('it applies overrides on top of the defaults', () => {
   const client = createImpClient({ url: 'http://impd.test' });
-  const guard = createImpGuard({ prefix: 'agent-' });
+  const guard = buildImpGuard({ prefix: 'agent-' });
 
   const ends = new AbortController().signal;
 

@@ -5,7 +5,7 @@ import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../testing/start-test-impd';
 import { buildImagePaths } from '../storage/data-layout';
 import { createImage } from './images';
-import { findImpByName } from './imps';
+import { readImpByName } from './imps';
 import { listGrantNames, listGrantedRules } from './secrets';
 
 // Grants made, revoked, copied and changed at the same time: each race ends
@@ -48,7 +48,7 @@ test('it makes exactly one of two clashing grants made at once, and refuses the 
     ctx.client.grants.add({ name: 'dev', secret: 'gh-api' }),
   ]);
 
-  const dev = await findImpByName(ctx.db, 'dev');
+  const dev = await readImpByName(ctx.db, 'dev');
 
   invariant(dev);
 

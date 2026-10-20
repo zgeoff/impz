@@ -30,7 +30,7 @@ test('it streams the trace of a RUN step and then the image ID to a build', asyn
   ]);
 
   expect(
-    traces.flatMap((trace) => trace.logs.map((log) => new TextDecoder().decode(log.msg))),
+    traces.flatMap((trace) => trace.logs.map((log) => new TextDecoder().decode(log.message))),
   ).toStrictEqual(['compiling widget\nsecond line\n']);
 
   expect(messages.at(-1)).toStrictEqual({

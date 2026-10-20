@@ -4,18 +4,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'run-hooks-'));
+  const directory = await mkdtemp(join(tmpdir(), 'run-hooks-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it puts an env override back before the next test of a run', async () => {
   const ctx = await setupTest();
 
   await writeFile(
-    join(ctx.dir, 'env.test.ts'),
+    join(ctx.directoryPath, 'env.test.ts'),
     [
       "import { expect, test } from 'bun:test';",
       `import { updateEnv } from '${join(import.meta.dir, 'update-env.ts')}';`,
@@ -32,7 +32,7 @@ test('it puts an env override back before the next test of a run', async () => {
       join(import.meta.dir, 'preload-e2e.ts'),
       './env.test.ts',
     ],
-    { cwd: ctx.dir },
+    { cwd: ctx.directoryPath },
   );
 
   expect(result.exitCode).toBe(0);

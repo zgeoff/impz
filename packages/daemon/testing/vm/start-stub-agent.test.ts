@@ -9,19 +9,19 @@ import type { AgentFrame } from '../../src/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-agent-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it answers the CONNECT line with the handshake reply', async () => {
   const ctx = await setupTest();
 
-  await startStubAgent(join(ctx.dir, 'v.sock'), () => {});
+  await startStubAgent(join(ctx.directoryPath, 'v.sock'), () => {});
 
-  const client = createConnection(join(ctx.dir, 'v.sock'));
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
 
   onTestFinished(() => {
     client.destroy();
@@ -49,11 +49,11 @@ test('it hands each frame to the handler with the request and the frames so far'
 
   const calls: { request: AgentFrame; frames: AgentFrame[] }[] = [];
 
-  await startStubAgent(join(ctx.dir, 'v.sock'), (_socket, request, frames) => {
+  await startStubAgent(join(ctx.directoryPath, 'v.sock'), (_socket, request, frames) => {
     calls.push({ request, frames: [...frames] });
   });
 
-  const client = createConnection(join(ctx.dir, 'v.sock'));
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
 
   onTestFinished(() => {
     client.destroy();
@@ -91,9 +91,9 @@ test('it hands each frame to the handler with the request and the frames so far'
 
 test('it decodes frames sent in the same chunk as the CONNECT line', async () => {
   const ctx = await setupTest();
-  const agent = await startStubAgent(join(ctx.dir, 'v.sock'), () => {});
+  const agent = await startStubAgent(join(ctx.directoryPath, 'v.sock'), () => {});
 
-  const client = createConnection(join(ctx.dir, 'v.sock'));
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
 
   onTestFinished(() => {
     client.destroy();
@@ -117,9 +117,9 @@ test('it decodes frames sent in the same chunk as the CONNECT line', async () =>
 
 test('it waits for the rest of a CONNECT line split across chunks', async () => {
   const ctx = await setupTest();
-  const agent = await startStubAgent(join(ctx.dir, 'v.sock'), () => {});
+  const agent = await startStubAgent(join(ctx.directoryPath, 'v.sock'), () => {});
 
-  const client = createConnection(join(ctx.dir, 'v.sock'));
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
 
   onTestFinished(() => {
     client.destroy();
@@ -158,28 +158,34 @@ test('it keeps the frames of every connection in received', async () => {
 
   const requests: AgentFrame[] = [];
 
-  const agent = await startStubAgent(join(ctx.dir, 'v.sock'), (_socket, request) => {
+  const agent = await startStubAgent(join(ctx.directoryPath, 'v.sock'), (_socket, request) => {
     requests.push(request);
   });
 
-  const first = createConnection(join(ctx.dir, 'v.sock'));
+  const first = createConnection(join(ctx.directoryPath, 'v.sock'));
 
   onTestFinished(() => {
     first.destroy();
   });
 
-  const second = createConnection(join(ctx.dir, 'v.sock'));
+  const second = createConnection(join(ctx.directoryPath, 'v.sock'));
 
   onTestFinished(() => {
     second.destroy();
   });
 
   first.write(
-    Buffer.concat([Buffer.from('CONNECT 1024\n'), encodeJsonFrame(FRAME_TYPES.request, { n: 1 })]),
+    Buffer.concat([
+      Buffer.from('CONNECT 1024\n'),
+      encodeJsonFrame(FRAME_TYPES.request, { sequence: 1 }),
+    ]),
   );
 
   second.write(
-    Buffer.concat([Buffer.from('CONNECT 1024\n'), encodeJsonFrame(FRAME_TYPES.request, { n: 2 })]),
+    Buffer.concat([
+      Buffer.from('CONNECT 1024\n'),
+      encodeJsonFrame(FRAME_TYPES.request, { sequence: 2 }),
+    ]),
   );
 
   await waitFor(() => {
@@ -189,24 +195,24 @@ test('it keeps the frames of every connection in received', async () => {
   });
 
   expect(agent.received).toIncludeSameMembers([
-    { type: 1, payload: Buffer.from('{"n":1}') },
-    { type: 1, payload: Buffer.from('{"n":2}') },
+    { type: 1, payload: Buffer.from('{"sequence":1}') },
+    { type: 1, payload: Buffer.from('{"sequence":2}') },
   ]);
 
   expect(requests).toIncludeSameMembers([
-    { type: 1, payload: Buffer.from('{"n":1}') },
-    { type: 1, payload: Buffer.from('{"n":2}') },
+    { type: 1, payload: Buffer.from('{"sequence":1}') },
+    { type: 1, payload: Buffer.from('{"sequence":2}') },
   ]);
 });
 
 test('it hands the handler the socket that replies to the client', async () => {
   const ctx = await setupTest();
 
-  await startStubAgent(join(ctx.dir, 'v.sock'), (socket) => {
+  await startStubAgent(join(ctx.directoryPath, 'v.sock'), (socket) => {
     socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
   });
 
-  const client = createConnection(join(ctx.dir, 'v.sock'));
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
 
   onTestFinished(() => {
     client.destroy();
@@ -238,11 +244,11 @@ test('it hands the handler the socket that replies to the client', async () => {
 
 test('it stops accepting connections once closed', async () => {
   const ctx = await setupTest();
-  const agent = await startStubAgent(join(ctx.dir, 'v.sock'), () => {});
+  const agent = await startStubAgent(join(ctx.directoryPath, 'v.sock'), () => {});
 
   agent.close();
 
-  const client = createConnection(join(ctx.dir, 'v.sock'));
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
 
   onTestFinished(() => {
     client.destroy();
@@ -287,11 +293,11 @@ test('it closes when the stack it was given is released', async () => {
 
   onTestFinished(() => stack.disposeAsync());
 
-  await startStubAgent(join(ctx.dir, 'v.sock'), () => {}, { stack });
+  await startStubAgent(join(ctx.directoryPath, 'v.sock'), () => {}, { stack });
 
   await stack.disposeAsync();
 
-  const client = createConnection(join(ctx.dir, 'v.sock'));
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
 
   onTestFinished(() => {
     client.destroy();

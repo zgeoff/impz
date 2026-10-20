@@ -47,8 +47,8 @@ export function buildStubGuestMemory() {
   // reads still to reject, per imp dir, since the last request
   const lostReads = new Map<string, number>();
 
-  const readGuest = (paths: Pick<ImpPaths, 'dir'>): Promise<StubGuest> => {
-    const guest = guests.get(paths.dir);
+  const readGuest = (paths: Pick<ImpPaths, 'directory'>): Promise<StubGuest> => {
+    const guest = guests.get(paths.directory);
 
     return guest === undefined ? Promise.reject(new Error('no such VM')) : Promise.resolve(guest);
   };
@@ -58,7 +58,7 @@ export function buildStubGuestMemory() {
 
     // a running guest: 512 MiB base, 300 used, a 1024 MiB region and
     // nothing plugged, unless `guest` says otherwise
-    addGuest: (paths: Pick<ImpPaths, 'dir'>, guest: Partial<StubGuest> = {}): StubGuest => {
+    addGuest: (paths: Pick<ImpPaths, 'directory'>, guest: Partial<StubGuest> = {}): StubGuest => {
       const added: StubGuest = {
         baseMib: 512,
         pluggedMib: 0,
@@ -74,18 +74,18 @@ export function buildStubGuestMemory() {
         ...guest,
       };
 
-      guests.set(paths.dir, added);
+      guests.set(paths.directory, added);
 
       return added;
     },
     vms: {
-      readGuestMemory: async (paths: Pick<ImpPaths, 'dir'>): Promise<GuestMemory> => {
+      readGuestMemory: async (paths: Pick<ImpPaths, 'directory'>): Promise<GuestMemory> => {
         const guest = await readGuest(paths);
 
-        const lost = lostReads.get(paths.dir) ?? 0;
+        const lost = lostReads.get(paths.directory) ?? 0;
 
         if (lost > 0) {
-          lostReads.set(paths.dir, lost - 1);
+          lostReads.set(paths.directory, lost - 1);
           throw new Error('firecracker GET /hotplug/memory: no answer within 1000 ms');
         }
 
@@ -113,7 +113,7 @@ export function buildStubGuestMemory() {
 
       // Firecracker's PATCH /hotplug/memory takes whole blocks within the
       // region and answers 400 to anything else
-      requestPluggedMib: async (paths: Pick<ImpPaths, 'dir'>, mib: number): Promise<void> => {
+      requestPluggedMib: async (paths: Pick<ImpPaths, 'directory'>, mib: number): Promise<void> => {
         const guest = await readGuest(paths);
 
         if (!Number.isInteger(mib / BLOCK_MIB) || mib < 0 || mib > guest.regionMib) {
@@ -125,7 +125,7 @@ export function buildStubGuestMemory() {
         guest.requestedMib = mib;
 
         requests.push(mib);
-        lostReads.set(paths.dir, guest.lostReadsAfterRequest);
+        lostReads.set(paths.directory, guest.lostReadsAfterRequest);
 
         if (guest.isAnswerLost) {
           throw new Error('firecracker PATCH /hotplug/memory: no answer within 1000 ms');

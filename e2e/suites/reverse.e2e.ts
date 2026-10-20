@@ -13,12 +13,12 @@ import {
   runShellInImp,
   tryImp,
 } from '../lib/imp-cli';
-import { collectText, startReverse } from '../lib/imp-proxy';
+import { readText, startReverse } from '../lib/imp-proxy';
 import { holdImp, waitForExec, waitForGuestPathGone } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { SSH_HOST, setupSshClient, startLocalSshAgent, startSsh } from '../lib/ssh';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // Reverse forwards (docs/guides/reverse-forwards.md), by `impz proxy
@@ -42,7 +42,7 @@ async function setupTest() {
 
   stack.defer(() => laptop.stop());
 
-  return { prefix: readSuitePrefix('reverse'), stack, client, ssh, laptop };
+  return { prefix: getSuitePrefix('reverse'), stack, client, ssh, laptop };
 }
 
 test('it refuses a forward it cannot open at once, and says why', async () => {
@@ -89,7 +89,7 @@ test('it lets a process in the imp reach a unix socket and a port on this machin
   const page = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: () => new Response('e2e-reverse-ok\n'),
+    routes: { '/*': () => new Response('e2e-reverse-ok\n') },
   });
 
   ctx.stack.defer(() => page.stop(true));
@@ -277,7 +277,7 @@ test('it forwards a port and a unix socket in the imp to this machine with ssh -
   const page = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: () => new Response('e2e-reverse-ok\n'),
+    routes: { '/*': () => new Response('e2e-reverse-ok\n') },
   });
 
   ctx.stack.defer(() => page.stop(true));
@@ -304,7 +304,7 @@ test('it forwards a port and a unix socket in the imp to this machine with ssh -
 
   ctx.stack.defer(() => forward.stop());
 
-  const log = collectText(forward.proc.stderr);
+  const log = readText(forward.childProcess.stderr);
 
   const port = await waitFor('ssh to allocate the port', () => {
     const allocated = /Allocated port (?<port>\d+) for remote forward/v.exec(log.read());
@@ -357,9 +357,9 @@ test('it refuses ssh -R to a privileged port', async () => {
 
   ctx.stack.defer(() => forward.stop());
 
-  const code = await forward.proc.exited;
+  const code = await forward.childProcess.exited;
 
-  const stderr = await new Response(forward.proc.stderr).text();
+  const stderr = await new Response(forward.childProcess.stderr).text();
 
   expect(code).toBe(255);
   expect(stderr).toContain('remote port forwarding failed for listen port 80');

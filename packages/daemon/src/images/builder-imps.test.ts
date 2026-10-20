@@ -14,7 +14,7 @@ import { buildStubClock } from '../../testing/platform/build-stub-clock';
 import { startTestImpd } from '../../testing/start-test-impd';
 import { buildStubGuest } from '../../testing/vm/build-stub-guest';
 import { createImage } from '../db/images';
-import { findImpByName, listImps } from '../db/imps';
+import { listImps, readImpByName } from '../db/imps';
 import { buildImagePaths } from '../storage/data-layout';
 import { createBuilders } from './builder-imps';
 import { writeGuestTree } from './guest-build';
@@ -480,7 +480,7 @@ test('it never removes a user imp that took the id of a removed builder on a ret
     kind: 'builder',
   });
 
-  const record = await findImpByName(ctx.db, builder.name);
+  const record = await readImpByName(ctx.db, builder.name);
 
   invariant(record);
 
@@ -512,7 +512,7 @@ test('it ends an export over its file limit and removes its builder, with no cli
 
   onTestFinished(() => rm(tree, { recursive: true, force: true }));
 
-  const parents = Array.from({ length: 20 }, (_, n) => `d${String(n)}`).join('/');
+  const parents = Array.from({ length: 20 }, (_, index) => `d${String(index)}`).join('/');
 
   await mkdir(join(tree, 'tree', parents), { recursive: true });
   await writeFile(join(tree, 'tree', parents, 'f'), 'x');

@@ -5,7 +5,7 @@ import { createInstanceClient, runImp } from '../lib/imp-cli';
 import { holdImp, waitForExec } from '../lib/imps';
 import { instance, runDevScript } from '../lib/instance';
 import {
-  findJailViolations,
+  collectJailViolations,
   readJailState,
   readStatusField,
   readVmProcess,
@@ -13,7 +13,7 @@ import {
 import { checkMemoryProof, startMemoryProof } from '../lib/memory-proof';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // A rollback to an impd without the jailer, then the upgrade back: each
 // reboot sleeps the imp in the old impd. The journey ends on the run's
@@ -26,7 +26,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('jail'), stack, client };
+  return { prefix: getSuitePrefix('jail'), stack, client };
 }
 
 test('it wakes a jailed snapshot as root in an impd without the jailer, and that snapshot jailed again after the upgrade', async () => {
@@ -62,5 +62,5 @@ test('it wakes a jailed snapshot as root in an impd without the jailer, and that
 
   const upgraded = await readJailState(name);
 
-  expect(findJailViolations(upgraded)).toStrictEqual([]);
+  expect(collectJailViolations(upgraded)).toStrictEqual([]);
 });

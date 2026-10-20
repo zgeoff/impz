@@ -54,7 +54,7 @@ export interface BudgetBreach {
 
 // Runs of consecutive samples over the budget. A booting guest grows past its
 // boot reserve, so a run is expected; a governor sleep ends it.
-export function findOvershoots(
+export function collectOvershoots(
   samples: readonly UsageSample[],
   budgetMib: number,
 ): readonly Overshoot[] {
@@ -90,13 +90,13 @@ function buildOvershoot(
   };
 }
 
-export function findBudgetBreaches(
+export function collectBudgetBreaches(
   samples: readonly UsageSample[],
   sleeps: readonly SleepSpan[],
   limits: OvershootLimits,
   check: BudgetCheck = 'running',
 ): readonly BudgetBreach[] {
-  return findOvershoots(samples, limits.budgetMib).flatMap((overshoot) => {
+  return collectOvershoots(samples, limits.budgetMib).flatMap((overshoot) => {
     const why =
       check === 'final' && overshoot.isOpen
         ? 'still over the budget when the run ended'
@@ -137,7 +137,7 @@ function checkOvershoot(
 
   const sleep = sleeps
     .filter((span) => span.isEnforce && span.endAt >= first.at && span.startAt <= deadline)
-    .toSorted((a, b) => a.endAt - b.endAt)
+    .toSorted((left, right) => left.endAt - right.endAt)
     .at(0);
 
   if (sleep === undefined) {

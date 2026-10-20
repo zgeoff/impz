@@ -192,11 +192,11 @@ export function readDockerSocket(dockerHost: string | null): string {
 // can refuse /session and /grpc. Returns the image ID; the image is tagged
 // `tag`.
 export async function runDockerBuild(options: Readonly<DockerBuildOptions>): Promise<string> {
-  const query = new URLSearchParams({
-    t: options.tag,
-    version: '2',
-    buildargs: JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }),
-  });
+  const query = new URLSearchParams([
+    ['t', options.tag],
+    ['version', '2'],
+    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
+  ]);
 
   if (options.dockerfile !== undefined) {
     query.set('dockerfile', options.dockerfile);

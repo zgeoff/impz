@@ -16,17 +16,17 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'stub-attach-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-attach-agent-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir, stack };
+  return { directoryPath: directory, stack };
 }
 
 test('it reports its boot and a 0.15.0 agent in its ping', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubAttachAgent(path, { bootId: 'boot-a', stack: ctx.stack });
 
@@ -38,7 +38,7 @@ test('it reports its boot and a 0.15.0 agent in its ping', async () => {
 test('it answers a session request with the first reply, and keeps a stream open', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubAttachAgent(path, {
     bootId: 'boot-a',
@@ -58,7 +58,7 @@ test('it answers a session request with the first reply, and keeps a stream open
 test('it answers the next session request with the next reply, and ends its connection', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubAttachAgent(path, {
     bootId: 'boot-a',
@@ -88,7 +88,7 @@ test('it answers the next session request with the next reply, and ends its conn
 test('it ends the connection of a session request past its last reply', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubAttachAgent(path, { bootId: 'boot-a', stack: ctx.stack });
 
@@ -98,7 +98,7 @@ test('it ends the connection of a session request past its last reply', async ()
 test('it lists the ops of the requests it got', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubAttachAgent(path, { bootId: 'boot-a', stack: ctx.stack });
 
@@ -111,7 +111,7 @@ test('it lists the ops of the requests it got', async () => {
 test('it stops listening once its stack is released', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const stack = new AsyncDisposableStack();
 

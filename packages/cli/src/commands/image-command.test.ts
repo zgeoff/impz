@@ -30,7 +30,7 @@ async function setupTest() {
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
   // the engine a host build sends its context to
-  const engine = startStubDockerEngine({ dir: dataDir });
+  const engine = startStubDockerEngine({ directoryPath: dataDir });
 
   stack.defer(() => engine.stop());
 
@@ -62,7 +62,7 @@ test('#imageCommand prints progress lines and the step output of a build whose s
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -110,7 +110,7 @@ test('#imageCommand prints no progress and no step output for --quiet', async ()
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -145,7 +145,7 @@ test('#imageCommand prints the image as JSON alone on stdout with --json, and th
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -182,7 +182,7 @@ test('#imageCommand lists a running build with its start and step from another s
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {

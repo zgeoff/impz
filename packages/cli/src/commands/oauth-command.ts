@@ -24,56 +24,6 @@ const redirectArg = {
   required: true,
 } as const;
 
-// --redirect-uri 'https://a/cb,https://b/cb'
-function parseRedirectUris(text: string): string[] {
-  const uris = text
-    .split(',')
-    .map((uri) => uri.trim())
-    .filter((uri) => uri !== '');
-
-  const bad = uris.find((uri) => !RedirectUriSchema.safeParse(uri).success);
-
-  if (uris.length === 0 || bad !== undefined) {
-    throw new UsageError(
-      `--redirect-uri takes https URLs, or http on a loopback host, with no fragment; not ${bad ?? text}`,
-    );
-  }
-
-  return uris;
-}
-
-// --imps 'dev-*,web': imp names, or a name prefix and a trailing *
-function parseGrantPatterns(text: string | undefined): string[] | undefined {
-  if (text === undefined) {
-    return undefined;
-  }
-
-  const patterns = text
-    .split(',')
-    .map((pattern) => pattern.trim())
-    .filter((pattern) => pattern !== '');
-
-  const bad = patterns.find((pattern) => !GrantPatternSchema.safeParse(pattern).success);
-
-  if (patterns.length === 0 || bad !== undefined) {
-    throw new UsageError(
-      `--imps takes imp names, or a name prefix and a trailing *, such as dev-*; not ${bad ?? text}`,
-    );
-  }
-
-  return patterns;
-}
-
-function parseApprovalCode(text: string): string {
-  const parsed = ApprovalCodeSchema.safeParse(text);
-
-  if (!parsed.success) {
-    throw new UsageError(`${text} is not a sign-in code; it looks like ABCD-EFGH`);
-  }
-
-  return parsed.data;
-}
-
 const clientAddCommand = defineCommand({
   name: 'add',
   description: "Add a client; its client ID prints on stdout, for the connector's settings",
@@ -271,3 +221,53 @@ export const oauthCommand = defineGroup({
   description: 'Manage sign-ins to the public MCP route: clients, grants and approvals',
   subCommands: { client: clientCommand, grant: grantCommand, approve: approveCommand },
 });
+
+// --redirect-uri 'https://a/cb,https://b/cb'
+function parseRedirectUris(text: string): string[] {
+  const uris = text
+    .split(',')
+    .map((uri) => uri.trim())
+    .filter((uri) => uri !== '');
+
+  const bad = uris.find((uri) => !RedirectUriSchema.safeParse(uri).success);
+
+  if (uris.length === 0 || bad !== undefined) {
+    throw new UsageError(
+      `--redirect-uri takes https URLs, or http on a loopback host, with no fragment; not ${bad ?? text}`,
+    );
+  }
+
+  return uris;
+}
+
+function parseApprovalCode(text: string): string {
+  const parsed = ApprovalCodeSchema.safeParse(text);
+
+  if (!parsed.success) {
+    throw new UsageError(`${text} is not a sign-in code; it looks like ABCD-EFGH`);
+  }
+
+  return parsed.data;
+}
+
+// --imps 'dev-*,web': imp names, or a name prefix and a trailing *
+function parseGrantPatterns(text: string | undefined): string[] | undefined {
+  if (text === undefined) {
+    return undefined;
+  }
+
+  const patterns = text
+    .split(',')
+    .map((pattern) => pattern.trim())
+    .filter((pattern) => pattern !== '');
+
+  const bad = patterns.find((pattern) => !GrantPatternSchema.safeParse(pattern).success);
+
+  if (patterns.length === 0 || bad !== undefined) {
+    throw new UsageError(
+      `--imps takes imp names, or a name prefix and a trailing *, such as dev-*; not ${bad ?? text}`,
+    );
+  }
+
+  return patterns;
+}

@@ -5,18 +5,18 @@ import { join } from 'node:path';
 import { runChildTests } from './run-child-tests';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'child-tests-'));
+  const directory = await mkdtemp(join(tmpdir(), 'child-tests-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it exits 0 and reports each pass for a passing file', async () => {
   const ctx = await setupTest();
 
   const run = runChildTests(
-    ctx.dir,
+    ctx.directoryPath,
     "import { expect, test } from 'bun:test';\ntest('it passes', () => { expect(1).toBe(1); });\n",
   );
 
@@ -28,7 +28,7 @@ test('it exits 1 for a file with a failing test', async () => {
   const ctx = await setupTest();
 
   const run = runChildTests(
-    ctx.dir,
+    ctx.directoryPath,
     "import { expect, test } from 'bun:test';\ntest('it fails', () => { expect(1).toBe(2); });\n",
   );
 
@@ -40,11 +40,11 @@ test('it runs the child with the dir as its temp dir', async () => {
   const ctx = await setupTest();
 
   const run = runChildTests(
-    ctx.dir,
+    ctx.directoryPath,
     [
       "import { expect, test } from 'bun:test';",
       "import { tmpdir } from 'node:os';",
-      `test('it sees the dir', () => { expect(tmpdir()).toBe(${JSON.stringify(ctx.dir)}); });`,
+      `test('it sees the dir', () => { expect(tmpdir()).toBe(${JSON.stringify(ctx.directoryPath)}); });`,
     ].join('\n'),
   );
 
@@ -55,7 +55,7 @@ test('it lets a later test read what an earlier test released', async () => {
   const ctx = await setupTest();
 
   const run = runChildTests(
-    ctx.dir,
+    ctx.directoryPath,
     [
       "import { expect, onTestFinished, test } from 'bun:test';",
       'const state = { isReleased: false };',
@@ -73,7 +73,7 @@ test('it kills a child that hangs past its deadline', async () => {
 
   // a test that never settles, with a test timeout longer than the deadline
   const run = runChildTests(
-    ctx.dir,
+    ctx.directoryPath,
     [
       "import { test } from 'bun:test';",
       "test('it hangs', () => new Promise(() => {}), 60_000);",

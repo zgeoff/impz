@@ -9,7 +9,7 @@ import { holdImp, waitForExec, writeGuestFile } from '../lib/imps';
 import { readInitStart } from '../lib/inner-container';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // User code runs in the inner container over the user disk; the agent stays
 // outside it (docs/architecture/guest/agent.md#the-inner-container). Nothing done
@@ -22,7 +22,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('inner'), stack, client };
+  return { prefix: getSuitePrefix('inner'), stack, client };
 }
 
 test('it runs the inner init as PID 1 of what an exec sees, from the system drive', async () => {

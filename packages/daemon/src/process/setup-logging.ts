@@ -23,6 +23,11 @@ export function setupLogging(write: (line: string) => void = writeStdout): void 
   });
 }
 
+// where a rendered line goes: stdout, which the container runtime collects
+function writeStdout(line: string): void {
+  process.stdout.write(line);
+}
+
 // the parts of a LogTape record a line shows
 interface RenderedRecord {
   readonly level: LogRecord['level'];
@@ -45,9 +50,4 @@ function renderLogLine(record: RenderedRecord): string {
     .replaceAll('\n', String.raw`\n`);
 
   return `${record.level.toUpperCase()} ${record.category.join('.')} ${about}${message}\n`;
-}
-
-// where a rendered line goes: stdout, which the container runtime collects
-function writeStdout(line: string): void {
-  process.stdout.write(line);
 }

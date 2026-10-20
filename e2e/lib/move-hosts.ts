@@ -28,8 +28,8 @@ const DEFAULT_MEMORY_MIB = '512';
 export const HOST_B = 'b';
 
 export interface MoveHosts {
-  readonly a: DevInstance;
-  readonly b: DevInstance;
+  readonly hostA: DevInstance;
+  readonly hostB: DevInstance;
   readonly network: string;
 
   // the network's gateway: this machine, as both containers see it
@@ -124,7 +124,7 @@ export function readHostBZfsRoot(): string | undefined {
 }
 
 // B as the options make it, for starting it and for its teardown
-function buildHostB(options: MoveHostsOptions): DevInstance {
+function readHostB(options: MoveHostsOptions): DevInstance {
   const names = buildNames();
   const network = buildMoveNetwork(readOffset());
   const zfsRoot = readHostBZfsRoot();
@@ -162,7 +162,7 @@ async function checkAOnNetwork(network: string): Promise<boolean> {
 export async function removeMoveLeftovers(): Promise<void> {
   const names = buildNames();
 
-  await runDevScript('down', buildHostB({ tailnet: false }));
+  await runDevScript('down', readHostB({ tailnet: false }));
 
   const isOnNetwork = await checkAOnNetwork(names.network);
 
@@ -297,23 +297,23 @@ export function buildHostBFixtureDeps(keep: boolean): HostBFixtureDeps {
   };
 }
 
-export function buildHostBFixture(
+export function createHostBFixture(
   options: Readonly<MoveHostsOptions>,
   prefix: string,
   deps: Readonly<HostBFixtureDeps>,
 ): HostBFixture {
   const names = buildNames();
-  const b = buildHostB(options);
-  const reset = () => deps.resetHost(b, prefix);
+  const hostB = readHostB(options);
+  const reset = () => deps.resetHost(hostB, prefix);
 
   // B up and saved in a fresh CLI config
   const startLoggedIn = async () => {
-    await deps.startHost(b);
+    await deps.startHost(hostB);
 
     rmSync(deps.cliDir, { recursive: true, force: true });
     mkdirSync(deps.cliDir, { recursive: true });
 
-    await deps.login(b, { XDG_CONFIG_HOME: deps.cliDir });
+    await deps.login(hostB, { XDG_CONFIG_HOME: deps.cliDir });
   };
 
   return {
@@ -335,9 +335,9 @@ export function buildHostBFixture(
 
         const reason = error instanceof Error ? error.message : String(error);
 
-        deps.log(`    ${b.container} could not be reset, so it starts from nothing: ${reason}`);
+        deps.log(`    ${hostB.container} could not be reset, so it starts from nothing: ${reason}`);
 
-        await deps.removeHost(b);
+        await deps.removeHost(hostB);
 
         await startLoggedIn();
         await reset();
@@ -358,8 +358,8 @@ export function readMoveHosts(options: Readonly<MoveHostsOptions>): MoveHosts {
   const names = buildNames();
 
   return {
-    a: instance,
-    b: buildHostB(options),
+    hostA: instance,
+    hostB: readHostB(options),
     network: names.network,
     gateway: buildMoveNetwork(readOffset()).gateway,
     cliEnv: { XDG_CONFIG_HOME: names.cliDir },

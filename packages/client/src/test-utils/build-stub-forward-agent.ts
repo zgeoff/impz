@@ -25,16 +25,6 @@ interface AgentRefusal {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-// where a listen of `address` listens: a unix socket at its path, or the
-// agent's own one for an empty path; a tcp listen gets port 4000
-function readListening(request: Readonly<StubRequest>) {
-  if (request.network === 'tcp') {
-    return { port: 4000 };
-  }
-
-  return { path: request.address === '' ? '/run/imp/forward/1.sock' : request.address };
-}
-
 // An imp's guest agent for reverse forwards, for startStubAgent: listeners
 // `fwd<N>`, until refuseListens; an accepted client answers `got <bytes>`.
 // endListeners ends them all, as a forced sleep does.
@@ -104,4 +94,14 @@ export function buildStubForwardAgent() {
       refusal.error = error;
     },
   };
+}
+
+// where a listen of `address` listens: a unix socket at its path, or the
+// agent's own one for an empty path; a tcp listen gets port 4000
+function readListening(request: Readonly<StubRequest>) {
+  if (request.network === 'tcp') {
+    return { port: 4000 };
+  }
+
+  return { path: request.address === '' ? '/run/imp/forward/1.sock' : request.address };
 }

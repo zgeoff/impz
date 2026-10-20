@@ -39,7 +39,7 @@ async function setupTest() {
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
   // the engine a host build sends its context to; it stops after impd
-  const engine = startStubDockerEngine({ dir: dataDir });
+  const engine = startStubDockerEngine({ directoryPath: dataDir });
 
   stack.defer(() => engine.stop());
 
@@ -76,7 +76,7 @@ test('it builds an uploaded context and answers the image', async () => {
   const exportTar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout;
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -114,7 +114,7 @@ test('it sends the engine the context under the image tag and the Dockerfile pat
   await writeFile(join(ctx.dataDir, 'context', 'docker', 'Dockerfile'), 'FROM scratch\n');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
   });
 
@@ -150,7 +150,7 @@ test('it removes the upload and audits the build as ok once the build ends', asy
   const exportTar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout;
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -198,7 +198,7 @@ test('it answers a streamed build with its headers while the build still runs', 
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
   });
 
@@ -255,7 +255,7 @@ test('it streams progress lines while the build runs, then the image', async () 
   const exportTar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout;
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -294,7 +294,7 @@ test('it streams progress lines while the build runs, then the image', async () 
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'context'), '-c', 'Dockerfile']).stdout;
 
-  const response = await route.handle(
+  const response = await route.respond(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
       headers: { accept: IMAGE_BUILD_STREAM_TYPE },
@@ -340,7 +340,7 @@ test('it streams the step and output of a running build, and lists it in images.
   const exportTar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout;
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -374,7 +374,7 @@ test('it streams the step and output of a running build, and lists it in images.
 
   const before = new Date();
 
-  const response = await route.handle(
+  const response = await route.respond(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
       headers: { accept: IMAGE_BUILD_STREAM_TYPE },
@@ -440,7 +440,7 @@ test('it sends a progress line through the proxy before the upload ends', async 
   const exportTar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout;
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -638,7 +638,7 @@ test('it refuses with 413 a context whose Content-Length is over the limit', asy
     keepaliveMs: 10_000,
   });
 
-  const response = await route.handle(
+  const response = await route.respond(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
       headers: { 'content-length': String(2 * 1024 ** 2) },
@@ -675,7 +675,7 @@ test('it frees the build slot of a context refused for its Content-Length', asyn
 
   // four refusals, one for each build slot
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    await route.handle(
+    await route.respond(
       new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
         method: 'POST',
         headers: { 'content-length': String(2 * 1024 ** 2) },
@@ -686,7 +686,7 @@ test('it frees the build slot of a context refused for its Content-Length', asyn
     );
   }
 
-  const fifth = await route.handle(
+  const fifth = await route.respond(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
       headers: { 'content-length': String(2 * 1024 ** 2) },
@@ -715,7 +715,7 @@ test('it refuses with 413 a context whose bytes run over the limit, and removes 
   // a body with no Content-Length, one byte over the limit
   const context = new Blob([new Uint8Array(1024 ** 2 + 1)]).stream();
 
-  const response = await route.handle(
+  const response = await route.respond(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
       body: context,
@@ -750,7 +750,7 @@ test('it refuses with 413 a streamed build whose Content-Length is over the limi
     keepaliveMs: 10_000,
   });
 
-  const response = await route.handle(
+  const response = await route.respond(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
       headers: { accept: IMAGE_BUILD_STREAM_TYPE, 'content-length': String(2 * 1024 ** 2) },
@@ -779,7 +779,7 @@ test('it ends a streamed build whose bytes run over the limit with a too-large e
 
   const context = new Blob([new Uint8Array(1024 ** 2 + 1)]).stream();
 
-  const response = await route.handle(
+  const response = await route.respond(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
       headers: { accept: IMAGE_BUILD_STREAM_TYPE },
@@ -821,7 +821,7 @@ test('it hands a context of exactly the limit to the build', async () => {
 
   const context = new Blob([new Uint8Array(1024 ** 2)]).stream();
 
-  const response = await route.handle(
+  const response = await route.respond(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
       body: context,
@@ -852,7 +852,7 @@ test('it refuses a build with no body', async () => {
     keepaliveMs: 10_000,
   });
 
-  const response = await route.handle(
+  const response = await route.respond(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, { method: 'POST' }),
     buildMockCaller(),
     toApiImage,
@@ -882,7 +882,7 @@ test('it refuses a build whose body is longer than its Content-Length', async ()
 
   const context = new Blob([new Uint8Array(64)]).stream();
 
-  const response = await route.handle(
+  const response = await route.respond(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
       headers: { 'content-length': '4' },
@@ -914,7 +914,7 @@ test('it refuses a build whose body is empty', async () => {
     keepaliveMs: 10_000,
   });
 
-  const response = await route.handle(
+  const response = await route.respond(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
       body: new ReadableStream({
@@ -944,7 +944,7 @@ test('it refuses a fifth build with 429 while four run', async () => {
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
   });
 
@@ -966,9 +966,9 @@ test('it refuses a fifth build with 429 while four run', async () => {
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'context'), '-c', 'Dockerfile']).stdout;
 
-  const running = [1, 2, 3, 4].map((n) =>
+  const running = [1, 2, 3, 4].map((index) =>
     ctx.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web${String(n)}`, {
+      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web${String(index)}`, {
         method: 'POST',
         headers: { authorization: `Bearer ${ctx.rootToken}` },
         body: tar,
@@ -1009,7 +1009,7 @@ test('it refuses a fifth streamed build with 429, before its stream, while four 
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
   });
 
@@ -1030,9 +1030,9 @@ test('it refuses a fifth streamed build with 429, before its stream, while four 
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'context'), '-c', 'Dockerfile']).stdout;
 
-  const running = [1, 2, 3, 4].map((n) =>
+  const running = [1, 2, 3, 4].map((index) =>
     ctx.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web${String(n)}`, {
+      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web${String(index)}`, {
         method: 'POST',
         headers: { authorization: `Bearer ${ctx.rootToken}` },
         body: tar,
@@ -1077,7 +1077,7 @@ test('it frees each build slot once its build ends', async () => {
   const exportTar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout;
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -1112,9 +1112,9 @@ test('it frees each build slot once its build ends', async () => {
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'context'), '-c', 'Dockerfile']).stdout;
 
-  const running = [1, 2, 3, 4].map((n) =>
+  const running = [1, 2, 3, 4].map((index) =>
     ctx.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web${String(n)}`, {
+      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web${String(index)}`, {
         method: 'POST',
         headers: { authorization: `Bearer ${ctx.rootToken}` },
         body: tar,
@@ -1159,7 +1159,7 @@ test.each([
     await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
 
     const docker = createStubDockerCli({
-      dir: ctx.dataDir,
+      directory: ctx.dataDir,
       images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
     });
 
@@ -1194,9 +1194,9 @@ test.each([
 
     const clients = [1, 2, 3, 4].map(() => new AbortController());
 
-    const sent = clients.map((client, n) =>
+    const sent = clients.map((client, index) =>
       ctx.impd.api.app.handle(
-        new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=gone${String(n)}`, {
+        new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=gone${String(index)}`, {
           method: 'POST',
           headers: { authorization: `Bearer ${ctx.rootToken}`, ...headers },
           body: tar,
@@ -1247,7 +1247,7 @@ test.each([
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
   });
 
@@ -1272,9 +1272,9 @@ test.each([
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'context'), '-c', 'Dockerfile']).stdout;
   const clients = [1, 2, 3, 4].map(() => new AbortController());
 
-  const sent = clients.map((client, n) =>
+  const sent = clients.map((client, index) =>
     ctx.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=gone${String(n)}`, {
+      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=gone${String(index)}`, {
         method: 'POST',
         headers: { authorization: `Bearer ${ctx.rootToken}`, ...headers },
         body: tar,
@@ -1324,7 +1324,7 @@ test('it kills the base image pulls of clients that go, and starts no other pull
 
   // neither image is on the host, and a pull hangs until it is killed
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['first.test/a:1'],
@@ -1346,9 +1346,9 @@ test('it kills the base image pulls of clients that go, and starts no other pull
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'context'), '-c', 'Dockerfile']).stdout;
   const clients = [1, 2, 3, 4].map(() => new AbortController());
 
-  const sent = clients.map((client, n) =>
+  const sent = clients.map((client, index) =>
     ctx.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=pull${String(n)}`, {
+      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=pull${String(index)}`, {
         method: 'POST',
         headers: { authorization: `Bearer ${ctx.rootToken}` },
         body: tar,
@@ -1396,7 +1396,7 @@ test('it frees the build slots of clients that go during a base image pull', asy
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM first.test/a:1\n');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['first.test/a:1'],
@@ -1412,9 +1412,9 @@ test('it frees the build slots of clients that go during a base image pull', asy
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'context'), '-c', 'Dockerfile']).stdout;
   const clients = [1, 2, 3, 4].map(() => new AbortController());
 
-  const sent = clients.map((client, n) =>
+  const sent = clients.map((client, index) =>
     ctx.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=pull${String(n)}`, {
+      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=pull${String(index)}`, {
         method: 'POST',
         headers: { authorization: `Bearer ${ctx.rootToken}` },
         body: tar,
@@ -1466,7 +1466,7 @@ test('it refuses a base image with ONBUILD triggers once the host has it', async
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/onbuild:1'],
@@ -1545,7 +1545,7 @@ test('it pulls COPY --from and RUN --mount images first, like a FROM, by tag or 
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/a:1'],
@@ -1637,7 +1637,7 @@ test('it sends the engine the Dockerfile with each image pinned and the platform
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/a:1'],
@@ -1741,7 +1741,7 @@ test('it refuses a COPY --from image with ONBUILD triggers, which the frontend w
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/onbuild:1'],
@@ -1811,7 +1811,7 @@ test('it refuses a RUN --mount image with ONBUILD triggers, which the frontend w
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/a:1'],
@@ -1894,7 +1894,7 @@ test('it inspects and pins a ref the build names twice once, so a moving tag giv
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/moving:1'],
@@ -1977,7 +1977,7 @@ test('it inspects and pins the spellings of one image once', async () => {
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['moving:1', 'docker.io/library/moving:1', 'index.docker.io/library/moving'],
@@ -2058,7 +2058,7 @@ test('it says how impd pinned a build the registry denies, and what to build fro
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/retag:1'],
@@ -2115,7 +2115,7 @@ test('it refuses a FROM image with no registry digest before the build', async (
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/local:1'],
@@ -2182,7 +2182,7 @@ test('it refuses a COPY --from image with no registry digest before the build', 
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/local:1'],
@@ -2245,7 +2245,7 @@ test('it refuses an arm64 image on an amd64 host before the build', async () => 
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/arm:1'],
@@ -2313,7 +2313,7 @@ test('it refuses a 32-bit arm image on an amd64 host before the build', async ()
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/arm32:1'],
@@ -2381,7 +2381,7 @@ test('it refuses an image whose registry digests name only registries impd refus
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/private:1'],
@@ -2451,7 +2451,7 @@ test('it refuses an image under an IP address registry before any call', async (
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['LocalHost/name:1'],
@@ -2521,7 +2521,7 @@ test("it refuses an image under the host's own registry, in any case, before any
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['LocalHost/name:1'],
@@ -2594,7 +2594,7 @@ test('it refuses a global ARG that sets the build platform before any call', asy
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/a:1'],
@@ -2655,7 +2655,7 @@ test('it refuses a stage ARG that sets the target platform before any call', asy
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/a:1'],
@@ -2716,7 +2716,7 @@ test('it refuses a braced platform variable before any call', async () => {
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/a:1'],
@@ -2775,7 +2775,7 @@ test('it pulls a missing Dockerfile frontend by digest once, before the build', 
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/a:1'],
@@ -2845,7 +2845,7 @@ test('it pulls no Dockerfile frontend the engine has, and checks it before the b
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/a:1'],
@@ -2904,7 +2904,7 @@ test('it fails a build with 502 before the engine gets it when the frontend pull
 
   // an amd64 host engine with these images
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['base.test/a:1'],
@@ -2978,7 +2978,7 @@ test('it answers a build that fails after the engine built it with its error, an
 
   // the engine builds the image; the unpack's create finds no room
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -3022,7 +3022,7 @@ test('it ends a streamed build that fails with its error, and removes the upload
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -3068,7 +3068,7 @@ test('it audits a failed build with its code', async () => {
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -3133,7 +3133,7 @@ test('it reports the unpack of an on-host build after the engine built the image
 
   // the frontend and the built tag are on the host; the unpack's create fails
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -3148,7 +3148,7 @@ test('it reports the unpack of an on-host build after the engine built the image
 
   const phases: string[] = [];
 
-  const building = ctx.impd.images.buildImage(join(ctx.dataDir, 'context'), 'web', undefined, {
+  const building = ctx.impd.images.runImageBuild(join(ctx.dataDir, 'context'), 'web', undefined, {
     setPhase: (phase) => {
       phases.push(phase);
     },
@@ -3174,7 +3174,7 @@ test('it refuses an on-host build at once while uploads hold all four build slot
     }
   });
 
-  const building = ctx.impd.images.buildImage('relative/path', 'web');
+  const building = ctx.impd.images.runImageBuild('relative/path', 'web');
 
   expect(building).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
   expect(ctx.engine.unexpected).toStrictEqual([]);
@@ -3215,7 +3215,7 @@ test('it lets an on-host build through to its own checks once a build slot is fr
   });
 
   held[0]?.();
-  const building = ctx.impd.images.buildImage('relative/path', 'web');
+  const building = ctx.impd.images.runImageBuild('relative/path', 'web');
 
   expect(building).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   expect(ctx.engine.unexpected).toStrictEqual([]);

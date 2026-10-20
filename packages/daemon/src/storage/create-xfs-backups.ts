@@ -53,7 +53,7 @@ export function createXfsBackups(
   };
 
   const writeCopies = (copies: Readonly<Copies>): void => {
-    mkdirSync(backup.dir, { recursive: true });
+    mkdirSync(backup.directoryPath, { recursive: true });
     writeFileDurably(backup.copies, JSON.stringify(copies));
   };
 
@@ -142,12 +142,12 @@ export function createXfsBackups(
 
       for (const digest of request.imageDigests) {
         const source = buildImagePaths(ctx.dataDir, digest);
-        const dir = join(backup.tree, BACKUP_TREE.buildImageDir(digest));
+        const directory = join(backup.tree, BACKUP_TREE.buildImageDir(digest));
 
-        const isCopied = await createTreeClone(source.rootfs, join(dir, 'rootfs.ext4'));
+        const isCopied = await createTreeClone(source.rootfs, join(directory, 'rootfs.ext4'));
 
         if (isCopied) {
-          copyFileSync(source.config, join(dir, 'config.json'));
+          copyFileSync(source.config, join(directory, 'config.json'));
 
           imageDigests.add(digest);
         }
@@ -181,10 +181,10 @@ export function createXfsBackups(
 }
 
 // drops each entry of `dir` that `keep` does not name
-function removeUnlisted(dir: string, keep: ReadonlySet<string>): void {
-  const names = existsSync(dir) ? readdirSync(dir) : [];
+function removeUnlisted(directory: string, keep: ReadonlySet<string>): void {
+  const names = existsSync(directory) ? readdirSync(directory) : [];
 
   for (const name of names.filter((entry) => !keep.has(entry))) {
-    rmSync(join(dir, name), { recursive: true, force: true });
+    rmSync(join(directory, name), { recursive: true, force: true });
   }
 }

@@ -6,7 +6,7 @@ import type { FirecrackerPaths } from '../vmm/firecracker-process';
 
 export interface ImpPaths extends FirecrackerPaths {
   readonly impId: string;
-  readonly dir: string;
+  readonly directory: string;
   readonly runDir: string;
   readonly disk: string;
   readonly snapshotDir: string;
@@ -26,7 +26,7 @@ export interface ImpPaths extends FirecrackerPaths {
 }
 
 export interface ImagePaths {
-  readonly dir: string;
+  readonly directory: string;
   readonly rootfs: string;
   readonly config: string;
 }
@@ -56,22 +56,22 @@ export function toDigestHex(digest: string): string {
 }
 
 export function buildImpPaths(dataDir: string, impId: string): ImpPaths {
-  const dir = join(buildImpsDir(dataDir), impId);
-  const runDir = join(dir, 'run');
+  const directory = join(buildImpsDir(dataDir), impId);
+  const runDir = join(directory, 'run');
 
   return {
     impId,
-    dir,
+    directory,
     runDir,
-    disk: join(dir, 'disk.ext4'),
+    disk: join(directory, 'disk.ext4'),
     apiSocket: join(runDir, 'api.sock'),
     vsockSocket: join(runDir, 'vsock.sock'),
     logFile: join(runDir, 'firecracker.log'),
     pidFile: join(runDir, 'pid'),
-    ...buildSnapshotPaths(join(dir, 'snapshot')),
-    vmIdentity: join(dir, 'vm.json'),
-    checkpointsDir: join(dir, 'checkpoints'),
-    sessionLogsDir: join(dir, 'session-logs'),
+    ...buildSnapshotPaths(join(directory, 'snapshot')),
+    vmIdentity: join(directory, 'vm.json'),
+    checkpointsDir: join(directory, 'checkpoints'),
+    sessionLogsDir: join(directory, 'session-logs'),
   };
 }
 
@@ -95,9 +95,13 @@ export function buildSnapshotPaths(snapshotDir: string) {
 }
 
 export function buildImagePaths(dataDir: string, digest: string): ImagePaths {
-  const dir = join(buildImagesDir(dataDir), toDigestHex(digest));
+  const directory = join(buildImagesDir(dataDir), toDigestHex(digest));
 
-  return { dir, rootfs: join(dir, 'rootfs.ext4'), config: join(dir, 'config.json') };
+  return {
+    directory,
+    rootfs: join(directory, 'rootfs.ext4'),
+    config: join(directory, 'config.json'),
+  };
 }
 
 // build contexts clients upload, each removed after its build
@@ -117,23 +121,23 @@ export function buildSystemDrivePath(dataDir: string, sha256: string): string {
 
 // What impd's backups keep on the host (docs/architecture/storage/backups.md).
 export function buildBackupPaths(dataDir: string) {
-  const dir = join(dataDir, 'backup');
+  const directory = join(dataDir, 'backup');
 
   return {
-    dir,
+    directoryPath: directory,
 
     // what restic reads: the manifest, and the disks, checkpoints and images
     // at the same paths every run; the run's database copy sits outside it,
     // and a copy of that goes in only with IMP_BACKUP_DATABASE
-    tree: join(dir, 'tree'),
-    cache: join(dir, 'cache'),
+    tree: join(directory, 'tree'),
+    cache: join(directory, 'cache'),
 
     // when forget, prune and check last ran
-    state: join(dir, 'state.json'),
+    state: join(directory, 'state.json'),
 
     // XFS: the source of each disk copy in the tree, to reuse an unchanged one
-    copies: join(dir, 'copies.json'),
-    restoreDir: join(dir, 'restore'),
+    copies: join(directory, 'copies.json'),
+    restoreDir: join(directory, 'restore'),
   };
 }
 

@@ -3,12 +3,12 @@ import { join } from 'node:path';
 
 // Every path under dir, sorted, as a test compares two trees: `/` after a
 // directory, `@` after a symlink and `*` after an executable file.
-export async function listTree(dir: string): Promise<string[]> {
-  const names = await readdir(dir, { recursive: true });
+export async function listTree(directory: string): Promise<string[]> {
+  const names = await readdir(directory, { recursive: true });
 
   const marked = await Promise.all(
     names.map(async (name) => {
-      const stats = await lstat(join(dir, name));
+      const stats = await lstat(join(directory, name));
 
       if (stats.isSymbolicLink()) {
         return `${name}@`;

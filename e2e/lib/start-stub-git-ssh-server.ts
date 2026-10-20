@@ -26,23 +26,46 @@ export interface StubGitSshServer {
   readonly stop: () => Promise<void>;
 }
 
-const RECEIVE_PACK = /^git-receive-pack '\/?repo\.git'$/u;
+export async function startStubGitSshServer(
+  address: string,
+  directory: string,
+  allowedKey: string,
+): Promise<StubGitSshServer> {
+  const hostKeyPath = join(directory, 'git-host-key');
+  const repo = join(directory, 'repo.git');
 
-function runReceivePack(channel: ServerChannel, repo: string): void {
-  const child = spawn('git', ['receive-pack', repo], {
-    stdio: 'pipe',
-    env: createGitFreeEnv(process.env),
+  await runChecked(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', hostKeyPath]);
+  await runGitChecked(['git', 'init', '-q', '--bare', '-b', 'main', repo]);
+
+  const counts = { logins: 0 };
+
+  const server = new Server({ hostKeys: [readFileSync(hostKeyPath)] }, (client) => {
+    handleConnection(client, allowedKey, repo, () => {
+      counts.logins += 1;
+    });
   });
 
-  channel.pipe(child.stdin);
-  child.stdout.pipe(channel, { end: false });
-  child.stderr.pipe(channel.stderr, { end: false });
-
-  child.once('close', (code) => {
-    channel.exit(code ?? 1);
-    channel.end();
+  await new Promise<void>((resolve) => {
+    server.listen(0, address, resolve);
   });
+
+  const listening = server.address();
+
+  return {
+    port: typeof listening === 'object' && listening !== null ? listening.port : 0,
+    hostKey: readFileSync(`${hostKeyPath}.pub`, 'utf8').split(' ').slice(0, 2).join(' '),
+    repo,
+    logins: () => counts.logins,
+    stop: () =>
+      new Promise<void>((resolve) => {
+        server.close(() => {
+          resolve();
+        });
+      }),
+  };
 }
+
+const RECEIVE_PACK = /^git-receive-pack '\/?repo\.git'$/u;
 
 function handleConnection(
   client: Connection,
@@ -103,41 +126,18 @@ function handleConnection(
   });
 }
 
-export async function startStubGitSshServer(
-  address: string,
-  dir: string,
-  allowedKey: string,
-): Promise<StubGitSshServer> {
-  const hostKeyPath = join(dir, 'git-host-key');
-  const repo = join(dir, 'repo.git');
-
-  await runChecked(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', hostKeyPath]);
-  await runGitChecked(['git', 'init', '-q', '--bare', '-b', 'main', repo]);
-
-  const counts = { logins: 0 };
-
-  const server = new Server({ hostKeys: [readFileSync(hostKeyPath)] }, (client) => {
-    handleConnection(client, allowedKey, repo, () => {
-      counts.logins += 1;
-    });
+function runReceivePack(channel: ServerChannel, repo: string): void {
+  const child = spawn('git', ['receive-pack', repo], {
+    stdio: 'pipe',
+    env: createGitFreeEnv(process.env),
   });
 
-  await new Promise<void>((resolve) => {
-    server.listen(0, address, resolve);
+  channel.pipe(child.stdin);
+  child.stdout.pipe(channel, { end: false });
+  child.stderr.pipe(channel.stderr, { end: false });
+
+  child.once('close', (code) => {
+    channel.exit(code ?? 1);
+    channel.end();
   });
-
-  const listening = server.address();
-
-  return {
-    port: typeof listening === 'object' && listening !== null ? listening.port : 0,
-    hostKey: readFileSync(`${hostKeyPath}.pub`, 'utf8').split(' ').slice(0, 2).join(' '),
-    repo,
-    logins: () => counts.logins,
-    stop: () =>
-      new Promise<void>((resolve) => {
-        server.close(() => {
-          resolve();
-        });
-      }),
-  };
 }

@@ -7,7 +7,7 @@ import { startTestImpd } from '../../testing/start-test-impd';
 import type { TestImpdOptions } from '../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
 import { writeTestSnapshot } from '../../testing/vm/write-test-snapshot';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
 import { buildImpPaths } from '../storage/data-layout';
 
@@ -60,7 +60,7 @@ test('it finds a VM that died after its sleep wrote the snapshot asleep, not sto
 
   ctx.fake.alive.clear();
 
-  const found = await ctx.imps.getImp('dev');
+  const found = await ctx.imps.readImp('dev');
 
   expect(found.state).toBe('sleeping');
 });
@@ -78,7 +78,7 @@ test('it wakes an imp found asleep after its VM died from the snapshot', async (
 
   ctx.fake.alive.clear();
 
-  await ctx.imps.getImp('dev');
+  await ctx.imps.readImp('dev');
 
   const woken = await ctx.imps.wakeImp('dev');
 
@@ -99,7 +99,7 @@ test('it finds a dead VM with a snapshot from before its last activity stopped',
 
   ctx.fake.alive.clear();
 
-  const found = await ctx.imps.getImp('dev');
+  const found = await ctx.imps.readImp('dev');
 
   expect(found.state).toBe('stopped');
 });
@@ -113,7 +113,7 @@ test('it finds a dead VM stopped after a real sleep and wake left the snapshot b
 
   ctx.fake.alive.clear();
 
-  const found = await ctx.imps.getImp('dev');
+  const found = await ctx.imps.readImp('dev');
 
   expect(found.state).toBe('stopped');
 });
@@ -127,7 +127,7 @@ test('it finds a VM that its memory limit killed stopped, and says so', async ()
   stub.oomKills.set(imp.id, 1);
   ctx.fake.alive.clear();
 
-  const found = await ctx.imps.getImp('dev');
+  const found = await ctx.imps.readImp('dev');
 
   expect(found.state).toBe('stopped');
   expect(found.error).toBe('its memory limit killed firecracker');
@@ -146,8 +146,8 @@ test('it finds a VM lost after a kernel oops stopped, and says so', async () => 
 
   ctx.fake.alive.clear();
 
-  const found = await ctx.imps.getImp('dev');
-  const record = await findImpByName(ctx.db, 'dev');
+  const found = await ctx.imps.readImp('dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(found.state).toBe('stopped');
   expect(found.error).toBe('a kernel oops killed firecracker');
@@ -175,7 +175,7 @@ test('it gives the kernel oops as the trigger of the state change', async () => 
 
   ctx.fake.alive.clear();
 
-  await ctx.imps.getImp('dev');
+  await ctx.imps.readImp('dev');
 
   expect(changes).toStrictEqual([{ trigger: 'a kernel oops killed firecracker' }]);
 });
@@ -193,7 +193,7 @@ test('it logs that an imp a kernel oops killed stays off its disk until the host
 
   ctx.fake.alive.clear();
 
-  await ctx.imps.getImp('dev');
+  await ctx.imps.readImp('dev');
 
   expect(ctx.logs).toContain(
     'impd: dev: a kernel oops killed firecracker; marked it stopped; it stays off its disk until the host reboots',
@@ -213,7 +213,7 @@ test('it refuses to start an imp a kernel oops killed until the host reboots', a
 
   ctx.fake.alive.clear();
 
-  await ctx.imps.getImp('dev');
+  await ctx.imps.readImp('dev');
 
   expect(ctx.imps.startImp('dev')).rejects.toMatchObject({
     code: 'PRECONDITION_FAILED',
@@ -235,7 +235,7 @@ test('it boots no VM on the disk of an imp a kernel oops killed', async () => {
 
   ctx.fake.alive.clear();
 
-  await ctx.imps.getImp('dev');
+  await ctx.imps.readImp('dev');
 
   const bootsBefore = ctx.fake.boots.length;
 
@@ -265,7 +265,7 @@ test('it refuses to wake an imp whose VM a kernel oops killed after its sleep wr
 
   ctx.fake.alive.clear();
 
-  await ctx.imps.getImp('dev');
+  await ctx.imps.readImp('dev');
 
   expect(ctx.imps.wakeImp('dev')).rejects.toMatchObject({
     code: 'PRECONDITION_FAILED',
@@ -291,7 +291,7 @@ test('it gives no kernel oops trigger to a VM that booted after impd saw the oop
 
   ctx.fake.alive.clear();
 
-  const found = await ctx.imps.getImp('dev');
+  const found = await ctx.imps.readImp('dev');
 
   // the API leaves out an error the record does not have
   expect(found.state).toBe('stopped');
@@ -309,7 +309,7 @@ test('it gives no kernel oops trigger to a VM lost while the flag stays as impd 
 
   ctx.fake.alive.clear();
 
-  const found = await ctx.imps.getImp('dev');
+  const found = await ctx.imps.readImp('dev');
 
   // the API leaves out an error the record does not have
   expect(found.state).toBe('stopped');
@@ -326,8 +326,8 @@ test('it holds only the imp whose Firecracker owned the thread a kernel oops kil
   await ctx.imps.createImp({ name: 'hit' });
   await ctx.imps.createImp({ name: 'other' });
 
-  const hit = await findImpByName(ctx.db, 'hit');
-  const other = await findImpByName(ctx.db, 'other');
+  const hit = await readImpByName(ctx.db, 'hit');
+  const other = await readImpByName(ctx.db, 'other');
 
   invariant(typeof hit?.pid === 'number');
   invariant(typeof other?.pid === 'number');
@@ -355,8 +355,8 @@ test('it holds only the imp whose Firecracker owned the thread a kernel oops kil
 
   ctx.fake.alive.clear();
 
-  const foundHit = await ctx.imps.getImp('hit');
-  const foundOther = await ctx.imps.getImp('other');
+  const foundHit = await ctx.imps.readImp('hit');
+  const foundOther = await ctx.imps.readImp('other');
 
   expect(foundHit.error).toBe('a kernel oops killed firecracker');
   expect(foundOther.state).toBe('stopped');
@@ -373,8 +373,8 @@ test('it starts an imp whose VM died after a kernel oops killed a thread of anot
   await ctx.imps.createImp({ name: 'hit' });
   await ctx.imps.createImp({ name: 'other' });
 
-  const hit = await findImpByName(ctx.db, 'hit');
-  const other = await findImpByName(ctx.db, 'other');
+  const hit = await readImpByName(ctx.db, 'hit');
+  const other = await readImpByName(ctx.db, 'other');
 
   invariant(typeof hit?.pid === 'number');
   invariant(typeof other?.pid === 'number');
@@ -397,12 +397,12 @@ test('it starts an imp whose VM died after a kernel oops killed a thread of anot
   // the hit VM dies and leaves the sampler; the other dies on a later pass
   ctx.fake.alive.delete(hit.pid);
 
-  await ctx.imps.getImp('hit');
+  await ctx.imps.readImp('hit');
   await ctx.imps.sampleResources();
 
   ctx.fake.alive.delete(other.pid);
 
-  await ctx.imps.getImp('other');
+  await ctx.imps.readImp('other');
 
   const started = await ctx.imps.startImp('other');
 
@@ -419,8 +419,8 @@ test('it holds every imp lost after a kernel oops killed a thread that no VM own
   await ctx.imps.createImp({ name: 'first' });
   await ctx.imps.createImp({ name: 'second' });
 
-  const first = await findImpByName(ctx.db, 'first');
-  const second = await findImpByName(ctx.db, 'second');
+  const first = await readImpByName(ctx.db, 'first');
+  const second = await readImpByName(ctx.db, 'second');
 
   invariant(typeof first?.pid === 'number');
   invariant(typeof second?.pid === 'number');
@@ -443,8 +443,8 @@ test('it holds every imp lost after a kernel oops killed a thread that no VM own
 
   ctx.fake.alive.clear();
 
-  const foundFirst = await ctx.imps.getImp('first');
-  const foundSecond = await ctx.imps.getImp('second');
+  const foundFirst = await ctx.imps.readImp('first');
+  const foundSecond = await ctx.imps.readImp('second');
 
   expect(foundFirst.error).toBe('a kernel oops killed firecracker');
   expect(foundSecond.error).toBe('a kernel oops killed firecracker');
@@ -480,7 +480,7 @@ test('it starts an imp a kernel oops killed once the host has rebooted', async (
   writeFileSync(ctx.taintPath, '0\n');
 
   const started = await ctx.imps.startImp('dev');
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(started.state).toBe('running');
   expect(record?.error).toBeNull();
@@ -554,7 +554,7 @@ test('it clears the hold of an imp a kernel oops killed when impd starts with fl
 
   await ctx.imps.reconcileImps();
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record).toMatchObject({ error: null, hasOopsHold: false });
   expect(ctx.logs).toContain('impd: dev: the host rebooted since a kernel oops held its disk');
@@ -574,9 +574,9 @@ test('it records the boot a kernel oops held the disk of an imp in', async () =>
 
   ctx.fake.alive.clear();
 
-  await ctx.imps.getImp('dev');
+  await ctx.imps.readImp('dev');
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.oopsBootId).toBe('0e7c5a91-3d2b-4f86-b1a4-9c8e7d6f5a43');
 });
@@ -603,7 +603,7 @@ test('it clears the hold of an earlier boot when an oops set flag D before impd 
 
   await ctx.imps.reconcileImps();
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.error).toBeNull();
   expect(ctx.logs).toContain('impd: dev: the host rebooted since a kernel oops held its disk');
@@ -657,7 +657,7 @@ test('it clears the hold of an earlier boot when impd cannot read the taint flag
 
   await ctx.imps.reconcileImps();
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.error).toBeNull();
 });
@@ -683,7 +683,7 @@ test('it keeps the record of a hold of this boot when impd starts again with fla
 
   await ctx.imps.reconcileImps();
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.error).toBe('a kernel oops killed firecracker');
 });
@@ -732,7 +732,7 @@ test('it keeps the hold of an earlier boot when impd cannot read the boot id', a
 
   await ctx.imps.reconcileImps();
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.error).toBe('a kernel oops killed firecracker');
 });
@@ -756,7 +756,7 @@ test('it keeps the record of a hold when impd starts with flag D set', async () 
 
   await ctx.imps.reconcileImps();
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.error).toBe('a kernel oops killed firecracker');
 });
@@ -782,7 +782,7 @@ test('it keeps every hold when impd starts without the taint file', async () => 
 
   await ctx.imps.reconcileImps();
 
-  const records = await Promise.all(['dev', 'build'].map((name) => findImpByName(ctx.db, name)));
+  const records = await Promise.all(['dev', 'build'].map((name) => readImpByName(ctx.db, name)));
 
   expect(records.map((record) => record?.error)).toEqual([
     'a kernel oops killed firecracker',
@@ -813,7 +813,7 @@ test('it keeps the hold when impd starts with a taint file it cannot read', asyn
 
   await ctx.imps.reconcileImps();
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.error).toBe('a kernel oops killed firecracker');
   expect(ctx.imps.startImp('dev')).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
@@ -838,7 +838,7 @@ test('it keeps the hold when impd starts with a malformed taint file', async () 
 
   await ctx.imps.reconcileImps();
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.error).toBe('a kernel oops killed firecracker');
 });

@@ -19,7 +19,7 @@ import {
   STUB_GENERATION,
   buildStubExecAgent,
 } from '../test-utils/build-stub-exec-agent';
-import { buildStubImpdWithoutFeature } from '../test-utils/build-stub-impd-without-feature';
+import { makeStubImpdWithoutFeature } from '../test-utils/make-stub-impd-without-feature';
 import { ExecError } from './exec-error';
 import { InvalidResumeError } from './invalid-resume-error';
 import { InvalidStateError } from './invalid-state-error';
@@ -393,7 +393,7 @@ test("#openExec starts a command that requires the broker with the broker's vari
 test('#openExec starts nothing that requires anything on an impd without execRequire', async () => {
   const ctx = await setupTest();
 
-  const older = buildStubImpdWithoutFeature(
+  const older = makeStubImpdWithoutFeature(
     (request) => ctx.impd.api.app.handle(request),
     'execRequire',
   );
@@ -421,7 +421,7 @@ test('#openExec starts nothing that requires anything on an impd without execReq
 test('#openExec starts nothing that drops CAP_SYS_ADMIN on an impd without execDropSysAdmin', async () => {
   const ctx = await setupTest();
 
-  const older = buildStubImpdWithoutFeature(
+  const older = makeStubImpdWithoutFeature(
     (request) => ctx.impd.api.app.handle(request),
     'execDropSysAdmin',
   );

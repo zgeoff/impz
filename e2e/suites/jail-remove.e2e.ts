@@ -5,15 +5,15 @@ import { assertState, createInstanceClient, requireImp, runImp } from '../lib/im
 import { waitForExec } from '../lib/imps';
 import { readImpdLogSince, runInContainer } from '../lib/instance';
 import {
-  checkTemplateBuildEnded,
-  findJailViolations,
+  collectJailViolations,
+  hasTemplateBuildEnded,
   listJailMounts,
   readJailState,
   readTemplateKey,
 } from '../lib/jail-host';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // A jailed VM's start, stop and removal leave no jail, cgroup or mount
@@ -26,7 +26,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('jail'), stack, client };
+  return { prefix: getSuitePrefix('jail'), stack, client };
 }
 
 test('it starts, stops and removes a jailed VM cleanly, and the boot template build leaves no jail mounted', async () => {
@@ -49,7 +49,7 @@ test('it starts, stops and removes a jailed VM cleanly, and the boot template bu
 
   const started = await readJailState(name);
 
-  expect(findJailViolations(started)).toStrictEqual([]);
+  expect(collectJailViolations(started)).toStrictEqual([]);
 
   await runImp('stop', name);
   await assertState(name, 'stopped');
@@ -79,7 +79,7 @@ test('it starts, stops and removes a jailed VM cleanly, and the boot template bu
   await waitFor('the imp’s boot template build to end', async () => {
     const log = await readImpdLogSince(since);
 
-    if (!checkTemplateBuildEnded(log, name, key)) {
+    if (!hasTemplateBuildEnded(log, name, key)) {
       throw new Error(`no end of the ${key.slice(0, 12)} build logged yet`);
     }
   });

@@ -87,12 +87,12 @@ function isCidr6Entry(entry: string): boolean {
   }
 
   // no host bits past the prefix
-  const value = readIpv6Value(canonical);
+  const value = toIpv6Value(canonical);
 
   return value % 2n ** BigInt(128 - prefix) === 0n;
 }
 
-function readIpv6Value(canonical: string): bigint {
+function toIpv6Value(canonical: string): bigint {
   const [head = '', tail] = canonical.split('::');
   const headGroups = head === '' ? [] : head.split(':');
   const tailGroups = tail === undefined || tail === '' ? [] : tail.split(':');

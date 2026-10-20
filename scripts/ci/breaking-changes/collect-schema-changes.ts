@@ -3,28 +3,28 @@ import { ANNOTATIONS } from './annotations';
 import { buildWithout } from './build-without';
 import { collectBoundChange } from './collect-bound-change';
 import { collectBoundChanges } from './collect-bound-changes';
+import { collectSchemaMap } from './collect-schema-map';
 import type { Comparison } from './comparison';
+import { findBranches } from './find-branches';
+import { findInclusive } from './find-inclusive';
 import { findRef } from './find-ref';
-import { findTagKeys } from './find-tag-keys';
+import { findSchema } from './find-schema';
+import { findSchemaList } from './find-schema-list';
+import { collectTagKeys } from './find-tag-keys';
+import { findTypes } from './find-types';
+import { findValues } from './find-values';
 import { formatChange } from './format-change';
 import { formatSides } from './format-sides';
 import { formatTag } from './format-tag';
 import { formatValue } from './format-value';
 import { formatValues } from './format-values';
+import { getStrings } from './get-strings';
 import { hasOtherTag } from './has-other-tag';
 import { isAnything } from './is-anything';
 import { isSchemaObject } from './is-schema-object';
 import { isValueAccepted } from './is-value-accepted';
 import { JSON_TYPES } from './json-types';
 import { mergeIntersection } from './merge-intersection';
-import { readBranches } from './read-branches';
-import { readInclusive } from './read-inclusive';
-import { readSchema } from './read-schema';
-import { readSchemaList } from './read-schema-list';
-import { readSchemaMap } from './read-schema-map';
-import { readStrings } from './read-strings';
-import { readTypes } from './read-types';
-import { readValues } from './read-values';
 import { resolveRef } from './resolve-ref';
 import type { Schema, SchemaObject } from './schema';
 
@@ -88,7 +88,7 @@ function findCycleKey(schema: Schema): string | undefined {
     return ref;
   }
 
-  const parts = readSchemaList(schema, 'allOf') ?? [];
+  const parts = findSchemaList(schema, 'allOf') ?? [];
 
   return parts.some((part) => findRef(part) !== undefined) ? JSON.stringify(schema) : undefined;
 }
@@ -107,8 +107,8 @@ function collectObjectChanges(
   path: string,
   comparison: Comparison,
 ): string[] {
-  const narrowBranches = readBranches(narrow);
-  const wideBranches = readBranches(wide);
+  const narrowBranches = findBranches(narrow);
+  const wideBranches = findBranches(wide);
 
   // a union: each of its options must pass, against the discriminator both
   // sides share; impd must still send every variant it sent
@@ -118,7 +118,7 @@ function collectObjectChanges(
     const keys =
       wideBranches === undefined
         ? []
-        : findTagKeys([
+        : collectTagKeys([
             resolveBranches(narrowBranches, comparison.narrowRoot),
             resolveBranches(wideBranches, comparison.wideRoot),
           ]);
@@ -138,11 +138,11 @@ function collectObjectChanges(
     ];
   }
 
-  if (readSchemaList(narrow, 'allOf') !== undefined) {
+  if (findSchemaList(narrow, 'allOf') !== undefined) {
     return collectIntersectionChanges(narrow, wide, path, comparison);
   }
 
-  if (readValues(narrow) !== undefined) {
+  if (findValues(narrow) !== undefined) {
     return collectValueChanges(narrow, wide, path, comparison);
   }
 
@@ -150,7 +150,7 @@ function collectObjectChanges(
     return collectUnionChanges(narrow, wide, wideBranches, path, comparison);
   }
 
-  const wideParts = readSchemaList(wide, 'allOf');
+  const wideParts = findSchemaList(wide, 'allOf');
 
   if (wideParts !== undefined) {
     return mergeIntersection(wide, comparison.wideRoot, comparison.direction).flatMap((group) =>
@@ -166,6 +166,34 @@ function collectObjectChanges(
     ...collectPropertyChanges(narrow, wide, path, comparison),
     ...collectKeywordChanges(narrow, wide, path, comparison),
   ];
+}
+
+function resolveBranches(branches: readonly Schema[], root: Schema): readonly SchemaObject[] {
+  return branches
+    .map((branch) => resolveRef(branch, root))
+    .filter((branch) => isSchemaObject(branch));
+}
+
+// What impd sends must keep every variant an older client waits for: a base
+// variant whose tag no head variant carries is no longer sent.
+function collectDroppedVariants(
+  narrowBranches: readonly Schema[],
+  wideBranches: readonly Schema[],
+  tagKeys: readonly string[],
+  path: string,
+  comparison: Comparison,
+): string[] {
+  if (tagKeys.length === 0) {
+    return [];
+  }
+
+  const narrowObjects = resolveBranches(narrowBranches, comparison.narrowRoot);
+
+  return resolveBranches(wideBranches, comparison.wideRoot)
+    .filter((branch) => narrowObjects.every((other) => hasOtherTag(other, branch, tagKeys)))
+    .map((branch) =>
+      formatChange(path, `no longer sends the variant ${formatTag(branch, tagKeys)}`),
+    );
 }
 
 function mergeSchemas(siblings: SchemaObject, branch: Schema): Schema {
@@ -209,7 +237,7 @@ function collectValueChanges(
 
   // a listed value that the narrow side's other keywords refuse, as an
   // intersection's merge may leave, was never taken
-  return (readValues(narrow) ?? [])
+  return (findValues(narrow) ?? [])
     .filter((value) => isValueAccepted(narrow, value, comparison.narrowRoot))
     .filter((value) => !isValueAccepted(wide, value, comparison.wideRoot))
     .map((value) => formatChange(path, `${verb} ${formatValue(value)}`));
@@ -223,10 +251,10 @@ function isClosedSet(schemaRef: Schema, root: Schema): boolean {
     return false;
   }
 
-  const branches = readBranches(schema);
+  const branches = findBranches(schema);
 
   return (
-    readValues(schema) !== undefined ||
+    findValues(schema) !== undefined ||
     (branches !== undefined && branches.every((branch) => isClosedSet(branch, root)))
   );
 }
@@ -251,7 +279,7 @@ function collectUnionChanges(
   const tagKeys =
     comparison.unionTags?.path === path
       ? comparison.unionTags.keys
-      : findTagKeys([[narrow], resolveBranches(branches, comparison.wideRoot)]);
+      : collectTagKeys([[narrow], resolveBranches(branches, comparison.wideRoot)]);
 
   const sameTag = branches.filter(
     (branch) => !hasOtherTag(narrow, resolveRef(branch, comparison.wideRoot), tagKeys),
@@ -267,37 +295,9 @@ function collectUnionChanges(
   }
 
   const trials = sameTag.map((branch) => collectChanges(narrow, branch, path, comparison));
-  const [closest = []] = trials.toSorted((a, b) => a.length - b.length);
+  const [closest = []] = trials.toSorted((left, right) => left.length - right.length);
 
   return [...siblingChanges, ...closest];
-}
-
-// What impd sends must keep every variant an older client waits for: a base
-// variant whose tag no head variant carries is no longer sent.
-function collectDroppedVariants(
-  narrowBranches: readonly Schema[],
-  wideBranches: readonly Schema[],
-  tagKeys: readonly string[],
-  path: string,
-  comparison: Comparison,
-): string[] {
-  if (tagKeys.length === 0) {
-    return [];
-  }
-
-  const narrowObjects = resolveBranches(narrowBranches, comparison.narrowRoot);
-
-  return resolveBranches(wideBranches, comparison.wideRoot)
-    .filter((branch) => narrowObjects.every((other) => hasOtherTag(other, branch, tagKeys)))
-    .map((branch) =>
-      formatChange(path, `no longer sends the variant ${formatTag(branch, tagKeys)}`),
-    );
-}
-
-function resolveBranches(branches: readonly Schema[], root: Schema): readonly SchemaObject[] {
-  return branches
-    .map((branch) => resolveRef(branch, root))
-    .filter((branch) => isSchemaObject(branch));
 }
 
 // the type, and a closed set that the wide side brings where the narrow had none
@@ -307,9 +307,9 @@ function collectTypeChanges(
   path: string,
   comparison: Comparison,
 ): string[] {
-  const wideTypes = readTypes(wide);
-  const narrowTypes = readTypes(narrow) ?? JSON_TYPES;
-  const wideValues = readValues(wide);
+  const wideTypes = findTypes(wide);
+  const narrowTypes = findTypes(narrow) ?? JSON_TYPES;
+  const wideValues = findValues(wide);
 
   const fits =
     wideTypes === undefined ||
@@ -317,7 +317,7 @@ function collectTypeChanges(
       (type) => wideTypes.includes(type) || (type === 'integer' && wideTypes.includes('number')),
     );
 
-  const typeChange = formatSides(comparison, readTypes(narrow), wideTypes, formatTypes);
+  const typeChange = formatSides(comparison, findTypes(narrow), wideTypes, formatTypes);
   const valueChange = formatSides(comparison, undefined, wideValues, formatValues);
 
   return [
@@ -337,8 +337,8 @@ function collectStringChanges(
   comparison: Comparison,
 ): string[] {
   const lengths = [
-    ['min length', readInclusive(narrow, 'minLength'), readInclusive(wide, 'minLength'), 'lower'],
-    ['max length', readInclusive(narrow, 'maxLength'), readInclusive(wide, 'maxLength'), 'upper'],
+    ['min length', findInclusive(narrow, 'minLength'), findInclusive(wide, 'minLength'), 'lower'],
+    ['max length', findInclusive(narrow, 'maxLength'), findInclusive(wide, 'maxLength'), 'upper'],
   ] as const;
 
   const exact = (['pattern', 'format'] as const)
@@ -367,8 +367,8 @@ function collectItemChanges(
     return [];
   }
 
-  const narrowItems = readSchema(narrow, 'items') ?? true;
-  const wideItems = readSchema(wide, 'items') ?? true;
+  const narrowItems = findSchema(narrow, 'items') ?? true;
+  const wideItems = findSchema(wide, 'items') ?? true;
 
   return collectChanges(narrowItems, wideItems, `${path}[]`, comparison);
 }
@@ -379,12 +379,12 @@ function collectPropertyChanges(
   path: string,
   comparison: Comparison,
 ): string[] {
-  const narrowProperties = readSchemaMap(narrow, 'properties');
-  const wideProperties = readSchemaMap(wide, 'properties');
-  const narrowRequired = readStrings(narrow, 'required');
-  const wideRequired = readStrings(wide, 'required');
-  const wideExtra = readSchema(wide, 'additionalProperties');
-  const narrowExtra = readSchema(narrow, 'additionalProperties');
+  const narrowProperties = collectSchemaMap(narrow, 'properties');
+  const wideProperties = collectSchemaMap(wide, 'properties');
+  const narrowRequired = getStrings(narrow, 'required');
+  const wideRequired = getStrings(wide, 'required');
+  const wideExtra = findSchema(wide, 'additionalProperties');
+  const narrowExtra = findSchema(narrow, 'additionalProperties');
   const recordValues = typeof wideExtra === 'object' ? wideExtra : undefined;
   const missing = comparison.direction === 'toServer' ? 'now required' : 'may now be missing';
 
@@ -447,13 +447,13 @@ function collectKeyChanges(
   path: string,
   comparison: Comparison,
 ): string[] {
-  const wideKeys = readSchema(wide, 'propertyNames');
+  const wideKeys = findSchema(wide, 'propertyNames');
 
   if (wideKeys === undefined) {
     return [];
   }
 
-  const narrowKeys = readSchema(narrow, 'propertyNames') ?? { type: 'string' };
+  const narrowKeys = findSchema(narrow, 'propertyNames') ?? { type: 'string' };
 
   return collectChanges(narrowKeys, wideKeys, `${path}{key}`, comparison);
 }

@@ -73,11 +73,11 @@ test('it holds the control path it is given, and answers another path with its a
 test('it answers at once a request its answerAtOnce answers, on the unix socket it is given', async () => {
   const ctx = setupTest();
 
-  const dir = await mkdtemp(join(tmpdir(), 'silent-origin-'));
+  const directory = await mkdtemp(join(tmpdir(), 'silent-origin-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const socket = join(dir, 'engine.sock');
+  const socket = join(directory, 'engine.sock');
 
   startStubSilentOrigin(ctx.stack, {
     unix: socket,
@@ -94,11 +94,11 @@ test('it answers at once a request its answerAtOnce answers, on the unix socket 
 test('it holds a request its answerAtOnce leaves, on the unix socket it is given', async () => {
   const ctx = setupTest();
 
-  const dir = await mkdtemp(join(tmpdir(), 'silent-origin-'));
+  const directory = await mkdtemp(join(tmpdir(), 'silent-origin-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const socket = join(dir, 'engine.sock');
+  const socket = join(directory, 'engine.sock');
 
   const origin = startStubSilentOrigin(ctx.stack, {
     unix: socket,

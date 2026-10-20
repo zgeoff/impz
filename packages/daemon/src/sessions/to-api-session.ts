@@ -1,6 +1,6 @@
 import type { Session } from '@impz/api';
 import { isAgentSessionState } from '../agent-client/is-agent-session-state';
-import { findSignalName } from '../exec/signal-names';
+import { getSignalName } from '../exec/signal-names';
 import type { SeenSession } from './session-cache';
 
 export function toApiSession(session: SeenSession): Session {
@@ -36,7 +36,7 @@ export function toApiSession(session: SeenSession): Session {
 
     api.exit = {
       code: signalled ? null : session.exit.code,
-      signal: signalled ? findSignalName(session.exit.signal) : null,
+      signal: signalled ? getSignalName(session.exit.signal) : null,
     };
   }
 

@@ -1,8 +1,8 @@
-import { findImpById } from '../db/imps';
+import { readImpById } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
 import type { ImpStateChange } from '../db/update-imp-state';
-import { hasSnapshot, readLoadingMeta, readSnapshotMeta } from '../sleep/snapshot-meta';
+import { probeSnapshot, readLoadingMeta, readSnapshotMeta } from '../sleep/snapshot-meta';
 import type { ImpPaths } from '../storage/data-layout';
 import { isImpVm } from '../vmm/firecracker-process';
 import type { ImpHost, ImpMemory, ImpVms } from './imp-context';
@@ -21,26 +21,27 @@ export async function checkLiveness(
 
   // a wake a crash cut short is reconcile's to settle
   const lostSnapshot =
-    imp.state === 'sleeping' && !hasSnapshot(paths) && readLoadingMeta(paths) === null;
+    imp.state === 'sleeping' && !probeSnapshot(paths) && readLoadingMeta(paths) === null;
 
   // a recycled pid whose argv a jail forged is alive, but not this imp's
   const lostVm =
     imp.state === 'running' &&
     (imp.pid === null ||
-      !context.vms.isVmAlive(imp.pid, paths) ||
+      !context.vms.probeVmAlive(imp.pid, paths) ||
       !isImpVm(context.vms.readVmOwner(imp.pid), imp.id, imp.jailUid));
 
   if ((!lostSnapshot && !lostVm) || !canRepair) {
     return imp;
   }
 
-  const trigger = lostVm ? findLostVmTrigger(context, imp) : null;
+  const trigger = lostVm ? readLostVmTrigger(context, imp) : null;
 
   // an oops holds the disk until a reboot, so the record says so even asleep
-  const slept = lostVm ? findSleptChange(imp, paths) : null;
+  const slept = lostVm ? readSleptChange(imp, paths) : null;
 
   // the hold records this boot, so a later boot knows a reboot freed the disk
-  const oopsBootId = trigger === KERNEL_OOPS_TRIGGER ? context.kernelOops.findBootId() : null;
+  const oopsBootId =
+    trigger === KERNEL_OOPS_TRIGGER ? context.kernelOops.readCurrentBootId() : null;
 
   const change =
     slept !== null && trigger === KERNEL_OOPS_TRIGGER
@@ -54,7 +55,7 @@ export async function checkLiveness(
       reason: 'repaired',
       state: 'stopped',
       pid: null,
-      awakeUntil: findLastSeenAlive(context, imp),
+      awakeUntil: readLastSeenAlive(context, imp),
 
       // a VM gone while it ran is a recovery; a lost snapshot fails the wake
       nextBootCause: lostVm ? 'recovery' : 'wake_fallback',
@@ -69,7 +70,7 @@ export async function checkLiveness(
   );
 
   if (repaired === undefined) {
-    const current = await findImpById(context.db, imp.id);
+    const current = await readImpById(context.db, imp.id);
 
     return current ?? imp;
   }
@@ -97,19 +98,19 @@ export async function checkLiveness(
 // Why a lost VM died, when impd can tell: its memory limit, read before the
 // cgroup goes, or a kernel oops that impd saw while the VM ran and that hit
 // its thread or a thread no VM owned (lifecycle.md)
-function findLostVmTrigger(context: ImpVms & ImpMemory, imp: Readonly<ImpRecord>): string | null {
-  if (context.cgroups.hasOomKillSinceStart(imp.id)) {
+function readLostVmTrigger(context: ImpVms & ImpMemory, imp: Readonly<ImpRecord>): string | null {
+  if (context.cgroups.probeOomKillSinceStart(imp.id)) {
     return OOM_KILL_TRIGGER;
   }
 
-  const oopsSeenAt = context.kernelOops.findOopsSeenAt();
+  const oopsSeenAt = context.kernelOops.readOopsSeenAt();
   const ranSince = imp.awakeSince?.getTime() ?? 0;
 
   if (oopsSeenAt === null || ranSince > oopsSeenAt) {
     return null;
   }
 
-  const owners = context.kernelOops.findOopsOwners(context.resources.listThreadOwners);
+  const owners = context.kernelOops.readOopsOwners(context.resources.listThreadOwners);
 
   return owners === null || owners.has(imp.id) ? KERNEL_OOPS_TRIGGER : null;
 }
@@ -117,7 +118,7 @@ function findLostVmTrigger(context: ImpVms & ImpMemory, imp: Readonly<ImpRecord>
 // Sleeping when the snapshot on disk is newer than the imp's last activity,
 // so this VM wrote it: impd stopped between the snapshot and the record. An
 // older snapshot belongs to an earlier sleep and must not be resumed.
-function findSleptChange(imp: ImpRecord, paths: ImpPaths): ImpStateChange | null {
+function readSleptChange(imp: ImpRecord, paths: ImpPaths): ImpStateChange | null {
   const meta = readSnapshotMeta(paths);
 
   if (meta === null || meta.createdAt <= imp.lastActiveAt.getTime()) {
@@ -131,7 +132,7 @@ function findSleptChange(imp: ImpRecord, paths: ImpPaths): ImpStateChange | null
 
 // A dead VM's awake span ends when anything last saw it alive: impd's last
 // sample or the imp's last activity, not when the repair ran.
-function findLastSeenAlive(context: ImpMemory, imp: Readonly<ImpRecord>): Date {
+function readLastSeenAlive(context: ImpMemory, imp: Readonly<ImpRecord>): Date {
   const sampled = context.resources.readLastSeenAt(imp.id)?.getTime() ?? 0;
 
   return new Date(Math.max(sampled, imp.lastActiveAt.getTime()));

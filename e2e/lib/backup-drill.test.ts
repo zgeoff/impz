@@ -5,7 +5,7 @@ test('#buildBackupEnv points impd at the drill repository with its keys and sche
   expect(
     buildBackupEnv(
       {
-        dir: '/repo/.cache/e2e/backups-a1',
+        directory: '/repo/.cache/e2e/backups-a1',
         envFile: '/repo/.cache/e2e/backups-a1/restic.env',
         passwordInContainer: '/src/.cache/e2e/backups-a1/restic-password',
         accessKey: 'e2e-backups',

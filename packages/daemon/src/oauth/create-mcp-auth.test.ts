@@ -40,7 +40,7 @@ async function setupTest() {
     log,
 
     // the route's OAuth paths, with impd's 404 for any other
-    handle: async (request: Request) => {
+    respond: async (request: Request) => {
       const answered = await auth.handle(request);
 
       return answered ?? new Response('not found', { status: 404 });
@@ -59,7 +59,7 @@ test('it signs a client in on an approval, and its access token acts within the 
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -100,7 +100,7 @@ test('it refuses an access token past its expiry', async () => {
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -140,7 +140,7 @@ test('it refuses a refresh token sent as the access token', async () => {
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -167,7 +167,7 @@ test('it refuses the access token of a removed grant, and ends what the grant op
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -203,7 +203,7 @@ test('it ends the grant a removed token approved', async () => {
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -234,7 +234,7 @@ test('it ends a grant whose approving token no longer holds its scope', async ()
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -283,7 +283,7 @@ test('it refreshes a grant’s tokens and refuses its spent refresh token', asyn
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -295,7 +295,7 @@ test('it refreshes a grant’s tokens and refuses its spent refresh token', asyn
   );
 
   const sendRefresh = () =>
-    ctx.handle(
+    ctx.respond(
       new Request('http://127.0.0.1:7171/oauth2/token', {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -326,7 +326,7 @@ test('it keeps the grant when another client presents its spent refresh token', 
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -338,7 +338,7 @@ test('it keeps the grant when another client presents its spent refresh token', 
   );
 
   const sendRefresh = (clientID: string) =>
-    ctx.handle(
+    ctx.respond(
       new Request('http://127.0.0.1:7171/oauth2/token', {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -375,7 +375,7 @@ test('it ends the grant when two refreshes spend one refresh token at once', asy
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -387,7 +387,7 @@ test('it ends the grant when two refreshes spend one refresh token at once', asy
   );
 
   const sendRefresh = () =>
-    ctx.handle(
+    ctx.respond(
       new Request('http://127.0.0.1:7171/oauth2/token', {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -419,7 +419,7 @@ test('it refuses an access token bound to a key, as the route takes bearer token
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -452,7 +452,7 @@ test('it answers a token request that sends a DPoP proof with a bearer token', a
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -463,7 +463,7 @@ test('it answers a token request that sends a DPoP proof with a bearer token', a
     },
   );
 
-  const refreshed = await ctx.handle(
+  const refreshed = await ctx.respond(
     new Request('http://127.0.0.1:7171/oauth2/token', {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded', dpop: 'a.dpop.proof' },
@@ -492,7 +492,7 @@ test('#listGrants lists a signed-in grant with its client, token, scope and imps
 
   await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -529,7 +529,7 @@ test('#removeClient removes the grants its client holds', async () => {
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -606,7 +606,7 @@ test('#removeExpired removes a grant whose refresh token expired', async () => {
 
   await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -646,7 +646,7 @@ test('#removeExpired removes the expired tokens of a grant that keeps refreshing
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -657,7 +657,7 @@ test('#removeExpired removes the expired tokens of a grant that keeps refreshing
     },
   );
 
-  const refreshed = await ctx.handle(
+  const refreshed = await ctx.respond(
     new Request('http://127.0.0.1:7171/oauth2/token', {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -704,7 +704,7 @@ test('#removeExpired never removes a grant with a live refresh token', async () 
 
   await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -732,14 +732,14 @@ test('it shows the login page again on Continue before the sign-in is approved',
   const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
 
   const pending = await createPendingSignIn({
-    handle: ctx.handle,
+    respond: ctx.respond,
     origin: 'http://127.0.0.1:7171',
     clientID: client.clientId,
     redirectURI: 'https://client.example/callback',
     scope: 'read',
   });
 
-  const continued = await ctx.handle(
+  const continued = await ctx.respond(
     new Request('http://127.0.0.1:7171/login', {
       method: 'POST',
       headers: {
@@ -761,14 +761,14 @@ test('it returns a denied sign-in to the client with access_denied, its state an
   const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
 
   const pending = await createPendingSignIn({
-    handle: ctx.handle,
+    respond: ctx.respond,
     origin: 'http://127.0.0.1:7171',
     clientID: client.clientId,
     redirectURI: 'https://client.example/callback',
     scope: 'read',
   });
 
-  const denied = await ctx.handle(
+  const denied = await ctx.respond(
     new Request('http://127.0.0.1:7171/login', {
       method: 'POST',
       headers: {
@@ -796,14 +796,14 @@ test('it refuses a login form posted from another origin', async () => {
   const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
 
   const pending = await createPendingSignIn({
-    handle: ctx.handle,
+    respond: ctx.respond,
     origin: 'http://127.0.0.1:7171',
     clientID: client.clientId,
     redirectURI: 'https://client.example/callback',
     scope: 'read',
   });
 
-  const posted = await ctx.handle(
+  const posted = await ctx.respond(
     new Request('http://127.0.0.1:7171/login', {
       method: 'POST',
       headers: {
@@ -828,7 +828,7 @@ test('it refuses a consent with no session from the sign-in', async () => {
   invariant(approver);
 
   const pending = await createPendingSignIn({
-    handle: ctx.handle,
+    respond: ctx.respond,
     origin: 'http://127.0.0.1:7171',
     clientID: client.clientId,
     redirectURI: 'https://client.example/callback',
@@ -837,7 +837,7 @@ test('it refuses a consent with no session from the sign-in', async () => {
 
   ctx.auth.approve(ApprovalCodeSchema.parse(pending.code), approver, 'read', undefined);
 
-  const continued = await ctx.handle(
+  const continued = await ctx.respond(
     new Request('http://127.0.0.1:7171/login', {
       method: 'POST',
       headers: {
@@ -852,7 +852,7 @@ test('it refuses a consent with no session from the sign-in', async () => {
 
   const consentQuery = consentURL.search.slice(1);
 
-  const allowed = await ctx.handle(
+  const allowed = await ctx.respond(
     new Request('http://127.0.0.1:7171/consent', {
       method: 'POST',
       headers: {
@@ -871,7 +871,7 @@ test('it answers a revocation of a token it does not know with an empty 200', as
   const ctx = await setupTest();
   const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
 
-  const revoked = await ctx.handle(
+  const revoked = await ctx.respond(
     new Request('http://127.0.0.1:7171/oauth2/revoke', {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -891,7 +891,7 @@ test('it refuses a token request whose body is past 16 KiB', async () => {
 
   const refreshToken = 'r'.repeat(16 * 1024);
 
-  const refused = await ctx.handle(
+  const refused = await ctx.respond(
     new Request('http://127.0.0.1:7171/oauth2/token', {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -919,7 +919,7 @@ test('it refuses a revocation whose body is past 16 KiB', async () => {
 
   const token = 't'.repeat(16 * 1024);
 
-  const refused = await ctx.handle(
+  const refused = await ctx.respond(
     new Request('http://127.0.0.1:7171/oauth2/revoke', {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -941,13 +941,13 @@ test('it shows a sign-in for a client it does not know a page that says so', asy
     code_challenge_method: 'S256',
   });
 
-  const authorized = await ctx.handle(
+  const authorized = await ctx.respond(
     new Request(`http://127.0.0.1:7171/oauth2/authorize?${query.toString()}`),
   );
 
   const errorURL = new URL(authorized.headers.get('location') ?? '', 'http://127.0.0.1:7171');
 
-  const page = await ctx.handle(new Request(errorURL.href));
+  const page = await ctx.respond(new Request(errorURL.href));
   const text = await page.text();
 
   expect(errorURL.pathname).toBe('/error');
@@ -976,7 +976,7 @@ test('it signs a client in on a clock of impd’s own that is not the wall clock
 
   const issued = await runOAuthSignIn(
     {
-      handle: async (request) => {
+      respond: async (request) => {
         const answered = await frozen.handle(request);
 
         return answered ?? new Response('not found', { status: 404 });

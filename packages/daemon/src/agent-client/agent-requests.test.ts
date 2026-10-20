@@ -18,13 +18,13 @@ import {
 import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from './frame-codec';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-vsock-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-vsock-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { vsockPath: join(dir, 'vsock.sock') };
+  return { vsockPath: join(directory, 'vsock.sock') };
 }
 
 test('#sendPing sends a ping through the CONNECT handshake', async () => {

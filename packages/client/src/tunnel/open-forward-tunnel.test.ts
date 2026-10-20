@@ -8,7 +8,7 @@ import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
-  findFreePorts,
+  claimFreePorts,
   startStubAgent,
   startStubDialAgent,
   startTestImpd,
@@ -216,7 +216,7 @@ test('it ends as unreachable when nothing answers at impd’s address', async ()
 
   // nothing listens on a free port
   const tunnel = openForwardTunnel({
-    baseUrl: `http://127.0.0.1:${String(findFreePorts(1).take())}`,
+    baseUrl: `http://127.0.0.1:${String(claimFreePorts(1).take())}`,
     token: 'root-token',
     name: 'box',
     port: 80,

@@ -87,8 +87,8 @@ export function buildStubEgressService(options: Readonly<StubEgressServiceOption
     admitted: admitted as readonly AdmittedAnswer[],
     forwarded: forwarded as readonly string[],
     logs: logs as readonly string[],
-    advance: (ms: number): void => {
-      clock.nowMs += ms;
+    advance: (durationMs: number): void => {
+      clock.nowMs += durationMs;
     },
   };
 }

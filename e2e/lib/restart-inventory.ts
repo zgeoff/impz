@@ -1,6 +1,6 @@
 import { listCheckpoints, listImps } from './imp-cli';
 import type { ImpRow } from './imp-cli';
-import { readSuitePrefix } from './suites';
+import { getSuitePrefix } from './suites';
 
 export interface InventoryEntry {
   readonly name: string;
@@ -32,7 +32,7 @@ export function buildInventoryEntry(
 }
 
 // The rows that are neither sleeping nor stopped, as `<name> <state>`.
-export function findAwakeRows(rows: readonly Readonly<ImpRow>[]): readonly string[] {
+export function collectAwakeRows(rows: readonly Readonly<ImpRow>[]): readonly string[] {
   return rows
     .filter((row) => row.state !== 'sleeping' && row.state !== 'stopped')
     .map((row) => `${row.name} ${row.state}`);
@@ -42,7 +42,7 @@ export function findAwakeRows(rows: readonly Readonly<ImpRow>[]): readonly strin
 // (config.keptPrefixes), as scale names them: e2e-scale-01 on. None when it
 // kept no fleet, as when scale failed or did not run.
 export function buildKeptScaleFleet(keptPrefixes: readonly string[], scaleCount: number): string[] {
-  const prefix = readSuitePrefix('scale');
+  const prefix = getSuitePrefix('scale');
 
   if (!keptPrefixes.includes(prefix)) {
     return [];
@@ -58,7 +58,7 @@ export function buildKeptScaleFleet(keptPrefixes: readonly string[], scaleCount:
 export async function readInventory(): Promise<readonly InventoryEntry[]> {
   const rows = await listImps();
 
-  const sorted = rows.toSorted((a, b) => a.name.localeCompare(b.name));
+  const sorted = rows.toSorted((left, right) => left.name.localeCompare(right.name));
 
   const checkpoints = await Promise.all(sorted.map((row) => listCheckpoints(row.name)));
 
@@ -73,5 +73,5 @@ export async function readInventory(): Promise<readonly InventoryEntry[]> {
 export async function listAwakeImps(): Promise<readonly string[]> {
   const rows = await listImps();
 
-  return findAwakeRows(rows);
+  return collectAwakeRows(rows);
 }

@@ -1,5 +1,5 @@
 import type { Access } from './access-policy';
-import { readField } from './access-policy';
+import { findField } from './access-policy';
 
 // the host-wide calls that change an imp, and the fields that name it
 const HOST_IMP_FIELDS: Readonly<Record<string, readonly string[]>> = {
@@ -25,5 +25,5 @@ export function readChangedImps(
   const fields =
     access.on === 'imp' || access.on === 'grant' ? access.fields : HOST_IMP_FIELDS[procedure];
 
-  return (fields ?? []).flatMap((field) => readField(input, field) ?? []);
+  return (fields ?? []).flatMap((field) => findField(input, field) ?? []);
 }

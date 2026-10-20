@@ -2,12 +2,12 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { countGuestSleeps } from '../lib/guest-processes';
-import { createInstanceClient, findImp } from '../lib/imp-cli';
+import { createInstanceClient, readImp } from '../lib/imp-cli';
 import { startHttpMcpSession, startMcpSession } from '../lib/mcp';
 import { readToolData } from '../lib/mcp-result';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent, removeTokenIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // `impz mcp` over stdio, as an agent's MCP client drives it, held to the
 // suite's prefix; and impd's MCP over HTTP. The file tools' commands must
@@ -20,7 +20,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  const prefix = readSuitePrefix('mcp');
+  const prefix = getSuitePrefix('mcp');
 
   const session = await startMcpSession(['--prefix', prefix]);
 
@@ -39,7 +39,7 @@ test('it boots an imp inside the prefix with imp_create, and refuses one outside
 
   // the outside name must be free, so the cleanup below takes only what this
   // test made
-  const taken = await findImp(other);
+  const taken = await readImp(other);
 
   expect(taken).toBeUndefined();
 
@@ -290,7 +290,7 @@ test('it runs a 15 s command over HTTP for a token held to the prefix, and refus
 
   // the outside name must be free, so the cleanup below takes only what this
   // test made
-  const taken = await findImp(other);
+  const taken = await readImp(other);
 
   expect(taken).toBeUndefined();
 

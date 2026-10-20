@@ -5,7 +5,7 @@ import packageJson from '@impz/daemon/package.json' with { type: 'json' };
 import { MIGRATIONS } from '@impz/daemon/src/db/run-migrations';
 import { startStubImpdRelease, startTestImpd } from '@impz/daemon/testing';
 import * as z from 'zod';
-import { parseJsonOutput } from '../test-utils/parse-json-output';
+import { readJsonOutput } from '../test-utils/read-json-output';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 
 // impd's real app, listening on a loopback port for the spawned CLI
@@ -90,5 +90,5 @@ test('it prints the database copy as --json output in the shape of the committed
   });
 
   expect(result.code).toBe(0);
-  expect(parseJsonOutput('db copy', result.stdout).data).toStrictEqual(JSON.parse(result.stdout));
+  expect(readJsonOutput('db copy', result.stdout).data).toStrictEqual(JSON.parse(result.stdout));
 });

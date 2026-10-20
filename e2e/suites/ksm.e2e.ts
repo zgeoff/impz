@@ -14,7 +14,7 @@ import {
 } from '../lib/ksm-host';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -29,7 +29,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('ksm'), stack, client };
+  return { prefix: getSuitePrefix('ksm'), stack, client };
 }
 
 test.skipIf(!checkHostRunsKsm())(
@@ -38,47 +38,47 @@ test.skipIf(!checkHostRunsKsm())(
     const ctx = await setupTest();
 
     const image = resolveImageName('e2e-tiny');
-    const a = `${ctx.prefix}a`;
-    const b = `${ctx.prefix}b`;
+    const firstName = `${ctx.prefix}a`;
+    const secondName = `${ctx.prefix}b`;
     const cpuBefore = readKsmdCpuMs();
 
-    await runImp('new', a, '--image', image, '--memory', '512m');
+    await runImp('new', firstName, '--image', image, '--memory', '512m');
 
-    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, a));
+    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, firstName));
 
-    await waitForExec(a);
-    await holdImp(a);
-    await runImp('new', b, '--image', image, '--memory', '512m');
+    await waitForExec(firstName);
+    await holdImp(firstName);
+    await runImp('new', secondName, '--image', image, '--memory', '512m');
 
-    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, b));
+    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, secondName));
 
-    await waitForExec(b);
-    await holdImp(b);
+    await waitForExec(secondName);
+    await holdImp(secondName);
 
-    const mappingsA = await readGuestMappings(a);
-    const mappingsB = await readGuestMappings(b);
+    const mappingsA = await readGuestMappings(firstName);
+    const mappingsB = await readGuestMappings(secondName);
 
     // private and mergeable: memfd-backed memory would fail here
     expect(new Set([...mappingsA, ...mappingsB])).toStrictEqual(new Set(['rw-p mg']));
 
     // before the fill, so no merge of it has begun yet
-    const beforeA = await readVmPssMib(a);
-    const beforeB = await readVmPssMib(b);
+    const beforeA = await readVmPssMib(firstName);
+    const beforeB = await readVmPssMib(secondName);
 
     // 96 MiB of 9-byte lines, the same in both guests but no two pages alike
     // within one: only a merge across the guests counts
     const fill = `seq -w 1 ${String(Math.floor((96 * 1024 ** 2) / 9))} > /dev/shm/fill`;
 
-    await runShellInImp(a, fill);
-    await runShellInImp(b, fill);
+    await runShellInImp(firstName, fill);
+    await runShellInImp(secondName, fill);
 
     const merge = await waitFor(
       'KSM to merge the guests',
       async () => {
-        const pagesA = await readMergingPages(a);
-        const pagesB = await readMergingPages(b);
-        const pssA = await readVmPssMib(a);
-        const pssB = await readVmPssMib(b);
+        const pagesA = await readMergingPages(firstName);
+        const pagesB = await readMergingPages(secondName);
+        const pssA = await readVmPssMib(firstName);
+        const pssB = await readVmPssMib(secondName);
 
         // most of each fill, in 4 KiB pages; unmerged, the fills add 192 MiB,
         // and the shared fill counts half in each guest
@@ -106,8 +106,8 @@ test.skipIf(!checkHostRunsKsm())(
 
     expect(info.ksm?.headroomMib).toBeGreaterThan(0);
 
-    await runImp('hold', a, '0');
-    await runImp('hold', b, '0');
+    await runImp('hold', firstName, '0');
+    await runImp('hold', secondName, '0');
 
     // The fill goes first, so the merged pages split; then 288 MiB of each
     // guest's own: the two pass the budget even without their base, one fits.
@@ -118,8 +118,8 @@ test.skipIf(!checkHostRunsKsm())(
       'dd if=/dev/urandom of=/dev/shm/own bs=1M count=288',
     ].join(' && ');
 
-    await runShellInImp(a, ownWrite);
-    await runShellInImp(b, ownWrite);
+    await runShellInImp(firstName, ownWrite);
+    await runShellInImp(secondName, ownWrite);
 
     // two enforce passes, and 2 s to read every guest's Pss: the most a
     // breach may last after the last write
@@ -128,7 +128,9 @@ test.skipIf(!checkHostRunsKsm())(
       async () => {
         const rows = await listImps();
 
-        const awake = rows.filter((row) => [a, b].includes(row.name) && row.state === 'running');
+        const awake = rows.filter(
+          (row) => [firstName, secondName].includes(row.name) && row.state === 'running',
+        );
 
         const pss = await Promise.all(awake.map((row) => readVmPssMib(row.name)));
 
@@ -145,7 +147,9 @@ test.skipIf(!checkHostRunsKsm())(
 
     const rows = await listImps();
 
-    const states = rows.filter((row) => [a, b].includes(row.name)).map((row) => row.state);
+    const states = rows
+      .filter((row) => [firstName, secondName].includes(row.name))
+      .map((row) => row.state);
 
     writeMetric('ksm_after_split', { awakeMib, states });
 

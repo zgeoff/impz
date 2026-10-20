@@ -36,7 +36,7 @@ test('it decodes the output of a step from an engine trace', () => {
   expect(trace.vertexes).toStrictEqual([]);
 
   expect(
-    trace.logs.map((log) => ({ vertex: log.vertex, text: new TextDecoder().decode(log.msg) })),
+    trace.logs.map((log) => ({ vertex: log.vertex, text: new TextDecoder().decode(log.message) })),
   ).toStrictEqual([
     {
       vertex: 'sha256:38bdcb9ec725b0901b6e9ede9e16f1c2601b2f853c1c77490d4a369ae6294688',

@@ -50,8 +50,8 @@ export interface ZfsCommands {
 
   // legacy mountpoints: impd mounts every dataset itself. A legacy mount
   // ignores the readonly property, so a read-only mount says so itself.
-  readonly mount: (name: string, dir: string, options?: MountOptions) => Promise<void>;
-  readonly unmount: (dir: string) => Promise<void>;
+  readonly mount: (name: string, directory: string, options?: MountOptions) => Promise<void>;
+  readonly unmount: (directory: string) => Promise<void>;
 }
 
 const LIST_COLUMNS = 'name,type,origin,defer_destroy';
@@ -146,16 +146,16 @@ export function createZfsCommands(run: CommandRunner): ZfsCommands {
 
       return parseZfsVersion(stdout);
     },
-    mount: (name, dir, options) =>
+    mount: (name, directory, options) =>
       runQuiet([
         'mount',
         '-t',
         'zfs',
         ...(options?.isReadOnly === true ? ['-o', 'ro'] : []),
         name,
-        dir,
+        directory,
       ]),
-    unmount: (dir) => runQuiet(['umount', dir]),
+    unmount: (directory) => runQuiet(['umount', directory]),
   };
 }
 
@@ -283,14 +283,14 @@ function parseEpochSeconds(value: string): Date | null {
   return Number.isSafeInteger(seconds) && seconds >= 0 ? new Date(seconds * 1000) : null;
 }
 
-export function readSnapshotId(name: string): string {
+export function getSnapshotId(name: string): string {
   return name.slice(name.indexOf('@') + 1);
 }
 
 export const CHECKPOINT_SNAPSHOT = /@cp-[^@]+$/u;
 
 // `tank/imp/disks/<id>` → `<id>`
-export function readChildId(name: string, parent: string): string {
+export function getChildId(name: string, parent: string): string {
   return name.slice(parent.length + 1);
 }
 
@@ -311,11 +311,11 @@ export function listCheckpointSnapshots(
   checkpointId: string,
 ): ZfsEntry[] {
   return entries.filter(
-    (entry) => entry.type === 'snapshot' && readSnapshotId(entry.name) === checkpointId,
+    (entry) => entry.type === 'snapshot' && getSnapshotId(entry.name) === checkpointId,
   );
 }
 
-export function findCheckpointSnapshot(entries: readonly ZfsEntry[], checkpointId: string): string {
+export function getCheckpointSnapshot(entries: readonly ZfsEntry[], checkpointId: string): string {
   const snapshots = listCheckpointSnapshots(entries, checkpointId);
   const [snapshot] = snapshots;
 

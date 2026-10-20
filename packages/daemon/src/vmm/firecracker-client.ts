@@ -114,11 +114,11 @@ export interface FirecrackerClient {
   readonly putBalloon: (balloon: Balloon) => Promise<void>;
 
   // the guest's own view of its memory, every stats_polling_interval_s
-  readonly getBalloonStats: () => Promise<BalloonStats>;
+  readonly readBalloonStats: () => Promise<BalloonStats>;
 
   // before InstanceStart only, as the balloon
   readonly putHotplugMemory: (hotplug: HotplugMemory) => Promise<void>;
-  readonly getHotplugMemory: () => Promise<HotplugState>;
+  readonly readHotplugMemory: () => Promise<HotplugState>;
 
   // the guest plugs or unplugs blocks toward `mib`, in its own time
   readonly patchHotplugMemory: (requestedMib: number) => Promise<void>;
@@ -131,8 +131,8 @@ export interface FirecrackerClient {
 
   // only on a fresh Firecracker process, before any other configuration
   readonly loadSnapshot: (files: SnapshotFiles, options: LoadOptions) => Promise<void>;
-  readonly getVersion: () => Promise<string>;
-  readonly getInstanceState: () => Promise<InstanceState>;
+  readonly readVersion: () => Promise<string>;
+  readonly readInstanceState: () => Promise<InstanceState>;
 }
 
 interface FirecrackerTimeouts {
@@ -244,7 +244,7 @@ export function createFirecrackerClient(
         stats_polling_interval_s: balloon.statsPollingIntervalS,
         free_page_reporting: balloon.freePageReporting,
       }),
-    getBalloonStats: async () => {
+    readBalloonStats: async () => {
       const text = await sendRequest('GET', '/balloon/statistics');
 
       const parsed = parseObject('GET /balloon/statistics', text);
@@ -260,7 +260,7 @@ export function createFirecrackerClient(
         slot_size_mib: hotplug.slotSizeMib,
         block_size_mib: hotplug.blockSizeMib,
       }),
-    getHotplugMemory: async () => {
+    readHotplugMemory: async () => {
       const text = await sendRequest('GET', '/hotplug/memory');
 
       const parsed = parseObject('GET /hotplug/memory', text);
@@ -308,7 +308,7 @@ export function createFirecrackerClient(
         },
         timeouts.snapshotMs,
       ),
-    getVersion: async () => {
+    readVersion: async () => {
       const text = await sendRequest('GET', '/version');
 
       const parsed: unknown = JSON.parse(text);
@@ -324,7 +324,7 @@ export function createFirecrackerClient(
 
       throw new Error(`firecracker GET /version: unexpected body ${text}`);
     },
-    getInstanceState: async () => {
+    readInstanceState: async () => {
       const text = await sendRequest('GET', '/');
 
       return InstanceInfoSchema.parse(JSON.parse(text)).state;
@@ -342,6 +342,11 @@ function parseObject(call: string, text: string): Readonly<Record<string, unknow
   return Object.fromEntries(Object.entries(parsed));
 }
 
+// the balloon's statistics are bytes
+function readBytesAsMib(parsed: Readonly<Record<string, unknown>>, key: string): number {
+  return Math.floor(readNumber(parsed, key) / 1_048_576);
+}
+
 function readNumber(parsed: Readonly<Record<string, unknown>>, key: string): number {
   const value = parsed[key];
 
@@ -350,9 +355,4 @@ function readNumber(parsed: Readonly<Record<string, unknown>>, key: string): num
   }
 
   return value;
-}
-
-// the balloon's statistics are bytes
-function readBytesAsMib(parsed: Readonly<Record<string, unknown>>, key: string): number {
-  return Math.floor(readNumber(parsed, key) / 1_048_576);
 }

@@ -56,16 +56,6 @@ interface AckWaiter {
 // is no unhandled rejection
 type ExecOutcome = { readonly code: number } | { readonly error: Error };
 
-function parseServerMessage(text: string): ExecServerMessage | null {
-  try {
-    const parsed = ExecServerMessageSchema.safeParse(JSON.parse(text));
-
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
-
 // Opens the exec and resolves once the tool started.
 export async function openToolExec(options: ToolExecOptions): Promise<ToolExec> {
   const headers: Record<string, string> =
@@ -216,4 +206,14 @@ export async function openToolExec(options: ToolExecOptions): Promise<ToolExec> 
       ws.close();
     },
   };
+}
+
+function parseServerMessage(text: string): ExecServerMessage | null {
+  try {
+    const parsed = ExecServerMessageSchema.safeParse(JSON.parse(text));
+
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }

@@ -4,7 +4,7 @@ import {
   DOCUMENTATION_RANGES6,
   RESERVED_RANGES6,
   createRangeChecker6,
-  readMappedIpv4,
+  findMappedIpv4,
 } from './ranges6';
 
 test.each([
@@ -142,13 +142,13 @@ test.each([
 test.each([
   ['::ffff:169.254.169.254', '169.254.169.254'],
   ['::ffff:a9fe:a9fe', '169.254.169.254'],
-])('#readMappedIpv4 reads the IPv4-mapped address %s as %s', (address, ipv4) => {
-  expect(readMappedIpv4(address)).toBe(ipv4);
+])('#findMappedIpv4 reads the IPv4-mapped address %s as %s', (address, ipv4) => {
+  expect(findMappedIpv4(address)).toBe(ipv4);
 });
 
 test.each(['2001:db8::1', 'example.com'])(
-  '#readMappedIpv4 reads %p as holding no IPv4 address',
+  '#findMappedIpv4 reads %p as holding no IPv4 address',
   (address) => {
-    expect(readMappedIpv4(address)).toBeNull();
+    expect(findMappedIpv4(address)).toBeNull();
   },
 );

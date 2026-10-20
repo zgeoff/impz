@@ -15,10 +15,10 @@ import { readSnapshotMeta } from '../sleep/snapshot-meta';
 import { buildImagePaths, buildImpPaths } from '../storage/data-layout';
 import { buildMemoryMax, createCpuCgroups } from '../vmm/cpu-cgroups';
 import {
-  findLowMib,
-  findRegionMib,
-  findSpareTotalMib,
-  findStructPageMib,
+  getLowMib,
+  getRegionMib,
+  getSpareTotalMib,
+  getStructPageMib,
   resolveMaxMemoryMib,
   toWholeBlocks,
 } from './elastic-memory';
@@ -56,28 +56,28 @@ test.each([
   ['growth of exactly one slot', 512, 640, 128],
   ['growth past a slot, rounded up to whole slots', 512, 700, 256],
 ])('#findRegionMib gives %s its region', (_label, memoryMib, maxMemoryMib, regionMib) => {
-  expect(findRegionMib(memoryMib, maxMemoryMib)).toBe(regionMib);
+  expect(getRegionMib(memoryMib, maxMemoryMib)).toBe(regionMib);
 });
 
 test.each([
   ['128 MiB for a small guest', 512, 128],
   ['15 % of a large guest', 2000, 300],
 ])('#findLowMib sets the grow mark at %s', (_label, totalMib, lowMib) => {
-  expect(findLowMib(totalMib)).toBe(lowMib);
+  expect(getLowMib(totalMib)).toBe(lowMib);
 });
 
 // 200 used: its grow mark is 128 MiB free, and a 256 MiB step above it
 test('#findSpareTotalMib leaves a small guest a step more than 128 MiB free', () => {
-  expect(findSpareTotalMib(200)).toBe(584);
+  expect(getSpareTotalMib(200)).toBe(584);
 });
 
 // 2000 used: of 2655 MiB, 15 % is 398.25 free and the guest has 655
 test('#findSpareTotalMib leaves a large guest a step more than 15 % of it free', () => {
-  expect(findSpareTotalMib(2000)).toBe(2655);
+  expect(getSpareTotalMib(2000)).toBe(2655);
 });
 
 test('#findStructPageMib costs 16 MiB of struct pages per GiB plugged, rounded up', () => {
-  expect(findStructPageMib(3072)).toBe(48);
+  expect(getStructPageMib(3072)).toBe(48);
 });
 
 test('#toWholeBlocks rounds up to whole 2 MiB blocks', () => {
@@ -171,7 +171,7 @@ test('it unplugs on a sleep what the guest can spare', async () => {
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
   // 512 plugged, 100 used: the target is 228, but the guest stops at 256
-  ctx.fake.guestMemory.set(paths.dir, {
+  ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 512,
     requestedMib: 512,
@@ -182,7 +182,7 @@ test('it unplugs on a sleep what the guest can spare', async () => {
   await ctx.client.imps.sleep({ name: 'dev' });
 
   expect(readSnapshotMeta(paths)).toMatchObject({ memoryMib: 256, pluggedMib: 256 });
-  expect(ctx.fake.guestMemory.get(paths.dir)?.requestedMib).toBe(256);
+  expect(ctx.fake.guestMemory.get(paths.directory)?.requestedMib).toBe(256);
   expect(ctx.logs).toSatisfyAny((line: string) => line.includes('256 MiB plugged'));
 });
 
@@ -192,7 +192,7 @@ test('it allows on a wake what the guest kept plugged at its sleep', async () =>
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  ctx.fake.guestMemory.set(paths.dir, {
+  ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 512,
     requestedMib: 512,
@@ -216,7 +216,7 @@ test('it records what a plug under way asked for at a sleep', async () => {
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
   // 256 plugged of 512 asked, and nothing to spare
-  ctx.fake.guestMemory.set(paths.dir, {
+  ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 256,
     requestedMib: 512,
@@ -235,7 +235,7 @@ test('it allows on a wake what a plug under way at the sleep asked for', async (
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  ctx.fake.guestMemory.set(paths.dir, {
+  ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 256,
     requestedMib: 512,
@@ -263,7 +263,7 @@ test('it sleeps an imp that does not grow without asking its guest', async () =>
 
   invariant(meta);
 
-  expect(ctx.fake.guestMemory.has(paths.dir)).toBeFalse();
+  expect(ctx.fake.guestMemory.has(paths.directory)).toBeFalse();
   expect(meta).not.toHaveProperty('pluggedMib');
 });
 
@@ -292,7 +292,7 @@ test('it raises memory.max with a grow of the guest', async () => {
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
   // 56 MiB available, under the 128 MiB mark: the next tick plugs a step
-  ctx.fake.guestMemory.set(paths.dir, {
+  ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 0,
     requestedMib: 0,
@@ -302,7 +302,7 @@ test('it raises memory.max with a grow of the guest', async () => {
 
   await ctx.impd.governed.memory.runTick();
 
-  expect(ctx.fake.guestMemory.get(paths.dir)?.pluggedMib).toBe(256);
+  expect(ctx.fake.guestMemory.get(paths.directory)?.pluggedMib).toBe(256);
 
   const memoryMax = await readFile(join(root, 'imps', created.id, 'memory.max'), 'utf8');
 
@@ -336,7 +336,7 @@ test('it consumes the snapshot meta of an elastic imp on a wake', async () => {
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  ctx.fake.guestMemory.set(paths.dir, {
+  ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 512,
     requestedMib: 512,
@@ -370,7 +370,7 @@ test('it keeps memory.max at the plugged size across a sleep and a wake', async 
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  ctx.fake.guestMemory.set(paths.dir, {
+  ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 0,
     requestedMib: 0,
@@ -409,7 +409,7 @@ test('it sets memory.max back to the memory on a cold boot after a stop', async 
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  ctx.fake.guestMemory.set(paths.dir, {
+  ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 0,
     requestedMib: 0,
@@ -445,7 +445,7 @@ test('it allows on adopt after a restart what the guest holds', async () => {
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
   // 512 plugged, none of it free to unplug
-  ctx.fake.guestMemory.set(paths.dir, {
+  ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 512,
     requestedMib: 512,
@@ -479,7 +479,7 @@ test('it keeps the adopted memory.max through a sleep before any tick after a re
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  ctx.fake.guestMemory.set(paths.dir, {
+  ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 512,
     requestedMib: 512,
@@ -503,7 +503,7 @@ test('it never grows an elastic imp whose agent predates elastic memory, and log
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  ctx.fake.guestMemory.set(paths.dir, {
+  ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 0,
     requestedMib: 0,
@@ -513,7 +513,7 @@ test('it never grows an elastic imp whose agent predates elastic memory, and log
 
   await ctx.impd.governed.memory.runTick();
 
-  expect(ctx.fake.guestMemory.get(paths.dir)?.pluggedMib).toBe(0);
+  expect(ctx.fake.guestMemory.get(paths.directory)?.pluggedMib).toBe(0);
 
   expect(ctx.logs).toSatisfyAny((line: string) =>
     /dev: memory low, not grown.*the imp's agent has no elastic memory/u.test(line),

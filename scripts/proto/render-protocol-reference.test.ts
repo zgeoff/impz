@@ -8,13 +8,13 @@ import invariant from 'tiny-invariant';
 import { renderProtocolReference } from './render-protocol-reference';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'protocol-reference-'));
+  const directory = mkdtempSync(join(tmpdir(), 'protocol-reference-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 // buf compiles the schema with its comments, as buf generate hands it to the
@@ -22,10 +22,10 @@ function setupTest() {
 test('it renders the header comment, then a table per message', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'buf.yaml'), 'version: v2\n');
+  writeFileSync(join(ctx.directoryPath, 'buf.yaml'), 'version: v2\n');
 
   writeFileSync(
-    join(ctx.dir, 'demo.proto'),
+    join(ctx.directoryPath, 'demo.proto'),
     `// The demo protocol.
 syntax = "proto3";
 
@@ -47,9 +47,19 @@ message Reply {}
 `,
   );
 
-  Bun.spawnSync(['node_modules/.bin/buf', 'build', ctx.dir, '-o', join(ctx.dir, 'out.binpb')]);
+  Bun.spawnSync([
+    'node_modules/.bin/buf',
+    'build',
+    ctx.directoryPath,
+    '-o',
+    join(ctx.directoryPath, 'out.binpb'),
+  ]);
 
-  const set = fromBinary(FileDescriptorSetSchema, readFileSync(join(ctx.dir, 'out.binpb')));
+  const set = fromBinary(
+    FileDescriptorSetSchema,
+    readFileSync(join(ctx.directoryPath, 'out.binpb')),
+  );
+
   const file = createFileRegistry(set).getFile('demo.proto');
 
   invariant(file);
@@ -87,10 +97,10 @@ message Reply {}
 test('it renders the same schema the same way twice', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'buf.yaml'), 'version: v2\n');
+  writeFileSync(join(ctx.directoryPath, 'buf.yaml'), 'version: v2\n');
 
   writeFileSync(
-    join(ctx.dir, 'demo.proto'),
+    join(ctx.directoryPath, 'demo.proto'),
     `syntax = "proto3";
 
 package demo;
@@ -103,9 +113,19 @@ message Reply {
 `,
   );
 
-  Bun.spawnSync(['node_modules/.bin/buf', 'build', ctx.dir, '-o', join(ctx.dir, 'out.binpb')]);
+  Bun.spawnSync([
+    'node_modules/.bin/buf',
+    'build',
+    ctx.directoryPath,
+    '-o',
+    join(ctx.directoryPath, 'out.binpb'),
+  ]);
 
-  const set = fromBinary(FileDescriptorSetSchema, readFileSync(join(ctx.dir, 'out.binpb')));
+  const set = fromBinary(
+    FileDescriptorSetSchema,
+    readFileSync(join(ctx.directoryPath, 'out.binpb')),
+  );
+
   const file = createFileRegistry(set).getFile('demo.proto');
 
   invariant(file);

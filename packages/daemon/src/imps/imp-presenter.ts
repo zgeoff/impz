@@ -1,5 +1,5 @@
 import type { Imp } from '@impz/api';
-import { findImageById, listImages } from '../db/images';
+import { listImages, readImageById } from '../db/images';
 import type { ImpRecord } from '../db/imps';
 import { listLeases } from '../db/leases';
 import type { LeaseRecord } from '../db/leases';
@@ -34,8 +34,8 @@ export function readPresentedLeases(imp: Imp): readonly LeaseRecord[] | undefine
 // Imp records as the API shows them; the URLs follow
 // docs/architecture/network/ingress.md#the-wake-proxy.
 export interface ImpPresenter {
-  readonly toApi: (imp: ImpRecord) => Promise<Imp>;
-  readonly toApiList: (imps: readonly ImpRecord[]) => Promise<Imp[]>;
+  readonly readApi: (imp: ImpRecord) => Promise<Imp>;
+  readonly readApiList: (imps: readonly ImpRecord[]) => Promise<Imp[]>;
   readonly readUrls: (imp: ImpRecord) => Promise<ImpUrls>;
 }
 
@@ -49,7 +49,7 @@ export function createImpPresenter(
 
   // `leases` are the imp's live ones, shown as a count: who owns them is
   // the router's to show, per caller (auth/caller-view.ts)
-  const toApiImp = (imp: ImpRecord, imageName: string, leases: readonly LeaseRecord[]): Imp => {
+  const readApiImp = (imp: ImpRecord, imageName: string, leases: readonly LeaseRecord[]): Imp => {
     const api: Imp = {
       id: imp.id,
       name: imp.name,
@@ -180,15 +180,15 @@ export function createImpPresenter(
   };
 
   return {
-    toApi: async (imp) => {
+    readApi: async (imp) => {
       const [image, leases] = await Promise.all([
-        findImageById(context.db, imp.imageId),
+        readImageById(context.db, imp.imageId),
         listLeases(context.db, context.now(), [imp.id]),
       ]);
 
-      return toApiImp(imp, image?.name ?? 'unknown', leases);
+      return readApiImp(imp, image?.name ?? 'unknown', leases);
     },
-    toApiList: async (imps) => {
+    readApiList: async (imps) => {
       const [images, leases] = await Promise.all([
         listImages(context.db),
         listLeases(
@@ -203,7 +203,7 @@ export function createImpPresenter(
       const byImp = Map.groupBy(leases, (lease) => lease.impId);
 
       return imps.map((imp) =>
-        toApiImp(imp, names.get(imp.imageId) ?? 'unknown', byImp.get(imp.id) ?? []),
+        readApiImp(imp, names.get(imp.imageId) ?? 'unknown', byImp.get(imp.id) ?? []),
       );
     },
     readUrls: async (imp) => {

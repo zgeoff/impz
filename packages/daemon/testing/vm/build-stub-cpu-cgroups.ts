@@ -7,7 +7,7 @@ interface StubCgroup {
   guestMib: number | null;
   readonly pids: number[];
 
-  // the OOM kill count when its VM started, for hasOomKillSinceStart
+  // the OOM kill count when its VM started, for probeOomKillSinceStart
   oomKillsAtStart: number;
 }
 
@@ -15,10 +15,6 @@ interface StubCpuCgroupsOptions {
   // false: a host without a delegated cpu controller, where setup makes none
   readonly isEnforced?: boolean;
   readonly isMemoryEnforced?: boolean;
-}
-
-function formatCpu(cpu: Readonly<CpuSettings>): string {
-  return `${String(cpu.limit)}/${String(cpu.weight)}`;
 }
 
 // The cgroup tree under /sys/fs/cgroup/imps in memory. `calls` records each
@@ -115,7 +111,7 @@ export function buildStubCpuCgroups(options: StubCpuCgroupsOptions = {}) {
     readCpuStat: (impId) =>
       groups.has(impId) ? (cpuStats.get(impId) ?? { usageUsec: 0, throttledUsec: 0 }) : null,
     readOomKills: (impId) => (groups.has(impId) ? (oomKills.get(impId) ?? 0) : null),
-    hasOomKillSinceStart: (impId) => {
+    probeOomKillSinceStart: (impId) => {
       const group = groups.get(impId);
 
       return group !== undefined && (oomKills.get(impId) ?? 0) > group.oomKillsAtStart;
@@ -148,4 +144,8 @@ export function buildStubCpuCgroups(options: StubCpuCgroupsOptions = {}) {
           };
     },
   };
+}
+
+function formatCpu(cpu: Readonly<CpuSettings>): string {
+  return `${String(cpu.limit)}/${String(cpu.weight)}`;
 }

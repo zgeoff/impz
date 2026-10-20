@@ -13,25 +13,6 @@ import type { ProgressOutput } from '../cp/copy-progress';
 // how often `impz move` asks the source how far the send is
 const POLL_MS = 1000;
 
-type MoveClient = Pick<ImpClient, 'moves' | 'system'>;
-
-export interface MoveRun {
-  readonly name: string;
-  readonly from: MoveClient;
-  readonly to: MoveClient;
-
-  // the saved host the imp moves to, for messages
-  readonly toHost: string;
-  readonly mode: 'move' | 'resume' | 'abort';
-  readonly stop: boolean;
-  readonly output: ProgressOutput;
-  readonly print: (line: string) => void;
-  readonly wait: (ms: number) => Promise<void>;
-
-  // the clock the send's progress reads its rate from
-  readonly now: () => number;
-}
-
 // A whole move, as docs/guides/hosts.md#moves walks it: the source marks
 // the imp, the target issues a ticket, the source streams and commits.
 export async function runMove(run: MoveRun): Promise<void> {
@@ -81,6 +62,52 @@ export async function runMove(run: MoveRun): Promise<void> {
 
   run.print(`${run.name}: moved to ${run.toHost}${how}`);
 }
+
+export const moveCommand = defineCommand({
+  name: 'move',
+  description:
+    'Move an imp to another saved host: a stopped one cold, a sleeping one with its memory (see docs/guides/hosts.md)',
+  args: {
+    name: nameArg,
+    to: { type: 'positional', description: 'saved host to move it to', required: true },
+    stop: {
+      type: 'boolean',
+      description: 'stop a running or sleeping imp first, ending its leases: a cold move',
+    },
+    resume: { type: 'boolean', description: 'commit a move the target verified' },
+    abort: { type: 'boolean', description: 'end a move; the imp stays here' },
+  },
+  run: async (ctx) => {
+    await runAction(ctx.extensions.impz, async (client) => {
+      if (ctx.values.resume === true && ctx.values.abort === true) {
+        throw new UsageError('--resume and --abort do not go together');
+      }
+
+      const target = loadCliConfig(
+        ctx.extensions.impz.io.env,
+        ctx.values.to,
+        ctx.extensions.impz.io.printError,
+      );
+
+      const mode = readMode(ctx.values.resume === true, ctx.values.abort === true);
+
+      await runMove({
+        name: ctx.values.name,
+        from: client,
+        to: createImpClient(target),
+        toHost: ctx.values.to,
+        mode,
+        stop: ctx.values.stop === true,
+        output: toProgressOutput(ctx.extensions.impz.io),
+        print: (line) => {
+          ctx.extensions.impz.io.print(line);
+        },
+        wait: (durationMs) => Bun.sleep(durationMs),
+        now: Date.now,
+      });
+    });
+  },
+});
 
 // an older target has no facts to give, and takes cold moves only
 async function readFacts(run: MoveRun): Promise<WarmHost | null> {
@@ -176,51 +203,24 @@ function readFailureHint(run: MoveRun, status: Readonly<MoveStatus>): string {
   return '; nothing changed on either host';
 }
 
-export const moveCommand = defineCommand({
-  name: 'move',
-  description:
-    'Move an imp to another saved host: a stopped one cold, a sleeping one with its memory (see docs/guides/hosts.md)',
-  args: {
-    name: nameArg,
-    to: { type: 'positional', description: 'saved host to move it to', required: true },
-    stop: {
-      type: 'boolean',
-      description: 'stop a running or sleeping imp first, ending its leases: a cold move',
-    },
-    resume: { type: 'boolean', description: 'commit a move the target verified' },
-    abort: { type: 'boolean', description: 'end a move; the imp stays here' },
-  },
-  run: async (ctx) => {
-    await runAction(ctx.extensions.impz, async (client) => {
-      if (ctx.values.resume === true && ctx.values.abort === true) {
-        throw new UsageError('--resume and --abort do not go together');
-      }
+type MoveClient = Pick<ImpClient, 'moves' | 'system'>;
 
-      const target = loadCliConfig(
-        ctx.extensions.impz.io.env,
-        ctx.values.to,
-        ctx.extensions.impz.io.printError,
-      );
+export interface MoveRun {
+  readonly name: string;
+  readonly from: MoveClient;
+  readonly to: MoveClient;
 
-      const mode = readMode(ctx.values.resume === true, ctx.values.abort === true);
+  // the saved host the imp moves to, for messages
+  readonly toHost: string;
+  readonly mode: 'move' | 'resume' | 'abort';
+  readonly stop: boolean;
+  readonly output: ProgressOutput;
+  readonly print: (line: string) => void;
+  readonly wait: (durationMs: number) => Promise<void>;
 
-      await runMove({
-        name: ctx.values.name,
-        from: client,
-        to: createImpClient(target),
-        toHost: ctx.values.to,
-        mode,
-        stop: ctx.values.stop === true,
-        output: toProgressOutput(ctx.extensions.impz.io),
-        print: (line) => {
-          ctx.extensions.impz.io.print(line);
-        },
-        wait: (ms) => Bun.sleep(ms),
-        now: Date.now,
-      });
-    });
-  },
-});
+  // the clock the send's progress reads its rate from
+  readonly now: () => number;
+}
 
 function readMode(isResume: boolean, isAbort: boolean): MoveRun['mode'] {
   if (isResume) {

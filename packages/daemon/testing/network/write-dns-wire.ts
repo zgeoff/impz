@@ -2,6 +2,7 @@
 // (RFC 3596 for AAAA), names without compression, and 16-bit fields.
 
 export const DNS_TYPE_CODES = {
+  // oxlint-disable-next-line id-length -- `A` is the record type's name in RFC 1035
   A: 1,
   CNAME: 5,
   SOA: 6,
@@ -13,7 +14,7 @@ export const DNS_TYPE_CODES = {
 
 export const DNS_CLASS_IN = 1;
 
-export function writeDnsName(name: string): number[] {
+export function encodeDnsName(name: string): number[] {
   const labels = name.split('.').filter((label) => label !== '');
   const bytes: number[] = [];
 
@@ -26,6 +27,6 @@ export function writeDnsName(name: string): number[] {
   return bytes;
 }
 
-export function writeDnsUint16(value: number): number[] {
+export function encodeDnsUint16(value: number): number[] {
   return [(value >> 8) & 0xff, value & 0xff];
 }

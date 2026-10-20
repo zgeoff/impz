@@ -54,7 +54,7 @@ export function makeTraceLines(output: BuildOutput): (trace: BuildTrace) => void
         continue;
       }
 
-      const text = state.decoder.decode(log.msg, { stream: true });
+      const text = state.decoder.decode(log.message, { stream: true });
       const lines = (state.partial + text).split(/\r?\n/v);
 
       state.partial = lines.pop() ?? '';

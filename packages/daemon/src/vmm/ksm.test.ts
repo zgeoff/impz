@@ -14,13 +14,13 @@ import {
 } from './ksm';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-ksm-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-ksm-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test.each(['6.10.0', '6.17.0-1022-azure', '7.0.0-1012-azure'])(
@@ -171,12 +171,12 @@ test('#checkMergeableMappings finds no guest memory in the pieces of a small bac
 test('#readKsmHostStats reads the host counters from the KSM sysfs directory', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'run'), '1\n');
-  writeFileSync(join(ctx.dir, 'pages_sharing'), '25600\n');
-  writeFileSync(join(ctx.dir, 'general_profit'), String(90 * 1024 ** 2));
-  writeFileSync(join(ctx.dir, 'ksm_zero_pages'), '512\n');
+  writeFileSync(join(ctx.directoryPath, 'run'), '1\n');
+  writeFileSync(join(ctx.directoryPath, 'pages_sharing'), '25600\n');
+  writeFileSync(join(ctx.directoryPath, 'general_profit'), String(90 * 1024 ** 2));
+  writeFileSync(join(ctx.directoryPath, 'ksm_zero_pages'), '512\n');
 
-  expect(readKsmHostStats(ctx.dir)).toStrictEqual({
+  expect(readKsmHostStats(ctx.directoryPath)).toStrictEqual({
     running: true,
     sharedMib: 100,
     profitMib: 90,
@@ -187,11 +187,11 @@ test('#readKsmHostStats reads the host counters from the KSM sysfs directory', (
 test('#readKsmHostStats reads no counters from a directory without run', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'pages_sharing'), '25600\n');
-  writeFileSync(join(ctx.dir, 'general_profit'), String(90 * 1024 ** 2));
-  writeFileSync(join(ctx.dir, 'ksm_zero_pages'), '512\n');
+  writeFileSync(join(ctx.directoryPath, 'pages_sharing'), '25600\n');
+  writeFileSync(join(ctx.directoryPath, 'general_profit'), String(90 * 1024 ** 2));
+  writeFileSync(join(ctx.directoryPath, 'ksm_zero_pages'), '512\n');
 
-  expect(readKsmHostStats(ctx.dir)).toBeNull();
+  expect(readKsmHostStats(ctx.directoryPath)).toBeNull();
 });
 
 test('#parseKsmStat reads each counter of ksm_stat', () => {
@@ -231,16 +231,20 @@ test('#parseKsmStat reads no merge flag from an older kernel', () => {
 test('#checkGuestMemoryMergeable answers from ksm_merge_any when the kernel has it', async () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, '42'));
-  writeFileSync(join(ctx.dir, '42', 'ksm_stat'), 'ksm_rmap_items 0\nksm_merge_any: yes\n');
+  mkdirSync(join(ctx.directoryPath, '42'));
+
+  writeFileSync(
+    join(ctx.directoryPath, '42', 'ksm_stat'),
+    'ksm_rmap_items 0\nksm_merge_any: yes\n',
+  );
 
   // smaps that says otherwise: ksm_merge_any wins
   writeFileSync(
-    join(ctx.dir, '42', 'smaps'),
+    join(ctx.directoryPath, '42', 'smaps'),
     buildStubSmapsMapping({ start: 0x7f_00_00_00_00_00, mib: 512, perms: 'rw-p', flags: '' }),
   );
 
-  const mergeable = await checkGuestMemoryMergeable(42, ctx.dir);
+  const mergeable = await checkGuestMemoryMergeable(42, ctx.directoryPath);
 
   expect(mergeable).toBeTrue();
 });
@@ -248,10 +252,10 @@ test('#checkGuestMemoryMergeable answers from ksm_merge_any when the kernel has 
 test('#checkGuestMemoryMergeable finds the guest memory not mergeable when ksm_merge_any says no', async () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, '42'));
-  writeFileSync(join(ctx.dir, '42', 'ksm_stat'), 'ksm_rmap_items 0\nksm_merge_any: no\n');
+  mkdirSync(join(ctx.directoryPath, '42'));
+  writeFileSync(join(ctx.directoryPath, '42', 'ksm_stat'), 'ksm_rmap_items 0\nksm_merge_any: no\n');
 
-  const mergeable = await checkGuestMemoryMergeable(42, ctx.dir);
+  const mergeable = await checkGuestMemoryMergeable(42, ctx.directoryPath);
 
   expect(mergeable).toBeFalse();
 });
@@ -259,15 +263,15 @@ test('#checkGuestMemoryMergeable finds the guest memory not mergeable when ksm_m
 test('#checkGuestMemoryMergeable reads the smaps flags on a kernel before ksm_merge_any', async () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, '42'));
-  writeFileSync(join(ctx.dir, '42', 'ksm_stat'), 'ksm_rmap_items 0\n');
+  mkdirSync(join(ctx.directoryPath, '42'));
+  writeFileSync(join(ctx.directoryPath, '42', 'ksm_stat'), 'ksm_rmap_items 0\n');
 
   writeFileSync(
-    join(ctx.dir, '42', 'smaps'),
+    join(ctx.directoryPath, '42', 'smaps'),
     buildStubSmapsMapping({ start: 0x7f_00_00_00_00_00, mib: 512, perms: 'rw-p', flags: 'mg' }),
   );
 
-  const mergeable = await checkGuestMemoryMergeable(42, ctx.dir);
+  const mergeable = await checkGuestMemoryMergeable(42, ctx.directoryPath);
 
   expect(mergeable).toBeTrue();
 });
@@ -275,7 +279,7 @@ test('#checkGuestMemoryMergeable reads the smaps flags on a kernel before ksm_me
 test('#checkGuestMemoryMergeable cannot say for a process that is gone', async () => {
   const ctx = setupTest();
 
-  const mergeable = await checkGuestMemoryMergeable(42, ctx.dir);
+  const mergeable = await checkGuestMemoryMergeable(42, ctx.directoryPath);
 
   expect(mergeable).toBeNull();
 });
@@ -283,14 +287,14 @@ test('#checkGuestMemoryMergeable cannot say for a process that is gone', async (
 test('#readKsmProfitMib reads ksm_process_profit in MiB', async () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, '42'));
+  mkdirSync(join(ctx.directoryPath, '42'));
 
   writeFileSync(
-    join(ctx.dir, '42', 'ksm_stat'),
+    join(ctx.directoryPath, '42', 'ksm_stat'),
     `ksm_rmap_items 5120\nksm_process_profit ${String(24 * 1024 ** 2)}\n`,
   );
 
-  const profitMib = await readKsmProfitMib(42, ctx.dir);
+  const profitMib = await readKsmProfitMib(42, ctx.directoryPath);
 
   expect(profitMib).toBe(24);
 });
@@ -298,10 +302,14 @@ test('#readKsmProfitMib reads ksm_process_profit in MiB', async () => {
 test('#readKsmProfitMib reads a negative profit while little is merged', async () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, '42'));
-  writeFileSync(join(ctx.dir, '42', 'ksm_stat'), `ksm_process_profit ${String(-2 * 1024 ** 2)}\n`);
+  mkdirSync(join(ctx.directoryPath, '42'));
 
-  const profitMib = await readKsmProfitMib(42, ctx.dir);
+  writeFileSync(
+    join(ctx.directoryPath, '42', 'ksm_stat'),
+    `ksm_process_profit ${String(-2 * 1024 ** 2)}\n`,
+  );
+
+  const profitMib = await readKsmProfitMib(42, ctx.directoryPath);
 
   expect(profitMib).toBe(-2);
 });
@@ -309,10 +317,10 @@ test('#readKsmProfitMib reads a negative profit while little is merged', async (
 test('#readKsmProfitMib reads nothing from a kernel without ksm_process_profit', async () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, '42'));
-  writeFileSync(join(ctx.dir, '42', 'ksm_stat'), 'ksm_rmap_items 5120\n');
+  mkdirSync(join(ctx.directoryPath, '42'));
+  writeFileSync(join(ctx.directoryPath, '42', 'ksm_stat'), 'ksm_rmap_items 5120\n');
 
-  const profitMib = await readKsmProfitMib(42, ctx.dir);
+  const profitMib = await readKsmProfitMib(42, ctx.directoryPath);
 
   expect(profitMib).toBeNull();
 });
@@ -320,7 +328,7 @@ test('#readKsmProfitMib reads nothing from a kernel without ksm_process_profit',
 test('#readKsmProfitMib reads nothing for a process that is gone', async () => {
   const ctx = setupTest();
 
-  const profitMib = await readKsmProfitMib(42, ctx.dir);
+  const profitMib = await readKsmProfitMib(42, ctx.directoryPath);
 
   expect(profitMib).toBeNull();
 });

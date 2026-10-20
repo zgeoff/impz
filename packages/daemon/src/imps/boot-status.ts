@@ -1,7 +1,7 @@
 import type { OutdatedPart, SystemInfo } from '@impz/api';
 import type { ImpRecord } from '../db/imps';
-import { findColdBootReason, readSnapshotMeta } from '../sleep/snapshot-meta';
-import { findOutdatedParts, readVmIdentity } from '../sleep/vm-identity';
+import { readColdBootReason, readSnapshotMeta } from '../sleep/snapshot-meta';
+import { collectOutdatedParts, readVmIdentity } from '../sleep/vm-identity';
 import type { HostIdentity } from '../sleep/vm-identity';
 import type { ImpPaths } from '../storage/data-layout';
 
@@ -26,10 +26,10 @@ export function readBootStatus(
       return { coldBootReason: 'no snapshot it can load' };
     }
 
-    const reason = findColdBootReason(meta, host);
+    const reason = readColdBootReason(meta, host);
 
     return reason === null
-      ? withOutdated({}, findOutdatedParts(meta, host))
+      ? withOutdated({}, collectOutdatedParts(meta, host))
       : { coldBootReason: reason };
   }
 
@@ -46,7 +46,7 @@ export function readBootStatus(
 
   const status = vm.bootReason === null ? {} : { coldBootReason: vm.bootReason };
 
-  return withOutdated(status, findOutdatedParts(vm, host));
+  return withOutdated(status, collectOutdatedParts(vm, host));
 }
 
 function withOutdated(status: Readonly<BootStatus>, outdated: readonly OutdatedPart[]): BootStatus {

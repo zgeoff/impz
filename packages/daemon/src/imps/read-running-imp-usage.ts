@@ -34,8 +34,8 @@ export async function readRunningImpUsage(
 
   // an oops after impd read the flag clear is pinned on its VMs before a
   // stopped one leaves the sampler, so a later lost VM is judged by it
-  if (context.kernelOops.findOopsSeenAt() !== null) {
-    context.kernelOops.findOopsOwners(context.resources.listThreadOwners);
+  if (context.kernelOops.readOopsSeenAt() !== null) {
+    context.kernelOops.readOopsOwners(context.resources.listThreadOwners);
   }
 
   context.resources.keepOnly(running);

@@ -36,7 +36,7 @@ export type StubEngineAnswer = (
 
 export interface StubDockerEngineOptions {
   // a directory of the test's own, where the socket goes
-  readonly dir: string;
+  readonly directoryPath: string;
 
   // the ID a build answers with
   readonly builtImageId?: string;
@@ -49,10 +49,6 @@ const IMAGE_PATH = /^\/images\/(?<name>.+)\/json$/v;
 
 // the part of POST /containers/create the engine keeps
 const CreateBodySchema = z.object({ Labels: z.record(z.string(), z.string()).nullish() });
-
-function buildEngineId(): string {
-  return faker.string.hexadecimal({ length: 64, casing: 'lower', prefix: '' });
-}
 
 // a container the engine holds: its full ID, the labels of its create, and
 // the bytes GET /containers/<id>/export streams
@@ -73,66 +69,11 @@ const ImageSchema = z.object({
   id: z.string().default(() => `sha256:${buildEngineId()}`),
 });
 
-// What a reference names, as the engine's reference parser reads it: a
-// name with no registry is on docker.io, a one-part docker.io name is in
-// library/, and a name with neither tag nor digest takes `latest`.
-function normalizeImageRef(ref: string): string {
-  const [named = '', digest] = ref.split('@');
-  const slash = named.lastIndexOf('/');
-  const colon = named.lastIndexOf(':');
-  const repository = colon > slash ? named.slice(0, colon) : named;
-  const tag = colon > slash ? named.slice(colon + 1) : 'latest';
-  const [first = '', ...rest] = repository.split('/');
-
-  const hasRegistry =
-    rest.length > 0 && (first.includes('.') || first.includes(':') || first === 'localhost');
-
-  const path = hasRegistry ? rest.join('/') : repository;
-  const registry = hasRegistry && first !== 'index.docker.io' ? first : 'docker.io';
-  const libraryPath = registry === 'docker.io' && !path.includes('/') ? `library/${path}` : path;
-  const full = `${registry}/${libraryPath}`;
-
-  return digest === undefined ? `${full}:${tag}` : `${full}@${digest}`;
-}
-
-// a normalised reference as the engine shows it in RepoTags and
-// RepoDigests: docker.io/library/ and docker.io/ left off
-function toFamiliarRef(ref: string): string {
-  return ref.replace(/^docker\.io\/(?:library\/)?/v, '');
-}
-
-function readApiPath(path: string): string {
-  return path.replace(/^\/v1\.\d+(?=\/)/v, '');
-}
-
-async function readBody(request: Request): Promise<{ body: Uint8Array; isBodyCut: boolean }> {
-  const chunks: Uint8Array[] = [];
-
-  if (request.body === null) {
-    return { body: new Uint8Array(), isBodyCut: false };
-  }
-
-  try {
-    for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
-      chunks.push(chunk);
-    }
-  } catch {
-    return { body: Bun.concatArrayBuffers(chunks, Infinity, true), isBodyCut: true };
-  }
-
-  return { body: Bun.concatArrayBuffers(chunks, Infinity, true), isBodyCut: false };
-}
-
-// the engine's error body, as every refused or missing call carries it
-function buildError(status: number, message: string): Response {
-  return Response.json({ message }, { status });
-}
-
 // The Docker engine API on a unix socket in `dir`, as impd and
 // imp-docker-proxy call it, over schema-backed collections; a call it does
 // not model gets a 500 that names it. It stops when the test ends.
 export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>) {
-  const socket = join(options.dir, 'engine.sock');
+  const socket = join(options.directoryPath, 'engine.sock');
   const seen: StubEngineRequest[] = [];
   const unexpected: string[] = [];
 
@@ -151,7 +92,7 @@ export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>
     return buildError(500, `stub docker engine: ${method} ${path} is not modelled`);
   };
 
-  const buildImageAnswer = async (method: string, path: string, query: string) => {
+  const answerImage = async (method: string, path: string, query: string) => {
     if (path === '/images/create' && method === 'POST') {
       const params = new URLSearchParams(query);
 
@@ -193,7 +134,7 @@ export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>
     return Response.json(inspect);
   };
 
-  const buildContainerAnswer = async (
+  const answerContainer = async (
     method: string,
     path: string,
     body: Uint8Array,
@@ -243,7 +184,7 @@ export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>
     return new Response(null, { status: 204 });
   };
 
-  const buildDefaultAnswer = async (
+  const answerDefault = async (
     method: string,
     path: string,
     query: string,
@@ -265,35 +206,36 @@ export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>
       return new Response(`${JSON.stringify({ id: 'moby.image.id', aux: { ID: id } })}\n`);
     }
 
-    const image = await buildImageAnswer(method, path, query);
-    const container = await buildContainerAnswer(method, path, body);
+    const image = await answerImage(method, path, query);
+    const container = await answerContainer(method, path, body);
 
     return image ?? container ?? buildUnmodelledAnswer(method, path);
   };
 
+  const handleRequest = async (request: Request) => {
+    const url = new URL(request.url);
+
+    const read = await readBody(request);
+
+    const received: StubEngineRequest = {
+      method: request.method,
+      target: `${url.pathname}${url.search}`,
+      headers: Object.fromEntries(request.headers),
+      ...read,
+    };
+
+    seen.push(received);
+
+    const answered = state.answer === null ? null : await state.answer(request, received);
+
+    return (
+      answered ?? answerDefault(request.method, readApiPath(url.pathname), url.search, read.body)
+    );
+  };
+
   const server = Bun.serve({
     unix: socket,
-    fetch: async (request) => {
-      const url = new URL(request.url);
-
-      const read = await readBody(request);
-
-      const received: StubEngineRequest = {
-        method: request.method,
-        target: `${url.pathname}${url.search}`,
-        headers: Object.fromEntries(request.headers),
-        ...read,
-      };
-
-      seen.push(received);
-
-      const answered = state.answer === null ? null : await state.answer(request, received);
-
-      return (
-        answered ??
-        buildDefaultAnswer(request.method, readApiPath(url.pathname), url.search, read.body)
-      );
-    },
+    fetch: handleRequest,
   });
 
   // the first stop closes the engine; a later one waits on the same close
@@ -341,4 +283,63 @@ export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>
     },
     stop,
   };
+}
+
+function buildEngineId(): string {
+  return faker.string.hexadecimal({ length: 64, casing: 'lower', prefix: '' });
+}
+
+// the engine's error body, as every refused or missing call carries it
+function buildError(status: number, message: string): Response {
+  return Response.json({ message }, { status });
+}
+
+// What a reference names, as the engine's reference parser reads it: a
+// name with no registry is on docker.io, a one-part docker.io name is in
+// library/, and a name with neither tag nor digest takes `latest`.
+function normalizeImageRef(ref: string): string {
+  const [named = '', digest] = ref.split('@');
+  const slash = named.lastIndexOf('/');
+  const colon = named.lastIndexOf(':');
+  const repository = colon > slash ? named.slice(0, colon) : named;
+  const tag = colon > slash ? named.slice(colon + 1) : 'latest';
+  const [first = '', ...rest] = repository.split('/');
+
+  const hasRegistry =
+    rest.length > 0 && (first.includes('.') || first.includes(':') || first === 'localhost');
+
+  const path = hasRegistry ? rest.join('/') : repository;
+  const registry = hasRegistry && first !== 'index.docker.io' ? first : 'docker.io';
+  const libraryPath = registry === 'docker.io' && !path.includes('/') ? `library/${path}` : path;
+  const full = `${registry}/${libraryPath}`;
+
+  return digest === undefined ? `${full}:${tag}` : `${full}@${digest}`;
+}
+
+// a normalised reference as the engine shows it in RepoTags and
+// RepoDigests: docker.io/library/ and docker.io/ left off
+function toFamiliarRef(ref: string): string {
+  return ref.replace(/^docker\.io\/(?:library\/)?/v, '');
+}
+
+async function readBody(request: Request): Promise<{ body: Uint8Array; isBodyCut: boolean }> {
+  const chunks: Uint8Array[] = [];
+
+  if (request.body === null) {
+    return { body: new Uint8Array(), isBodyCut: false };
+  }
+
+  try {
+    for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
+      chunks.push(chunk);
+    }
+  } catch {
+    return { body: Bun.concatArrayBuffers(chunks, Infinity, true), isBodyCut: true };
+  }
+
+  return { body: Bun.concatArrayBuffers(chunks, Infinity, true), isBodyCut: false };
+}
+
+function readApiPath(path: string): string {
+  return path.replace(/^\/v1\.\d+(?=\/)/v, '');
 }

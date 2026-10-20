@@ -13,7 +13,7 @@ interface LoginKey {
 }
 
 export interface LoginKeys {
-  readonly findKey: (blob: Buffer) => LoginKey | null;
+  readonly readLoginKey: (blob: Buffer) => LoginKey | null;
 }
 
 interface LoginKeysDeps {
@@ -27,14 +27,14 @@ interface LoginKeysDeps {
 // narrower grant holds even if someone adds the key to the file later.
 export function createLoginKeys(deps: Readonly<LoginKeysDeps>): LoginKeys {
   return {
-    findKey: (blob) => {
+    readLoginKey: (blob) => {
       const bound = deps.findBound(blob);
 
       if (bound !== null) {
         return { key: bound.key, caller: bound.caller, keyId: bound.keyId };
       }
 
-      const key = deps.file?.findKey(blob) ?? null;
+      const key = deps.file?.readKey(blob) ?? null;
 
       return key === null ? null : { key, caller: buildFileCaller(key), keyId: null };
     },

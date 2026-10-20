@@ -9,12 +9,6 @@ export class MissingDockerfileError extends Error {
   override readonly name = 'MissingDockerfileError';
 }
 
-const ENTRY_KINDS = [
-  ['directory', 'isDirectory'],
-  ['symlink', 'isSymbolicLink'],
-  ['file', 'isFile'],
-] as const;
-
 // The context as `docker buildx build <dir>` sends it, by path in the context, parents first.
 // The ignore file is `<Dockerfile>.dockerignore` when there is one, else `.dockerignore`, and
 // it may leave itself out. The Dockerfile always goes: docker reads it from the tar.
@@ -35,6 +29,12 @@ export function listContextEntries(
   return listEntries(root, found);
 }
 
+const ENTRY_KINDS = [
+  ['directory', 'isDirectory'],
+  ['symlink', 'isSymbolicLink'],
+  ['file', 'isFile'],
+] as const;
+
 async function listEntries(root: string, dockerfile: string): Promise<readonly LocalEntry[]> {
   const ignoreName = existsSync(join(root, `${dockerfile}.dockerignore`))
     ? `${dockerfile}.dockerignore`
@@ -51,15 +51,17 @@ async function listEntries(root: string, dockerfile: string): Promise<readonly L
 
   // `./Dockerfile` names the entry `Dockerfile`
   const dockerfileName = posix.normalize(dockerfile);
-  const isDockerfileBelow = (dir: string): boolean => dockerfileName.startsWith(`${dir}/`);
 
-  const collectEntries = async (dir: string, prefix: string): Promise<LocalEntry[]> => {
+  const isDockerfileBelow = (directory: string): boolean =>
+    dockerfileName.startsWith(`${directory}/`);
+
+  const readEntries = async (directory: string, prefix: string): Promise<LocalEntry[]> => {
     const entries: LocalEntry[] = [];
 
-    const children = await readdir(dir);
+    const children = await readdir(directory);
 
     for (const child of children.toSorted()) {
-      const path = join(dir, child);
+      const path = join(directory, child);
       const name = prefix === '' ? child : `${prefix}/${child}`;
 
       const stats = await lstat(path);
@@ -84,13 +86,13 @@ async function listEntries(root: string, dockerfile: string): Promise<readonly L
       }
 
       if (!ignored) {
-        entries.push(entry, ...(await collectEntries(path, name)));
+        entries.push(entry, ...(await readEntries(path, name)));
         continue;
       }
 
       // an ignored directory goes only as the parent of what comes back
       if (hasExceptions || isDockerfileBelow(name)) {
-        const below = await collectEntries(path, name);
+        const below = await readEntries(path, name);
 
         if (below.length > 0) {
           entries.push(entry, ...below);
@@ -101,5 +103,5 @@ async function listEntries(root: string, dockerfile: string): Promise<readonly L
     return entries;
   };
 
-  return collectEntries(root, '');
+  return readEntries(root, '');
 }

@@ -9,7 +9,7 @@ import { sql } from 'kysely';
 import invariant from 'tiny-invariant';
 import { createUnmigratedDatabase } from '../../testing/platform/create-unmigrated-database';
 import { createSecretFiles } from '../broker/secret-files';
-import { findImpByName } from './imps';
+import { readImpByName } from './imps';
 import { MIGRATIONS, runMigrations, runMigrationsTo } from './run-migrations';
 import { listGrantedRules } from './secrets';
 
@@ -81,13 +81,13 @@ test('#runMigrations refuses a database a newer impd migrated, naming both versi
 });
 
 test('#runMigrations runs nothing on a database file a newer impd migrated', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-migrate-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-migrate-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  const db = createUnmigratedDatabase(join(dir, 'imp.sqlite'));
+  const db = createUnmigratedDatabase(join(directory, 'imp.sqlite'));
   const names = Object.keys(MIGRATIONS).toSorted();
   const older = names.at(-2);
 
@@ -763,7 +763,7 @@ test('#runMigrations keeps a kernel oops hold an older impd wrote in the oops bo
 
   await runMigrations(db);
 
-  const imp = await findImpByName(db, 'dev');
+  const imp = await readImpByName(db, 'dev');
 
   expect(imp).toMatchObject({ error: 'a kernel oops killed firecracker', oopsBootId: null });
 });
@@ -813,7 +813,7 @@ test('#runMigrations carries each kernel oops hold into its own column in the oo
   await runMigrations(db);
 
   const imps = await Promise.all(
-    ['held', 'held-before-032', 'oom', 'fine'].map((name) => findImpByName(db, name)),
+    ['held', 'held-before-032', 'oom', 'fine'].map((name) => readImpByName(db, name)),
   );
 
   expect(

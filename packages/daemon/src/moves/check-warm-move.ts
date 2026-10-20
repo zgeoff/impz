@@ -11,7 +11,7 @@ import type { ImpDatabase } from '../db/open-database';
 import type { EgressService } from '../egress/egress-service';
 import { deriveSlotAddress } from '../net/addressing';
 import { readTapMac } from '../net/tap-devices';
-import { findColdBootReason, readSnapshotMeta, writeSnapshotMeta } from '../sleep/snapshot-meta';
+import { readColdBootReason, readSnapshotMeta, writeSnapshotMeta } from '../sleep/snapshot-meta';
 import type { SnapshotMeta } from '../sleep/snapshot-meta';
 import { readVmIdentity, writeVmIdentity } from '../sleep/vm-identity';
 import type { HostIdentity } from '../sleep/vm-identity';
@@ -21,7 +21,7 @@ import type { MoveHeader } from './move-header';
 import { MoveRequestError } from './move-request-error';
 import { isSameHash } from './move-tickets';
 import type { ReceiptBody } from './move-tickets';
-import { buildWarmMove, findWarmMismatches } from './warm-facts';
+import { buildWarmMove, collectWarmMismatches } from './warm-facts';
 
 interface WarmSendDeps {
   readonly config: Pick<Config, 'subnet'>;
@@ -47,7 +47,7 @@ export async function checkWarmMove(
   const mismatches =
     target === null
       ? ['the target does not say what it can load']
-      : findWarmMismatches(move, target);
+      : collectWarmMismatches(move, target);
 
   // The guest knows its gateway by this tap's MAC. A tap made before taps
   // took their slot's MAC has a random one, which no target tap has; with
@@ -103,7 +103,7 @@ export interface WarmParts {
 
 // a warm send's part of the header: what the target checks, the snapshot's
 // record and vm.json, and a box imp's resolved addresses
-export async function buildWarmHeader(
+export async function readWarmHeader(
   deps: WarmSendDeps,
   imp: ImpRecord,
   warm: WarmParts,
@@ -129,7 +129,7 @@ interface WarmReceiveDeps {
 
 // the facts of a warm move this host does not match, as a refusal
 export function requireWarmMove(deps: Pick<WarmReceiveDeps, 'readWarmHost'>, move: WarmMove): void {
-  const mismatches = findWarmMismatches(move, deps.readWarmHost());
+  const mismatches = collectWarmMismatches(move, deps.readWarmHost());
 
   if (mismatches.length > 0) {
     throw new MoveRequestError(409, `this host cannot load the memory: ${mismatches.join('; ')}`);
@@ -201,7 +201,7 @@ export async function writeWarmFiles(deps: WarmReceiveDeps, files: WarmFiles): P
   }
 
   // the wake's own check, before the record that lets a wake load it
-  const reason = findColdBootReason(warm.meta, deps.readIdentity());
+  const reason = readColdBootReason(warm.meta, deps.readIdentity());
 
   if (reason !== null) {
     throw new MoveRequestError(409, `the memory snapshot cannot load here: ${reason}`);

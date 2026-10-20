@@ -11,7 +11,7 @@ import type {
 import {
   buildReceiveArgv,
   buildSendArgv,
-  findCheckpointSnapshot,
+  getCheckpointSnapshot,
   listCheckpointSnapshots,
 } from './zfs-commands';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
@@ -29,9 +29,9 @@ interface ZfsMoveContext {
   readonly runSerial: <T>(task: () => Promise<T>) => Promise<T>;
   readonly runSnapshot: <T>(task: () => Promise<T>) => Promise<T>;
   readonly listAll: () => Promise<ZfsEntry[]>;
-  readonly setupMount: (name: string, dir: string, isReadOnly?: boolean) => Promise<void>;
-  readonly removeMount: (dir: string) => Promise<void>;
-  readonly removeMountDir: (dir: string) => void;
+  readonly setupMount: (name: string, directory: string, isReadOnly?: boolean) => Promise<void>;
+  readonly removeMount: (directory: string) => Promise<void>;
+  readonly removeMountDir: (directory: string) => void;
   readonly buildDiskName: (impId: string) => string;
   readonly buildDiskDir: (impId: string) => string;
   readonly buildStagingDir: (name: string) => string;
@@ -52,15 +52,15 @@ export function createZfsMoves(
     removeMoveSnapshot: () => Promise<void>,
   ): Promise<MoveSource> => {
     const moveId = Bun.randomUUIDv7();
-    const clones: { name: string; dir: string }[] = [];
+    const clones: { name: string; directory: string }[] = [];
 
     const removeClones = async () => {
       await ctx.runSerial(async () => {
         for (const clone of clones.splice(0).toReversed()) {
-          await ctx.removeMount(clone.dir);
+          await ctx.removeMount(clone.directory);
           await ctx.zfs.destroy(clone.name);
 
-          ctx.removeMountDir(clone.dir);
+          ctx.removeMountDir(clone.directory);
         }
       });
 
@@ -71,13 +71,13 @@ export function createZfsMoves(
       await ctx.runSerial(async () => {
         for (const [index, snapshot] of snapshots.entries()) {
           const name = `${ctx.datasets.staging}/mv-${moveId}-${String(index)}`;
-          const dir = ctx.buildStagingDir(name);
+          const directory = ctx.buildStagingDir(name);
 
           await ctx.zfs.clone(snapshot, name, { readonly: 'on' });
 
-          clones.push({ name, dir });
+          clones.push({ name, directory });
 
-          await ctx.setupMount(name, dir, true);
+          await ctx.setupMount(name, directory, true);
         }
       });
     } catch (error) {
@@ -86,7 +86,7 @@ export function createZfsMoves(
       throw error;
     }
 
-    const paths = clones.map((clone) => join(clone.dir, ctx.rootfsFile));
+    const paths = clones.map((clone) => join(clone.directory, ctx.rootfsFile));
 
     return {
       kind: 'files',
@@ -307,7 +307,7 @@ export function createZfsMoves(
         const entries = await ctx.runSerial(ctx.listAll);
 
         const wanted = new Map<string, string | null>([
-          ...checkpointIds.map((id): [string, string] => [findCheckpointSnapshot(entries, id), id]),
+          ...checkpointIds.map((id): [string, string] => [getCheckpointSnapshot(entries, id), id]),
           [disk, null],
         ]);
 

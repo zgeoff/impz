@@ -2,12 +2,12 @@ import { ImageRefSchema, NameSchema } from '@impz/api';
 import type { ImageBuildPhase } from '@impz/api';
 import { ORPCError } from '@orpc/server';
 import type { Config } from '../config';
-import { findImageByName, listImages } from '../db/images';
+import { listImages, readImageByName } from '../db/images';
 import type { ImageRecord } from '../db/images';
 import type { ImpDatabase } from '../db/open-database';
 import { checkReferenceRegistry } from '../docker-proxy/rules';
+import { getErrorMessage } from '../get-error-message';
 import { createSingleFlight } from '../process/single-flight';
-import { readErrorMessage } from '../read-error-message';
 import { createBuildEngine, toEngineRun } from './build-engine';
 import { BUILDER_IMAGE } from './builder-imps';
 import type { Builders } from './builder-imps';
@@ -145,7 +145,7 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
     const givenName = name ?? deriveImageName(ref);
     const imageName = isImpds ? NameSchema.parse(givenName) : requireClientImageName(givenName);
 
-    const taken = await findImageByName(deps.db, imageName);
+    const taken = await readImageByName(deps.db, imageName);
 
     requireDockerImage(taken);
 
@@ -181,7 +181,7 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
       const reason =
         timeout.aborted && !step.pulled
           ? `the pull did not finish in ${formatPullLimit(pullMs)}; on a slow link, pull ${ref} on the host engine first (docker pull ${ref}), and impd takes it from there`
-          : readErrorMessage(error);
+          : getErrorMessage(error);
 
       throw new ORPCError('SERVICE_UNAVAILABLE', {
         message: `impd cannot add its builder image ${ref} (IMP_BUILD_IMAGE) from the host engine, so no image add or build can run: ${reason}`,
@@ -192,7 +192,7 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
   const loadBuilderImage = async (signal?: AbortSignal): Promise<void> => {
     const ref = deps.config.build.image;
 
-    const image = await findImageByName(deps.db, BUILDER_IMAGE);
+    const image = await readImageByName(deps.db, BUILDER_IMAGE);
 
     if (image?.ref === ref) {
       return;
@@ -229,6 +229,27 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
   };
 }
 
+// The reference with the tag the engine would assume written out, so the
+// pull, the log and the error name what is fetched: `ubuntu` is
+// `ubuntu:latest`
+function formatExplicitRef(ref: string): string {
+  const [withoutDigest = ''] = ref.split('@');
+  const lastSlash = withoutDigest.lastIndexOf('/');
+  const hasTag = withoutDigest.includes(':', lastSlash + 1);
+
+  return ref.includes('@') || hasTag ? ref : `${ref}:latest`;
+}
+
+// The contract validates refs already; this guards every other caller, since
+// the ref goes into docker's argv and a leading `-` would read as a flag.
+function assertImageRef(ref: string): void {
+  if (!ImageRefSchema.safeParse(ref).success) {
+    throw new ORPCError('BAD_REQUEST', {
+      message: `invalid image reference ${JSON.stringify(ref)}`,
+    });
+  }
+}
+
 // the pull's limit as the error names it: 10 minutes, or seconds in a test
 function formatPullLimit(pullMs: number): string {
   return pullMs >= 60_000 ? `${String(pullMs / 60_000)} minutes` : `${String(pullMs / 1000)} s`;
@@ -256,26 +277,5 @@ async function waitForPull(pulling: Promise<unknown>, signal: AbortSignal | unde
     await Promise.race([pulling, aborted.promise]);
   } finally {
     signal.removeEventListener('abort', stopWaiting);
-  }
-}
-
-// The reference with the tag the engine would assume written out, so the
-// pull, the log and the error name what is fetched: `ubuntu` is
-// `ubuntu:latest`
-function formatExplicitRef(ref: string): string {
-  const [withoutDigest = ''] = ref.split('@');
-  const lastSlash = withoutDigest.lastIndexOf('/');
-  const hasTag = withoutDigest.includes(':', lastSlash + 1);
-
-  return ref.includes('@') || hasTag ? ref : `${ref}:latest`;
-}
-
-// The contract validates refs already; this guards every other caller, since
-// the ref goes into docker's argv and a leading `-` would read as a flag.
-function assertImageRef(ref: string): void {
-  if (!ImageRefSchema.safeParse(ref).success) {
-    throw new ORPCError('BAD_REQUEST', {
-      message: `invalid image reference ${JSON.stringify(ref)}`,
-    });
   }
 }

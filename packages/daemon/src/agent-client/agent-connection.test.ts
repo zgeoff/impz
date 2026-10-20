@@ -8,13 +8,13 @@ import { openAgentConnection } from './agent-connection';
 import { FRAME_TYPES, encodeJsonFrame } from './frame-codec';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-vsock-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-vsock-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { vsockPath: join(dir, 'vsock.sock') };
+  return { vsockPath: join(directory, 'vsock.sock') };
 }
 
 test('it hands over the frames the agent sends after its OK', async () => {

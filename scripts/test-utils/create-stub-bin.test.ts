@@ -5,20 +5,20 @@ import { join } from 'node:path';
 import { createStubBin } from './create-stub-bin';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-stub-bin-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-stub-bin-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   return {
-    dir,
+    directoryPath: directory,
   };
 }
 
 test('it records each call with its arguments', () => {
   const ctx = setupTest();
-  const stub = createStubBin(ctx.dir, 'docker');
+  const stub = createStubBin(ctx.directoryPath, 'docker');
 
   Bun.spawnSync(['docker', 'image', 'ls', '--format', '{{.ID}}'], {
     env: { PATH: `${stub.bin}:${process.env['PATH'] ?? ''}` },
@@ -29,7 +29,7 @@ test('it records each call with its arguments', () => {
 
 test('it answers with the output and exit code of its script', () => {
   const ctx = setupTest();
-  const stub = createStubBin(ctx.dir, 'gh', 'echo "attested $1"; echo warn >&2; exit 3');
+  const stub = createStubBin(ctx.directoryPath, 'gh', 'echo "attested $1"; echo warn >&2; exit 3');
 
   const result = Bun.spawnSync(['gh', 'attestation'], {
     env: { PATH: `${stub.bin}:${process.env['PATH'] ?? ''}` },
@@ -44,7 +44,7 @@ test('it answers with the output and exit code of its script', () => {
 
 test('it exits 0 with no output when it has no script', () => {
   const ctx = setupTest();
-  const stub = createStubBin(ctx.dir, 'systemctl');
+  const stub = createStubBin(ctx.directoryPath, 'systemctl');
 
   const result = Bun.spawnSync(['systemctl', 'daemon-reload'], {
     env: { PATH: `${stub.bin}:${process.env['PATH'] ?? ''}` },
@@ -59,8 +59,8 @@ test('it exits 0 with no output when it has no script', () => {
 
 test('it logs the calls of stubs that share a directory in the order they ran', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker');
-  const systemctl = createStubBin(ctx.dir, 'systemctl');
+  const docker = createStubBin(ctx.directoryPath, 'docker');
+  const systemctl = createStubBin(ctx.directoryPath, 'systemctl');
 
   Bun.spawnSync(['bash', '-c', 'docker pull x; systemctl restart imp-host; docker ps'], {
     env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
@@ -75,14 +75,19 @@ test('it logs the calls of stubs that share a directory in the order they ran', 
 
 test('it starts with an empty log before any call', () => {
   const ctx = setupTest();
-  const stub = createStubBin(ctx.dir, 'curl');
+  const stub = createStubBin(ctx.directoryPath, 'curl');
 
   expect(readFileSync(stub.calls, 'utf8')).toBe('');
 });
 
 test('it lets the script append its own lines to the log', () => {
   const ctx = setupTest();
-  const stub = createStubBin(ctx.dir, 'docker', 'echo "saw IMP_X=$IMP_X" >>"$STUB_CALLS"');
+
+  const stub = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    'echo "saw IMP_X=$IMP_X" >>"$STUB_CALLS"',
+  );
 
   Bun.spawnSync(['docker', 'compose'], {
     env: { PATH: `${stub.bin}:${process.env['PATH'] ?? ''}`, IMP_X: '1' },
@@ -93,7 +98,7 @@ test('it lets the script append its own lines to the log', () => {
 
 test('it stands in for a binary of the same name further along PATH', () => {
   const ctx = setupTest();
-  const stub = createStubBin(ctx.dir, 'ls', 'echo stubbed');
+  const stub = createStubBin(ctx.directoryPath, 'ls', 'echo stubbed');
 
   const result = Bun.spawnSync(['bash', '-c', 'ls /'], {
     env: { PATH: `${stub.bin}:${process.env['PATH'] ?? ''}` },

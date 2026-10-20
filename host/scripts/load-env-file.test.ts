@@ -6,14 +6,14 @@ import { join } from 'node:path';
 // Each test sources load-env-file.sh in bash under set -euo pipefail, as host/entrypoint does,
 // and prints what the shell holds after it.
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-load-env-file-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-load-env-file-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   return {
-    dir,
+    directoryPath: directory,
     script: new URL('load-env-file.sh', import.meta.url).pathname,
   };
 }
@@ -22,7 +22,7 @@ test('it exports each line as docker --env-file reads it, with no expansion', ()
   const ctx = setupTest();
 
   writeFileSync(
-    join(ctx.dir, 'env'),
+    join(ctx.directoryPath, 'env'),
     [
       '# a comment',
       '',
@@ -44,7 +44,7 @@ test('it exports each line as docker --env-file reads it, with no expansion', ()
       '-c',
       'set -euo pipefail; . "$0" "$1"; exec bash -c "$2"',
       ctx.script,
-      join(ctx.dir, 'env'),
+      join(ctx.directoryPath, 'env'),
       String.raw`printf "[%s]\n" "$PLAIN" "$QUOTED" "$INDENTED" "$DOLLAR" "$CRLF" "$LAST"; [ -v EMPTY ] && echo EMPTY set; [ -v BARE ] || echo BARE unset`,
     ],
     { env: { PATH: process.env['PATH'] ?? '' } },
@@ -60,7 +60,7 @@ test('it exports each line as docker --env-file reads it, with no expansion', ()
 test('it sets a key over the value the environment holds', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'env'), 'IMP_DAEMON=/from/the/file\n');
+  writeFileSync(join(ctx.directoryPath, 'env'), 'IMP_DAEMON=/from/the/file\n');
 
   const result = Bun.spawnSync(
     [
@@ -68,7 +68,7 @@ test('it sets a key over the value the environment holds', () => {
       '-c',
       'set -euo pipefail; . "$0" "$1"; echo "$IMP_DAEMON"',
       ctx.script,
-      join(ctx.dir, 'env'),
+      join(ctx.directoryPath, 'env'),
     ],
     { env: { PATH: process.env['PATH'] ?? '', IMP_DAEMON: '/from/the/image' } },
   );
@@ -79,7 +79,7 @@ test('it sets a key over the value the environment holds', () => {
 test('it stops the shell on a line with no valid name, naming the line but not its value', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'env'), 'GOOD=1\nBAD KEY=fake-secret\n');
+  writeFileSync(join(ctx.directoryPath, 'env'), 'GOOD=1\nBAD KEY=fake-secret\n');
 
   const result = Bun.spawnSync(
     [
@@ -87,7 +87,7 @@ test('it stops the shell on a line with no valid name, naming the line but not i
       '-c',
       'set -euo pipefail; . "$0" "$1"; echo went on',
       ctx.script,
-      join(ctx.dir, 'env'),
+      join(ctx.directoryPath, 'env'),
     ],
     { env: { PATH: process.env['PATH'] ?? '' } },
   );
@@ -96,7 +96,7 @@ test('it stops the shell on a line with no valid name, naming the line but not i
   expect(result.stdout.toString()).toBe('');
 
   expect(result.stderr.toString()).toBe(
-    `load-env-file: ${join(ctx.dir, 'env')} line 2 has no valid variable name\n`,
+    `load-env-file: ${join(ctx.directoryPath, 'env')} line 2 has no valid variable name\n`,
   );
 });
 
@@ -109,7 +109,7 @@ test('it stops the shell when the file is missing', () => {
       '-c',
       'set -euo pipefail; . "$0" "$1"; echo went on',
       ctx.script,
-      join(ctx.dir, 'none'),
+      join(ctx.directoryPath, 'none'),
     ],
     { env: { PATH: process.env['PATH'] ?? '' } },
   );

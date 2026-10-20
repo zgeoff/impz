@@ -7,11 +7,11 @@ import { sendFilesRemove, sendFilesWrite } from '../../src/agent-client/file-req
 import { startStubFilesAgent } from './start-stub-files-agent';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-files-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-files-agent-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { vsockPath: join(dir, 'v.sock') };
+  return { vsockPath: join(directory, 'v.sock') };
 }
 
 test('it keeps the content a write sends under its path', async () => {

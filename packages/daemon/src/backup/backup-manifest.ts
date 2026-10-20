@@ -36,6 +36,8 @@ const ManifestImpSchema = z
 
     // false: the guest was not frozen, so the disk is as after a power cut
     synced: z.boolean(),
+
+    // oxlint-disable-next-line zgeoff/no-abbreviated-names -- stored backups hold this key
     dir: z.string(),
     disk: z.string(),
 
@@ -79,6 +81,8 @@ const ManifestImageSchema = z
     // a template's source imp, which a limited token must reach to copy it
     sourceImp: z.string().nullable().default(null),
     sizeBytes: z.int(),
+
+    // oxlint-disable-next-line zgeoff/no-abbreviated-names -- stored backups hold this key
     dir: z.string(),
   })
   .readonly();

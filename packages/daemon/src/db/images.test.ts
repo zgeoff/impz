@@ -5,10 +5,10 @@ import { createTestDatabase } from '../../testing/platform/create-test-database'
 import {
   countImageDigestUses,
   createImage,
-  findImageByDigest,
-  findImageById,
-  findImageByName,
   listImages,
+  readImageByDigest,
+  readImageById,
+  readImageByName,
   removeImage,
   updateImage,
 } from './images';
@@ -57,36 +57,36 @@ test('#createImage rejects a duplicate image name', async () => {
   );
 });
 
-test('#findImageByName finds the image of that name', async () => {
+test('#readImageByName finds the image of that name', async () => {
   const ctx = await createTestDatabase();
 
   await createImage(ctx.db, buildMockNewImage({ name: 'base' }));
 
   const dev = await createImage(ctx.db, buildMockNewImage({ name: 'dev' }));
-  const found = await findImageByName(ctx.db, 'dev');
+  const found = await readImageByName(ctx.db, 'dev');
 
   expect(found).toStrictEqual(dev);
 });
 
-test('#findImageByName finds nothing for a name no image has', async () => {
+test('#readImageByName finds nothing for a name no image has', async () => {
   const ctx = await createTestDatabase();
 
   await createImage(ctx.db, buildMockNewImage({ name: 'base' }));
 
-  const found = await findImageByName(ctx.db, 'dev');
+  const found = await readImageByName(ctx.db, 'dev');
 
   expect(found).toBeUndefined();
 });
 
-test('#findImageById finds the image of that id', async () => {
+test('#readImageById finds the image of that id', async () => {
   const ctx = await createTestDatabase();
   const dev = await createImage(ctx.db, buildMockNewImage());
-  const found = await findImageById(ctx.db, dev.id);
+  const found = await readImageById(ctx.db, dev.id);
 
   expect(found).toStrictEqual(dev);
 });
 
-test('#findImageByDigest finds the oldest image of that digest', async () => {
+test('#readImageByDigest finds the oldest image of that digest', async () => {
   const ctx = await createTestDatabase();
 
   await ctx.db
@@ -98,12 +98,12 @@ test('#findImageByDigest finds the oldest image of that digest', async () => {
     ])
     .execute();
 
-  const found = await findImageByDigest(ctx.db, 'sha256:1111');
+  const found = await readImageByDigest(ctx.db, 'sha256:1111');
 
   expect(found?.name).toBe('older');
 });
 
-test('#findImageByDigest breaks a tie in age by id', async () => {
+test('#readImageByDigest breaks a tie in age by id', async () => {
   const ctx = await createTestDatabase();
 
   await ctx.db
@@ -114,17 +114,17 @@ test('#findImageByDigest breaks a tie in age by id', async () => {
     ])
     .execute();
 
-  const found = await findImageByDigest(ctx.db, 'sha256:1111');
+  const found = await readImageByDigest(ctx.db, 'sha256:1111');
 
   expect(found?.name).toBe('first');
 });
 
-test('#findImageByDigest finds nothing for a digest no image has', async () => {
+test('#readImageByDigest finds nothing for a digest no image has', async () => {
   const ctx = await createTestDatabase();
 
   await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1111' }));
 
-  const found = await findImageByDigest(ctx.db, 'sha256:2222');
+  const found = await readImageByDigest(ctx.db, 'sha256:2222');
 
   expect(found).toBeUndefined();
 });

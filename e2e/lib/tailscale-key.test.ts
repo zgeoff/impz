@@ -4,16 +4,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
-import { hasTailscaleE2EKey, readTailscaleE2EAuthKey } from './tailscale-key';
+import { probeTailscaleE2EKey, readTailscaleE2EAuthKey } from './tailscale-key';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-tskey-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-tskey-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#readTailscaleE2EAuthKey reads the e2e client as an ephemeral, preauthorized key with its tag', async () => {
@@ -31,7 +31,7 @@ test('#readTailscaleE2EAuthKey reads no key when neither the env nor op has the 
   const ctx = setupTest();
 
   // 1Password without the item
-  const op = createStubBin(ctx.dir, 'op', 'exit 1');
+  const op = createStubBin(ctx.directoryPath, 'op', 'exit 1');
 
   updateEnv('PATH', `${op.bin}:${process.env['PATH'] ?? ''}`);
   updateEnv('IMP_E2E_TAILSCALE_AUTHKEY', undefined);
@@ -41,23 +41,23 @@ test('#readTailscaleE2EAuthKey reads no key when neither the env nor op has the 
   expect(found).toBeNull();
 });
 
-test('#hasTailscaleE2EKey holds for a key with the tag:imp-e2e tag', () => {
+test('#probeTailscaleE2EKey holds for a key with the tag:imp-e2e tag', () => {
   updateEnv('TAILSCALE_AUTHKEY', 'fake-client-secret?ephemeral=true&preauthorized=true');
   updateEnv('IMP_TAILSCALE_TAGS', 'tag:imp-e2e');
 
-  expect(hasTailscaleE2EKey()).toBeTrue();
+  expect(probeTailscaleE2EKey()).toBeTrue();
 });
 
-test("#hasTailscaleE2EKey fails for dev's tag:imp key", () => {
+test("#probeTailscaleE2EKey fails for dev's tag:imp key", () => {
   updateEnv('TAILSCALE_AUTHKEY', 'fake-tag-imp-key');
   updateEnv('IMP_TAILSCALE_TAGS', 'tag:imp');
 
-  expect(hasTailscaleE2EKey()).toBeFalse();
+  expect(probeTailscaleE2EKey()).toBeFalse();
 });
 
-test('#hasTailscaleE2EKey fails for the e2e tag without a key', () => {
+test('#probeTailscaleE2EKey fails for the e2e tag without a key', () => {
   updateEnv('TAILSCALE_AUTHKEY', undefined);
   updateEnv('IMP_TAILSCALE_TAGS', 'tag:imp-e2e');
 
-  expect(hasTailscaleE2EKey()).toBeFalse();
+  expect(probeTailscaleE2EKey()).toBeFalse();
 });

@@ -28,7 +28,7 @@ export function pickSleepVictims<Candidate extends VictimCandidate>(
 
   const eligible = candidates
     .filter((candidate) => !candidate.held && !candidate.busy)
-    .toSorted((a, b) => a.lastActiveAt - b.lastActiveAt);
+    .toSorted((left, right) => left.lastActiveAt - right.lastActiveAt);
 
   const victims: Candidate[] = [];
   let freed = 0;

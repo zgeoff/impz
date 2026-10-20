@@ -1,6 +1,11 @@
 import { UsageError } from '../cli/errors';
 
-const UNIT_MIB: Readonly<Record<string, number>> = { m: 1, g: 1024, t: 1024 * 1024 };
+// keyed by the unit letter a user types
+const UNIT_MIB: ReadonlyMap<string, number> = new Map([
+  ['m', 1],
+  ['g', 1024],
+  ['t', 1024 * 1024],
+]);
 
 // `2048`, `512m`, `2g`, `2GiB`, `1t` → MiB; a bare number is MiB already
 export function parseSize(text: string): number {
@@ -12,7 +17,7 @@ export function parseSize(text: string): number {
     throw new UsageError(`not a size: ${text} (try 512m, 2g, 1t, or MiB as a whole number)`);
   }
 
-  return amount * (UNIT_MIB[unit] ?? 1);
+  return amount * (UNIT_MIB.get(unit) ?? 1);
 }
 
 // a count such as --cpus: a whole number above zero

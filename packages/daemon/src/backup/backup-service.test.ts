@@ -17,9 +17,9 @@ import { buildMockNewCheckpoint } from '../../testing/imp-ops/build-mock-new-che
 import { buildStubRestic } from '../../testing/imp-ops/build-stub-restic';
 import { startTestImpd } from '../../testing/start-test-impd';
 import { createCheckpoint, listCheckpoints } from '../db/checkpoints';
-import { findImageByName } from '../db/images';
-import { findImpByName } from '../db/imps';
-import { findSecret } from '../db/secrets';
+import { readImageByName } from '../db/images';
+import { readImpByName } from '../db/imps';
+import { readSecret } from '../db/secrets';
 import { updateImpState } from '../db/update-imp-state';
 import { createTemplateService } from '../images/template-service';
 import { createNetworkService } from '../networks/network-service';
@@ -264,7 +264,7 @@ test('#restoreBackup restores an imp stopped, with its disk and its checkpoints 
   await ctx.imps.destroyImp('dev');
 
   const result = await backups.restoreBackup({ name: 'dev' });
-  const restored = await findImpByName(ctx.db, 'dev');
+  const restored = await readImpByName(ctx.db, 'dev');
 
   invariant(restored);
 
@@ -336,7 +336,7 @@ test('#restoreBackup restores the newest backup at or before --at that holds the
 
   await backups.restoreBackup({ name: 'dev', as: 'back', at: new Date(halfway) });
 
-  const back = await findImpByName(ctx.db, 'back');
+  const back = await readImpByName(ctx.db, 'back');
 
   invariant(back);
 
@@ -365,7 +365,7 @@ test('#restoreBackup restores the newest backup without --at', async () => {
   await backups.runBackup();
   await backups.restoreBackup({ name: 'dev', as: 'back' });
 
-  const back = await findImpByName(ctx.db, 'back');
+  const back = await readImpByName(ctx.db, 'back');
 
   invariant(back);
 
@@ -518,7 +518,7 @@ test('#restoreBackup restores every imp and its image on a fresh host, renaming 
   await fresh.db.updateTable('images').set({ name: 'base' }).execute();
 
   const restored = await freshBackups.restoreBackup({ all: true });
-  const freshDev = await findImpByName(fresh.db, 'dev');
+  const freshDev = await readImpByName(fresh.db, 'dev');
 
   invariant(freshDev);
 
@@ -655,7 +655,7 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
   await ctx.imps.createImp({ name: 'copy', image: 'tools', start: false });
   await backups.runBackup();
 
-  const tools = await findImageByName(ctx.db, 'tools');
+  const tools = await readImageByName(ctx.db, 'tools');
 
   invariant(tools);
 
@@ -681,8 +681,8 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
   await fresh.createTestImage('tools');
 
   const restored = await freshBackups.restoreBackup({ all: true });
-  const spare = await findImageByName(fresh.db, 'spare');
-  const copy = await findImpByName(fresh.db, 'copy');
+  const spare = await readImageByName(fresh.db, 'spare');
+  const copy = await readImpByName(fresh.db, 'copy');
 
   invariant(copy);
 
@@ -731,7 +731,7 @@ test('#restoreBackup leaves no imp behind when a restore fails part way', async 
 
   expect(backups.restoreBackup({ name: 'dev', as: 'copy' })).rejects.toThrow('ENOENT');
 
-  const copy = await findImpByName(ctx.db, 'copy');
+  const copy = await readImpByName(ctx.db, 'copy');
   const checkpoints = await ctx.db.selectFrom('checkpoints').select('id').execute();
 
   expect(ctx.restic.restores).toContain(`imps/${dev.id}/checkpoints/cp-one`);
@@ -1363,7 +1363,7 @@ test('#restoreBackup puts a restored imp back on its networks, made again when g
   await networks.createNetwork('lab');
   await networks.joinNetwork('lab', 'dev');
   await backups.runBackup();
-  await networks.deleteNetwork('lab');
+  await networks.removeNetwork('lab');
   await backups.restoreBackup({ name: 'dev', as: 'back' });
 
   const restored = await networks.listNetworks();
@@ -1621,13 +1621,13 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
   });
 
   // what each restore of a dir sees as it starts; a GC would wait for each
-  const seen: { dir: string; isJoined: boolean; pendingBytes: number }[] = [];
+  const seen: { directory: string; isJoined: boolean; pendingBytes: number }[] = [];
 
-  freshRestic.state.onRestore = async (dir) => {
+  freshRestic.state.onRestore = async (directory) => {
     const status = await fresh.diskBudget.readStatus();
 
     seen.push({
-      dir,
+      directory,
       isJoined: fresh.storageGate.countInFlight() > 0,
       pendingBytes: status.pendingBytes,
     });
@@ -1637,14 +1637,14 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
 
   expect(seen).toStrictEqual([
     {
-      dir: 'images/base',
+      directory: 'images/base',
       isJoined: true,
       pendingBytes: expect.toSatisfy((bytes: number) => bytes > 0),
     },
 
     // twice each file's blocks: restic's sparse copy, then the disk
-    { dir: dirname(checkpoint.disk), isJoined: true, pendingBytes: 2 * checkpointUsedBytes },
-    { dir: dirname(recorded.disk), isJoined: true, pendingBytes: 2 * usedBytes },
+    { directory: dirname(checkpoint.disk), isJoined: true, pendingBytes: 2 * checkpointUsedBytes },
+    { directory: dirname(recorded.disk), isJoined: true, pendingBytes: 2 * usedBytes },
   ]);
 });
 
@@ -1673,8 +1673,8 @@ test('#restoreBackup grants a restored imp against the secret as it is now', asy
 
   await backups.restoreBackup({ name: 'dev', as: 'back' });
 
-  const back = await findImpByName(ctx.db, 'back');
-  const secret = await findSecret(ctx.db, 'gh');
+  const back = await readImpByName(ctx.db, 'back');
+  const secret = await readSecret(ctx.db, 'gh');
 
   invariant(back);
   invariant(secret);
@@ -2150,19 +2150,19 @@ test('#restoreBackup holds the database copy’s size from the disk budget while
   });
 
   // the bytes the budget holds as each restore of a dir starts
-  const seen: { dir: string; pendingBytes: number }[] = [];
+  const seen: { directory: string; pendingBytes: number }[] = [];
 
-  freshRestic.state.onRestore = async (dir) => {
+  freshRestic.state.onRestore = async (directory) => {
     const status = await fresh.diskBudget.readStatus();
 
-    seen.push({ dir, pendingBytes: status.pendingBytes });
+    seen.push({ directory, pendingBytes: status.pendingBytes });
   };
 
   await freshBackups.restoreBackup({ all: true });
 
   const copyBytes = statSync(join(ctx.repoDir, run.snapshotId, 'database', 'impd.sqlite')).size;
 
-  expect(seen).toPartiallyContain({ dir: 'database', pendingBytes: copyBytes });
+  expect(seen).toPartiallyContain({ directory: 'database', pendingBytes: copyBytes });
 });
 
 test('#restoreBackup refuses a backup whose manifest names its database copy at another path', async () => {

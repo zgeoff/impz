@@ -6,18 +6,18 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
-import { buildStubTailscaleApi } from '../../testing/network/build-stub-tailscale-api';
 import { buildStubTailscaleServe } from '../../testing/network/build-stub-tailscale-serve';
+import { createStubTailscaleApi } from '../../testing/network/create-stub-tailscale-api';
 import { startTestImpd } from '../../testing/start-test-impd';
 import { createImage } from '../db/images';
-import { findImpByName, updateImpMove } from '../db/imps';
+import { readImpByName, updateImpMove } from '../db/imps';
 import { deriveSlotAddress } from '../net/addressing';
 import { buildImagePaths } from '../storage/data-layout';
-import { createPresenceCheck } from './build-tailnet-names';
 import { createServiceServe } from './service-serve';
 import { createServicesApi } from './services-api';
 import { SERVICE_TAG, createTailnetNames } from './tailnet-names';
 import type { TailnetNamesDeps } from './tailnet-names';
+import { createPresenceCheck } from './wire-tailnet-names';
 
 interface SetupOptions {
   // '1' wires impd's own per-imp names (IMP_TAILNET_NAMES) on a tailnet node
@@ -64,7 +64,7 @@ async function setupTest(options: SetupOptions = {}) {
   await createImage(harness.db, image);
 
   // the OAuth client the stub tailnet knows, which every API call needs a token from
-  const tailscaleApi = buildStubTailscaleApi({
+  const tailscaleApi = createStubTailscaleApi({
     client: { clientId: 'kExample', clientSecret: 'secret' },
   });
 
@@ -147,7 +147,7 @@ test('it serves each imp’s service to the imp’s own port', async () => {
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const imp = await findImpByName(ctx.db, 'box');
+  const imp = await readImpByName(ctx.db, 'box');
 
   invariant(imp);
 
@@ -432,7 +432,7 @@ test('it keeps a moving imp’s service while the move sends', async () => {
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const imp = await findImpByName(ctx.db, 'box');
+  const imp = await readImpByName(ctx.db, 'box');
 
   invariant(imp);
 
@@ -452,7 +452,7 @@ test('it neither writes nor clears a moving imp’s service while the move sends
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const imp = await findImpByName(ctx.db, 'box');
+  const imp = await readImpByName(ctx.db, 'box');
 
   invariant(imp);
 
@@ -483,7 +483,7 @@ test('it removes a moved imp’s service once the target holds a verified copy',
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const imp = await findImpByName(ctx.db, 'box');
+  const imp = await readImpByName(ctx.db, 'box');
 
   invariant(imp);
 
@@ -600,7 +600,7 @@ test('it fails only the imp whose name a device holds, and keeps that imp runnin
 
   await names.runSync();
 
-  const laptop = await findImpByName(ctx.db, 'laptop');
+  const laptop = await readImpByName(ctx.db, 'laptop');
 
   expect(names.readStatus()).toStrictEqual({
     live: 1,

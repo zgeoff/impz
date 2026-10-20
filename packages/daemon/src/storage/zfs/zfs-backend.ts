@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createKeyedMutex } from '../../process/keyed-mutex';
+import { buildKeyedMutex } from '../../process/keyed-mutex';
 import { readMounts as readHostMounts } from '../../process/mounts';
 import { printLog } from '../../process/print-log';
 import { runCommand } from '../../process/run-command';
@@ -19,11 +19,11 @@ import { createZfsSweep } from './create-zfs-sweep';
 import { createZfsUsage } from './create-zfs-usage';
 import {
   createZfsCommands,
-  findCheckpointSnapshot,
+  getCheckpointSnapshot,
+  getChildId,
   listCheckpointSnapshots,
   listChildren,
   parseZfsMounts,
-  readChildId,
 } from './zfs-commands';
 
 // ARC and record sizes are set where the datasets are made (deploy/
@@ -83,7 +83,7 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
   // Dataset changes run one at a time: a reclaim must never see a restore
   // half done. Snapshots of a frozen guest have a lane of their own and never
   // wait for one; they touch no dataset a reclaim or restore moves.
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const runSerial = <T>(task: () => Promise<T>) => mutex.runExclusive('zfs', task);
   const runSnapshot = <T>(task: () => Promise<T>) => mutex.runExclusive('snapshot', task);
 
@@ -102,8 +102,11 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
   const buildDiskName = (impId: string) => `${datasets.disks}/${impId}`;
   const buildImageName = (digest: string) => `${datasets.images}/${toDigestHex(digest)}`;
   const buildRestoreName = (impId: string) => `${datasets.staging}/restore-${impId}`;
-  const buildDiskDir = (impId: string) => join(buildImpPaths(deps.dataDir, impId).dir, 'disk');
-  const buildImageDir = (digest: string) => buildImagePaths(deps.dataDir, digest).dir;
+
+  const buildDiskDir = (impId: string) =>
+    join(buildImpPaths(deps.dataDir, impId).directory, 'disk');
+
+  const buildImageDir = (digest: string) => buildImagePaths(deps.dataDir, digest).directory;
 
   const buildStagingDir = (name: string) =>
     join(deps.dataDir, 'staging', name.slice(datasets.staging.length + 1));
@@ -116,25 +119,25 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
 
   const listAll = () => zfs.list(deps.root);
 
-  const setupMount = async (name: string, dir: string, isReadOnly = false): Promise<void> => {
-    const mounted = parseZfsMounts(readMounts()).get(dir);
+  const setupMount = async (name: string, directory: string, isReadOnly = false): Promise<void> => {
+    const mounted = parseZfsMounts(readMounts()).get(directory);
 
     if (mounted === name) {
       return;
     }
 
     if (mounted !== undefined) {
-      throw new Error(`zfs: ${dir} has ${mounted} mounted, not ${name}`);
+      throw new Error(`zfs: ${directory} has ${mounted} mounted, not ${name}`);
     }
 
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(directory, { recursive: true });
 
-    await zfs.mount(name, dir, { isReadOnly });
+    await zfs.mount(name, directory, { isReadOnly });
   };
 
-  const removeMount = async (dir: string): Promise<void> => {
-    if (parseZfsMounts(readMounts()).has(dir)) {
-      await zfs.unmount(dir);
+  const removeMount = async (directory: string): Promise<void> => {
+    if (parseZfsMounts(readMounts()).has(directory)) {
+      await zfs.unmount(directory);
     }
   };
 
@@ -157,7 +160,7 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
     isKernelOopsed,
   });
 
-  const findOrigin = async (source: DiskSource): Promise<string> => {
+  const readOrigin = async (source: DiskSource): Promise<string> => {
     if (source.kind === 'image') {
       return `${buildImageName(source.digest)}@base`;
     }
@@ -172,7 +175,7 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
 
     const entries = await listAll();
 
-    return findCheckpointSnapshot(entries, source.checkpointId);
+    return getCheckpointSnapshot(entries, source.checkpointId);
   };
 
   const createMissingDatasets = async (): Promise<void> => {
@@ -217,9 +220,9 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
       }
 
       // a backup run's clones are mounted in the backup tree
-      for (const [dir, name] of parseZfsMounts(readMounts())) {
+      for (const [directory, name] of parseZfsMounts(readMounts())) {
         if (name === staged.name) {
-          await zfs.unmount(dir);
+          await zfs.unmount(directory);
         }
       }
 
@@ -250,11 +253,11 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
     const entries = await listAll();
 
     for (const disk of listChildren(entries, datasets.disks)) {
-      await setupMount(disk.name, buildDiskDir(readChildId(disk.name, datasets.disks)));
+      await setupMount(disk.name, buildDiskDir(getChildId(disk.name, datasets.disks)));
     }
 
     for (const image of listChildren(entries, datasets.images)) {
-      await setupMount(image.name, buildImageDir(readChildId(image.name, datasets.images)));
+      await setupMount(image.name, buildImageDir(getChildId(image.name, datasets.images)));
     }
   };
 
@@ -263,30 +266,30 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
   const createImageFromStaging = async (
     digest: string,
     staged: string,
-    write: (dir: string) => Promise<void>,
+    write: (directory: string) => Promise<void>,
   ): Promise<void> => {
-    const dir = buildStagingDir(staged);
+    const directory = buildStagingDir(staged);
 
     try {
-      await runSerial(() => setupMount(staged, dir));
-      await write(dir);
+      await runSerial(() => setupMount(staged, directory));
+      await write(directory);
     } catch (error) {
       await runSerial(async () => {
-        await removeMount(dir);
+        await removeMount(directory);
 
         await zfs.destroy(staged);
       });
 
-      removeMountDir(dir);
+      removeMountDir(directory);
       throw error;
     }
 
     await runSerial(async () => {
       const name = buildImageName(digest);
 
-      await removeMount(dir);
+      await removeMount(directory);
 
-      removeMountDir(dir);
+      removeMountDir(directory);
 
       // the snapshot moves with the rename, so no image is ever without one
       await zfs.snapshot(`${staged}@base`);
@@ -447,7 +450,7 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
 
       // a promote can move a checkpoint's snapshot, so the lookup is serial
       await runSerial(async () => {
-        const origin = await findOrigin(source);
+        const origin = await readOrigin(source);
 
         await zfs.clone(origin, target);
 
@@ -538,8 +541,8 @@ function readZfsModuleVersion(): string | null {
 }
 
 // Not recursive: a dataset still mounted there would lose its files.
-function removeMountDir(dir: string): void {
-  if (existsSync(dir)) {
-    rmdirSync(dir);
+function removeMountDir(directory: string): void {
+  if (existsSync(directory)) {
+    rmdirSync(directory);
   }
 }

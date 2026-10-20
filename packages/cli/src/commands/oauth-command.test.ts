@@ -2,7 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
 import { ApprovalCodeSchema } from '@impz/api';
 import { createImpClient } from '@impz/client';
-import { createPendingSignIn, findFreePorts, startTestImpd } from '@impz/daemon/testing';
+import { claimFreePorts, createPendingSignIn, startTestImpd } from '@impz/daemon/testing';
 import * as z from 'zod';
 import { UsageError } from '../cli/errors';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
@@ -17,7 +17,7 @@ async function setupTest() {
   const rootToken = faker.string.alphanumeric(32);
 
   // the port impd's own public listener takes, below the imps' ports
-  const publicPort = findFreePorts(1, {
+  const publicPort = claimFreePorts(1, {
     pick: () => 10_000 + Math.floor(Math.random() * 10_000),
   }).take();
 
@@ -40,6 +40,17 @@ async function setupTest() {
   // each call a client makes: its procedure and its input as oRPC sends it
   const calls: { readonly path: string; readonly input: unknown }[] = [];
 
+  const sendRecordedRequest = async (request: Request) => {
+    const body: unknown = await request.clone().json();
+
+    calls.push({
+      path: new URL(request.url).pathname.slice('/rpc/'.length),
+      input: RpcBodySchema.parse(body).json,
+    });
+
+    return impd.api.app.handle(request);
+  };
+
   return {
     rootToken,
     now: harness.now,
@@ -58,16 +69,7 @@ async function setupTest() {
       createImpClient({
         url: 'http://impd.test',
         token,
-        fetch: async (request) => {
-          const body: unknown = await request.clone().json();
-
-          calls.push({
-            path: new URL(request.url).pathname.slice('/rpc/'.length),
-            input: RpcBodySchema.parse(body).json,
-          });
-
-          return impd.api.app.handle(request);
-        },
+        fetch: sendRecordedRequest,
       }),
   };
 }
@@ -109,7 +111,7 @@ test('it shows the sign-in and approves nothing when the answer at a terminal is
   ctx.advance(Date.UTC(2026, 0, 1) - ctx.now());
 
   const started = await createPendingSignIn({
-    handle: ctx.handleRoute,
+    respond: ctx.handleRoute,
     origin: 'http://127.0.0.1:7171',
     clientID: added.clientId,
     redirectURI: 'https://client.example/callback',
@@ -158,7 +160,7 @@ test('it approves what it showed when the answer at a terminal is yes', async ()
   const made = await root.tokens.create({ name: 'approver', scope: 'manage' });
 
   const started = await createPendingSignIn({
-    handle: ctx.handleRoute,
+    respond: ctx.handleRoute,
     origin: 'http://127.0.0.1:7171',
     clientID: added.clientId,
     redirectURI: 'https://client.example/callback',
@@ -204,7 +206,7 @@ test.each([
   const made = await root.tokens.create({ name: 'approver', scope: 'manage' });
 
   const started = await createPendingSignIn({
-    handle: ctx.handleRoute,
+    respond: ctx.handleRoute,
     origin: 'http://127.0.0.1:7171',
     clientID: added.clientId,
     redirectURI: 'https://client.example/callback',
@@ -241,7 +243,7 @@ test('it refuses an approval of more than a read token holds', async () => {
   const made = await root.tokens.create({ name: 'reader', scope: 'read' });
 
   const started = await createPendingSignIn({
-    handle: ctx.handleRoute,
+    respond: ctx.handleRoute,
     origin: 'http://127.0.0.1:7171',
     clientID: added.clientId,
     redirectURI: 'https://client.example/callback',

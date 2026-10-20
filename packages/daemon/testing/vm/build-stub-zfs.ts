@@ -31,18 +31,6 @@ export class StubZfsCrashError extends Error {
   override name = 'StubZfsCrashError';
 }
 
-function buildFailure(message: string): CommandResult {
-  return { exitCode: 1, stdout: '', stderr: message };
-}
-
-function buildSuccess(stdout = ''): CommandResult {
-  return { exitCode: 0, stdout, stderr: '' };
-}
-
-function findParent(name: string): string {
-  return name.slice(0, name.lastIndexOf('/'));
-}
-
 // An in-memory ZFS: clones, promote, deferred destroy and legacy mounts, with
 // the errors real ZFS gives where impd could trip. It answers impd's argv in
 // the real `-H` format and records each command.
@@ -105,7 +93,7 @@ export function buildStubZfs(options: FakeZfsOptions) {
       return buildFailure(`cannot create '${name}': dataset already exists`);
     }
 
-    if (!datasets.has(findParent(name))) {
+    if (!datasets.has(getParent(name))) {
       return buildFailure(`cannot create '${name}': parent does not exist`);
     }
 
@@ -143,7 +131,7 @@ export function buildStubZfs(options: FakeZfsOptions) {
       return buildFailure(`cannot create '${target}': dataset already exists`);
     }
 
-    if (!datasets.has(findParent(target))) {
+    if (!datasets.has(getParent(target))) {
       return buildFailure(`cannot create '${target}': parent does not exist`);
     }
 
@@ -159,7 +147,7 @@ export function buildStubZfs(options: FakeZfsOptions) {
       return buildFailure(`cannot open '${from}': dataset does not exist`);
     }
 
-    if (datasets.has(to) || !datasets.has(findParent(to))) {
+    if (datasets.has(to) || !datasets.has(getParent(to))) {
       return buildFailure(
         `cannot rename to '${to}': dataset already exists or parent does not exist`,
       );
@@ -328,7 +316,7 @@ export function buildStubZfs(options: FakeZfsOptions) {
           txg: found.txg,
           line: `${name}\tsnapshot\t-\t${found.deferDestroy ? 'on' : 'off'}`,
         })),
-    ].toSorted((a, b) => a.txg - b.txg);
+    ].toSorted((left, right) => left.txg - right.txg);
 
     return buildSuccess(rows.map((row) => `${row.line}\n`).join(''));
   };
@@ -366,20 +354,20 @@ export function buildStubZfs(options: FakeZfsOptions) {
     // readonly property does not make it read-only
     if (tool === 'mount') {
       const name = argv.at(-2) ?? '';
-      const dir = last;
+      const directory = last;
 
       if (!datasets.has(name)) {
-        return buildFailure(`mount: ${dir}: ${name} does not exist`);
+        return buildFailure(`mount: ${directory}: ${name} does not exist`);
       }
 
-      if (mounts.has(dir)) {
-        return buildFailure(`mount: ${dir}: already mounted`);
+      if (mounts.has(directory)) {
+        return buildFailure(`mount: ${directory}: already mounted`);
       }
 
-      mounts.set(dir, name);
+      mounts.set(directory, name);
 
       if (rest.includes('ro')) {
-        readOnlyDirs.add(dir);
+        readOnlyDirs.add(directory);
       }
 
       return buildSuccess();
@@ -393,12 +381,12 @@ export function buildStubZfs(options: FakeZfsOptions) {
       }
 
       const under = [...mounts.keys()]
-        .filter((dir) => dir === last || dir.startsWith(`${last}/`))
-        .toSorted((a, b) => b.length - a.length);
+        .filter((directory) => directory === last || directory.startsWith(`${last}/`))
+        .toSorted((left, right) => right.length - left.length);
 
-      for (const dir of under) {
-        mounts.delete(dir);
-        readOnlyDirs.delete(dir);
+      for (const directory of under) {
+        mounts.delete(directory);
+        readOnlyDirs.delete(directory);
       }
 
       return buildSuccess();
@@ -556,8 +544,8 @@ export function buildStubZfs(options: FakeZfsOptions) {
     readMounts: () =>
       [...mounts.entries()]
         .map(
-          ([dir, name]) =>
-            `${name} ${dir.replaceAll(' ', String.raw`\040`)} zfs ${readOnlyDirs.has(dir) ? 'ro' : 'rw'},noatime,xattr,noacl 0 0\n`,
+          ([directory, name]) =>
+            `${name} ${directory.replaceAll(' ', String.raw`\040`)} zfs ${readOnlyDirs.has(directory) ? 'ro' : 'rw'},noatime,xattr,noacl 0 0\n`,
         )
         .join(''),
 
@@ -573,9 +561,9 @@ export function buildStubZfs(options: FakeZfsOptions) {
       state.crashed = false;
 
       if (dropMounts) {
-        for (const dir of mounts.keys()) {
-          if (dir !== options.rootDir) {
-            mounts.delete(dir);
+        for (const directory of mounts.keys()) {
+          if (directory !== options.rootDir) {
+            mounts.delete(directory);
           }
         }
       }
@@ -593,9 +581,21 @@ export function buildStubZfs(options: FakeZfsOptions) {
       ),
     readProperty: (name: string, key: string) => datasets.get(name)?.properties?.[key] ?? null,
     isDeferred: (name: string) => snapshots.get(name)?.deferDestroy ?? false,
-    readMountedAt: (dir: string) => mounts.get(dir) ?? null,
-    isReadOnlyAt: (dir: string) => readOnlyDirs.has(dir),
+    readMountedAt: (directory: string) => mounts.get(directory) ?? null,
+    isReadOnlyAt: (directory: string) => readOnlyDirs.has(directory),
   };
+}
+
+function buildFailure(message: string): CommandResult {
+  return { exitCode: 1, stdout: '', stderr: message };
+}
+
+function getParent(name: string): string {
+  return name.slice(0, name.lastIndexOf('/'));
+}
+
+function buildSuccess(stdout = ''): CommandResult {
+  return { exitCode: 0, stdout, stderr: '' };
 }
 
 export type StubZfs = ReturnType<typeof buildStubZfs>;

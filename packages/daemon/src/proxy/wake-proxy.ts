@@ -2,18 +2,18 @@ import type { Logger } from '@logtape/logtape';
 import { ORPCError } from '@orpc/server';
 import type { Server, WebSocketHandler } from 'bun';
 import { MOVING_RETRY_AFTER_S } from '../api-errors';
-import { removeSessionCookie } from '../auth/session-cookie';
+import { stripSessionCookie } from '../auth/session-cookie';
 import type { Config } from '../config';
 import type { ImpRecord } from '../db/imps';
 import { listImps } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
+import { getErrorMessage } from '../get-error-message';
 import type { ImpRuntime } from '../imps/imp-runtime';
 import { deriveSlotAddress } from '../net/addressing';
 import type { StartTimer } from '../process/clock';
 import { getImpdLogger } from '../process/get-impd-logger';
 import { createSemaphore } from '../process/semaphore';
 import { startRealTimer } from '../process/start-real-timer';
-import { readErrorMessage } from '../read-error-message';
 import { buildTrackedBody } from './build-tracked-body';
 import { buildErrorPage } from './error-pages';
 import { PEER_HEADER, isCallerPath } from './forwarded-peers';
@@ -67,6 +67,14 @@ interface WakeProxyDeps {
   readonly startTimer?: StartTimer;
 }
 
+// A request on the public listeners (docs/guides/https.md#public-imps): no
+// detail in its errors, a fresh X-Forwarded-For, no checked credential
+// upstream. `release` runs when the request or its WebSocket ends.
+interface PublicRequest {
+  readonly dropAuthorization: boolean;
+  readonly release: () => void;
+}
+
 // Where a request goes: an imp, which it wakes, impd's own API, nowhere,
 // back with a 401 that asks for a public imp's credential, or back with a
 // 429 when a public imp is over a limit.
@@ -76,14 +84,6 @@ export type ProxyRoute =
   | { readonly kind: 'none'; readonly hint: string }
   | { readonly kind: 'unauthorized'; readonly challenge: string }
   | { readonly kind: 'limited'; readonly detail: string; readonly retryAfterS: number };
-
-// A request on the public listeners (docs/guides/https.md#public-imps): no
-// detail in its errors, a fresh X-Forwarded-For, no checked credential
-// upstream. `release` runs when the request or its WebSocket ends.
-interface PublicRequest {
-  readonly dropAuthorization: boolean;
-  readonly release: () => void;
-}
 
 export interface ProxyListenOptions {
   readonly port: number;
@@ -348,7 +348,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
                 ...(options.imp !== null && { imp: options.imp }),
                 method: request.method,
                 path: url.pathname,
-                reason: readErrorMessage(failure),
+                reason: getErrorMessage(failure),
               });
             });
 
@@ -364,7 +364,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     } catch (error) {
       release();
 
-      return buildErrorPage(502, options.formatFailure(readErrorMessage(error)));
+      return buildErrorPage(502, options.formatFailure(getErrorMessage(error)));
     }
   };
 
@@ -391,7 +391,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     } catch (error) {
       release();
 
-      const reason = readErrorMessage(error);
+      const reason = getErrorMessage(error);
 
       return buildErrorPage(502, `The WebSocket to ${target} failed: ${reason}`);
     }
@@ -418,20 +418,23 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     return undefined;
   };
 
-  const startListener = (options: ProxyListenOptions): ProxyServer =>
-    Bun.serve<SocketData>({
+  const startListener = (options: ProxyListenOptions): ProxyServer => {
+    const handleRoutedRequest = async (request: Request, server: ProxyServer) => {
+      const route = await options.route(request);
+
+      return handleRequest(request, server, route);
+    };
+
+    return Bun.serve<SocketData>({
       port: options.port,
       ...(options.hostname !== undefined && { hostname: options.hostname }),
       ...(options.tls !== undefined && { tls: options.tls }),
       ...(options.reusePort === true && { reusePort: true }),
       idleTimeout: 0,
-      fetch: async (request, server) => {
-        const route = await options.route(request);
-
-        return handleRequest(request, server, route);
-      },
+      fetch: handleRoutedRequest,
       websocket,
     });
+  };
 
   const hint = `Use http://<imp>.imp.localhost:${String(deps.config.proxyPort)}/.`;
 
@@ -515,6 +518,31 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
   };
 }
 
+// 1005, 1006 and 1015 describe a close; they cannot be sent in one
+function toSendableCode(code: number): number {
+  return code === 1000 ||
+    (code >= 1001 && code <= 1014 && code !== 1005 && code !== 1006) ||
+    (code >= 3000 && code <= 4999)
+    ? code
+    : 1000;
+}
+
+function buildWakeErrorPage(name: string, error: unknown): Response {
+  if (error instanceof ORPCError && error.code === 'NOT_FOUND') {
+    return buildErrorPage(404, `There is no imp named ${name}.`);
+  }
+
+  const reason = getErrorMessage(error);
+  const page = buildErrorPage(503, `${name} could not wake: ${reason}`);
+
+  // a move holds the imp for a while: the client may come back
+  if (error instanceof ORPCError && error.code === 'MOVING') {
+    page.headers.set('retry-after', String(MOVING_RETRY_AFTER_S));
+  }
+
+  return page;
+}
+
 function buildUpstreamHeaders(
   request: Request,
   server: ProxyServer,
@@ -536,7 +564,7 @@ function buildUpstreamHeaders(
   // too; an imp must not get it. An imp can still set a cookie by that name
   // and so log the dashboard out, which costs a login and nothing more.
   const cookie = headers.get('cookie');
-  const kept = cookie === null || keepSession ? cookie : removeSessionCookie(cookie);
+  const kept = cookie === null || keepSession ? cookie : stripSessionCookie(cookie);
 
   if (kept === null) {
     headers.delete('cookie');
@@ -563,29 +591,4 @@ function buildUpstreamHeaders(
   headers.set('x-forwarded-proto', new URL(request.url).protocol.replace(':', ''));
 
   return headers;
-}
-
-// 1005, 1006 and 1015 describe a close; they cannot be sent in one
-function toSendableCode(code: number): number {
-  return code === 1000 ||
-    (code >= 1001 && code <= 1014 && code !== 1005 && code !== 1006) ||
-    (code >= 3000 && code <= 4999)
-    ? code
-    : 1000;
-}
-
-function buildWakeErrorPage(name: string, error: unknown): Response {
-  if (error instanceof ORPCError && error.code === 'NOT_FOUND') {
-    return buildErrorPage(404, `There is no imp named ${name}.`);
-  }
-
-  const reason = readErrorMessage(error);
-  const page = buildErrorPage(503, `${name} could not wake: ${reason}`);
-
-  // a move holds the imp for a while: the client may come back
-  if (error instanceof ORPCError && error.code === 'MOVING') {
-    page.headers.set('retry-after', String(MOVING_RETRY_AFTER_S));
-  }
-
-  return page;
 }

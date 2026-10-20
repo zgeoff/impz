@@ -74,16 +74,18 @@ test('it passes impd’s own JSON error through as oRPC reads it', () => {
 test('it sends the call through a fetch the caller gives', async () => {
   const sent = mock<(path: string) => void>();
 
+  const sendRpcRequest = (request: Request) => {
+    sent(new URL(request.url).pathname);
+
+    return Promise.resolve(
+      Response.json({ json: { version: '2.4.1', features: SYSTEM_FEATURES } }),
+    );
+  };
+
   const rpc = createRpcClient({
     url: 'http://in-process.test',
     token: null,
-    fetch: (request) => {
-      sent(new URL(request.url).pathname);
-
-      return Promise.resolve(
-        Response.json({ json: { version: '2.4.1', features: SYSTEM_FEATURES } }),
-      );
-    },
+    fetch: sendRpcRequest,
   });
 
   await rpc.system.features();

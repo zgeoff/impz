@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { collectEventLines, formatEventLine } from './event-lines';
+import { formatEventLine, readEventLines } from './event-lines';
 
 test('#formatEventLine names the imp, the event and its reason', () => {
   const line = JSON.stringify({
@@ -31,7 +31,7 @@ test('#formatEventLine leaves out a governor decision', () => {
   expect(formatEventLine('{"ev":"GovernorDecision","reason":"sleep"}')).toBeNull();
 });
 
-test('#collectEventLines passes each whole line once, across chunks that split them', async () => {
+test('#readEventLines passes each whole line once, across chunks that split them', async () => {
   const encoder = new TextEncoder();
 
   const chunks = [
@@ -52,7 +52,7 @@ test('#collectEventLines passes each whole line once, across chunks that split t
 
   const seen: string[] = [];
 
-  await collectEventLines(stdout, (line) => {
+  await readEventLines(stdout, (line) => {
     seen.push(line);
   });
 

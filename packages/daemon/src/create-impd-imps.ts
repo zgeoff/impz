@@ -1,7 +1,7 @@
 import { availableParallelism } from 'node:os';
 import type { Broker } from './broker/broker-service';
-import type { ImpdStorage } from './build-impd-storage';
 import type { Config } from './config';
+import type { ImpdStorage } from './create-impd-storage';
 import { countImpsByState, listImps } from './db/imps';
 import type { EgressService } from './egress/egress-service';
 import { createRamGovernor } from './governor/ram-governor';

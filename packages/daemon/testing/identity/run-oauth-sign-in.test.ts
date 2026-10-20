@@ -32,7 +32,7 @@ async function setupTest() {
   return {
     auth,
     tokens,
-    handle: async (request: Request) => {
+    respond: async (request: Request) => {
       const answered = await auth.handle(request);
 
       return answered ?? new Response('not found', { status: 404 });
@@ -51,7 +51,7 @@ test('it signs a client in to tokens for the approved scope', async () => {
 
   const issued = await runOAuthSignIn(
     {
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -76,7 +76,7 @@ test('it throws, naming Continue, when nothing approves the sign-in', async () =
   expect(
     runOAuthSignIn(
       {
-        handle: ctx.handle,
+        respond: ctx.respond,
         origin: 'http://127.0.0.1:7171',
         clientID: client.clientId,
         redirectURI: 'https://client.example/callback',

@@ -1,11 +1,11 @@
 import { buildApiListenOptions } from './api-listen-options';
 import type { ApiAudit } from './audit/api-audit';
 import type { Broker } from './broker/broker-service';
-import type { buildImpdApp } from './build-impd-app';
 import type { Config } from './config';
-import { buildHttpsService } from './https/build-https-service';
+import type { createImpdApp } from './create-impd-app';
 import type { DnsToken } from './https/dns/dns-token';
 import type { PublicRecordsLink } from './https/public-records-link';
+import { wireHttpsService } from './https/wire-https-service';
 import type { ImpdDeps } from './impd-deps';
 import type { RunImpdStartupStep } from './impd-startup-steps';
 import type { Imps } from './imps/imp-service';
@@ -23,7 +23,7 @@ import type { ImpdStopParts } from './stop-impd';
 import type { TailnetNames } from './tailnet-names/tailnet-names';
 
 export interface ImpdListenerParts {
-  readonly api: ReturnType<typeof buildImpdApp>;
+  readonly api: ReturnType<typeof createImpdApp>;
   readonly access: ImpdAccess;
   readonly imps: Imps;
   readonly peers: ForwardedPeers;
@@ -123,7 +123,7 @@ export async function startImpdListeners(
       return null;
     }
 
-    const service = buildHttpsService({
+    const service = wireHttpsService({
       config: config.https,
       dataDir: config.dataDir,
       db,

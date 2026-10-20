@@ -12,18 +12,18 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'pebble-'));
+  const directory = await mkdtemp(join(tmpdir(), 'pebble-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { stack, dir };
+  return { stack, directoryPath: directory };
 }
 
 test('#startPebbleStack refuses a Pebble container name that is taken, before it makes anything', async () => {
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     ['case "$*" in', '  *-pebble) exit 0 ;;', 'esac', 'exit 1'].join('\n'),
   );
@@ -55,7 +55,7 @@ test('#startPebbleStack refuses a challtestsrv container name that is taken, bef
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     ['case "$*" in', '  *-challtestsrv) exit 0 ;;', 'esac', 'exit 1'].join('\n'),
   );
@@ -87,7 +87,7 @@ test('#startPebbleStack refuses a network name that is taken, before it makes an
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     ['case "$*" in', '  "network inspect "*) exit 0 ;;', 'esac', 'exit 1'].join('\n'),
   );
@@ -117,7 +117,7 @@ test('#startPebbleStack removes only what it made when the Pebble container is n
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     [
       'case "$*" in',
@@ -150,7 +150,7 @@ test('#startPebbleStack removes the Pebble container it created when that contai
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     [
       'case "$*" in',
@@ -184,7 +184,7 @@ test('#startPebbleStack copies the minica PEM into the directory the caller name
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     ['case "$*" in', '  *inspect*|"cp "*) exit 1 ;;', 'esac'].join('\n'),
   );
@@ -192,7 +192,7 @@ test('#startPebbleStack copies the minica PEM into the directory the caller name
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
   const failure = await startPebbleStack(ctx.stack, 'imp-acme-it-x', {
-    minicaDir: join(ctx.dir, 'ca'),
+    minicaDir: join(ctx.directoryPath, 'ca'),
   }).then(
     () => null,
     (error: unknown) => error,
@@ -205,7 +205,7 @@ test('#startPebbleStack copies the minica PEM into the directory the caller name
   expect(failure).toBeInstanceOf(Error);
 
   expect(calls.split('\n')).toContain(
-    `docker cp imp-acme-it-x-pebble:/test/certs/pebble.minica.pem ${join(ctx.dir, 'ca', 'imp-acme-it-x-pebble-minica.pem')}`,
+    `docker cp imp-acme-it-x-pebble:/test/certs/pebble.minica.pem ${join(ctx.directoryPath, 'ca', 'imp-acme-it-x-pebble-minica.pem')}`,
   );
 });
 

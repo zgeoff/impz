@@ -1,7 +1,7 @@
 import type { TailnetPeer } from './auth/tailnet-identity';
 import type { BrokerDeps } from './broker/broker-service';
-import type { AppDeps } from './build-app';
 import type { DiskFreezer } from './checkpoints/consistent-disk';
+import type { AppDeps } from './create-app';
 import type { ImpdMoveBoundaries } from './create-impd-moves';
 import type { ImpDatabase } from './db/open-database';
 import type { EgressDeps } from './egress/egress-service';

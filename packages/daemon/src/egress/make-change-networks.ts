@@ -1,6 +1,6 @@
 import type { NetworkMember } from '../db/networks';
+import { getErrorMessage } from '../get-error-message';
 import type { KeyedMutex } from '../process/keyed-mutex';
-import { readErrorMessage } from '../read-error-message';
 
 // A table nft refuses runs `undo`, so the rows and the table agree. Imps the
 // change parts lose their connections to each other.
@@ -34,7 +34,7 @@ export function makeChangeNetworks(
         return true;
       } catch (error) {
         deps.log(
-          `impd: egress: undoing a network change (try ${String(attempt)}): ${readErrorMessage(error)}`,
+          `impd: egress: undoing a network change (try ${String(attempt)}): ${getErrorMessage(error)}`,
         );
       }
     }
@@ -60,7 +60,7 @@ export function makeChangeNetworks(
 
         if (!undone) {
           throw new Error(
-            `${readErrorMessage(error)}; the network change could not be undone and may have applied`,
+            `${getErrorMessage(error)}; the network change could not be undone and may have applied`,
             { cause: error },
           );
         }
@@ -79,7 +79,7 @@ export function makeChangeNetworks(
           try {
             await deps.flushPair(first, second);
           } catch (error) {
-            deps.log(`impd: egress: ${pair}: ${readErrorMessage(error)}`);
+            deps.log(`impd: egress: ${pair}: ${getErrorMessage(error)}`);
           }
         }
       }

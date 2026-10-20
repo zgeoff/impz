@@ -254,14 +254,16 @@ test('#runOnInterval ticks a repeat again and again on its interval', async () =
 test('#createBuildEventStream sends nothing more and stops its keepalive once a served client leaves mid-stream', async () => {
   const keepalive = buildStubRepeat();
 
+  const handleRequest = (request: Request) =>
+    createBuildEventStream(request.signal, () => Promise.withResolvers<ImageBuildEvent>().promise, {
+      keepaliveMs: 10_000,
+      now: () => 0,
+      repeat: keepalive.repeat,
+    });
+
   const server = Bun.serve({
     port: 0,
-    fetch: (request) =>
-      createBuildEventStream(
-        request.signal,
-        () => Promise.withResolvers<ImageBuildEvent>().promise,
-        { keepaliveMs: 10_000, now: () => 0, repeat: keepalive.repeat },
-      ),
+    fetch: handleRequest,
   });
 
   onTestFinished(() => server.stop(true));

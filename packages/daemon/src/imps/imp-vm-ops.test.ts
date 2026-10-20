@@ -5,14 +5,14 @@ import fc from 'fast-check';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
 import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
-import { findBrokenInvariants } from '../../testing/imps/find-broken-invariants';
+import { readBrokenInvariants } from '../../testing/imps/read-broken-invariants';
 import { waitForOutcome } from '../../testing/imps/wait-for-outcome';
 import { runWithStack } from '../../testing/platform/run-with-stack';
 import { startTestImpd } from '../../testing/start-test-impd';
 import { StubVmError } from '../../testing/vm/build-stub-vmm';
 import type { VmOutcome } from '../../testing/vm/build-stub-vmm';
 import { writeTestSnapshot } from '../../testing/vm/write-test-snapshot';
-import { createImp, findImpByName, listImps, updateImpActivity } from '../db/imps';
+import { createImp, listImps, readImpByName, updateImpActivity } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
 import { updateImpState } from '../db/update-imp-state';
 import { readSnapshotMeta, writeSnapshotMeta } from '../sleep/snapshot-meta';
@@ -48,11 +48,11 @@ test(
     });
 
     const x = await ctx.client.imps.create({ name: 'x' });
-    const a = await ctx.client.imps.create({ name: 'a' });
+    const first = await ctx.client.imps.create({ name: 'a' });
     const checkpoint = await ctx.client.checkpoints.create({ name: 'a' });
 
     await updateImpActivity(ctx.db, x.id, new Date(1000));
-    await updateImpActivity(ctx.db, a.id, new Date(2000));
+    await updateImpActivity(ctx.db, first.id, new Date(2000));
 
     const sleepGate = ctx.fake.hold('sleep');
 
@@ -65,7 +65,7 @@ test(
     const restoring = ctx.client.checkpoints.restore({ name: 'a', checkpoint: checkpoint.id });
 
     await waitFor(async () => {
-      const halted = await findImpByName(ctx.db, 'a');
+      const halted = await readImpByName(ctx.db, 'a');
 
       expect(halted?.state).toBe('stopped');
     });
@@ -77,9 +77,9 @@ test(
 
     await ctx.imps.waitForLifecycle();
 
-    const xAfter = await findImpByName(ctx.db, 'x');
-    const aAfter = await findImpByName(ctx.db, 'a');
-    const broken = await findBrokenInvariants(ctx, false);
+    const xAfter = await readImpByName(ctx.db, 'x');
+    const aAfter = await readImpByName(ctx.db, 'a');
+    const broken = await readBrokenInvariants(ctx, false);
 
     expect(admitted).toBe('done');
     expect(restored).toBe('done');
@@ -103,9 +103,9 @@ test('it leaves an imp whose boot fails in error with no VM and no reservation',
 
   expect(creating).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
   const usage = await ctx.governor.readUsage();
-  const broken = await findBrokenInvariants(ctx, false);
+  const broken = await readBrokenInvariants(ctx, false);
 
   expect(imp?.state).toBe('error');
   expect(usage).toStrictEqual({ usedMib: 0, reservedMib: 0, headroomMib: 0 });
@@ -118,11 +118,11 @@ test('it finds a VM that died right after its boot stopped on the next read', as
   ctx.fake.queue('boot', 'die');
 
   const created = await ctx.client.imps.create({ name: 'dev' });
-  const before = await findBrokenInvariants(ctx, false);
+  const before = await readBrokenInvariants(ctx, false);
 
   // the read is the liveness pass
   const read = await ctx.client.imps.get({ name: 'dev' });
-  const after = await findBrokenInvariants(ctx, true);
+  const after = await readBrokenInvariants(ctx, true);
 
   expect(created.state).toBe('running');
   expect(before).toBeEmpty();
@@ -158,8 +158,8 @@ test('it leaves an imp in error when its wake and the cold boot after it fail', 
 
   expect(waking).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
-  const broken = await findBrokenInvariants(ctx, false);
+  const imp = await readImpByName(ctx.db, 'dev');
+  const broken = await readBrokenInvariants(ctx, false);
 
   expect(imp?.state).toBe('error');
   expect(broken).toBeEmpty();
@@ -175,7 +175,7 @@ test('it drops the used snapshot when the budget refuses the cold boot after a f
     },
   });
 
-  const a = await ctx.client.imps.create({ name: 'a' });
+  const first = await ctx.client.imps.create({ name: 'a' });
 
   await ctx.client.imps.sleep({ name: 'a' });
   await ctx.client.imps.create({ name: 'b' });
@@ -193,10 +193,10 @@ test('it drops the used snapshot when the budget refuses the cold boot after a f
 
   expect(waking).rejects.toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
 
-  const paths = buildImpPaths(ctx.dataDir, a.id);
+  const paths = buildImpPaths(ctx.dataDir, first.id);
 
-  const imp = await findImpByName(ctx.db, 'a');
-  const broken = await findBrokenInvariants(ctx, false);
+  const imp = await readImpByName(ctx.db, 'a');
+  const broken = await readBrokenInvariants(ctx, false);
 
   expect(imp?.state).toBe('stopped');
   expect(existsSync(paths.snapshotDir)).toBeFalse();
@@ -213,7 +213,7 @@ test('it keeps the snapshot when the budget refuses a cold boot before anything 
     },
   });
 
-  const a = await ctx.client.imps.create({ name: 'a' });
+  const first = await ctx.client.imps.create({ name: 'a' });
 
   await ctx.client.imps.sleep({ name: 'a' });
   await ctx.client.imps.create({ name: 'b' });
@@ -224,7 +224,7 @@ test('it keeps the snapshot when the budget refuses a cold boot before anything 
   // past the boot reservations: b and c count what they measure
   ctx.advance(30_000);
 
-  const paths = buildImpPaths(ctx.dataDir, a.id);
+  const paths = buildImpPaths(ctx.dataDir, first.id);
 
   // a snapshot an older Firecracker wrote can only boot cold
   writeTestSnapshot(paths, Date.now(), { ...ctx.readIdentity(), firecrackerVersion: 'v0.1.0' });
@@ -233,8 +233,8 @@ test('it keeps the snapshot when the budget refuses a cold boot before anything 
 
   expect(waking).rejects.toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
 
-  const imp = await findImpByName(ctx.db, 'a');
-  const broken = await findBrokenInvariants(ctx, false);
+  const imp = await readImpByName(ctx.db, 'a');
+  const broken = await readBrokenInvariants(ctx, false);
 
   expect(imp?.state).toBe('sleeping');
   expect(existsSync(paths.snapshotMeta)).toBeTrue();
@@ -258,9 +258,9 @@ test('it releases the reservation of a cold boot that fails after its admit', as
 
   expect(waking).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
   const usage = await ctx.governor.readUsage();
-  const broken = await findBrokenInvariants(ctx, false);
+  const broken = await readBrokenInvariants(ctx, false);
 
   expect(imp?.state).toBe('error');
   expect(usage).toStrictEqual({ usedMib: 0, reservedMib: 0, headroomMib: 0 });
@@ -278,8 +278,8 @@ test('it keeps the VM running when its snapshot fails', async () => {
 
   expect(sleeping).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
-  const broken = await findBrokenInvariants(ctx, true);
+  const imp = await readImpByName(ctx.db, 'dev');
+  const broken = await readBrokenInvariants(ctx, true);
 
   expect(imp?.state).toBe('running');
   expect(broken).toBeEmpty();
@@ -297,8 +297,8 @@ test('it stops the imp when its snapshot is lost after the kill', async () => {
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  const imp = await findImpByName(ctx.db, 'dev');
-  const broken = await findBrokenInvariants(ctx, false);
+  const imp = await readImpByName(ctx.db, 'dev');
+  const broken = await readBrokenInvariants(ctx, false);
 
   expect(imp?.state).toBe('stopped');
   expect(existsSync(paths.snapshotDir)).toBeFalse();
@@ -357,10 +357,10 @@ test('it settles imps a restarted impd finds in every state', async () => {
   await ctx.client.imps.stop({ name: 'failed' });
   await Promise.allSettled([ctx.client.imps.start({ name: 'failed' })]);
 
-  const dead = await findImpByName(ctx.db, 'dead');
-  const deadFresh = await findImpByName(ctx.db, 'dead-fresh-snapshot');
-  const deadOld = await findImpByName(ctx.db, 'dead-old-snapshot');
-  const lostSnapshot = await findImpByName(ctx.db, 'asleep-lost-snapshot');
+  const dead = await readImpByName(ctx.db, 'dead');
+  const deadFresh = await readImpByName(ctx.db, 'dead-fresh-snapshot');
+  const deadOld = await readImpByName(ctx.db, 'dead-old-snapshot');
+  const lostSnapshot = await readImpByName(ctx.db, 'asleep-lost-snapshot');
 
   invariant(typeof dead?.pid === 'number');
   invariant(typeof deadFresh?.pid === 'number');
@@ -393,7 +393,7 @@ test('it settles imps a restarted impd finds in every state', async () => {
 
   const states = Object.fromEntries(after.map((imp) => [imp.name, imp.state]));
 
-  const broken = await findBrokenInvariants(ctx, true);
+  const broken = await readBrokenInvariants(ctx, true);
 
   expect(states).toStrictEqual({
     alive: 'running',
@@ -434,8 +434,8 @@ test(
 
     // the next impd's start runs its reconcile
     const reconciled = await waitForOutcome(ctx.restartImpd(), 10_000);
-    const stuck = await findImpByName(ctx.db, 'stuck');
-    const broken = await findBrokenInvariants(ctx, true);
+    const stuck = await readImpByName(ctx.db, 'stuck');
+    const broken = await readBrokenInvariants(ctx, true);
 
     expect(reconciled).toBe('done');
     expect(stuck).toMatchObject({ state: 'error', pid });
@@ -507,7 +507,7 @@ test(
     await ctx.restartImpd();
 
     const after = await listImps(ctx.db);
-    const broken = await findBrokenInvariants(ctx, true);
+    const broken = await readBrokenInvariants(ctx, true);
 
     expect(woke).toBe('done');
     expect(stopped).toBe('done');
@@ -570,8 +570,8 @@ test('it re-adopts the VM of a boot under way once impd restarting in place wait
 
   await ctx.restartImpd();
 
-  const imp = await findImpByName(ctx.db, 'dev');
-  const broken = await findBrokenInvariants(ctx, true);
+  const imp = await readImpByName(ctx.db, 'dev');
+  const broken = await readBrokenInvariants(ctx, true);
 
   expect(vmsAtWaitEnd).toBe(1);
   expect(imp?.state).toBe('running');
@@ -598,7 +598,7 @@ test('it leaves the next impd an error record when impd dies mid-create', async 
     expect(ctx.fake.countParkedCalls()).toBe(1);
   });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(ctx.fake.alive.size).toBe(1);
   expect(Bun.peek.status(creating)).toBe('pending');
@@ -664,7 +664,7 @@ test(
             };
 
             const readSleep = async (name: string, at: number) => {
-              const imp = holder.db === null ? undefined : await findImpByName(holder.db, name);
+              const imp = holder.db === null ? undefined : await readImpByName(holder.db, name);
               const holdUntil = imp?.holdUntil?.getTime() ?? 0;
 
               return { name, held: holdUntil > at };
@@ -737,7 +737,7 @@ test(
                 )
                 .with({ kind: 'destroy' }, (destroy) => client.imps.destroy({ name: destroy.name }))
                 .with({ kind: 'crash' }, async (crash) => {
-                  const imp = await findImpByName(ctx.db, crash.name);
+                  const imp = await readImpByName(ctx.db, crash.name);
 
                   ctx.fake.alive.delete(imp?.pid ?? 0);
                 })
@@ -745,7 +745,7 @@ test(
                   // firecracker changed under the snapshot: its wake boots
                   // cold. Only the version moves, as on a real upgrade; an imp
                   // with no snapshot makes this a no-op.
-                  const imp = await findImpByName(ctx.db, outdate.name);
+                  const imp = await readImpByName(ctx.db, outdate.name);
 
                   const paths = buildImpPaths(ctx.dataDir, imp?.id ?? '');
                   const meta = readSnapshotMeta(paths);
@@ -843,12 +843,12 @@ test(
 
             const pinnedSleeps = sleeps.filter((sleep) => sleep.held);
 
-            const quiescent = await findBrokenInvariants(ctx, false);
+            const quiescent = await readBrokenInvariants(ctx, false);
 
             // the list runs the liveness pass that repairs dead VMs
             await client.imps.list();
 
-            const repaired = await findBrokenInvariants(ctx, true);
+            const repaired = await readBrokenInvariants(ctx, true);
             const afterOps = await listImps(ctx.db);
 
             // the governor may sleep every running imp without a hold: none

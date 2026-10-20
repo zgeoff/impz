@@ -9,12 +9,14 @@ test('it forwards a request with the prefix taken off', async () => {
   const target = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: async (request) =>
-      Response.json({
-        path: new URL(request.url).pathname,
-        method: request.method,
-        body: await request.text(),
-      }),
+    routes: {
+      '/*': async (request: Request) =>
+        Response.json({
+          path: new URL(request.url).pathname,
+          method: request.method,
+          body: await request.text(),
+        }),
+    },
   });
 
   stack.defer(async () => {
@@ -40,14 +42,16 @@ test('it answers 404 for a path outside the prefix and forwards nothing', async 
 
   const seen = mock<(path: string) => void>();
 
+  const handleTargetRequest = (request: Request) => {
+    seen(new URL(request.url).pathname);
+
+    return new Response('ok');
+  };
+
   const target = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: (request) => {
-      seen(new URL(request.url).pathname);
-
-      return new Response('ok');
-    },
+    fetch: handleTargetRequest,
   });
 
   stack.defer(async () => {
@@ -72,14 +76,16 @@ test('it relays a WebSocket under the prefix both ways with its authorization', 
 
   const upgrades = mock<(path: string, authorization: string | null) => void>();
 
+  const handleTargetRequest = (request: Request, server: Bun.Server<undefined>) => {
+    upgrades(new URL(request.url).pathname, request.headers.get('authorization'));
+
+    return server.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 });
+  };
+
   const target = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: (request, server) => {
-      upgrades(new URL(request.url).pathname, request.headers.get('authorization'));
-
-      return server.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 });
-    },
+    fetch: handleTargetRequest,
     websocket: {
       message: (ws, data) => {
         const reply = typeof data === 'string' ? `echo ${data}` : data;
@@ -138,8 +144,10 @@ test('it closes the client’s WebSocket with the target’s code and reason', a
   const target = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: (request, server) =>
-      server.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 }),
+    routes: {
+      '/*': (request: Request, server: Bun.Server<undefined>) =>
+        server.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 }),
+    },
     websocket: {
       open: (ws) => {
         ws.close(1011, 'agent gone');
@@ -179,8 +187,10 @@ test('it drops the client’s connection when the target’s connection drops', 
   const target = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: (request, server) =>
-      server.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 }),
+    routes: {
+      '/*': (request: Request, server: Bun.Server<undefined>) =>
+        server.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 }),
+    },
     websocket: {
       open: (ws) => {
         ws.terminate();

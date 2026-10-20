@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { checkLimit } from '../lib/check-limit';
-import { hasCheckpointStorage, hasImpDir, writeCrossFiles } from '../lib/checkpoint-storage';
+import { hasImpDir, probeCheckpointStorage, writeCrossFiles } from '../lib/checkpoint-storage';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import {
@@ -17,7 +17,7 @@ import { holdImp, readGuestFile, waitForExec, writeGuestFile } from '../lib/imps
 import { readImpdLoggedMs } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
 // `impz checkpoint`, `impz restore` and `impz fork` on the instance's storage
@@ -31,7 +31,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('checkpoints'), stack, client };
+  return { prefix: getSuitePrefix('checkpoints'), stack, client };
 }
 
 test('it restores the disk of a running imp from its checkpoint, within the limit', async () => {
@@ -64,7 +64,7 @@ test('it restores the disk of a running imp from its checkpoint, within the limi
   checkLimit('checkpoint (impd)', impdMs, config.maxCheckpointMs);
 
   const row = await requireImp(source);
-  const hasDisk = await hasCheckpointStorage(row.id, cp1.id);
+  const hasDisk = await probeCheckpointStorage(row.id, cp1.id);
 
   expect(cp1.label).toBe('cp1');
   expect(hasDisk).toBeTrue();
@@ -226,7 +226,7 @@ test('it lists checkpoints newest first, refuses a label taken, and deletes one 
   await runImp('checkpoint', 'rm', source, 'cp1');
 
   const remaining = await listCheckpoints(source);
-  const hasDisk = await hasCheckpointStorage(row.id, cp1.id);
+  const hasDisk = await probeCheckpointStorage(row.id, cp1.id);
   const restore = await tryImp(['restore', source, 'cp1']);
 
   expect(remaining).toHaveLength(1);

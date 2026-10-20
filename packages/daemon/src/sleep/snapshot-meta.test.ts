@@ -14,8 +14,8 @@ import { buildMockHostIdentity } from '../../testing/vm/build-mock-host-identity
 import { buildImpPaths } from '../storage/data-layout';
 import {
   buildSnapshotIdentity,
-  findColdBootReason,
-  hasSnapshot,
+  probeSnapshot,
+  readColdBootReason,
   readLoadingMeta,
   readSnapshotMeta,
   removeSnapshot,
@@ -26,41 +26,41 @@ import {
 } from './snapshot-meta';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-snapshot-meta-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-snapshot-meta-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  const paths = buildImpPaths(dir, 'imp1');
+  const paths = buildImpPaths(directory, 'imp1');
 
   // the snapshot's dir, which every sleep makes before it writes there
   mkdirSync(paths.snapshotDir, { recursive: true });
 
-  return { dir, paths };
+  return { directoryPath: directory, paths };
 }
 
-test('#findColdBootReason loads a snapshot on a host with the same identity', () => {
+test('#readColdBootReason loads a snapshot on a host with the same identity', () => {
   const ctx = setupTest();
-  const drive = join(ctx.dir, 'drive.squashfs');
+  const drive = join(ctx.directoryPath, 'drive.squashfs');
 
   writeFileSync(drive, 'drive');
 
   const host = buildMockHostIdentity({ systemDrivePath: drive });
 
-  expect(findColdBootReason({ ...host, agentVersion: '0.1.0' }, host)).toBeNull();
+  expect(readColdBootReason({ ...host, agentVersion: '0.1.0' }, host)).toBeNull();
 });
 
-test('#findColdBootReason loads a snapshot from another guest kernel and drive', () => {
+test('#readColdBootReason loads a snapshot from another guest kernel and drive', () => {
   const ctx = setupTest();
-  const drive = join(ctx.dir, 'drive.squashfs');
+  const drive = join(ctx.directoryPath, 'drive.squashfs');
 
   writeFileSync(drive, 'drive');
 
   const host = buildMockHostIdentity({ systemDrivePath: drive });
 
   expect(
-    findColdBootReason({ ...host, guestKernel: 'old-kernel', systemDrive: 'old-drive' }, host),
+    readColdBootReason({ ...host, guestKernel: 'old-kernel', systemDrive: 'old-drive' }, host),
   ).toBeNull();
 });
 
@@ -78,9 +78,9 @@ test.each([
   ['hostKernel', { hostKernel: '6.1.0' }, 'hostKernel changed (6.1.0 → 6.6.87)'],
   ['cpuModel', { cpuModel: 'Other CPU' }, 'the CPU changed (Other CPU → Test CPU)'],
   ['cpuFlags', { cpuFlags: 'other-flags' }, 'the CPU flags changed'],
-])('#findColdBootReason boots cold when the %s changed', (_key, change, reason) => {
+])('#readColdBootReason boots cold when the %s changed', (_key, change, reason) => {
   const ctx = setupTest();
-  const drive = join(ctx.dir, 'drive.squashfs');
+  const drive = join(ctx.directoryPath, 'drive.squashfs');
 
   writeFileSync(drive, 'drive');
 
@@ -93,22 +93,29 @@ test.each([
     systemDrivePath: drive,
   });
 
-  expect(findColdBootReason({ ...host, ...change }, host)).toBe(reason);
+  expect(readColdBootReason({ ...host, ...change }, host)).toBe(reason);
 });
 
-test('#findColdBootReason boots cold when the drive the snapshot names is gone', () => {
+test('#readColdBootReason boots cold when the drive the snapshot names is gone', () => {
   const ctx = setupTest();
-  const host = buildMockHostIdentity({ systemDrivePath: join(ctx.dir, 'drive.squashfs') });
+
+  const host = buildMockHostIdentity({
+    systemDrivePath: join(ctx.directoryPath, 'drive.squashfs'),
+  });
 
   expect(
-    findColdBootReason(
-      { ...host, systemDrive: 'abcdef0123456789', systemDrivePath: join(ctx.dir, 'gone') },
+    readColdBootReason(
+      {
+        ...host,
+        systemDrive: 'abcdef0123456789',
+        systemDrivePath: join(ctx.directoryPath, 'gone'),
+      },
       host,
     ),
   ).toBe('its agent drive abcdef012345 is gone');
 });
 
-test('#findColdBootReason boots cold a snapshot that names no drive', () => {
+test('#readColdBootReason boots cold a snapshot that names no drive', () => {
   const host = buildMockHostIdentity();
 
   const snapshot = {
@@ -119,12 +126,12 @@ test('#findColdBootReason boots cold a snapshot that names no drive', () => {
     systemDrive: host.systemDrive,
   };
 
-  expect(findColdBootReason(snapshot, host)).toBe('the snapshot is from an older impd');
+  expect(readColdBootReason(snapshot, host)).toBe('the snapshot is from an older impd');
 });
 
-test('#findColdBootReason boots cold a snapshot from another IPv6 prefix', () => {
+test('#readColdBootReason boots cold a snapshot from another IPv6 prefix', () => {
   const ctx = setupTest();
-  const drive = join(ctx.dir, 'drive.squashfs');
+  const drive = join(ctx.directoryPath, 'drive.squashfs');
 
   writeFileSync(drive, 'drive');
 
@@ -133,20 +140,20 @@ test('#findColdBootReason boots cold a snapshot from another IPv6 prefix', () =>
     ipv6Prefix: 'fd12:3456:789a::/64',
   });
 
-  expect(findColdBootReason({ ...host, ipv6Prefix: 'fd00:1::/64' }, host)).toBe(
+  expect(readColdBootReason({ ...host, ipv6Prefix: 'fd00:1::/64' }, host)).toBe(
     'the IPv6 prefix changed (fd00:1::/64 → fd12:3456:789a::/64)',
   );
 });
 
-test('#findColdBootReason boots cold a snapshot with a prefix on a host with IPv6 off', () => {
+test('#readColdBootReason boots cold a snapshot with a prefix on a host with IPv6 off', () => {
   const ctx = setupTest();
-  const drive = join(ctx.dir, 'drive.squashfs');
+  const drive = join(ctx.directoryPath, 'drive.squashfs');
 
   writeFileSync(drive, 'drive');
 
   const host = buildMockHostIdentity({ systemDrivePath: drive, ipv6Prefix: null });
 
-  expect(findColdBootReason({ ...host, ipv6Prefix: 'fd12:3456:789a::/64' }, host)).toBe(
+  expect(readColdBootReason({ ...host, ipv6Prefix: 'fd12:3456:789a::/64' }, host)).toBe(
     'the IPv6 prefix changed (fd12:3456:789a::/64 → off)',
   );
 });
@@ -154,9 +161,9 @@ test('#findColdBootReason boots cold a snapshot with a prefix on a host with IPv
 test.each([
   ['no prefix', null],
   ['a prefix left out by an older impd', undefined],
-])('#findColdBootReason loads a snapshot with %s on a host with IPv6', (_label, ipv6Prefix) => {
+])('#readColdBootReason loads a snapshot with %s on a host with IPv6', (_label, ipv6Prefix) => {
   const ctx = setupTest();
-  const drive = join(ctx.dir, 'drive.squashfs');
+  const drive = join(ctx.directoryPath, 'drive.squashfs');
 
   writeFileSync(drive, 'drive');
 
@@ -165,7 +172,7 @@ test.each([
     ipv6Prefix: 'fd12:3456:789a::/64',
   });
 
-  expect(findColdBootReason({ ...host, ipv6Prefix }, host)).toBeNull();
+  expect(readColdBootReason({ ...host, ipv6Prefix }, host)).toBeNull();
 });
 
 test('#buildSnapshotIdentity records the identity a VM booted with, without its boot reason', () => {
@@ -188,11 +195,11 @@ test('#buildSnapshotIdentity records for a VM with no identity one that boots co
   });
 });
 
-test('#findColdBootReason boots cold the snapshot of a VM that had no identity', () => {
+test('#readColdBootReason boots cold the snapshot of a VM that had no identity', () => {
   const host = buildMockHostIdentity();
   const identity = buildSnapshotIdentity(null, host);
 
-  expect(findColdBootReason(identity, host)).toBe('the snapshot is from an older impd');
+  expect(readColdBootReason(identity, host)).toBe('the snapshot is from an older impd');
 });
 
 test('#readSnapshotMeta reads the meta of an older impd', () => {
@@ -261,7 +268,7 @@ test('#readSnapshotMeta reads no snapshot without its memory file', () => {
 
 test('#readSnapshotMeta reads a planted symlink as meta.json as no snapshot', () => {
   const ctx = setupTest();
-  const outside = join(ctx.dir, 'outside');
+  const outside = join(ctx.directoryPath, 'outside');
 
   writeFileSync(ctx.paths.vmstate, 'vmstate');
   writeFileSync(ctx.paths.memFile, 'mem');
@@ -299,7 +306,7 @@ test('#readSnapshotMeta reads a planted FIFO as meta.json as no snapshot without
 
 test('#writeSnapshotMeta replaces a planted symlink and leaves its target untouched', () => {
   const ctx = setupTest();
-  const outside = join(ctx.dir, 'outside');
+  const outside = join(ctx.directoryPath, 'outside');
 
   const meta = {
     firecrackerVersion: 'v1.17.0',
@@ -322,7 +329,7 @@ test('#writeSnapshotMeta replaces a planted symlink and leaves its target untouc
   expect(readSnapshotMeta(ctx.paths)).toStrictEqual(meta);
 });
 
-test('#hasSnapshot finds a complete snapshot', () => {
+test('#probeSnapshot finds a complete snapshot', () => {
   const ctx = setupTest();
 
   writeFileSync(ctx.paths.vmstate, 'vmstate');
@@ -339,16 +346,16 @@ test('#hasSnapshot finds a complete snapshot', () => {
     ramMib: 60,
   });
 
-  expect(hasSnapshot(ctx.paths)).toBeTrue();
+  expect(probeSnapshot(ctx.paths)).toBeTrue();
 });
 
-test('#hasSnapshot finds no snapshot without its meta', () => {
+test('#probeSnapshot finds no snapshot without its meta', () => {
   const ctx = setupTest();
 
   writeFileSync(ctx.paths.vmstate, 'vmstate');
   writeFileSync(ctx.paths.memFile, 'mem');
 
-  expect(hasSnapshot(ctx.paths)).toBeFalse();
+  expect(probeSnapshot(ctx.paths)).toBeFalse();
 });
 
 test('#setSnapshotLoading takes the meta away while a wake loads it', () => {

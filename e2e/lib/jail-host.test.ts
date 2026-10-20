@@ -1,22 +1,22 @@
 import { expect, test } from 'bun:test';
-import { checkTemplateBuildEnded, findJailViolations, readStatusField } from './jail-host';
+import { collectJailViolations, hasTemplateBuildEnded, readStatusField } from './jail-host';
 
-test('#checkTemplateBuildEnded sees the end of the imp’s own template build', () => {
+test('#hasTemplateBuildEnded sees the end of the imp’s own template build', () => {
   const log = 'impd: boot template 0e61ca281a1c build failed: no agent\n';
 
-  expect(checkTemplateBuildEnded(log, 'e2e-jail-rm', '0e61ca281a1c9f00')).toBeTrue();
+  expect(hasTemplateBuildEnded(log, 'e2e-jail-rm', '0e61ca281a1c9f00')).toBeTrue();
 });
 
-test('#checkTemplateBuildEnded passes over the end of another key’s build', () => {
+test('#hasTemplateBuildEnded passes over the end of another key’s build', () => {
   const log = 'impd: boot template 7a2b44c0d1e3 built in 900ms\n';
 
-  expect(checkTemplateBuildEnded(log, 'e2e-jail-rm', '0e61ca281a1c9f00')).toBeFalse();
+  expect(hasTemplateBuildEnded(log, 'e2e-jail-rm', '0e61ca281a1c9f00')).toBeFalse();
 });
 
-test('#checkTemplateBuildEnded sees a restore, which starts no build', () => {
+test('#hasTemplateBuildEnded sees a restore, which starts no build', () => {
   const log = 'impd: e2e-jail-rm: restored boot template 0e61ca281a1c as pid 9\n';
 
-  expect(checkTemplateBuildEnded(log, 'e2e-jail-rm', '0e61ca281a1c9f00')).toBeTrue();
+  expect(hasTemplateBuildEnded(log, 'e2e-jail-rm', '0e61ca281a1c9f00')).toBeTrue();
 });
 
 test('#readStatusField reads a field of a process status', () => {
@@ -30,9 +30,9 @@ test('#readStatusField reads a missing field as empty', () => {
   expect(readStatusField('Name:\tfirecracker\n', 'CapEff')).toBe('');
 });
 
-test('#findJailViolations finds none in a jailed VM', () => {
+test('#collectJailViolations finds none in a jailed VM', () => {
   expect(
-    findJailViolations({
+    collectJailViolations({
       impId: 'abc',
       cmdline:
         '/firecracker --id abc --start-time-us 1 -- --api-sock /var/lib/imp/imps/abc/run/api.sock',
@@ -45,9 +45,9 @@ test('#findJailViolations finds none in a jailed VM', () => {
   ).toStrictEqual([]);
 });
 
-test('#findJailViolations names each break of a VM run as root by an impd without the jailer', () => {
+test('#collectJailViolations names each break of a VM run as root by an impd without the jailer', () => {
   expect(
-    findJailViolations({
+    collectJailViolations({
       impId: 'abc',
       cmdline: '/usr/local/bin/firecracker --api-sock /var/lib/imp/imps/abc/run/api.sock',
       uid: '0',
@@ -66,9 +66,9 @@ test('#findJailViolations names each break of a VM run as root by an impd withou
   ]);
 });
 
-test('#findJailViolations names a VM whose filters cover one thread only', () => {
+test('#collectJailViolations names a VM whose filters cover one thread only', () => {
   expect(
-    findJailViolations({
+    collectJailViolations({
       impId: 'abc',
       cmdline: '/firecracker --id abc -- --api-sock /var/lib/imp/imps/other/run/api.sock',
       uid: '900001',

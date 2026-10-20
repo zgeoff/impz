@@ -36,7 +36,7 @@ export interface DetachKeyMatch {
 // sends when a program turned on the kitty keyboard protocol (CSI cp;5u)
 // or xterm's modifyOtherKeys (CSI 27;5;cp~). The earliest one wins.
 export function findDetachKey(chunk: Uint8Array, key: number): DetachKeyMatch | null {
-  const codepoint = String(readKeyCodepoint(key));
+  const codepoint = String(getKeyCodepoint(key));
 
   const text = new TextDecoder('latin1').decode(chunk);
 
@@ -57,6 +57,6 @@ export function findDetachKey(chunk: Uint8Array, key: number): DetachKeyMatch | 
 
 // the key ctrl was held with: a letter in lower case, as kitty reports it,
 // else the symbol
-function readKeyCodepoint(key: number): number {
+function getKeyCodepoint(key: number): number {
   return key >= 0x01 && key <= 0x1a ? 0x60 + key : 0x40 + key;
 }

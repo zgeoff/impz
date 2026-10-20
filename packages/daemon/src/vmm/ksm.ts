@@ -54,17 +54,17 @@ export function checkKsmHost(release: string, stats: KsmHostStats | null): strin
 }
 
 // null when the kernel has no KSM
-export function readKsmHostStats(dir = KSM_DIR): KsmHostStats | null {
+export function readKsmHostStats(directory = KSM_DIR): KsmHostStats | null {
   try {
     const readCount = (name: string): number => {
       try {
-        return Number(readFileSync(`${dir}/${name}`, 'utf8').trim());
+        return Number(readFileSync(`${directory}/${name}`, 'utf8').trim());
       } catch {
         return 0;
       }
     };
 
-    const run = readFileSync(`${dir}/run`, 'utf8').trim();
+    const run = readFileSync(`${directory}/run`, 'utf8').trim();
 
     return {
       running: run === '1',

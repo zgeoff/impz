@@ -5,27 +5,29 @@ export interface StubRepeat {
   readonly repeat: Repeat;
 
   // runs once every running repeat of `ms`, as if that much time had passed
-  readonly tick: (ms: number) => void;
+  readonly tick: (durationMs: number) => void;
 
   // how many repeats of `ms` run now: a test waits for its code to start one
-  readonly countRunning: (ms: number) => number;
+  readonly countRunning: (durationMs: number) => number;
 
   // the tick of each repeat of `ms` started so far, stopped ones too: a test
   // calls one late, as an interval that fell due as it was stopped
-  readonly listStartedTicks: (ms: number) => (() => void)[];
+  readonly listStartedTicks: (durationMs: number) => (() => void)[];
 }
 
 // A timer the test steps by hand, in place of setInterval: nothing ticks
 // until the test calls `tick`, and a stopped repeat never ticks again.
 export function buildStubRepeat(): StubRepeat {
-  const running = new Set<{ readonly ms: number; readonly tick: () => void }>();
+  const running = new Set<{ readonly durationMs: number; readonly tick: () => void }>();
 
-  const started: { readonly ms: number; readonly tick: () => void }[] = [];
-  const listRunning = (ms: number) => [...running].filter((entry) => entry.ms === ms);
+  const started: { readonly durationMs: number; readonly tick: () => void }[] = [];
+
+  const listRunning = (durationMs: number) =>
+    [...running].filter((entry) => entry.durationMs === durationMs);
 
   return {
-    repeat: (ms, tick) => {
-      const entry = { ms, tick };
+    repeat: (durationMs, tick) => {
+      const entry = { durationMs, tick };
 
       running.add(entry);
       started.push(entry);
@@ -34,12 +36,13 @@ export function buildStubRepeat(): StubRepeat {
         running.delete(entry);
       };
     },
-    tick: (ms) => {
-      for (const entry of listRunning(ms)) {
+    tick: (durationMs) => {
+      for (const entry of listRunning(durationMs)) {
         entry.tick();
       }
     },
-    countRunning: (ms) => listRunning(ms).length,
-    listStartedTicks: (ms) => started.filter((entry) => entry.ms === ms).map((entry) => entry.tick),
+    countRunning: (durationMs) => listRunning(durationMs).length,
+    listStartedTicks: (durationMs) =>
+      started.filter((entry) => entry.durationMs === durationMs).map((entry) => entry.tick),
   };
 }

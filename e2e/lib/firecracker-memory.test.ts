@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
+  findImpIdFromArgv,
   parseFirecrackerMemory,
-  readImpIdFromArgv,
   readSmallestOwnedMib,
 } from './firecracker-memory';
 
@@ -75,7 +75,7 @@ test('#readSmallestOwnedMib throws for an imp with no Firecracker', () => {
   );
 });
 
-test('#readImpIdFromArgv reads a jailed VM’s imp from the --id the jailer passes on', () => {
+test('#findImpIdFromArgv reads a jailed VM’s imp from the --id the jailer passes on', () => {
   const argv = [
     '/firecracker',
     '--id',
@@ -86,10 +86,10 @@ test('#readImpIdFromArgv reads a jailed VM’s imp from the --id the jailer pass
     '/run/api.sock',
   ];
 
-  expect(readImpIdFromArgv(argv)).toBe('abc123');
+  expect(findImpIdFromArgv(argv)).toBe('abc123');
 });
 
-test('#readImpIdFromArgv reads an unjailed VM’s imp from its API socket path', () => {
+test('#findImpIdFromArgv reads an unjailed VM’s imp from its API socket path', () => {
   // IMP_JAILER=false: no --id
   const argv = [
     '/usr/local/bin/firecracker',
@@ -97,9 +97,9 @@ test('#readImpIdFromArgv reads an unjailed VM’s imp from its API socket path',
     '/var/lib/imp/imps/abc123/run/api.sock',
   ];
 
-  expect(readImpIdFromArgv(argv)).toBe('abc123');
+  expect(findImpIdFromArgv(argv)).toBe('abc123');
 });
 
-test('#readImpIdFromArgv reads no imp from a VM with neither --id nor an imp socket', () => {
-  expect(readImpIdFromArgv(['/usr/local/bin/firecracker'])).toBeNull();
+test('#findImpIdFromArgv reads no imp from a VM with neither --id nor an imp socket', () => {
+  expect(findImpIdFromArgv(['/usr/local/bin/firecracker'])).toBeNull();
 });

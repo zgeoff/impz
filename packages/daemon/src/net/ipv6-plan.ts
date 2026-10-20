@@ -2,9 +2,9 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { buildNat66Removal, buildNat66Ruleset } from '../egress/egress-ruleset';
+import { getErrorMessage } from '../get-error-message';
 import { runChecked, runCommand } from '../process/run-command';
 import type { CommandRunner } from '../process/run-command';
-import { readErrorMessage } from '../read-error-message';
 import { buildUlaPrefix, formatCidr6, parsePrefix64 } from './addressing6';
 import type { Prefix64 } from './addressing6';
 
@@ -99,7 +99,7 @@ export async function resolveIpv6Plan(
   try {
     await deps.runNft(buildNat66Ruleset(prefix.text, uplink ?? ''));
   } catch (error) {
-    return stopIpv6(`NAT66: ${readErrorMessage(error)}`);
+    return stopIpv6(`NAT66: ${getErrorMessage(error)}`);
   }
 
   deps.log(`impd: ipv6: ${prefix.text}, NAT66 out of ${uplink ?? ''}`);

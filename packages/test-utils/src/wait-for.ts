@@ -9,7 +9,7 @@ interface WaitForOptions {
   readonly now?: () => number;
 
   // Waits out the interval between retries.
-  readonly wait?: (ms: number) => Promise<void>;
+  readonly wait?: (durationMs: number) => Promise<void>;
 }
 
 // Retries the attempt until it stops throwing, resolving with its value; past

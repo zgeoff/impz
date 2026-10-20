@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
 import type { McpPrincipal } from '../http/create-http-transport';
-import { createImpGuard } from '../imp-guard';
+import { buildImpGuard } from '../imp-guard';
 
 // A caller as the host resolves it for one MCP request: a manage-scope caller
 // with no guard limits and a credential that never ends, its client aimed at
@@ -11,7 +11,7 @@ export function buildMockMcpPrincipal(overrides: Partial<McpPrincipal> = {}): Mc
     key: faker.internet.username(),
     scope: 'manage',
     client: createImpClient({ url: faker.internet.url() }),
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     ends: null,
     ...overrides,
   };

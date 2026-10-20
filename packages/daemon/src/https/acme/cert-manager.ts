@@ -1,4 +1,4 @@
-import { readErrorMessage } from '../../read-error-message';
+import { getErrorMessage } from '../../get-error-message';
 import type { IssueCertificate } from './acme-issuer';
 import { readCertificateInfo } from './acme-issuer';
 import type { CertStore, Certificate } from './cert-store';
@@ -42,7 +42,7 @@ export function createCertManager(options: CertManagerOptions): CertManager {
     try {
       return readCertificateInfo(certificate.chainPem);
     } catch (error) {
-      log(`impd: https: cannot read the stored certificate: ${readErrorMessage(error)}`);
+      log(`impd: https: cannot read the stored certificate: ${getErrorMessage(error)}`);
 
       return null;
     }
@@ -97,7 +97,7 @@ export function createCertManager(options: CertManagerOptions): CertManager {
 
       return certificate;
     } catch (error) {
-      const reason = readErrorMessage(error);
+      const reason = getErrorMessage(error);
 
       const retryAt = new Date(now + readBackoffMs(failures)).toISOString();
 
@@ -115,7 +115,7 @@ export function createCertManager(options: CertManagerOptions): CertManager {
     try {
       return await tryRenewal();
     } catch (error) {
-      log(`impd: https: renewal failed: ${readErrorMessage(error)}`);
+      log(`impd: https: renewal failed: ${getErrorMessage(error)}`);
 
       return null;
     } finally {

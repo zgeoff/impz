@@ -10,7 +10,7 @@ import { HOST_B, readMoveHosts } from '../lib/move-hosts';
 import { HOST_A, listAllHosts, startMoveSend, writeBothHostsConfig } from '../lib/move-steps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // `impz ls --all` across A and B on the harness's move network
 // (lib/move-hosts.ts), with both saved in a CLI config of the test's own.
@@ -24,9 +24,9 @@ async function setupTest() {
   const hosts = readMoveHosts({ tailnet: false });
 
   const client = await createInstanceClient();
-  const clientB = await createInstanceClient(hosts.b);
+  const clientB = await createInstanceClient(hosts.hostB);
 
-  return { prefix: readSuitePrefix('moves'), stack, hosts, client, clientB };
+  return { prefix: getSuitePrefix('moves'), stack, hosts, client, clientB };
 }
 
 test('it shows both hosts in impz ls --all, with the move mark while the imp moves', async () => {
@@ -47,7 +47,7 @@ test('it shows both hosts in impz ls --all, with the move mark while the imp mov
 
   await waitForExec(seen);
   await runImp('stop', seen);
-  await startMoveSend(ctx.hosts.a, seen);
+  await startMoveSend(ctx.hosts.hostA, seen);
 
   const during = await listAllHosts(bothEnv, seen);
 

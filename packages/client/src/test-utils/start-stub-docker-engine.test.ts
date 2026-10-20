@@ -8,11 +8,11 @@ import { startStubDockerEngine } from './start-stub-docker-engine';
 
 // a directory for the engine's socket
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-docker-engine-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-docker-engine-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir, socketPath: join(dir, 'docker.sock') };
+  return { directoryPath: directory, socketPath: join(directory, 'docker.sock') };
 }
 
 test('it answers a build with a trace line, then the image ID', async () => {
@@ -202,7 +202,7 @@ test('it stops when the test finishes', async () => {
   const ctx = await setupTest();
 
   const run = runChildTests(
-    ctx.dir,
+    ctx.directoryPath,
     [
       "import { expect, test } from 'bun:test';",
       `import { startStubDockerEngine } from ${JSON.stringify(join(import.meta.dir, 'start-stub-docker-engine.ts'))};`,

@@ -9,17 +9,19 @@ export const MIGRATION_012_ADD_NETWORKS: Migration = {
     // a private network between imps (docs/guides/networks.md)
     await db.schema
       .createTable('networks')
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('name', 'text', (c) => c.notNull().unique())
-      .addColumn('created_at', 'integer', (c) => c.notNull())
+      .addColumn('id', 'text', (column) => column.primaryKey())
+      .addColumn('name', 'text', (column) => column.notNull().unique())
+      .addColumn('created_at', 'integer', (column) => column.notNull())
       .execute();
 
     await db.schema
       .createTable('network_members')
-      .addColumn('network_id', 'text', (c) =>
-        c.notNull().references('networks.id').onDelete('cascade'),
+      .addColumn('network_id', 'text', (column) =>
+        column.notNull().references('networks.id').onDelete('cascade'),
       )
-      .addColumn('imp_id', 'text', (c) => c.notNull().references('imps.id').onDelete('cascade'))
+      .addColumn('imp_id', 'text', (column) =>
+        column.notNull().references('imps.id').onDelete('cascade'),
+      )
       .addPrimaryKeyConstraint('network_members_pk', ['network_id', 'imp_id'])
       .execute();
 

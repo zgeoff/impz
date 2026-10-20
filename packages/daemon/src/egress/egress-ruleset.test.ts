@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { canUnshare } from '../../testing/host-net/can-unshare';
+import { probeUnshare } from '../../testing/host-net/probe-unshare';
 import { runInNetns } from '../../testing/host-net/run-in-netns';
 import { buildMockFirewallSlot } from '../../testing/network/build-mock-firewall-slot';
 import { buildStubPublicNetwork } from '../../testing/network/build-stub-public-network';
@@ -542,7 +542,7 @@ test('#buildNat66Ruleset masquerades the prefix out of the uplink in a table of 
 // namespace, in a user namespace when not root. Each skips where it cannot,
 // unless IMP_HOST_TESTS=required: `bun run test:host`.
 
-test.skipIf(!canUnshare(['nft', 'list', 'ruleset']))(
+test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
   '#buildRuleset applies over the table it already applied',
   () => {
     const table = buildRuleset({
@@ -617,7 +617,7 @@ nft list map inet imp_egress slots | tr -s '\\n\\t ' ' ' | grep -o 'elements = {
   },
 );
 
-test.skipIf(!canUnshare(['nft', 'list', 'ruleset']))(
+test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
   "#buildElementChange adds and deletes a box slot's allowed addresses in each family",
   () => {
     const table = buildRuleset({
@@ -697,7 +697,7 @@ nft list set inet imp_egress allow61 | grep elements
   },
 );
 
-test.skipIf(!canUnshare(['nft', 'list', 'ruleset']))(
+test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
   '#buildRuleset drops the set and map entry of a slot that is gone',
   () => {
     const first = buildRuleset({
@@ -820,7 +820,7 @@ nft list set inet imp_egress allow1 2>&1 | head -1 || true
   },
 );
 
-test.skipIf(!canUnshare(['nft', 'list', 'ruleset']))(
+test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
   '#buildRuleset checks both source addresses in every slot chain',
   () => {
     const table = buildRuleset({
@@ -906,7 +906,7 @@ for slot in 0 1 2; do nft list chain inet imp_egress slot$slot | grep -E 'saddr|
   },
 );
 
-test.skipIf(!canUnshare(['nft', 'list', 'ruleset']))(
+test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
   "#buildNat66Ruleset masquerades the guests' prefix out the uplink, applied twice",
   () => {
     const nat66 = buildNat66Ruleset('fd12:3456:789a::/64', 'eth0');
@@ -929,7 +929,7 @@ nft list chain ip6 imp_nat66 postrouting | grep masquerade | sed 's/^[[:space:]]
   },
 );
 
-test.skipIf(!canUnshare(['nft', 'list', 'ruleset']))(
+test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
   '#buildNat66Removal applies where there is no NAT66 table',
   () => {
     const removal = buildNat66Removal();
@@ -947,7 +947,7 @@ nft list tables
   },
 );
 
-test.skipIf(!canUnshare(['nft', 'list', 'ruleset']))(
+test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
   '#buildNat66Removal removes the NAT66 table',
   () => {
     const nat66 = buildNat66Ruleset('fd12:3456:789a::/64', 'eth0');
@@ -968,7 +968,7 @@ nft list tables
   },
 );
 
-test.skipIf(!canUnshare(['nft', 'list', 'ruleset']))(
+test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
   "#buildRuleset lists each network's members and the open imps' taps",
   () => {
     const table = buildRuleset({
@@ -1052,7 +1052,7 @@ nft list set inet imp_egress open_peer_taps | tr -s '\\n\\t ' ' ' | grep -o 'ele
   },
 );
 
-test.skipIf(!canUnshare(['nft', 'list', 'ruleset']))(
+test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
   '#buildRuleset drops a member that leaves, and a network left with one member',
   () => {
     const joined = buildRuleset({
@@ -1192,7 +1192,7 @@ nft list set inet imp_egress net1 2>&1 | head -1 || true
 );
 
 test.skipIf(
-  !canUnshare([
+  !probeUnshare([
     'sh',
     '-c',
     'nft list ruleset && iptables -S && ip link && command -v ping && command -v sysctl',
@@ -1325,7 +1325,7 @@ counted
 });
 
 test.skipIf(
-  !canUnshare([
+  !probeUnshare([
     'sh',
     '-c',
     'nft list ruleset && iptables -S && ip link && command -v ping && command -v sysctl',
@@ -1424,7 +1424,7 @@ for target in 10.250.77.1 44.0.0.2 8.8.4.4 1.2.3.4 2001:db8:77::1; do reach g0 $
 });
 
 test.skipIf(
-  !canUnshare([
+  !probeUnshare([
     'sh',
     '-c',
     'nft list ruleset && iptables -S && ip link && command -v ping && command -v sysctl',
@@ -1485,7 +1485,7 @@ reach g3 2606:4700::1111
 });
 
 test.skipIf(
-  !canUnshare([
+  !probeUnshare([
     'sh',
     '-c',
     'nft list ruleset && iptables -S && ip link && command -v ping && command -v sysctl',

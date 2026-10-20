@@ -5,22 +5,22 @@ import { buildConflictError, buildInvalidStateError, buildNotFoundError } from '
 import type { Config } from '../config';
 import {
   createCheckpoint,
-  findCheckpoint,
   listCheckpoints,
+  readCheckpoint,
   removeCheckpoint,
   toApiCheckpoint,
 } from '../db/checkpoints';
 import type { CheckpointRecord } from '../db/checkpoints';
 import { writeNextBootCause } from '../db/cold-boots';
 import { readEgressPolicy } from '../db/egress';
-import { findImpByName, updateImpDisk } from '../db/imps';
+import { readImpByName, updateImpDisk } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
+import { getErrorMessage } from '../get-error-message';
 import { toLockedImp } from '../imps/imp-lock';
 import type { ImpCheckpointHooks } from '../imps/imp-service';
 import { updateLockedImpState } from '../imps/update-locked-imp-state';
 import { printLog } from '../process/print-log';
-import { readErrorMessage } from '../read-error-message';
 import type { DiskBudget } from '../storage/disk-budget';
 import { CheckpointIdTakenError } from '../storage/storage-backend';
 import type { StorageBackend } from '../storage/storage-backend';
@@ -42,7 +42,7 @@ interface ForkInput {
 export interface CheckpointService {
   readonly createCheckpoint: (name: string, label: string | undefined) => Promise<Checkpoint>;
   readonly listCheckpoints: (name: string) => Promise<Checkpoint[]>;
-  readonly deleteCheckpoint: (name: string, ref: string) => Promise<void>;
+  readonly removeCheckpoint: (name: string, ref: string) => Promise<void>;
 
   // stops the VM, puts the checkpoint's disk in place, drops any memory
   // snapshot, and boots again if the imp was awake
@@ -99,7 +99,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
     }
 
     await deps.imps.destroyImpId(forkId).catch((error: unknown) => {
-      log(`impd: ${name}: a refused fork left the imp: ${readErrorMessage(error)}`);
+      log(`impd: ${name}: a refused fork left the imp: ${getErrorMessage(error)}`);
     });
   };
 
@@ -112,8 +112,8 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
     freezer: deps.freezer,
   });
 
-  const findCheckpointOrThrow = async (imp: ImpRecord, ref: string): Promise<CheckpointRecord> => {
-    const checkpoint = await findCheckpoint(deps.db, imp.id, ref);
+  const readCheckpointOrThrow = async (imp: ImpRecord, ref: string): Promise<CheckpointRecord> => {
+    const checkpoint = await readCheckpoint(deps.db, imp.id, ref);
 
     if (checkpoint === undefined) {
       throw buildNotFoundError('checkpoint', ref);
@@ -150,7 +150,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
             });
           }
 
-          const taken = await findCheckpoint(deps.db, imp.id, label);
+          const taken = await readCheckpoint(deps.db, imp.id, label);
 
           if (taken !== undefined) {
             throw buildConflictError('checkpoint', label);
@@ -176,9 +176,9 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
             diskBytes: imp.diskBytes,
           });
 
-          const ms = Math.round(performance.now() - started);
+          const durationMs = Math.round(performance.now() - started);
 
-          log(`impd: ${imp.name}: checkpoint ${id} in ${String(ms)}ms`);
+          log(`impd: ${imp.name}: checkpoint ${id} in ${String(durationMs)}ms`);
 
           return toApiCheckpoint(checkpoint);
         } catch (error) {
@@ -189,7 +189,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
       }),
 
     listCheckpoints: async (name) => {
-      const imp = await findImpByName(deps.db, name);
+      const imp = await readImpByName(deps.db, name);
 
       if (imp === undefined) {
         throw buildNotFoundError('imp', name);
@@ -202,9 +202,9 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
 
     // the row goes first: a leftover disk is harmless, a row without a disk
     // is not
-    deleteCheckpoint: (name, ref) =>
+    removeCheckpoint: (name, ref) =>
       deps.imps.lockImp(name, async (imp) => {
-        const checkpoint = await findCheckpointOrThrow(imp, ref);
+        const checkpoint = await readCheckpointOrThrow(imp, ref);
 
         await removeCheckpoint(deps.db, checkpoint.id);
 
@@ -213,7 +213,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
 
     restoreCheckpoint: (name, ref) =>
       deps.imps.lockImp(name, async (imp) => {
-        const checkpoint = await findCheckpointOrThrow(imp, ref);
+        const checkpoint = await readCheckpointOrThrow(imp, ref);
 
         if (imp.state === 'creating') {
           throw buildInvalidStateError(
@@ -254,16 +254,16 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
         }
 
         const booted = wasAwake ? await deps.imps.bootImp(sized) : sized;
-        const ms = Math.round(performance.now() - started);
+        const durationMs = Math.round(performance.now() - started);
 
         // the state may be what it was, the disk is not: the stream hears of it
         const restored = await updateLockedImpState(deps.db, booted, {
           reason: 'restored',
-          detail: { durationMs: ms, trigger: checkpoint.id },
+          detail: { durationMs, trigger: checkpoint.id },
           state: booted.state,
         });
 
-        log(`impd: ${imp.name}: restored ${checkpoint.id} in ${String(ms)}ms`);
+        log(`impd: ${imp.name}: restored ${checkpoint.id} in ${String(durationMs)}ms`);
 
         return deps.imps.toApi(restored);
       }),
@@ -274,7 +274,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
         const policy = await readEgressPolicy(deps.db, imp.id);
 
         if (input.checkpoint !== undefined) {
-          await findCheckpointOrThrow(imp, input.checkpoint);
+          await readCheckpointOrThrow(imp, input.checkpoint);
         } else if (imp.state === 'creating') {
           throw buildInvalidStateError(
             imp.state,
@@ -320,7 +320,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
               return;
             }
 
-            const checkpoint = await findCheckpointOrThrow(imp, input.checkpoint);
+            const checkpoint = await readCheckpointOrThrow(imp, input.checkpoint);
 
             await storage.createImpDisk(impId, {
               kind: 'checkpoint',

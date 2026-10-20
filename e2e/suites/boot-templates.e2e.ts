@@ -9,7 +9,7 @@ import {
   waitForShapeTemplate,
 } from '../lib/boot-template-guest';
 import {
-  findU32Span,
+  getU32Span,
   parseLoggedGuestSteps,
   parseLoggedSteps,
   pickPercentile,
@@ -21,7 +21,7 @@ import { waitForExec } from '../lib/imps';
 import { readImpdLogSince, runInContainer } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
 // Boot templates (docs/architecture/lifecycle/boot-templates.md): every restored imp
@@ -38,7 +38,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('boot-templates'), stack, client };
+  return { prefix: getSuitePrefix('boot-templates'), stack, client };
 }
 
 test('it makes the template of a shape on its second boot and restores it as imps with their own name, MAC, address, disk and CRNG', async () => {
@@ -169,10 +169,10 @@ test('it keys TCP with its own secret in each restored imp', async () => {
   // that share the kernel's net_secret land within a few hundred
   const again = await readIsnSecret(second);
 
-  expect(findU32Span(secondSecret, again)).toBeLessThan(100_000);
-  expect(findU32Span(secondSecret, thirdSecret)).toBeGreaterThan(100_000);
-  expect(findU32Span(firstSecret, secondSecret)).toBeGreaterThan(100_000);
-  expect(findU32Span(firstSecret, thirdSecret)).toBeGreaterThan(100_000);
+  expect(getU32Span(secondSecret, again)).toBeLessThan(100_000);
+  expect(getU32Span(secondSecret, thirdSecret)).toBeGreaterThan(100_000);
+  expect(getU32Span(firstSecret, secondSecret)).toBeGreaterThan(100_000);
+  expect(getU32Span(firstSecret, thirdSecret)).toBeGreaterThan(100_000);
 });
 
 test('it records each restored boot as its own cold boot, again after a restart restores the template', async () => {
@@ -333,7 +333,7 @@ test('it times impz new from a template: the wall time and its spans', async () 
 
     const createdSteps = parseLoggedSteps(log, name, 'created in');
     const restoredSteps = parseLoggedSteps(log, name, 'restored boot template');
-    const vmMs = Object.values(restoredSteps).reduce((sum, ms) => sum + ms, 0);
+    const vmMs = Object.values(restoredSteps).reduce((sum, durationMs) => sum + durationMs, 0);
 
     // the CLI's process and the API round trip, and impd's write-up after
     // the VM
@@ -344,16 +344,16 @@ test('it times impz new from a template: the wall time and its spans', async () 
       finish: (createdSteps['boot'] ?? 0) - vmMs,
     };
 
-    for (const [step, ms] of Object.entries(found)) {
-      spans[step] = [...(spans[step] ?? []), ms];
+    for (const [step, durationMs] of Object.entries(found)) {
+      spans[step] = [...(spans[step] ?? []), durationMs];
     }
 
     // the guest's own steps after the claim, which run inside impd's claim
     // and agent spans
     const guestSteps = parseLoggedGuestSteps(log, name, 'restored boot template');
 
-    for (const [step, ms] of Object.entries(guestSteps)) {
-      guestSpans[step] = [...(guestSpans[step] ?? []), ms];
+    for (const [step, durationMs] of Object.entries(guestSteps)) {
+      guestSpans[step] = [...(guestSpans[step] ?? []), durationMs];
     }
 
     await runImp('rm', name);
@@ -366,7 +366,7 @@ test('it times impz new from a template: the wall time and its spans', async () 
   writeMetric('bootTemplateNewMs', {
     p50: Math.round(pickPercentile(walls, 0.5)),
     p95: Math.round(pickPercentile(walls, 0.95)),
-    n: walls.length,
+    count: walls.length,
   });
 
   writeMetric('bootTemplateNewSpansP50Ms', medians);

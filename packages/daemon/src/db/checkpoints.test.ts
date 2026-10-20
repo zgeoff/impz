@@ -6,8 +6,8 @@ import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../testing/platform/create-test-database';
 import {
   createCheckpoint,
-  findCheckpoint,
   listCheckpoints,
+  readCheckpoint,
   removeCheckpoint,
   toApiCheckpoint,
 } from './checkpoints';
@@ -166,7 +166,7 @@ test('#listCheckpoints leaves out another imp’s checkpoints', async () => {
   expect(checkpoints).toStrictEqual([]);
 });
 
-test('#findCheckpoint finds a checkpoint by id', async () => {
+test('#readCheckpoint finds a checkpoint by id', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
@@ -176,12 +176,12 @@ test('#findCheckpoint finds a checkpoint by id', async () => {
     buildMockNewCheckpoint({ id: 'cp-3', impId: imp.id }),
   );
 
-  const found = await findCheckpoint(ctx.db, imp.id, 'cp-3');
+  const found = await readCheckpoint(ctx.db, imp.id, 'cp-3');
 
   expect(found).toStrictEqual(checkpoint);
 });
 
-test('#findCheckpoint finds a checkpoint by label', async () => {
+test('#readCheckpoint finds a checkpoint by label', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
@@ -191,19 +191,19 @@ test('#findCheckpoint finds a checkpoint by label', async () => {
     buildMockNewCheckpoint({ impId: imp.id, label: 'clean' }),
   );
 
-  const found = await findCheckpoint(ctx.db, imp.id, 'clean');
+  const found = await readCheckpoint(ctx.db, imp.id, 'clean');
 
   expect(found).toStrictEqual(checkpoint);
 });
 
-test('#findCheckpoint finds nothing for a label no checkpoint has', async () => {
+test('#readCheckpoint finds nothing for a label no checkpoint has', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
   await createCheckpoint(ctx.db, buildMockNewCheckpoint({ impId: imp.id, label: 'clean' }));
 
-  const found = await findCheckpoint(ctx.db, imp.id, 'dirty');
+  const found = await readCheckpoint(ctx.db, imp.id, 'dirty');
 
   expect(found).toBeUndefined();
 });

@@ -5,18 +5,18 @@ import { join } from 'node:path';
 import { readOAuthCredential } from './oauth-credential';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-oauth-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-oauth-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it reads the client from an owner-only file', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'oauth.json');
+  const path = join(ctx.directoryPath, 'oauth.json');
 
   writeFileSync(path, JSON.stringify({ clientId: 'kExample', clientSecret: 'secret' }), {
     mode: 0o600,
@@ -27,7 +27,7 @@ test('it reads the client from an owner-only file', () => {
 
 test('it refuses a file others can read, naming its mode and not its secret', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'oauth.json');
+  const path = join(ctx.directoryPath, 'oauth.json');
 
   writeFileSync(
     path,
@@ -43,7 +43,7 @@ test('it refuses a file others can read, naming its mode and not its secret', ()
 
 test('it refuses a file it cannot parse, without its secret', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'oauth.json');
+  const path = join(ctx.directoryPath, 'oauth.json');
 
   writeFileSync(path, '{"clientSecret": "tskey-client-kExample-SECRETVALUE"', { mode: 0o600 });
 
@@ -55,7 +55,7 @@ test('it refuses a file it cannot parse, without its secret', () => {
 
 test('it refuses a file with an empty client secret', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'oauth.json');
+  const path = join(ctx.directoryPath, 'oauth.json');
 
   writeFileSync(path, JSON.stringify({ clientId: 'kExample', clientSecret: '' }), { mode: 0o600 });
 
@@ -68,5 +68,5 @@ test('it refuses a file with an empty client secret', () => {
 test('it refuses a file that is not there', () => {
   const ctx = setupTest();
 
-  expect(() => readOAuthCredential(join(ctx.dir, 'oauth.json'))).toThrow(/^ENOENT/v);
+  expect(() => readOAuthCredential(join(ctx.directoryPath, 'oauth.json'))).toThrow(/^ENOENT/v);
 });

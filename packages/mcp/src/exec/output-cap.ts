@@ -95,8 +95,8 @@ export function formatCappedText(output: Readonly<CappedOutput>): string {
     return decoder.decode(mergeBytes([output.head, output.tail]));
   }
 
-  const headEnd = findHeadEnd(output.head);
-  const tailStart = findTailStart(output.tail);
+  const headEnd = getHeadEnd(output.head);
+  const tailStart = getTailStart(output.tail);
   const head = output.head.subarray(0, headEnd);
   const tail = output.tail.subarray(tailStart);
   const dropped = output.droppedBytes + (output.head.byteLength - headEnd) + tailStart;
@@ -125,7 +125,7 @@ function countCharacterBytes(lead: number): number {
 }
 
 // the end of the head without a character cut short at it
-function findHeadEnd(head: Uint8Array): number {
+function getHeadEnd(head: Uint8Array): number {
   for (let back = 1; back <= Math.min(MAX_CHARACTER_BYTES, head.byteLength); back++) {
     const start = head.byteLength - back;
     const byte = head[start] ?? 0;
@@ -139,7 +139,7 @@ function findHeadEnd(head: Uint8Array): number {
 }
 
 // the start of the tail past the rest of a character cut at it
-function findTailStart(tail: Uint8Array): number {
+function getTailStart(tail: Uint8Array): number {
   let start = 0;
 
   while (

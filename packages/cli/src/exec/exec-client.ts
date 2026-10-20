@@ -1,7 +1,7 @@
 import { openExecSession } from '@impz/client';
 import type { ExecRequirement, ExecSession, ExecSessionOptions } from '@impz/client';
 import pRetry from 'p-retry';
-import { buildProcessIO } from '../cli/command-io';
+import { readProcessIO } from '../cli/command-io';
 import type { CommandIO, CommandStdin } from '../cli/command-io';
 import { toSignalExitCode } from '../cli/to-signal-exit-code';
 import { loadCliConfig } from '../config/cli-config';
@@ -69,7 +69,7 @@ export interface ExecIo {
   // the clock the reattach window is judged by, and the pause between tries;
   // Date.now and Bun.sleep by default
   readonly now?: () => number;
-  readonly wait?: (ms: number) => Promise<void>;
+  readonly wait?: (durationMs: number) => Promise<void>;
 }
 
 // impd failed, as advanceExec reports it too
@@ -93,7 +93,7 @@ const MAX_PENDING_INPUT = 64 * 1024;
 const CLEAR_SCREEN = '\u001B[H\u001B[2J';
 
 // the command's stdio and environment, and its line for each error
-export function buildExecIO(io: CommandIO): ExecIo {
+export function createExecIO(io: CommandIO): ExecIo {
   return {
     env: io.env,
     stdin: io.openStdin(),
@@ -113,7 +113,7 @@ export function buildExecIO(io: CommandIO): ExecIo {
 // again by itself when impd restarts or the imp sleeps under it.
 export function runExec(
   options: Readonly<ExecOptions>,
-  io: ExecIo = buildExecIO(buildProcessIO()),
+  io: ExecIo = createExecIO(readProcessIO()),
 ): Promise<number> {
   const printError = io.printError ?? console.error;
   const now = io.now ?? Date.now;
@@ -474,6 +474,7 @@ export function runExec(
       await pRetry(runAttach, {
         retries: Number.POSITIVE_INFINITY,
         minTimeout: 0,
+        // oxlint-disable-next-line zgeoff/verb-contract -- p-retry's option name
         shouldRetry: async (context) => {
           if (!(context.error instanceof SessionAwayError)) {
             return false;

@@ -3,17 +3,18 @@ import { join } from 'node:path';
 import packageJson from '../package.json' with { type: 'json' };
 import { createBackupService } from './backup/backup-service';
 import { createSecretFiles } from './broker/secret-files';
-import { buildImpdApp } from './build-impd-app';
-import { buildImpdServices } from './build-impd-services';
-import { buildImpdStorage } from './build-impd-storage';
-import type { ImpdStorage } from './build-impd-storage';
-import { buildTailnetAccess } from './build-tailnet-access';
 import type { Config } from './config';
+import { createImpdApp } from './create-impd-app';
 import { createImpdFirewall } from './create-impd-firewall';
 import { createImpdImps } from './create-impd-imps';
 import { createImpdMoves } from './create-impd-moves';
+import { createImpdServices } from './create-impd-services';
+import { createImpdStorage } from './create-impd-storage';
+import type { ImpdStorage } from './create-impd-storage';
+import { createTailnetAccess } from './create-tailnet-access';
 import { isImpSetWrite } from './db/is-imp-set-write';
 import { openDatabase } from './db/open-database';
+import { getErrorMessage } from './get-error-message';
 import { createDnsToken } from './https/dns/dns-token';
 import { createPublicRecordsLink } from './https/public-records-link';
 import { createIdleLoop } from './idle/idle-loop';
@@ -31,7 +32,6 @@ import { getImpdLogger } from './process/get-impd-logger';
 import { printLog } from './process/print-log';
 import { createForwardedPeers } from './proxy/forwarded-peers';
 import type { WakeProxy } from './proxy/wake-proxy';
-import { readErrorMessage } from './read-error-message';
 import { createAuthorizedKeys } from './ssh/authorized-keys';
 import { setupSshDir } from './ssh/host-key';
 import { startImpdListeners } from './start-impd-listeners';
@@ -43,8 +43,8 @@ import { createDataDirs } from './storage/data-layout';
 import { CHANGES_USAGE } from './storage/disk-usage-cache';
 import { readLiveStorage } from './storage/read-live-storage';
 import { setupSystemFiles } from './storage/setup-system-files';
-import { buildTailnetNames } from './tailnet-names/build-tailnet-names';
 import type { TailnetNames } from './tailnet-names/tailnet-names';
+import { wireTailnetNames } from './tailnet-names/wire-tailnet-names';
 import { startOtlpExport } from './telemetry/start-otlp-export';
 import { loadOrCreateToken } from './token';
 import { checkKsmHost, readKsmHostStats } from './vmm/ksm';
@@ -161,7 +161,7 @@ async function startImpdParts(
 
   plan.storage = storage;
 
-  const stored = buildImpdStorage(config, deps);
+  const stored = createImpdStorage(config, deps);
   const diskUsage = stored.diskUsage;
 
   plan.diskUsage = diskUsage;
@@ -284,7 +284,7 @@ async function startImpdParts(
     }
   });
 
-  const services = buildImpdServices(config, deps, {
+  const services = createImpdServices(config, deps, {
     storage: stored,
     imps,
     egress,
@@ -301,7 +301,7 @@ async function startImpdParts(
   );
 
   const access = await runStep('access', () =>
-    loadImpdAccess(config, deps, authorizedKeys.isListed),
+    loadImpdAccess(config, deps, authorizedKeys.probeListed),
   );
 
   const backups =
@@ -325,7 +325,7 @@ async function startImpdParts(
   const tailnetNames =
     config.tailnetNames === null
       ? null
-      : buildTailnetNames({
+      : wireTailnetNames({
           names: config.tailnetNames,
           config,
           db,
@@ -368,7 +368,7 @@ async function startImpdParts(
 
   await runStep('moves', () => moves.recover());
 
-  const api = buildImpdApp(config, deps, {
+  const api = createImpdApp(config, deps, {
     storage: stored,
     access,
     services,
@@ -378,7 +378,7 @@ async function startImpdParts(
     egress,
     identity,
     peers,
-    tailnet: buildTailnetAccess(config, deps, readTailscale),
+    tailnet: createTailnetAccess(config, deps, readTailscale),
     backups,
     moves,
     publicRecords,
@@ -441,7 +441,7 @@ async function startImpdParts(
     if (boundaries.log === undefined) {
       getImpdLogger('image').error('could not add the default image: {error}', { error });
     } else {
-      log(`impd: could not add the default image: ${readErrorMessage(error)}`);
+      log(`impd: could not add the default image: ${getErrorMessage(error)}`);
     }
   };
 

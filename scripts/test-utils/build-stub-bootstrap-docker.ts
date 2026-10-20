@@ -25,14 +25,6 @@ interface StubBootstrapDocker {
 
 const SECCOMP_IN_IMAGE = '/usr/local/share/imp/deploy/imp-host.seccomp.json';
 
-function buildShellWord(value: string): string {
-  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
-}
-
-function buildPrint(value: string | undefined): string {
-  return value === undefined ? ':' : `printf '%s\\n' ${buildShellWord(value)}`;
-}
-
 // A stub docker's script, for createStubBin, that answers the calls deploy/bootstrap.sh makes
 // of a host's Docker. Any call bootstrap.sh does not make fails as unexpected.
 export function buildStubBootstrapDocker(stub: StubBootstrapDocker): string {
@@ -66,4 +58,12 @@ ${seccompImages.map((image) => `  "run --rm "${image}" cat ${SECCOMP_IN_IMAGE}")
   "logs imp-host") ${buildPrint(stub.logs)} ;;
   *) echo "unexpected: docker $*" >&2; exit 1 ;;
 esac`;
+}
+
+function buildShellWord(value: string): string {
+  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
+}
+
+function buildPrint(value: string | undefined): string {
+  return value === undefined ? ':' : `printf '%s\\n' ${buildShellWord(value)}`;
 }

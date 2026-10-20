@@ -10,8 +10,8 @@ export const MIGRATION_023_ADD_SECRET_FILE_REMOVALS: Migration = {
     // A value file a committed delete or replace displaced, until it is removed
     await db.schema
       .createTable('secret_file_removals')
-      .addColumn('value_file', 'text', (c) => c.primaryKey())
-      .addColumn('created_at', 'integer', (c) => c.notNull())
+      .addColumn('value_file', 'text', (column) => column.primaryKey())
+      .addColumn('created_at', 'integer', (column) => column.notNull())
       .execute();
   },
 };

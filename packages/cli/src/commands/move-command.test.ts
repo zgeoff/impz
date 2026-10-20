@@ -54,14 +54,16 @@ async function setupTest() {
     // the image's config, which a move sends with it
     await Bun.write(buildImagePaths(harness.dataDir, 'sha256:ubuntu').config, '{}');
 
+    const sendClientRequest = (request: Request) => {
+      calls.push(`${host} ${new URL(request.url).pathname.slice('/rpc/'.length)}`);
+
+      return impd.api.app.handle(request);
+    };
+
     const client = createImpClient({
       url: `http://${host}.test`,
       token: 'root-token',
-      fetch: (request) => {
-        calls.push(`${host} ${new URL(request.url).pathname.slice('/rpc/'.length)}`);
-
-        return impd.api.app.handle(request);
-      },
+      fetch: sendClientRequest,
     });
 
     return {
@@ -70,7 +72,7 @@ async function setupTest() {
       // a test moves a host's clock on, such as past the target's commit window
       advance: harness.advance,
       moves: impd.moves,
-      handle: (request: Request) => impd.api.app.handle(request),
+      respond: (request: Request) => impd.api.app.handle(request),
     };
   };
 
@@ -83,14 +85,14 @@ async function setupTest() {
     to: target.client,
 
     // the target's API, as a client in front of it reaches it
-    handleOnTarget: target.handle,
+    handleOnTarget: target.respond,
 
     // moves the target's clock on, as a test may
     advanceTarget: target.advance,
 
     // the target's move routes, as the source reaches them over the
     // tailnet from 100.100.0.1
-    receiveFromSource: (request: Request) => target.moves.handle(request, '100.100.0.1'),
+    receiveFromSource: (request: Request) => target.moves.respond(request, '100.100.0.1'),
   };
 }
 
@@ -173,7 +175,7 @@ test('it draws the send’s progress on a terminal and ends the line', async () 
     .slice(0, -1)
     .map((line) => Number(/(?<percent>\d+)%/u.exec(line)?.groups?.['percent']));
 
-  expect(percents).toStrictEqual(percents.toSorted((a, b) => a - b));
+  expect(percents).toStrictEqual(percents.toSorted((left, right) => left - right));
   expect(percents.at(-1)).toBeGreaterThan(0);
 
   expect(lines.slice(0, -1)).toSatisfyAll(

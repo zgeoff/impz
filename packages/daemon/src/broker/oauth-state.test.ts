@@ -2,10 +2,10 @@ import { expect, test } from 'bun:test';
 import { buildStubBrokerJwt } from '../../testing/network/build-stub-broker-jwt';
 import {
   buildPendingState,
+  findIdClaims,
   formatOAuthState,
   isHeaderSafeToken,
   parseOAuthState,
-  readIdClaims,
   readJwtExpiry,
 } from './oauth-state';
 
@@ -86,22 +86,22 @@ test('it keeps the account claims of an ID token and drops the per-token ones', 
     jti: 'e',
   });
 
-  expect(readIdClaims(idToken)).toStrictEqual({
+  expect(findIdClaims(idToken)).toStrictEqual({
     email: 'someone@example.com',
     org: { id: 'fake-org' },
   });
 });
 
 test('it reads no claims without an ID token', () => {
-  expect(readIdClaims(null)).toBeNull();
+  expect(findIdClaims(null)).toBeNull();
 });
 
 test('it reads no claims from an opaque token', () => {
-  expect(readIdClaims('fake-opaque')).toBeNull();
+  expect(findIdClaims('fake-opaque')).toBeNull();
 });
 
 test('it reads no claims from a JWT whose payload is an array', () => {
-  expect(readIdClaims(buildStubBrokerJwt([1, 2]))).toBeNull();
+  expect(findIdClaims(buildStubBrokerJwt([1, 2]))).toBeNull();
 });
 
 test('it reads a JWT expiry in milliseconds', () => {

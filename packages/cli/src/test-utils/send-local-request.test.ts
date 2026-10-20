@@ -1,10 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createServer } from 'node:net';
-import { findFreePorts } from '@impz/daemon/testing';
+import { claimFreePorts } from '@impz/daemon/testing';
 import { sendLocalRequest } from './send-local-request';
 
 test('it sends the body, half-closes, and resolves with the whole reply', async () => {
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
 
   const server = createServer({ allowHalfOpen: true }, (socket) => {
     const chunks: Buffer[] = [];
@@ -34,7 +34,7 @@ test('it sends the body, half-closes, and resolves with the whole reply', async 
 });
 
 test('it rejects when the far end resets the connection', async () => {
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
 
   const server = createServer((socket) => {
     socket.resetAndDestroy();

@@ -22,7 +22,7 @@ test('it ends a call with no answer at its deadline, and aborts the request', as
     `${ctx.origin.origin}/long`,
     { method: 'POST', body: 'the long call' },
     {
-      deadline: { ms: 3_600_000, buildError: () => new Error('no answer in 60 minutes') },
+      deadline: { delayMs: 3_600_000, buildError: () => new Error('no answer in 60 minutes') },
       startTimer: clock.startTimer,
     },
   );
@@ -56,7 +56,7 @@ test('it stops the deadline once the answer comes', async () => {
     `${ctx.origin.origin}/long`,
     { method: 'POST', body: 'the long call' },
     {
-      deadline: { ms: 3_600_000, buildError: () => new Error('no answer in 60 minutes') },
+      deadline: { delayMs: 3_600_000, buildError: () => new Error('no answer in 60 minutes') },
       startTimer: clock.startTimer,
     },
   );
@@ -84,7 +84,7 @@ test('it ends a call when its caller’s signal aborts before the deadline', asy
     `${ctx.origin.origin}/long`,
     { method: 'POST', body: 'the long call', signal: caller.signal },
     {
-      deadline: { ms: 3_600_000, buildError: () => new Error('no answer in 60 minutes') },
+      deadline: { delayMs: 3_600_000, buildError: () => new Error('no answer in 60 minutes') },
       startTimer: clock.startTimer,
     },
   );

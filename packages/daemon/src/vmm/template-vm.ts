@@ -2,11 +2,11 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { sendClaim, sendPing } from '../agent-client/agent-requests';
 import type { Claim } from '../agent-client/agent-requests';
 import { waitForAgent } from '../agent-client/wait-for-agent';
+import { getErrorMessage } from '../get-error-message';
 import { IMPD_USER } from '../process/impd-user';
 import { stopPid } from '../process/proc';
 import { VM_DEADLINES } from '../process/vm-deadlines';
 import { writeToDisk } from '../process/write-file-durably';
-import { readErrorMessage } from '../read-error-message';
 import { waitForGuestAge } from '../sleep/guest-age';
 import type { ImpPaths } from '../storage/data-layout';
 import { VM_DEVICES, createMarks, setupVm } from './configure-vm';
@@ -91,7 +91,7 @@ export interface TemplateRestorePlan {
 // Boots the stub VM, waits for its agent to park and the guest to be old
 // enough, then pauses it and writes a full snapshot. The VM and its jail's
 // mounts are gone after, whatever happens; the files are root's then.
-export async function buildTemplateVm(
+export async function createTemplateVm(
   plan: Readonly<TemplateBuildPlan>,
   jails: Jails,
   mergeWrapper: string | null = null,
@@ -107,7 +107,7 @@ export async function buildTemplateVm(
     rmSync(plan.snapshotDir, { recursive: true, force: true });
 
     throw new Error(
-      `template build failed: ${readErrorMessage(error)}\n${readLogTail(plan.paths.logFile)}`,
+      `template build failed: ${getErrorMessage(error)}\n${readLogTail(plan.paths.logFile)}`,
       { cause: error },
     );
   }
@@ -202,7 +202,7 @@ async function startRestoreProcess(
   mergeWrapper: string | null,
 ): Promise<number> {
   try {
-    const argv = await buildRestoreCommand(plan, jails);
+    const argv = await setupRestoreCommand(plan, jails);
 
     return await startFirecracker(argv, plan.paths, plan.cgroup?.procsPath ?? null, mergeWrapper);
   } catch (error) {
@@ -214,7 +214,7 @@ async function startRestoreProcess(
 
 // the jailer's command in the imp's chroot with the template bound in, or
 // Firecracker's own beside a swept run/
-async function buildRestoreCommand(
+async function setupRestoreCommand(
   plan: Readonly<TemplateRestorePlan>,
   jails: Jails,
 ): Promise<readonly string[]> {
@@ -327,7 +327,7 @@ export async function loadTemplateVm(
 
     marks.setMark('agent');
 
-    const firecrackerVersion = await api.getVersion();
+    const firecrackerVersion = await api.readVersion();
 
     marks.setMark('version');
 
@@ -350,7 +350,7 @@ export async function loadTemplateVm(
     await jails.release(plan.paths.impId);
 
     throw new TemplateRestoreError(
-      `template restore failed: ${readErrorMessage(error)}\n${readLogTail(plan.paths.logFile, 5)}`,
+      `template restore failed: ${getErrorMessage(error)}\n${readLogTail(plan.paths.logFile, 5)}`,
       step.isTemplateFault,
       error,
     );

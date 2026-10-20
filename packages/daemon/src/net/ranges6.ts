@@ -74,7 +74,7 @@ export function createRangeChecker6(ranges: readonly string[]): (address: string
 }
 
 // The IPv4 address an IPv4-mapped one (`::ffff:a.b.c.d`) holds, or null.
-export function readMappedIpv4(address: string): string | null {
+export function findMappedIpv4(address: string): string | null {
   const parsed = parseIpv6(address);
 
   if (parsed === null || parsed >> 32n !== 0xff_ffn) {

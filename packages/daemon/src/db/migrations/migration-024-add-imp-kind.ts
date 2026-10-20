@@ -8,7 +8,7 @@ export const MIGRATION_024_ADD_IMP_KIND: Migration = {
   async up(db: Kysely<NoTables>) {
     await db.schema
       .alterTable('imps')
-      .addColumn('kind', 'text', (c) => c.notNull().defaultTo('user'))
+      .addColumn('kind', 'text', (column) => column.notNull().defaultTo('user'))
       .execute();
   },
 };

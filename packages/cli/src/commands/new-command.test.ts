@@ -3,11 +3,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImage } from '@impz/daemon/src/db/images';
-import { findImpByName } from '@impz/daemon/src/db/imps';
+import { readImpByName } from '@impz/daemon/src/db/imps';
 import {
   buildImagePaths,
   buildMockNewImage,
-  buildStubCloudflareApi,
+  createStubCloudflareApi,
   startStubImpdRelease,
 } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
@@ -22,11 +22,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-cli-imps-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-cli-imps-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { home: { HOME: dir, XDG_CONFIG_HOME: dir }, stack };
+  return { home: { HOME: directory, XDG_CONFIG_HOME: directory }, stack };
 }
 
 test('#new refuses a size that is not a whole positive number', async () => {
@@ -90,7 +90,7 @@ test('#new refuses --public for a token limited to some imps, and creates nothin
     env: { ...ctx.home, IMP_URL: box.url, IMP_TOKEN: limited.secret },
   });
 
-  const dev = await findImpByName(box.db, 'dev');
+  const dev = await readImpByName(box.db, 'dev');
 
   expect(result).toStrictEqual({
     stdout: '',
@@ -116,7 +116,7 @@ test('#new creates an imp left out of every backup for --no-backup', async () =>
     env: { ...ctx.home, IMP_URL: box.url, IMP_TOKEN: box.rootToken },
   });
 
-  const chat = await findImpByName(box.db, 'chat');
+  const chat = await readImpByName(box.db, 'chat');
 
   expect(result.code).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ name: 'chat', backup: false });
@@ -142,7 +142,7 @@ test('#new refuses --no-backup on an impd from before the setting, and creates n
     env: { ...ctx.home, IMP_URL: older.url, IMP_TOKEN: box.rootToken },
   });
 
-  const chat = await findImpByName(box.db, 'chat');
+  const chat = await readImpByName(box.db, 'chat');
 
   expect(result).toStrictEqual({
     stdout: '',
@@ -246,11 +246,11 @@ test('#new skips a host without the image and moves past a RAM refusal under --p
   expect(body).toStrictEqual(sent);
   expect(placed.code).toBe(0);
 
-  const bigDev = await findImpByName(big.db, 'dev');
+  const bigDev = await readImpByName(big.db, 'dev');
 
   expect(bigDev).toBeUndefined();
 
-  const bareDev = await findImpByName(bare.db, 'dev');
+  const bareDev = await readImpByName(bare.db, 'dev');
 
   expect(bareDev).toBeUndefined();
 });
@@ -317,7 +317,7 @@ test('#new refuses --place when no saved host can take the imp', async () => {
     env: ctx.home,
   });
 
-  const dev = await findImpByName(bare.db, 'dev');
+  const dev = await readImpByName(bare.db, 'dev');
 
   expect(placed).toStrictEqual({
     stdout: '',
@@ -365,7 +365,7 @@ test('#new refuses --place for a name a saved host has already', async () => {
     code: 1,
   });
 
-  const boxDev = await findImpByName(box.db, 'dev');
+  const boxDev = await readImpByName(box.db, 'dev');
 
   expect(boxDev).toBeUndefined();
 });
@@ -375,7 +375,7 @@ test('#new passes over a host whose token is limited, then exposes, under --plac
   const big = await startImpdHost(ctx.stack, { env: {} });
 
   // Cloudflare, where impd's startup and the expose write the records
-  const cloudflare = buildStubCloudflareApi({ tokens: ['unused'] });
+  const cloudflare = createStubCloudflareApi({ tokens: ['unused'] });
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
 
@@ -453,7 +453,7 @@ test('#new passes over a host whose token is limited, then exposes, under --plac
 
   expect(placed.code).toBe(0);
 
-  const bigDev = await findImpByName(big.db, 'dev');
+  const bigDev = await readImpByName(big.db, 'dev');
 
   expect(bigDev).toBeUndefined();
 });

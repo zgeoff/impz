@@ -7,13 +7,13 @@ import { FRAME_TYPES } from '../../src/agent-client/frame-codec';
 import { startStubDialAgent } from './start-stub-dial-agent';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'stub-dial-agent-'));
+  const directory = mkdtempSync(join(tmpdir(), 'stub-dial-agent-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { vsockPath: join(dir, 'vsock.sock') };
+  return { vsockPath: join(directory, 'vsock.sock') };
 }
 
 test('it answers the request with an ok response', async () => {

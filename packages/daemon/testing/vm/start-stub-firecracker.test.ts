@@ -2,17 +2,21 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isFirecrackerAlive } from '../../src/vmm/firecracker-process';
+import { probeFirecrackerAlive } from '../../src/vmm/firecracker-process';
 import { buildStubFirecrackerArgv, startStubFirecracker } from './start-stub-firecracker';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'stub-fc-'));
+  const directory = mkdtempSync(join(tmpdir(), 'stub-fc-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir, apiSocket: join(dir, 'api.sock'), logPath: join(dir, 'calls.log') };
+  return {
+    directoryPath: directory,
+    apiSocket: join(directory, 'api.sock'),
+    logPath: join(directory, 'calls.log'),
+  };
 }
 
 test('it builds a command that names the API socket after --api-sock', () => {
@@ -63,22 +67,22 @@ test('it writes every page of its guest on a full snapshot', async () => {
     method: 'PUT',
     body: JSON.stringify({
       snapshot_type: 'Full',
-      snapshot_path: join(ctx.dir, 'vmstate'),
-      mem_file_path: join(ctx.dir, 'mem'),
+      snapshot_path: join(ctx.directoryPath, 'vmstate'),
+      mem_file_path: join(ctx.directoryPath, 'mem'),
     }),
   });
 
-  expect(readFileSync(join(ctx.dir, 'mem'), 'latin1')).toBe(
+  expect(readFileSync(join(ctx.directoryPath, 'mem'), 'latin1')).toBe(
     `${'a'.repeat(4096)}${'B'.repeat(4096)}${'c'.repeat(4096)}`,
   );
 
-  expect(readFileSync(join(ctx.dir, 'vmstate'), 'utf8')).toBe('vmstate');
+  expect(readFileSync(join(ctx.directoryPath, 'vmstate'), 'utf8')).toBe('vmstate');
 });
 
 test('it writes only the dirty pages over a mem file of the guest size on a diff snapshot', async () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'mem'), 'x'.repeat(3 * 4096));
+  writeFileSync(join(ctx.directoryPath, 'mem'), 'x'.repeat(3 * 4096));
 
   await startStubFirecracker({
     apiSocket: ctx.apiSocket,
@@ -91,12 +95,12 @@ test('it writes only the dirty pages over a mem file of the guest size on a diff
     method: 'PUT',
     body: JSON.stringify({
       snapshot_type: 'Diff',
-      snapshot_path: join(ctx.dir, 'vmstate'),
-      mem_file_path: join(ctx.dir, 'mem'),
+      snapshot_path: join(ctx.directoryPath, 'vmstate'),
+      mem_file_path: join(ctx.directoryPath, 'mem'),
     }),
   });
 
-  expect(readFileSync(join(ctx.dir, 'mem'), 'latin1')).toBe(
+  expect(readFileSync(join(ctx.directoryPath, 'mem'), 'latin1')).toBe(
     `${'x'.repeat(4096)}${'B'.repeat(4096)}${'x'.repeat(4096)}`,
   );
 });
@@ -104,7 +108,7 @@ test('it writes only the dirty pages over a mem file of the guest size on a diff
 test('it empties a mem file of another size before a diff snapshot', async () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'mem'), 'x'.repeat(4096));
+  writeFileSync(join(ctx.directoryPath, 'mem'), 'x'.repeat(4096));
 
   await startStubFirecracker({
     apiSocket: ctx.apiSocket,
@@ -117,12 +121,12 @@ test('it empties a mem file of another size before a diff snapshot', async () =>
     method: 'PUT',
     body: JSON.stringify({
       snapshot_type: 'Diff',
-      snapshot_path: join(ctx.dir, 'vmstate'),
-      mem_file_path: join(ctx.dir, 'mem'),
+      snapshot_path: join(ctx.directoryPath, 'vmstate'),
+      mem_file_path: join(ctx.directoryPath, 'mem'),
     }),
   });
 
-  expect(readFileSync(join(ctx.dir, 'mem'), 'latin1')).toBe(
+  expect(readFileSync(join(ctx.directoryPath, 'mem'), 'latin1')).toBe(
     `${'\0'.repeat(4096)}${'B'.repeat(4096)}`,
   );
 });
@@ -132,7 +136,7 @@ test('it runs as a process the liveness check takes for a Firecracker', async ()
 
   const vm = await startStubFirecracker({ apiSocket: ctx.apiSocket, logPath: ctx.logPath });
 
-  expect(isFirecrackerAlive(vm.pid, ctx.apiSocket)).toBeTrue();
+  expect(probeFirecrackerAlive(vm.pid, ctx.apiSocket)).toBeTrue();
 });
 
 test('it answers a PUT with 204 and logs its method and path', async () => {

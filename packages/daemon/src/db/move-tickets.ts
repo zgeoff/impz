@@ -1,6 +1,6 @@
 import type { Insertable, Selectable, Updateable } from 'kysely';
-import { isSlotFree } from './is-slot-free';
 import type { ImpDatabase, ImpQueries } from './open-database';
+import { probeSlotFree } from './probe-slot-free';
 import type { DB } from './schema';
 
 // The target's side of a move: one receive ticket, kept by the sha256 of its
@@ -9,12 +9,12 @@ export type MoveTicketRow = Selectable<DB['move_tickets']>;
 
 export type NewMoveTicketRow = Insertable<DB['move_tickets']>;
 
-export function findMoveTicket(db: ImpQueries, id: string): Promise<MoveTicketRow | undefined> {
+export function readMoveTicket(db: ImpQueries, id: string): Promise<MoveTicketRow | undefined> {
   return db.selectFrom('move_tickets').selectAll().where('id', '=', id).executeTakeFirst();
 }
 
 // the ticket of an imp staged here that waits for its commit
-export function findStagedMoveTicket(
+export function readStagedMoveTicket(
   db: ImpQueries,
   impId: string,
 ): Promise<MoveTicketRow | undefined> {
@@ -43,7 +43,7 @@ export function createMoveTicketInFreeSlot(
   now: number,
 ): Promise<boolean> {
   return db.transaction().execute(async (trx) => {
-    if (!(await isSlotFree(trx, row.slot, now))) {
+    if (!(await probeSlotFree(trx, row.slot, now))) {
       return false;
     }
 

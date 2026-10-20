@@ -26,21 +26,23 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'move-steps-'));
+  const directory = await mkdtemp(join(tmpdir(), 'move-steps-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  const dataDir = join(dir, 'data');
+  const dataDir = join(directory, 'data');
 
   // impd boots with a root token, the bearer the host's token file holds
   const rootToken = faker.string.alphanumeric(32);
 
   const harness = await startTestImpd(stack, { dataDir, rootToken });
 
+  const sendClientRequest = (request: Request) => harness.impd.api.app.handle(request);
+
   const client = createImpClient({
     url: 'http://impd.test',
     token: rootToken,
-    fetch: (request) => harness.impd.api.app.handle(request),
+    fetch: sendClientRequest,
   });
 
   // the image an imp boots from when it names none, as impd's image
@@ -54,7 +56,7 @@ async function setupTest() {
 
   await createImage(harness.db, image);
 
-  return { dir, client, rootToken, apiUrl: harness.url };
+  return { directoryPath: directory, client, rootToken, apiUrl: harness.url };
 }
 
 test('#buildUpstreamsPath names the upstreams file in the host’s data dir', () => {
@@ -132,7 +134,7 @@ test('#startMoveSend marks the imp sending on the source host', async () => {
   const ctx = await setupTest();
 
   // scripts/dev/dev.sh token reads the host's token through docker exec
-  const docker = createStubBin(ctx.dir, 'docker', `echo ${ctx.rootToken}`);
+  const docker = createStubBin(ctx.directoryPath, 'docker', `echo ${ctx.rootToken}`);
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
@@ -140,7 +142,12 @@ test('#startMoveSend marks the imp sending on the source host', async () => {
   await ctx.client.imps.stop({ name: 'e2e-mv-seen' });
 
   const host = {
-    ...createInstance({ container: 'imp-e2e-a', dataDir: ctx.dir, network: 'n', ip: '127.0.0.1' }),
+    ...createInstance({
+      container: 'imp-e2e-a',
+      dataDir: ctx.directoryPath,
+      network: 'n',
+      ip: '127.0.0.1',
+    }),
     apiUrl: ctx.apiUrl,
   };
 
@@ -155,12 +162,17 @@ test('#startMoveSend rejects with the host’s error when the source refuses the
   const ctx = await setupTest();
 
   // scripts/dev/dev.sh token reads the host's token through docker exec
-  const docker = createStubBin(ctx.dir, 'docker', `echo ${ctx.rootToken}`);
+  const docker = createStubBin(ctx.directoryPath, 'docker', `echo ${ctx.rootToken}`);
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
   const host = {
-    ...createInstance({ container: 'imp-e2e-a', dataDir: ctx.dir, network: 'n', ip: '127.0.0.1' }),
+    ...createInstance({
+      container: 'imp-e2e-a',
+      dataDir: ctx.directoryPath,
+      network: 'n',
+      ip: '127.0.0.1',
+    }),
     apiUrl: ctx.apiUrl,
   };
 
@@ -174,7 +186,7 @@ test('#readAllowSet reads the addresses of the slot’s allow set in the host’
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     String.raw`printf 'table inet imp_egress {\n\tset allow7 {\n\t\telements = { 93.184.215.14, 140.82.112.5 }\n\t}\n}\n'`,
   );
@@ -183,7 +195,7 @@ test('#readAllowSet reads the addresses of the slot’s allow set in the host’
 
   const host = createInstance({
     container: 'imp-e2e-mv-b',
-    dataDir: ctx.dir,
+    dataDir: ctx.directoryPath,
     network: 'n',
     ip: '10.100.0.11',
   });
@@ -200,22 +212,22 @@ test('#readJailOwners reads the jail uid, then the owners of the disk and the ta
 
   // the script, as the container's sh gets it, beside the stub's answer
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
-    `printf '%s' "$5" > '${join(ctx.dir, 'script')}'\nprintf '900007\\n900007\\n900007\\n'`,
+    `printf '%s' "$5" > '${join(ctx.directoryPath, 'script')}'\nprintf '900007\\n900007\\n900007\\n'`,
   );
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
   const host = createInstance({
     container: 'imp-e2e-mv-b',
-    dataDir: ctx.dir,
+    dataDir: ctx.directoryPath,
     network: 'n',
     ip: '10.100.0.11',
   });
 
   const owners = await readJailOwners(host, 'imp-id-1', 7);
-  const script = await readFile(join(ctx.dir, 'script'), 'utf8');
+  const script = await readFile(join(ctx.directoryPath, 'script'), 'utf8');
 
   expect(owners).toStrictEqual(['900007', '900007', '900007']);
   expect(script).toInclude("pgrep -f 'firecracker.*imps/imp-id-1/'");

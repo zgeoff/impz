@@ -10,7 +10,7 @@ import type { CliEnv } from '../config/host-store';
 const HOST_TIMEOUT_MS = 5000;
 
 // starts a timer that fires once after `ms`, and returns its cancel
-export type StartTimer = (ms: number, fire: () => void) => () => void;
+export type StartTimer = (durationMs: number, fire: () => void) => () => void;
 
 // a saved host, as loadCliConfig would give it for `--host <name>`
 export interface SavedTarget {
@@ -91,8 +91,8 @@ async function runWithTimeout<T>(
   }
 }
 
-function startTimeout(ms: number, fire: () => void): () => void {
-  const timer = setTimeout(fire, ms);
+function startTimeout(durationMs: number, fire: () => void): () => void {
+  const timer = setTimeout(fire, durationMs);
 
   return () => {
     clearTimeout(timer);

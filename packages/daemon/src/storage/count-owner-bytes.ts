@@ -57,7 +57,7 @@ export function countOwnerBytes(files: readonly OwnedFile[]): Map<string, OwnerB
     }
   }
 
-  events.sort((a, b) => a.at - b.at);
+  events.sort((left, right) => left.at - right.at);
 
   const covering = new Map<string, number>();
 

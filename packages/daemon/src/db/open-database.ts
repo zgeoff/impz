@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { Kysely, SqliteAdapter, SqliteIntrospector, SqliteQueryCompiler } from 'kysely';
 import { createEventBus } from '../events/event-bus';
-import { BunSqliteDriver } from './bun-sqlite-driver';
+import { createBunSqliteDriver } from './create-bun-sqlite-driver';
 import type { ImpWrite, ImpWriteFeed } from './imp-write-feed';
 import { runMigrations } from './run-migrations';
 import type { DB } from './schema';
@@ -28,7 +28,7 @@ export async function openDatabase(path: string, options: OpenOptions = {}): Pro
   const builder = new Kysely<DB>({
     dialect: {
       createAdapter: () => new SqliteAdapter(),
-      createDriver: () => new BunSqliteDriver(sqlite),
+      createDriver: () => createBunSqliteDriver(sqlite),
       createIntrospector: (kysely) => new SqliteIntrospector(kysely),
       createQueryCompiler: () => new SqliteQueryCompiler(),
     },

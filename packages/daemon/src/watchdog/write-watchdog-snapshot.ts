@@ -1,10 +1,10 @@
 import { chmodSync, lchownSync, mkdirSync, rmSync } from 'node:fs';
 import { isDiskFullError } from '../api-errors';
+import { getErrorMessage } from '../get-error-message';
 import type { ImpDisk, ImpHost, ImpVms } from '../imps/imp-context';
 import type { LockedImp } from '../imps/imp-lock';
 import type { ImpVmOps } from '../imps/imp-vm-ops';
 import { IMPD_USER } from '../process/impd-user';
-import { readErrorMessage } from '../read-error-message';
 import { buildSnapshotIdentity, writeSnapshotMeta } from '../sleep/snapshot-meta';
 import { readVmIdentity } from '../sleep/vm-identity';
 import { buildWatchdogSlot } from '../storage/data-layout';
@@ -18,7 +18,7 @@ export async function writeWatchdogSnapshot(
   imp: LockedImp,
 ): Promise<void> {
   const paths = context.findPaths(imp.id);
-  const slot = buildWatchdogSlot(paths.dir);
+  const slot = buildWatchdogSlot(paths.directory);
   const pid = imp.pid;
 
   if (pid === null) {
@@ -61,6 +61,6 @@ export async function writeWatchdogSnapshot(
 
     const what = isDiskFullError(error) ? 'no watchdog snapshot' : 'the watchdog snapshot failed';
 
-    context.log(`impd: ${imp.name}: ${what}: ${readErrorMessage(error)}`);
+    context.log(`impd: ${imp.name}: ${what}: ${getErrorMessage(error)}`);
   }
 }

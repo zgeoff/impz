@@ -1,19 +1,3 @@
-function readNumber(name: string, fallback: number): number {
-  const raw = process.env[name];
-
-  if (raw === undefined || raw === '') {
-    return fallback;
-  }
-
-  const value = Number(raw);
-
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`${name} must be a positive integer, got '${raw}'`);
-  }
-
-  return value;
-}
-
 // Harness knobs. The defaults are the acceptance sizes; lower them to run the
 // scale suite on a smaller machine.
 export const config = {
@@ -52,3 +36,19 @@ export const config = {
   // 127.0.0.1 on this machine
   registryName: process.env['E2E_REGISTRY_NAME'] ?? 'imp-e2e-registry.test',
 } as const;
+
+function readNumber(name: string, fallback: number): number {
+  const raw = process.env[name];
+
+  if (raw === undefined || raw === '') {
+    return fallback;
+  }
+
+  const value = Number(raw);
+
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer, got '${raw}'`);
+  }
+
+  return value;
+}

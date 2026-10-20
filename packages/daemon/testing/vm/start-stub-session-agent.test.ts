@@ -29,17 +29,17 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'stub-session-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-session-agent-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir, stack };
+  return { directoryPath: directory, stack };
 }
 
 test('it answers a plain exec with STARTED and no session', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubSessionAgent(path, { stack: ctx.stack });
 
@@ -56,7 +56,7 @@ test('it answers a plain exec with STARTED and no session', async () => {
 test('it starts a new run for a session name it does not know', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, {
     bootId: '11111111-1111-4111-8111-111111111111',
@@ -93,7 +93,7 @@ test('it starts a new run for a session name it does not know', async () => {
 test('it refuses a session without a tty', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubSessionAgent(path, { stack: ctx.stack });
 
@@ -105,7 +105,7 @@ test('it refuses a session without a tty', async () => {
 test('it attaches to a running session and takes it over from its viewer', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const first = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -134,7 +134,7 @@ test('it attaches to a running session and takes it over from its viewer', async
 test('it detaches the viewer when its connection closes', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const stream = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -151,7 +151,7 @@ test('it detaches the viewer when its connection closes', async () => {
 test('it keeps output written with no viewer and replays it to the next one', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const first = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -179,7 +179,7 @@ test('it keeps output written with no viewer and replays it to the next one', as
 test('it sends the EXIT to the viewer attached when the run exits, and the run is over', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const stream = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -199,7 +199,7 @@ test('it sends the EXIT to the viewer attached when the run exits, and the run i
 test('it starts a new run for an exited session opened without a resume, naming the old one as previous', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const first = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -238,7 +238,7 @@ test('it starts a new run for an exited session opened without a resume, naming 
 test('it sends STARTED then the EXIT on a resume of an exited run', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const first = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -288,7 +288,7 @@ test('it sends STARTED then the EXIT on a resume of an exited run', async () => 
 test('it marks a resume of another generation as generation_changed and sends this one from 0', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const first = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -321,7 +321,7 @@ test('it marks a resume of another generation as generation_changed and sends th
 test('it refuses a resume past the end of the output with INVALID_RESUME', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const first = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -347,7 +347,7 @@ test('it refuses a resume past the end of the output with INVALID_RESUME', async
 test('it answers session.attach to a name with no run with NO_SESSION and the previous run', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, {
     bootId: '22222222-2222-4222-8222-222222222222',
@@ -379,7 +379,7 @@ test('it answers session.attach to a name with no run with NO_SESSION and the pr
 test('it starts no run on session.attach to an unknown name', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
 
@@ -390,7 +390,7 @@ test('it starts no run on session.attach to an unknown name', async () => {
 test('it attaches session.attach to a running run as its viewer', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const first = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -414,7 +414,7 @@ test('it attaches session.attach to a running run as its viewer', async () => {
 test('it taps a logged run without becoming its viewer', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const first = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main', log: true });
@@ -442,7 +442,7 @@ test('it taps a logged run without becoming its viewer', async () => {
 test('it refuses a tap of a run kept with no log', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubSessionAgent(path, { stack: ctx.stack });
 
@@ -458,7 +458,7 @@ test('it refuses a tap of a run kept with no log', async () => {
 test('it refuses a tap of a name with no run with NO_SESSION', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubSessionAgent(path, { stack: ctx.stack });
 
@@ -468,7 +468,7 @@ test('it refuses a tap of a name with no run with NO_SESSION', async () => {
 test('it counts open connections as exec_sessions, not runs and not taps', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const job = await openExecStream(path, { argv: ['sh'], tty: true, session: 'job', log: true });
@@ -506,7 +506,7 @@ test('it counts open connections as exec_sessions, not runs and not taps', async
 test('it lists every run in its activity, exited ones with their exit', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const job = await openExecStream(path, { argv: ['sh'], tty: true, session: 'job' });
@@ -536,7 +536,7 @@ test('it lists every run in its activity, exited ones with their exit', async ()
 test('it lists the exec requests it got, not its activity requests', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
 
@@ -556,7 +556,7 @@ test('it lists the exec requests it got, not its activity requests', async () =>
 test('it keeps the JSON of each exec request as it came, not its activity requests', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
 
@@ -574,7 +574,7 @@ test('it keeps the JSON of each exec request as it came, not its activity reques
 test('it sends a run’s output to the client attached to it', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const stream = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -592,7 +592,10 @@ test('it sends a run’s output to the client attached to it', async () => {
 
 test('it refuses output for a session it does not know', async () => {
   const ctx = await setupTest();
-  const agent = await startStubSessionAgent(join(ctx.dir, 'v.sock'), { stack: ctx.stack });
+
+  const agent = await startStubSessionAgent(join(ctx.directoryPath, 'v.sock'), {
+    stack: ctx.stack,
+  });
 
   expect(() => {
     agent.writeOutput('main', Buffer.from('hi'));
@@ -601,7 +604,10 @@ test('it refuses output for a session it does not know', async () => {
 
 test('it refuses to exit a run of a session it does not know', async () => {
   const ctx = await setupTest();
-  const agent = await startStubSessionAgent(join(ctx.dir, 'v.sock'), { stack: ctx.stack });
+
+  const agent = await startStubSessionAgent(join(ctx.directoryPath, 'v.sock'), {
+    stack: ctx.stack,
+  });
 
   expect(() => {
     agent.exitRun('main', { code: 0, signal: 0 });
@@ -611,7 +617,7 @@ test('it refuses to exit a run of a session it does not know', async () => {
 test('it forgets every run and every previous run once the guest boots cold', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const stream = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -634,7 +640,7 @@ test('it forgets every run and every previous run once the guest boots cold', as
 test('it stops listening once its stack is released', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const stack = new AsyncDisposableStack();
 
@@ -654,7 +660,7 @@ test.each([
 ])('it starts a run opened with %s at its size %j', async (_label, size, expected) => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubSessionAgent(path, { stack: ctx.stack });
 
@@ -674,7 +680,7 @@ test.each([
 test('it hangs up a running run on session.kill, sending its viewer the EXIT of SIGHUP', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const stream = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
@@ -694,7 +700,7 @@ test('it hangs up a running run on session.kill, sending its viewer the EXIT of 
 test('it names a killed run as the previous of its session', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, {
     bootId: '22222222-2222-4222-8222-222222222222',
@@ -729,7 +735,7 @@ test('it names a killed run as the previous of its session', async () => {
 test('it removes an exited run on session.kill, keeping its own exit as the previous', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { stack: ctx.stack });
   const stream = await openExecStream(path, { argv: ['sh'], tty: true, session: 'job' });
@@ -755,7 +761,7 @@ test('it removes an exited run on session.kill, keeping its own exit as the prev
 test('it refuses session.kill of a name with no run with NO_SESSION and its boot', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubSessionAgent(path, {
     bootId: '22222222-2222-4222-8222-222222222222',
@@ -774,7 +780,7 @@ test('it refuses session.kill of a name with no run with NO_SESSION and its boot
 test('it lists no sessions in its activity as an agent from before sessions', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubSessionAgent(path, { release: 'before-sessions', stack: ctx.stack });
 
@@ -786,7 +792,7 @@ test('it lists no sessions in its activity as an agent from before sessions', as
 test('it ignores an exec’s session name as an agent from before sessions', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, {
     release: 'before-sessions',
@@ -805,7 +811,7 @@ test.each(['session.kill', 'session.attach', 'session.tap'])(
   async (op) => {
     const ctx = await setupTest();
 
-    const path = join(ctx.dir, 'v.sock');
+    const path = join(ctx.directoryPath, 'v.sock');
 
     await startStubSessionAgent(path, { release: 'before-sessions', stack: ctx.stack });
 
@@ -818,7 +824,7 @@ test.each(['session.kill', 'session.attach', 'session.tap'])(
 test('it lists sessions without generation, boot or end as an agent from before offsets', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubSessionAgent(path, { release: 'before-offsets', stack: ctx.stack });
 
@@ -859,7 +865,7 @@ test('it lists sessions without generation, boot or end as an agent from before 
 test('it sends no output place in STARTED as an agent from before offsets', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubSessionAgent(path, { release: 'before-offsets', stack: ctx.stack });
 
@@ -876,7 +882,7 @@ test('it sends no output place in STARTED as an agent from before offsets', asyn
 test('it answers session.tap with UNKNOWN_OP as an agent from before offsets', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubSessionAgent(path, { release: 'before-offsets', stack: ctx.stack });
 
@@ -888,7 +894,7 @@ test('it answers session.tap with UNKNOWN_OP as an agent from before offsets', a
 test('it hangs up a run on session.kill as an agent from before offsets', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   const agent = await startStubSessionAgent(path, { release: 'before-offsets', stack: ctx.stack });
   const stream = await openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });

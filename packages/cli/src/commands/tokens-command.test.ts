@@ -55,11 +55,11 @@ test('it refuses an imp pattern that is not an imp name', async () => {
 });
 
 test('it refuses a private key where a .pub file belongs', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const privateKey = join(dir, 'id_ed25519');
+  const privateKey = join(directory, 'id_ed25519');
 
   await writeFile(privateKey, '-----BEGIN OPENSSH PRIVATE KEY-----\n');
 
@@ -76,11 +76,11 @@ test('it refuses a private key where a .pub file belongs', async () => {
 });
 
 test('it refuses a .pub file that holds no key', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const empty = join(dir, 'empty.pub');
+  const empty = join(directory, 'empty.pub');
 
   await writeFile(empty, '# nothing\n');
 
@@ -93,11 +93,11 @@ test('it refuses a .pub file that holds no key', async () => {
 });
 
 test('it refuses an --ssh-key file that is missing', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const missing = join(dir, 'missing.pub');
+  const missing = join(directory, 'missing.pub');
 
   const result = await runCLIInProcess({
     args: ['token', 'new', 'ci', '--scope', 'exec', '--ssh-key', missing],

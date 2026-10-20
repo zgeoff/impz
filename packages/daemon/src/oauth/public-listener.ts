@@ -60,7 +60,7 @@ export function createPublicHandler(
     if (path === MCP_PATH) {
       server?.timeout(request, 0);
 
-      return deps.mcp.handle(request);
+      return deps.mcp.respond(request);
     }
 
     const answered = await deps.oauth.handle(request);
@@ -199,11 +199,14 @@ export function startPublicListener(
 ): PublicListener {
   const handle = createPublicHandler(deps);
 
+  const handleRequest = (request: Request, bunServer: Bun.Server<undefined>) =>
+    handle(request, bunServer);
+
   const server = Bun.serve({
     port: deps.config.port,
     maxRequestBodySize: MAX_BODY_BYTES,
     idleTimeout: IDLE_TIMEOUT_S,
-    fetch: (request, bunServer) => handle(request, bunServer),
+    fetch: handleRequest,
 
     // the reason stays in impd's log; the client gets none
     error: (error) => {

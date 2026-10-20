@@ -12,7 +12,7 @@ export const MIGRATION_011_ADD_PUBLIC_EXPOSURE: Migration = {
       // `tailnet` or `public` (docs/guides/https.md#public-imps); a public imp's
       // auth (`none`, `token`, `basic`), basic's user, and the sha256 of the
       // token or password, base64url
-      .addColumn('exposure', 'text', (c) => c.notNull().defaultTo('tailnet'))
+      .addColumn('exposure', 'text', (column) => column.notNull().defaultTo('tailnet'))
       .execute();
 
     await db.schema.alterTable('imps').addColumn('public_auth', 'text').execute();

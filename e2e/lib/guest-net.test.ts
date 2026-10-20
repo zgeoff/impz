@@ -5,18 +5,18 @@ import { join } from 'node:path';
 import { buildListenCheck, parseEstabResets } from './guest-net';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'guest-net-'));
+  const directory = await mkdtemp(join(tmpdir(), 'guest-net-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#buildListenCheck passes when the port listens over IPv4', async () => {
   const ctx = await setupTest();
 
   await writeFile(
-    join(ctx.dir, 'tcp'),
+    join(ctx.directoryPath, 'tcp'),
     [
       '  sl  local_address rem_address   st',
       '   0: 00000000:1B58 00000000:0000 0A 00000000:00000000',
@@ -24,10 +24,10 @@ test('#buildListenCheck passes when the port listens over IPv4', async () => {
     ].join('\n'),
   );
 
-  await writeFile(join(ctx.dir, 'tcp6'), '  sl  local_address rem_address   st\n');
+  await writeFile(join(ctx.directoryPath, 'tcp6'), '  sl  local_address rem_address   st\n');
 
   // the check, run by sh over the stand-in files
-  const script = buildListenCheck(7000).replaceAll('/proc/net/', `${ctx.dir}/`);
+  const script = buildListenCheck(7000).replaceAll('/proc/net/', `${ctx.directoryPath}/`);
 
   const code = await Bun.spawn(['sh', '-c', script]).exited;
 
@@ -37,10 +37,10 @@ test('#buildListenCheck passes when the port listens over IPv4', async () => {
 test('#buildListenCheck passes when the port listens over IPv6', async () => {
   const ctx = await setupTest();
 
-  await writeFile(join(ctx.dir, 'tcp'), '  sl  local_address rem_address   st\n');
+  await writeFile(join(ctx.directoryPath, 'tcp'), '  sl  local_address rem_address   st\n');
 
   await writeFile(
-    join(ctx.dir, 'tcp6'),
+    join(ctx.directoryPath, 'tcp6'),
     [
       '  sl  local_address rem_address   st',
       '   0: 00000000000000000000000000000000:0035 00000000000000000000000000000000:0000 0A 0',
@@ -49,7 +49,7 @@ test('#buildListenCheck passes when the port listens over IPv6', async () => {
   );
 
   // the check, run by sh over the stand-in files
-  const script = buildListenCheck(53).replaceAll('/proc/net/', `${ctx.dir}/`);
+  const script = buildListenCheck(53).replaceAll('/proc/net/', `${ctx.directoryPath}/`);
 
   const code = await Bun.spawn(['sh', '-c', script]).exited;
 
@@ -60,7 +60,7 @@ test('#buildListenCheck fails for a port that is only connected, not listening',
   const ctx = await setupTest();
 
   await writeFile(
-    join(ctx.dir, 'tcp'),
+    join(ctx.directoryPath, 'tcp'),
     [
       '  sl  local_address rem_address   st',
       '   0: 0A420002:1B58 0A420003:9C40 01 00000000:00000000',
@@ -68,10 +68,10 @@ test('#buildListenCheck fails for a port that is only connected, not listening',
     ].join('\n'),
   );
 
-  await writeFile(join(ctx.dir, 'tcp6'), '  sl  local_address rem_address   st\n');
+  await writeFile(join(ctx.directoryPath, 'tcp6'), '  sl  local_address rem_address   st\n');
 
   // the check, run by sh over the stand-in files
-  const script = buildListenCheck(7000).replaceAll('/proc/net/', `${ctx.dir}/`);
+  const script = buildListenCheck(7000).replaceAll('/proc/net/', `${ctx.directoryPath}/`);
 
   const code = await Bun.spawn(['sh', '-c', script]).exited;
 

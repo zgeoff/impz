@@ -12,13 +12,13 @@ export interface StubDockerImage {
 // `images` by reference (run-stub-docker.sh), for impd's host builds and adds;
 // it pulls nothing, and any call it lacks fails and names itself
 export function createStubDockerBin(
-  dir: string,
+  directory: string,
   images: Readonly<Record<string, StubDockerImage>>,
 ) {
-  const bin = join(dir, 'bin');
-  const exports = join(dir, 'exports');
-  const inspects = join(dir, 'inspect');
-  const log = join(dir, 'docker.log');
+  const bin = join(directory, 'bin');
+  const exports = join(directory, 'exports');
+  const inspects = join(directory, 'inspect');
+  const log = join(directory, 'docker.log');
 
   mkdirSync(bin, { recursive: true });
   mkdirSync(exports, { recursive: true });
@@ -29,7 +29,7 @@ export function createStubDockerBin(
 
   for (const [ref, image] of Object.entries(images)) {
     const key = image.id.replace('sha256:', '');
-    const tree = join(dir, 'trees', key);
+    const tree = join(directory, 'trees', key);
 
     mkdirSync(tree, { recursive: true });
 
@@ -47,7 +47,7 @@ export function createStubDockerBin(
     lines.push(`${ref} ${key}\n`);
   }
 
-  writeFileSync(join(dir, 'images'), lines.join(''));
+  writeFileSync(join(directory, 'images'), lines.join(''));
   copyFileSync(join(import.meta.dir, 'run-stub-docker.sh'), join(bin, 'docker'));
   chmodSync(join(bin, 'docker'), 0o755);
 
