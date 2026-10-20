@@ -33,6 +33,43 @@ test('it moves a daemon file that git does not track yet', async () => {
   expect(existsSync(join(ctx.root, 'packages/daemon/src/platform/db/imps.ts'))).toBeTrue();
 });
 
+test('it prints its usage on --help and moves no file', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(join(ctx.root, 'packages/daemon/src/db/imps.ts'), 'export const readImp = 1;\n');
+
+  const result = await runGitCommand([process.execPath, CODEMOD, ctx.root, '--help']);
+
+  expect(result).toStrictEqual({
+    exitCode: 0,
+    stdout: 'usage: bun scripts/codemod/nest-daemon-layers.ts [repo root, default the cwd]\n',
+    stderr: '',
+  });
+
+  expect(existsSync(join(ctx.root, 'packages/daemon/src/db/imps.ts'))).toBeTrue();
+});
+
+test.each([
+  ['an unknown option', ['--force']],
+  ['a second repo root', ['other']],
+])('it exits 1 with its usage and moves no file on %s', async (_label, args) => {
+  const ctx = await setupTest();
+
+  await Bun.write(join(ctx.root, 'packages/daemon/src/db/imps.ts'), 'export const readImp = 1;\n');
+
+  const result = await runGitCommand([process.execPath, CODEMOD, ctx.root, ...args]);
+
+  expect(result).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr: expect.toEndWith(
+      '\nusage: bun scripts/codemod/nest-daemon-layers.ts [repo root, default the cwd]\n',
+    ),
+  });
+
+  expect(existsSync(join(ctx.root, 'packages/daemon/src/db/imps.ts'))).toBeTrue();
+});
+
 test('it exits 1 and names a daemon file that no layer covers', async () => {
   const ctx = await setupTest();
 

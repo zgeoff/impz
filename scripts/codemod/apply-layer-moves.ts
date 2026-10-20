@@ -1,3 +1,4 @@
+import { isUtf8 } from 'node:buffer';
 import {
   existsSync,
   mkdirSync,
@@ -60,7 +61,7 @@ export function applyLayerMoves(root: string, files: readonly string[]): LayerRe
     if (!existsSync(join(root, plan.to))) {
       mkdirSync(dirname(join(root, plan.to)), { recursive: true });
 
-      if (plan.next === null) {
+      if (plan.next === null || plan.next === plan.text) {
         renameSync(join(root, plan.from), join(root, plan.to));
       } else {
         writeFileSync(join(root, plan.to), plan.next, { mode: plan.mode });
@@ -177,7 +178,8 @@ function updateFilePaths(root: string, file: string): boolean {
   return true;
 }
 
-// null for a file that is gone or binary (a NUL byte), which holds no path to rewrite
+// null for a file that is gone or binary (a NUL byte or invalid UTF-8), which holds no path to
+// rewrite and keeps its bytes as they are
 function readText(path: string): string | null {
   if (!existsSync(path) || !statSync(path).isFile()) {
     return null;
@@ -185,5 +187,5 @@ function readText(path: string): string | null {
 
   const bytes = readFileSync(path);
 
-  return bytes.includes(0) ? null : bytes.toString('utf8');
+  return bytes.includes(0) || !isUtf8(bytes) ? null : bytes.toString('utf8');
 }

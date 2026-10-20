@@ -176,6 +176,21 @@ test('it moves a file that a branch adds at an old path after the move', async (
   );
 });
 
+test('it moves a file that is not valid UTF-8 with its bytes unchanged', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/src/db/fixture.bin'),
+    new Uint8Array([0x66, 0xff, 0x2e, 0x2e, 0x2f]),
+  );
+
+  applyLayerMoves(ctx.root, ['packages/daemon/src/db/fixture.bin']);
+
+  expect([
+    ...readFileSync(join(ctx.root, 'packages/daemon/src/platform/db/fixture.bin')),
+  ]).toStrictEqual([0x66, 0xff, 0x2e, 0x2e, 0x2f]);
+});
+
 test('it reports a file under src that no move or root stem covers', async () => {
   const ctx = await setupTest();
 
@@ -212,6 +227,32 @@ test('it relinks an import that a merge carried into a placed file', async () =>
 
   expect(readFileSync(join(ctx.root, 'packages/daemon/src/imps/imps/imp-service.ts'), 'utf8')).toBe(
     "import { readQuery } from '../../platform/db/new-query';\n",
+  );
+});
+
+test('it keeps an import of a placed file that resolves, though its old folder resolves it too', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/src/imps/imps/imp-service.ts'),
+    "import { runStub } from '../../../testing/run-stub';\n",
+  );
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/testing/run-stub.ts'),
+    'export const runStub = 1;\n',
+  );
+
+  await Bun.write(join(ctx.root, 'packages/testing/run-stub.ts'), 'export const runStub = 2;\n');
+
+  applyLayerMoves(ctx.root, [
+    'packages/daemon/src/imps/imps/imp-service.ts',
+    'packages/daemon/testing/run-stub.ts',
+    'packages/testing/run-stub.ts',
+  ]);
+
+  expect(readFileSync(join(ctx.root, 'packages/daemon/src/imps/imps/imp-service.ts'), 'utf8')).toBe(
+    "import { runStub } from '../../../testing/run-stub';\n",
   );
 });
 
