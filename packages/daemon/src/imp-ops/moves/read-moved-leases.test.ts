@@ -388,7 +388,7 @@ test('it keeps the hold of a stopped imp on a cold move, and says the commit is 
     expect(events).toPartiallyContain({
       ev: 'ImpChanged',
       reason: 'held',
-      imp: expect.objectContaining({ name: 'dev', state: 'stopped' }) as unknown,
+      imp: expect.objectContaining({ name: 'dev', state: 'stopped' }),
     });
   });
 });
