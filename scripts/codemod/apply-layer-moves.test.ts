@@ -3,31 +3,15 @@ import { readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { applyLayerMoves, planLayerPath } from './nest-daemon-layers';
+import { applyLayerMoves } from './apply-layer-moves';
 
 async function setupTest() {
-  const root = await mkdtemp(join(tmpdir(), 'nest-daemon-layers-'));
+  const root = await mkdtemp(join(tmpdir(), 'apply-layer-moves-'));
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
   return { root };
 }
-
-test.each([
-  ['a folder', 'db/imps.ts', 'platform/db/imps.ts'],
-  ['a folder without an extension', 'db/imps', 'platform/db/imps'],
-  ['a test beside its module', 'net/addressing.test.ts', 'host-net/net/addressing.test.ts'],
-  ['a file that leaves its folder', 'ssh/ssh-gateway.ts', 'surface/ssh/ssh-gateway.ts'],
-  ['a sibling of a file that leaves', 'ssh/channel-io.ts', 'imps/ssh/channel-io.ts'],
-  ['a file of the old imps folder', 'imps/imp-service.ts', 'imps/imps/imp-service.ts'],
-  ['a placed file of the imps layer', 'imps/imps/imp-service.ts', 'imps/imps/imp-service.ts'],
-  ['a placed file', 'platform/db/imps.ts', 'platform/db/imps.ts'],
-  ['a file at the top of src', 'build-app.ts', 'surface/build-app.ts'],
-  ['a root file', 'main.ts', 'main.ts'],
-  ['a name that only starts like a stem', 'token-store.ts', 'token-store.ts'],
-])('it moves %s from %s to %s', (_label, path, expected) => {
-  expect(planLayerPath(path)).toBe(expected);
-});
 
 test('it moves the files and rewrites the paths that name them', async () => {
   const ctx = await setupTest();
