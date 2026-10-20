@@ -230,6 +230,32 @@ test('it relinks an import that a merge carried into a placed file', async () =>
   );
 });
 
+test('it keeps an import of a placed file that resolves, though its old folder resolves it too', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/src/imps/imps/imp-service.ts'),
+    "import { runStub } from '../../../testing/run-stub';\n",
+  );
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/testing/run-stub.ts'),
+    'export const runStub = 1;\n',
+  );
+
+  await Bun.write(join(ctx.root, 'packages/testing/run-stub.ts'), 'export const runStub = 2;\n');
+
+  applyLayerMoves(ctx.root, [
+    'packages/daemon/src/imps/imps/imp-service.ts',
+    'packages/daemon/testing/run-stub.ts',
+    'packages/testing/run-stub.ts',
+  ]);
+
+  expect(readFileSync(join(ctx.root, 'packages/daemon/src/imps/imps/imp-service.ts'), 'utf8')).toBe(
+    "import { runStub } from '../../../testing/run-stub';\n",
+  );
+});
+
 test('it carries on from a run that stopped after it wrote a moved file', async () => {
   const ctx = await setupTest();
 
