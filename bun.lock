@@ -38,7 +38,7 @@
     },
     "packages/api": {
       "name": "@impz/api",
-      "version": "2.8.1",
+      "version": "2.8.2",
       "dependencies": {
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -51,7 +51,7 @@
     },
     "packages/cli": {
       "name": "@impz/cli",
-      "version": "2.8.1",
+      "version": "2.8.2",
       "bin": {
         "impz": "src/main.ts",
       },
@@ -76,7 +76,7 @@
     },
     "packages/client": {
       "name": "@impz/client",
-      "version": "2.8.1",
+      "version": "2.8.2",
       "dependencies": {
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -104,7 +104,7 @@
     },
     "packages/daemon": {
       "name": "@impz/daemon",
-      "version": "2.8.1",
+      "version": "2.8.2",
       "dependencies": {
         "@better-auth/mcp": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
