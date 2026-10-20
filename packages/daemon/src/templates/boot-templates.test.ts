@@ -110,7 +110,7 @@ test('#buildTemplateKey keeps the key when only the drive path changes', () => {
   );
 });
 
-test('#readTemplate answers null and starts no build on the first miss of a shape', async () => {
+test('#requestTemplate answers null and starts no build on the first miss of a shape', async () => {
   const ctx = await setupTest();
 
   const store = createBootTemplates({
@@ -119,7 +119,7 @@ test('#readTemplate answers null and starts no build on the first miss of a shap
     bootReservePercent: 50,
   });
 
-  const found = store.readTemplate({ vcpus: 1, memoryMib: 512 });
+  const found = store.requestTemplate({ vcpus: 1, memoryMib: 512 });
 
   await store.stop();
 
@@ -127,7 +127,7 @@ test('#readTemplate answers null and starts no build on the first miss of a shap
   expect(ctx.vm.builds).toStrictEqual([]);
 });
 
-test('#readTemplate starts one build on the second miss of a shape, shared by the misses after it', async () => {
+test('#requestTemplate starts one build on the second miss of a shape, shared by the misses after it', async () => {
   const ctx = await setupTest();
 
   const store = createBootTemplates({
@@ -136,16 +136,16 @@ test('#readTemplate starts one build on the second miss of a shape, shared by th
     bootReservePercent: 50,
   });
 
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
 
   await store.stop();
 
   expect(ctx.vm.builds).toHaveLength(1);
 });
 
-test('#readTemplate answers the template a build made', async () => {
+test('#requestTemplate answers the template a build made', async () => {
   const ctx = await setupTest();
 
   const store = createBootTemplates({
@@ -156,7 +156,7 @@ test('#readTemplate answers the template a build made', async () => {
 
   const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-  expect(store.readTemplate({ vcpus: 1, memoryMib: 512 })).toStrictEqual(files);
+  expect(store.requestTemplate({ vcpus: 1, memoryMib: 512 })).toStrictEqual(files);
 });
 
 test('#buildTemplate names the template by its key', async () => {
@@ -415,7 +415,7 @@ test('#buildTemplate leaves no template behind a failed build', async () => {
   expect(readdirSync(join(ctx.dataDir, 'templates'))).toStrictEqual(['placeholder.ext4']);
 });
 
-test('#readTemplate starts no build while a failed build backs off', async () => {
+test('#requestTemplate starts no build while a failed build backs off', async () => {
   const ctx = await setupTest();
 
   const buildVm = mock(() => Promise.reject(new Error('no agent')));
@@ -427,13 +427,13 @@ test('#readTemplate starts no build while a failed build backs off', async () =>
     buildVm,
   });
 
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
 
   await store.stop();
 
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
 
   await store.stop();
 
@@ -460,7 +460,7 @@ test('#buildTemplate refuses a shape while its failed build backs off', async ()
   );
 });
 
-test('#readTemplate builds again once the backoff after a failed build has passed', async () => {
+test('#requestTemplate builds again once the backoff after a failed build has passed', async () => {
   const ctx = await setupTest();
 
   const buildVm = mock(() => Promise.reject(new Error('no agent')));
@@ -472,13 +472,13 @@ test('#readTemplate builds again once the backoff after a failed build has passe
     buildVm,
   });
 
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
 
   await store.stop();
 
   ctx.advance(60_000);
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
 
   await store.stop();
 
@@ -541,7 +541,7 @@ test('#buildTemplate refuses a key that is off however long it waits', async () 
   );
 });
 
-test('#readTemplate starts no build for a key that is off', async () => {
+test('#requestTemplate starts no build for a key that is off', async () => {
   const ctx = await setupTest();
 
   const buildVm = mock(() => Promise.reject(new Error('no agent')));
@@ -564,8 +564,8 @@ test('#readTemplate starts no build for a key that is off', async () => {
   await store.buildTemplate({ vcpus: 1, memoryMib: 512 }).catch(() => null);
 
   ctx.advance(3_600_000);
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
-  store.readTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 512 });
 
   await store.stop();
 
@@ -796,7 +796,7 @@ test('#reportFailure counts no fault in the imp toward turning the key off', asy
     store.reportFailure(files, false);
   }
 
-  expect(store.readTemplate({ vcpus: 1, memoryMib: 512 })).toStrictEqual(files);
+  expect(store.requestTemplate({ vcpus: 1, memoryMib: 512 })).toStrictEqual(files);
 });
 
 test('#reportRestored starts the count of template faults again', async () => {
@@ -845,7 +845,7 @@ test('#reportFailure counts no failure for a template evicted before it', async 
 
   const rebuilt = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-  expect(store.readTemplate({ vcpus: 1, memoryMib: 512 })).toStrictEqual(rebuilt);
+  expect(store.requestTemplate({ vcpus: 1, memoryMib: 512 })).toStrictEqual(rebuilt);
 });
 
 test('#buildTemplate removes the least recently used template past four', async () => {
@@ -864,15 +864,15 @@ test('#buildTemplate removes the least recently used template past four', async 
   }
 
   // the first is used again; the second is now the oldest
-  store.readTemplate({ vcpus: 1, memoryMib: 256 });
+  store.requestTemplate({ vcpus: 1, memoryMib: 256 });
   ctx.advance(1000);
 
   await store.buildTemplate({ vcpus: 2, memoryMib: 256 });
 
-  expect(store.readTemplate({ vcpus: 1, memoryMib: 512 })).toBeNull();
-  expect(store.readTemplate({ vcpus: 1, memoryMib: 256 })).not.toBeNull();
-  expect(store.readTemplate({ vcpus: 1, memoryMib: 768 })).not.toBeNull();
-  expect(store.readTemplate({ vcpus: 1, memoryMib: 1024 })).not.toBeNull();
+  expect(store.requestTemplate({ vcpus: 1, memoryMib: 512 })).toBeNull();
+  expect(store.requestTemplate({ vcpus: 1, memoryMib: 256 })).not.toBeNull();
+  expect(store.requestTemplate({ vcpus: 1, memoryMib: 768 })).not.toBeNull();
+  expect(store.requestTemplate({ vcpus: 1, memoryMib: 1024 })).not.toBeNull();
 });
 
 test('#removeStale removes the templates of another host identity', async () => {

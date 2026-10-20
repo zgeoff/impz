@@ -91,7 +91,7 @@ interface TemplateFiles {
 export interface BootTemplates {
   // the ready template for the shape, or null; the second miss of a key
   // starts its build in the background
-  readonly readTemplate: (shape: Readonly<TemplateShape>) => TemplateFiles | null;
+  readonly requestTemplate: (shape: Readonly<TemplateShape>) => TemplateFiles | null;
 
   // the build itself, shared by every miss of one key while it runs; it
   // rejects while the key backs off or is off
@@ -499,7 +499,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
   };
 
   return {
-    readTemplate: (shape) => {
+    requestTemplate: (shape) => {
       const key = buildTemplateKey(deps.identity, shape);
       const record = getRecord(key);
 

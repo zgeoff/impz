@@ -44,7 +44,7 @@ export async function startColdVm(
   const template =
     imp.maxMemoryMib > imp.memoryMib
       ? null
-      : context.templates?.readTemplate({ vcpus: imp.vcpus, memoryMib: imp.memoryMib });
+      : context.templates?.requestTemplate({ vcpus: imp.vcpus, memoryMib: imp.memoryMib });
 
   // a disk that fails is the create's failure, not the template's
   const disk = { isFailed: false };
