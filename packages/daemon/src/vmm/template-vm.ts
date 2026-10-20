@@ -202,7 +202,7 @@ async function startRestoreProcess(
   mergeWrapper: string | null,
 ): Promise<number> {
   try {
-    const argv = await readRestoreCommand(plan, jails);
+    const argv = await setupRestoreCommand(plan, jails);
 
     return await startFirecracker(argv, plan.paths, plan.cgroup?.procsPath ?? null, mergeWrapper);
   } catch (error) {
@@ -214,7 +214,7 @@ async function startRestoreProcess(
 
 // the jailer's command in the imp's chroot with the template bound in, or
 // Firecracker's own beside a swept run/
-async function readRestoreCommand(
+async function setupRestoreCommand(
   plan: Readonly<TemplateRestorePlan>,
   jails: Jails,
 ): Promise<readonly string[]> {
