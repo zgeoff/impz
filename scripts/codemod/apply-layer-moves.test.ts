@@ -176,6 +176,21 @@ test('it moves a file that a branch adds at an old path after the move', async (
   );
 });
 
+test('it moves a file that is not valid UTF-8 with its bytes unchanged', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/src/db/fixture.bin'),
+    new Uint8Array([0x66, 0xff, 0x2e, 0x2e, 0x2f]),
+  );
+
+  applyLayerMoves(ctx.root, ['packages/daemon/src/db/fixture.bin']);
+
+  expect([
+    ...readFileSync(join(ctx.root, 'packages/daemon/src/platform/db/fixture.bin')),
+  ]).toStrictEqual([0x66, 0xff, 0x2e, 0x2e, 0x2f]);
+});
+
 test('it reports a file under src that no move or root stem covers', async () => {
   const ctx = await setupTest();
 
