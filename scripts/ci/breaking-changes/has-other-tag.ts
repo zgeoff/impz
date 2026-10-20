@@ -1,4 +1,4 @@
-import { findSchemaMap } from './find-schema-map';
+import { collectSchemaMap } from './collect-schema-map';
 import { findValues } from './find-values';
 import { isSchemaObject } from './is-schema-object';
 import type { Schema, SchemaObject } from './schema';
@@ -14,8 +14,8 @@ export function hasOtherTag(
     return false;
   }
 
-  const narrowProperties = findSchemaMap(narrow, 'properties');
-  const wideProperties = findSchemaMap(wide, 'properties');
+  const narrowProperties = collectSchemaMap(narrow, 'properties');
+  const wideProperties = collectSchemaMap(wide, 'properties');
 
   return tagKeys.some((key) => {
     const narrowProperty = narrowProperties[key];

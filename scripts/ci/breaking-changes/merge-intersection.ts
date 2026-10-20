@@ -1,9 +1,9 @@
 import type { MessageDirection } from '../../../packages/api/src/protocols/build-protocol-schema';
 import { ANNOTATIONS } from './annotations';
 import { buildWithout } from './build-without';
+import { collectSchemaMap } from './collect-schema-map';
 import { findSchema } from './find-schema';
 import { findSchemaList } from './find-schema-list';
-import { findSchemaMap } from './find-schema-map';
 import { findTypes } from './find-types';
 import { isSchemaObject } from './is-schema-object';
 import { JSON_TYPES } from './json-types';
@@ -100,7 +100,7 @@ function mergeObjectKeywords(
   direction: MessageDirection,
 ): Record<string, unknown> {
   const parts = [left, right].map((part) => ({
-    properties: findSchemaMap(part, 'properties'),
+    properties: collectSchemaMap(part, 'properties'),
     extra: findSchema(part, 'additionalProperties'),
   }));
 

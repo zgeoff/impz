@@ -3,13 +3,13 @@ import { ANNOTATIONS } from './annotations';
 import { buildWithout } from './build-without';
 import { collectBoundChange } from './collect-bound-change';
 import { collectBoundChanges } from './collect-bound-changes';
+import { collectSchemaMap } from './collect-schema-map';
 import type { Comparison } from './comparison';
 import { findBranches } from './find-branches';
 import { findInclusive } from './find-inclusive';
 import { findRef } from './find-ref';
 import { findSchema } from './find-schema';
 import { findSchemaList } from './find-schema-list';
-import { findSchemaMap } from './find-schema-map';
 import { collectTagKeys } from './find-tag-keys';
 import { findTypes } from './find-types';
 import { findValues } from './find-values';
@@ -379,8 +379,8 @@ function collectPropertyChanges(
   path: string,
   comparison: Comparison,
 ): string[] {
-  const narrowProperties = findSchemaMap(narrow, 'properties');
-  const wideProperties = findSchemaMap(wide, 'properties');
+  const narrowProperties = collectSchemaMap(narrow, 'properties');
+  const wideProperties = collectSchemaMap(wide, 'properties');
   const narrowRequired = getStrings(narrow, 'required');
   const wideRequired = getStrings(wide, 'required');
   const wideExtra = findSchema(wide, 'additionalProperties');

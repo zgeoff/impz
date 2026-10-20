@@ -1,4 +1,4 @@
-import { findSchemaMap } from './find-schema-map';
+import { collectSchemaMap } from './collect-schema-map';
 import { findValues } from './find-values';
 import type { SchemaObject } from './schema';
 
@@ -13,7 +13,7 @@ export function collectTagKeys(sides: readonly (readonly SchemaObject[])[]): rea
     return [];
   }
 
-  return Object.keys(findSchemaMap(first, 'properties')).filter(
+  return Object.keys(collectSchemaMap(first, 'properties')).filter(
     (key) =>
       options.every((option) => findTag(option, key) !== undefined) &&
       sides.some(
@@ -24,7 +24,7 @@ export function collectTagKeys(sides: readonly (readonly SchemaObject[])[]): rea
 
 // the one value a schema fixes a property to
 function findTag(schema: SchemaObject, key: string): unknown {
-  const property = findSchemaMap(schema, 'properties')[key];
+  const property = collectSchemaMap(schema, 'properties')[key];
   const values = property === undefined ? undefined : findValues(property);
 
   return values?.length === 1 ? values[0] : undefined;
