@@ -51,6 +51,25 @@ test('it exits 1 and names a daemon file that no layer covers', async () => {
   });
 });
 
+test('it exits 1 and names the rewritten files when oxfmt fails on them', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(join(ctx.root, 'packages/daemon/src/db/imps.ts'), 'export const readImp = 1;\n');
+
+  await Bun.write(
+    join(ctx.root, 'packages/cli/src/broken.ts'),
+    "import { readImp } from '../../daemon/src/db/imps';\nconst = ;\n",
+  );
+
+  const result = await runGitCommand([process.execPath, CODEMOD, ctx.root]);
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr).toEndWith(
+    'oxfmt exited 2; fix and format these files:\n  packages/cli/src/broken.ts\n',
+  );
+});
+
 test('it exits 1 and moves no file when a destination already holds one', async () => {
   const ctx = await setupTest();
 

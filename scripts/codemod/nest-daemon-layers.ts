@@ -49,11 +49,22 @@ function main(): void {
   const formattable = report.rewritten.filter((file) => FORMATTED_FILE.test(file));
 
   if (formattable.length > 0) {
-    Bun.spawnSync([OXFMT, '--no-error-on-unmatched-pattern', ...formattable], {
+    const formatted = Bun.spawnSync([OXFMT, '--no-error-on-unmatched-pattern', ...formattable], {
       cwd: root,
       stdout: 'inherit',
       stderr: 'inherit',
     });
+
+    // a run on this output rewrites nothing and so formats nothing, so this run reports it
+    if (formatted.exitCode !== 0) {
+      console.error(`oxfmt exited ${String(formatted.exitCode)}; fix and format these files:`);
+
+      for (const file of formattable) {
+        console.error(`  ${file}`);
+      }
+
+      process.exitCode = 1;
+    }
   }
 
   for (const file of report.unplaced) {
