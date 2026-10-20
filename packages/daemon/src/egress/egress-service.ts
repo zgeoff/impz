@@ -285,12 +285,16 @@ export function createEgressService(deps: EgressDeps): EgressService {
         state.isScreened = createRangeChecker(public4, public6);
         state.publicUnenforced = host.error;
 
-        state.denyListMissing = isMissingHostAddresses({
-          hasPublic,
-          hostAddresses: deps.config.hostAddresses,
-          wasMissing: state.denyListMissing,
-          log: deps.log,
-        });
+        const isMissing = isMissingHostAddresses(hasPublic, deps.config.hostAddresses);
+
+        // logged once each time the missing addresses appear
+        if (isMissing && !state.denyListMissing) {
+          deps.log(
+            "impd: egress: WARNING: a public imp exists and IMP_HOST_ADDRESSES is empty, so only IMP_EGRESS_DENY keeps it from the Docker host's own addresses and networks; the systemd unit and the NixOS module fill it at each start, compose does not (docs/architecture/network/egress.md#public)",
+          );
+        }
+
+        state.denyListMissing = isMissing;
       }
 
       for (const slot of state.slots.keys()) {
