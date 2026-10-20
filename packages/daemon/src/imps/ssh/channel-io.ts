@@ -1,4 +1,5 @@
 import type { Readable, Writable } from 'node:stream';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { ServerChannel } from 'ssh2';
 import { getErrorMessage } from '../../platform/process/get-error-message';

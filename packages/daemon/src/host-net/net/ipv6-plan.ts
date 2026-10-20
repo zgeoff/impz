@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 breaks the net and egress cycle
 import { buildNat66Removal, buildNat66Ruleset } from '../../network/egress/egress-ruleset';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { runChecked, runCommand } from '../../platform/process/run-command';

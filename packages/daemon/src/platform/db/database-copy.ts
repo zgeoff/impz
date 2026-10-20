@@ -3,7 +3,9 @@ import { chmodSync, closeSync, mkdirSync, openSync, rmSync, statSync } from 'nod
 import { join } from 'node:path';
 import { sql } from 'kysely';
 import * as z from 'zod';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildConflictError } from '../../surface/api-errors';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { ImpQueries } from './open-database';
 

@@ -1,4 +1,5 @@
 import type { Imp } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
 import { createImpWatchdog } from '../../imp-ops/watchdog/imp-watchdog';
 import type { ImpRecord } from '../../platform/db/imps';
 import { createEventBus } from '../../platform/events/event-bus';

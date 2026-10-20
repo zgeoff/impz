@@ -1,6 +1,9 @@
 import type { ExecRequirement } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
 import { PROXY_VARIABLE } from '../../network/broker/guest-trust';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
 import type { BrokerExecEnv } from '../../network/broker/guest-trust';
 import { readEnvKey } from './merge-env';
 

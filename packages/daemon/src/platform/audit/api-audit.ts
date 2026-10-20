@@ -1,4 +1,6 @@
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 moves the caller into platform
 import type { AuditActor } from '../../identity/auth/caller';
 import { writeApiCall } from '../db/api-audit';
 import type { ImpDatabase } from '../db/open-database';

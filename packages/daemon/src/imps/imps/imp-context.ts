@@ -5,6 +5,7 @@ import type { SlotAddress } from '../../host-net/net/addressing';
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
 import { readGuestNetBytes } from '../../host-net/net/tap-bytes';
 import type { TapDevices } from '../../host-net/net/tap-devices';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
 import type { BrokerExecEnv } from '../../network/broker/guest-trust';
 import { TEMPLATE_BUILD_UID } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';

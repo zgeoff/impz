@@ -1,3 +1,4 @@
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import * as z from 'zod';
 import type { StartTimer } from '../../platform/process/clock';

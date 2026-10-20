@@ -1,6 +1,8 @@
 import type { EgressPolicy, ImpKind, ImpState, MoveState, PublicAuth } from '@impz/api';
 import { sql } from 'kysely';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
 import { MOVE_TRANSITIONS } from '../../imp-ops/moves/move-transitions';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
 import { requireTransition } from '../../imps/imps/imp-transitions';
 import { getErrorMessage } from '../process/get-error-message';
 import { allocateSlot } from './allocate-slot';

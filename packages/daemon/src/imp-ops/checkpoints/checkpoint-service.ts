@@ -1,5 +1,6 @@
 import { rmSync } from 'node:fs';
 import type { Checkpoint, Imp } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { Config } from '../../config';
 import { toLockedImp } from '../../imps/imps/imp-lock';
@@ -20,6 +21,7 @@ import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { printLog } from '../../platform/process/print-log';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildConflictError,
   buildInvalidStateError,

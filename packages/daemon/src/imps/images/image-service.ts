@@ -3,6 +3,7 @@ import { listImages, readImageByName, removeImage } from '../../platform/db/imag
 import type { ImageRecord } from '../../platform/db/images';
 import { countImpsUsingImage } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';

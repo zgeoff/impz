@@ -1,5 +1,7 @@
 import { FILES_GUEST_DIR } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildAgentOutdatedApiError } from '../../surface/api-errors';
 import { sendFilesRemove, sendFilesWrite } from '../../vm/agent-client/file-requests';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';

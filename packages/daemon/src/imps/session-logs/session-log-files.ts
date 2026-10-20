@@ -3,6 +3,7 @@ import { open } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { SessionLog, SessionLogRead } from '@impz/api';
 import { SESSION_LOG_READ_MAX_BYTES } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
 import {

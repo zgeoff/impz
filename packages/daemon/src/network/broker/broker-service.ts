@@ -10,6 +10,7 @@ import type {
   Secret,
   SecretAdded,
 } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import { match } from 'ts-pattern';
 import type { Config } from '../../config';
@@ -31,6 +32,7 @@ import {
 } from '../../platform/db/secrets';
 import type { GrantAuthority, GrantClash } from '../../platform/db/secrets';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildConflictError,
   buildForbiddenError,

@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { MAX_SSH_KEYS } from '@impz/api';
 import type { Scope, SshKey, Token } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import { formatKeyFingerprint, parsePublicKey } from '../../imps/ssh/authorized-keys';
 import type { AuthorizedKey } from '../../imps/ssh/authorized-keys';
@@ -16,6 +17,7 @@ import {
   writeTokenSshKeyRecord,
 } from '../../platform/db/tokens';
 import type { GrantableSecret, TokenRecord, TokenSshKeyRecord } from '../../platform/db/tokens';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
 import type { Caller } from './caller';
 
