@@ -37,7 +37,7 @@ import { isPublicCrossOrigin } from './is-public-cross-origin';
 import { createMcpEndpoint } from './mcp/mcp-endpoint';
 import type { MoveService } from './moves/move-service';
 import { getImpdLogger } from './process/get-impd-logger';
-import { findPeerAddress } from './proxy/forwarded-peers';
+import { redeemPeerAddress } from './proxy/forwarded-peers';
 import type { ForwardedPeers } from './proxy/forwarded-peers';
 import { readBufferedAmount } from './read-buffered-amount';
 import { createReverseForwards } from './reverse/reverse-forwards';
@@ -110,7 +110,7 @@ export function createApp(deps: AppDeps) {
 
   const findCaller = (request: Request, server: PeerServer | null, cookie: boolean) => {
     const socket = server?.requestIP(request)?.address ?? null;
-    const peer = findPeerAddress(request, socket, deps.peers);
+    const peer = redeemPeerAddress(request, socket, deps.peers);
 
     return resolveCaller(request, sources, { peer, cookie });
   };
