@@ -284,7 +284,7 @@
     "@xterm/xterm": "6.0.0",
     "@zgeoff/bun-test-extended": "0.2.0",
     "@zgeoff/bun-test-react": "0.2.1",
-    "@zgeoff/format-codemod": "0.1.1",
+    "@zgeoff/format-codemod": "0.3.0",
     "@zgeoff/oxlint-config": "0.2.6",
     "@zgeoff/skill-gate": "0.1.0",
     "acme-client": "5.4.0",
@@ -1139,7 +1139,7 @@
 
     "@zgeoff/bun-test-react": ["@zgeoff/bun-test-react@0.2.1", "", { "dependencies": { "@happy-dom/global-registrator": "20.14.5", "@testing-library/jest-dom": "7.0.1", "happy-dom": "20.14.5" }, "peerDependencies": { "@testing-library/react": ">=16.0.0", "react": ">=19.0.0", "react-dom": ">=19.0.0", "zustand": ">=5.0.0" }, "optionalPeers": ["zustand"] }, "sha512-PyttguyF542VNL3CikzklSXY2LGIeDRvbLqqOeVrjeENPOkBJKxvCfsqFaCOJJj31EU3uxM4eYqMhfiF5f1B3A=="],
 
-    "@zgeoff/format-codemod": ["@zgeoff/format-codemod@0.1.1", "", { "dependencies": { "gunshi": "1.0.0-rc.1", "oxc-parser": "0.153.0" }, "bin": { "format-codemod": "dist/cli.js" } }, "sha512-jr4ZKTO8VS4vAycIkfFamtQc+iVK8A/WzyUDfU/heYlA7qXXoL/HW/GytMBvFczeC5usioqsHvazx6bGzd0nGA=="],
+    "@zgeoff/format-codemod": ["@zgeoff/format-codemod@0.3.0", "", { "dependencies": { "gunshi": "1.0.0-rc.1", "oxc-parser": "0.153.0" }, "bin": { "format-codemod": "dist/cli.js" } }, "sha512-PxExnH3dNcGKW3yM3GJ5G41O8Je0QbPAtZIOwVbCgpN8KOx67ctHM+lEiFxEgkJoHA2JsU7Vy3gkxGIFpX4FRg=="],
 
     "@zgeoff/oxlint-config": ["@zgeoff/oxlint-config@0.2.6", "", { "dependencies": { "@stylistic/eslint-plugin": "5.10.0" }, "peerDependencies": { "oxlint": ">=1.78.0" } }, "sha512-8FIfAYPb17VoiAwulusMSvn4F6DDDH9VDUeUcy7hM2SAUlNi/Y6poWi5y4cNoOfACZyprT7qsHEb2+SgKjUiKw=="],
 
