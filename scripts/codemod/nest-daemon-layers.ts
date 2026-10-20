@@ -29,6 +29,18 @@ function main(): void {
 
   const report = applyLayerMoves(root, files);
 
+  for (const [from, to] of report.collisions) {
+    console.error(`collision: ${from} moves to ${to}, which a file already holds`);
+  }
+
+  if (report.collisions.length > 0) {
+    console.error('moved no file: merge or remove each colliding pair, then run again');
+
+    process.exitCode = 1;
+
+    return;
+  }
+
   console.log(`moved ${report.moved.length} files, rewrote ${report.rewritten.length} files`);
 
   // a longer path can push a line past the width, so the rewritten files are formatted again

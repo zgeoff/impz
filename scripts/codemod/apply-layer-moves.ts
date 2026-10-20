@@ -21,6 +21,10 @@ export interface LayerReport {
 
   // the files under src that no move and no root stem covers, to add to the layer table
   readonly unplaced: readonly string[];
+
+  // the moves whose destination already holds a file, or another move's file; any one of them
+  // stops the run before it changes a file
+  readonly collisions: readonly (readonly [from: string, to: string])[];
 }
 
 // `files` are the repository's text files relative to `root`, before the move
@@ -33,6 +37,16 @@ export function applyLayerMoves(root: string, files: readonly string[]): LayerRe
     if (target !== file && existsSync(join(root, file))) {
       moves.set(file, target);
     }
+  }
+
+  const collisions = [...moves].filter(
+    ([from, to]) =>
+      existsSync(join(root, to)) ||
+      [...moves].some(([other, otherTo]) => other !== from && otherTo === to),
+  );
+
+  if (collisions.length > 0) {
+    return { moved: [], rewritten: [], unplaced: [], collisions };
   }
 
   for (const [from, to] of moves) {
@@ -54,6 +68,7 @@ export function applyLayerMoves(root: string, files: readonly string[]): LayerRe
     unplaced: files
       .map((file) => moves.get(file) ?? file)
       .filter((file) => file.startsWith(`${DAEMON_SRC}/`) && !isCovered(file)),
+    collisions: [],
   };
 }
 

@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -146,7 +146,7 @@ test('it changes nothing on a second run', async () => {
       'packages/daemon/src/platform/db/imps.ts',
       'notes/guide.md',
     ]),
-  ).toStrictEqual({ moved: [], rewritten: [], unplaced: [] });
+  ).toStrictEqual({ moved: [], rewritten: [], unplaced: [], collisions: [] });
 });
 
 test('it moves a file that a branch adds at an old path after the move', async () => {
@@ -188,5 +188,45 @@ test('it reports a file under src that no move or root stem covers', async () =>
     moved: [],
     rewritten: [],
     unplaced: ['packages/daemon/src/quotas/quota.ts'],
+    collisions: [],
   });
+});
+
+test('it moves no file when a destination already holds one', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(join(ctx.root, 'packages/daemon/src/db/imps.ts'), 'export const old = 1;\n');
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/src/platform/db/imps.ts'),
+    'export const placed = 1;\n',
+  );
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/src/net/addressing.ts'),
+    'export const addressing = 1;\n',
+  );
+
+  const report = applyLayerMoves(ctx.root, [
+    'packages/daemon/src/db/imps.ts',
+    'packages/daemon/src/platform/db/imps.ts',
+    'packages/daemon/src/net/addressing.ts',
+  ]);
+
+  expect(report).toStrictEqual({
+    moved: [],
+    rewritten: [],
+    unplaced: [],
+    collisions: [['packages/daemon/src/db/imps.ts', 'packages/daemon/src/platform/db/imps.ts']],
+  });
+
+  expect(readFileSync(join(ctx.root, 'packages/daemon/src/db/imps.ts'), 'utf8')).toBe(
+    'export const old = 1;\n',
+  );
+
+  expect(readFileSync(join(ctx.root, 'packages/daemon/src/platform/db/imps.ts'), 'utf8')).toBe(
+    'export const placed = 1;\n',
+  );
+
+  expect(existsSync(join(ctx.root, 'packages/daemon/src/net/addressing.ts'))).toBeTrue();
 });
