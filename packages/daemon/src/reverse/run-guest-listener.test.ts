@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { buildStubGuestListener } from '../test-utils/build-stub-guest-listener';
+import { buildStubGuestListener } from '../../testing/vm/build-stub-guest-listener';
 import { runGuestListener } from './run-guest-listener';
 
 test('it delivers clients until the forward is full and refuses the rest', async () => {

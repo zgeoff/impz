@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildStubIpCommand } from '../test-utils/build-stub-ip-command';
+import { buildStubIpCommand } from '../../testing/host-net/build-stub-ip-command';
 import {
   parseConnectedPrefixes4,
   parseRouteDevice,

@@ -58,10 +58,11 @@
           "test-utils": ["packages/test-utils/**"],
           "runtime-neutral": ["packages/{shared,api,client}/**"],
           // the daemon's own test helpers build queries against real databases
-          "db": ["packages/daemon/src/{db,test-utils}/**"],
+          "db": ["packages/daemon/src/db/**", "packages/daemon/testing/**"],
           "tests": [
             "**/*.{test,e2e,pebble}.{ts,tsx}",
             "**/{test-utils,smoke,mocks}/**",
+            "packages/daemon/testing/**",
             "packages/dashboard/e2e/**",
             "**/test-setup.ts"
           ]
@@ -83,6 +84,7 @@
             "ignore": [
               "**/*.{test,e2e,pebble}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
+              "packages/daemon/testing/**",
               "packages/dashboard/e2e/**",
               "**/test-setup.ts"
             ],
@@ -99,7 +101,12 @@
           },
           {
             "name": "test-support",
-            "modules": ["@impz/test-utils", "@impz/api/test-utils", "@impz/client/test-utils"],
+            "modules": [
+              "@impz/test-utils",
+              "@impz/api/test-utils",
+              "@impz/client/test-utils",
+              "@impz/daemon/testing"
+            ],
             "from": ["packages"],
             "allow": ["tests"],
             "reason": "production code never imports test support"
@@ -179,7 +186,7 @@
       // line counts run past the limit
       "files": [
         "packages/dashboard/src/mocks/impd-router.ts",
-        "packages/daemon/src/test-utils/build-stub-vmm.ts"
+        "packages/daemon/testing/vm/build-stub-vmm.ts"
       ],
       "rules": { "max-lines": "off" }
     },

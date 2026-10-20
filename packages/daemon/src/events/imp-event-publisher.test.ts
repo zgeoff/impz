@@ -1,6 +1,4 @@
 import { expect, jest, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ImpContract, ImpEvent } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -8,156 +6,30 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { readInBackground } from '../../testing/platform/read-in-background';
+import { readQueuedText } from '../../testing/platform/read-queued-text';
+import { startTestImpd } from '../../testing/start-test-impd';
+import { buildMockGovernorDecision } from '../../testing/vm/build-mock-governor-decision';
 import { buildSessionValue } from '../auth/session-cookie';
 import { ROOT_TOKEN_ID } from '../auth/token-store';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
-import type { ImpdDeps } from '../create-impd';
 import { listApiCalls } from '../db/api-audit';
 import { createImage } from '../db/images';
 import type { ImpWrite } from '../db/imp-write-feed';
 import { findImpByName } from '../db/imps';
-import { openDatabase } from '../db/open-database';
-import { buildSystemDrivePath, buildSystemDrivesDir } from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockGovernorDecision } from '../test-utils/build-mock-governor-decision';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubClock } from '../test-utils/build-stub-clock';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { readInBackground } from '../test-utils/read-in-background';
-import { readQueuedText } from '../test-utils/read-queued-text';
 
-async function setupTest() {
+function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'imp-events-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-  const logs: string[] = [];
-
-  // a frozen clock, far from the wall clock, that the session cookies read
-  const clock = { nowMs: Date.UTC(2026, 0, 1) };
-
-  // the clock a sleep's timings and its young-guest wait read, which moves
-  // only by that wait's pauses
-  const sleepClock = buildStubClock();
-
-  const deps: ImpdDeps = {
-    db,
-
-    // the bearer the test's client sends, and the key of its session cookies
+  // a frozen clock, far from the wall clock, that the session cookies read;
+  // a sleep's young-guest wait moves it by its pauses alone. The root
+  // token is the key of the session cookies.
+  return startTestImpd(stack, {
+    frozenClockMs: Date.UTC(2026, 0, 1),
     rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: (message) => {
-      logs.push(message);
-    },
-    now: () => clock.nowMs,
-
-    // Firecracker, the kernel and the CPU as this host reports them, which a
-    // snapshot must match to load
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-      sleepTiming: { now: sleepClock.now, sleep: sleepClock.sleep },
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  };
-
-  const impd = await createImpd(config, deps);
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
   });
-
-  stack.defer(() => {
-    impd.diskUsage.stop();
-  });
-
-  const link = new RPCLink({
-    url: 'http://impd.test/rpc',
-    headers: { authorization: 'Bearer root-token' },
-    fetch: (request) => impd.api.app.handle(request),
-  });
-
-  const client: ContractRouterClient<ImpContract> = createORPCClient(link);
-
-  return { config, db, dataDir, deps, vmm, logs, clock, sleepClock, impd, client, stack };
 }
 
 // oRPC's keepalive is its own setInterval, so fake timers run 400 s of a
@@ -288,7 +160,7 @@ test('it counts a young guest’s wait before a sleep in the slept event’s pre
   // 200 ms short of IMP_SLEEP_MIN_GUEST_UPTIME_MS's 1500 ms default: the
   // sleep waits the rest on the sleep clock before it pauses the VM, and
   // the pause itself moves that clock by nothing
-  ctx.vmm.setGuestUptime(1300);
+  ctx.fake.setGuestUptime(1300);
 
   await ctx.client.imps.sleep({ name: 'dev' });
 
@@ -335,7 +207,7 @@ test('it sends a repaired event when a check finds an imp’s VM gone', async ()
 
   const stream = readInBackground(events);
 
-  ctx.vmm.alive.delete(dead.pid);
+  ctx.fake.alive.delete(dead.pid);
 
   await ctx.client.imps.list();
 
@@ -376,21 +248,7 @@ test('it reports an adopted change when a restarted impd adopts a running VM', a
 
   onTestFinished(unsubscribe);
 
-  // the first impd still holds its resolver's port in this process
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    { ...ctx.deps, vms: ctx.vmm.startGeneration() },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-  });
-
-  ctx.stack.defer(() => {
-    restarted.diskUsage.stop();
-  });
+  const restarted = await ctx.restartImpd();
 
   const bootChanges = writes
     .filter((write) => write.kind === 'changed')
@@ -507,11 +365,13 @@ test('it ends a dashboard stream at the session’s expiry', async () => {
   const ctx = await setupTest();
 
   // a session that ends a millisecond after the test's frozen now
+  const expiresAt = ctx.now() + 1;
+
   const dashboard: ContractRouterClient<ImpContract> = createORPCClient(
     new RPCLink({
       url: 'http://impd.test/rpc',
       headers: {
-        cookie: `imp_session=${buildSessionValue('root-token', { tokenId: ROOT_TOKEN_ID, expiresAt: ctx.clock.nowMs + 1 })}`,
+        cookie: `imp_session=${buildSessionValue('root-token', { tokenId: ROOT_TOKEN_ID, expiresAt })}`,
         'sec-fetch-site': 'same-origin',
       },
       fetch: (request) => ctx.impd.api.app.handle(request),
@@ -543,11 +403,13 @@ test('it ends a dashboard stream at any logout, and leaves a token’s stream op
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
+  const expiresAt = ctx.now() + 60_000;
+
   const dashboard: ContractRouterClient<ImpContract> = createORPCClient(
     new RPCLink({
       url: 'http://impd.test/rpc',
       headers: {
-        cookie: `imp_session=${buildSessionValue('root-token', { tokenId: ROOT_TOKEN_ID, expiresAt: ctx.clock.nowMs + 60_000 })}`,
+        cookie: `imp_session=${buildSessionValue('root-token', { tokenId: ROOT_TOKEN_ID, expiresAt })}`,
         'sec-fetch-site': 'same-origin',
       },
       fetch: (request) => ctx.impd.api.app.handle(request),
@@ -615,11 +477,13 @@ test('it records a dashboard session’s calls in the audit log as the dashboard
 
   await ctx.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
+  const expiresAt = ctx.now() + 60_000;
+
   const dashboard: ContractRouterClient<ImpContract> = createORPCClient(
     new RPCLink({
       url: 'http://impd.test/rpc',
       headers: {
-        cookie: `imp_session=${buildSessionValue('root-token', { tokenId: ROOT_TOKEN_ID, expiresAt: ctx.clock.nowMs + 60_000 })}`,
+        cookie: `imp_session=${buildSessionValue('root-token', { tokenId: ROOT_TOKEN_ID, expiresAt })}`,
         'sec-fetch-site': 'same-origin',
       },
       fetch: (request) => ctx.impd.api.app.handle(request),

@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { createTestDatabase } from '../test-utils/create-test-database';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { readSession, readSessionCookies } from './session-cookie';
 import { createSessionRoutes } from './session-routes';
 import { loadTokenStore } from './token-store';

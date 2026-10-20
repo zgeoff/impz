@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import { buildMockMoveTicketRow } from '../test-utils/build-mock-move-ticket-row';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { createTestDatabase } from '../test-utils/create-test-database';
+import { buildMockMoveTicketRow } from '../../testing/imp-ops/build-mock-move-ticket-row';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { allocateSlot } from './allocate-slot';
 import { createImage } from './images';
 import { createImp } from './imps';

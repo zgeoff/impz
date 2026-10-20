@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { buildMockBackupConfig } from '../test-utils/build-mock-backup-config';
-import { buildStubResticLockRunner } from '../test-utils/build-stub-restic-lock-runner';
-import { buildStubResticRunner } from '../test-utils/build-stub-restic-runner';
+import { buildMockBackupConfig } from '../../testing/imp-ops/build-mock-backup-config';
+import { buildStubResticLockRunner } from '../../testing/imp-ops/build-stub-restic-lock-runner';
+import { buildStubResticRunner } from '../../testing/imp-ops/build-stub-restic-runner';
 import {
   ResticError,
   createRestic,

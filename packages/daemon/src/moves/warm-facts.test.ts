@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
+import { buildMockWarmHost } from '../../testing/imp-ops/build-mock-warm-host';
+import { buildMockWarmMove } from '../../testing/imp-ops/build-mock-warm-move';
 import { parseSubnet } from '../net/addressing';
-import { buildMockWarmHost } from '../test-utils/build-mock-warm-host';
-import { buildMockWarmMove } from '../test-utils/build-mock-warm-move';
 import { buildWarmMove, findWarmMismatches, readWarmHost } from './warm-facts';
 
 test('#readWarmHost reports the identity, the config and the storage a warm move needs', () => {

@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import * as dnsPacket from 'dns-packet';
 import invariant from 'tiny-invariant';
-import { buildMockDnsQuery } from '../test-utils/build-mock-dns-query';
-import { buildMockDnsReply } from '../test-utils/build-mock-dns-reply';
+import { buildMockDnsQuery } from '../../testing/network/build-mock-dns-query';
+import { buildMockDnsReply } from '../../testing/network/build-mock-dns-reply';
 import { EDE_PROHIBITED, RCODE, buildEmptyReply, buildLocalReply, readQuery } from './dns-messages';
 
 test('#readQuery reads the id, name and type of a query with one question', () => {

@@ -1,26 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { ImpContract } from '@impz/api';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
-import { loadConfig } from './config';
-import { createImpd } from './create-impd';
-import type { ImpdDeps } from './create-impd';
-import { createImage } from './db/images';
+import { startTestImpd } from '../testing/start-test-impd';
 import { findImpByName } from './db/imps';
-import { openDatabase } from './db/open-database';
 import { findSecret } from './db/secrets';
 import { listTokenRecords } from './db/tokens';
-import { buildSystemDrivePath, buildSystemDrivesDir } from './storage/data-layout';
-import { createXfsBackend } from './storage/xfs-backend';
-import { buildMockNewImage } from './test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from './test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from './test-utils/build-stub-vmm';
-import { findFreePorts } from './test-utils/find-free-ports';
 
 // tokens.update: a token's grantable list changed in place
 // (docs/guides/tokens.md#change-the-list), through the API as a client calls it.
@@ -33,131 +20,30 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'token-update-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
   const gap = { once: (): Promise<void> => Promise.resolve() };
 
-  const deps: ImpdDeps = {
-    db,
+  const harness = await startTestImpd(stack, {
+    boundaries: {
+      broker: {
+        // the race window: what a test sets runs once, then writes run on
+        beforeGrantWrite: () => {
+          const run = gap.once;
 
-    // the bearer the root client sends
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+          gap.once = () => Promise.resolve();
 
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
+          return run();
+        },
       },
     },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-
-    // Firecracker, the kernel and the CPU as this host reports them
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-
-      // the race window: what a test sets runs once, then writes run on
-      beforeGrantWrite: () => {
-        const run = gap.once;
-
-        gap.once = () => Promise.resolve();
-
-        return run();
-      },
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  };
-
-  const impd = await createImpd(config, deps);
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
   });
 
   // the default image, which every imps.create boots when it names none
-  await Bun.write(join(dataDir, 'images', 'base', 'rootfs.ext4'), 'rootfs');
+  await harness.createTestImage('base');
 
-  await createImage(db, buildMockNewImage({ name: 'base', digest: 'sha256:base', sizeBytes: 6 }));
+  // the impd that runs now, through a restart too
+  const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
 
-  const sendToImpd = (request: Request) => impd.api.app.handle(request);
-
-  const client: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: 'Bearer root-token' },
-      fetch: sendToImpd,
-    }),
-  );
-
-  return { db, config, deps, vmm, stack, impd, client, sendToImpd, gap };
+  return Object.assign(harness, { sendToImpd, gap });
 }
 
 test('it lets a host-wide manage token change another token’s list', async () => {
@@ -703,27 +589,9 @@ test('it keeps the updated list for the old bearer after a restart', async () =>
   });
 
   await ctx.client.tokens.update({ name: 'agent', grantable: ['gh', 'npm'] });
+  await ctx.restartImpd();
 
-  // the first impd still holds its resolver's port in this process
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    { ...ctx.deps, vms: ctx.vmm.startGeneration() },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-    restarted.diskUsage.stop();
-  });
-
-  const agent: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${made.secret}` },
-      fetch: (request) => restarted.api.app.handle(request),
-    }),
-  );
+  const agent = ctx.buildClient(made.secret);
 
   const identity = await agent.tokens.whoami();
 

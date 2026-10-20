@@ -1,22 +1,16 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '@impz/daemon/src/config';
-import { createImpd } from '@impz/daemon/src/create-impd';
-import type { ImpdDeps } from '@impz/daemon/src/create-impd';
 import { createImage } from '@impz/daemon/src/db/images';
-import { openDatabase } from '@impz/daemon/src/db/open-database';
+import { DOCKERFILE_FRONTEND } from '@impz/daemon/src/docker-proxy/dockerfile-frontend';
 import {
   buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '@impz/daemon/src/storage/data-layout';
-import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
-import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+  buildMockNewImage,
+  createStubDockerCli,
+  findFreePorts,
+  startTestImpd,
+} from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -25,12 +19,11 @@ import { HttpResponse, http } from 'msw';
 import { CLIENT_VERSION } from './check-server';
 import { createImpClient } from './create-imp-client';
 import { buildStubImpdWithNewReason } from './test-utils/build-stub-impd-with-new-reason';
-import { createStubDockerBin } from './test-utils/create-stub-docker-bin';
 import { startStubDockerEngine } from './test-utils/start-stub-docker-engine';
 
-// impd's dependencies on stub VMs; `startImpd` boots one over the same
-// database and storage, as a restart does, and serves it at http://impd.test/
-// through the run's MSW server; `workDir` holds a test's host engine
+// `startImpd` boots impd with `env` and serves it at http://impd.test/
+// through the run's MSW server, its `restartImpd` as a restart does;
+// `workDir` holds a test's host engine
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -39,125 +32,33 @@ async function setupTest() {
   // impd boots with a root token, the bearer the test's client sends
   const rootToken = 'root-token';
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'imp-client-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
   const workDir = await mkdtemp(join(tmpdir(), 'imp-client-engine-'));
 
   stack.defer(() => rm(workDir, { recursive: true, force: true }));
 
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  // the image every imps.create boots when it names none
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(db, image);
-
-  const vmm = buildStubVmm();
-
-  const deps: Omit<ImpdDeps, 'vms'> = {
-    db,
-
-    rootToken,
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  };
-
   const client = createImpClient({ url: 'http://impd.test/', token: rootToken });
 
-  // each impd binds its own resolver port and takes a new runner; the stub
-  // VMM runs no jailer and builds no boot template
   const startImpd = async (env: Readonly<Record<string, string>> = {}) => {
-    const config = loadConfig({
-      IMP_DATA_DIR: dataDir,
-      IMP_JAILER: 'false',
-      IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-      ...env,
-    });
+    const harness = await startTestImpd(stack, { rootToken, env });
 
-    const impd = await createImpd(config, { ...deps, vms: vmm.startGeneration() });
+    // the image every imps.create boots when it names none
+    const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-    stack.defer(() => impd.broker.stop());
+    await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
-    stack.defer(() => {
-      impd.egress.stop();
-      impd.diskUsage.stop();
-    });
+    await createImage(harness.db, image);
 
-    server.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
+    server.use(http.all('http://impd.test/*', (info) => harness.impd.api.app.handle(info.request)));
 
-    return impd;
+    return harness;
   };
 
-  return { vmm, client, startImpd, workDir, rootToken };
+  return { client, startImpd, workDir, rootToken };
 }
 
 test('#createImpClient calls the contract under the base url with the bearer token', async () => {
   const ctx = await setupTest();
-  const impd = await ctx.startImpd();
+  const harness = await ctx.startImpd();
 
   const paths = mock<(path: string) => void>();
 
@@ -165,7 +66,7 @@ test('#createImpClient calls the contract under the base url with the bearer tok
     http.all('http://impd.test/*', (info) => {
       paths(new URL(info.request.url).pathname);
 
-      return impd.api.app.handle(info.request);
+      return harness.impd.api.app.handle(info.request);
     }),
   );
 
@@ -189,13 +90,13 @@ test('#createImpClient rejects a call with a wrong token as UNAUTHORIZED', async
 
 test('#createImpClient rejects a procedure impd does not have as an unknown procedure', async () => {
   const ctx = await setupTest();
-  const impd = await ctx.startImpd();
+  const harness = await ctx.startImpd();
 
   // an impd from before the stream: the call reaches a path impd has no
   // procedure for, which it answers with its own plain-text not-found
   server.use(
     http.all('http://impd.test/*', (info) =>
-      impd.api.app.handle(
+      harness.impd.api.app.handle(
         new Request(
           info.request.url.replace('/rpc/events/stream', '/rpc/events/retired'),
           info.request,
@@ -259,10 +160,9 @@ test('#requireAwake answers a running imp as it is', async () => {
 
 test('#requireAwake refuses an imp in error with INVALID_STATE', async () => {
   const ctx = await setupTest();
+  const harness = await ctx.startImpd();
 
-  await ctx.startImpd();
-
-  ctx.vmm.queue('boot', 'fail');
+  harness.fake.queue('boot', 'fail');
 
   await ctx.client.imps.create({ name: 'dev' }).catch(() => null);
 
@@ -274,10 +174,9 @@ test('#requireAwake refuses an imp in error with INVALID_STATE', async () => {
 
 test('#requireAwake restarts an imp in error when told to', async () => {
   const ctx = await setupTest();
+  const harness = await ctx.startImpd();
 
-  await ctx.startImpd();
-
-  ctx.vmm.queue('boot', 'fail');
+  harness.fake.queue('boot', 'fail');
 
   await ctx.client.imps.create({ name: 'dev' }).catch(() => null);
 
@@ -289,7 +188,7 @@ test('#requireAwake restarts an imp in error when told to', async () => {
 test('#requireAwake passes RAM_BUDGET_EXCEEDED on after one wake', async () => {
   const ctx = await setupTest();
 
-  const impd = await ctx.startImpd({
+  const harness = await ctx.startImpd({
     IMP_RAM_BUDGET_MIB: '600',
     IMP_DEFAULT_MEMORY_MIB: '512',
     IMP_BOOT_RESERVE_PERCENT: '100',
@@ -306,7 +205,7 @@ test('#requireAwake passes RAM_BUDGET_EXCEEDED on after one wake', async () => {
     http.all('http://impd.test/*', (info) => {
       paths(new URL(info.request.url).pathname);
 
-      return impd.api.app.handle(info.request);
+      return harness.impd.api.app.handle(info.request);
     }),
   );
 
@@ -322,22 +221,24 @@ test('#requireAwake passes RAM_BUDGET_EXCEEDED on after one wake', async () => {
 
 test('#requireAwake rejects with SERVICE_UNAVAILABLE while impd stops', async () => {
   const ctx = await setupTest();
-  const impd = await ctx.startImpd();
+  const harness = await ctx.startImpd();
 
   await ctx.client.imps.create({ name: 'dev' });
-  await impd.imps.sleepAllImps();
+  await harness.imps.sleepAllImps();
 
   expect(ctx.client.requireAwake('dev')).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
 });
 
 test('#requireAwake waits out a stopping impd for the one that replaces it when asked to', async () => {
   const ctx = await setupTest();
-  const stopping = await ctx.startImpd();
+  const harness = await ctx.startImpd();
+
+  const stopping = harness.impd;
 
   await ctx.client.imps.create({ name: 'dev' });
   await stopping.imps.sleepAllImps();
 
-  const replacement = await ctx.startImpd();
+  const replacement = await harness.restartImpd();
 
   const wakes = mock<(impd: string, status: number) => void>();
 
@@ -495,15 +396,30 @@ test('#images.addStream hands on each progress event, then the image', async () 
 
   const imageId = `sha256:${'c'.repeat(64)}`;
 
-  const docker = createStubDockerBin(ctx.workDir, {
-    'busybox:1.37': {
-      id: imageId,
-      repoDigests: [`busybox@sha256:${'d'.repeat(64)}`],
-      files: { hello: 'from busybox\n' },
-    },
+  await mkdir(join(ctx.workDir, 'tree'));
+  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'from busybox\n');
+
+  // the image is on the host already
+  const docker = createStubDockerCli({
+    dir: ctx.workDir,
+    images: [
+      {
+        refs: ['busybox:1.37'],
+        inspects: [
+          {
+            Id: imageId,
+            RepoDigests: [`busybox@sha256:${'d'.repeat(64)}`],
+            Config: {},
+            Size: 1024,
+          },
+        ],
+      },
+    ],
+    create: { id: 'c'.repeat(64) },
+    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
   });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', docker.path);
 
   // adds pull onto the host engine, as no builder imp has an agent here
   await ctx.startImpd({ IMP_BUILD_ISOLATION: 'host' });
@@ -553,11 +469,24 @@ test('#images.buildStream hands on each progress event as it comes, then the ima
   const imageId = `sha256:${'b'.repeat(64)}`;
   const release = Promise.withResolvers<void>();
 
-  const docker = createStubDockerBin(ctx.workDir, {
-    'imp/web:latest': { id: imageId, repoDigests: [], files: { hello: 'built\n' } },
+  await mkdir(join(ctx.workDir, 'tree'));
+  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
+
+  // the frontend is on the host, and the engine tags what it builds
+  const docker = createStubDockerCli({
+    dir: ctx.workDir,
+    images: [
+      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
+      {
+        refs: ['imp/web:latest'],
+        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
+      },
+    ],
+    create: { id: 'c'.repeat(64) },
+    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
   });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', docker.path);
 
   const engine = startStubDockerEngine({
     socketPath: join(ctx.workDir, 'docker.sock'),
@@ -625,10 +554,10 @@ test('#images.buildStream hands on each progress event as it comes, then the ima
 // ImpChangeReason needs no EVENT_VERSION bump.
 test('#events.stream passes on an event whose reason this client does not know', async () => {
   const ctx = await setupTest();
-  const impd = await ctx.startImpd();
+  const harness = await ctx.startImpd();
 
   const newer = buildStubImpdWithNewReason(
-    (request) => impd.api.app.handle(request),
+    (request) => harness.impd.api.app.handle(request),
     'from-the-future',
   );
 

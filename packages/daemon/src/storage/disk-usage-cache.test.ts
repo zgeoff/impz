@@ -1,13 +1,13 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
+import { buildMockNewCheckpoint } from '../../testing/imp-ops/build-mock-new-checkpoint';
+import { buildStubClock } from '../../testing/platform/build-stub-clock';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
+import { buildMockImpDiskUsage } from '../../testing/vm/build-mock-imp-disk-usage';
+import { buildStubSlowMeasure } from '../../testing/vm/build-stub-slow-measure';
 import { createCheckpoint } from '../db/checkpoints';
 import { createImage } from '../db/images';
 import { createImp } from '../db/imps';
-import { buildMockImpDiskUsage } from '../test-utils/build-mock-imp-disk-usage';
-import { buildMockNewCheckpoint } from '../test-utils/build-mock-new-checkpoint';
-import { buildStubClock } from '../test-utils/build-stub-clock';
-import { buildStubSlowMeasure } from '../test-utils/build-stub-slow-measure';
-import { createTestDatabase } from '../test-utils/create-test-database';
 import { createDiskUsageCache } from './disk-usage-cache';
 import type { DiskUsageReport, StorageBackend } from './storage-backend';
 

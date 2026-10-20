@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { startStubDockerEngine } from '../test-utils/start-stub-docker-engine';
-import { startStubSilentOrigin } from '../test-utils/start-stub-silent-origin';
+import { startStubDockerEngine } from '../../testing/imps/start-stub-docker-engine';
+import { startStubSilentOrigin } from '../../testing/network/start-stub-silent-origin';
 import { DOCKERFILE_FRONTEND } from './dockerfile-frontend';
 import { PROXY_LABEL, createDockerProxy } from './proxy';
 import type { DockerProxyOptions } from './proxy';
@@ -1083,7 +1083,7 @@ test('it passes on a pull and an export that stay silent past Bun’s idle limit
   const child = Bun.spawn(
     [
       process.execPath,
-      join(import.meta.dir, '../test-utils/run-idle-limited-requests.ts'),
+      join(import.meta.dir, '../../testing/surface/run-idle-limited-requests.ts'),
       JSON.stringify({ via: 'docker-proxy', socket }),
     ],
     {

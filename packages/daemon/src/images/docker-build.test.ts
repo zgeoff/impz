@@ -3,10 +3,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
+import { startStubDockerEngine } from '../../testing/imps/start-stub-docker-engine';
+import { startStubSilentBuildEngine } from '../../testing/imps/start-stub-silent-build-engine';
 import { parseQuery } from '../docker-proxy/router';
 import { checkBuildQuery } from '../docker-proxy/rules';
-import { startStubDockerEngine } from '../test-utils/start-stub-docker-engine';
-import { startStubSilentBuildEngine } from '../test-utils/start-stub-silent-build-engine';
 import {
   DockerBuildError,
   readBuiltImageId,
@@ -477,7 +477,7 @@ test('#runDockerBuild gets the image of a build silent past the idle limit, whic
   const child = Bun.spawn(
     [
       process.execPath,
-      join(import.meta.dir, '../test-utils/run-idle-limited-docker-build.ts'),
+      join(import.meta.dir, '../../testing/imps/run-idle-limited-docker-build.ts'),
       JSON.stringify({
         dir: ctx.dir,
         buildEngine: join(ctx.dir, 'build-engine.sock'),

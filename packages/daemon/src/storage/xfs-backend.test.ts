@@ -11,7 +11,7 @@ import {
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { buildStubFiemap } from '../test-utils/build-stub-fiemap';
+import { buildStubFiemap } from '../../testing/vm/build-stub-fiemap';
 import { readExtents } from './fiemap';
 import { createXfsBackend } from './xfs-backend';
 

@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
 import { createEventBus } from '../events/event-bus';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
 import { createImage } from './images';
 import type { ImpWrite } from './imp-write-feed';
 import { createImp } from './imps';

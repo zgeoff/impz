@@ -6,11 +6,10 @@ to use for a change and what each one proves; the scripts and their tests show h
 ## ZFS
 
 Test the ZFS backend against the in-memory `zfs` fake,
-[`buildStubZfs`](../../../../packages/daemon/src/test-utils/build-stub-zfs.ts), first. The fake
-models datasets, snapshots, clones, promote, deferred destroy and legacy mounts, and it can block,
-fail or crash a command and restart, so a test can stop a backend halfway through an operation. Its
-space numbers are fixed, and it refuses to unmount a dir that is not itself a mount, as util-linux
-does.
+[`buildStubZfs`](../../../../packages/daemon/testing/vm/build-stub-zfs.ts), first. The fake models
+datasets, snapshots, clones, promote, deferred destroy and legacy mounts, and it can block, fail or
+crash a command and restart, so a test can stop a backend halfway through an operation. Its space
+numbers are fixed, and it refuses to unmount a dir that is not itself a mount, as util-linux does.
 
 Write a real-pool test only for behaviour that depends on the kernel module, such as space
 accounting or a real mount. Real-pool tests skip until their two gates name a dataset and its mount

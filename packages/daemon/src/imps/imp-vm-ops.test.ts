@@ -4,19 +4,19 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import fc from 'fast-check';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { findBrokenInvariants } from '../../testing/imps/find-broken-invariants';
+import { waitForOutcome } from '../../testing/imps/wait-for-outcome';
+import { runWithStack } from '../../testing/platform/run-with-stack';
+import { startTestImpd } from '../../testing/start-test-impd';
+import { StubVmError } from '../../testing/vm/build-stub-vmm';
+import type { VmOutcome } from '../../testing/vm/build-stub-vmm';
+import { writeTestSnapshot } from '../../testing/vm/write-test-snapshot';
 import { createImp, findImpByName, listImps, updateImpActivity } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
 import { updateImpState } from '../db/update-imp-state';
 import { readSnapshotMeta, writeSnapshotMeta } from '../sleep/snapshot-meta';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { StubVmError } from '../test-utils/build-stub-vmm';
-import type { VmOutcome } from '../test-utils/build-stub-vmm';
-import { runWithStack } from '../test-utils/run-with-stack';
-import { buildTestApp } from './build-test-app';
-import { findBrokenInvariants } from './find-broken-invariants';
-import { createImpTest, writeTestSnapshot } from './test-imps';
-import { waitForOutcome } from './wait-for-outcome';
 
 // Whole-service tests through the oRPC router, with VM steps that fail, die
 // or hang, and impd restarts over the same database and VMs.
@@ -26,14 +26,12 @@ async function setupTest(options: Readonly<{ env?: Readonly<Record<string, strin
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await createImpTest(stack, { env: options.env ?? {} });
+  const harness = await startTestImpd(stack, { env: options.env ?? {} });
 
   // every create boots this image
   await harness.createTestImage('ubuntu');
 
-  const app = buildTestApp(harness, harness);
-
-  return { ...harness, client: app.client };
+  return harness;
 }
 
 test(
@@ -386,9 +384,10 @@ test('it settles imps a restarted impd finds in every state', async () => {
   writeTestSnapshot(buildImpPaths(ctx.dataDir, deadOld.id), lastActive - 1000, ctx.readIdentity());
   rmSync(buildImpPaths(ctx.dataDir, lostSnapshot.id).memFile);
 
-  const impd = ctx.restartImpd();
+  // the old impd's imps, once the restart replaced them
+  const oldImps = ctx.imps;
 
-  await impd.imps.reconcileImps();
+  await ctx.restartImpd();
 
   const after = await listImps(ctx.db);
 
@@ -412,7 +411,7 @@ test('it settles imps a restarted impd finds in every state', async () => {
   expect(ctx.fake.stops).toContainEqual({ pid: orphanPid, graceful: false });
 
   // the old impd is gone: its VM calls never come back
-  expect(ctx.imps.listImps()).rejects.toThrow('this impd was replaced');
+  expect(oldImps.listImps()).rejects.toThrow('this impd was replaced');
   expect(broken).toBeEmpty();
 });
 
@@ -433,9 +432,8 @@ test(
 
     ctx.fake.queue('stop', 'fail');
 
-    const impd = ctx.restartImpd();
-
-    const reconciled = await waitForOutcome(impd.imps.reconcileImps(), 10_000);
+    // the next impd's start runs its reconcile
+    const reconciled = await waitForOutcome(ctx.restartImpd(), 10_000);
     const stuck = await findImpByName(ctx.db, 'stuck');
     const broken = await findBrokenInvariants(ctx, true);
 
@@ -464,12 +462,10 @@ test('it kills the VM of a creating imp that would not stop once a destroy lets 
 
   ctx.fake.queue('stop', 'fail');
 
-  const impd = ctx.restartImpd();
-
-  await impd.imps.reconcileImps();
+  await ctx.restartImpd();
 
   // the record kept the pid, so a destroy kills the VM
-  await buildTestApp(ctx, impd).client.imps.destroy({ name: 'stuck' });
+  await ctx.client.imps.destroy({ name: 'stuck' });
 
   expect(ctx.fake.alive.has(pid)).toBeFalse();
 });
@@ -508,9 +504,7 @@ test(
     const woke = await waitForOutcome(waking, 10_000);
     const stopped = await waitForOutcome(stopping, 10_000);
 
-    const impd = ctx.restartImpd();
-
-    await impd.imps.reconcileImps();
+    await ctx.restartImpd();
 
     const after = await listImps(ctx.db);
     const broken = await findBrokenInvariants(ctx, true);
@@ -542,12 +536,9 @@ test('it wakes an imp that impd stopping left asleep on the next impd', async ()
   wakeGate.release();
 
   await Promise.all([waking, stopping]);
+  await ctx.restartImpd();
 
-  const impd = ctx.restartImpd();
-
-  await impd.imps.reconcileImps();
-
-  const woken = await buildTestApp(ctx, impd).client.imps.wake({ name: 'waking' });
+  const woken = await ctx.client.imps.wake({ name: 'waking' });
 
   expect(woken.state).toBe('running');
 });
@@ -577,9 +568,7 @@ test('it re-adopts the VM of a boot under way once impd restarting in place wait
 
   await starting;
 
-  const impd = ctx.restartImpd();
-
-  await impd.imps.reconcileImps();
+  await ctx.restartImpd();
 
   const imp = await findImpByName(ctx.db, 'dev');
   const broken = await findBrokenInvariants(ctx, true);
@@ -599,9 +588,7 @@ test('it leaves the next impd an error record when impd dies mid-create', async 
   await bootGate.reached;
 
   // impd is killed: the new one reconciles while the old boot is stuck
-  const impd = ctx.restartImpd();
-
-  await impd.imps.reconcileImps();
+  await ctx.restartImpd();
 
   // the old boot finishes into a dead process: its VM starts, and the call
   // parks without coming back to write its record
@@ -683,7 +670,7 @@ test(
               return { name, held: holdUntil > at };
             };
 
-            const ctx = await createImpTest(stack, {
+            const ctx = await startTestImpd(stack, {
               // 300 MiB per awake stub VM, 410 reserved per boot or wake: with
               // two imps awake a third makes the governor sleep one, and holds
               // leave it none
@@ -714,7 +701,7 @@ test(
 
             await ctx.createTestImage('ubuntu');
 
-            const client = buildTestApp(ctx, ctx).client;
+            const client = ctx.client;
 
             // c asleep, a and b awake, d not created yet; each has a checkpoint
             await client.imps.create({ name: 'c' });
@@ -902,6 +889,6 @@ test(
     );
   },
 
-  // the time all 300 cases may take, each with its own impd
-  60_000,
+  // the time all 300 cases may take, each with its own impd started in full
+  180_000,
 );

@@ -1,8 +1,8 @@
 import type { Config } from './config';
-import type { ImpdDeps } from './create-impd';
 import type { Builders } from './images/builder-imps';
 import { createImageService } from './images/image-service';
 import type { ImageService } from './images/image-service';
+import type { ImpdDeps } from './impd-deps';
 import { printLog } from './process/print-log';
 import { createDiskBudget } from './storage/disk-budget';
 import type { DiskBudget } from './storage/disk-budget';

@@ -3,10 +3,10 @@ import { EVENT_VERSION } from '@impz/api';
 import { buildMockImp } from '@impz/api/test-utils/build-mock-imp';
 import { spanExporter } from '@impz/test-utils/register-tracing';
 import invariant from 'tiny-invariant';
+import { startInMemoryMetrics } from '../../testing/platform/start-in-memory-metrics';
+import { buildMockGovernorDecision } from '../../testing/vm/build-mock-governor-decision';
 import { createEventBus } from '../events/event-bus';
 import type { ResourceDelta } from '../imps/resource-sampler';
-import { buildMockGovernorDecision } from '../test-utils/build-mock-governor-decision';
-import { startInMemoryMetrics } from '../test-utils/start-in-memory-metrics';
 import { startImpTelemetry } from './imp-telemetry';
 
 test('it records imp.lifecycle.transitions per reason', async () => {

@@ -1,162 +1,36 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import type { ImpContract } from '@impz/api';
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildStubNft } from '../../testing/network/build-stub-nft';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { createImage } from '../db/images';
 import { findImpByName, listImps, updateImpMove } from '../db/imps';
-import { openDatabase } from '../db/open-database';
-import {
-  buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubNft } from '../test-utils/build-stub-nft';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { buildImagePaths } from '../storage/data-layout';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'network-service-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = {
-    ...loadConfig({
-      IMP_DATA_DIR: dataDir,
-      IMP_JAILER: 'false',
-      IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-    }),
-
-    // a new disk stays its image's size: a clone off XFS copies every byte,
-    // and a fork of a 32 GiB disk would take tens of seconds
-    defaultDiskBytes: 0,
-  };
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
+  // the firewall the network sets live in, and the conntrack flush of a
+  // pair that no longer shares a network
   const nft = buildStubNft();
   const flushPair = mock<(first: string, second: string) => Promise<void>>(() => Promise.resolve());
 
-  const impd = await createImpd(config, {
-    db,
-
-    // the bearer the test's client sends
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-
-    // Firecracker, the kernel and the CPU as this host reports them, which a
-    // snapshot must match to load
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-
-    // the firewall the network sets live in, and the conntrack flush of a
-    // pair that no longer shares a network
-    egress: {
-      runNft: nft.runNft,
-      flushConnections: () => Promise.resolve(),
-      flushPair,
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  });
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-  });
-
-  stack.defer(() => {
-    impd.diskUsage.stop();
+  const harness = await startTestImpd(stack, {
+    runNft: nft.runNft,
+    boundaries: { egress: { flushPair } },
   });
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
   // the image every imp here boots
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
+  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
-  await createImage(db, image);
+  await createImage(harness.db, image);
 
-  const client: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: 'Bearer root-token' },
-      fetch: (request) => impd.api.app.handle(request),
-    }),
-  );
-
-  return { db, impd, client, nft, flushPair };
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, { nft, flushPair });
 }
 
 test('it puts the imps on a network into its set', async () => {
@@ -355,13 +229,7 @@ test('it refuses a create on a network to a token limited to some imps, even for
 
   const created = await ctx.client.tokens.create({ name: 'dev', scope: 'manage', imps: ['dev-*'] });
 
-  const limited: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${created.secret}` },
-      fetch: (request) => ctx.impd.api.app.handle(request),
-    }),
-  );
+  const limited = ctx.buildClient(created.secret);
 
   expect(limited.imps.create({ name: 'dev-a', networks: ['lab'] })).rejects.toMatchObject({
     code: 'FORBIDDEN',
@@ -379,13 +247,7 @@ test('it refuses a join to a token limited to some imps, even for an imp it may 
 
   const created = await ctx.client.tokens.create({ name: 'dev', scope: 'manage', imps: ['dev-*'] });
 
-  const limited: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${created.secret}` },
-      fetch: (request) => ctx.impd.api.app.handle(request),
-    }),
-  );
+  const limited = ctx.buildClient(created.secret);
 
   await limited.imps.create({ name: 'dev-a' });
 

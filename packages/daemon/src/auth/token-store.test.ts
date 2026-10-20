@@ -4,13 +4,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
+import { buildMockTokenRecord } from '../../testing/identity/build-mock-token-record';
+import { buildMockTokenSshKeyRecord } from '../../testing/identity/build-mock-token-ssh-key-record';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { createSecret, findSecret } from '../db/secrets';
 import { removeTokenRecord, writeTokenRecord } from '../db/tokens';
 import { createAuthorizedKeys, formatKeyFingerprint } from '../ssh/authorized-keys';
 import { createEd25519Key } from '../ssh/host-key';
-import { buildMockTokenRecord } from '../test-utils/build-mock-token-record';
-import { buildMockTokenSshKeyRecord } from '../test-utils/build-mock-token-ssh-key-record';
-import { createTestDatabase } from '../test-utils/create-test-database';
 import { ROOT_TOKEN_ID, loadTokenStore, readBearer } from './token-store';
 
 async function setupTest() {

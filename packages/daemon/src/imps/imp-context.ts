@@ -1,4 +1,3 @@
-import { availableParallelism } from 'node:os';
 import type { EgressPolicy } from '@impz/api';
 import type { openTapStream } from '../agent-client/exec-stream';
 import type { BrokerExecEnv } from '../broker/guest-trust';
@@ -33,27 +32,16 @@ import { createStorageGate } from '../storage/storage-gate';
 import type { StorageGate } from '../storage/storage-gate';
 import { createBootTemplates } from '../templates/boot-templates';
 import type { BootTemplates } from '../templates/boot-templates';
-import { createCpuCgroups } from '../vmm/cpu-cgroups';
 import type { CpuCgroups } from '../vmm/cpu-cgroups';
 import type { JailUser } from '../vmm/jail';
-import { checkGuestMemoryMergeable } from '../vmm/ksm';
 import type { VmRunner } from '../vmm/vm-runner';
-import {
-  readCpuTicks,
-  readOwnedRamMib,
-  readRssMib,
-  readThreadIds,
-  readUnsharedRamMib,
-  readVmMemory,
-} from '../vmm/vm-stats';
+import { readCpuTicks } from '../vmm/vm-stats';
 import { createActivityTracker } from './activity-tracker';
 import type { ActivityTracker } from './activity-tracker';
 import { createMergeFlags } from './check-merge-flag';
 import type { MergeFlags } from './check-merge-flag';
-import { growFilesystem } from './imp-disk';
 import { createInnerCache } from './inner-cache';
 import type { InnerCache } from './inner-cache';
-import { NO_KERNEL_OOPS } from './kernel-oops-watch';
 import type { KernelOopsWatch } from './kernel-oops-watch';
 import { createResourceSampler } from './resource-sampler';
 import type { ResourceSampler } from './resource-sampler';
@@ -96,14 +84,19 @@ export interface ImpServiceDeps {
 
   // the IPv6 impd resolved at start; null or left out, imps get none
   readonly ipv6?: Ipv6Plan | null;
-  readonly readRamMib?: (pid: number, apiSocket: string) => number | null;
-  readonly readRssMib?: (pid: number, apiSocket: string) => number | null;
+  readonly readRamMib: (pid: number, apiSocket: string) => number | null;
+  readonly readRssMib: (pid: number, apiSocket: string) => number | null;
+
+  // both of the above in one read, as the resource sampler takes them
+  readonly readVmMemory: (
+    pid: number,
+    apiSocket: string,
+  ) => { readonly ramMib: number | null; readonly rssMib: number | null };
 
   // with IMP_KSM: the RAM a sleep records for the wake reserve, and whether
   // KSM may merge a VM's guest memory (null: unknown)
-  readonly readUnsharedRamMib?: (pid: number, apiSocket: string) => number | null;
-  readonly checkGuestMerge?: (pid: number) => Promise<boolean | null>;
-  readonly readKsmProfitMib?: (pid: number) => Promise<number | null>;
+  readonly readUnsharedRamMib: (pid: number, apiSocket: string) => number | null;
+  readonly checkGuestMerge: (pid: number) => Promise<boolean | null>;
 
   // the host's live tailnet name, null when tailscaled does not answer; the
   // configured name can be taken by an older node (`imp-1`)
@@ -119,13 +112,11 @@ export interface ImpServiceDeps {
   // so tests can move it
   readonly now?: () => number;
 
-  // the pause between an elastic guest's looks while a sleep shrinks it;
-  // Bun.sleep by default
-  readonly sleep?: (ms: number) => Promise<void>;
+  // the pause between an elastic guest's looks while a sleep shrinks it
+  readonly sleep: (ms: number) => Promise<void>;
 
-  // the clock a sleep's timings read and the pause of its young-guest wait;
-  // performance.now and Bun.sleep by default
-  readonly sleepTiming?: SleepTiming;
+  // the clock a sleep's timings read and the pause of its young-guest wait
+  readonly sleepTiming: SleepTiming;
 
   // `KEY=VALUE` entries every exec in the imp starts with, under the
   // caller's own: the credential broker's proxy and CA variables, or why
@@ -147,14 +138,14 @@ export interface ImpServiceDeps {
 
   // grows a disk's filesystem on the host while no VM has it open; false
   // leaves the grow to the guest's next boot (imp-disk.ts)
-  readonly growFilesystem?: (disk: string) => Promise<boolean>;
+  readonly growFilesystem: (disk: string) => Promise<boolean>;
   readonly egress?: ImpEgress;
 
-  // each VM's CPU limit; none enforced by default, as outside a container
-  readonly cgroups?: CpuCgroups;
+  // each VM's CPU limit
+  readonly cgroups: CpuCgroups;
 
-  // the most a CPU limit may be; the host's cores by default
-  readonly hostCpus?: number;
+  // the most a CPU limit may be
+  readonly hostCpus: number;
 
   // the boot templates cold boots restore (docs/architecture/lifecycle/boot-templates.md);
   // by default made from the deps when IMP_BOOT_TEMPLATES is on
@@ -168,12 +159,11 @@ export interface ImpServiceDeps {
   // writes; a store of its own by default
   readonly pluggedSizes?: PluggedSizes;
 
-  // whether the host's kernel has oopsed (kernel-oops-watch.ts); never by
-  // default
-  readonly kernelOops?: KernelOopsWatch;
+  // whether the host's kernel has oopsed (kernel-oops-watch.ts)
+  readonly kernelOops: KernelOopsWatch;
 
-  // the threads of a VM's Firecracker, for the oops above; /proc by default
-  readonly readThreadIds?: (pid: number) => readonly number[] | null;
+  // the threads of a VM's Firecracker, for the oops above
+  readonly readThreadIds: (pid: number) => readonly number[] | null;
 }
 
 // the host: its config, its database of imps, its log, and what it boots with
@@ -267,18 +257,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
 
   const log = deps.log ?? printLog;
   const now = deps.now ?? Date.now;
-  const cgroups = deps.cgroups ?? createCpuCgroups({ root: '/nonexistent', log });
-  const readRam = deps.readRamMib;
-  const readRss = deps.readRssMib;
-
-  // a test's readers stand in for smaps_rollup; impd reads it once for both
-  const readMemory =
-    readRam === undefined && readRss === undefined
-      ? readVmMemory
-      : (pid: number, apiSocket: string) => ({
-          ramMib: (readRam ?? readOwnedRamMib)(pid, apiSocket),
-          rssMib: (readRss ?? readRssMib)(pid, apiSocket),
-        });
+  const cgroups = deps.cgroups;
 
   const diskBudget =
     deps.diskBudget ??
@@ -297,8 +276,8 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
 
   const clock: ImpClock = {
     now,
-    sleep: deps.sleep ?? Bun.sleep,
-    sleepTiming: deps.sleepTiming ?? { now: () => performance.now(), sleep: Bun.sleep },
+    sleep: deps.sleep,
+    sleepTiming: deps.sleepTiming,
   };
 
   const vms: ImpVms = {
@@ -307,7 +286,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
     vms: deps.vms,
     storage: deps.storage,
     cgroups,
-    hostCpus: deps.hostCpus ?? availableParallelism(),
+    hostCpus: deps.hostCpus,
     templates:
       deps.templates === undefined ? createDefaultTemplates(deps, cgroups, log) : deps.templates,
     findPaths: (impId) => deps.storage.resolveImpPaths(impId),
@@ -316,19 +295,16 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
       deps.config.jailerBin === null || imp.jailUid === null
         ? null
         : { uid: imp.jailUid, gid: imp.jailUid },
-    growFilesystem: deps.growFilesystem ?? growFilesystem,
-    kernelOops: deps.kernelOops ?? NO_KERNEL_OOPS,
+    growFilesystem: deps.growFilesystem,
+    kernelOops: deps.kernelOops,
   };
 
   const memory: ImpMemory = {
     admission: deps.admission,
-    readRamMib: deps.readRamMib ?? readOwnedRamMib,
-    readRssMib: deps.readRssMib ?? readRssMib,
-    readSleepRamMib:
-      deps.config.ksm === null
-        ? (deps.readRamMib ?? readOwnedRamMib)
-        : (deps.readUnsharedRamMib ?? readUnsharedRamMib),
-    checkGuestMerge: deps.checkGuestMerge ?? checkGuestMemoryMergeable,
+    readRamMib: deps.readRamMib,
+    readRssMib: deps.readRssMib,
+    readSleepRamMib: deps.config.ksm === null ? deps.readRamMib : deps.readUnsharedRamMib,
+    checkGuestMerge: deps.checkGuestMerge,
     mergeFlags: createMergeFlags(),
     memoryLimit: deps.memoryLimit ?? NO_MEMORY_LIMIT,
     pluggedSizes: deps.pluggedSizes ?? createPluggedSizes(),
@@ -337,8 +313,8 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
       readCpuStat: cgroups.readCpuStat,
       readCpuTicks,
       readNetBytes: (tap) => readGuestNetBytes(tap),
-      readMemory,
-      readThreadIds: deps.readThreadIds ?? readThreadIds,
+      readMemory: deps.readVmMemory,
+      readThreadIds: deps.readThreadIds,
     }),
   };
 

@@ -1,31 +1,20 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import {
-  access,
-  copyFile,
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { access, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import type { Socket } from 'node:net';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { connect as connectTls } from 'node:tls';
-import type { ImpContract } from '@impz/api';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { startStubBrokerGuestSocket } from '../../testing/network/start-stub-broker-guest-socket';
+import { startStubBrokerReplyTarget } from '../../testing/network/start-stub-broker-reply-target';
+import { buildMockNewAuditEntry } from '../../testing/platform/build-mock-new-audit-entry';
+import { runSql } from '../../testing/platform/run-sql';
+import { startTestImpd } from '../../testing/start-test-impd';
 import {
   AUDIT_ROWS_PER_IMP,
   listAuditEntries,
@@ -34,23 +23,9 @@ import {
 } from '../db/broker-audit';
 import { createImage } from '../db/images';
 import { findImpByName, updateImpMove } from '../db/imps';
-import { openDatabase } from '../db/open-database';
 import { findSecret } from '../db/secrets';
 import { parsePrefix64 } from '../net/addressing6';
-import {
-  buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewAuditEntry } from '../test-utils/build-mock-new-audit-entry';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { runSql } from '../test-utils/run-sql';
-import { startStubBrokerGuestSocket } from '../test-utils/start-stub-broker-guest-socket';
-import { startStubBrokerReplyTarget } from '../test-utils/start-stub-broker-reply-target';
+import { buildImagePaths } from '../storage/data-layout';
 import { createBroker } from './broker-service';
 
 async function setupTest() {
@@ -58,131 +33,28 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'broker-service-'));
+  const installs: string[] = [];
 
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
+  // a loopback subnet lets a test's socket be a guest
+  const harness = await startTestImpd(stack, {
+    env: { IMP_SUBNET: '127.0.0.0/16' },
 
-  const db = await openDatabase(':memory:');
+    // the guest's CA install, which takes where the vsock path exists
+    installBundle: (vsockPath) => {
+      installs.push(vsockPath);
 
-  stack.defer(() => db.destroy());
-
-  // no jailer, no boot template; a loopback subnet lets a test's socket be
-  // a guest; each resolver takes a free port; a new disk stays the size of
-  // its image, so a fork's copy fits in /tmp
-  const config = {
-    ...loadConfig({
-      IMP_DATA_DIR: dataDir,
-      IMP_JAILER: 'false',
-      IMP_BOOT_TEMPLATES: 'false',
-      IMP_SUBNET: '127.0.0.0/16',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-    }),
-    defaultDiskBytes: 0,
-  };
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
+      return access(vsockPath);
+    },
+  });
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
   // the default image, which every imp the tests create boots
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
+  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
-  await createImage(db, image);
+  await createImage(harness.db, image);
 
-  const vmm = buildStubVmm();
-  const logs: string[] = [];
-  const installs: string[] = [];
-
-  // the API's unexpected RPC failures, as it would log them
-  const rpcFailures: unknown[] = [];
-
-  const impd = await createImpd(config, {
-    db,
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: (message) => {
-      logs.push(message);
-    },
-    logRpcFailure: (failure) => {
-      rpcFailures.push(failure);
-    },
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      // the guest's CA install, which takes where the vsock path exists
-      installBundle: (vsockPath) => {
-        installs.push(vsockPath);
-
-        return access(vsockPath);
-      },
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  });
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
-  });
-
-  const client: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: 'Bearer root-token' },
-      fetch: (request) => impd.api.app.handle(request),
-    }),
-  );
-
-  return { stack, config, db, dataDir, logs, rpcFailures, installs, impd, client };
+  return Object.assign(harness, { stack, installs });
 }
 
 test('it stores a secret value in an owner-only file the row names', async () => {
@@ -669,8 +541,8 @@ test('it gives a granted imp the broker variables once the CA is in its boot', a
   expect(env).toStrictEqual({
     kind: 'ready',
     env: [
-      'HTTPS_PROXY=http://127.0.0.1:7081',
-      'https_proxy=http://127.0.0.1:7081',
+      `HTTPS_PROXY=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+      `https_proxy=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
       'NO_PROXY=localhost,127.0.0.1,::1',
       'no_proxy=localhost,127.0.0.1,::1',
       'NODE_USE_ENV_PROXY=1',
@@ -706,8 +578,8 @@ test('it points an imp in another slot at that slot’s gateway', async () => {
   expect(env).toStrictEqual({
     kind: 'ready',
     env: [
-      'HTTPS_PROXY=http://127.0.0.5:7081',
-      'https_proxy=http://127.0.0.5:7081',
+      `HTTPS_PROXY=http://127.0.0.5:${String(ctx.config.brokerPort)}`,
+      `https_proxy=http://127.0.0.5:${String(ctx.config.brokerPort)}`,
       'NO_PROXY=localhost,127.0.0.1,::1',
       'no_proxy=localhost,127.0.0.1,::1',
       'NODE_USE_ENV_PROXY=1',

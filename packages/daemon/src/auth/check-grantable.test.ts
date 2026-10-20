@@ -1,7 +1,4 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { ImpSchema } from '@impz/api';
 import type { ImpContract } from '@impz/api';
 import { createORPCClient } from '@orpc/client';
@@ -9,26 +6,15 @@ import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import { utils } from 'ssh2';
 import invariant from 'tiny-invariant';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
-import type { ImpdDeps } from '../create-impd';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { listApiCalls } from '../db/api-audit';
 import { createForkGrants } from '../db/create-fork-grants';
 import { createImage } from '../db/images';
 import { findImpByName } from '../db/imps';
-import { openDatabase } from '../db/open-database';
 import { listTokenRecords } from '../db/tokens';
 import { createEd25519Key } from '../ssh/host-key';
-import {
-  buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { buildImagePaths } from '../storage/data-layout';
 import { checkAccess, findAccess } from './access-policy';
 
 // Scoped tokens that may grant selected secrets (docs/guides/tokens.md#granting-secrets),
@@ -42,144 +28,34 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'build-app-grants-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one; a new
-  // disk stays the size of its image, since a fork copies every byte
-  const config = {
-    ...loadConfig({
-      IMP_DATA_DIR: dataDir,
-      IMP_JAILER: 'false',
-      IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-    }),
-    defaultDiskBytes: 0,
-  };
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-  const logs: string[] = [];
-  const rpcFailures: string[] = [];
   const gap = { once: (): Promise<void> => Promise.resolve() };
 
-  const deps: ImpdDeps = {
-    db,
+  const harness = await startTestImpd(stack, {
+    boundaries: {
+      broker: {
+        // the race window: what a test sets runs once, then writes run on
+        beforeGrantWrite: () => {
+          const run = gap.once;
 
-    // the bearer the root client sends
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+          gap.once = () => Promise.resolve();
 
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
+          return run();
+        },
       },
     },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: (line) => {
-      logs.push(line);
-    },
-    logRpcFailure: (failure) => {
-      rpcFailures.push(Bun.inspect(failure));
-    },
-
-    // Firecracker, the kernel and the CPU as this host reports them
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-
-      // the race window: what a test sets runs once, then writes run on
-      beforeGrantWrite: () => {
-        const run = gap.once;
-
-        gap.once = () => Promise.resolve();
-
-        return run();
-      },
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  };
-
-  const impd = await createImpd(config, deps);
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
   });
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
   // the default image, which every imps.create boots when it names none
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
+  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
-  await createImage(db, image);
+  await createImage(harness.db, image);
 
-  const sendToImpd = (request: Request) => impd.api.app.handle(request);
+  // the impd that runs now, through a restart too
+  const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
 
-  const client: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: 'Bearer root-token' },
-      fetch: sendToImpd,
-    }),
-  );
-
-  return { db, config, deps, vmm, stack, impd, client, sendToImpd, logs, rpcFailures, gap };
+  return Object.assign(harness, { stack, sendToImpd, gap });
 }
 
 test('it lets a token grant a listed secret on its imps', async () => {
@@ -1030,27 +906,9 @@ test('it refuses a grant of a deleted listed secret after a restart', async () =
 
   await ctx.client.secrets.delete({ name: 'gh' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
+  await ctx.restartImpd();
 
-  // the first impd still holds its resolver's port in this process
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    { ...ctx.deps, vms: ctx.vmm.startGeneration() },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-    restarted.diskUsage.stop();
-  });
-
-  const agent: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${made.secret}` },
-      fetch: (request) => restarted.api.app.handle(request),
-    }),
-  );
+  const agent = ctx.buildClient(made.secret);
 
   expect(agent.grants.add({ name: 'dev-a', secret: 'gh' })).rejects.toMatchObject({
     code: 'FORBIDDEN',
@@ -1072,26 +930,9 @@ test('it refuses a fork by a token whose listed secret was deleted, after a rest
   });
 
   await ctx.client.secrets.delete({ name: 'gh' });
+  await ctx.restartImpd();
 
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    { ...ctx.deps, vms: ctx.vmm.startGeneration() },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-    restarted.diskUsage.stop();
-  });
-
-  const agent: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${made.secret}` },
-      fetch: (request) => restarted.api.app.handle(request),
-    }),
-  );
+  const agent = ctx.buildClient(made.secret);
 
   expect(agent.imps.fork({ source: 'dev-a', name: 'dev-b' })).rejects.toMatchObject({
     code: 'FORBIDDEN',
@@ -1112,26 +953,9 @@ test('it still names a deleted listed secret in the list after a restart', async
   });
 
   await ctx.client.secrets.delete({ name: 'gh' });
+  await ctx.restartImpd();
 
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    { ...ctx.deps, vms: ctx.vmm.startGeneration() },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-    restarted.diskUsage.stop();
-  });
-
-  const agent: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${made.secret}` },
-      fetch: (request) => restarted.api.app.handle(request),
-    }),
-  );
+  const agent = ctx.buildClient(made.secret);
 
   const identity = await agent.tokens.whoami();
 
@@ -1261,26 +1085,9 @@ test('it keeps a token’s grants through a restart', async () => {
 
   await agent.grants.add({ name: 'dev-a', secret: 'gh' });
   await agent.grants.add({ name: 'dev-a', secret: 'npm' });
+  await ctx.restartImpd();
 
-  const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
-    { ...ctx.deps, vms: ctx.vmm.startGeneration() },
-  );
-
-  ctx.stack.defer(() => restarted.broker.stop());
-
-  ctx.stack.defer(() => {
-    restarted.egress.stop();
-    restarted.diskUsage.stop();
-  });
-
-  const after: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${made.secret}` },
-      fetch: (request) => restarted.api.app.handle(request),
-    }),
-  );
+  const after = ctx.buildClient(made.secret);
 
   const listed = await after.grants.list({ name: 'dev-a' });
 
@@ -1409,7 +1216,7 @@ test('it puts no secret value in an answer, error, log line or audit row', async
     granted,
     answers,
     last,
-    ctx.rpcFailures,
+    ctx.rpcFailures.map((failure) => Bun.inspect(failure)),
     ctx.logs,
     calls,
     brokerRows,

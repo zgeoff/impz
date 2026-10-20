@@ -8,11 +8,11 @@ import {
 } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/server';
+import { buildMockSessionOutput } from '../../testing/imps/build-mock-session-output';
+import { buildStubExecBackend } from '../../testing/imps/build-stub-exec-backend';
+import { buildStubAgentExecStream } from '../../testing/vm/build-stub-agent-exec-stream';
+import { buildStubExecSocket } from '../../testing/vm/build-stub-exec-socket';
 import { AgentError } from '../agent-client/agent-connection';
-import { buildMockSessionOutput } from '../test-utils/build-mock-session-output';
-import { buildStubAgentExecStream } from '../test-utils/build-stub-agent-exec-stream';
-import { buildStubExecBackend } from '../test-utils/build-stub-exec-backend';
-import { buildStubExecSocket } from '../test-utils/build-stub-exec-socket';
 import { createExecSession } from './exec-session';
 
 test("it opens the exec with the start's argv, env and size", async () => {

@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { buildStubTailscale } from '../test-utils/build-stub-tailscale';
+import { buildStubTailscale } from '../../testing/network/build-stub-tailscale';
 import { createStatusCache, parseTailscaleStatus, readTailscaleStatus } from './tailscale-status';
 
 test('#parseTailscaleStatus reads state, the MagicDNS name and the IPv4 address', () => {
