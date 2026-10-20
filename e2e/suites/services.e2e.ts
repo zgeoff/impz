@@ -121,7 +121,7 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
 
   const all = await runImp('logs', name);
 
-  expect(logs).toContain('url:/');
+  expect(logs).toContain(': GET /');
   expect(all).toMatch(/^web \| /mu);
 
   // a restart starts the service again from its file
@@ -170,7 +170,7 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
   expect(removed).toStrictEqual([]);
   expect(files).toBe('');
   expect(response.ok).toBe(false);
-  expect(kept).toContain('url:/');
+  expect(kept).toContain(': GET /');
 
   expect(again).toStrictEqual({
     exitCode: 1,
@@ -253,7 +253,7 @@ test('it waits out a sleep in a log follow without waking the imp, and prints ea
   await sendProxyRequest(name, marker);
 
   await waitFor('the follow to print the request after the wake', () => {
-    if (!stdout.read().includes(`url:${marker}`)) {
+    if (!stdout.read().includes(`: GET ${marker}`)) {
       throw new Error(`printed so far: ${JSON.stringify(stdout.read())}`);
     }
   });
@@ -266,7 +266,7 @@ test('it waits out a sleep in a log follow without waking the imp, and prints ea
   expect(waiting.resources.wakeCount).toBe(slept.resources.wakeCount);
   expect(saidBeforeWake).not.toContain(`${name} runs again`);
   expect(stderr.read()).toContain(`${name} runs again`);
-  expect(stdout.read().split(`url:${marker}`)).toHaveLength(2);
+  expect(stdout.read().split(`: GET ${marker}`)).toHaveLength(2);
 });
 
 test('it starts a service file written by hand on its first restart', async () => {
