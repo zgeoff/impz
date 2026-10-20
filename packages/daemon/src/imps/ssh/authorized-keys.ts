@@ -82,11 +82,11 @@ export function formatKeyFingerprint(blob: Buffer): string {
 
 export interface AuthorizedKeys {
   // the key a client offers, if the file authorizes it
-  readonly findKey: (blob: Buffer) => AuthorizedKey | null;
+  readonly readKey: (blob: Buffer) => AuthorizedKey | null;
 
   // whether the file lists the key, even while its mode grants nothing: a
   // fixed mode would grant it again
-  readonly isListed: (blob: Buffer) => boolean;
+  readonly probeListed: (blob: Buffer) => boolean;
 }
 
 interface FileState {
@@ -115,12 +115,12 @@ export function createAuthorizedKeys(path: string, log: (message: string) => voi
     return state.current;
   };
 
-  const findListed = (blob: Buffer): AuthorizedKey | null =>
+  const readListed = (blob: Buffer): AuthorizedKey | null =>
     load().keys.find((key) => key.blob.equals(blob)) ?? null;
 
   return {
-    findKey: (blob) => (load().isSafe ? findListed(blob) : null),
-    isListed: (blob) => findListed(blob) !== null,
+    readKey: (blob) => (load().isSafe ? readListed(blob) : null),
+    probeListed: (blob) => readListed(blob) !== null,
   };
 }
 
@@ -128,9 +128,9 @@ export function createAuthorizedKeys(path: string, log: (message: string) => voi
 function readStamp(path: string): string {
   try {
     const file = statSync(path);
-    const dir = statSync(dirname(path));
+    const directory = statSync(dirname(path));
 
-    return [file.mtimeMs, file.size, file.mode, file.ino, dir.mode].join(':');
+    return [file.mtimeMs, file.size, file.mode, file.ino, directory.mode].join(':');
   } catch {
     return 'missing';
   }

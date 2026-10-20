@@ -13,7 +13,7 @@ import {
 } from '../lib/ipv6-topology';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // Egress policies over IPv6 (docs/architecture/network/networking.md#ipv6), on the
 // topology's near network behind NAT66. The instance reboots onto it, and
@@ -27,7 +27,7 @@ async function setupTest() {
   const client = await createInstanceClient();
 
   return {
-    prefix: readSuitePrefix('ipv6'),
+    prefix: getSuitePrefix('ipv6'),
     stack,
     client,
     plan: buildV6Plan(instance.portOffset),

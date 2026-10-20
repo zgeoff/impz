@@ -15,7 +15,7 @@ import { readContainerGateway, runInContainer } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent, removeSecretIfPresent } from '../lib/reset-baseline';
 import { startStubUpstream } from '../lib/start-stub-upstream';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // The broker's oauth and custom secrets (docs/guides/connectors.md), against
 // the stub upstream on this machine, which stands in for every host here:
@@ -29,7 +29,7 @@ async function setupTest() {
   const client = await createInstanceClient();
   const gateway = await readContainerGateway();
 
-  return { prefix: readSuitePrefix('connectors'), stack, client, gateway };
+  return { prefix: getSuitePrefix('connectors'), stack, client, gateway };
 }
 
 test('it signs an oauth secret in, rotates its tokens on a forced refresh, refuses a websocket upgrade, and leaves no token in the guest', async () => {

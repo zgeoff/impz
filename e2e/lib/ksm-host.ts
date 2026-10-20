@@ -8,7 +8,7 @@ import { parseWholeNumber } from './parse-whole-number';
 // host and in the host container.
 
 // KSM merges a VM's private anonymous memory from Linux 6.10 on
-export function checkKernelSupportsKsm(release: string): boolean {
+export function isKsmSupported(release: string): boolean {
   const match = /^(?<major>\d+)\.(?<minor>\d+)/v.exec(release);
   const major = Number(match?.groups?.['major'] ?? 0);
   const minor = Number(match?.groups?.['minor'] ?? 0);
@@ -25,10 +25,10 @@ export function parseCpuMsFromStat(stat: string): number {
 
 // what the governor counts for a VM: Pss_Anon + Pss_Shmem, in MiB
 export function parsePssMib(rollup: string): number {
-  const readKb = (field: string): number =>
+  const getKb = (field: string): number =>
     Number(new RegExp(`^${field}:\\s+(?<kb>\\d+) kB$`, 'mv').exec(rollup)?.groups?.['kb'] ?? 0);
 
-  return Math.round((readKb('Pss_Anon') + readKb('Pss_Shmem')) / 1024);
+  return Math.round((getKb('Pss_Anon') + getKb('Pss_Shmem')) / 1024);
 }
 
 interface Mapping {
@@ -99,9 +99,7 @@ function readHostFile(path: string): string {
 
 // KSM on, in a kernel whose merges the suite can rely on
 export function checkHostRunsKsm(): boolean {
-  return (
-    readHostFile('/sys/kernel/mm/ksm/run') === '1' && checkKernelSupportsKsm(readKernelRelease())
-  );
+  return readHostFile('/sys/kernel/mm/ksm/run') === '1' && isKsmSupported(readKernelRelease());
 }
 
 // ksmd's CPU time on this host, in ms

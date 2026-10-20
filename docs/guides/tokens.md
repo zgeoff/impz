@@ -305,8 +305,8 @@ The dashboard needs no login for a tailnet member a rule matches.
   page.
 - `packages/daemon/src/identity/auth/check-grantable.test.ts`: tokens that may grant secrets,
   through a bearer token and a dashboard session: every pairing of imp and secret, refusals, stale
-  list entries, forks and moves, and what survives a restart. `build-token-routes.test.ts` changes a
-  list in place. `db/secrets.test.ts` races grants, revokes, fork copies and replaces against one
+  list entries, forks and moves, and what survives a restart. `create-token-routes.test.ts` changes
+  a list in place. `db/secrets.test.ts` races grants, revokes, fork copies and replaces against one
   another.
 - The `tokens` e2e suite drives it all through the CLI. The `tailscale` suite reboots impd with a
   rule and calls the API over the tailnet without a token.

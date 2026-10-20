@@ -9,7 +9,7 @@ export interface CpuStat {
 // The two counters of a cgroup v2 cpu.stat the cpu suite reads; throws when
 // either is missing, as a cgroup without the cpu controller shows.
 export function parseCpuStat(text: string): CpuStat {
-  const readField = (field: string): number => {
+  const getField = (field: string): number => {
     const value = new RegExp(`^${field} (?<value>\\d+)$`, 'mv').exec(text)?.groups?.['value'];
 
     if (value === undefined) {
@@ -19,7 +19,7 @@ export function parseCpuStat(text: string): CpuStat {
     return Number(value);
   };
 
-  return { usageUsec: readField('usage_usec'), throttledUsec: readField('throttled_usec') };
+  return { usageUsec: getField('usage_usec'), throttledUsec: getField('throttled_usec') };
 }
 
 // Thin glue over the host container and a live guest below.
@@ -52,8 +52,8 @@ export interface BusyLoop {
 // Runs one busy guest core for `seconds` and measures the VM's cgroup
 // across it.
 export async function runBusyLoop(name: string, seconds: number): Promise<BusyLoop> {
-  const dir = await readImpCgroupDir(name);
-  const before = await readContainerFile(`${dir}/cpu.stat`);
+  const directory = await readImpCgroupDir(name);
+  const before = await readContainerFile(`${directory}/cpu.stat`);
 
   const started = performance.now();
 
@@ -64,7 +64,7 @@ export async function runBusyLoop(name: string, seconds: number): Promise<BusyLo
 
   const wallUsec = (performance.now() - started) * 1000;
 
-  const after = await readContainerFile(`${dir}/cpu.stat`);
+  const after = await readContainerFile(`${directory}/cpu.stat`);
 
   const statBefore = parseCpuStat(before);
   const statAfter = parseCpuStat(after);

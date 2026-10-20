@@ -1,4 +1,4 @@
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildExitError } from '../../platform/process/run-command';
 
 // applies one nft script; throws with nft's reason
@@ -88,7 +88,7 @@ export const runNft: NftRunner = createNftRunner();
 
 // `nft` itself failed to start: a missing binary reads better this way
 export function formatNftError(error: unknown): string {
-  const message = readErrorMessage(error);
+  const message = getErrorMessage(error);
 
   return message.includes('ENOENT') ? 'nft is not installed' : message;
 }

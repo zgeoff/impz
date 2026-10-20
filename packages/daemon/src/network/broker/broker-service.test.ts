@@ -23,8 +23,8 @@ import {
   writeAuditEntry,
 } from '../../platform/db/broker-audit';
 import { createImage } from '../../platform/db/images';
-import { findImpByName, updateImpMove } from '../../platform/db/imps';
-import { findSecret } from '../../platform/db/secrets';
+import { readImpByName, updateImpMove } from '../../platform/db/imps';
+import { readSecret } from '../../platform/db/secrets';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createBroker } from './broker-service';
 
@@ -62,7 +62,7 @@ test('it stores a secret value in an owner-only file the row names', async () =>
 
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
 
-  const secret = await findSecret(ctx.db, 'gh');
+  const secret = await readSecret(ctx.db, 'gh');
 
   invariant(secret);
 
@@ -176,7 +176,7 @@ test('it refuses a taken name without replace and keeps the stored value', async
 
   expect(taken).rejects.toMatchObject({ code: 'CONFLICT' });
 
-  const secret = await findSecret(ctx.db, 'gh');
+  const secret = await readSecret(ctx.db, 'gh');
 
   invariant(secret);
 
@@ -191,7 +191,7 @@ test('it writes a replace to a new file and removes the old one', async () => {
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'rotated', replace: true });
 
-  const secret = await findSecret(ctx.db, 'gh');
+  const secret = await readSecret(ctx.db, 'gh');
 
   invariant(secret);
 
@@ -507,7 +507,7 @@ test('it gives an imp without a grant no broker variables and installs nothing',
 
   await ctx.client.imps.create({ name: 'dev' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   invariant(imp);
 
@@ -528,7 +528,7 @@ test('it gives a granted imp the broker variables once the CA is in its boot', a
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   invariant(imp);
 
@@ -565,7 +565,7 @@ test('it points an imp in another slot at that slot’s gateway', async () => {
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev-2', secret: 'gh' });
 
-  const imp = await findImpByName(ctx.db, 'dev-2');
+  const imp = await readImpByName(ctx.db, 'dev-2');
 
   invariant(imp);
 
@@ -601,7 +601,7 @@ test('it installs the CA once per boot however many execs ask', async () => {
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   invariant(imp);
 
@@ -622,7 +622,7 @@ test('it gives a new boot whose install fails no broker variables, and logs why'
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof imp?.pid === 'number');
 
@@ -654,7 +654,7 @@ test('it installs again for the same pid after the imp stops', async () => {
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   invariant(imp);
 
@@ -869,7 +869,7 @@ test('it copies no grant to a fork whose token was removed, and says so', async 
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
 
-  const secret = await findSecret(ctx.db, 'gh');
+  const secret = await readSecret(ctx.db, 'gh');
 
   invariant(secret);
 
@@ -954,7 +954,7 @@ test('it keeps the old value and makes no new file when a replace clashes', asyn
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
   await ctx.client.grants.add({ name: 'dev', secret: 'claude' });
 
-  const before = await findSecret(ctx.db, 'claude');
+  const before = await readSecret(ctx.db, 'claude');
 
   // claude moving onto gh's host would give dev two credentials for it
   const clash = ctx.client.secrets.add({
@@ -969,7 +969,7 @@ test('it keeps the old value and makes no new file when a replace clashes', asyn
 
   invariant(before);
 
-  const after = await findSecret(ctx.db, 'claude');
+  const after = await readSecret(ctx.db, 'claude');
   const value = await readFile(join(ctx.dataDir, 'secrets', before.valueFile), 'utf8');
   const files = await readdir(join(ctx.dataDir, 'secrets'));
 

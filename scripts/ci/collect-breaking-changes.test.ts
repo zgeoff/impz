@@ -1526,22 +1526,22 @@ test('#collectBreakingChanges finds nothing between an intersection of objects a
       'imps.label': {
         input: {
           allOf: [
-            { type: 'object', properties: { a: { type: 'string' } }, required: ['a'] },
-            { type: 'object', properties: { b: { type: 'string' } }, required: ['b'] },
+            { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+            { type: 'object', properties: { tag: { type: 'string' } }, required: ['tag'] },
           ],
         },
         output: {
           allOf: [
             {
               type: 'object',
-              properties: { a: { type: 'string' } },
-              required: ['a'],
+              properties: { name: { type: 'string' } },
+              required: ['name'],
               additionalProperties: false,
             },
             {
               type: 'object',
-              properties: { b: { type: 'string' } },
-              required: ['b'],
+              properties: { tag: { type: 'string' } },
+              required: ['tag'],
               additionalProperties: false,
             },
           ],
@@ -1562,10 +1562,10 @@ test('#collectBreakingChanges finds nothing between an intersection of two recur
     procedures: {
       'files.chain': {
         input: {
-          allOf: [{ $ref: '#/$defs/a' }, { $ref: '#/$defs/b' }],
+          allOf: [{ $ref: '#/$defs/left' }, { $ref: '#/$defs/right' }],
           $defs: {
-            a: { type: 'object', properties: { next: { $ref: '#/$defs/a' } } },
-            b: { type: 'object', properties: { next: { $ref: '#/$defs/b' } } },
+            left: { type: 'object', properties: { next: { $ref: '#/$defs/left' } } },
+            right: { type: 'object', properties: { next: { $ref: '#/$defs/right' } } },
           },
         },
         output: { type: 'object' },
@@ -1586,7 +1586,7 @@ test('#collectBreakingChanges finds nothing between an intersection of an object
       'imps.label': {
         input: {
           allOf: [
-            { type: 'object', properties: { a: { enum: ['x', 'y'] } } },
+            { type: 'object', properties: { name: { enum: ['x', 'y'] } } },
             { type: 'object', additionalProperties: { enum: ['y', 'z'] } },
           ],
         },
@@ -1670,10 +1670,10 @@ test('#collectBreakingChanges passes a changed input property that a closed part
           allOf: [
             {
               type: 'object',
-              properties: { a: { type: 'string' } },
+              properties: { name: { type: 'string' } },
               additionalProperties: false,
             },
-            { type: 'object', properties: { b: { type: 'string' } } },
+            { type: 'object', properties: { tag: { type: 'string' } } },
           ],
         },
         output: { type: 'object' },
@@ -1690,7 +1690,7 @@ test('#collectBreakingChanges passes a changed input property that a closed part
       'imps.label': {
         input: {
           type: 'object',
-          properties: { a: { type: 'string' }, b: { type: 'integer' } },
+          properties: { name: { type: 'string' }, tag: { type: 'integer' } },
         },
         output: { type: 'object' },
         stream: false,

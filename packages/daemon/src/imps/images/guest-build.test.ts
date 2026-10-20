@@ -22,26 +22,26 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-guest-build-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-guest-build-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  const root = join(dir, 'root');
+  const root = join(directory, 'root');
 
   // where writeGuestTree unpacks the export
   mkdirSync(root);
 
-  return { dir, root };
+  return { directoryPath: directory, root };
 }
 
 test('#writeGuestTree unpacks the builder export into the root', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree', 'etc'), { recursive: true });
-  writeFileSync(join(ctx.dir, 'tree', 'etc', 'hello'), 'hi\n'.repeat(100_000));
+  mkdirSync(join(ctx.directoryPath, 'tree', 'etc'), { recursive: true });
+  writeFileSync(join(ctx.directoryPath, 'tree', 'etc', 'hello'), 'hi\n'.repeat(100_000));
 
   const builder = buildStubImageBuilder({
-    exported: [Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout],
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -58,11 +58,11 @@ test('#writeGuestTree unpacks the builder export into the root', async () => {
 test('#writeGuestTree gives the image config the builder inspected', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
-  writeFileSync(join(ctx.dir, 'tree', 'hello'), 'hi\n');
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'hello'), 'hi\n');
 
   const builder = buildStubImageBuilder({
-    exported: [Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout],
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
     config: '{"Cmd":["sh"],"Env":["A=1"]}\n',
   });
@@ -80,11 +80,11 @@ test('#writeGuestTree gives the image config the builder inspected', async () =>
 test('#writeGuestTree gives a build digest of 64 hex characters', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
-  writeFileSync(join(ctx.dir, 'tree', 'hello'), 'hi\n');
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'hello'), 'hi\n');
 
   const builder = buildStubImageBuilder({
-    exported: [Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout],
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -101,12 +101,12 @@ test('#writeGuestTree gives a build digest of 64 hex characters', async () => {
 test('#writeGuestTree gives the same digest for the same config and export', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
-  writeFileSync(join(ctx.dir, 'tree', 'hello'), 'hi\n');
-  mkdirSync(join(ctx.dir, 'again'));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'hello'), 'hi\n');
+  mkdirSync(join(ctx.directoryPath, 'again'));
 
   const builder = buildStubImageBuilder({
-    exported: [Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout],
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -118,7 +118,7 @@ test('#writeGuestTree gives the same digest for the same config and export', asy
 
   const second = await writeGuestTree(
     createGuestExec(builder.guest.open),
-    join(ctx.dir, 'again'),
+    join(ctx.directoryPath, 'again'),
     limits,
     signal,
   );
@@ -129,11 +129,11 @@ test('#writeGuestTree gives the same digest for the same config and export', asy
 test('#writeGuestTree gives another digest for another config of the same export', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
-  writeFileSync(join(ctx.dir, 'tree', 'hello'), 'hi\n');
-  mkdirSync(join(ctx.dir, 'again'));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'hello'), 'hi\n');
+  mkdirSync(join(ctx.directoryPath, 'again'));
 
-  const tar = Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout;
+  const tar = Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout;
 
   const shell = buildStubImageBuilder({
     exported: [tar],
@@ -155,7 +155,7 @@ test('#writeGuestTree gives another digest for another config of the same export
 
   const second = await writeGuestTree(
     createGuestExec(bash.guest.open),
-    join(ctx.dir, 'again'),
+    join(ctx.directoryPath, 'again'),
     limits,
     signal,
   );
@@ -166,19 +166,19 @@ test('#writeGuestTree gives another digest for another config of the same export
 test('#writeGuestTree gives another digest for another export of the same config', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
-  writeFileSync(join(ctx.dir, 'tree', 'hello'), 'hi\n');
-  mkdirSync(join(ctx.dir, 'other'));
-  writeFileSync(join(ctx.dir, 'other', 'hello'), 'bye\n');
-  mkdirSync(join(ctx.dir, 'again'));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'hello'), 'hi\n');
+  mkdirSync(join(ctx.directoryPath, 'other'));
+  writeFileSync(join(ctx.directoryPath, 'other', 'hello'), 'bye\n');
+  mkdirSync(join(ctx.directoryPath, 'again'));
 
   const hello = buildStubImageBuilder({
-    exported: [Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout],
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
   const bye = buildStubImageBuilder({
-    exported: [Bun.spawnSync(['tar', '-C', join(ctx.dir, 'other'), '-c', '.']).stdout],
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'other'), '-c', '.']).stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -190,7 +190,7 @@ test('#writeGuestTree gives another digest for another export of the same config
 
   const second = await writeGuestTree(
     createGuestExec(bye.guest.open),
-    join(ctx.dir, 'again'),
+    join(ctx.directoryPath, 'again'),
     limits,
     signal,
   );
@@ -201,10 +201,10 @@ test('#writeGuestTree gives another digest for another export of the same config
 test('#writeGuestTree inspects, creates and exports the built image in the builder', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
 
   const builder = buildStubImageBuilder({
-    exported: [Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout],
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -225,13 +225,13 @@ test('#writeGuestTree inspects, creates and exports the built image in the build
 test('#writeGuestTree holds disk ahead of the export in 256 MiB steps', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
-  writeFileSync(join(ctx.dir, 'tree', 'hello'), 'hi\n');
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'hello'), 'hi\n');
 
   const holds: number[] = [];
 
   const builder = buildStubImageBuilder({
-    exported: [Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout],
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -253,10 +253,10 @@ test('#writeGuestTree holds disk ahead of the export in 256 MiB steps', async ()
 test('#writeGuestTree refuses an export past the byte cap', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
-  writeFileSync(join(ctx.dir, 'tree', 'big'), 'x'.repeat(4 * 64 * 1024));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'big'), 'x'.repeat(4 * 64 * 1024));
 
-  const tar = Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout;
+  const tar = Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout;
 
   const builder = buildStubImageBuilder({
     exported: Array.from({ length: Math.ceil(tar.byteLength / 65_536) }, (_, index) =>
@@ -281,10 +281,10 @@ test('#writeGuestTree refuses an export past the byte cap', async () => {
 test('#writeGuestTree ends the export exec at the byte cap', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
-  writeFileSync(join(ctx.dir, 'tree', 'big'), 'x'.repeat(4 * 64 * 1024));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'big'), 'x'.repeat(4 * 64 * 1024));
 
-  const tar = Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout;
+  const tar = Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout;
 
   const builder = buildStubImageBuilder({
     exported: Array.from({ length: Math.ceil(tar.byteLength / 65_536) }, (_, index) =>
@@ -307,16 +307,16 @@ test('#writeGuestTree ends the export exec at the byte cap', async () => {
 test('#writeGuestTree refuses an export of more entries than the file cap', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
 
   await Promise.all(
     Array.from({ length: 50 }, (_, index) =>
-      Bun.write(join(ctx.dir, 'tree', `f${String(index)}`), ''),
+      Bun.write(join(ctx.directoryPath, 'tree', `f${String(index)}`), ''),
     ),
   );
 
   const builder = buildStubImageBuilder({
-    exported: [Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout],
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -336,13 +336,15 @@ test('#writeGuestTree refuses an export of more entries than the file cap', asyn
 test('#writeGuestTree counts a sparse file at its full size against the cap', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
 
-  Bun.spawnSync(['truncate', '-s', '16M', join(ctx.dir, 'tree', 'holes')]);
+  Bun.spawnSync(['truncate', '-s', '16M', join(ctx.directoryPath, 'tree', 'holes')]);
 
   // an archive well inside the cap, of a file that is not
   const builder = buildStubImageBuilder({
-    exported: [Bun.spawnSync(['tar', '-S', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout],
+    exported: [
+      Bun.spawnSync(['tar', '-S', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout,
+    ],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -362,17 +364,17 @@ test('#writeGuestTree counts a sparse file at its full size against the cap', as
 test('#writeGuestTree counts a block for each small file against the cap', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
 
   await Promise.all(
     Array.from({ length: 300 }, (_, index) =>
-      Bun.write(join(ctx.dir, 'tree', `f${String(index)}`), 'x'),
+      Bun.write(join(ctx.directoryPath, 'tree', `f${String(index)}`), 'x'),
     ),
   );
 
   // an archive well inside the cap, of files whose blocks are not
   const builder = buildStubImageBuilder({
-    exported: [Bun.spawnSync(['tar', '-C', join(ctx.dir, 'tree'), '-c', '.']).stdout],
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -395,13 +397,19 @@ test('#writeGuestTree counts the directories tar makes for a member as entries',
 
   const parents = Array.from({ length: 80 }, (_, index) => `d${String(index)}`).join('/');
 
-  mkdirSync(join(ctx.dir, 'deep', parents), { recursive: true });
-  writeFileSync(join(ctx.dir, 'deep', parents, 'f'), 'x');
+  mkdirSync(join(ctx.directoryPath, 'deep', parents), { recursive: true });
+  writeFileSync(join(ctx.directoryPath, 'deep', parents, 'f'), 'x');
 
   const builder = buildStubImageBuilder({
     exported: [
-      Bun.spawnSync(['tar', '-C', join(ctx.dir, 'deep'), '--no-recursion', '-c', `${parents}/f`])
-        .stdout,
+      Bun.spawnSync([
+        'tar',
+        '-C',
+        join(ctx.directoryPath, 'deep'),
+        '--no-recursion',
+        '-c',
+        `${parents}/f`,
+      ]).stdout,
     ],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
@@ -424,13 +432,19 @@ test('#writeGuestTree counts the directories tar makes for a member as blocks', 
 
   const parents = Array.from({ length: 80 }, (_, index) => `d${String(index)}`).join('/');
 
-  mkdirSync(join(ctx.dir, 'deep', parents), { recursive: true });
-  writeFileSync(join(ctx.dir, 'deep', parents, 'f'), 'x');
+  mkdirSync(join(ctx.directoryPath, 'deep', parents), { recursive: true });
+  writeFileSync(join(ctx.directoryPath, 'deep', parents, 'f'), 'x');
 
   const builder = buildStubImageBuilder({
     exported: [
-      Bun.spawnSync(['tar', '-C', join(ctx.dir, 'deep'), '--no-recursion', '-c', `${parents}/f`])
-        .stdout,
+      Bun.spawnSync([
+        'tar',
+        '-C',
+        join(ctx.directoryPath, 'deep'),
+        '--no-recursion',
+        '-c',
+        `${parents}/f`,
+      ]).stdout,
     ],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
@@ -453,13 +467,19 @@ test('#writeGuestTree ends an export that stalls past a limit', async () => {
 
   const parents = Array.from({ length: 80 }, (_, index) => `d${String(index)}`).join('/');
 
-  mkdirSync(join(ctx.dir, 'deep', parents), { recursive: true });
-  writeFileSync(join(ctx.dir, 'deep', parents, 'f'), 'x');
+  mkdirSync(join(ctx.directoryPath, 'deep', parents), { recursive: true });
+  writeFileSync(join(ctx.directoryPath, 'deep', parents, 'f'), 'x');
 
   const builder = buildStubImageBuilder({
     exported: [
-      Bun.spawnSync(['tar', '-C', join(ctx.dir, 'deep'), '--no-recursion', '-c', `${parents}/f`])
-        .stdout,
+      Bun.spawnSync([
+        'tar',
+        '-C',
+        join(ctx.directoryPath, 'deep'),
+        '--no-recursion',
+        '-c',
+        `${parents}/f`,
+      ]).stdout,
     ],
     repoDigest: `sha256:${'b'.repeat(64)}`,
     isExportStalled: true,
@@ -607,10 +627,10 @@ test('#runGuestBuild sends the context to the build as its stdin', async () => {
     return {};
   });
 
-  writeFileSync(join(ctx.dir, 'context.tar'), 'the context');
+  writeFileSync(join(ctx.directoryPath, 'context.tar'), 'the context');
 
   await runGuestBuild(createGuestExec(guest.open), {
-    tarPath: join(ctx.dir, 'context.tar'),
+    tarPath: join(ctx.directoryPath, 'context.tar'),
     dockerfile: 'sub/Dockerfile',
     signal: new AbortController().signal,
   });
@@ -628,10 +648,10 @@ test('#runGuestBuild sends each line of the plain progress and its step to the o
     stderr: '#4 [2/2] RUN make all\n#4 0.301 cc -o widget main.c\n#4 DONE 0.5s\n',
   }));
 
-  writeFileSync(join(ctx.dir, 'context.tar'), 'the context');
+  writeFileSync(join(ctx.directoryPath, 'context.tar'), 'the context');
 
   await runGuestBuild(createGuestExec(guest.open), {
-    tarPath: join(ctx.dir, 'context.tar'),
+    tarPath: join(ctx.directoryPath, 'context.tar'),
     dockerfile: 'Dockerfile',
     signal: new AbortController().signal,
     output: {
@@ -658,10 +678,10 @@ test('#runGuestBuild builds with the pinned frontend, the builder tag and the Do
 
   const guest = buildStubGuest(() => ({}));
 
-  writeFileSync(join(ctx.dir, 'context.tar'), 'the context');
+  writeFileSync(join(ctx.directoryPath, 'context.tar'), 'the context');
 
   await runGuestBuild(createGuestExec(guest.open), {
-    tarPath: join(ctx.dir, 'context.tar'),
+    tarPath: join(ctx.directoryPath, 'context.tar'),
     dockerfile: 'sub/Dockerfile',
     signal: new AbortController().signal,
   });
@@ -690,11 +710,11 @@ test('#runGuestBuild fails a build with the last 8000 characters of its log', as
     stderr: `${'early '.repeat(2000)}\n#5 ERROR: process "/bin/sh -c false"`,
   }));
 
-  writeFileSync(join(ctx.dir, 'context.tar'), 'the context');
+  writeFileSync(join(ctx.directoryPath, 'context.tar'), 'the context');
 
   expect(
     runGuestBuild(createGuestExec(guest.open), {
-      tarPath: join(ctx.dir, 'context.tar'),
+      tarPath: join(ctx.directoryPath, 'context.tar'),
       dockerfile: 'Dockerfile',
       signal: new AbortController().signal,
     }),

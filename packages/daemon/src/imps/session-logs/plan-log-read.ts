@@ -29,7 +29,7 @@ export type LogReadPlan =
     } & LogBounds);
 
 // The bounds of a log; `origin` is where an empty log began.
-export function readLogBounds(segments: readonly LogSegment[], origin: number): LogBounds {
+export function getLogBounds(segments: readonly LogSegment[], origin: number): LogBounds {
   const [first] = segments;
   const last = segments.at(-1);
 
@@ -48,7 +48,7 @@ export function planLogRead(
   from: number,
   limit: number,
 ): LogReadPlan {
-  const bounds = readLogBounds(segments, origin);
+  const bounds = getLogBounds(segments, origin);
 
   if (from > bounds.logEnd) {
     return { kind: 'past_end', ...bounds };

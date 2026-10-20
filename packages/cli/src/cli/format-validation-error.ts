@@ -26,7 +26,7 @@ export function formatValidationError(error: AggregateError, command: string): s
 
 function formatArgError(error: Readonly<ArgsValidationError>): string {
   const values = error.values;
-  const flag = readDisplayName(values['displayName'], values['name']);
+  const flag = getDisplayName(values['displayName'], values['name']);
 
   return match(error.code)
     .with('err:arg:invalid-choice', () => {
@@ -46,7 +46,7 @@ function formatArgError(error: Readonly<ArgsValidationError>): string {
       return formatParseFailure(flag, why);
     })
     .with('err:arg:conflict', () => {
-      const other = readDisplayName(values['conflictDisplayName'], values['conflictName']);
+      const other = getDisplayName(values['conflictDisplayName'], values['conflictName']);
 
       return `${flag} does not go with ${other}`;
     })
@@ -69,6 +69,13 @@ function formatArgError(error: Readonly<ArgsValidationError>): string {
     .exhaustive();
 }
 
+// the flag as `--name`, or a positional argument by its name
+function getDisplayName(displayName: unknown, name: unknown): string {
+  const text = typeof displayName === 'string' ? displayName : String(name);
+
+  return text.startsWith("'--") ? `--${String(name)}` : text.replaceAll("'", '');
+}
+
 // gunshi's integer bounds as a sentence, else the parser's own message under
 // the flag's name
 function formatParseFailure(flag: string, reason: string): string {
@@ -81,11 +88,4 @@ function formatParseFailure(flag: string, reason: string): string {
   }
 
   return reason.startsWith(flag) ? reason : `${flag}: ${reason}`;
-}
-
-// the flag as `--name`, or a positional argument by its name
-function readDisplayName(displayName: unknown, name: unknown): string {
-  const text = typeof displayName === 'string' ? displayName : String(name);
-
-  return text.startsWith("'--") ? `--${String(name)}` : text.replaceAll("'", '');
 }

@@ -99,7 +99,7 @@ export async function runCommand(
   argv: readonly string[],
   options: Readonly<{ stdin?: string; env?: Readonly<Record<string, string>> }> = {},
 ): Promise<CommandResult> {
-  const proc = Bun.spawn([...argv], {
+  const subprocess = Bun.spawn([...argv], {
     stdin: options.stdin === undefined ? 'ignore' : Buffer.from(options.stdin),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -107,9 +107,9 @@ export async function runCommand(
   });
 
   const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
+    new Response(subprocess.stdout).text(),
+    new Response(subprocess.stderr).text(),
+    subprocess.exited,
   ]);
 
   return { exitCode, stdout, stderr };
@@ -143,7 +143,7 @@ export async function readHostImage(): Promise<string> {
 }
 
 // the host image main.ts put in the env (readHostImage)
-export function getHostImage(): string {
+export function readHostImageFromEnv(): string {
   const image = process.env['IMP_HOST_IMAGE'] ?? '';
 
   if (image === '') {
@@ -163,7 +163,7 @@ export async function runDevScript(
 ): Promise<void> {
   // Bun.spawn's default env is the one the process started with, not
   // process.env as changed since
-  const proc = Bun.spawn([DEV_SCRIPT, command], {
+  const subprocess = Bun.spawn([DEV_SCRIPT, command], {
     stdout: 'inherit',
     stderr: 'inherit',
     env: {
@@ -175,7 +175,7 @@ export async function runDevScript(
     },
   });
 
-  const exitCode = await proc.exited;
+  const exitCode = await subprocess.exited;
 
   if (exitCode !== 0) {
     throw new Error(`scripts/dev/dev.sh ${command} exited ${String(exitCode)}`);
@@ -255,9 +255,9 @@ export async function readImpdLoggedMs(text: string): Promise<number | null> {
     .filter((line) => line.includes(text));
 
   const match = /in (?<ms>\d+)ms$/u.exec(lines.at(-1)?.trim() ?? '');
-  const ms = match?.groups?.['ms'];
+  const durationMs = match?.groups?.['ms'];
 
-  return ms === undefined ? null : Number(ms);
+  return durationMs === undefined ? null : Number(durationMs);
 }
 
 // Firecracker's argv holds the imp's directory (imps/<id>/run/api.sock)
@@ -278,7 +278,7 @@ export async function stopFirecrackerHard(id: string): Promise<void> {
 }
 
 // null between an old impd exiting and the new one starting
-export async function findImpdPid(): Promise<string | null> {
+export async function readImpdPid(): Promise<string | null> {
   const result = await runInContainer(['pgrep', '-f', 'bun .*/daemon/src/main.ts']);
 
   const pid = result.stdout.split('\n')[0]?.trim() ?? '';

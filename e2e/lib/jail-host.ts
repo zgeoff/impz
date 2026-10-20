@@ -33,7 +33,7 @@ export function readStatusField(status: string, field: string): string {
 // The ways a VM breaks the jail's contract, empty for a jailed one: the
 // jailer's argv, a uid of 900000 or more, no capabilities, seccomp on every
 // thread, its own tap, and run/ and snapshot/ sealed to root.
-export function findJailViolations(state: Readonly<JailState>): readonly string[] {
+export function collectJailViolations(state: Readonly<JailState>): readonly string[] {
   const checks: readonly (readonly [boolean, string])[] = [
     [state.cmdline.startsWith(`/firecracker --id ${state.impId} `), 'not started by the jailer'],
     [
@@ -57,7 +57,7 @@ export function findJailViolations(state: Readonly<JailState>): readonly string[
 // Whether impd's log shows the end of the imp's own template build (built,
 // refused or failed), or a restore of a template made earlier, which
 // starts none.
-export function checkTemplateBuildEnded(log: string, name: string, key: string): boolean {
+export function hasTemplateBuildEnded(log: string, name: string, key: string): boolean {
   const ended = new RegExp(
     `impd: boot template ${key.slice(0, 12)} (?:built in|build refused|build failed)`,
     'v',
@@ -159,8 +159,8 @@ export async function readImpCgroupText(name: string, file: string): Promise<str
 
 // the host container's mounts under a jail dir: none for an imp whose VM and
 // boot template builds are gone
-export async function listJailMounts(dir: string): Promise<readonly string[]> {
+export async function listJailMounts(directory: string): Promise<readonly string[]> {
   const mounts = await readContainerText('/proc/self/mounts');
 
-  return mounts.split('\n').filter((line) => line.includes(` /var/lib/imp/jail/${dir}`));
+  return mounts.split('\n').filter((line) => line.includes(` /var/lib/imp/jail/${directory}`));
 }

@@ -3,7 +3,7 @@ import { listCheckpoints } from '../../platform/db/checkpoints';
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StartTimer } from '../../platform/process/clock';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { ImpDiskUsage, StorageBackend } from './storage-backend';
 
@@ -97,7 +97,7 @@ export function createDiskUsageCache(deps: DiskUsageCacheDeps): DiskUsageCache {
 
       state.usage = new Map(kept);
     } catch (error) {
-      deps.log(`impd: disk usage: ${readErrorMessage(error)}`);
+      deps.log(`impd: disk usage: ${getErrorMessage(error)}`);
     }
   };
 

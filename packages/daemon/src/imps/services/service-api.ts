@@ -21,13 +21,27 @@ import {
   sendServicesRemove,
   sendServicesRestart,
 } from '../../vm/agent-client/service-requests';
-import { findSignalName } from '../exec/signal-names';
+import { getSignalName } from '../exec/signal-names';
 import type { ImpRuntime } from '../imps/imp-runtime';
 import { createLogDecoders } from './create-log-decoders';
 import { mergeLogStreams } from './merge-log-streams';
 import type { NamedStream } from './merge-log-streams';
 import { stopOnReturn } from './stop-on-return';
 import { waitForImpChange } from './wait-for-imp-change';
+
+// What the caller may do beyond the exec scope: with `manage`, a service
+// that runs as another user than the image's, or as root
+interface ServiceRights {
+  readonly canManage: boolean;
+  readonly replace?: boolean;
+}
+
+interface ServiceLogsRequest {
+  // every service's log when it is undefined
+  readonly service: string | undefined;
+  readonly lines: number;
+  readonly follow: boolean;
+}
 
 // The `services` API (docs/guides/services.md) through the guest agent. A
 // call wakes or boots the imp and counts as an exec, except a list and a
@@ -50,22 +64,8 @@ export interface ServiceApi {
   readonly endLogFollows: () => void;
 }
 
-// What the caller may do beyond the exec scope: with `manage`, a service
-// that runs as another user than the image's, or as root
-interface ServiceRights {
-  readonly canManage: boolean;
-  readonly replace?: boolean;
-}
-
-interface ServiceLogsRequest {
-  // every service's log when it is undefined
-  readonly service: string | undefined;
-  readonly lines: number;
-  readonly follow: boolean;
-}
-
 interface ServiceApiParts {
-  readonly runtime: Pick<ImpRuntime, 'sendToAgent' | 'openAgentStream' | 'findAgent'>;
+  readonly runtime: Pick<ImpRuntime, 'sendToAgent' | 'openAgentStream' | 'readAgent'>;
   readonly events: Pick<EventBus, 'subscribe'>;
 
   // the list a sleeping imp's last sleep recorded, if it did
@@ -77,61 +77,9 @@ interface ServiceApiParts {
   readonly startTimer?: StartTimer;
 }
 
-// lines in all when every service's log goes, split among them
-const MERGED_LINES = 10_000;
-
-// a follow looks again this often while the imp does not run, in case an
-// event went by before it listened
-const FOLLOW_RECHECK_MS = 5000;
-
-// and this long after its streams ended while the imp still ran
-const FOLLOW_RETRY_MS = 500;
-
-// opens in a row that fail on a running imp before the follow ends
-const FOLLOW_OPEN_TRIES = 5;
-
-// a list waits this long for a running imp's lifecycle op, such as a
-// checkpoint, to end
-const LIST_WAIT_MS = 10_000;
-
-// The running imp's agent socket, without a wake or a boot: listing is a
-// read, and a read never starts an imp. A sleeping imp has none; any other
-// state that does not run is INVALID_STATE.
-async function findRunningAgent(
-  context: Readonly<WaitContext>,
-  name: string,
-): Promise<{ readonly imp: ImpRecord; readonly vsockPath: string | null }> {
-  const runtime = context.runtime;
-  const deadline = context.now() + LIST_WAIT_MS;
-
-  for (;;) {
-    const found = await runtime.findAgent(name);
-
-    if (found.vsockPath !== null || found.imp.state === 'sleeping') {
-      return found;
-    }
-
-    if (found.imp.state !== 'running' || context.now() > deadline) {
-      throw buildInvalidStateError(
-        found.imp.state,
-        ['running', 'sleeping'],
-        'list the services of',
-      );
-    }
-
-    const waited = Promise.withResolvers<undefined>();
-
-    context.startTimer(() => {
-      waited.resolve(undefined);
-    }, FOLLOW_RETRY_MS);
-
-    await waited.promise;
-  }
-}
-
 // what a list's and a follow's waits read
 interface WaitContext {
-  readonly runtime: Pick<ImpRuntime, 'findAgent'>;
+  readonly runtime: Pick<ImpRuntime, 'readAgent'>;
   readonly now: () => number;
   readonly startTimer: StartTimer;
 }
@@ -146,23 +94,10 @@ interface FollowControl {
   readonly stop: () => void;
 }
 
-function createFollowControl(): FollowControl {
-  const abort = new AbortController();
-
-  let open: readonly NamedStream[] = [];
-
-  return {
-    readStreams: () => open,
-    setStreams: (streams) => {
-      open = streams;
-    },
-    signal: abort.signal,
-    stop: () => {
-      abort.abort();
-
-      stopStreams(open);
-    },
-  };
+// what a follow needs of impd
+interface FollowContext extends WaitContext {
+  readonly events: Pick<EventBus, 'subscribe'>;
+  readonly restart: { readonly started: boolean };
 }
 
 export function createServiceApi(parts: ServiceApiParts): ServiceApi {
@@ -205,7 +140,7 @@ export function createServiceApi(parts: ServiceApiParts): ServiceApi {
 
     // the first streams open before the call returns, so a missing
     // service is a NOT_FOUND for the call; a sleeping imp opens none yet
-    const found = await runtime.findAgent(name, 'services').catch(handleAgentError(''));
+    const found = await runtime.readAgent(name, 'services').catch(handleAgentError(''));
 
     const control = createFollowControl();
 
@@ -226,7 +161,7 @@ export function createServiceApi(parts: ServiceApiParts): ServiceApi {
 
   return {
     listServices: async (name) => {
-      const found = await findRunningAgent(followContext, name);
+      const found = await readRunningAgent(followContext, name);
 
       if (found.vsockPath === null) {
         const slept = parts.readSleptServices(found.imp);
@@ -319,11 +254,130 @@ export function createServiceApi(parts: ServiceApiParts): ServiceApi {
   };
 }
 
-// what a follow needs of impd
-interface FollowContext extends WaitContext {
-  readonly events: Pick<EventBus, 'subscribe'>;
-  readonly restart: { readonly started: boolean };
+async function listServiceNames(
+  vsockPath: string,
+  request: Readonly<ServiceLogsRequest>,
+): Promise<string[]> {
+  if (request.service !== undefined) {
+    return [request.service];
+  }
+
+  const listed = await sendServicesList(vsockPath);
+
+  return listed.services.map((entry) => entry.name);
 }
+
+async function openLogStreams(
+  vsockPath: string,
+  services: readonly string[],
+  request: Readonly<ServiceLogsRequest>,
+  cursors: ReadonlyMap<string, LogCursor>,
+): Promise<NamedStream[]> {
+  const lines = countLinesPerService(request, services.length);
+  const streams: NamedStream[] = [];
+
+  try {
+    for (const service of services) {
+      const stream = await openServiceLogStream(vsockPath, {
+        service,
+        lines,
+        follow: request.follow,
+        cursor: cursors.get(service),
+      }).catch(handleAgentError(service));
+
+      streams.push({ service, stream });
+    }
+  } catch (error) {
+    stopStreams(streams);
+    throw error;
+  }
+
+  return streams;
+}
+
+// lines in all when every service's log goes, split among them
+const MERGED_LINES = 10_000;
+
+// lines per service: every service's log shares MERGED_LINES
+function countLinesPerService(request: Readonly<ServiceLogsRequest>, count: number): number {
+  if (request.service !== undefined) {
+    return request.lines;
+  }
+
+  return Math.min(request.lines, Math.floor(MERGED_LINES / Math.max(count, 1)));
+}
+
+// The agent's error codes as the API's.
+function handleAgentError(service: string): (error: unknown) => never {
+  return (error) => {
+    if (isAgentError(error, 'NO_SERVICE')) {
+      throw buildNotFoundError('service', service);
+    }
+
+    if (isAgentError(error, 'SERVICE_EXISTS')) {
+      throw buildConflictError('service', service);
+    }
+
+    if (isAgentError(error, 'BAD_REQUEST')) {
+      throw new ORPCError('BAD_REQUEST', { message: error.detail });
+    }
+
+    if (isAgentError(error, 'AGENT_OUTDATED')) {
+      throw buildAgentOutdatedApiError(error.message);
+    }
+
+    throw error;
+  };
+}
+
+function stopStreams(streams: readonly NamedStream[]): void {
+  for (const entry of streams) {
+    entry.stream.close();
+  }
+}
+
+async function* readLogs(
+  streams: readonly NamedStream[],
+): AsyncGenerator<ServiceLog, void, undefined> {
+  const decoders = createLogDecoders();
+
+  for await (const item of mergeLogStreams(streams, decoders)) {
+    if (item.text !== '') {
+      yield { type: 'log', service: item.service, text: item.text };
+    }
+  }
+
+  yield* decoders.readRest();
+}
+
+function createFollowControl(): FollowControl {
+  const abort = new AbortController();
+
+  let open: readonly NamedStream[] = [];
+
+  return {
+    readStreams: () => open,
+    setStreams: (streams) => {
+      open = streams;
+    },
+    signal: abort.signal,
+    stop: () => {
+      abort.abort();
+
+      stopStreams(open);
+    },
+  };
+}
+
+// a follow looks again this often while the imp does not run, in case an
+// event went by before it listened
+const FOLLOW_RECHECK_MS = 5000;
+
+// and this long after its streams ended while the imp still ran
+const FOLLOW_RETRY_MS = 500;
+
+// opens in a row that fail on a running imp before the follow ends
+const FOLLOW_OPEN_TRIES = 5;
 
 // A follow never wakes the imp: while it does not run, the follow says so,
 // and again when it goes on to sleep or stop, and waits; once it runs, the
@@ -346,7 +400,7 @@ async function* readFollowedLogs(
   for (;;) {
     if (control.readStreams().length === 0) {
       // a destroyed imp ends the follow; anything else is an error
-      const found = await context.runtime.findAgent(name, 'services').catch((error: unknown) => {
+      const found = await context.runtime.readAgent(name, 'services').catch((error: unknown) => {
         if (error instanceof ORPCError && error.code === 'NOT_FOUND') {
           return null;
         }
@@ -436,45 +490,73 @@ async function* readFollowedLogs(
   }
 }
 
-async function openLogStreams(
-  vsockPath: string,
-  services: readonly string[],
-  request: Readonly<ServiceLogsRequest>,
-  cursors: ReadonlyMap<string, LogCursor>,
-): Promise<NamedStream[]> {
-  const lines = countLinesPerService(request, services.length);
-  const streams: NamedStream[] = [];
+// a list waits this long for a running imp's lifecycle op, such as a
+// checkpoint, to end
+const LIST_WAIT_MS = 10_000;
 
-  try {
-    for (const service of services) {
-      const stream = await openServiceLogStream(vsockPath, {
-        service,
-        lines,
-        follow: request.follow,
-        cursor: cursors.get(service),
-      }).catch(handleAgentError(service));
+// The running imp's agent socket, without a wake or a boot: listing is a
+// read, and a read never starts an imp. A sleeping imp has none; any other
+// state that does not run is INVALID_STATE.
+async function readRunningAgent(
+  context: Readonly<WaitContext>,
+  name: string,
+): Promise<{ readonly imp: ImpRecord; readonly vsockPath: string | null }> {
+  const runtime = context.runtime;
+  const deadline = context.now() + LIST_WAIT_MS;
 
-      streams.push({ service, stream });
+  for (;;) {
+    const found = await runtime.readAgent(name);
+
+    if (found.vsockPath !== null || found.imp.state === 'sleeping') {
+      return found;
     }
-  } catch (error) {
-    stopStreams(streams);
-    throw error;
-  }
 
-  return streams;
+    if (found.imp.state !== 'running' || context.now() > deadline) {
+      throw buildInvalidStateError(
+        found.imp.state,
+        ['running', 'sleeping'],
+        'list the services of',
+      );
+    }
+
+    const waited = Promise.withResolvers<undefined>();
+
+    context.startTimer(() => {
+      waited.resolve(undefined);
+    }, FOLLOW_RETRY_MS);
+
+    await waited.promise;
+  }
 }
 
-async function listServiceNames(
-  vsockPath: string,
-  request: Readonly<ServiceLogsRequest>,
-): Promise<string[]> {
-  if (request.service !== undefined) {
-    return [request.service];
-  }
+function toApiService(service: ServiceStatus): Service {
+  const def = service.def;
+  const exit = service.lastExit;
 
-  const listed = await sendServicesList(vsockPath);
+  // a state or a restart policy this impd does not know throws, as a
+  // services list it cannot show
+  return {
+    name: service.name,
+    state: ServiceStateSchema.parse(service.state),
+    pid: service.pid === undefined || service.pid === 0 ? null : service.pid,
+    restarts: service.restarts,
+    lastExit:
+      exit === undefined
+        ? null
+        : {
+            code: exit.code,
+            signal: exit.signal === 0 ? null : getSignalName(exit.signal),
+          },
+    argv: [...(def?.argv ?? [])],
+    envKeys: (def?.env ?? []).map((entry) => entry.split('=', 1)[0] ?? entry),
+    cwd: def?.cwd ?? null,
+    user: def?.user ?? null,
+    restart: ServiceRestartSchema.parse(def?.restart ?? 'always'),
+    source: def?.source === 'api' ? 'api' : 'image',
 
-  return listed.services.map((entry) => entry.name);
+    // an agent too old to say counts as root
+    root: service.root ?? true,
+  };
 }
 
 // With the exec scope, a service runs as the image's user, and a replace
@@ -511,86 +593,4 @@ function requireNotRoot(listed: ServicesList, service: string, action: string): 
   const why = found === undefined ? 'is not running yet' : 'runs as root';
 
   throw buildForbiddenError(`service ${service} ${why}: to ${action} it needs the manage scope`);
-}
-
-// lines per service: every service's log shares MERGED_LINES
-function countLinesPerService(request: Readonly<ServiceLogsRequest>, count: number): number {
-  if (request.service !== undefined) {
-    return request.lines;
-  }
-
-  return Math.min(request.lines, Math.floor(MERGED_LINES / Math.max(count, 1)));
-}
-
-function stopStreams(streams: readonly NamedStream[]): void {
-  for (const entry of streams) {
-    entry.stream.close();
-  }
-}
-
-async function* readLogs(
-  streams: readonly NamedStream[],
-): AsyncGenerator<ServiceLog, void, undefined> {
-  const decoders = createLogDecoders();
-
-  for await (const item of mergeLogStreams(streams, decoders)) {
-    if (item.text !== '') {
-      yield { type: 'log', service: item.service, text: item.text };
-    }
-  }
-
-  yield* decoders.readRest();
-}
-
-// The agent's error codes as the API's.
-function handleAgentError(service: string): (error: unknown) => never {
-  return (error) => {
-    if (isAgentError(error, 'NO_SERVICE')) {
-      throw buildNotFoundError('service', service);
-    }
-
-    if (isAgentError(error, 'SERVICE_EXISTS')) {
-      throw buildConflictError('service', service);
-    }
-
-    if (isAgentError(error, 'BAD_REQUEST')) {
-      throw new ORPCError('BAD_REQUEST', { message: error.detail });
-    }
-
-    if (isAgentError(error, 'AGENT_OUTDATED')) {
-      throw buildAgentOutdatedApiError(error.message);
-    }
-
-    throw error;
-  };
-}
-
-function toApiService(service: ServiceStatus): Service {
-  const def = service.def;
-  const exit = service.lastExit;
-
-  // a state or a restart policy this impd does not know throws, as a
-  // services list it cannot show
-  return {
-    name: service.name,
-    state: ServiceStateSchema.parse(service.state),
-    pid: service.pid === undefined || service.pid === 0 ? null : service.pid,
-    restarts: service.restarts,
-    lastExit:
-      exit === undefined
-        ? null
-        : {
-            code: exit.code,
-            signal: exit.signal === 0 ? null : findSignalName(exit.signal),
-          },
-    argv: [...(def?.argv ?? [])],
-    envKeys: (def?.env ?? []).map((entry) => entry.split('=', 1)[0] ?? entry),
-    cwd: def?.cwd ?? null,
-    user: def?.user ?? null,
-    restart: ServiceRestartSchema.parse(def?.restart ?? 'always'),
-    source: def?.source === 'api' ? 'api' : 'image',
-
-    // an agent too old to say counts as root
-    root: service.root ?? true,
-  };
 }

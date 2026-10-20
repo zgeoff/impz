@@ -5,16 +5,16 @@ import { join } from 'node:path';
 import { createStubNftBin } from './create-stub-nft-bin';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-nft-bin-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-nft-bin-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it records the arguments it was run with', async () => {
   const ctx = await setupTest();
-  const nft = await createStubNftBin(ctx.dir);
+  const nft = await createStubNftBin(ctx.directoryPath);
 
   await Bun.spawn([nft.path, '-f', '-'], { stdin: 'ignore' }).exited;
 
@@ -25,7 +25,7 @@ test('it records the arguments it was run with', async () => {
 
 test('it records the script it read on stdin', async () => {
   const ctx = await setupTest();
-  const nft = await createStubNftBin(ctx.dir);
+  const nft = await createStubNftBin(ctx.directoryPath);
 
   await Bun.spawn([nft.path, '-f', '-'], {
     stdin: new TextEncoder().encode("table inet imp_egress {}\n# it's\n"),
@@ -38,7 +38,7 @@ test('it records the script it read on stdin', async () => {
 
 test('it exits 0 and prints nothing by default', async () => {
   const ctx = await setupTest();
-  const nft = await createStubNftBin(ctx.dir);
+  const nft = await createStubNftBin(ctx.directoryPath);
 
   const child = Bun.spawn([nft.path, '-f', '-'], { stdin: 'ignore', stderr: 'pipe' });
 
@@ -51,7 +51,7 @@ test('it exits 0 and prints nothing by default', async () => {
 test('it prints the stderr it is given and exits with the code it is given', async () => {
   const ctx = await setupTest();
 
-  const nft = await createStubNftBin(ctx.dir, {
+  const nft = await createStubNftBin(ctx.directoryPath, {
     stderr: "Error: syntax error, unexpected newline\ndon't\n",
     exitCode: 3,
   });

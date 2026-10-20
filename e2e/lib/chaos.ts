@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { listImps, tryImp } from './imp-cli';
 import {
   checkHealthReady,
-  findImpdPid,
   instance,
+  readImpdPid,
   runChecked,
   runCommand,
   runDevScript,
@@ -129,7 +129,7 @@ export function listExpectedImpVmCounts(
 }
 
 // the VMs no imp owns
-export function findStrayVms(
+export function collectStrayVms(
   rows: readonly ImpVmRow[],
   vms: ReadonlyMap<string, readonly number[]>,
 ): string[] {
@@ -141,7 +141,10 @@ export function findStrayVms(
 const SETTLED_STATES = new Set(['running', 'sleeping', 'stopped', 'error']);
 
 // the imps of `names` not yet in a state a user can act on
-export function findUnsettledImps(rows: readonly ImpVmRow[], names: readonly string[]): string[] {
+export function collectUnsettledImps(
+  rows: readonly ImpVmRow[],
+  names: readonly string[],
+): string[] {
   return names.filter((name) => {
     const state = rows.find((row) => row.name === name)?.state ?? 'missing';
 
@@ -184,7 +187,7 @@ export async function listContainerVms(): Promise<Map<string, number[]>> {
 }
 
 // host processes in the cgroup of the container with this id
-export function findContainerProcesses(containerId: string): number[] {
+export function readContainerProcesses(containerId: string): number[] {
   const pids: number[] = [];
 
   for (const entry of readdirSync('/proc').filter((name) => /^\d+$/v.test(name))) {
@@ -256,7 +259,7 @@ async function runContainerKill(containerId: string): Promise<void> {
   await runChecked(['docker', 'kill', instance.container]);
 
   await waitFor('the killed container to leave no process', () => {
-    const left = findContainerProcesses(containerId);
+    const left = readContainerProcesses(containerId);
 
     if (left.length > 0) {
       throw new Error(`pids ${left.join(', ')} left`);
@@ -304,7 +307,7 @@ export async function runChaosFault(
   random: () => number,
 ): Promise<ChaosFaultResult> {
   if (fault === 'impd') {
-    const pid = await findImpdPid();
+    const pid = await readImpdPid();
 
     if (pid === null) {
       throw new Error('no impd to kill');
@@ -346,7 +349,7 @@ export function readSettledImps(names: readonly string[]): Promise<readonly ImpV
   return waitFor('every imp to settle', async () => {
     const rows = await listImps();
 
-    const unsettled = findUnsettledImps(rows, names);
+    const unsettled = collectUnsettledImps(rows, names);
 
     if (unsettled.length > 0) {
       throw new Error(`${unsettled.join(', ')} not settled`);

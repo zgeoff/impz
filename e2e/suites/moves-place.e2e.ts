@@ -8,7 +8,7 @@ import { resolveImageName } from '../lib/fixtures';
 import {
   assertState,
   createInstanceClient,
-  findImp,
+  readImp,
   requireImp,
   runImp,
   runImpWith,
@@ -19,7 +19,7 @@ import { HOST_B, readMoveHosts } from '../lib/move-hosts';
 import { writeBothHostsConfig } from '../lib/move-steps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // `impz new --place` across A and B on the harness's move network
@@ -34,9 +34,9 @@ async function setupTest() {
   const hosts = readMoveHosts({ tailnet: false });
 
   const client = await createInstanceClient();
-  const clientB = await createInstanceClient(hosts.b);
+  const clientB = await createInstanceClient(hosts.hostB);
 
-  return { prefix: readSuitePrefix('moves'), stack, hosts, client, clientB };
+  return { prefix: getSuitePrefix('moves'), stack, hosts, client, clientB };
 }
 
 test('it creates on the saved host with the most free RAM for impz new --place', async () => {
@@ -64,7 +64,7 @@ test('it creates on the saved host with the most free RAM for impz new --place',
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, seed));
 
-  await runImpWith({ target: ctx.hosts.b }, 'rm', seed);
+  await runImpWith({ target: ctx.hosts.hostB }, 'rm', seed);
 
   // A's sleeper counts its whole memory as taken, which leaves A less free
   // RAM than B
@@ -93,8 +93,8 @@ test('it creates on the saved host with the most free RAM for impz new --place',
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, placed));
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, placed));
 
-  const onA = await findImp(placed);
-  const onB = await requireImp(placed, ctx.hosts.b);
+  const onA = await readImp(placed);
+  const onB = await requireImp(placed, ctx.hosts.hostB);
 
   expect(result).toStrictEqual({
     exitCode: 0,

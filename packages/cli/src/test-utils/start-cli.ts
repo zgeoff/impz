@@ -40,11 +40,11 @@ export function startCli(options: StartCliOptions) {
   return child;
 }
 
-async function removeOnExit(exited: Promise<number>, dir: string): Promise<void> {
+async function removeOnExit(exited: Promise<number>, directory: string): Promise<void> {
   try {
     await exited;
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   }
 }
 

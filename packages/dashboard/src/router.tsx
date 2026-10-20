@@ -73,6 +73,11 @@ const routeTree = rootRoute.addChildren([
   appRoute.addChildren([impsRoute, impRoute, consoleRoute, imagesRoute, ramRoute, tokensRoute]),
 ]);
 
+// tests pass a memory history
+export function buildRouter(history?: RouterHistory) {
+  return createRouter({ routeTree, basepath: '/ui', ...(history !== undefined && { history }) });
+}
+
 // keyed by name, so a page for another imp starts fresh
 function ImpRouteView() {
   const params = impRoute.useParams();
@@ -84,11 +89,6 @@ function ConsoleRouteView() {
   const params = consoleRoute.useParams();
 
   return <ConsolePage key={params.name} name={params.name} />;
-}
-
-// tests pass a memory history
-export function buildRouter(history?: RouterHistory) {
-  return createRouter({ routeTree, basepath: '/ui', ...(history !== undefined && { history }) });
 }
 
 declare module '@tanstack/react-router' {

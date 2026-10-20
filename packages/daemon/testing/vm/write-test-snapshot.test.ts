@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { hasSnapshot, readSnapshotMeta } from '../../src/vm/sleep/snapshot-meta';
+import { probeSnapshot, readSnapshotMeta } from '../../src/vm/sleep/snapshot-meta';
 import { buildImpPaths } from '../../src/vm/storage/data-layout';
 import { writeTestSnapshot } from './write-test-snapshot';
 
@@ -27,7 +27,7 @@ test('it writes the files and the meta a wake loads', async () => {
     systemDrive: 'd1',
   });
 
-  expect(hasSnapshot(paths)).toBeTrue();
+  expect(probeSnapshot(paths)).toBeTrue();
 
   expect(readSnapshotMeta(paths)).toStrictEqual({
     firecrackerVersion: 'v1.17.0',

@@ -1,6 +1,6 @@
 import type { SlotAddress } from '../../host-net/net/addressing';
 import { GATEWAY_IP6 } from '../../host-net/net/addressing6';
-import { ONLINE_MOVABLE_ARG, findRegionMib } from '../memory/elastic-memory';
+import { ONLINE_MOVABLE_ARG, getRegionMib } from '../memory/elastic-memory';
 import type { ImpPaths } from '../storage/data-layout';
 import { BASE_BOOT_ARGS } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
@@ -48,6 +48,6 @@ export function buildBootArgs(plan: Readonly<VmPlan>): string {
       : [`imp.ip6=${plan.address.guestIp6}/128`, `imp.gw6=${GATEWAY_IP6}`]),
     `imp.dns=${plan.dns.join(',')}`,
     ...(plan.isIdentityReset ? ['imp.reset_identity=1'] : []),
-    ...(findRegionMib(plan.memoryMib, plan.maxMemoryMib) > 0 ? [ONLINE_MOVABLE_ARG] : []),
+    ...(getRegionMib(plan.memoryMib, plan.maxMemoryMib) > 0 ? [ONLINE_MOVABLE_ARG] : []),
   ].join(' ');
 }

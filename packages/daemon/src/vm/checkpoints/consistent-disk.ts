@@ -1,6 +1,6 @@
 import type { LockedImp } from '../../imps/imps/imp-lock';
 import type { ImpCheckpointHooks } from '../../imps/imps/imp-service';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildInvalidStateError } from '../../surface/api-errors';
 import { sendFreeze, sendThaw } from '../agent-client/agent-requests';
 import type { StorageBackend } from '../storage/storage-backend';
@@ -54,7 +54,7 @@ export function createConsistentDisk(deps: ConsistentDiskDeps): WithConsistentDi
       try {
         await freezer.thaw(paths.vsockSocket);
       } catch (error) {
-        const message = readErrorMessage(error);
+        const message = getErrorMessage(error);
 
         deps.log(`impd: ${imp.name}: thaw failed (the agent thaws on its own): ${message}`);
       }

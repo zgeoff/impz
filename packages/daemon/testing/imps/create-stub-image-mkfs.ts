@@ -5,10 +5,10 @@ import { waitFor } from '@impz/test-utils/wait-for';
 // An `mkfs.ext4` in `<dir>/bin` that holds each rootfs write until `release`
 // (the real one runs) or `fail` (that stderr), so a test acts while impd
 // writes a rootfs; it gives up once `dir` is gone.
-export function createStubImageMkfs(dir: string) {
-  const bin = join(dir, 'bin');
-  const started = join(dir, 'mkfs-started');
-  const released = join(dir, 'mkfs-released');
+export function createStubImageMkfs(directory: string) {
+  const bin = join(directory, 'bin');
+  const started = join(directory, 'mkfs-started');
+  const released = join(directory, 'mkfs-released');
 
   // the real mkfs.ext4, which sits in sbin on most hosts
   const real =
@@ -17,7 +17,7 @@ export function createStubImageMkfs(dir: string) {
   const script = [
     '#!/bin/sh',
     `touch '${started}'`,
-    `while [ ! -e '${released}' ]; do [ -d '${dir}' ] || exit 1; sleep 0.05; done`,
+    `while [ ! -e '${released}' ]; do [ -d '${directory}' ] || exit 1; sleep 0.05; done`,
     `[ -s '${released}' ] && { cat '${released}' >&2; exit 1; }`,
     `exec '${real}' "$@"`,
     '',

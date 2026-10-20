@@ -30,7 +30,7 @@ interface OutputSink {
   text: string;
 }
 
-async function collectOutput(stream: ReadableStream<Uint8Array>, sink: OutputSink): Promise<void> {
+async function readOutput(stream: ReadableStream<Uint8Array>, sink: OutputSink): Promise<void> {
   for await (const chunk of stream) {
     sink.text += decoder.decode(chunk);
   }
@@ -38,13 +38,13 @@ async function collectOutput(stream: ReadableStream<Uint8Array>, sink: OutputSin
 
 // `impz proxy <name> <specs>`, once it printed a line for every forward
 export async function startProxy(name: string, ...specs: readonly string[]): Promise<RunningProxy> {
-  const proc = await startImp(['proxy', name, ...specs]);
+  const subprocess = await startImp(['proxy', name, ...specs]);
 
   const stderr = { text: '' };
   const stdout = { text: '' };
 
-  void collectOutput(proc.stderr, stderr);
-  void collectOutput(proc.stdout, stdout);
+  void readOutput(subprocess.stderr, stderr);
+  void readOutput(subprocess.stdout, stdout);
 
   const ports = await waitFor('impz proxy to listen', () => {
     const found = [...stdout.text.matchAll(/forwarding localhost:(?<port>\d+) ->/gv)];
@@ -60,9 +60,9 @@ export async function startProxy(name: string, ...specs: readonly string[]): Pro
     ports,
     readStderr: () => stderr.text,
     stop: () => {
-      proc.kill('SIGINT');
+      subprocess.kill('SIGINT');
 
-      return proc.exited;
+      return subprocess.exited;
     },
   };
 }
@@ -87,13 +87,17 @@ export async function startReverse(
   name: string,
   ...specs: readonly string[]
 ): Promise<RunningReverse> {
-  const proc = await startImp(['proxy', name, ...specs.flatMap((spec) => ['--reverse', spec])]);
+  const subprocess = await startImp([
+    'proxy',
+    name,
+    ...specs.flatMap((spec) => ['--reverse', spec]),
+  ]);
 
   const stderr = { text: '' };
   const stdout = { text: '' };
 
-  void collectOutput(proc.stderr, stderr);
-  void collectOutput(proc.stdout, stdout);
+  void readOutput(subprocess.stderr, stderr);
+  void readOutput(subprocess.stdout, stdout);
 
   const guests = await waitFor('impz proxy --reverse to listen', () => {
     const found = parseReverseForwards(stdout.text);
@@ -109,19 +113,19 @@ export async function startReverse(
     guests,
     readStderr: () => stderr.text,
     stop: () => {
-      proc.kill('SIGINT');
+      subprocess.kill('SIGINT');
 
-      return proc.exited;
+      return subprocess.exited;
     },
   };
 }
 
 // Collects a stream as text while it runs, such as the log of an ssh that
 // keeps going; read() gives what arrived so far.
-export function collectText(stream: ReadableStream<Uint8Array>): { readonly read: () => string } {
+export function readText(stream: ReadableStream<Uint8Array>): { readonly read: () => string } {
   const sink = { text: '' };
 
-  void collectOutput(stream, sink);
+  void readOutput(stream, sink);
 
   return { read: () => sink.text };
 }

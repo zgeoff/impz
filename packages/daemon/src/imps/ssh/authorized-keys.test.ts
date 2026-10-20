@@ -5,21 +5,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { utils } from 'ssh2';
 import invariant from 'tiny-invariant';
-import { createEd25519Key } from '../../surface/ssh/host-key';
+import { generateEd25519Key } from '../../surface/ssh/host-key';
 import { createAuthorizedKeys, formatKeyFingerprint, parseAuthorizedKeys } from './authorized-keys';
 
 // An owner-only dir for authorized_keys, which the test writes.
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-keys-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-keys-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
-  chmodSync(dir, 0o700);
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  chmodSync(directory, 0o700);
 
-  return { dir, keysPath: join(dir, 'authorized_keys') };
+  return { directoryPath: directory, keysPath: join(directory, 'authorized_keys') };
 }
 
 test('it reads a key line with its type and comment', () => {
-  const key = createEd25519Key().public;
+  const key = generateEd25519Key().public;
   const parsed = parseAuthorizedKeys(`# laptop\n\n${key} me@laptop\n`);
 
   expect(parsed.keys).toStrictEqual([
@@ -33,13 +33,13 @@ test('it reads a key line with its type and comment', () => {
 });
 
 test('it skips comments and blank lines without a problem', () => {
-  const key = createEd25519Key().public;
+  const key = generateEd25519Key().public;
 
   expect(parseAuthorizedKeys(`# laptop\n\n${key} me@laptop\n`).problems).toStrictEqual([]);
 });
 
 test('it reads a key’s blob in SSH wire format', () => {
-  const key = createEd25519Key().public;
+  const key = generateEd25519Key().public;
   const parsed = utils.parseKey(key);
 
   if (parsed instanceof Error) {
@@ -56,7 +56,7 @@ test.each([
 ])(
   'it refuses a line that starts with the %s option, which it cannot enforce',
   (_option, prefix) => {
-    const key = createEd25519Key().public;
+    const key = generateEd25519Key().public;
 
     expect(parseAuthorizedKeys(`${prefix} ${key}`)).toStrictEqual({
       keys: [],
@@ -95,7 +95,7 @@ test('it formats a fingerprint as ssh-keygen prints it', () => {
 test('it finds a key that the file lists', async () => {
   const ctx = await setupTest();
 
-  const key = createEd25519Key().public;
+  const key = generateEd25519Key().public;
   const blob = parseAuthorizedKeys(key).keys[0]?.blob;
 
   invariant(blob);
@@ -103,7 +103,7 @@ test('it finds a key that the file lists', async () => {
 
   const keys = createAuthorizedKeys(ctx.keysPath, () => {});
 
-  expect(keys.findKey(blob)).toStrictEqual({
+  expect(keys.readKey(blob)).toStrictEqual({
     type: 'ssh-ed25519',
     blob,
     comment: 'me',
@@ -114,20 +114,20 @@ test('it finds a key that the file lists', async () => {
 test('it finds no key that the file does not list', async () => {
   const ctx = await setupTest();
 
-  const other = parseAuthorizedKeys(createEd25519Key().public).keys[0]?.blob;
+  const other = parseAuthorizedKeys(generateEd25519Key().public).keys[0]?.blob;
 
   invariant(other);
-  writeFileSync(ctx.keysPath, `${createEd25519Key().public}\n`, { mode: 0o600 });
+  writeFileSync(ctx.keysPath, `${generateEd25519Key().public}\n`, { mode: 0o600 });
 
   const keys = createAuthorizedKeys(ctx.keysPath, () => {});
 
-  expect(keys.findKey(other)).toBeNull();
+  expect(keys.readKey(other)).toBeNull();
 });
 
 test('it lists a key but grants none from a file that others can write', async () => {
   const ctx = await setupTest();
 
-  const key = createEd25519Key().public;
+  const key = generateEd25519Key().public;
   const blob = parseAuthorizedKeys(key).keys[0]?.blob;
 
   invariant(blob);
@@ -136,36 +136,36 @@ test('it lists a key but grants none from a file that others can write', async (
 
   const keys = createAuthorizedKeys(ctx.keysPath, () => {});
 
-  expect(keys.findKey(blob)).toBeNull();
-  expect(keys.isListed(blob)).toBeTrue();
+  expect(keys.readKey(blob)).toBeNull();
+  expect(keys.probeListed(blob)).toBeTrue();
 });
 
 test('it grants no key from a file whose directory others can write', async () => {
   const ctx = await setupTest();
 
-  const key = createEd25519Key().public;
+  const key = generateEd25519Key().public;
   const blob = parseAuthorizedKeys(key).keys[0]?.blob;
   const logs: string[] = [];
 
   invariant(blob);
   writeFileSync(ctx.keysPath, `${key}\n`, { mode: 0o600 });
-  chmodSync(ctx.dir, 0o777);
+  chmodSync(ctx.directoryPath, 0o777);
 
   const keys = createAuthorizedKeys(ctx.keysPath, (message) => {
     logs.push(message);
   });
 
-  expect(keys.findKey(blob)).toBeNull();
+  expect(keys.readKey(blob)).toBeNull();
 
   expect(logs).toStrictEqual([
-    `impd: ssh: ${ctx.dir} is writable by group or others; no key can log in until it is not`,
+    `impd: ssh: ${ctx.directoryPath} is writable by group or others; no key can log in until it is not`,
   ]);
 });
 
 test('it logs that no key can log in when the file is missing', async () => {
   const ctx = await setupTest();
 
-  const blob = parseAuthorizedKeys(createEd25519Key().public).keys[0]?.blob;
+  const blob = parseAuthorizedKeys(generateEd25519Key().public).keys[0]?.blob;
   const logs: string[] = [];
 
   invariant(blob);
@@ -174,7 +174,7 @@ test('it logs that no key can log in when the file is missing', async () => {
     logs.push(message);
   });
 
-  expect(keys.findKey(blob)).toBeNull();
+  expect(keys.readKey(blob)).toBeNull();
   expect(logs).toStrictEqual([`impd: ssh: no ${ctx.keysPath}; no key can log in`]);
 });
 
@@ -189,7 +189,7 @@ test('it logs each line it skips with its problem', async () => {
     logs.push(message);
   });
 
-  keys.isListed(Buffer.alloc(0));
+  keys.probeListed(Buffer.alloc(0));
 
   expect(logs).toStrictEqual([
     `impd: ssh: ${ctx.keysPath} line 1: ssh-dss keys are not supported; skipped`,
@@ -199,14 +199,14 @@ test('it logs each line it skips with its problem', async () => {
 test('it reads the file again once it changes', async () => {
   const ctx = await setupTest();
 
-  const key = createEd25519Key().public;
+  const key = generateEd25519Key().public;
   const blob = parseAuthorizedKeys(key).keys[0]?.blob;
   const keys = createAuthorizedKeys(ctx.keysPath, () => {});
 
   invariant(blob);
   writeFileSync(ctx.keysPath, '', { mode: 0o600 });
 
-  keys.isListed(blob);
+  keys.probeListed(blob);
 
   // an explicit new mtime, whatever the filesystem's clock granularity
   const later = new Date(Date.now() + 60_000);
@@ -214,7 +214,7 @@ test('it reads the file again once it changes', async () => {
   writeFileSync(ctx.keysPath, `${key}\n`, { mode: 0o600 });
   utimesSync(ctx.keysPath, later, later);
 
-  expect(keys.findKey(blob)).toStrictEqual({
+  expect(keys.readKey(blob)).toStrictEqual({
     type: 'ssh-ed25519',
     blob,
     comment: '',
@@ -233,8 +233,8 @@ test('it reads the file once while it does not change', async () => {
     logs.push(message);
   });
 
-  keys.isListed(Buffer.alloc(0));
-  keys.isListed(Buffer.alloc(0));
+  keys.probeListed(Buffer.alloc(0));
+  keys.probeListed(Buffer.alloc(0));
 
   expect(logs).toHaveLength(1);
 });

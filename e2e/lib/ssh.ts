@@ -19,7 +19,7 @@ export interface SshClient {
   // `ssh -F <config>`: the start of every ssh, scp and sftp command
   readonly configArgs: readonly string[];
 
-  readonly dir: string;
+  readonly directory: string;
   readonly cleanup: () => Promise<void>;
 }
 
@@ -34,14 +34,14 @@ async function createKey(path: string, comment: string): Promise<string> {
 const IGNORE_UNKNOWN = 'IgnoreUnknown WarnWeakCrypto';
 
 // a Host alias for the dev instance's gateway that logs in with one key
-function buildHostBlock(dir: string, alias: string, identity: string): string[] {
+function buildHostBlock(directory: string, alias: string, identity: string): string[] {
   return [
     `Host ${alias}`,
     '  HostName 127.0.0.1',
     `  Port ${String(instance.sshPort)}`,
     `  IdentityFile ${identity}`,
     '  IdentitiesOnly yes',
-    `  UserKnownHostsFile ${join(dir, 'known_hosts')}`,
+    `  UserKnownHostsFile ${join(directory, 'known_hosts')}`,
     '  StrictHostKeyChecking accept-new',
     '  BatchMode yes',
     '  LogLevel ERROR',
@@ -61,30 +61,30 @@ export async function setupKeyClient(aliases: readonly string[]): Promise<KeyCli
 
   mkdirSync(scratch, { recursive: true });
 
-  const dir = mkdtempSync(join(scratch, 'ssh-keys-'));
-  const config = join(dir, 'config');
+  const directory = mkdtempSync(join(scratch, 'ssh-keys-'));
+  const config = join(directory, 'config');
 
   const publicKeyPaths = new Map<string, string>();
 
   const blocks: string[] = [];
 
   for (const alias of aliases) {
-    const key = join(dir, alias);
+    const key = join(directory, alias);
 
     await createKey(key, alias);
 
     publicKeyPaths.set(alias, `${key}.pub`);
-    blocks.push(...buildHostBlock(dir, alias, key));
+    blocks.push(...buildHostBlock(directory, alias, key));
   }
 
   writeFileSync(config, [IGNORE_UNKNOWN, ...blocks, ''].join('\n'));
 
   return {
     configArgs: ['-F', config],
-    dir,
+    directory,
     publicKeyPaths,
     cleanup: () => {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(directory, { recursive: true, force: true });
 
       return Promise.resolve();
     },
@@ -100,10 +100,10 @@ export async function setupSshClient(): Promise<SshClient> {
 
   mkdirSync(scratch, { recursive: true });
 
-  const dir = mkdtempSync(join(scratch, 'ssh-'));
-  const key = join(dir, 'id');
-  const otherKey = join(dir, 'other');
-  const config = join(dir, 'config');
+  const directory = mkdtempSync(join(scratch, 'ssh-'));
+  const key = join(directory, 'id');
+  const otherKey = join(directory, 'other');
+  const config = join(directory, 'config');
 
   const publicKey = await createKey(key, KEY_COMMENT);
 
@@ -125,19 +125,19 @@ export async function setupSshClient(): Promise<SshClient> {
     config,
     [
       IGNORE_UNKNOWN,
-      ...buildHostBlock(dir, SSH_HOST, key),
-      ...buildHostBlock(dir, SSH_HOST_OTHER_KEY, otherKey),
+      ...buildHostBlock(directory, SSH_HOST, key),
+      ...buildHostBlock(directory, SSH_HOST_OTHER_KEY, otherKey),
       '',
     ].join('\n'),
   );
 
   return {
     configArgs: ['-F', config],
-    dir,
+    directory,
     cleanup: async () => {
       await runInContainer(['sed', '-i', `/${KEY_COMMENT}/d`, AUTHORIZED_KEYS]);
 
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(directory, { recursive: true, force: true });
     },
   };
 }
@@ -161,7 +161,7 @@ export function startSsh(
   stdin?: string,
   env: Readonly<Record<string, string>> = {},
 ) {
-  const proc = Bun.spawn(['ssh', ...client.configArgs, ...args], {
+  const subprocess = Bun.spawn(['ssh', ...client.configArgs, ...args], {
     stdin: stdin === undefined ? 'ignore' : Buffer.from(stdin),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -169,11 +169,11 @@ export function startSsh(
   });
 
   return {
-    proc,
+    childProcess: subprocess,
     stop: async () => {
-      proc.kill();
+      subprocess.kill();
 
-      await proc.exited;
+      await subprocess.exited;
     },
   };
 }
@@ -224,7 +224,7 @@ export async function listAgentThroughUnixForward(
 
   rmSync(local, { force: true });
 
-  const forwardLog = await new Response(forward.proc.stderr).text();
+  const forwardLog = await new Response(forward.childProcess.stderr).text();
 
   return { listed: result, forwardLog };
 }
@@ -255,7 +255,7 @@ export async function startLocalSshAgent(
 ): Promise<LocalSshAgent> {
   const sockets = mkdtempSync(join(tmpdir(), 'imp-agent-'));
   const socket = join(sockets, `${label}.sock`);
-  const keyPath = join(client.dir, `${label}-key`);
+  const keyPath = join(client.directory, `${label}-key`);
 
   const publicKey = await createKey(keyPath, `imp-e2e-${label}`);
 

@@ -9,7 +9,7 @@ export interface RunSuiteOptions {
 
 // Runs one suite file as its own process group and returns its exit code.
 export function runSuite(options: Readonly<RunSuiteOptions>): Promise<number> {
-  const proc = Bun.spawn([...options.argv], {
+  const subprocess = Bun.spawn([...options.argv], {
     cwd: options.cwd,
     detached: true,
     stdout: 'inherit',
@@ -17,9 +17,9 @@ export function runSuite(options: Readonly<RunSuiteOptions>): Promise<number> {
     env: options.env,
   });
 
-  options.onStart(proc.pid);
+  options.onStart(subprocess.pid);
 
-  return proc.exited;
+  return subprocess.exited;
 }
 
 // Signals a suite's whole process group; a group already gone (ESRCH) counts

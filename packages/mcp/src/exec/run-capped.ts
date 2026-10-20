@@ -35,8 +35,6 @@ export interface CappedRunResult {
   readonly stderr: CappedOutput;
 }
 
-type Stop = 'exited' | 'timeout' | 'cancel';
-
 // Runs a command in an imp to its exit, its deadline or a cancel, which
 // throws once the command stopped. A closed socket only sends SIGHUP, which
 // nohup ignores, so a stop signals the process group; see stopCommand.
@@ -106,6 +104,34 @@ async function runToStop(
   };
 }
 
+async function drain(
+  stream: ReadableStream<Uint8Array>,
+  push: (chunk: Uint8Array) => void,
+): Promise<void> {
+  for await (const chunk of stream) {
+    push(chunk);
+  }
+}
+
+// a command that exits before reading its stdin makes the write fail; its
+// exit says what happened
+async function writeStdin(
+  handle: Readonly<ExecHandle>,
+  stdin: Uint8Array | undefined,
+): Promise<void> {
+  try {
+    if (stdin !== undefined && stdin.byteLength > 0) {
+      await handle.write(stdin);
+    }
+
+    await handle.closeStdin();
+  } catch {
+    // see above
+  }
+}
+
+type Stop = 'exited' | 'timeout' | 'cancel';
+
 // the first of: the command's exit (or the session's end), the cancel, the
 // deadline. A start that fails throws, as `exit` does.
 async function waitForStop(
@@ -152,6 +178,14 @@ async function waitForStop(
   }
 }
 
+async function waitSettled(promise: Promise<unknown>): Promise<void> {
+  try {
+    await promise;
+  } catch {
+    // the caller reads the outcome where it needs it
+  }
+}
+
 // SIGTERM to the process group, then SIGKILL after the grace. After a leader
 // exits on SIGTERM, the agent kills the rest (docs/guides/mcp.md#exec).
 async function stopCommand(
@@ -179,7 +213,7 @@ async function stopCommand(
 // whether the session ended within `ms`
 async function waitForExit(
   handle: Readonly<ExecHandle>,
-  ms: number,
+  durationMs: number,
   after: After,
 ): Promise<boolean> {
   const settled = (async () => {
@@ -190,7 +224,7 @@ async function waitForExit(
 
   const timer = Promise.withResolvers<boolean>();
 
-  const cancel = after(ms, () => {
+  const cancel = after(durationMs, () => {
     timer.resolve(false);
   });
 
@@ -215,39 +249,5 @@ async function readExit(
     }
 
     throw error;
-  }
-}
-
-async function drain(
-  stream: ReadableStream<Uint8Array>,
-  push: (chunk: Uint8Array) => void,
-): Promise<void> {
-  for await (const chunk of stream) {
-    push(chunk);
-  }
-}
-
-// a command that exits before reading its stdin makes the write fail; its
-// exit says what happened
-async function writeStdin(
-  handle: Readonly<ExecHandle>,
-  stdin: Uint8Array | undefined,
-): Promise<void> {
-  try {
-    if (stdin !== undefined && stdin.byteLength > 0) {
-      await handle.write(stdin);
-    }
-
-    await handle.closeStdin();
-  } catch {
-    // see above
-  }
-}
-
-async function waitSettled(promise: Promise<unknown>): Promise<void> {
-  try {
-    await promise;
-  } catch {
-    // the caller reads the outcome where it needs it
   }
 }

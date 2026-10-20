@@ -84,7 +84,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 
 // the ID token's claims without the per-token identifiers; null without an
 // ID token or when it does not decode
-export function readIdClaims(idToken: string | null): Record<string, unknown> | null {
+export function findIdClaims(idToken: string | null): Record<string, unknown> | null {
   if (idToken === null) {
     return null;
   }

@@ -5,14 +5,14 @@ import { startRealTimer } from './start-real-timer';
 // a rejection passes through. `startTimer` is setTimeout's by default.
 export async function waitWithin(
   promise: Promise<unknown>,
-  ms: number,
+  durationMs: number,
   startTimer: StartTimer = startRealTimer,
 ): Promise<boolean> {
   const timer = Promise.withResolvers<boolean>();
 
   const cancel = startTimer(() => {
     timer.resolve(false);
-  }, ms);
+  }, durationMs);
 
   try {
     return await Promise.race([

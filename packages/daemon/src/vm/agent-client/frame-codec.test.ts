@@ -3,7 +3,7 @@ import invariant from 'tiny-invariant';
 import {
   FRAME_TYPES,
   MAX_PAYLOAD,
-  createFrameDecoder,
+  buildFrameDecoder,
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
@@ -24,7 +24,7 @@ test('it round-trips request, empty and raw frames', () => {
     ...encodeFrame(FRAME_TYPES.stdout, new TextEncoder().encode('hello')),
   ]);
 
-  const decoder = createFrameDecoder();
+  const decoder = buildFrameDecoder();
   const frames = decoder.push(bytes);
 
   expect(frames).toStrictEqual([
@@ -44,7 +44,7 @@ test('it decodes frames split across chunks at any byte', () => {
     ...encodeFrame(FRAME_TYPES.stderr, new TextEncoder().encode('oops')),
   ]);
 
-  const decoder = createFrameDecoder();
+  const decoder = buildFrameDecoder();
   const frames = [...bytes].flatMap((byte) => decoder.push(Uint8Array.of(byte)));
 
   expect(frames).toStrictEqual([
@@ -54,7 +54,7 @@ test('it decodes frames split across chunks at any byte', () => {
 });
 
 test('it decodes a JSON payload', () => {
-  const [frame] = createFrameDecoder().push(
+  const [frame] = buildFrameDecoder().push(
     encodeJsonFrame(FRAME_TYPES.exit, { code: 7, signal: 0 }),
   );
 
@@ -66,7 +66,7 @@ test('it decodes a JSON payload', () => {
 test('it splits a payload larger than the maximum into several frames', () => {
   const data = new Uint8Array(MAX_PAYLOAD + 10).fill(120);
 
-  const frames = createFrameDecoder().push(encodeFrame(FRAME_TYPES.stdout, data));
+  const frames = buildFrameDecoder().push(encodeFrame(FRAME_TYPES.stdout, data));
 
   expect(frames).toStrictEqual([
     { type: FRAME_TYPES.stdout, payload: new Uint8Array(MAX_PAYLOAD).fill(120) },
@@ -79,7 +79,7 @@ test('it rejects a frame longer than the maximum', () => {
 
   new DataView(header.buffer).setUint32(1, MAX_PAYLOAD + 1);
 
-  expect(() => createFrameDecoder().push(header)).toThrowWithMessage(
+  expect(() => buildFrameDecoder().push(header)).toThrowWithMessage(
     Error,
     'agent frame too large: 1048577 bytes',
   );
@@ -89,7 +89,7 @@ test.each([
   ['inside a header', Uint8Array.of(8, 0, 0), 3],
   ['inside a payload', Uint8Array.of(8, 0, 0, 0, 4, 97), 6],
 ])('it reports a stream that ends %s', (_label, input, pending) => {
-  const decoder = createFrameDecoder();
+  const decoder = buildFrameDecoder();
 
   decoder.push(input);
 
@@ -102,5 +102,5 @@ test.each([
   ['inside a header', Uint8Array.of(8, 0, 0)],
   ['inside a payload', Uint8Array.of(8, 0, 0, 0, 4, 97)],
 ])('it decodes no frame yet from bytes that stop %s', (_label, input) => {
-  expect(createFrameDecoder().push(input)).toStrictEqual([]);
+  expect(buildFrameDecoder().push(input)).toStrictEqual([]);
 });

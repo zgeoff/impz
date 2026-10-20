@@ -17,7 +17,7 @@ import {
 } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImageIfPresent, removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // `impz template` (docs/guides/templates.md) on the e2e-git image, which has
 // ssh-keygen. Its USER is `dev`, so root's steps go through sudo.
@@ -30,7 +30,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('templates'), stack, client };
+  return { prefix: getSuitePrefix('templates'), stack, client };
 }
 
 test('it copies a running imp into a template whose copies each get their own identity, and removes the template once no imp boots it', async () => {

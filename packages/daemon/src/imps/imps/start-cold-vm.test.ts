@@ -5,10 +5,10 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import invariant from 'tiny-invariant';
 import { buildStubDiskTools } from '../../../testing/imps/build-stub-disk-tools';
-import { findBrokenInvariants } from '../../../testing/imps/find-broken-invariants';
+import { readBrokenInvariants } from '../../../testing/imps/read-broken-invariants';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
-import { findImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/imps';
 import { buildTemplateKey } from '../../vm/templates/boot-templates';
 
 // Cold boots with IMP_BOOT_TEMPLATES on, over the stub VMM: the first boot
@@ -73,7 +73,7 @@ test('it builds the template on the second boot of a shape, and the next restore
 
   const key = buildTemplateKey(ctx.readIdentity(), { vcpus: 1, memoryMib: 256 });
 
-  const second = await findImpByName(ctx.db, 'second');
+  const second = await readImpByName(ctx.db, 'second');
 
   expect(ctx.fake.templateBuilds).toStrictEqual([{ vcpus: 1, memoryMib: 256 }]);
   expect(ctx.fake.boots.map((boot) => boot.hostname)).toStrictEqual(['once', 'first']);
@@ -134,7 +134,7 @@ test('it leaves no broken record behind once a restored imp settles', async () =
   await ctx.client.imps.create({ name: 'second', vcpus: 1, memoryMib: 256 });
   await ctx.imps.waitForLifecycle();
 
-  const broken = await findBrokenInvariants(ctx, false);
+  const broken = await readBrokenInvariants(ctx, false);
 
   // a fallback to the kernel would leave no restore and a third boot
   expect(ctx.fake.restores.map((restore) => restore.hostname)).toStrictEqual(['second']);
@@ -241,9 +241,9 @@ test('it keeps the template through more failed clones than turn a key off', asy
       (error: unknown) => error,
     );
 
-  const second = await findImpByName(ctx.db, 'second');
-  const third = await findImpByName(ctx.db, 'third');
-  const fourth = await findImpByName(ctx.db, 'fourth');
+  const second = await readImpByName(ctx.db, 'second');
+  const third = await readImpByName(ctx.db, 'third');
+  const fourth = await readImpByName(ctx.db, 'fourth');
 
   const plansAfterFailures = [...ctx.fake.restorePlans];
 
@@ -313,9 +313,9 @@ test('it ends the restored VM when the grow after the clone fails, and keeps the
       (error: unknown) => error,
     );
 
-  const second = await findImpByName(ctx.db, 'second');
-  const third = await findImpByName(ctx.db, 'third');
-  const fourth = await findImpByName(ctx.db, 'fourth');
+  const second = await readImpByName(ctx.db, 'second');
+  const third = await readImpByName(ctx.db, 'third');
+  const fourth = await readImpByName(ctx.db, 'fourth');
 
   ctx.disk.setCloneEmpty(false);
 
@@ -377,7 +377,7 @@ test('it claims the identity reset an imp owes with a restore, and clears it onc
   await ctx.db.updateTable('imps').set({ identity_reset_pending: 1 }).execute();
   await ctx.client.imps.start({ name: 'first' });
 
-  const first = await findImpByName(ctx.db, 'first');
+  const first = await readImpByName(ctx.db, 'first');
 
   expect(ctx.fake.restores.map((restore) => restore.isIdentityReset)).toStrictEqual([true]);
   expect(first?.isIdentityResetPending).toBe(false);
@@ -412,9 +412,9 @@ test('it runs a jailed restore as the imp, with the template and its drive bound
 
   const key = buildTemplateKey(ctx.readIdentity(), { vcpus: 1, memoryMib: 256 });
 
-  const second = await findImpByName(ctx.db, 'second');
+  const second = await readImpByName(ctx.db, 'second');
 
-  const dir = join(ctx.dataDir, 'templates');
+  const directory = join(ctx.dataDir, 'templates');
 
   invariant(typeof second?.jailUid === 'number');
 
@@ -424,10 +424,10 @@ test('it runs a jailed restore as the imp, with the template and its drive bound
 
   expect(ctx.fake.restorePlans[0]).toMatchObject({
     jail: { uid: second.jailUid, gid: second.jailUid },
-    vmstate: join(dir, key, 'vmstate'),
-    memFile: join(dir, key, 'mem'),
+    vmstate: join(directory, key, 'vmstate'),
+    memFile: join(directory, key, 'mem'),
     systemDrivePath: ctx.readIdentity().systemDrivePath,
-    placeholderPath: join(dir, 'placeholder.ext4'),
+    placeholderPath: join(directory, 'placeholder.ext4'),
     cgroup: { procsPath: `/sys/fs/cgroup/imps/${second.id}/cgroup.procs` },
   });
 });

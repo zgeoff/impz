@@ -33,7 +33,7 @@ export interface ReverseIo {
 
   // resolves after `ms`, or at once when the signal aborts; a timer by
   // default
-  readonly wait?: (ms: number, signal: AbortSignal) => Promise<void>;
+  readonly wait?: (durationMs: number, signal: AbortSignal) => Promise<void>;
 
   // told each state the wait for a wake reads; nothing by default
   readonly onWatchedState?: (state: ImpState) => void;

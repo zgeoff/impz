@@ -7,7 +7,7 @@ test('it resolves once every nameserver has every value, waiting the interval be
     ns2: [['b', 'a', 'stale']],
   };
 
-  const wait = mock<(ms: number) => Promise<void>>(() => Promise.resolve());
+  const wait = mock<(durationMs: number) => Promise<void>>(() => Promise.resolve());
 
   await waitForTxt(['ns1', 'ns2'], '_acme-challenge.x', ['a', 'b'], {
     intervalMs: 5000,
@@ -45,7 +45,7 @@ test('it asks every address of every nameserver', async () => {
 
 test('it counts a failed lookup as missing and resolves once the value answers', async () => {
   const answers = [() => Promise.reject(new Error('ENOTFOUND')), () => Promise.resolve(['a'])];
-  const wait = mock<(ms: number) => Promise<void>>(() => Promise.resolve());
+  const wait = mock<(durationMs: number) => Promise<void>>(() => Promise.resolve());
 
   await waitForTxt(['ns1'], '_acme-challenge.x', ['a'], {
     wait,
@@ -63,8 +63,8 @@ test('it names the nameserver that still lacks a value when time runs out', () =
     timeoutMs: 20_000,
     intervalMs: 5000,
     now: () => clock.now,
-    wait: (ms) => {
-      clock.now += ms;
+    wait: (durationMs) => {
+      clock.now += durationMs;
 
       return Promise.resolve();
     },
@@ -87,8 +87,8 @@ test('it gives up at the deadline and not before', async () => {
     timeoutMs: 20_000,
     intervalMs: 5000,
     now: () => clock.now,
-    wait: (ms) => {
-      clock.now += ms;
+    wait: (durationMs) => {
+      clock.now += durationMs;
 
       return Promise.resolve();
     },

@@ -16,7 +16,7 @@ import { ROOT_TOKEN_ID } from '../../identity/auth/token-store';
 import { listApiCalls } from '../db/api-audit';
 import { createImage } from '../db/images';
 import type { ImpWrite } from '../db/imp-write-feed';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 
 function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -193,7 +193,7 @@ test('it sends a repaired event when a check finds an imp’s VM gone', async ()
 
   await ctx.client.imps.create({ name: 'dead', image: 'ubuntu' });
 
-  const dead = await findImpByName(ctx.db, 'dead');
+  const dead = await readImpByName(ctx.db, 'dead');
 
   invariant(typeof dead?.pid === 'number');
 
@@ -366,6 +366,7 @@ test('it ends a dashboard stream at the session’s expiry', async () => {
 
   // a session that ends a millisecond after the test's frozen now
   const expiresAt = ctx.now() + 1;
+  const sendDashboardRequest = (request: Request) => ctx.impd.api.app.handle(request);
 
   const dashboard: ContractRouterClient<ImpContract> = createORPCClient(
     new RPCLink({
@@ -374,7 +375,7 @@ test('it ends a dashboard stream at the session’s expiry', async () => {
         cookie: `imp_session=${buildSessionValue('root-token', { tokenId: ROOT_TOKEN_ID, expiresAt })}`,
         'sec-fetch-site': 'same-origin',
       },
-      fetch: (request) => ctx.impd.api.app.handle(request),
+      fetch: sendDashboardRequest,
     }),
   );
 
@@ -404,6 +405,7 @@ test('it ends a dashboard stream at any logout, and leaves a token’s stream op
   );
 
   const expiresAt = ctx.now() + 60_000;
+  const sendDashboardRequest = (request: Request) => ctx.impd.api.app.handle(request);
 
   const dashboard: ContractRouterClient<ImpContract> = createORPCClient(
     new RPCLink({
@@ -412,7 +414,7 @@ test('it ends a dashboard stream at any logout, and leaves a token’s stream op
         cookie: `imp_session=${buildSessionValue('root-token', { tokenId: ROOT_TOKEN_ID, expiresAt })}`,
         'sec-fetch-site': 'same-origin',
       },
-      fetch: (request) => ctx.impd.api.app.handle(request),
+      fetch: sendDashboardRequest,
     }),
   );
 
@@ -478,6 +480,7 @@ test('it records a dashboard session’s calls in the audit log as the dashboard
   await ctx.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   const expiresAt = ctx.now() + 60_000;
+  const sendDashboardRequest = (request: Request) => ctx.impd.api.app.handle(request);
 
   const dashboard: ContractRouterClient<ImpContract> = createORPCClient(
     new RPCLink({
@@ -486,7 +489,7 @@ test('it records a dashboard session’s calls in the audit log as the dashboard
         cookie: `imp_session=${buildSessionValue('root-token', { tokenId: ROOT_TOKEN_ID, expiresAt })}`,
         'sec-fetch-site': 'same-origin',
       },
-      fetch: (request) => ctx.impd.api.app.handle(request),
+      fetch: sendDashboardRequest,
     }),
   );
 

@@ -30,7 +30,7 @@ export async function runOAuthSignIn(
     origin: route.origin,
   };
 
-  const continued = await route.handle(
+  const continued = await route.respond(
     new Request(`${route.origin}/login`, {
       method: 'POST',
       headers: form,
@@ -51,7 +51,7 @@ export async function runOAuthSignIn(
 
   const consentQuery = consentURL.search.slice(1);
 
-  const allowed = await route.handle(
+  const allowed = await route.respond(
     new Request(`${route.origin}/consent`, {
       method: 'POST',
       headers: { ...form, cookie },
@@ -67,7 +67,7 @@ export async function runOAuthSignIn(
     throw new Error(`Allow answered ${String(allowed.status)} with no code: ${back.href}`);
   }
 
-  const exchanged = await route.handle(
+  const exchanged = await route.respond(
     new Request(`${route.origin}/oauth2/token`, {
       method: 'POST',
       headers: { host, 'content-type': 'application/x-www-form-urlencoded' },

@@ -83,7 +83,7 @@ export function createImpLeases(parts: ImpLeaseParts): ImpLeases {
   const ops = parts.ops;
   const presenter = parts.presenter;
 
-  const findLease = async (impId: string, principal: string, label: string, at: number) => {
+  const readLease = async (impId: string, principal: string, label: string, at: number) => {
     const leases = await listLeases(context.db, at, [impId]);
 
     return leases.find((lease) => lease.principal === principal && lease.label === label);
@@ -98,7 +98,7 @@ export function createImpLeases(parts: ImpLeaseParts): ImpLeases {
 
         const at = context.now();
 
-        const live = await findLease(imp.id, holder.principal, label, at);
+        const live = await readLease(imp.id, holder.principal, label, at);
 
         const lease: LeaseRecord = {
           impId: imp.id,
@@ -118,7 +118,7 @@ export function createImpLeases(parts: ImpLeaseParts): ImpLeases {
       lock.withImp(name, async (imp) => {
         const at = context.now();
 
-        const live = await findLease(imp.id, holder.principal, label, at);
+        const live = await readLease(imp.id, holder.principal, label, at);
 
         if (live === undefined) {
           throw buildLeaseNotHeldError(imp.name, label);
@@ -182,10 +182,10 @@ export function createImpLeases(parts: ImpLeaseParts): ImpLeases {
             { at, reason: 'held', isEmittedWhenNone: true },
           );
 
-          return presenter.toApi(toLockedImp(imp, released.imp));
+          return presenter.readApi(toLockedImp(imp, released.imp));
         }
 
-        const live = await findLease(imp.id, holder.principal, HOLD_LABEL, at);
+        const live = await readLease(imp.id, holder.principal, HOLD_LABEL, at);
 
         // a hold sets its end, longer or shorter, as it always did
         const updated = await writeLease(
@@ -205,7 +205,7 @@ export function createImpLeases(parts: ImpLeaseParts): ImpLeases {
 
         const running = await ops.requireRunningImp(toLockedImp(imp, updated));
 
-        return presenter.toApi(running);
+        return presenter.readApi(running);
       }),
 
     requireUnleased: async (imp, force) => {

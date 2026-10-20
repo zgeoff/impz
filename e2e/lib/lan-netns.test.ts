@@ -20,7 +20,7 @@ test('#countLanConnections counts an empty log as no connections', () => {
 });
 
 test('#parseTimedDial reads a connection and its time', () => {
-  expect(parseTimedDial('0 40 \n')).toStrictEqual({ isConnected: true, ms: 40, error: '' });
+  expect(parseTimedDial('0 40 \n')).toStrictEqual({ isConnected: true, durationMs: 40, error: '' });
 });
 
 test('#parseTimedDial reads a refusal with the error wget named', () => {
@@ -28,7 +28,7 @@ test('#parseTimedDial reads a refusal with the error wget named', () => {
     parseTimedDial("1 10 wget: can't connect to remote host (10.250.77.1): Connection refused \n"),
   ).toStrictEqual({
     isConnected: false,
-    ms: 10,
+    durationMs: 10,
     error: "wget: can't connect to remote host (10.250.77.1): Connection refused",
   });
 });

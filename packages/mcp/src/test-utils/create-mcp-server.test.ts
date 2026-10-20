@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { createImpGuard } from '../imp-guard';
+import { buildImpGuard } from '../imp-guard';
 import { createMcpServer } from './create-mcp-server';
 
 test('it resolves a receive once the request is answered, with the answer sent to its reply', async () => {
@@ -15,7 +15,7 @@ test('it resolves a receive once the request is answered, with the answer sent t
       sent.push(JSON.parse(message));
     },
     client: createImpClient({ url: 'http://impd.test' }),
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   });
 
@@ -32,7 +32,7 @@ test('it sends each answer to the reply of the message it answers', async () => 
 
   const context = {
     client: createImpClient({ url: 'http://impd.test' }),
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'read',
   } as const;
 
@@ -66,7 +66,7 @@ test('it resolves a receive of a notification with nothing sent', async () => {
       sent.push(JSON.parse(message));
     },
     client: createImpClient({ url: 'http://impd.test' }),
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   });
 

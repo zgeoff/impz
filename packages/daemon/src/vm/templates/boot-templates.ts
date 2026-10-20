@@ -15,7 +15,7 @@ import * as z from 'zod';
 import type { SlotAddress } from '../../host-net/net/addressing';
 import type { TapDevices } from '../../host-net/net/tap-devices';
 import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { runCommand } from '../../platform/process/run-command';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { createSingleFlight } from '../../platform/process/single-flight';
@@ -91,7 +91,7 @@ interface TemplateFiles {
 export interface BootTemplates {
   // the ready template for the shape, or null; the second miss of a key
   // starts its build in the background
-  readonly find: (shape: Readonly<TemplateShape>) => TemplateFiles | null;
+  readonly requestTemplate: (shape: Readonly<TemplateShape>) => TemplateFiles | null;
 
   // the build itself, shared by every miss of one key while it runs; it
   // rejects while the key backs off or is off
@@ -190,7 +190,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
   // one build at a time: they share the template tap
   const lane = createSemaphore(1);
 
-  const readRecord = (key: string): KeyRecord => {
+  const getRecord = (key: string): KeyRecord => {
     const found = records.get(key);
 
     if (found !== undefined) {
@@ -215,10 +215,10 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
   };
 
   // the ready template of the key, or null
-  const findReady = (key: string): TemplateFiles | null => {
-    const dir = join(root, key);
+  const readReady = (key: string): TemplateFiles | null => {
+    const directory = join(root, key);
     const meta = readMeta(key);
-    const files = { vmstate: join(dir, 'vmstate'), memFile: join(dir, 'mem') };
+    const files = { vmstate: join(directory, 'vmstate'), memFile: join(directory, 'mem') };
 
     if (meta === null || !existsSync(files.vmstate) || !existsSync(files.memFile)) {
       return null;
@@ -277,7 +277,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       return;
     }
 
-    const byAge = keys.toSorted((a, b) => readLastUsed(a) - readLastUsed(b));
+    const byAge = keys.toSorted((left, right) => readLastUsed(left) - readLastUsed(right));
 
     for (const key of byAge.slice(0, excess)) {
       removeDir(key);
@@ -344,7 +344,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     } finally {
       // logged, never thrown: the build's own error is the one that counts
       await deps.cgroups.remove(BUILD_JAIL_ID).catch((error: unknown) => {
-        deps.log(`impd: cgroup ${BUILD_JAIL_ID}: ${readErrorMessage(error)}`);
+        deps.log(`impd: cgroup ${BUILD_JAIL_ID}: ${getErrorMessage(error)}`);
       });
     }
 
@@ -364,9 +364,9 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
 
     removeLeastUsed(key);
 
-    const ms = Math.round(performance.now() - started);
+    const durationMs = Math.round(performance.now() - started);
 
-    deps.log(`impd: boot template ${key.slice(0, 12)} built in ${String(ms)}ms`);
+    deps.log(`impd: boot template ${key.slice(0, 12)} built in ${String(durationMs)}ms`);
 
     return {
       key,
@@ -411,7 +411,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
         throw error;
       }
 
-      throw new BuildRefusedError(readErrorMessage(error), { cause: error });
+      throw new BuildRefusedError(getErrorMessage(error), { cause: error });
     } finally {
       deps.admission?.release(id);
       rmSync(work, { recursive: true, force: true });
@@ -422,7 +422,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
   // third failure turns the key off. A refused build holds off the next one
   // as long as a first failure, and is no failure.
   const setBuildFailed = (key: string, error: unknown): void => {
-    const record = readRecord(key);
+    const record = getRecord(key);
 
     if (error instanceof BuildRefusedError) {
       record.retryAt = now() + BUILD_RETRY_MS;
@@ -450,19 +450,19 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       : `next try in ${String(Math.round((record.retryAt - now()) / 1000))}s`;
 
     deps.log(
-      `impd: boot template ${key.slice(0, 12)} build failed (${next}): ${readErrorMessage(error)}`,
+      `impd: boot template ${key.slice(0, 12)} build failed (${next}): ${getErrorMessage(error)}`,
     );
   };
 
-  const buildTemplate = (shape: Readonly<TemplateShape>): Promise<TemplateFiles> => {
+  const createTemplateFiles = (shape: Readonly<TemplateShape>): Promise<TemplateFiles> => {
     const key = buildTemplateKey(deps.identity, shape);
-    const record = readRecord(key);
+    const record = getRecord(key);
 
     if (record.isOff) {
       return Promise.reject(new Error('boot templates of this shape are off until impd restarts'));
     }
 
-    const ready = findReady(key);
+    const ready = readReady(key);
 
     if (ready !== null) {
       return Promise.resolve(ready);
@@ -490,24 +490,24 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     });
   };
 
-  const buildInBackground = async (shape: Readonly<TemplateShape>): Promise<void> => {
+  const createInBackground = async (shape: Readonly<TemplateShape>): Promise<void> => {
     try {
-      await buildTemplate(shape);
+      await createTemplateFiles(shape);
     } catch {
       // setBuildFailed logged it
     }
   };
 
   return {
-    find: (shape) => {
+    requestTemplate: (shape) => {
       const key = buildTemplateKey(deps.identity, shape);
-      const record = readRecord(key);
+      const record = getRecord(key);
 
       if (record.isOff) {
         return null;
       }
 
-      const ready = findReady(key);
+      const ready = readReady(key);
 
       if (ready !== null) {
         lastUsed.set(key, now());
@@ -519,12 +519,12 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       record.misses += 1;
 
       if (record.misses >= MIN_MISSES && now() >= record.retryAt) {
-        void buildInBackground(shape);
+        void createInBackground(shape);
       }
 
       return null;
     },
-    buildTemplate,
+    buildTemplate: createTemplateFiles,
     reportFailure: (files, isTemplateFault) => {
       // Only the template's own fault counts, and only against the build that
       // failed: an imp's fault (a bad disk, an image that never pings) says
@@ -533,7 +533,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
         return;
       }
 
-      const record = readRecord(files.key);
+      const record = getRecord(files.key);
 
       record.restoreFailures += 1;
 
@@ -548,7 +548,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       }
     },
     reportRestored: (files) => {
-      readRecord(files.key).restoreFailures = 0;
+      getRecord(files.key).restoreFailures = 0;
     },
     removeStale: () => {
       if (!existsSync(root)) {
@@ -559,7 +559,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
 
       // a key names one host's identity and one shape (meta.json says which):
       // any other is stale, as is what a build cut short left
-      const isCurrent = (name: string) => {
+      const probeCurrent = (name: string) => {
         const meta = readMeta(name);
 
         return meta !== null && buildTemplateKey(deps.identity, meta) === name;
@@ -569,7 +569,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
         (name) =>
           name !== PLACEHOLDER_NAME &&
           !live.has(name) &&
-          (name.startsWith('.') || !isCurrent(name)),
+          (name.startsWith('.') || !probeCurrent(name)),
       );
 
       for (const name of stale) {

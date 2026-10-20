@@ -23,7 +23,7 @@ import {
 } from './data-layout';
 import { readExtents } from './fiemap';
 import { readLoopHostFreeBytes } from './loop-backing-file';
-import { isHoldingFiles, listFilesUnder, readDirectoryOrphan } from './orphan-files';
+import { listFilesUnder, probeHoldingFiles, readDirectoryOrphan } from './orphan-files';
 import { printSweep } from './print-sweep';
 import { createReflinkClone } from './reflink';
 import type {
@@ -42,17 +42,17 @@ const USAGE_DEADLINE_MS = 20_000;
 // hidden name, as image-service's `.build-` work directories
 const STAGING_PREFIX = '.new-';
 
-// what a sweep removes, and the orphans it keeps
-interface LeftoverPlan {
-  readonly dropped: DroppedStorage[];
-  readonly orphans: OrphanEntry[];
-}
-
 // what no row names, and the directory that holds it
 interface OrphanEntry {
   readonly kind: 'imp' | 'image' | 'checkpoint';
   readonly id: string;
-  readonly dir: string;
+  readonly directory: string;
+}
+
+// what a sweep removes, and the orphans it keeps
+interface LeftoverPlan {
+  readonly dropped: DroppedStorage[];
+  readonly orphans: OrphanEntry[];
 }
 
 interface XfsBackendDeps {
@@ -70,6 +70,11 @@ interface XfsBackendDeps {
   readonly readFileExtents?: typeof readExtents;
 }
 
+interface OwnedPath {
+  readonly owner: string;
+  readonly path: string;
+}
+
 // Every disk, checkpoint and fork is a reflink clone of another file
 // (docs/architecture/storage/storage.md).
 export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
@@ -81,7 +86,7 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
   const buildCheckpointDisk = (impId: string, checkpointId: string): string =>
     join(resolveImpPaths(impId).checkpointsDir, checkpointId, 'disk.ext4');
 
-  const findSourceFile = (source: DiskSource): string => {
+  const getSourceFile = (source: DiskSource): string => {
     if (source.kind === 'image') {
       return buildImagePaths(deps.dataDir, source.digest).rootfs;
     }
@@ -97,7 +102,7 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     throw new Error('xfs: an empty disk has no source file');
   };
 
-  const createImage = async (digest: string, write: (dir: string) => Promise<void>) => {
+  const createImage = async (digest: string, write: (directory: string) => Promise<void>) => {
     const paths = buildImagePaths(deps.dataDir, digest);
     const staged = join(buildImagesDir(deps.dataDir), `${STAGING_PREFIX}${Bun.randomUUIDv7()}`);
 
@@ -109,10 +114,10 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
       // impd before the storage backends wrote config.json first, so a
       // crash could leave the directory with no rootfs
       if (!existsSync(paths.rootfs)) {
-        rmSync(paths.dir, { recursive: true, force: true });
+        rmSync(paths.directory, { recursive: true, force: true });
       }
 
-      renameSync(staged, paths.dir);
+      renameSync(staged, paths.directory);
     } finally {
       rmSync(staged, { recursive: true, force: true });
     }
@@ -125,7 +130,9 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
   // (docs/architecture/storage/disk-space.md#the-sweep).
   const planLeftovers = (live: LiveStorage, isOrphans: boolean): LeftoverPlan => {
     const liveDigests = new Set(
-      [...live.imageDigests].map((digest) => basename(buildImagePaths(deps.dataDir, digest).dir)),
+      [...live.imageDigests].map((digest) =>
+        basename(buildImagePaths(deps.dataDir, digest).directory),
+      ),
     );
 
     const impIds = listEntries(buildImpsDir(deps.dataDir));
@@ -135,12 +142,12 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     const checkpoints = impIds
       .filter((impId) => live.impIds.has(impId))
       .flatMap((impId) => {
-        const dir = resolveImpPaths(impId).checkpointsDir;
+        const directory = resolveImpPaths(impId).checkpointsDir;
 
-        return listEntries(dir).map((id) => ({
+        return listEntries(directory).map((id) => ({
           kind: 'checkpoint' as const,
           id,
-          dir: join(dir, id),
+          directory: join(directory, id),
         }));
       })
       .filter((checkpoint) => !live.checkpointIds.has(checkpoint.id));
@@ -151,21 +158,25 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
       .map((name) => ({
         kind: 'image' as const,
         id: name,
-        dir: join(buildImagesDir(deps.dataDir), name),
+        directory: join(buildImagesDir(deps.dataDir), name),
       }));
 
     const unknownImps = impIds
       .filter((impId) => !live.impIds.has(impId))
-      .map((impId) => ({ kind: 'imp' as const, id: impId, dir: resolveImpPaths(impId).dir }));
+      .map((impId) => ({
+        kind: 'imp' as const,
+        id: impId,
+        directory: resolveImpPaths(impId).directory,
+      }));
 
     // only a directory with no file in it is provably nothing; anything
     // else may be what an imp needs to come back
     const unknown: OrphanEntry[] = [...unknownImages, ...unknownImps, ...checkpoints];
-    const isDropped = (entry: OrphanEntry) => isOrphans || !isHoldingFiles(entry.dir);
+    const probeDropped = (entry: OrphanEntry) => isOrphans || !probeHoldingFiles(entry.directory);
 
     return {
-      dropped: unknown.filter((entry) => isDropped(entry)).map((entry) => toStorage(entry)),
-      orphans: unknown.filter((entry) => !isDropped(entry)),
+      dropped: unknown.filter((entry) => probeDropped(entry)).map((entry) => toStorage(entry)),
+      orphans: unknown.filter((entry) => !probeDropped(entry)),
     };
   };
 
@@ -174,7 +185,7 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     const snapshots =
       orphan.kind === 'imp' ? listEntries(resolveImpPaths(orphan.id).checkpointsDir) : [];
 
-    return readDirectoryOrphan(orphan.kind, orphan.id, orphan.dir, snapshots);
+    return readDirectoryOrphan(orphan.kind, orphan.id, orphan.directory, snapshots);
   };
 
   const removeLeftover = (dropped: DroppedStorage, live: LiveStorage): void => {
@@ -183,7 +194,7 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     }
 
     if (dropped.kind === 'imp') {
-      rmSync(resolveImpPaths(dropped.id).dir, { recursive: true, force: true });
+      rmSync(resolveImpPaths(dropped.id).directory, { recursive: true, force: true });
     }
 
     if (dropped.kind === 'checkpoint') {
@@ -309,13 +320,16 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     createImage,
 
     createImageFromImp: (digest, impId, steps) =>
-      createImage(digest, async (dir) => {
-        await steps.hold(() => cloneFile(resolveImpPaths(impId).disk, join(dir, 'rootfs.ext4')));
-        await steps.write(dir);
+      createImage(digest, async (directory) => {
+        await steps.hold(() =>
+          cloneFile(resolveImpPaths(impId).disk, join(directory, 'rootfs.ext4')),
+        );
+
+        await steps.write(directory);
       }),
 
     removeImage: (digest) => {
-      rmSync(buildImagePaths(deps.dataDir, digest).dir, { recursive: true, force: true });
+      rmSync(buildImagePaths(deps.dataDir, digest).directory, { recursive: true, force: true });
 
       return Promise.resolve();
     },
@@ -331,7 +345,7 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
         return;
       }
 
-      await cloneFile(findSourceFile(source), disk);
+      await cloneFile(getSourceFile(source), disk);
     },
 
     removeImpDisk: (impId) => {
@@ -463,9 +477,14 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
   };
 }
 
-interface OwnedPath {
-  readonly owner: string;
-  readonly path: string;
+// sorted, so a sweep lists the same order on every filesystem
+function listEntries(directory: string): string[] {
+  return existsSync(directory) ? readdirSync(directory).toSorted() : [];
+}
+
+// a kind and id alone, without the directory
+function toStorage(entry: OrphanEntry): DroppedStorage {
+  return { kind: entry.kind, id: entry.id };
 }
 
 // a file removed since the listing holds nothing
@@ -483,14 +502,4 @@ async function readOwnedExtents(
 
     return { extents: [], isComplete: true };
   }
-}
-
-// a kind and id alone, without the directory
-function toStorage(entry: OrphanEntry): DroppedStorage {
-  return { kind: entry.kind, id: entry.id };
-}
-
-// sorted, so a sweep lists the same order on every filesystem
-function listEntries(dir: string): string[] {
-  return existsSync(dir) ? readdirSync(dir).toSorted() : [];
 }

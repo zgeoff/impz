@@ -7,8 +7,8 @@ import { buildProxyBuildScript, parseProxyAnswer } from '../lib/docker-proxy-bui
 import { buildHostModeProxyArgv } from '../lib/host-mode-proxy';
 import {
   REPO_ROOT,
-  getHostImage,
   instance,
+  readHostImageFromEnv,
   runChecked,
   runCommand,
   runInContainer,
@@ -34,7 +34,7 @@ async function setupTest() {
       argsJson,
       name,
       dockerGid: gid.trim(),
-      hostImage: getHostImage(),
+      hostImage: readHostImageFromEnv(),
       socketVolume: `${instance.container}-docker`,
       socket,
       binary: join(instance.dataDir, 'imp-docker-proxy'),
@@ -76,7 +76,7 @@ test("it refuses a build that tags outside imp/ or retags the host's image", asy
     buildProxyBuildScript(
       [
         ['t', 'imp/e2e-sock:latest'],
-        ['t', getHostImage()],
+        ['t', readHostImageFromEnv()],
         ['version', '2'],
         ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
       ],

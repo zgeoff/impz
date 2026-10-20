@@ -5,7 +5,7 @@ import { createInstanceClient, runImp, runInImp, startImp, tryImp } from '../lib
 import { holdImp, waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent, removeTokenIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { startTextCapture } from '../lib/text-capture';
 import { waitFor } from '../lib/wait-for';
 
@@ -19,7 +19,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('inner'), stack, client };
+  return { prefix: getSuitePrefix('inner'), stack, client };
 }
 
 test('it runs exec --agent as root outside the container and reports it as an AgentExec event', async () => {

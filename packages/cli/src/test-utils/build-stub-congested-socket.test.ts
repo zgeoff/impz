@@ -25,8 +25,10 @@ test('it sends through the real socket', async () => {
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: (request, bunServer) =>
-      bunServer.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 }),
+    routes: {
+      '/*': (request: Request, bunServer: Bun.Server<undefined>) =>
+        bunServer.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 }),
+    },
     websocket: {
       message: (_ws, data) => {
         received.resolve(String(data));

@@ -11,17 +11,17 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-context-tar-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-context-tar-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it writes the entries as a tar that holds each of them by name', async () => {
   const ctx = await setupTest();
 
-  const context = join(ctx.dir, 'context');
+  const context = join(ctx.directoryPath, 'context');
 
   mkdirSync(join(context, 'src'), { recursive: true });
   writeFileSync(join(context, 'Dockerfile'), 'FROM scratch\n');
@@ -29,9 +29,13 @@ test('it writes the entries as a tar that holds each of them by name', async () 
 
   const entries = await listLocalEntries(context);
 
-  await writeContextTar(entries, join(ctx.dir, 'context.tar'));
+  await writeContextTar(entries, join(ctx.directoryPath, 'context.tar'));
 
-  const listed = Bun.spawnSync(['tar', '-tf', join(ctx.dir, 'context.tar')]).stdout.toString();
+  const listed = Bun.spawnSync([
+    'tar',
+    '-tf',
+    join(ctx.directoryPath, 'context.tar'),
+  ]).stdout.toString();
 
   expect(listed.trim().split('\n')).toStrictEqual([
     'context/',
@@ -44,16 +48,21 @@ test('it writes the entries as a tar that holds each of them by name', async () 
 test('it writes the content of each file into the tar', async () => {
   const ctx = await setupTest();
 
-  const context = join(ctx.dir, 'context');
+  const context = join(ctx.directoryPath, 'context');
 
   mkdirSync(context);
   writeFileSync(join(context, 'Dockerfile'), 'FROM scratch\n');
 
   const entries = await listLocalEntries(context);
 
-  await writeContextTar(entries, join(ctx.dir, 'context.tar'));
+  await writeContextTar(entries, join(ctx.directoryPath, 'context.tar'));
 
-  const read = Bun.spawnSync(['tar', '-xOf', join(ctx.dir, 'context.tar'), 'context/Dockerfile']);
+  const read = Bun.spawnSync([
+    'tar',
+    '-xOf',
+    join(ctx.directoryPath, 'context.tar'),
+    'context/Dockerfile',
+  ]);
 
   expect(read.stdout.toString()).toBe('FROM scratch\n');
 });
@@ -61,24 +70,24 @@ test('it writes the content of each file into the tar', async () => {
 test('it writes the tar readable by impd alone', async () => {
   const ctx = await setupTest();
 
-  const context = join(ctx.dir, 'context');
+  const context = join(ctx.directoryPath, 'context');
 
   mkdirSync(context);
   writeFileSync(join(context, 'Dockerfile'), 'FROM scratch\n');
 
   const entries = await listLocalEntries(context);
 
-  await writeContextTar(entries, join(ctx.dir, 'context.tar'));
+  await writeContextTar(entries, join(ctx.directoryPath, 'context.tar'));
 
-  expect(statSync(join(ctx.dir, 'context.tar')).mode & 0o777).toBe(0o600);
+  expect(statSync(join(ctx.directoryPath, 'context.tar')).mode & 0o777).toBe(0o600);
 });
 
 test('it refuses a path that exists already', async () => {
   const ctx = await setupTest();
 
-  writeFileSync(join(ctx.dir, 'context.tar'), 'old');
+  writeFileSync(join(ctx.directoryPath, 'context.tar'), 'old');
 
-  expect(writeContextTar([], join(ctx.dir, 'context.tar'))).rejects.toMatchObject({
+  expect(writeContextTar([], join(ctx.directoryPath, 'context.tar'))).rejects.toMatchObject({
     code: 'EEXIST',
   });
 });

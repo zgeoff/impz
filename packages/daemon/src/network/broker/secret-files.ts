@@ -53,7 +53,7 @@ interface KeptDirectory {
 
 interface KeptOrphans {
   // null when there were none, and no directory was made
-  readonly dir: string | null;
+  readonly directory: string | null;
   readonly files: readonly string[];
 }
 
@@ -73,26 +73,26 @@ export function createSecretFiles(
   dataDir: string,
   options: Readonly<SecretFilesOptions> = {},
 ): SecretFiles {
-  const dir = join(dataDir, 'secrets');
+  const directory = join(dataDir, 'secrets');
   const sync = options.sync ?? fsyncSync;
 
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
 
   // a directory made by an older impd or by hand keeps its mode otherwise
-  chmodSync(dir, 0o700);
+  chmodSync(directory, 0o700);
 
   return {
     // a temp file then a rename, so a reader never sees half a value, each
     // flushed to the disk, so an added secret outlives a power loss
     write: (file, value) => {
-      writeFileDurably(join(dir, file), value, { mode: 0o600, sync });
+      writeFileDurably(join(directory, file), value, { mode: 0o600, sync });
     },
     rewrite: (file, value) => {
-      writeFileDurably(join(dir, file), value, { mode: 0o600, sync });
+      writeFileDurably(join(directory, file), value, { mode: 0o600, sync });
     },
     read: (file) => {
       try {
-        return readFileSync(join(dir, file), 'utf8');
+        return readFileSync(join(directory, file), 'utf8');
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
           return null;
@@ -102,36 +102,36 @@ export function createSecretFiles(
       }
     },
     remove: (file) => {
-      rmSync(join(dir, file), { force: true });
+      rmSync(join(directory, file), { force: true });
     },
     keepOrphansExcept: (keep, at) => {
       const stamp = at.toISOString().replaceAll(':', '-');
 
-      checkOrphansDirectory(join(dir, ORPHANED_DIR), `${ORPHANED_DIR}.${stamp}`);
+      checkOrphansDirectory(join(directory, ORPHANED_DIR), `${ORPHANED_DIR}.${stamp}`);
 
-      const files = readdirSync(dir)
+      const files = readdirSync(directory)
         .filter((file) => file !== ORPHANED_DIR && !keep.has(file))
         .toSorted();
 
       if (files.length === 0) {
-        return { dir: null, files };
+        return { directory: null, files };
       }
 
       // a time a path can hold: no colons
-      const target = join(dir, ORPHANED_DIR, stamp);
+      const target = join(directory, ORPHANED_DIR, stamp);
 
       mkdirSync(target, { recursive: true, mode: 0o700 });
-      chmodSync(join(dir, ORPHANED_DIR), 0o700);
+      chmodSync(join(directory, ORPHANED_DIR), 0o700);
       chmodSync(target, 0o700);
 
       for (const file of files) {
-        renameSync(join(dir, file), join(target, file));
+        renameSync(join(directory, file), join(target, file));
       }
 
-      return { dir: target, files };
+      return { directory: target, files };
     },
     listKept: () => {
-      const orphaned = join(dir, ORPHANED_DIR);
+      const orphaned = join(directory, ORPHANED_DIR);
 
       if (!checkDirectory(orphaned)) {
         return [];
@@ -153,7 +153,7 @@ export function createSecretFiles(
         throw new Error(`not a kept directory: ${name}`);
       }
 
-      rmSync(join(dir, ORPHANED_DIR, name), { recursive: true, force: true });
+      rmSync(join(directory, ORPHANED_DIR, name), { recursive: true, force: true });
     },
   };
 }

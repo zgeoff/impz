@@ -34,7 +34,7 @@ export function renderUsage(ctx: Readonly<CommandContext<never>>): string {
       ]);
 
       if (arg.type === 'boolean' && arg.negatable === true) {
-        argLines.push([`--no-${name}`, readNegativeDescription(arg)]);
+        argLines.push([`--no-${name}`, getNegativeDescription(arg)]);
       }
 
       if (isRequired) {
@@ -81,16 +81,6 @@ export function renderUsage(ctx: Readonly<CommandContext<never>>): string {
   return `${lines.join('\n')}\n`;
 }
 
-// gunshi's rule: a positional is required unless it says otherwise or has a
-// default, and one that takes many only when it says so
-function isPositionalRequired(arg: Readonly<ArgSchema>): boolean {
-  if (arg.multiple === true) {
-    return arg.required === true;
-  }
-
-  return arg.required !== false && arg.default === undefined;
-}
-
 // the flags gunshi gives every command, which the help never listed
 const BUILTIN_FLAGS = new Set(['help', 'version']);
 
@@ -106,6 +96,43 @@ function listShownArgs(ctx: Readonly<CommandContext<never>>): [string, ArgSchema
       !BUILTIN_FLAGS.has(name) &&
       (ctx.commandPath.length === 0 || !globals.has(name)),
   );
+}
+
+// gunshi's rule: a positional is required unless it says otherwise or has a
+// default, and one that takes many only when it says so
+function isPositionalRequired(arg: Readonly<ArgSchema>): boolean {
+  if (arg.multiple === true) {
+    return arg.required === true;
+  }
+
+  return arg.required !== false && arg.default === undefined;
+}
+
+// `=<name>` after a flag that takes a value, its name in snake case
+function renderValueHint(name: string, arg: Readonly<ArgSchema>): string {
+  if (arg.type === 'positional' || arg.type === 'boolean') {
+    return '';
+  }
+
+  return `=<${name.replaceAll('-', '_')}>`;
+}
+
+function renderDescription(arg: Readonly<ArgSchema>, isRequired: boolean): string {
+  return [
+    arg.description,
+    isRequired ? '(Required)' : '',
+    arg.default === undefined ? '' : `(Default: ${String(arg.default)})`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+// what `--no-<flag>` does, which a negatable flag may say beside its own
+// description
+function getNegativeDescription(arg: Readonly<ArgSchema>): string {
+  const text: unknown = 'negativeDescription' in arg ? arg.negativeDescription : undefined;
+
+  return typeof text === 'string' ? text : '';
 }
 
 // gunshi hands a renderer the commands beside the one it renders, that
@@ -128,33 +155,6 @@ function listOwnSubCommands(command: SubCommandable | undefined): [string, SubCo
     | ReadonlyMap<string, SubCommandable> = command?.subCommands ?? {};
 
   return listEntries(subCommands);
-}
-
-// `=<name>` after a flag that takes a value, its name in snake case
-function renderValueHint(name: string, arg: Readonly<ArgSchema>): string {
-  if (arg.type === 'positional' || arg.type === 'boolean') {
-    return '';
-  }
-
-  return `=<${name.replaceAll('-', '_')}>`;
-}
-
-// what `--no-<flag>` does, which a negatable flag may say beside its own
-// description
-function readNegativeDescription(arg: Readonly<ArgSchema>): string {
-  const text: unknown = 'negativeDescription' in arg ? arg.negativeDescription : undefined;
-
-  return typeof text === 'string' ? text : '';
-}
-
-function renderDescription(arg: Readonly<ArgSchema>, isRequired: boolean): string {
-  return [
-    arg.description,
-    isRequired ? '(Required)' : '',
-    arg.default === undefined ? '' : `(Default: ${String(arg.default)})`,
-  ]
-    .filter(Boolean)
-    .join(' ');
 }
 
 // two-space indented columns: the first right-aligned, the rest padded to

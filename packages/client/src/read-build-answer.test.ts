@@ -6,7 +6,7 @@ import { ORPCError } from '@orpc/client';
 import { readBuildAnswer } from './read-build-answer';
 
 // Answers a real impd never sends, from a newer impd, a proxy in front of
-// impd or a dropped connection. build-image.test.ts reads impd's own.
+// impd or a dropped connection. run-image-build.test.ts reads impd's own.
 
 test('it skips a line it does not know and reads on to the image', async () => {
   const image = buildMockImage({ name: 'web' });

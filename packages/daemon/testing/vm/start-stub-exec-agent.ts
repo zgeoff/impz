@@ -16,9 +16,6 @@ import {
 import type { AgentFrame } from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
-// the agent's maxKillGrace, as the host's API caps it too
-const MAX_KILL_GRACE_MS = 60_000;
-
 // what runs the commands: buildStubExecGuest's openExec
 interface StubExecTarget {
   readonly openExec: (name: string, request: Readonly<AgentExecRequest>) => Promise<ExecStream>;
@@ -99,19 +96,6 @@ export function startStubExecAgent(path: string, guest: StubExecTarget) {
   });
 }
 
-// stdin, its end and signals reach the stream
-async function sendInput(pending: Promise<ExecStream>, frame: AgentFrame): Promise<void> {
-  const stream = await pending;
-
-  if (frame.type === FRAME_TYPES.stdin) {
-    stream.writeStdin(frame.payload);
-  } else if (frame.type === FRAME_TYPES.stdinEof) {
-    stream.closeStdin();
-  } else if (frame.type === FRAME_TYPES.signal) {
-    stream.sendSignal(decodeAgentMessage(SignalSchema, decodeJsonPayload(frame)).signal);
-  }
-}
-
 function encodeEventFrame(event: Readonly<ExecEvent>): Uint8Array {
   if (event.type === 'exit') {
     return encodeJsonFrame(FRAME_TYPES.exit, { code: event.code, signal: event.signal });
@@ -126,11 +110,27 @@ function encodeEventFrame(event: Readonly<ExecEvent>): Uint8Array {
   return encodeFrame(type, event.data);
 }
 
+// stdin, its end and signals reach the stream
+async function sendInput(pending: Promise<ExecStream>, frame: AgentFrame): Promise<void> {
+  const stream = await pending;
+
+  if (frame.type === FRAME_TYPES.stdin) {
+    stream.writeStdin(frame.payload);
+  } else if (frame.type === FRAME_TYPES.stdinEof) {
+    stream.closeStdin();
+  } else if (frame.type === FRAME_TYPES.signal) {
+    stream.sendSignal(decodeAgentMessage(SignalSchema, decodeJsonPayload(frame)).signal);
+  }
+}
+
 async function stopStream(pending: Promise<ExecStream>): Promise<void> {
   const stream = await pending;
 
   stream.close();
 }
+
+// the agent's maxKillGrace, as the host's API caps it too
+const MAX_KILL_GRACE_MS = 60_000;
 
 // the agent's killGrace (agent/internal/exec/group.go): off for a tty exec
 // or none asked, else capped at a minute

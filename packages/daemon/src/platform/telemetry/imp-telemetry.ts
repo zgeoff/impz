@@ -200,10 +200,10 @@ export function startImpTelemetry(deps: TelemetryDeps): () => void {
     const parent = trace.setSpan(ROOT_CONTEXT, span);
     let stepStartMs = startMs;
 
-    for (const [step, ms] of Object.entries(event.detail?.steps ?? {})) {
-      tracer.startSpan(step, { startTime: stepStartMs }, parent).end(stepStartMs + ms);
+    for (const [step, delayMs] of Object.entries(event.detail?.steps ?? {})) {
+      tracer.startSpan(step, { startTime: stepStartMs }, parent).end(stepStartMs + delayMs);
 
-      stepStartMs += ms;
+      stepStartMs += delayMs;
     }
 
     span.end(endMs);

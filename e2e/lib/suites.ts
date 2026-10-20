@@ -270,7 +270,7 @@ export function listJourneys(suite: Readonly<Suite>): readonly string[] {
 }
 
 // the prefix a suite's journeys name what they make with
-export function readSuitePrefix(name: string): string {
+export function getSuitePrefix(name: string): string {
   const suite = SUITES.find((candidate) => candidate.name === name);
 
   if (suite === undefined) {

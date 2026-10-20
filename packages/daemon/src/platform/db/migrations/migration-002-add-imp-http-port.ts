@@ -7,7 +7,7 @@ export const MIGRATION_002_ADD_IMP_HTTP_PORT: Migration = {
   async up(db: Kysely<NoTables>) {
     await db.schema
       .alterTable('imps')
-      .addColumn('http_port', 'integer', (c) => c.notNull().defaultTo(8080))
+      .addColumn('http_port', 'integer', (column) => column.notNull().defaultTo(8080))
       .execute();
   },
 };

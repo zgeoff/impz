@@ -200,7 +200,7 @@ test('it reports no OOM kill since start for kills from before the VM started', 
   stub.oomKills.set('imp-a', 3);
   stub.cgroups.setup('imp-a', { limit: null, weight: 100 }, 512);
 
-  expect(stub.cgroups.hasOomKillSinceStart('imp-a')).toBeFalse();
+  expect(stub.cgroups.probeOomKillSinceStart('imp-a')).toBeFalse();
 });
 
 test('it reports an OOM kill since start once the count rises after setup', () => {
@@ -210,5 +210,5 @@ test('it reports an OOM kill since start once the count rises after setup', () =
   stub.cgroups.setup('imp-a', { limit: null, weight: 100 }, 512);
   stub.oomKills.set('imp-a', 4);
 
-  expect(stub.cgroups.hasOomKillSinceStart('imp-a')).toBeTrue();
+  expect(stub.cgroups.probeOomKillSinceStart('imp-a')).toBeTrue();
 });

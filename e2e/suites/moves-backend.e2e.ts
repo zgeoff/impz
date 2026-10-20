@@ -17,8 +17,8 @@ test('it runs both hosts on the storage backend the run asked for', async () => 
   const ctx = setupTest();
   const backend = process.env['IMP_STORAGE_BACKEND'] === 'zfs' ? 'zfs' : 'xfs';
 
-  const infoA = await readInfo(ctx.hosts.a);
-  const infoB = await readInfo(ctx.hosts.b);
+  const infoA = await readInfo(ctx.hosts.hostA);
+  const infoB = await readInfo(ctx.hosts.hostB);
 
   expect(infoA.storage.backend).toBe(backend);
   expect(infoB.storage.backend).toBe(backend);

@@ -2,7 +2,7 @@ import { onTestFinished } from 'bun:test';
 import { Server } from 'ssh2';
 import type { ServerChannel } from 'ssh2';
 import { z } from 'zod';
-import { createEd25519Key } from '../../src/surface/ssh/host-key';
+import { generateEd25519Key } from '../../src/surface/ssh/host-key';
 
 interface StubSshServerOptions {
   // the one password the server takes; it refuses any other
@@ -16,7 +16,7 @@ export async function startStubSshServer(options: Readonly<StubSshServerOptions>
   const exec: { answer: (channel: ServerChannel) => void } = { answer: () => {} };
   const closes = { count: 0 };
 
-  const server = new Server({ hostKeys: [createEd25519Key().private] }, (client) => {
+  const server = new Server({ hostKeys: [generateEd25519Key().private] }, (client) => {
     client.on('authentication', (auth) => {
       const isRight = auth.method === 'password' && auth.password === options.password;
 

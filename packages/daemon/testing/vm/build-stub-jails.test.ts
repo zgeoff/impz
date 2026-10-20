@@ -6,13 +6,13 @@ import { buildImpPaths } from '../../src/vm/storage/data-layout';
 import { buildStubJails } from './build-stub-jails';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'stub-jails-'));
+  const directory = mkdtempSync(join(tmpdir(), 'stub-jails-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it hands a prepare the command it was given, and keeps the plan', async () => {
@@ -36,7 +36,7 @@ test('it hands a prepare the command it was given, and keeps the plan', async ()
 test('it notes whether the disk is there when a prepare comes', async () => {
   const ctx = setupTest();
   const stub = buildStubJails({ argv: [] });
-  const paths = buildImpPaths(ctx.dir, 'i1');
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
 
   await stub.jails.prepare({
     impId: 'i1',
@@ -53,9 +53,9 @@ test('it notes whether the disk is there when a prepare comes', async () => {
 test('it notes whether the disk is there when it takes the disk', () => {
   const ctx = setupTest();
   const stub = buildStubJails();
-  const paths = buildImpPaths(ctx.dir, 'i1');
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
 
-  mkdirSync(paths.dir, { recursive: true });
+  mkdirSync(paths.directory, { recursive: true });
   writeFileSync(paths.disk, '');
 
   stub.jails.setupDiskOwner(paths, { uid: 900_001, gid: 900_001 });

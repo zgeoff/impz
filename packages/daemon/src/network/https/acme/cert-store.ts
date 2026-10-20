@@ -38,7 +38,6 @@ const AccountSchema = z.object({ directoryUrl: z.string(), url: z.string(), keyP
 // v0.1.1 kept the key in account.key and only the URL in account.json
 const LegacyAccountSchema = z.object({ directoryUrl: z.string(), url: z.string() });
 const NO_ATTEMPTS: AttemptState = { failures: 0, lastAttemptAt: null, lastError: null };
-const PEM_BLOCK = /-----BEGIN (?<label>[A-Z ]+)-----[\s\S]+?-----END \k<label>-----\n?/gu;
 
 export interface CertStore {
   readonly readCertificate: () => Certificate | null;
@@ -58,15 +57,15 @@ export function createCertStore(
   dataDir: string,
   log: (message: string) => void = () => {},
 ): CertStore {
-  const dir = join(dataDir, 'tls');
-  const certificatePath = join(dir, 'certificate.pem');
-  const attemptsPath = join(dir, 'attempts.json');
-  const accountPath = join(dir, 'account.json');
-  const legacyKeyPath = join(dir, 'account.key');
+  const directory = join(dataDir, 'tls');
+  const certificatePath = join(directory, 'certificate.pem');
+  const attemptsPath = join(directory, 'attempts.json');
+  const accountPath = join(directory, 'account.json');
+  const legacyKeyPath = join(directory, 'account.key');
   const warned = { account: false };
 
   const write = (path: string, content: string): void => {
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
     writeFileDurably(path, content, { mode: 0o600 });
   };
 
@@ -147,6 +146,20 @@ export function createCertStore(
   };
 }
 
+function readIfExists(path: string): string | null {
+  return existsSync(path) ? readFileSync(path, 'utf8') : null;
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+const PEM_BLOCK = /-----BEGIN (?<label>[A-Z ]+)-----[\s\S]+?-----END \k<label>-----\n?/gu;
+
 // the key block, then every certificate block in order; null for a file
 // with no key or no certificate
 function splitCertificate(pem: string): Certificate | null {
@@ -162,16 +175,4 @@ function splitCertificate(pem: string): Certificate | null {
     keyPem: key[0].trimEnd(),
     chainPem: chain.map((block) => block[0].trimEnd()).join('\n'),
   };
-}
-
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return null;
-  }
-}
-
-function readIfExists(path: string): string | null {
-  return existsSync(path) ? readFileSync(path, 'utf8') : null;
 }

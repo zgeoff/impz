@@ -1,5 +1,5 @@
 import type { Uplinks } from '../../host-net/net/host-routes';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 
 // the host container's networks and default routes, read for a table build
 export interface HostNetwork {
@@ -39,7 +39,7 @@ export async function readHostNetwork(
       error: null,
     };
   } catch (error) {
-    const message = readErrorMessage(error);
+    const message = getErrorMessage(error);
 
     readers.log(`impd: egress: reading the host container's routes: ${message}`);
 

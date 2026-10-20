@@ -8,7 +8,7 @@ import { waitForExec } from '../lib/imps';
 import { instance, runChecked } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // `impz proxy` to an imp whose agent impd records as too old to dial.
@@ -22,7 +22,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('proxy'), stack, client };
+  return { prefix: getSuitePrefix('proxy'), stack, client };
 }
 
 test('it reports AGENT_OUTDATED and closes the connection when the imp’s agent is too old to dial', async () => {

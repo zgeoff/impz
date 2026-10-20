@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import {
-  collectText,
   countMatches,
   openHeldSocket,
   parseReverseForwards,
+  readText,
   sendOverHeldSocket,
   sendRequest,
 } from './imp-proxy';
@@ -28,7 +28,7 @@ test('#parseReverseForwards skips a line that is not at the start of the output'
   expect(parseReverseForwards('note: forwarding e2e-rev-a:1 -> x\n')).toStrictEqual([]);
 });
 
-test('#collectText gives what the stream sent so far', async () => {
+test('#readText gives what the stream sent so far', async () => {
   const stream = new ReadableStream<Uint8Array>({
     start: (controller) => {
       controller.enqueue(new TextEncoder().encode('Allocated port 1'));
@@ -36,7 +36,7 @@ test('#collectText gives what the stream sent so far', async () => {
     },
   });
 
-  const collected = collectText(stream);
+  const collected = readText(stream);
 
   const text = await waitFor('the text', () => {
     if (collected.read() === '') {

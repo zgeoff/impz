@@ -3,10 +3,6 @@ import * as z from 'zod';
 // oRPC's answer as the RPC protocol encodes it: the output under `json`
 const RpcBodySchema = z.looseObject({ json: z.unknown() });
 const RecordSchema = z.record(z.string(), z.unknown());
-const InfoJsonSchema = z.looseObject({ features: RecordSchema.optional() });
-
-// one SSE event of an event-iterator procedure, its data as oRPC encodes it
-const EventDataSchema = z.looseObject({ json: z.looseObject({ type: z.string() }) });
 
 // What another release of impd answers differently, by procedure such as
 // `imps/list`: what an older one lacked, or what a newer one adds
@@ -100,7 +96,7 @@ export function buildStubImpdReleaseFetch(
         Object.entries(RecordSchema.parse(item)).filter(([key]) => !without.includes(key)),
       );
 
-      return { ...(isFeatures ? removeFeatures(fields, options) : fields), ...added };
+      return { ...(isFeatures ? stripFeatures(fields, options) : fields), ...added };
     };
 
     const json = Array.isArray(body.json) ? body.json.map(buildItem) : buildItem(body.json);
@@ -111,25 +107,8 @@ export function buildStubImpdReleaseFetch(
   return { fetch: send, calls };
 }
 
-// system.info or system.features without the flags the release lacked; a
-// reply without features stays without them, as the stand-in only removes
-function removeFeatures(
-  info: Readonly<Record<string, unknown>>,
-  options: Readonly<StubImpdReleaseOptions>,
-): Record<string, unknown> {
-  const { features, ...rest } = InfoJsonSchema.parse(info);
-
-  if (options.isWithoutFeatureList === true || features === undefined) {
-    return rest;
-  }
-
-  return {
-    ...rest,
-    features: Object.fromEntries(
-      Object.entries(features).filter(([key]) => options.withoutFeatures?.includes(key) !== true),
-    ),
-  };
-}
+// one SSE event of an event-iterator procedure, its data as oRPC encodes it
+const EventDataSchema = z.looseObject({ json: z.looseObject({ type: z.string() }) });
 
 // an event stream without the events of `types`; an event without a type,
 // such as the stream's end, always passes
@@ -152,4 +131,26 @@ async function removeEvents(response: Response, types: readonly string[]): Promi
     status: response.status,
     headers: response.headers,
   });
+}
+
+const InfoJsonSchema = z.looseObject({ features: RecordSchema.optional() });
+
+// system.info or system.features without the flags the release lacked; a
+// reply without features stays without them, as the stand-in only removes
+function stripFeatures(
+  info: Readonly<Record<string, unknown>>,
+  options: Readonly<StubImpdReleaseOptions>,
+): Record<string, unknown> {
+  const { features, ...rest } = InfoJsonSchema.parse(info);
+
+  if (options.isWithoutFeatureList === true || features === undefined) {
+    return rest;
+  }
+
+  return {
+    ...rest,
+    features: Object.fromEntries(
+      Object.entries(features).filter(([key]) => options.withoutFeatures?.includes(key) !== true),
+    ),
+  };
 }

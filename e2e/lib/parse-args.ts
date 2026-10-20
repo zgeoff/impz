@@ -13,47 +13,6 @@ export interface HarnessArgs {
   readonly help: boolean;
 }
 
-// --group N: one of the fast set's CI groups, as its runner runs it
-function resolveGroup(group: string): readonly string[] {
-  const suites = /^[1-9]\d*$/u.test(group) ? FAST_GROUPS[Number(group) - 1] : undefined;
-
-  if (suites === undefined) {
-    throw new Error(`--group takes 1 to ${String(FAST_GROUPS.length)}, not ${group}`);
-  }
-
-  return suites;
-}
-
-function resolveSuites(only: string): readonly string[] {
-  const wanted = new Set<string>();
-
-  for (const item of only.split(',')) {
-    const name = item.trim();
-
-    if (name === '') {
-      continue;
-    }
-
-    const set = SUITE_SETS[name];
-
-    if (set !== undefined) {
-      for (const member of set) {
-        wanted.add(member);
-      }
-    } else if (SUITES.some((suite) => suite.name === name)) {
-      wanted.add(name);
-    } else {
-      throw new Error(`unknown suite or set: ${name}`);
-    }
-  }
-
-  if (wanted.size === 0) {
-    throw new Error('--only names no suite');
-  }
-
-  return SUITES.map((suite) => suite.name).filter((name) => wanted.has(name));
-}
-
 // node's own parser reports an unknown flag, a stray argument and a flag
 // missing its value
 export function parseArgs(argv: readonly string[]): HarnessArgs {
@@ -100,4 +59,45 @@ export function parseArgs(argv: readonly string[]): HarnessArgs {
     acceptance,
     ...flags,
   };
+}
+
+// --group N: one of the fast set's CI groups, as its runner runs it
+function resolveGroup(group: string): readonly string[] {
+  const suites = /^[1-9]\d*$/u.test(group) ? FAST_GROUPS[Number(group) - 1] : undefined;
+
+  if (suites === undefined) {
+    throw new Error(`--group takes 1 to ${String(FAST_GROUPS.length)}, not ${group}`);
+  }
+
+  return suites;
+}
+
+function resolveSuites(only: string): readonly string[] {
+  const wanted = new Set<string>();
+
+  for (const item of only.split(',')) {
+    const name = item.trim();
+
+    if (name === '') {
+      continue;
+    }
+
+    const set = SUITE_SETS[name];
+
+    if (set !== undefined) {
+      for (const member of set) {
+        wanted.add(member);
+      }
+    } else if (SUITES.some((suite) => suite.name === name)) {
+      wanted.add(name);
+    } else {
+      throw new Error(`unknown suite or set: ${name}`);
+    }
+  }
+
+  if (wanted.size === 0) {
+    throw new Error('--only names no suite');
+  }
+
+  return SUITES.map((suite) => suite.name).filter((name) => wanted.has(name));
 }

@@ -10,7 +10,7 @@ export const MIGRATION_018_ADD_WARM_MOVES: Migration = {
       .alterTable('move_sends')
 
       // 1 when the memory snapshot goes too: a warm move
-      .addColumn('warm', 'integer', (c) => c.notNull().defaultTo(0))
+      .addColumn('warm', 'integer', (column) => column.notNull().defaultTo(0))
       .execute();
 
     await db.schema
@@ -18,7 +18,7 @@ export const MIGRATION_018_ADD_WARM_MOVES: Migration = {
 
       // 1 from a warm move's commit to the imp's first wake here, which installs
       // this host's broker CA in the guest
-      .addColumn('trust_pending', 'integer', (c) => c.notNull().defaultTo(0))
+      .addColumn('trust_pending', 'integer', (column) => column.notNull().defaultTo(0))
       .execute();
   },
 };

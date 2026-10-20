@@ -73,7 +73,7 @@ export function encodeJsonFrame(type: FrameType, value: unknown): Uint8Array {
   return encodeFrame(type, new TextEncoder().encode(JSON.stringify(value)));
 }
 
-export function createFrameDecoder(): FrameDecoder {
+export function buildFrameDecoder(): FrameDecoder {
   let pending: Uint8Array = new Uint8Array();
 
   const decodeChunk = (chunk: Uint8Array): AgentFrame[] => {
@@ -120,15 +120,15 @@ export function decodeJsonPayload(frame: AgentFrame): JsonValue {
   return z.json().parse(JSON.parse(new TextDecoder().decode(frame.payload)));
 }
 
-function mergeBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
-  if (a.byteLength === 0) {
-    return b;
+function mergeBytes(left: Uint8Array, right: Uint8Array): Uint8Array {
+  if (left.byteLength === 0) {
+    return right;
   }
 
-  const out = new Uint8Array(a.byteLength + b.byteLength);
+  const out = new Uint8Array(left.byteLength + right.byteLength);
 
-  out.set(a);
-  out.set(b, a.byteLength);
+  out.set(left);
+  out.set(right, left.byteLength);
 
   return out;
 }

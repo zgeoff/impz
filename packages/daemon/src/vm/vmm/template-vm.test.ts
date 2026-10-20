@@ -19,24 +19,24 @@ import { buildStubFirecrackerArgv } from '../../../testing/vm/start-stub-firecra
 import { startStubParkedAgent } from '../../../testing/vm/start-stub-parked-agent';
 import { stopPid } from '../../platform/process/proc';
 import { buildImpPaths } from '../storage/data-layout';
-import { isFirecrackerAlive } from './firecracker-process';
-import { TemplateRestoreError, buildTemplateVm, loadTemplateVm } from './template-vm';
+import { probeFirecrackerAlive } from './firecracker-process';
+import { TemplateRestoreError, createTemplateVm, loadTemplateVm } from './template-vm';
 
 // A temp dir with one log that the stub VMM and the stub jails both append
 // to, so the order of their calls shows.
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-tpl-vm-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-tpl-vm-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir, logPath: join(dir, 'calls.log') };
+  return { directoryPath: directory, logPath: join(directory, 'calls.log') };
 }
 
 test('#loadTemplateVm owns the disk of a jailed restore once the clone is done, before it patches the drive', async () => {
   const ctx = setupTest();
-  const paths = buildImpPaths(ctx.dir, 'i1');
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
 
   mkdirSync(paths.runDir, { recursive: true });
 
@@ -110,7 +110,7 @@ test('#loadTemplateVm owns the disk of a jailed restore once the clone is done, 
 
 test('#loadTemplateVm fails a restore whose load fails as a fault of the template', () => {
   const ctx = setupTest();
-  const paths = buildImpPaths(ctx.dir, 'i1');
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
 
   mkdirSync(paths.runDir, { recursive: true });
 
@@ -134,7 +134,7 @@ test('#loadTemplateVm fails a restore whose load fails as a fault of the templat
 
 test('#loadTemplateVm fails a restore whose drive patch fails as a fault of the imp', async () => {
   const ctx = setupTest();
-  const paths = buildImpPaths(ctx.dir, 'i1');
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
 
   mkdirSync(paths.runDir, { recursive: true });
   writeFileSync(paths.disk, '');
@@ -164,7 +164,7 @@ test('#loadTemplateVm fails a restore whose drive patch fails as a fault of the 
 
 test('#loadTemplateVm returns the steps the claimed guest reports for its boot', async () => {
   const ctx = setupTest();
-  const paths = buildImpPaths(ctx.dir, 'i1');
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
 
   mkdirSync(paths.runDir, { recursive: true });
   writeFileSync(paths.disk, '');
@@ -197,7 +197,7 @@ test('#loadTemplateVm returns the steps the claimed guest reports for its boot',
 
 test('#loadTemplateVm kills the VM and releases the jail of a restore that fails', () => {
   const ctx = setupTest();
-  const paths = buildImpPaths(ctx.dir, 'i1');
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
 
   mkdirSync(paths.runDir, { recursive: true });
 
@@ -218,13 +218,13 @@ test('#loadTemplateVm kills the VM and releases the jail of a restore that fails
 
   const pid = Number(readFileSync(paths.pidFile, 'utf8'));
 
-  expect(isFirecrackerAlive(pid, paths.apiSocket)).toBeFalse();
+  expect(probeFirecrackerAlive(pid, paths.apiSocket)).toBeFalse();
   expect(stub.notes.at(-1)).toBe('release i1');
 });
 
 test('#loadTemplateVm releases the jail of a restore whose prepare fails, and passes the error on', () => {
   const ctx = setupTest();
-  const paths = buildImpPaths(ctx.dir, 'i1');
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
   const stub = buildStubJails({ argv: [] });
 
   stub.refusePrepare(new Error('mount --rbind: no space'));
@@ -246,7 +246,7 @@ test('#buildTemplateVm releases the jail of a build before its files go to root,
   const user = { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 };
 
   const plan = buildMockTemplateBuildPlan({
-    workDir: join(ctx.dir, '.build-1'),
+    workDir: join(ctx.directoryPath, '.build-1'),
     jailId: 'tpl-build',
     jail: user,
   });
@@ -263,7 +263,7 @@ test('#buildTemplateVm releases the jail of a build before its files go to root,
   // the release kills the build uid: the files are still the VM's then
   const memModes: string[] = [];
 
-  const building = buildTemplateVm(plan, {
+  const building = createTemplateVm(plan, {
     ...stub.jails,
     release: (id) => {
       memModes.push((lstatSync(plan.memFile).mode & 0o777).toString(8));
@@ -308,7 +308,7 @@ test('#buildTemplateVm binds the kernel and the system drive into a jailed build
   const user = { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 };
 
   const plan = buildMockTemplateBuildPlan({
-    workDir: join(ctx.dir, '.build-1'),
+    workDir: join(ctx.directoryPath, '.build-1'),
     jailId: 'tpl-build',
     jail: user,
   });
@@ -319,7 +319,7 @@ test('#buildTemplateVm binds the kernel and the system drive into a jailed build
     argv: buildStubFirecrackerArgv({ apiSocket: plan.paths.apiSocket, logPath: ctx.logPath }),
   });
 
-  const building = buildTemplateVm(plan, stub.jails);
+  const building = createTemplateVm(plan, stub.jails);
 
   await waitFor(() => {
     expect(existsSync(plan.paths.apiSocket)).toBeTrue();
@@ -344,7 +344,7 @@ test('#buildTemplateVm fails a build whose VM refuses its config', () => {
   const ctx = setupTest();
 
   const plan = buildMockTemplateBuildPlan({
-    workDir: join(ctx.dir, '.build-1'),
+    workDir: join(ctx.directoryPath, '.build-1'),
     jailId: 'tpl-build',
     jail: { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 },
   });
@@ -359,14 +359,14 @@ test('#buildTemplateVm fails a build whose VM refuses its config', () => {
     }),
   });
 
-  expect(buildTemplateVm(plan, stub.jails)).rejects.toThrow(/^template build failed: /u);
+  expect(createTemplateVm(plan, stub.jails)).rejects.toThrow(/^template build failed: /u);
 });
 
 test('#buildTemplateVm releases the jail of a build that fails, and leaves no snapshot', () => {
   const ctx = setupTest();
 
   const plan = buildMockTemplateBuildPlan({
-    workDir: join(ctx.dir, '.build-1'),
+    workDir: join(ctx.directoryPath, '.build-1'),
     jailId: 'tpl-build',
     jail: { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 },
   });
@@ -381,7 +381,7 @@ test('#buildTemplateVm releases the jail of a build that fails, and leaves no sn
     }),
   });
 
-  expect(buildTemplateVm(plan, stub.jails)).rejects.toThrow();
+  expect(createTemplateVm(plan, stub.jails)).rejects.toThrow();
   expect(stub.notes.at(-1)).toBe('release tpl-build');
   expect(existsSync(plan.snapshotDir)).toBeFalse();
 });

@@ -9,12 +9,12 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'idle-limited-build-'));
+  const directory = await mkdtemp(join(tmpdir(), 'idle-limited-build-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   // a release deferred here runs before the dir goes
-  return { stack, dir };
+  return { stack, directoryPath: directory };
 }
 
 test('it prints each outcome as a JSON line, with a cancelled build as its AbortError', async () => {
@@ -23,7 +23,7 @@ test('it prints each outcome as a JSON line, with a cancelled build as its Abort
   const ended = Promise.withResolvers<void>();
 
   const control = await startStubSilentBuildEngine({
-    socketPath: join(ctx.dir, 'control-engine.sock'),
+    socketPath: join(ctx.directoryPath, 'control-engine.sock'),
     imageId: `sha256:${'d'.repeat(64)}`,
     holdUntil: () => Promise.resolve(),
   });
@@ -31,7 +31,7 @@ test('it prints each outcome as a JSON line, with a cancelled build as its Abort
   ctx.stack.defer(() => control.stop());
 
   const build = await startStubSilentBuildEngine({
-    socketPath: join(ctx.dir, 'build-engine.sock'),
+    socketPath: join(ctx.directoryPath, 'build-engine.sock'),
     imageId: `sha256:${'c'.repeat(64)}`,
     holdUntil: () => Promise.resolve(),
   });
@@ -39,7 +39,7 @@ test('it prints each outcome as a JSON line, with a cancelled build as its Abort
   ctx.stack.defer(() => build.stop());
 
   const cancelled = await startStubSilentBuildEngine({
-    socketPath: join(ctx.dir, 'cancel-engine.sock'),
+    socketPath: join(ctx.directoryPath, 'cancel-engine.sock'),
     imageId: `sha256:${'e'.repeat(64)}`,
     holdUntil: () => ended.promise,
   });
@@ -55,10 +55,10 @@ test('it prints each outcome as a JSON line, with a cancelled build as its Abort
       process.execPath,
       join(import.meta.dir, 'run-idle-limited-docker-build.ts'),
       JSON.stringify({
-        dir: ctx.dir,
-        buildEngine: join(ctx.dir, 'build-engine.sock'),
-        cancelEngine: join(ctx.dir, 'cancel-engine.sock'),
-        controlEngine: join(ctx.dir, 'control-engine.sock'),
+        directory: ctx.directoryPath,
+        buildEngine: join(ctx.directoryPath, 'build-engine.sock'),
+        cancelEngine: join(ctx.directoryPath, 'cancel-engine.sock'),
+        controlEngine: join(ctx.directoryPath, 'control-engine.sock'),
       }),
     ],
     { stdin: 'pipe', stdout: 'pipe', stderr: 'inherit' },
@@ -100,7 +100,7 @@ test('it starts the unprotected fetch only on a control line', async () => {
   const ctx = await setupTest();
 
   const control = await startStubSilentBuildEngine({
-    socketPath: join(ctx.dir, 'control-engine.sock'),
+    socketPath: join(ctx.directoryPath, 'control-engine.sock'),
     imageId: `sha256:${'d'.repeat(64)}`,
     holdUntil: () => Promise.resolve(),
   });
@@ -108,7 +108,7 @@ test('it starts the unprotected fetch only on a control line', async () => {
   ctx.stack.defer(() => control.stop());
 
   const build = await startStubSilentBuildEngine({
-    socketPath: join(ctx.dir, 'build-engine.sock'),
+    socketPath: join(ctx.directoryPath, 'build-engine.sock'),
     imageId: `sha256:${'c'.repeat(64)}`,
     holdUntil: () => Promise.resolve(),
   });
@@ -116,7 +116,7 @@ test('it starts the unprotected fetch only on a control line', async () => {
   ctx.stack.defer(() => build.stop());
 
   const cancelled = await startStubSilentBuildEngine({
-    socketPath: join(ctx.dir, 'cancel-engine.sock'),
+    socketPath: join(ctx.directoryPath, 'cancel-engine.sock'),
     imageId: `sha256:${'e'.repeat(64)}`,
     holdUntil: () => Promise.resolve(),
   });
@@ -128,10 +128,10 @@ test('it starts the unprotected fetch only on a control line', async () => {
       process.execPath,
       join(import.meta.dir, 'run-idle-limited-docker-build.ts'),
       JSON.stringify({
-        dir: ctx.dir,
-        buildEngine: join(ctx.dir, 'build-engine.sock'),
-        cancelEngine: join(ctx.dir, 'cancel-engine.sock'),
-        controlEngine: join(ctx.dir, 'control-engine.sock'),
+        directory: ctx.directoryPath,
+        buildEngine: join(ctx.directoryPath, 'build-engine.sock'),
+        cancelEngine: join(ctx.directoryPath, 'cancel-engine.sock'),
+        controlEngine: join(ctx.directoryPath, 'control-engine.sock'),
       }),
     ],
     { stdin: 'pipe', stdout: 'pipe', stderr: 'inherit' },

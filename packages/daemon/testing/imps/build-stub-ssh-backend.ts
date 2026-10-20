@@ -1,5 +1,5 @@
 import type { AuditActor } from '../../src/identity/auth/caller';
-import { createActivityTracker } from '../../src/imps/imps/activity-tracker';
+import { buildActivityTracker } from '../../src/imps/imps/activity-tracker';
 import type { ConnectionKind } from '../../src/imps/imps/activity-tracker';
 import type { ImpRuntime } from '../../src/imps/imps/imp-runtime';
 import type { SshBackend } from '../../src/imps/ssh/ssh-connection-context';
@@ -12,45 +12,6 @@ import type {
   ExecStream,
 } from '../../src/vm/agent-client/exec-stream';
 import type { GuestListener, ListenSpec } from '../../src/vm/agent-client/listener-stream';
-
-// events a stub stream yields, in order; null ends the stream
-interface EventQueue<T> {
-  readonly emit: (event: T | null) => void;
-  readonly next: () => Promise<T | null>;
-}
-
-function createEventQueue<T>(): EventQueue<T> {
-  const events: (T | null)[] = [];
-  const waiter: { wake: (() => void) | null } = { wake: null };
-
-  return {
-    emit: (event) => {
-      events.push(event);
-      waiter.wake?.();
-    },
-    next: async () => {
-      while (events.length === 0) {
-        await new Promise<void>((resolve) => {
-          waiter.wake = resolve;
-        });
-      }
-
-      return events.shift() ?? null;
-    },
-  };
-}
-
-async function* readEvents<T>(next: () => Promise<T | null>): AsyncGenerator<T, void, undefined> {
-  for (;;) {
-    const event = await next();
-
-    if (event === null) {
-      return;
-    }
-
-    yield event;
-  }
-}
 
 // a program the gateway started; the test feeds its output
 interface StubExec {
@@ -100,16 +61,6 @@ interface StubAccept {
   readonly state: { closed: boolean; ended: boolean };
 }
 
-// where a stub listener's socket is, as the agent picks it: an ssh-agent's,
-// the path asked for, or none for a port
-function readStubPath(spec: ListenSpec, id: string): string | null {
-  if (spec.network === 'ssh-agent') {
-    return `/run/imp/ssh-agent/${id}/agent.sock`;
-  }
-
-  return spec.network === 'unix' ? (spec.path ?? `/run/imp/forward/${id}/sock`) : null;
-}
-
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 
@@ -123,7 +74,7 @@ export function buildStubSshBackend() {
   const dials: StubDial[] = [];
   const listeners: StubListener[] = [];
   const accepts: StubAccept[] = [];
-  const tracker = createActivityTracker();
+  const tracker = buildActivityTracker();
 
   // who each exec ran as, for the audit
   const actors: AuditActor[] = [];
@@ -378,7 +329,7 @@ export function buildStubSshBackend() {
   };
 
   const backend: SshBackend & Pick<ImpRuntime, 'openExec'> = {
-    findImp: (name) => {
+    readImp: (name) => {
       stub.lookups += 1;
 
       if (stub.findError !== null) {
@@ -433,4 +384,53 @@ export function buildStubSshBackend() {
       imps.set(imp.name, imp);
     },
   };
+}
+
+// events a stub stream yields, in order; null ends the stream
+interface EventQueue<T> {
+  readonly emit: (event: T | null) => void;
+  readonly next: () => Promise<T | null>;
+}
+
+function createEventQueue<T>(): EventQueue<T> {
+  const events: (T | null)[] = [];
+  const waiter: { wake: (() => void) | null } = { wake: null };
+
+  return {
+    emit: (event) => {
+      events.push(event);
+      waiter.wake?.();
+    },
+    next: async () => {
+      while (events.length === 0) {
+        await new Promise<void>((resolve) => {
+          waiter.wake = resolve;
+        });
+      }
+
+      return events.shift() ?? null;
+    },
+  };
+}
+
+async function* readEvents<T>(next: () => Promise<T | null>): AsyncGenerator<T, void, undefined> {
+  for (;;) {
+    const event = await next();
+
+    if (event === null) {
+      return;
+    }
+
+    yield event;
+  }
+}
+
+// where a stub listener's socket is, as the agent picks it: an ssh-agent's,
+// the path asked for, or none for a port
+function readStubPath(spec: ListenSpec, id: string): string | null {
+  if (spec.network === 'ssh-agent') {
+    return `/run/imp/ssh-agent/${id}/agent.sock`;
+  }
+
+  return spec.network === 'unix' ? (spec.path ?? `/run/imp/forward/${id}/sock`) : null;
 }

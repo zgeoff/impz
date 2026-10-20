@@ -8,9 +8,11 @@ export const MIGRATION_021_ADD_BROKER_SESSIONS: Migration = {
   async up(db: Kysely<NoTables>) {
     await db.schema
       .createTable('broker_sessions')
-      .addColumn('imp_id', 'text', (c) => c.notNull().references('imps.id').onDelete('cascade'))
-      .addColumn('generation', 'text', (c) => c.notNull())
-      .addColumn('at', 'integer', (c) => c.notNull())
+      .addColumn('imp_id', 'text', (column) =>
+        column.notNull().references('imps.id').onDelete('cascade'),
+      )
+      .addColumn('generation', 'text', (column) => column.notNull())
+      .addColumn('at', 'integer', (column) => column.notNull())
       .addPrimaryKeyConstraint('broker_sessions_pk', ['imp_id', 'generation'])
       .execute();
   },

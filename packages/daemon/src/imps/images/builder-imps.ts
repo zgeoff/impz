@@ -2,7 +2,7 @@ import type { Config } from '../../config';
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StartTimer } from '../../platform/process/clock';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { ImpService } from '../imps/imp-service';
 import { createGuestExec } from './guest-exec';
@@ -57,7 +57,7 @@ function pickBuilderName(): string {
 // how the engine wait reads the time and waits between its asks
 interface EngineClock {
   readonly now: () => number;
-  readonly wait: (ms: number) => Promise<void>;
+  readonly wait: (durationMs: number) => Promise<void>;
 }
 
 // a builder's dockerd starts with the guest, a little after its agent
@@ -90,7 +90,7 @@ async function waitForEngine(
 
 export function createBuilders(deps: BuildersDeps): Builders {
   const startTimer: StartTimer =
-    deps.startTimer ?? ((fire, ms) => startRealTimer(fire, ms, { isUnref: true }));
+    deps.startTimer ?? ((fire, durationMs) => startRealTimer(fire, durationMs, { isUnref: true }));
 
   const engineClock = deps.engineClock ?? { now: Date.now, wait: Bun.sleep };
 
@@ -106,7 +106,7 @@ export function createBuilders(deps: BuildersDeps): Builders {
       return true;
     } catch (error) {
       deps.log(
-        `impd: image build: ERROR: builder ${name} survives its removal, tried again every ${String(REMOVE_RETRY_MS / 1000)} s: ${readErrorMessage(error)}`,
+        `impd: image build: ERROR: builder ${name} survives its removal, tried again every ${String(REMOVE_RETRY_MS / 1000)} s: ${getErrorMessage(error)}`,
       );
 
       return false;

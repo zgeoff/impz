@@ -1,13 +1,13 @@
 import { match } from 'ts-pattern';
 import type { Bound, Side } from './bound';
+import { findBranches } from './find-branches';
+import { findInclusive } from './find-inclusive';
+import { findLower } from './find-lower';
+import { findSchemaList } from './find-schema-list';
+import { findTypes } from './find-types';
+import { findUpper } from './find-upper';
+import { findValues } from './find-values';
 import { isWithin } from './is-within';
-import { readBranches } from './read-branches';
-import { readInclusive } from './read-inclusive';
-import { readLower } from './read-lower';
-import { readSchemaList } from './read-schema-list';
-import { readTypes } from './read-types';
-import { readUpper } from './read-upper';
-import { readValues } from './read-values';
 import { resolveRef } from './resolve-ref';
 import type { Schema, SchemaObject } from './schema';
 
@@ -19,10 +19,10 @@ export function isValueAccepted(schemaRef: Schema, value: unknown, root: Schema)
     return schema;
   }
 
-  const branches = readBranches(schema);
-  const parts = readSchemaList(schema, 'allOf') ?? [];
-  const values = readValues(schema);
-  const types = readTypes(schema);
+  const branches = findBranches(schema);
+  const parts = findSchemaList(schema, 'allOf') ?? [];
+  const values = findValues(schema);
+  const types = findTypes(schema);
 
   return (
     (branches === undefined || branches.some((branch) => isValueAccepted(branch, value, root))) &&
@@ -49,8 +49,8 @@ function isStringAccepted(schema: SchemaObject, value: string): boolean {
   const pattern = schema['pattern'];
 
   return (
-    isInBound(length, readInclusive(schema, 'minLength'), 'lower') &&
-    isInBound(length, readInclusive(schema, 'maxLength'), 'upper') &&
+    isInBound(length, findInclusive(schema, 'minLength'), 'lower') &&
+    isInBound(length, findInclusive(schema, 'maxLength'), 'upper') &&
     (typeof pattern !== 'string' || new RegExp(pattern, 'u').test(value))
   );
 }
@@ -60,16 +60,16 @@ function countCodePoints(value: string): number {
   return [...value.matchAll(/./gsu)].length;
 }
 
+function isInBound(value: number, bound: Bound | undefined, side: Side): boolean {
+  return bound === undefined || isWithin({ value, exclusive: false }, bound, side);
+}
+
 function isNumberAccepted(schema: SchemaObject, value: number): boolean {
   const step = schema['multipleOf'];
 
   return (
-    isInBound(value, readLower(schema), 'lower') &&
-    isInBound(value, readUpper(schema), 'upper') &&
+    isInBound(value, findLower(schema), 'lower') &&
+    isInBound(value, findUpper(schema), 'upper') &&
     (typeof step !== 'number' || value % step === 0)
   );
-}
-
-function isInBound(value: number, bound: Bound | undefined, side: Side): boolean {
-  return bound === undefined || isWithin({ value, exclusive: false }, bound, side);
 }

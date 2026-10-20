@@ -3,10 +3,10 @@ import {
   PEER_HEADER,
   createForwardedPeers,
   isCallerPath,
-  readPeerAddress,
+  redeemPeerAddress,
 } from './forwarded-peers';
 
-test('#readPeerAddress gives the client’s address for a handle the proxy made, from loopback', () => {
+test('#redeemPeerAddress gives the client’s address for a handle the proxy made, from loopback', () => {
   const peers = createForwardedPeers(() => 0);
   const handle = peers.register('100.101.102.103');
 
@@ -14,10 +14,10 @@ test('#readPeerAddress gives the client’s address for a handle the proxy made,
     headers: { [PEER_HEADER]: handle },
   });
 
-  expect(readPeerAddress(request, '127.0.0.1', peers)).toBe('100.101.102.103');
+  expect(redeemPeerAddress(request, '127.0.0.1', peers)).toBe('100.101.102.103');
 });
 
-test('#readPeerAddress gives the socket’s own address for a handle sent from a remote peer', () => {
+test('#redeemPeerAddress gives the socket’s own address for a handle sent from a remote peer', () => {
   const peers = createForwardedPeers(() => 0);
   const handle = peers.register('100.101.102.103');
 
@@ -25,14 +25,14 @@ test('#readPeerAddress gives the socket’s own address for a handle sent from a
     headers: { [PEER_HEADER]: handle },
   });
 
-  expect(readPeerAddress(request, '203.0.113.9', peers)).toBe('203.0.113.9');
+  expect(redeemPeerAddress(request, '203.0.113.9', peers)).toBe('203.0.113.9');
 });
 
-test('#readPeerAddress leaves a handle unused when a remote peer sends it', () => {
+test('#redeemPeerAddress leaves a handle unused when a remote peer sends it', () => {
   const peers = createForwardedPeers(() => 0);
   const handle = peers.register('100.101.102.103');
 
-  readPeerAddress(
+  redeemPeerAddress(
     new Request('http://imp.example.com/rpc/system/info', { headers: { [PEER_HEADER]: handle } }),
     '203.0.113.9',
     peers,
@@ -41,7 +41,7 @@ test('#readPeerAddress leaves a handle unused when a remote peer sends it', () =
   expect(peers.take(handle)).toBe('100.101.102.103');
 });
 
-test('#readPeerAddress gives the socket’s own address for a handle used once already', () => {
+test('#redeemPeerAddress gives the socket’s own address for a handle used once already', () => {
   const peers = createForwardedPeers(() => 0);
   const handle = peers.register('100.101.102.103');
 
@@ -51,10 +51,10 @@ test('#readPeerAddress gives the socket’s own address for a handle used once a
     headers: { [PEER_HEADER]: handle },
   });
 
-  expect(readPeerAddress(request, '127.0.0.1', peers)).toBe('127.0.0.1');
+  expect(redeemPeerAddress(request, '127.0.0.1', peers)).toBe('127.0.0.1');
 });
 
-test('#readPeerAddress gives the socket’s own address for a forged handle', () => {
+test('#redeemPeerAddress gives the socket’s own address for a forged handle', () => {
   const peers = createForwardedPeers(() => 0);
 
   peers.register('100.101.102.103');
@@ -63,10 +63,10 @@ test('#readPeerAddress gives the socket’s own address for a forged handle', ()
     headers: { [PEER_HEADER]: '100.101.102.103' },
   });
 
-  expect(readPeerAddress(request, '::1', peers)).toBe('::1');
+  expect(redeemPeerAddress(request, '::1', peers)).toBe('::1');
 });
 
-test('#readPeerAddress gives the socket’s own address for a handle 30 seconds old', () => {
+test('#redeemPeerAddress gives the socket’s own address for a handle 30 seconds old', () => {
   const clock = { at: 0 };
   const peers = createForwardedPeers(() => clock.at);
   const handle = peers.register('100.101.102.103');
@@ -77,7 +77,7 @@ test('#readPeerAddress gives the socket’s own address for a handle 30 seconds 
     headers: { [PEER_HEADER]: handle },
   });
 
-  expect(readPeerAddress(request, '::ffff:127.0.0.1', peers)).toBe('::ffff:127.0.0.1');
+  expect(redeemPeerAddress(request, '::ffff:127.0.0.1', peers)).toBe('::ffff:127.0.0.1');
 });
 
 test('#createForwardedPeers redeems a handle just under 30 seconds old', () => {
@@ -90,20 +90,20 @@ test('#createForwardedPeers redeems a handle just under 30 seconds old', () => {
   expect(peers.take(handle)).toBe('100.101.102.103');
 });
 
-test('#readPeerAddress gives the socket’s own address for a loopback request with no handle', () => {
+test('#redeemPeerAddress gives the socket’s own address for a loopback request with no handle', () => {
   const peers = createForwardedPeers(() => 0);
 
   const request = new Request('http://imp.example.com/rpc/system/info');
 
-  expect(readPeerAddress(request, '127.0.0.1', peers)).toBe('127.0.0.1');
+  expect(redeemPeerAddress(request, '127.0.0.1', peers)).toBe('127.0.0.1');
 });
 
-test('#readPeerAddress gives null when the socket has no address', () => {
+test('#redeemPeerAddress gives null when the socket has no address', () => {
   const peers = createForwardedPeers(() => 0);
 
   const request = new Request('http://imp.example.com/rpc/system/info');
 
-  expect(readPeerAddress(request, null, peers)).toBeNull();
+  expect(redeemPeerAddress(request, null, peers)).toBeNull();
 });
 
 test('#createForwardedPeers evicts the oldest handle when a handle is made with 1024 held', () => {

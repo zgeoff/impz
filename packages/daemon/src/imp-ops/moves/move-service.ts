@@ -11,7 +11,7 @@ import { readWarmHost } from './warm-facts';
 // Moves between hosts (docs/architecture/storage/moves.md): this host as a source,
 // its sender, and as a target, its receiver
 export type MoveService = MoveSender &
-  Pick<MoveReceiver, 'issueTicket' | 'reissueTicket' | 'handle'> & {
+  Pick<MoveReceiver, 'issueTicket' | 'reissueTicket' | 'respond'> & {
     readonly recover: () => Promise<void>;
 
     // what a warm move to this host must match
@@ -75,7 +75,7 @@ export function createMoveService(deps: MoveServiceDeps): MoveService {
     ...sender,
     issueTicket: receiver.issueTicket,
     reissueTicket: receiver.reissueTicket,
-    handle: receiver.handle,
+    respond: receiver.respond,
     readFacts: readWarm,
     recover: async () => {
       await receiver.recover();

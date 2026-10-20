@@ -18,8 +18,8 @@ test('#waitForOutcome reports hung for a promise still pending at its deadline',
 
   const outcome = await waitForOutcome(new Promise(() => {}), 1000, {
     now: () => clock.nowMs,
-    wait: (ms) => {
-      clock.nowMs += ms;
+    wait: (durationMs) => {
+      clock.nowMs += durationMs;
 
       return Promise.resolve();
     },

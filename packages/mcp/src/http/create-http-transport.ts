@@ -38,7 +38,7 @@ export interface HttpTransportOptions extends ImpServerOptions {
 }
 
 export interface HttpTransport {
-  readonly handle: (request: Request) => Promise<Response>;
+  readonly respond: (request: Request) => Promise<Response>;
 
   // ends every session and stops what their calls run
   readonly close: () => Promise<void>;
@@ -308,7 +308,7 @@ export function createHttpTransport(options: Readonly<HttpTransportOptions>): Ht
   };
 
   return {
-    handle: async (request) => {
+    respond: async (request) => {
       if (options.isCrossOrigin(request)) {
         return buildText(403, 'a page on another origin may not call MCP');
       }
@@ -345,13 +345,6 @@ function waitForMicrotasks(): Promise<void> {
   });
 }
 
-function buildRpcError(status: number, code: number, message: string): Response {
-  return Response.json(
-    { jsonrpc: '2.0', id: null, error: { code, message } },
-    { status, headers: { 'content-type': 'application/json' } },
-  );
-}
-
 function buildText(
   status: number,
   text: string,
@@ -361,4 +354,11 @@ function buildText(
     status,
     headers: { 'content-type': 'text/plain', ...headers },
   });
+}
+
+function buildRpcError(status: number, code: number, message: string): Response {
+  return Response.json(
+    { jsonrpc: '2.0', id: null, error: { code, message } },
+    { status, headers: { 'content-type': 'application/json' } },
+  );
 }

@@ -7,7 +7,7 @@ import { HOST_B, readMoveHosts } from '../lib/move-hosts';
 import { listLeasesOn, sendHostRpc } from '../lib/move-steps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // A stop move and the leases on its imp, between A and B on the harness's
 // move network (lib/move-hosts.ts).
@@ -21,9 +21,9 @@ async function setupTest() {
   const hosts = readMoveHosts({ tailnet: false });
 
   const client = await createInstanceClient();
-  const clientB = await createInstanceClient(hosts.b);
+  const clientB = await createInstanceClient(hosts.hostB);
 
-  return { prefix: readSuitePrefix('moves'), stack, hosts, client, clientB };
+  return { prefix: getSuitePrefix('moves'), stack, hosts, client, clientB };
 }
 
 test('it ends the leases a client took on a stop move, and brings the hold over with its time left', async () => {
@@ -37,7 +37,7 @@ test('it ends the leases a client took on a stop move, and brings the hold over 
 
   await waitForExec(leased);
 
-  const acquired = await sendHostRpc(ctx.hosts.a, 'leases/acquire', {
+  const acquired = await sendHostRpc(ctx.hosts.hostA, 'leases/acquire', {
     name: leased,
     label: 'job',
     ttlSeconds: 600,
@@ -46,7 +46,7 @@ test('it ends the leases a client took on a stop move, and brings the hold over 
   await runImp('hold', leased, '30m');
 
   // the source's own route refuses the move while a client's lease stands
-  const refused = await sendHostRpc(ctx.hosts.a, 'moves/prepare', {
+  const refused = await sendHostRpc(ctx.hosts.hostA, 'moves/prepare', {
     name: leased,
     stop: true,
     targetStorage: 'xfs',
@@ -64,7 +64,7 @@ test('it ends the leases a client took on a stop move, and brings the hold over 
 
   const after = Date.now();
 
-  const leases = await listLeasesOn(ctx.hosts.b, leased);
+  const leases = await listLeasesOn(ctx.hosts.hostB, leased);
 
   expect(out).toContain(`${leased}: moved to ${HOST_B}`);
 
@@ -79,9 +79,9 @@ test('it ends the leases a client took on a stop move, and brings the hold over 
   expect(until).toBeLessThanOrEqual(after + 30 * 60_000);
 
   // B's root is the hold's owner: its `hold 0` releases it
-  await runImpWith({ target: ctx.hosts.b }, 'hold', leased, '0');
+  await runImpWith({ target: ctx.hosts.hostB }, 'hold', leased, '0');
 
-  const released = await listLeasesOn(ctx.hosts.b, leased);
+  const released = await listLeasesOn(ctx.hosts.hostB, leased);
 
   expect(released).toStrictEqual([]);
 });

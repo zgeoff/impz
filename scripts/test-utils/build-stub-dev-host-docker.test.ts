@@ -6,20 +6,20 @@ import { buildStubDevHostDocker } from './build-stub-dev-host-docker';
 import { createStubBin } from './create-stub-bin';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-dev-host-docker-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-dev-host-docker-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it finds the host image when it has one', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: false }),
   );
@@ -35,7 +35,7 @@ test('it fails the inspect of the host image when it has none', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: false, hasSocket: false }),
   );
@@ -51,7 +51,7 @@ test("it prints the host image's id", () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: false }),
   );
@@ -67,7 +67,7 @@ test('it reports a running container as running', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
       containers: { 'imp-dev': true, 'imp-dev-docker-proxy': false },
@@ -87,7 +87,7 @@ test('it reports a stopped container as not running', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
       containers: { 'imp-dev': true, 'imp-dev-docker-proxy': false },
@@ -108,7 +108,7 @@ test('it fails the inspect of a container it does not know, as no such object', 
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: { 'imp-dev': true }, hasImage: true, hasSocket: false }),
   );
@@ -128,12 +128,12 @@ test("it writes the proxy's compiled binary into the dir mounted on /out", () =>
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: false }),
   );
 
-  mkdirSync(join(ctx.dir, 'data dir'));
+  mkdirSync(join(ctx.directoryPath, 'data dir'));
 
   Bun.spawnSync(
     [
@@ -141,7 +141,7 @@ test("it writes the proxy's compiled binary into the dir mounted on /out", () =>
       'run',
       '--rm',
       '-v',
-      `${join(ctx.dir, 'data dir')}:/out`,
+      `${join(ctx.directoryPath, 'data dir')}:/out`,
       'imp-host:dev',
       'bun',
       'build',
@@ -153,14 +153,14 @@ test("it writes the proxy's compiled binary into the dir mounted on /out", () =>
     { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
   );
 
-  expect(existsSync(join(ctx.dir, 'data dir', 'imp-docker-proxy.new'))).toBe(true);
+  expect(existsSync(join(ctx.directoryPath, 'data dir', 'imp-docker-proxy.new'))).toBe(true);
 });
 
 test("it starts a detached container and prints the container's id", () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: false }),
   );
@@ -179,7 +179,7 @@ test('it removes a container', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: false }),
   );
@@ -195,7 +195,7 @@ test("it finds the proxy's socket when it has one", () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: true }),
   );
@@ -212,7 +212,7 @@ test("it fails the test of the proxy's socket when it has none", () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: false }),
   );
@@ -229,7 +229,7 @@ test("it prints a container's log", () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
       containers: {},
@@ -250,7 +250,7 @@ test('it prints no log for a container without one', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: false }),
   );
@@ -269,7 +269,7 @@ test("it prints impd's pids for pgrep in the container", () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
       containers: {},
@@ -294,7 +294,7 @@ test('it fails pgrep with no output when impd has no pids', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: true }),
   );
@@ -314,7 +314,7 @@ test('it takes the SIGHUP to impd', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: true, impdPids: [4242] }),
   );
@@ -330,7 +330,7 @@ test('it fails kill -0 of impd once impd has exited, by default', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: true, impdPids: [4242] }),
   );
@@ -346,7 +346,7 @@ test('it passes kill -0 of an impd that does not exit', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
       containers: {},
@@ -368,7 +368,7 @@ test('it fails a call that up and restart do not make, naming it', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: true }),
   );

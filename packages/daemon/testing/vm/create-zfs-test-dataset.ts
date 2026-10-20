@@ -15,14 +15,6 @@ export interface ZfsTestDataset {
   readonly dataDir: string;
 }
 
-async function runOrThrow(run: CommandRunner, argv: readonly string[]): Promise<void> {
-  const result = await run(argv);
-
-  if (result.exitCode !== 0) {
-    throw buildExitError(argv, { exitCode: result.exitCode, stderr: result.stderr });
-  }
-}
-
 // A fresh dataset of this run under `parent`, legacy-mounted on a new dir
 // under `parentDir`, as host/scripts/setup-storage.sh mounts impd's root.
 // Each release goes into `stack` right after its acquisition.
@@ -57,4 +49,12 @@ export async function createZfsTestDataset(
   stack.defer(() => runOrThrow(run, ['umount', '-R', dataDir]));
 
   return { root, dataDir };
+}
+
+async function runOrThrow(run: CommandRunner, argv: readonly string[]): Promise<void> {
+  const result = await run(argv);
+
+  if (result.exitCode !== 0) {
+    throw buildExitError(argv, { exitCode: result.exitCode, stderr: result.stderr });
+  }
 }

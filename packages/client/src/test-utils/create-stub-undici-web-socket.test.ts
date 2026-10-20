@@ -6,7 +6,7 @@ test('it fires error and no close listener for a refused upgrade', async () => {
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: () => new Response('unauthorized', { status: 401 }),
+    routes: { '/*': () => new Response('unauthorized', { status: 401 }) },
     websocket: { message: () => {} },
   });
 
@@ -36,8 +36,10 @@ test('it passes open and message listeners through for an accepted upgrade', asy
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: (request, bunServer) =>
-      bunServer.upgrade(request) ? undefined : new Response('not a socket', { status: 400 }),
+    routes: {
+      '/*': (request: Request, bunServer: Bun.Server<undefined>) =>
+        bunServer.upgrade(request) ? undefined : new Response('not a socket', { status: 400 }),
+    },
     websocket: {
       open: (ws) => {
         ws.send('hello');
@@ -69,8 +71,10 @@ test('it closes the socket when the test ends', async () => {
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: (request, bunServer) =>
-      bunServer.upgrade(request) ? undefined : new Response('not a socket', { status: 400 }),
+    routes: {
+      '/*': (request: Request, bunServer: Bun.Server<undefined>) =>
+        bunServer.upgrade(request) ? undefined : new Response('not a socket', { status: 400 }),
+    },
     websocket: { message: () => {} },
   });
 

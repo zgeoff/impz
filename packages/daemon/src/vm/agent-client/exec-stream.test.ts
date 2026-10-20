@@ -9,13 +9,13 @@ import { openAttachStream, openExecStream, openTapStream } from './exec-stream';
 import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from './frame-codec';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-vsock-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-vsock-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { vsockPath: join(dir, 'vsock.sock') };
+  return { vsockPath: join(directory, 'vsock.sock') };
 }
 
 test('#openExecStream asks the agent for an exec', async () => {

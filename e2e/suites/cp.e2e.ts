@@ -25,7 +25,7 @@ import { waitForExec } from '../lib/imps';
 import { REPO_ROOT, runInContainer } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // `impz cp` (docs/guides/cp.md) on the e2e-git image, whose USER is `dev`, not
 // root: what a copy makes belongs to the owner of the directory it lands in
@@ -44,7 +44,7 @@ async function setupTest() {
 
   stack.defer(() => rm(local, { recursive: true, force: true }));
 
-  return { prefix: readSuitePrefix('cp'), stack, client, local };
+  return { prefix: getSuitePrefix('cp'), stack, client, local };
 }
 
 test('it copies a directory into a root-owned path as root with its modes, and back out whole with its modes and symlink', async () => {

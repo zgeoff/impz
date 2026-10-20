@@ -84,7 +84,7 @@ type PartIdentity = Pick<
 
 // The parts of the host a VM predates; it picks them up at its next cold
 // boot. `ipv6`: the host gives imps an IPv6 the VM did not boot with.
-export function findOutdatedParts(
+export function collectOutdatedParts(
   vm: Readonly<PartIdentity>,
   host: Readonly<PartIdentity>,
 ): OutdatedPart[] {

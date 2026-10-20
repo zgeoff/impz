@@ -2,20 +2,20 @@ import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
 import { formatKeyFingerprint, parseAuthorizedKeys } from '../../imps/ssh/authorized-keys';
-import { createEd25519Key } from './host-key';
+import { generateEd25519Key } from './host-key';
 import { createLoginKeys } from './login-keys';
 
 test('it logs a file key in as its own principal, by fingerprint, shown by its comment', () => {
-  const [key] = parseAuthorizedKeys(`${createEd25519Key().public} me@desk`).keys;
+  const [key] = parseAuthorizedKeys(`${generateEd25519Key().public} me@desk`).keys;
 
   invariant(key);
 
   const keys = createLoginKeys({
     findBound: () => null,
-    file: { findKey: () => key, isListed: () => true },
+    file: { readKey: () => key, probeListed: () => true },
   });
 
-  expect(keys.findKey(key.blob)).toStrictEqual({
+  expect(keys.readLoginKey(key.blob)).toStrictEqual({
     key,
     keyId: null,
     caller: {
@@ -35,16 +35,16 @@ test('it logs a file key in as its own principal, by fingerprint, shown by its c
 });
 
 test('it shows a file key with no comment by its type', () => {
-  const [key] = parseAuthorizedKeys(createEd25519Key().public).keys;
+  const [key] = parseAuthorizedKeys(generateEd25519Key().public).keys;
 
   invariant(key);
 
   const keys = createLoginKeys({
     findBound: () => null,
-    file: { findKey: () => key, isListed: () => true },
+    file: { readKey: () => key, probeListed: () => true },
   });
 
-  expect(keys.findKey(key.blob)).toStrictEqual({
+  expect(keys.readLoginKey(key.blob)).toStrictEqual({
     key,
     keyId: null,
     caller: {
@@ -65,30 +65,30 @@ test('it shows a file key with no comment by its type', () => {
 
 // the narrower grant holds even if someone adds the key to the file later
 test('it logs a key bound to a token in as the token, even when the file lists it', () => {
-  const [key] = parseAuthorizedKeys(createEd25519Key().public).keys;
+  const [key] = parseAuthorizedKeys(generateEd25519Key().public).keys;
   const caller = buildMockCaller({ kind: 'ssh', name: 'ci' });
 
   invariant(key);
 
   const keys = createLoginKeys({
     findBound: () => ({ key, keyId: 'key-1', caller }),
-    file: { findKey: () => key, isListed: () => true },
+    file: { readKey: () => key, probeListed: () => true },
   });
 
-  expect(keys.findKey(key.blob)).toStrictEqual({ key, keyId: 'key-1', caller });
+  expect(keys.readLoginKey(key.blob)).toStrictEqual({ key, keyId: 'key-1', caller });
 });
 
 test('it finds no key that is neither bound nor in the file', () => {
   const keys = createLoginKeys({
     findBound: () => null,
-    file: { findKey: () => null, isListed: () => false },
+    file: { readKey: () => null, probeListed: () => false },
   });
 
-  expect(keys.findKey(Buffer.from('a key'))).toBeNull();
+  expect(keys.readLoginKey(Buffer.from('a key'))).toBeNull();
 });
 
 test('it finds no file key when authorized_keys is off', () => {
   const keys = createLoginKeys({ findBound: () => null, file: null });
 
-  expect(keys.findKey(Buffer.from('a key'))).toBeNull();
+  expect(keys.readLoginKey(Buffer.from('a key'))).toBeNull();
 });

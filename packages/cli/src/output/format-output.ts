@@ -179,32 +179,6 @@ export function formatSessionLogs(logs: readonly SessionLog[]): string {
   );
 }
 
-function formatLogState(log: SessionLog): string {
-  if (log.stopped !== undefined) {
-    return `${log.state} (stopped: ${log.stopped})`;
-  }
-
-  return log.complete ? `${log.state} (complete)` : log.state;
-}
-
-function formatLogExit(log: SessionLog): string {
-  if (log.exitCode === undefined) {
-    return '-';
-  }
-
-  return log.exitCode === null ? 'signal' : String(log.exitCode);
-}
-
-function formatSessionState(session: Readonly<Session>): string {
-  if (session.exit === undefined) {
-    return session.state;
-  }
-
-  const how = session.exit.signal ?? `code ${String(session.exit.code)}`;
-
-  return `exited (${how})`;
-}
-
 export function formatServices(services: readonly Readonly<Service>[]): string {
   return formatTable(
     ['NAME', 'STATE', 'PID', 'RESTARTS', 'LAST EXIT', 'COMMAND'],
@@ -217,14 +191,6 @@ export function formatServices(services: readonly Readonly<Service>[]): string {
       service.argv.join(' '),
     ]),
   );
-}
-
-function formatLastExit(exit: Service['lastExit']): string {
-  if (exit === null) {
-    return '-';
-  }
-
-  return exit.signal ?? `code ${String(exit.code)}`;
 }
 
 export function formatImages(images: readonly Image[]): string {
@@ -270,26 +236,6 @@ export function formatSecrets(secrets: readonly Secret[]): string {
       secret.imps.length === 0 ? '-' : secret.imps.join(','),
     ]),
   );
-}
-
-// `-` for a kind that never expires; for oauth, whether its access token is
-// there and until when
-function formatSecretState(secret: Readonly<Secret>): string {
-  const oauth = secret.oauth;
-
-  if (oauth === undefined) {
-    return '-';
-  }
-
-  if (oauth.status === 'ready') {
-    return oauth.expiresAt === null ? 'ready' : `ready until ${oauth.expiresAt.toISOString()}`;
-  }
-
-  if (oauth.status === 'pending') {
-    return oauth.error === null ? 'pending' : `pending (${oauth.error})`;
-  }
-
-  return `needs_login (${oauth.error ?? 'unknown'})`;
 }
 
 export function formatNetworks(networks: readonly Network[]): string {
@@ -376,16 +322,6 @@ export function formatIdentity(identity: WithOptionalGrantable<Identity>): strin
   const images = prefix === null ? '' : `; may add images from ${prefix}`;
 
   return `${identity.kind} ${identity.name}: ${identity.scope} on ${imps}${grants}${images}`;
-}
-
-// the secrets it may grant, comma-separated, or `none`
-function formatGrantable(
-  entry: Readonly<{ grantable?: readonly string[] | undefined }>,
-  none: string,
-): string {
-  const names = entry.grantable ?? [];
-
-  return names.length === 0 ? none : names.join(',');
 }
 
 export function formatAudit(entries: readonly AuditEntry[]): string {
@@ -484,15 +420,6 @@ export function formatGc(gc: Readonly<StorageGc>): string {
   return lines.join('\n');
 }
 
-// its snapshots, or for kept secret values how many files
-function formatOrphanContents(orphan: Readonly<OrphanStorage>): string {
-  if (orphan.files !== undefined) {
-    return `${String(orphan.files.length)} files`;
-  }
-
-  return orphan.snapshots.length === 0 ? '-' : orphan.snapshots.join(',');
-}
-
 export function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
@@ -504,4 +431,77 @@ export function formatOutput<T>(
   formatText: (value: T) => string,
 ): string {
   return json === true ? formatJson(value) : formatText(value);
+}
+
+function formatLogState(log: SessionLog): string {
+  if (log.stopped !== undefined) {
+    return `${log.state} (stopped: ${log.stopped})`;
+  }
+
+  return log.complete ? `${log.state} (complete)` : log.state;
+}
+
+function formatLogExit(log: SessionLog): string {
+  if (log.exitCode === undefined) {
+    return '-';
+  }
+
+  return log.exitCode === null ? 'signal' : String(log.exitCode);
+}
+
+function formatSessionState(session: Readonly<Session>): string {
+  if (session.exit === undefined) {
+    return session.state;
+  }
+
+  const how = session.exit.signal ?? `code ${String(session.exit.code)}`;
+
+  return `exited (${how})`;
+}
+
+function formatLastExit(exit: Service['lastExit']): string {
+  if (exit === null) {
+    return '-';
+  }
+
+  return exit.signal ?? `code ${String(exit.code)}`;
+}
+
+// `-` for a kind that never expires; for oauth, whether its access token is
+// there and until when
+function formatSecretState(secret: Readonly<Secret>): string {
+  const oauth = secret.oauth;
+
+  if (oauth === undefined) {
+    return '-';
+  }
+
+  if (oauth.status === 'ready') {
+    return oauth.expiresAt === null ? 'ready' : `ready until ${oauth.expiresAt.toISOString()}`;
+  }
+
+  if (oauth.status === 'pending') {
+    return oauth.error === null ? 'pending' : `pending (${oauth.error})`;
+  }
+
+  return `needs_login (${oauth.error ?? 'unknown'})`;
+}
+
+// the secrets it may grant, comma-separated, or `none`
+function formatGrantable(
+  entry: Readonly<{ grantable?: readonly string[] | undefined }>,
+  none: string,
+): string {
+  const names = entry.grantable ?? [];
+
+  return names.length === 0 ? none : names.join(',');
+}
+
+// its snapshots, or for kept secret values how many files
+function formatOrphanContents(orphan: Readonly<OrphanStorage>): string {
+  if (orphan.files !== undefined) {
+    return `${String(orphan.files.length)} files`;
+  }
+
+  return orphan.snapshots.length === 0 ? '-' : orphan.snapshots.join(',');
 }

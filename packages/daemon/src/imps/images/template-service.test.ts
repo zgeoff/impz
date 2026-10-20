@@ -7,8 +7,8 @@ import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
-import { createImage, findImageByName } from '../../platform/db/images';
-import { createImp, findImpByName } from '../../platform/db/imps';
+import { createImage, readImageByName } from '../../platform/db/images';
+import { createImp, readImpByName } from '../../platform/db/imps';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 import { BUILDER_IMAGE } from './builder-imps';
 
@@ -274,7 +274,7 @@ test('it clears the pending reset once the first boot reports it done', async ()
   await ctx.impd.templates.createTemplate('dev', 'tools');
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools' });
 
-  const copy = await findImpByName(ctx.db, 'copy');
+  const copy = await readImpByName(ctx.db, 'copy');
 
   expect(copy?.isIdentityResetPending).toBeFalse();
 });
@@ -329,7 +329,7 @@ test('it marks a template copy made stopped as owing the reset', async () => {
   await ctx.impd.templates.createTemplate('dev', 'tools');
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools', start: false });
 
-  const stopped = await findImpByName(ctx.db, 'copy');
+  const stopped = await readImpByName(ctx.db, 'copy');
 
   expect(stopped?.isIdentityResetPending).toBeTrue();
 });
@@ -370,7 +370,7 @@ test('it moves a template made again to a new disk under the same image and drop
 
   expect(second.id).toBe(first.id);
   expect(second.digest).not.toBe(first.digest);
-  expect(existsSync(buildImagePaths(ctx.dataDir, first.digest).dir)).toBeFalse();
+  expect(existsSync(buildImagePaths(ctx.dataDir, first.digest).directory)).toBeFalse();
 });
 
 test('it gives imps made after a template is made again its new disk, and older imps keep theirs', async () => {
@@ -514,7 +514,7 @@ test('it removes a template no imp uses, and its disk', async () => {
 
   await ctx.impd.images.removeImage('tools');
 
-  expect(existsSync(buildImagePaths(ctx.dataDir, image.digest).dir)).toBeFalse();
+  expect(existsSync(buildImagePaths(ctx.dataDir, image.digest).directory)).toBeFalse();
 });
 
 test('it resets a fork of a template copy that never booted', async () => {
@@ -576,7 +576,7 @@ test('it keeps the reset pending when the boot reports it failed', async () => {
 
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools' });
 
-  const copy = await findImpByName(ctx.db, 'copy');
+  const copy = await readImpByName(ctx.db, 'copy');
 
   expect(copy?.isIdentityResetPending).toBeTrue();
 });
@@ -602,7 +602,7 @@ test('it keeps the reset pending when a boot reports nothing of it', async () =>
 
   await ctx.impd.imps.startImp('copy');
 
-  const copy = await findImpByName(ctx.db, 'copy');
+  const copy = await readImpByName(ctx.db, 'copy');
 
   expect(copy?.isIdentityResetPending).toBeTrue();
 });
@@ -628,7 +628,7 @@ test('it clears a pending reset once a later boot reports it done', async () => 
 
   await ctx.impd.imps.startImp('copy');
 
-  const copy = await findImpByName(ctx.db, 'copy');
+  const copy = await readImpByName(ctx.db, 'copy');
 
   expect(copy?.isIdentityResetPending).toBeFalse();
 });
@@ -675,7 +675,7 @@ test('it leaves no template image when the clone fails', async () => {
 
   await creating.catch(() => {});
 
-  const tools = await findImageByName(ctx.db, 'tools');
+  const tools = await readImageByName(ctx.db, 'tools');
 
   expect(creating).rejects.toMatchObject({ code: 'ENOENT' });
   expect(tools).toBeUndefined();

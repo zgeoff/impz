@@ -1,8 +1,8 @@
 import { ORPCError } from '@orpc/server';
 import { listColdBoots } from '../../platform/db/cold-boots';
-import { findImpById, findImpByName, listImps, updateImpActivity } from '../../platform/db/imps';
+import { listImps, readImpById, readImpByName, updateImpActivity } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import {
   buildBuilderError,
   buildInvalidStateError,
@@ -30,7 +30,7 @@ import type { ActivityTracker, ConnectionKind } from './activity-tracker';
 import type { ImpClock, ImpGuest, ImpHost, ImpMemory, ImpVms } from './imp-context';
 import type { ImpLock, LockedImp } from './imp-lock';
 import type { ImpVmOps } from './imp-vm-ops';
-import { createLockFreeSleep } from './lock-free-sleep';
+import { makeLockFreeSleep } from './lock-free-sleep';
 import type { LockFreeSleep, SleepOutcome, SleepPolicy } from './lock-free-sleep';
 import { makeReconcileImps } from './make-reconcile-imps';
 import type { YoungGuestWait } from './make-sleep-imp-vm';
@@ -95,7 +95,7 @@ export interface ImpRuntime {
   // for a watcher that must not wake the imp or keep it awake: the imp as
   // it is, and its agent's vsock socket when it runs; `feature` as for
   // openExec, checked only then
-  readonly findAgent: (
+  readonly readAgent: (
     name: string,
     feature?: AgentFeature,
   ) => Promise<{ readonly imp: ImpRecord; readonly vsockPath: string | null }>;
@@ -231,7 +231,7 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
 
     return lock.withImp(name, async (imp) => {
       if (imp.state !== 'running') {
-        throw await buildNotAwakeError(context, imp);
+        throw await readNotAwakeError(context, imp);
       }
 
       onFound?.(imp);
@@ -304,15 +304,15 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
     }
 
     // the wait asks only once the guest proved young
-    const isWanted = async (): Promise<boolean> => {
+    const probeWanted = async (): Promise<boolean> => {
       youngGuestWaits.add(id);
 
-      const fresh = await findImpById(context.db, id);
+      const fresh = await readImpById(context.db, id);
 
       return fresh !== undefined && isSleepAllowed(fresh, policy);
     };
 
-    return { wait: true, isWanted };
+    return { wait: true, isWanted: probeWanted };
   };
 
   // the caller holds the lock; a failure leaves the imp as sleepImpVm left it
@@ -337,7 +337,7 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
         return 'diskFull';
       }
 
-      context.log(`impd: ${imp.name}: could not sleep: ${readErrorMessage(error)}`);
+      context.log(`impd: ${imp.name}: could not sleep: ${getErrorMessage(error)}`);
 
       return 'failed';
     } finally {
@@ -412,7 +412,7 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
         return open(paths.vsockSocket);
       }),
 
-    findAgent: async (name, feature) => {
+    readAgent: async (name, feature) => {
       const imp = await lock.findImp(name);
 
       if (imp.kind === 'builder') {
@@ -449,7 +449,7 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
     },
 
     recordActivity: async (name) => {
-      const imp = await findImpByName(context.db, name);
+      const imp = await readImpByName(context.db, name);
 
       if (imp !== undefined) {
         await updateImpActivity(context.db, imp.id, new Date());
@@ -458,7 +458,7 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
 
     requireRunning,
 
-    trySleepImp: createLockFreeSleep<LockedImp | undefined>(
+    trySleepImp: makeLockFreeSleep<LockedImp | undefined>(
       lock.tryWithImpId,
       (imp, reason, policy) =>
         imp !== undefined && isSleepAllowed(imp, policy)
@@ -523,7 +523,7 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
 
 // INVALID_STATE for an attach that must not wake the imp; an imp still
 // being created has no boots to name
-async function buildNotAwakeError(context: ImpHost, imp: ImpRecord): Promise<Error> {
+async function readNotAwakeError(context: ImpHost, imp: ImpRecord): Promise<Error> {
   const error = buildInvalidStateError(imp.state, ['running'], 'attach without a wake to');
 
   if (imp.state === 'creating') {

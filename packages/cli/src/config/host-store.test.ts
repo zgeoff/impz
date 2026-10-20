@@ -16,13 +16,13 @@ import { UsageError } from '../cli/errors';
 import { checkHostName, readHostConfig, resolveConfigPath, writeHostConfig } from './host-store';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-hosts-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-hosts-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  const env = { XDG_CONFIG_HOME: dir };
+  const env = { XDG_CONFIG_HOME: directory };
 
   return { env, path: resolveConfigPath(env) };
 }

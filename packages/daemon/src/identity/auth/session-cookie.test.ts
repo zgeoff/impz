@@ -7,7 +7,7 @@ import {
   buildSessionValue,
   readSession,
   readSessionCookies,
-  removeSessionCookie,
+  stripSessionCookie,
 } from './session-cookie';
 
 test('#buildSessionValue signs the version, the token and the expiry', () => {
@@ -143,8 +143,8 @@ test.each([
   ['a=1; __Host-imp_session=v1.2.abc', 'a=1'],
   ['imp_session=v1.2.abc; __Host-imp_session=v1.2.abc', null],
   ['imp_session_other=1', 'imp_session_other=1'],
-])('#removeSessionCookie turns %p into %p', (header, kept) => {
-  expect(removeSessionCookie(header)).toBe(kept);
+])('#stripSessionCookie turns %p into %p', (header, kept) => {
+  expect(stripSessionCookie(header)).toBe(kept);
 });
 
 test('#buildSessionCookie sets an http-only strict cookie over plain HTTP', () => {

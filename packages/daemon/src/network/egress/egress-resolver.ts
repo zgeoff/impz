@@ -3,7 +3,7 @@ import type { Answer } from 'dns-packet';
 import { findGuestSlot } from '../../host-net/net/addressing';
 import type { Subnet } from '../../host-net/net/addressing';
 import { createCountedLimit } from '../../platform/process/counted-limit';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { EDE_PROHIBITED, RCODE, buildEmptyReply, buildLocalReply, readQuery } from './dns-messages';
 import type { DnsForward } from './dns-upstream';
 import { normalizeName } from './egress-rules';
@@ -134,7 +134,7 @@ export function createQueryHandler(deps: ResolverDeps): QueryHandler {
 
       return await writeAnswers(deps, { slot, name, type: query.type }, reply);
     } catch (error) {
-      deps.log(`impd: egress: ${name} for slot ${String(slot)}: ${readErrorMessage(error)}`);
+      deps.log(`impd: egress: ${name} for slot ${String(slot)}: ${getErrorMessage(error)}`);
 
       return buildEmptyReply(message, RCODE.servFail);
     }
@@ -258,13 +258,13 @@ export function createSocketErrorReport(
 
   return (...args) => {
     const error = args.at(-1);
-    const write = checkRoutineSocketError(error) ? logRoutine : logOther;
+    const write = isRoutineSocketError(error) ? logRoutine : logOther;
 
-    write(`impd: egress: resolver socket: ${readErrorMessage(error)}`);
+    write(`impd: egress: resolver socket: ${getErrorMessage(error)}`);
   };
 }
 
-function checkRoutineSocketError(error: unknown): boolean {
+function isRoutineSocketError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) {
     return false;
   }

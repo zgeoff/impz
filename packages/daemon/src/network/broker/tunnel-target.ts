@@ -2,8 +2,8 @@ import { lookup } from 'node:dns/promises';
 import { networkInterfaces } from 'node:os';
 import { parseIpv4 } from '../../host-net/net/addressing';
 import { formatIpv6, parseIpv6 } from '../../host-net/net/addressing6';
-import { readMappedIpv4 } from '../../host-net/net/ranges6';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { findMappedIpv4 } from '../../host-net/net/ranges6';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 
 // Where a plain tunnel may go. It starts in the host container, past the
 // `INPUT -i imp+ DROP` rule: unchecked, a guest could reach impd's API, the
@@ -54,7 +54,7 @@ export function isRefusedAddress(
 ): boolean {
   const hostKeys = new Set([...hostAddresses].map((host) => formatAddressKey(host)));
 
-  const mapped = readMappedIpv4(address);
+  const mapped = findMappedIpv4(address);
 
   if (hostKeys.has(formatAddressKey(mapped ?? address))) {
     return true;
@@ -116,7 +116,7 @@ export async function resolveTunnelTarget(
 
   const answers = await resolve(host);
 
-  const addresses = answers.map((address) => readMappedIpv4(address) ?? address);
+  const addresses = answers.map((address) => findMappedIpv4(address) ?? address);
 
   const [first] = [
     ...addresses.filter((address) => parseIpv4(address) !== null),
@@ -154,7 +154,7 @@ export async function requireUplinkRoute(
   try {
     dev = await readRouteDevice(address);
   } catch (error) {
-    throw new TunnelRefusedError(`${host}: no route to ${address}: ${readErrorMessage(error)}`, {
+    throw new TunnelRefusedError(`${host}: no route to ${address}: ${getErrorMessage(error)}`, {
       cause: error,
     });
   }

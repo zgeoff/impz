@@ -1,9 +1,9 @@
 // "45s", "12m", "3h 20m"
-export function formatDuration(ms: number): string {
-  const minutes = Math.floor(ms / 60_000);
+export function formatDuration(durationMs: number): string {
+  const minutes = Math.floor(durationMs / 60_000);
 
   if (minutes < 1) {
-    return `${String(Math.floor(ms / 1000))}s`;
+    return `${String(Math.floor(durationMs / 1000))}s`;
   }
 
   if (minutes < 60) {

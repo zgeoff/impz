@@ -1,6 +1,6 @@
 import { closeSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getPidfdLibc } from '../../platform/process/libc';
+import { readPidfdLibc } from '../../platform/process/libc';
 import { stopPid } from '../../platform/process/proc';
 
 // What /proc says about who runs a process: its uids and its cgroup. A jailed
@@ -45,7 +45,7 @@ export function readProcessCgroup(pid: number, procRoot = '/proc'): string | nul
 }
 
 // whether `pid` runs as `uid`, by its real or its effective uid
-export function isProcessOfUid(pid: number, uid: number): boolean {
+export function probeProcessOfUid(pid: number, uid: number): boolean {
   const uids = readProcessUids(pid);
 
   return uids !== null && (uids.real === uid || uids.effective === uid);
@@ -60,7 +60,7 @@ interface Pidfd {
 
 // glibc's pidfd wrappers (2.36+); null where they or the syscalls are missing
 function loadPidfd(): Pidfd | null {
-  const libc = getPidfdLibc();
+  const libc = readPidfdLibc();
 
   if (libc === null) {
     return null;
@@ -96,7 +96,7 @@ export function stopProcessOfUid(pid: number, uid: number): void {
   pidfd ??= loadPidfd();
 
   if (pidfd === null) {
-    if (isProcessOfUid(pid, uid)) {
+    if (probeProcessOfUid(pid, uid)) {
       stopPid(pid);
     }
 
@@ -111,7 +111,7 @@ export function stopProcessOfUid(pid: number, uid: number): void {
   }
 
   try {
-    if (isProcessOfUid(pid, uid)) {
+    if (probeProcessOfUid(pid, uid)) {
       pidfd.sendSignal(fd, SIGKILL);
     }
   } finally {

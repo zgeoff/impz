@@ -3,7 +3,7 @@ import type { AcceptConnection, PseudoTtyInfo, ServerChannel, Session } from 'ss
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import type { AgentExecRequest, ExecStream } from '../../vm/agent-client/exec-stream';
 import { SYSTEM_AGENT_PATH } from '../exec/exec-tools';
-import { findSignalName, findSignalNumber } from '../exec/signal-names';
+import { findSignalNumber, getSignalName } from '../exec/signal-names';
 import { formatFailure, startChannelInput, writeToChannel } from './channel-io';
 import type { SshConnectionContext } from './ssh-connection-context';
 
@@ -13,24 +13,6 @@ const SFTP_ARGV = [SYSTEM_AGENT_PATH, 'sftp'];
 // the env a client may set with SendEnv/SetEnv; everything else is refused,
 // as OpenSSH's default AcceptEnv does
 const ACCEPTED_ENV = /^(?:LANG|LC_[A-Z_]+)$/u;
-
-// the signals an SSH exit-signal may name (RFC 4254 6.10); a process that
-// another signal ended reports 128 + its number instead
-const EXIT_SIGNALS = new Set([
-  'ABRT',
-  'ALRM',
-  'FPE',
-  'HUP',
-  'ILL',
-  'INT',
-  'KILL',
-  'PIPE',
-  'QUIT',
-  'SEGV',
-  'TERM',
-  'USR1',
-  'USR2',
-]);
 
 // ssh2 passes no accept or reject for a request that wants no reply; OpenSSH
 // sends env, window-change and signal that way
@@ -160,7 +142,7 @@ export function handleSession(session: Session, context: SshConnectionContext): 
     try {
       await context.awake;
 
-      const agentSocket = program.allowsTty ? await findAgentSocket(channel, newline) : null;
+      const agentSocket = program.allowsTty ? await readAgentSocket(channel, newline) : null;
 
       request = buildRequest(program, tty, agentSocket);
 
@@ -187,7 +169,7 @@ export function handleSession(session: Session, context: SshConnectionContext): 
     state.stream = stream;
 
     // the client may have resized while the imp woke
-    const size = tty ? readSize() : null;
+    const size = tty ? findSize() : null;
 
     if (size !== null && (size.cols !== request.cols || size.rows !== request.rows)) {
       stream.resize(size.cols, size.rows);
@@ -210,19 +192,19 @@ export function handleSession(session: Session, context: SshConnectionContext): 
 
   // the pty's size, unless the client sent none (OpenSSH sends 0x0 when its
   // own stdin is not a terminal); the agent then uses 80x24
-  const readSize = (): TerminalSize | null =>
+  const findSize = (): TerminalSize | null =>
     state.pty !== null && isTerminalSize(state.pty)
       ? { cols: state.pty.cols, rows: state.pty.rows }
       : null;
 
   // The forwarded agent's socket, once the connection asked for one. A
   // command still runs without it, with the reason on stderr.
-  const findAgentSocket = async (
+  const readAgentSocket = async (
     channel: ServerChannel,
     newline: string,
   ): Promise<string | null> => {
     try {
-      return await context.agent.findSocket();
+      return await context.agent.readSocket();
     } catch (error) {
       channel.stderr.write(`imp: no agent forwarding: ${formatFailure(error)}${newline}`);
 
@@ -247,7 +229,7 @@ export function handleSession(session: Session, context: SshConnectionContext): 
       env.push(`TERM=${state.pty.term}`);
     }
 
-    const size = tty ? readSize() : null;
+    const size = tty ? findSize() : null;
 
     return { argv: program.argv, env, tty, ...size };
   };
@@ -289,6 +271,10 @@ export function handleSession(session: Session, context: SshConnectionContext): 
   });
 }
 
+function isTerminalSize(size: TerminalSize): boolean {
+  return size.cols > 0 && size.rows > 0;
+}
+
 // Output to the client, then the exit status. A stream that ends without an
 // exit lost the agent connection (the imp went to sleep, a vsock reset); the
 // agent sent the process SIGHUP, so the client gets that.
@@ -316,12 +302,26 @@ async function sendOutput(
   channel.end();
 }
 
-function isTerminalSize(size: TerminalSize): boolean {
-  return size.cols > 0 && size.rows > 0;
-}
+// the signals an SSH exit-signal may name (RFC 4254 6.10); a process that
+// another signal ended reports 128 + its number instead
+const EXIT_SIGNALS = new Set([
+  'ABRT',
+  'ALRM',
+  'FPE',
+  'HUP',
+  'ILL',
+  'INT',
+  'KILL',
+  'PIPE',
+  'QUIT',
+  'SEGV',
+  'TERM',
+  'USR1',
+  'USR2',
+]);
 
 function sendExit(channel: ServerChannel, code: number, signal: number): void {
-  const name = signal === 0 ? null : findSignalName(signal).replace(/^SIG/u, '');
+  const name = signal === 0 ? null : getSignalName(signal).replace(/^SIG/u, '');
 
   if (name !== null && EXIT_SIGNALS.has(name)) {
     channel.exit(name, false, '');

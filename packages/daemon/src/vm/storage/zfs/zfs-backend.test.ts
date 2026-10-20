@@ -390,11 +390,11 @@ test('#createImage builds and snapshots an image in staging, then renames and mo
   await ctx.backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
 
   const before = ctx.fake.commands.length;
-  const written = { dir: '', mounted: null as string | null };
+  const written = { directory: '', mounted: null as string | null };
 
-  await ctx.backend.createImage('sha256:9f2c', (dir) => {
-    written.dir = dir;
-    written.mounted = ctx.fake.readMountedAt(dir);
+  await ctx.backend.createImage('sha256:9f2c', (directory) => {
+    written.directory = directory;
+    written.mounted = ctx.fake.readMountedAt(directory);
 
     return Promise.resolve();
   });
@@ -409,8 +409,8 @@ test('#createImage builds and snapshots an image in staging, then renames and mo
 
   expect(changes).toStrictEqual([
     `zfs create ${staged}`,
-    `mount -t zfs ${staged} ${written.dir}`,
-    `umount ${written.dir}`,
+    `mount -t zfs ${staged} ${written.directory}`,
+    `umount ${written.directory}`,
     `zfs snapshot ${staged}@base`,
     `zfs rename ${staged} tank/imp/images/9f2c`,
     `mount -t zfs tank/imp/images/9f2c ${join(ctx.dataDir, 'images', '9f2c')}`,
@@ -968,8 +968,10 @@ test('#createImageFromImp clones the live disk under hold and writes it in stagi
 
       held.push('release');
     },
-    write: (dir) => {
-      held.push(`write ${dir.startsWith(join(ctx.dataDir, 'staging')) ? 'staging' : dir}`);
+    write: (directory) => {
+      held.push(
+        `write ${directory.startsWith(join(ctx.dataDir, 'staging')) ? 'staging' : directory}`,
+      );
 
       return Promise.resolve();
     },
@@ -1829,7 +1831,7 @@ test('#openBackupTree mounts read-only clones of the copy, checkpoints and image
       join(ctx.dataDir, 'backup', 'tree', 'imps', 'a', 'disk'),
       join(ctx.dataDir, 'backup', 'tree', 'imps', 'a', 'checkpoints', 'cp-1'),
       join(ctx.dataDir, 'backup', 'tree', 'images', '9f2c'),
-    ].filter((dir) => !ctx.fake.isReadOnlyAt(dir)),
+    ].filter((directory) => !ctx.fake.isReadOnlyAt(directory)),
   ).toStrictEqual([]);
 
   expect(ctx.fake.isReadOnlyAt(join(ctx.dataDir, 'imps', 'a', 'disk'))).toBeFalse();
@@ -2076,7 +2078,7 @@ test('#removeImpDisk leaves no watchdog slot behind, since it sits on the root d
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:9f2c' });
 
   const paths = ctx.backend.resolveImpPaths('a');
-  const slot = buildWatchdogSlot(paths.dir);
+  const slot = buildWatchdogSlot(paths.directory);
 
   mkdirSync(slot.snapshotDir, { recursive: true });
   writeFileSync(slot.memFile, 'mem');
@@ -2084,11 +2086,11 @@ test('#removeImpDisk leaves no watchdog slot behind, since it sits on the root d
   // as a destroy does: the disk through the backend, then the directory
   await ctx.backend.removeImpDisk('a', []);
 
-  rmSync(paths.dir, { recursive: true });
+  rmSync(paths.directory, { recursive: true });
 
   expect(
-    [join(ctx.dataDir, 'imps', 'a', 'disk'), dirname(paths.memFile)].filter((dir) =>
-      slot.snapshotDir.startsWith(`${dir}/`),
+    [join(ctx.dataDir, 'imps', 'a', 'disk'), dirname(paths.memFile)].filter((directory) =>
+      slot.snapshotDir.startsWith(`${directory}/`),
     ),
   ).toStrictEqual([]);
 
@@ -2710,8 +2712,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -2736,8 +2738,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -2774,8 +2776,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -2813,8 +2815,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -2864,8 +2866,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -2930,8 +2932,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -2944,8 +2946,8 @@ test.skipIf(readZfsTestPool() === null)(
 
     await pool.backend.createImageFromImp('imp-0199a3b4-0000-7000-8000-000000000001', 'a', {
       hold: (clone) => clone(),
-      write: (dir) => {
-        writeFileSync(join(dir, 'config.json'), '{}');
+      write: (directory) => {
+        writeFileSync(join(directory, 'config.json'), '{}');
 
         return Promise.resolve();
       },
@@ -2988,8 +2990,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -3060,8 +3062,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -3149,8 +3151,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -3189,8 +3191,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -3246,8 +3248,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -3289,8 +3291,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -3345,8 +3347,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -3407,8 +3409,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -3451,8 +3453,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -3508,8 +3510,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -3552,8 +3554,8 @@ test.skipIf(readZfsTestPool() === null)(
     // the sweep runs while an image build writes, before the image has a row
     const swept: { dropped: readonly { kind: string; id: string }[] } = { dropped: [] };
 
-    await pool.backend.createImage('sha256:building', async (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'new image');
+    await pool.backend.createImage('sha256:building', async (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'new image');
 
       const result = await pool.backend.dropUnnamed(
         {
@@ -3607,8 +3609,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
@@ -3674,8 +3676,8 @@ test.skipIf(readZfsTestPool() === null)(
       imageDigests: new Set(['sha256:real']),
     });
 
-    await pool.backend.createImage('sha256:real', (dir) => {
-      writeFileSync(join(dir, 'rootfs.ext4'), 'image');
+    await pool.backend.createImage('sha256:real', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });

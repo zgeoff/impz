@@ -19,49 +19,6 @@ interface LoginOptions {
   readonly readToken: () => Promise<string>;
 }
 
-// Saves a host and makes it current. Every check (a damaged config, an
-// empty token, a refused token, an impd out of reach) comes before the
-// write, so a failed login never changes config.json.
-async function runLogin(io: CommandIO, options: LoginOptions): Promise<string> {
-  if (!isHttpUrl(options.url)) {
-    throw new UsageError(`not an http(s) URL: ${options.url}`);
-  }
-
-  const url = new URL(options.url);
-
-  const name = checkHostName(options.name ?? url.hostname.split('.')[0] ?? '');
-
-  readHostConfig(io.env, io.printError);
-
-  if (url.protocol === 'http:' && !LOOPBACK.has(url.hostname)) {
-    io.printError(
-      `impz: warning: ${options.url} is plain http; the token crosses the network unencrypted`,
-    );
-  }
-
-  const token = await options.readToken();
-
-  if (token === '') {
-    throw new UsageError('no token given; nothing saved');
-  }
-
-  if (options.verify) {
-    await verifyToken(options.url, token);
-  }
-
-  // read again after the prompt; two logins at the same moment can still
-  // lose one host, as the config has no lock
-  const config = readHostConfig(io.env, io.printError);
-
-  writeHostConfig(
-    io.env,
-    { current: name, hosts: { ...config.hosts, [name]: { url: options.url, token } } },
-    io.printError,
-  );
-
-  return name;
-}
-
 export const loginCommand = defineCommand({
   name: 'login',
   description: 'Save an impd and its token, and make it the current host',
@@ -157,6 +114,49 @@ export const hostsCommand = defineCommand({
     );
   },
 });
+
+// Saves a host and makes it current. Every check (a damaged config, an
+// empty token, a refused token, an impd out of reach) comes before the
+// write, so a failed login never changes config.json.
+async function runLogin(io: CommandIO, options: LoginOptions): Promise<string> {
+  if (!isHttpUrl(options.url)) {
+    throw new UsageError(`not an http(s) URL: ${options.url}`);
+  }
+
+  const url = new URL(options.url);
+
+  const name = checkHostName(options.name ?? url.hostname.split('.')[0] ?? '');
+
+  readHostConfig(io.env, io.printError);
+
+  if (url.protocol === 'http:' && !LOOPBACK.has(url.hostname)) {
+    io.printError(
+      `impz: warning: ${options.url} is plain http; the token crosses the network unencrypted`,
+    );
+  }
+
+  const token = await options.readToken();
+
+  if (token === '') {
+    throw new UsageError('no token given; nothing saved');
+  }
+
+  if (options.verify) {
+    await verifyToken(options.url, token);
+  }
+
+  // read again after the prompt; two logins at the same moment can still
+  // lose one host, as the config has no lock
+  const config = readHostConfig(io.env, io.printError);
+
+  writeHostConfig(
+    io.env,
+    { current: name, hosts: { ...config.hosts, [name]: { url: options.url, token } } },
+    io.printError,
+  );
+
+  return name;
+}
 
 // The table never shows a token, only whether one is saved: `imp hosts`
 // output ends up in terminals, logs and screenshots.

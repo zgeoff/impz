@@ -12,14 +12,14 @@ import {
   truncateSync,
 } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { IMPD_USER } from '../../platform/process/impd-user';
 import { parseMounts, readMounts as readHostMounts } from '../../platform/process/mounts';
 import { listPids, readStatFields } from '../../platform/process/proc';
-import { readErrorMessage } from '../../platform/process/read-error-message';
 import type { CommandRunner } from '../../platform/process/run-command';
 import type { ImpPaths } from '../storage/data-layout';
 import type { FirecrackerPaths } from './firecracker-process';
-import { isProcessOfUid, stopProcessOfUid } from './process-owner';
+import { probeProcessOfUid, stopProcessOfUid } from './process-owner';
 import { writeRegularFile } from './vm-files';
 
 // The Firecracker jailer (docs/architecture/isolation.md#the-jailer): each VM in a
@@ -128,7 +128,7 @@ export interface JailDeps {
   readonly readRootOwner?: (root: string) => number | undefined;
 
   // the pause between two kill scans; Bun.sleep by default
-  readonly wait?: (ms: number) => Promise<void>;
+  readonly wait?: (durationMs: number) => Promise<void>;
 }
 
 const KILL_WAIT_MS = 20;
@@ -142,12 +142,12 @@ const EXIT_TRIES = 3000;
 
 export function createJails(deps: Readonly<JailDeps>): Jails {
   const execName = basename(deps.firecrackerBin);
-  const findJailDir = (impId: string): string => join(deps.chrootBase, execName, impId);
-  const findRoot = (impId: string): string => join(findJailDir(impId), 'root');
+  const getJailDir = (impId: string): string => join(deps.chrootBase, execName, impId);
+  const getRoot = (impId: string): string => join(getJailDir(impId), 'root');
   const readMounts = deps.readMounts ?? readHostMounts;
   const listUidPids = deps.listUidPids ?? listProcessesOfUid;
   const killUidPid = deps.killUidPid ?? stopProcessOfUid;
-  const isPidExiting = deps.isPidExiting ?? isProcessExiting;
+  const isPidExiting = deps.isPidExiting ?? probeProcessExiting;
   const readRootOwner = deps.readRootOwner ?? readOwnerUid;
   const wait = deps.wait ?? Bun.sleep;
 
@@ -192,13 +192,13 @@ export function createJails(deps: Readonly<JailDeps>): Jails {
 
   // deepest first, so a bind inside another goes before it
   const removeMounts = async (impId: string): Promise<void> => {
-    const owner = readRootOwner(findRoot(impId));
+    const owner = readRootOwner(getRoot(impId));
 
     if (owner !== undefined) {
       await stopJailProcesses(impId, owner);
     }
 
-    const mounted = listMountsUnder(readMounts(), findRoot(impId)).toReversed();
+    const mounted = listMountsUnder(readMounts(), getRoot(impId)).toReversed();
 
     for (const target of mounted) {
       const result = await deps.run(['umount', target]);
@@ -213,8 +213,8 @@ export function createJails(deps: Readonly<JailDeps>): Jails {
   const remove = async (impId: string): Promise<void> => {
     await removeMounts(impId);
 
-    if (listMountsUnder(readMounts(), findRoot(impId)).length === 0) {
-      rmSync(findJailDir(impId), { recursive: true, force: true });
+    if (listMountsUnder(readMounts(), getRoot(impId)).length === 0) {
+      rmSync(getJailDir(impId), { recursive: true, force: true });
     }
   };
 
@@ -238,7 +238,7 @@ export function createJails(deps: Readonly<JailDeps>): Jails {
   // No process of the uid, no mount left, then a new chroot with its binds.
   // `setupFiles` runs between: root works on the VM's files then.
   const setupChroot = async (chroot: Readonly<ChrootPlan>): Promise<readonly string[]> => {
-    const root = findRoot(chroot.id);
+    const root = getRoot(chroot.id);
 
     await stopJailProcesses(chroot.id, chroot.user.uid);
     await removeMounts(chroot.id);
@@ -252,15 +252,15 @@ export function createJails(deps: Readonly<JailDeps>): Jails {
 
     // the last VM owned the chroot and may have left symlinks in it: a new
     // one each time, so no mkdir or mount below follows them
-    rmSync(findJailDir(chroot.id), { recursive: true, force: true });
+    rmSync(getJailDir(chroot.id), { recursive: true, force: true });
     mkdirSync(root, { recursive: true });
 
     // a mount of its own, private, so no bind below leaks out or in
     await runMount(['mount', '--bind', root, root]);
     await runMount(['mount', '--make-private', root]);
 
-    for (const dir of chroot.dirs) {
-      await setupDirBind(dir, join(root, dir));
+    for (const directory of chroot.dirs) {
+      await setupDirBind(directory, join(root, directory));
     }
 
     for (const file of chroot.readOnlyFiles) {
@@ -268,7 +268,7 @@ export function createJails(deps: Readonly<JailDeps>): Jails {
     }
 
     for (const file of chroot.scratchFiles) {
-      if (chroot.dirs.some((dir) => file.startsWith(`${dir}/`))) {
+      if (chroot.dirs.some((directory) => file.startsWith(`${directory}/`))) {
         throw new Error(`jail ${chroot.id}: ${file} is inside a bound directory`);
       }
 
@@ -337,7 +337,7 @@ export function createJails(deps: Readonly<JailDeps>): Jails {
 
           removed.push(impId);
         } catch (error) {
-          deps.log(`impd: jail ${impId}: ${readErrorMessage(error)}`);
+          deps.log(`impd: jail ${impId}: ${getErrorMessage(error)}`);
         }
       }
 
@@ -348,7 +348,7 @@ export function createJails(deps: Readonly<JailDeps>): Jails {
       setupImpdDir(paths.runDir);
 
       const planted = readdirSync(paths.runDir).filter(
-        (name) => !isSealedEntry(paths, join(paths.runDir, name)),
+        (name) => !probeSealedEntry(paths, join(paths.runDir, name)),
       );
 
       if (planted.length > 0) {
@@ -394,9 +394,9 @@ export function buildJailerCommand(command: Readonly<JailerCommand>): readonly s
 
 // the imp's directory, and the snapshot's when it lives elsewhere, as on ZFS
 export function listBoundDirs(paths: Readonly<ImpPaths>): readonly string[] {
-  const isInside = paths.snapshotDir.startsWith(`${paths.dir}/`);
+  const isInside = paths.snapshotDir.startsWith(`${paths.directory}/`);
 
-  return isInside ? [paths.dir] : [paths.dir, paths.snapshotDir];
+  return isInside ? [paths.directory] : [paths.directory, paths.snapshotDir];
 }
 
 // The mount points at `root` or below it, shallowest first. /proc/self/mounts
@@ -405,7 +405,7 @@ export function listMountsUnder(mounts: string, root: string): string[] {
   return parseMounts(mounts)
     .map((mount) => mount.target)
     .filter((target) => target === root || target.startsWith(`${root}/`))
-    .toSorted((a, b) => a.split('/').length - b.split('/').length);
+    .toSorted((left, right) => left.split('/').length - right.split('/').length);
 }
 
 // What the VM may write: run/ until it is sealed, the disk, and the snapshot
@@ -464,7 +464,7 @@ function setupImpdRunDir(paths: Readonly<RunPaths>): void {
   for (const name of readdirSync(paths.runDir)) {
     const path = join(paths.runDir, name);
 
-    if (!isSealedEntry(paths, path)) {
+    if (!probeSealedEntry(paths, path)) {
       rmSync(path, { recursive: true, force: true });
     }
   }
@@ -472,7 +472,7 @@ function setupImpdRunDir(paths: Readonly<RunPaths>): void {
 
 // The VM's two sockets, and the log and the pid file impd made: regular
 // files of impd's with one name, not ones the VM made or linked to.
-function isSealedEntry(paths: Readonly<RunPaths>, path: string): boolean {
+function probeSealedEntry(paths: Readonly<RunPaths>, path: string): boolean {
   const entry = lstatSync(path);
 
   if (path === paths.apiSocket || path === paths.vsockSocket) {
@@ -488,10 +488,10 @@ function isSealedEntry(paths: Readonly<RunPaths>, path: string): boolean {
 }
 
 // a directory of impd's own: a symlink or a file in its place goes first
-function setupImpdDir(dir: string): void {
-  setupRealDir(dir);
-  lchownSync(dir, IMPD_USER.uid, IMPD_USER.gid);
-  chmodSync(dir, 0o755);
+function setupImpdDir(directory: string): void {
+  setupRealDir(directory);
+  lchownSync(directory, IMPD_USER.uid, IMPD_USER.gid);
+  chmodSync(directory, 0o755);
 }
 
 // A template's file, once the build's uid is gone: the regular file it wrote,
@@ -513,19 +513,19 @@ export function setupSnapshotFile(file: string, gid: number): void {
   chmodSync(file, 0o640);
 }
 
-function setupRealDir(dir: string): void {
-  const found = lstatSync(dir, { throwIfNoEntry: false });
+function setupRealDir(directory: string): void {
+  const found = lstatSync(directory, { throwIfNoEntry: false });
 
   if (found !== undefined && !found.isDirectory()) {
-    rmSync(dir, { force: true });
+    rmSync(directory, { force: true });
   }
 
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(directory, { recursive: true });
 }
 
 // every live process whose real or effective uid is `uid`
 function listProcessesOfUid(uid: number): number[] {
-  return listPids().filter((pid) => isProcessOfUid(pid, uid));
+  return listPids().filter((pid) => probeProcessOfUid(pid, uid));
 }
 
 // the kernel's PF_EXITING, which a task sets as it starts to exit
@@ -533,7 +533,7 @@ const PF_EXITING = 0x4;
 
 // A zombie, or a task in its exit (the 9th field of /proc/<pid>/stat holds
 // its flags); a pid that is gone exits too.
-function isProcessExiting(pid: number): boolean {
+function probeProcessExiting(pid: number): boolean {
   const fields = readStatFields(pid);
 
   if (fields === null) {

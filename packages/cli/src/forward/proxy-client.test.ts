@@ -21,7 +21,7 @@ import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
-  findFreePorts,
+  claimFreePorts,
   startStubAgent,
   startStubDialAgent,
   startTestImpd,
@@ -258,7 +258,7 @@ test('#startProxy sends the rest of an upload once the guest takes it again', as
 });
 
 test('#startProxy fails at once naming a local port in use, before any call to impd', async () => {
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
   const busy = createServer();
 
   onTestFinished(() => {
@@ -289,7 +289,7 @@ test('#startProxy fails at once naming a local port in use, before any call to i
 });
 
 test('#startProxy fails naming the local port when only its IPv6 loopback is in use', async () => {
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
   const busy = createServer();
 
   onTestFinished(() => {
@@ -335,7 +335,7 @@ test.skipIf(
 test('#startProxy rejects an imp that impd does not have, and frees its local port', async () => {
   const ctx = await setupTest();
 
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
 
   const started = startProxy(
     { url: ctx.url, token: ctx.rootToken, host: null },

@@ -4,18 +4,7 @@ import { formatUnauthorized } from '../cli/run-action';
 import { toSignalExitCode } from '../cli/to-signal-exit-code';
 import type { CliConfig } from '../config/cli-config';
 
-// Exit codes as ssh and shells use them (docs/guides/cli.md has the table): 1 a
-// --require impd cannot meet, 127 could not start, 141 our output went away,
-// 254 another client took the session over, 255 imp failed. A detach exits 0.
-const PRECONDITION_FAILED_CODE = 1;
-const EXEC_FAILED_CODE = 127;
-const BROKEN_PIPE_CODE = 141;
 const TAKEN_OVER_CODE = 254;
-const IMP_FAILED_CODE = 255;
-
-// the imp answers, but the container its commands run in is down
-const INNER_DOWN_HINT =
-  ' (the container in the imp starts again on its own; impz stop and impz start, or impz restore, bring it back)';
 
 // the most a pause between two attaches grows to
 const REATTACH_MAX_DELAY_MS = 8000;
@@ -130,6 +119,12 @@ interface OutcomeResult {
   readonly message: string | null;
 }
 
+const IMP_FAILED_CODE = 255;
+
+// the imp answers, but the container its commands run in is down
+const INNER_DOWN_HINT =
+  ' (the container in the imp starts again on its own; impz stop and impz start, or impz restore, bring it back)';
+
 // the exit code for an outcome, and the line that explains a failure
 function buildOutcomeResult(
   outcome: ExecOutcome,
@@ -190,6 +185,24 @@ function buildOutcomeResult(
     .exhaustive();
 }
 
+// Exit codes as ssh and shells use them (docs/guides/cli.md has the table): 1 a
+// --require impd cannot meet, 127 could not start, 141 our output went away,
+// 254 another client took the session over, 255 imp failed. A detach exits 0.
+const PRECONDITION_FAILED_CODE = 1;
+const EXEC_FAILED_CODE = 127;
+
+// what a refusal exits with: 127 for a command that could not start, 1 for
+// a requirement impd cannot meet, as for any refused call, else 255
+function pickFailedCode(code: string | null): number {
+  if (code === 'EXEC_FAILED') {
+    return EXEC_FAILED_CODE;
+  }
+
+  return code === 'PRECONDITION_FAILED' ? PRECONDITION_FAILED_CODE : IMP_FAILED_CODE;
+}
+
+const BROKEN_PIPE_CODE = 141;
+
 // a callback threw; a reader such as `head` that went away is quiet, as for
 // a local command
 function buildLocalErrorResult(error: unknown): OutcomeResult {
@@ -200,16 +213,6 @@ function buildLocalErrorResult(error: unknown): OutcomeResult {
   const message = error instanceof Error ? error.message : String(error);
 
   return { code: IMP_FAILED_CODE, message };
-}
-
-// what a refusal exits with: 127 for a command that could not start, 1 for
-// a requirement impd cannot meet, as for any refused call, else 255
-function pickFailedCode(code: string | null): number {
-  if (code === 'EXEC_FAILED') {
-    return EXEC_FAILED_CODE;
-  }
-
-  return code === 'PRECONDITION_FAILED' ? PRECONDITION_FAILED_CODE : IMP_FAILED_CODE;
 }
 
 function isBrokenPipe(error: unknown): boolean {

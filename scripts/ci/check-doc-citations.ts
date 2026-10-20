@@ -18,6 +18,12 @@ const DOC_PATH = /(?<![\w/.-])docs(?:\/[\w.-]+)+(?:#[\p{L}\p{M}\p{N}_%-]+)?/gu;
 const BLOB_URL =
   /github\.com\/zgeoff\/impz\/(?:blob|tree)\/\S*?\/(?<ref>docs(?:\/[\w.-]+)+(?:#[\p{L}\p{M}\p{N}_%-]+)?)/gu;
 
+// the repository as one run sees it, with each page's anchors read once
+interface Repo {
+  readonly exists: (path: string) => boolean;
+  readonly readAnchors: (path: string) => Set<string> | null;
+}
+
 // `files` are paths relative to `root`, the repository root that every citation starts from
 export function checkDocCitations(root: string, files: readonly string[]): Problem[] {
   const pages = new Map<string, Set<string> | null>();
@@ -43,64 +49,22 @@ export function checkDocCitations(root: string, files: readonly string[]): Probl
   });
 }
 
-// the repository as one run sees it, with each page's anchors read once
-interface Repo {
-  readonly exists: (path: string) => boolean;
-  readonly readAnchors: (path: string) => Set<string> | null;
-}
-
-function checkFile(file: string, text: string, repo: Repo): Problem[] {
-  const problems: Problem[] = [];
-
-  for (const [index, line] of text.split('\n').entries()) {
-    const refs = [
-      ...[...line.matchAll(DOC_PATH)].map((match) => match[0]),
-      ...[...line.matchAll(BLOB_URL)].map((match) => match.groups?.['ref'] ?? ''),
-    ];
-
-    for (const ref of refs) {
-      const message = checkCitation(ref, repo);
-
-      if (message !== null) {
-        problems.push({ file, line: index + 1, message });
-      }
-    }
-  }
-
-  return problems;
-}
-
-// a sentence's full stop is no part of the path
-function checkCitation(ref: string, repo: Repo): string | null {
-  const [rawPath = '', rawAnchor] = ref.split('#');
-  const path = rawPath.replace(/\.+$/u, '');
-
-  if (!repo.exists(path)) {
-    return `${path} does not exist`;
-  }
-
-  const anchor = rawAnchor === undefined ? undefined : decodeAnchor(rawAnchor);
-
-  if (anchor === null) {
-    return `${path} is cited with a malformed anchor #${rawAnchor ?? ''}`;
-  }
-
-  const anchors = anchor !== undefined && path.endsWith('.md') ? repo.readAnchors(path) : null;
-
-  if (anchors !== null && anchor !== undefined && !anchors.has(anchor)) {
-    return `${path} has no heading #${anchor}`;
-  }
-
-  return null;
-}
-
-// an anchor with its URL escapes decoded, or null for an escape that is no UTF-8
-function decodeAnchor(anchor: string): string | null {
-  try {
-    return decodeURIComponent(anchor);
-  } catch {
+// null for a file that is gone from the tree or binary (a NUL byte): nothing to cite
+function readText(path: string): string | null {
+  if (!existsSync(path) || !statSync(path).isFile()) {
     return null;
   }
+
+  const bytes = readFileSync(path);
+
+  return bytes.includes(0) ? null : bytes.toString('utf8');
+}
+
+// GitHub never renders an HTML comment, so a heading inside one has no anchor: the line without
+// its comments, and whether a comment is still open at its end
+interface VisibleText {
+  readonly kept: string;
+  readonly isOpen: boolean;
 }
 
 // GitHub's anchors of a page: ATX and setext headings outside code fences and front matter,
@@ -125,7 +89,7 @@ function collectAnchors(markdown: string): Set<string> {
     const marker = /^\s*(?<marker>`{3,}|~{3,})(?<rest>.*)$/u.exec(line)?.groups;
 
     if (marker !== undefined) {
-      fence = updateFence(fence, marker['marker'] ?? '', marker['rest'] ?? '');
+      fence = formatFence(fence, marker['marker'] ?? '', marker['rest'] ?? '');
       previous = '';
       continue;
     }
@@ -155,32 +119,6 @@ function collectAnchors(markdown: string): Set<string> {
   return anchors;
 }
 
-// GitHub's suffix for a repeated slug, as github-slugger picks it: the slug's next number until
-// the result is no heading's anchor yet, so `Notes`, `Notes`, `Notes-1` get `notes`, `notes-1`
-// and `notes-1-1`
-function pickHeadingAnchor(
-  slug: string,
-  taken: ReadonlySet<string>,
-  seen: ReadonlyMap<string, number>,
-): { anchor: string; count: number } {
-  let anchor = slug;
-  let count = seen.get(slug) ?? 0;
-
-  while (taken.has(anchor)) {
-    count++;
-    anchor = `${slug}-${String(count)}`;
-  }
-
-  return { anchor, count };
-}
-
-// GitHub never renders an HTML comment, so a heading inside one has no anchor: the line without
-// its comments, and whether a comment is still open at its end
-interface VisibleText {
-  readonly kept: string;
-  readonly isOpen: boolean;
-}
-
 function splitComments(line: string, inComment: boolean): VisibleText {
   let kept = '';
   let rest = line;
@@ -203,7 +141,7 @@ function splitComments(line: string, inComment: boolean): VisibleText {
 }
 
 // a fence closes on a marker of its own character, at least as long, with nothing after it
-function updateFence(open: string, marker: string, rest: string): string {
+function formatFence(open: string, marker: string, rest: string): string {
   if (open === '') {
     return marker;
   }
@@ -269,6 +207,79 @@ function buildSlug(title: string): string {
     .replaceAll(' ', '-');
 }
 
+// GitHub's suffix for a repeated slug, as github-slugger picks it: the slug's next number until
+// the result is no heading's anchor yet, so `Notes`, `Notes`, `Notes-1` get `notes`, `notes-1`
+// and `notes-1-1`
+function pickHeadingAnchor(
+  slug: string,
+  taken: ReadonlySet<string>,
+  seen: ReadonlyMap<string, number>,
+): { anchor: string; count: number } {
+  let anchor = slug;
+  let count = seen.get(slug) ?? 0;
+
+  while (taken.has(anchor)) {
+    count++;
+    anchor = `${slug}-${String(count)}`;
+  }
+
+  return { anchor, count };
+}
+
+function checkFile(file: string, text: string, repo: Repo): Problem[] {
+  const problems: Problem[] = [];
+
+  for (const [index, line] of text.split('\n').entries()) {
+    const refs = [
+      ...[...line.matchAll(DOC_PATH)].map((match) => match[0]),
+      ...[...line.matchAll(BLOB_URL)].map((match) => match.groups?.['ref'] ?? ''),
+    ];
+
+    for (const ref of refs) {
+      const message = checkCitation(ref, repo);
+
+      if (message !== null) {
+        problems.push({ file, line: index + 1, message });
+      }
+    }
+  }
+
+  return problems;
+}
+
+// a sentence's full stop is no part of the path
+function checkCitation(ref: string, repo: Repo): string | null {
+  const [rawPath = '', rawAnchor] = ref.split('#');
+  const path = rawPath.replace(/\.+$/u, '');
+
+  if (!repo.exists(path)) {
+    return `${path} does not exist`;
+  }
+
+  const anchor = rawAnchor === undefined ? undefined : decodeAnchor(rawAnchor);
+
+  if (anchor === null) {
+    return `${path} is cited with a malformed anchor #${rawAnchor ?? ''}`;
+  }
+
+  const anchors = anchor !== undefined && path.endsWith('.md') ? repo.readAnchors(path) : null;
+
+  if (anchors !== null && anchor !== undefined && !anchors.has(anchor)) {
+    return `${path} has no heading #${anchor}`;
+  }
+
+  return null;
+}
+
+// an anchor with its URL escapes decoded, or null for an escape that is no UTF-8
+function decodeAnchor(anchor: string): string | null {
+  try {
+    return decodeURIComponent(anchor);
+  } catch {
+    return null;
+  }
+}
+
 // Markdown is check-links.sh's; the synced skills cite placeholder pages as examples, and this
 // check's own test cites missing ones on purpose
 const SKIPPED = [/\.md$/u, /^\.claude\//u, /^scripts\/ci\/check-doc-citations\.test\.ts$/u];
@@ -300,17 +311,6 @@ function listFiles(): string[] {
   }
 
   return [...new Set(result.stdout.toString().split('\0').filter(Boolean))];
-}
-
-// null for a file that is gone from the tree or binary (a NUL byte): nothing to cite
-function readText(path: string): string | null {
-  if (!existsSync(path) || !statSync(path).isFile()) {
-    return null;
-  }
-
-  const bytes = readFileSync(path);
-
-  return bytes.includes(0) ? null : bytes.toString('utf8');
 }
 
 if (import.meta.main) {

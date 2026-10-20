@@ -10,7 +10,7 @@ export const MIGRATION_010_ADD_IMAGE_SOURCE: Migration = {
       .alterTable('images')
 
       // `oci` from docker, `imp` a template from an imp's disk
-      .addColumn('source', 'text', (c) => c.notNull().defaultTo('oci'))
+      .addColumn('source', 'text', (column) => column.notNull().defaultTo('oci'))
       .execute();
 
     // a template's source imp, by name: a token must reach it to copy its disk
@@ -21,7 +21,7 @@ export const MIGRATION_010_ADD_IMAGE_SOURCE: Migration = {
 
       // 1 until the first cold boot of an imp from a template gives it its own
       // machine-id and ssh host keys
-      .addColumn('identity_reset_pending', 'integer', (c) => c.notNull().defaultTo(0))
+      .addColumn('identity_reset_pending', 'integer', (column) => column.notNull().defaultTo(0))
       .execute();
   },
 };

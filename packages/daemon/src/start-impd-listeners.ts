@@ -1,5 +1,5 @@
-import type { buildImpdApp } from './build-impd-app';
 import type { Config } from './config';
+import type { createImpdApp } from './create-impd-app';
 import type { TailscaleStatus } from './host-net/net/tailscale-status';
 import type { ImpdDeps } from './impd-deps';
 import type { RunImpdStartupStep } from './impd-startup-steps';
@@ -7,9 +7,9 @@ import type { Imps } from './imps/imps/imp-service';
 import type { AuthorizedKeys } from './imps/ssh/authorized-keys';
 import type { ImpdAccess } from './load-impd-access';
 import type { Broker } from './network/broker/broker-service';
-import { buildHttpsService } from './network/https/build-https-service';
 import type { DnsToken } from './network/https/dns/dns-token';
 import type { PublicRecordsLink } from './network/https/public-records-link';
+import { wireHttpsService } from './network/https/wire-https-service';
 import type { ForwardedPeers } from './network/proxy/forwarded-peers';
 import { startWakeProxy } from './network/proxy/wake-proxy';
 import type { WakeProxy } from './network/proxy/wake-proxy';
@@ -23,7 +23,7 @@ import { startPublicListener } from './surface/oauth/public-listener';
 import { startSsh } from './surface/ssh/start-ssh';
 
 export interface ImpdListenerParts {
-  readonly api: ReturnType<typeof buildImpdApp>;
+  readonly api: ReturnType<typeof createImpdApp>;
   readonly access: ImpdAccess;
   readonly imps: Imps;
   readonly peers: ForwardedPeers;
@@ -123,7 +123,7 @@ export async function startImpdListeners(
       return null;
     }
 
-    const service = buildHttpsService({
+    const service = wireHttpsService({
       config: config.https,
       dataDir: config.dataDir,
       db,

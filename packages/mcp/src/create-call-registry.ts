@@ -29,6 +29,11 @@ export interface CallRegistry {
   readonly createGate: (transport: Transport, onClose?: () => void) => Transport;
 }
 
+interface Arrival {
+  readonly cancellable: boolean;
+  cancelled: boolean;
+}
+
 export function createCallRegistry(): CallRegistry {
   const calls = new Map<RequestId, Call>();
 
@@ -140,20 +145,6 @@ export function createCallRegistry(): CallRegistry {
   };
 }
 
-interface Arrival {
-  readonly cancellable: boolean;
-  cancelled: boolean;
-}
-
-// whether the tool a `tools/call` names may stop mid-run; an unknown one,
-// which the server refuses, may
-function isCancellable(params: unknown): boolean {
-  const name =
-    typeof params === 'object' && params !== null && 'name' in params ? params.name : null;
-
-  return TOOLS.find((tool) => tool.definition.name === name)?.cancellable ?? true;
-}
-
 // the request a `notifications/cancelled` names; null for any other message
 function readCancelledRequestID(message: unknown): RequestId | null {
   if (typeof message !== 'object' || message === null || !('method' in message)) {
@@ -182,4 +173,13 @@ function buildDuplicateError(id: RequestId): JSONRPCErrorResponse {
     id,
     error: { code: INVALID_PARAMS, message: `request ${String(id)} is already running` },
   };
+}
+
+// whether the tool a `tools/call` names may stop mid-run; an unknown one,
+// which the server refuses, may
+function isCancellable(params: unknown): boolean {
+  const name =
+    typeof params === 'object' && params !== null && 'name' in params ? params.name : null;
+
+  return TOOLS.find((tool) => tool.definition.name === name)?.cancellable ?? true;
 }

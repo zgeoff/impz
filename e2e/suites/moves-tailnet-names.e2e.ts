@@ -13,14 +13,14 @@ import { waitForExec } from '../lib/imps';
 import { HOST_B, readMoveHosts, readMoveOptions } from '../lib/move-hosts';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import {
   findServiceUrl,
   isTailnetReady,
   readLocalTailscaleStatus,
   readTailnetBody,
 } from '../lib/tailnet';
-import { hasTailscaleE2EKey } from '../lib/tailscale-key';
+import { probeTailscaleE2EKey } from '../lib/tailscale-key';
 import { waitFor } from '../lib/wait-for';
 
 // A per-imp tailnet name across a move between two tag:imp-e2e nodes
@@ -34,7 +34,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('moves-tailnet'), stack, client };
+  return { prefix: getSuitePrefix('moves-tailnet'), stack, client };
 }
 
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
@@ -44,7 +44,7 @@ const tailscaleStatus = await readLocalTailscaleStatus();
 // (op://$IMP_OP_VAULT/imp-e2e-tailscale-services); set IMP_E2E_TAILNET_NAMES=1 when
 // 1Password holds it
 const tailnetNamesMissing =
-  !isTailnetReady(tailscaleStatus, hasTailscaleE2EKey()) ||
+  !isTailnetReady(tailscaleStatus, probeTailscaleE2EKey()) ||
   process.env['IMP_E2E_TAILNET_NAMES'] !== '1';
 
 test.skipIf(tailnetNamesMissing)(
@@ -58,7 +58,7 @@ test.skipIf(tailnetNamesMissing)(
     // starts them once IMP_E2E_TAILNET_NAMES is set (readMoveOptions)
     const hosts = readMoveHosts(readMoveOptions('host-b-tailnet'));
 
-    const clientB = await createInstanceClient(hosts.b);
+    const clientB = await createInstanceClient(hosts.hostB);
 
     await runImp('new', named, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
@@ -89,12 +89,12 @@ test.skipIf(tailnetNamesMissing)(
 
     expect(info.tailscale.names?.live).toBe(0);
 
-    await runImpWith({ target: hosts.b }, 'start', named);
+    await runImpWith({ target: hosts.hostB }, 'start', named);
 
     const moved = await waitFor(
       `${named}'s tailnet name on B`,
       async () => {
-        const stdout = await runImpWith({ target: hosts.b }, 'url', named);
+        const stdout = await runImpWith({ target: hosts.hostB }, 'url', named);
 
         const url = findServiceUrl(stdout);
 
@@ -107,7 +107,7 @@ test.skipIf(tailnetNamesMissing)(
       { timeoutMs: 180_000 },
     );
 
-    const row = await requireImp(named, hosts.b);
+    const row = await requireImp(named, hosts.hostB);
 
     // the name answers from B, over plain HTTP: its certificate is B's to get
     const body = await waitFor(

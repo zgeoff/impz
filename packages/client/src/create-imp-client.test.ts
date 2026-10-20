@@ -7,8 +7,8 @@ import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildMockNewImage,
+  claimFreePorts,
   createStubDockerCli,
-  findFreePorts,
   startTestImpd,
 } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
@@ -18,7 +18,7 @@ import { ORPCError } from '@orpc/client';
 import { HttpResponse, http } from 'msw';
 import { CLIENT_VERSION } from './check-server';
 import { createImpClient } from './create-imp-client';
-import { buildStubImpdWithNewReason } from './test-utils/build-stub-impd-with-new-reason';
+import { makeStubImpdWithNewReason } from './test-utils/make-stub-impd-with-new-reason';
 import { startStubDockerEngine } from './test-utils/start-stub-docker-engine';
 
 // `startImpd` boots impd with `env` and serves it at http://impd.test/
@@ -279,7 +279,7 @@ test('#requireAwake waits out a stopping impd for the one that replaces it when 
 test('#requireAwake rejects with the TypeError of an impd it cannot reach', () => {
   // nothing listens on a free port
   const client = createImpClient({
-    url: `http://127.0.0.1:${String(findFreePorts(1).take())}/`,
+    url: `http://127.0.0.1:${String(claimFreePorts(1).take())}/`,
     token: 'root-token',
   });
 
@@ -401,7 +401,7 @@ test('#images.addStream hands on each progress event, then the image', async () 
 
   // the image is on the host already
   const docker = createStubDockerCli({
-    dir: ctx.workDir,
+    directory: ctx.workDir,
     images: [
       {
         refs: ['busybox:1.37'],
@@ -474,7 +474,7 @@ test('#images.buildStream hands on each progress event as it comes, then the ima
 
   // the frontend is on the host, and the engine tags what it builds
   const docker = createStubDockerCli({
-    dir: ctx.workDir,
+    directory: ctx.workDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -556,7 +556,7 @@ test('#events.stream passes on an event whose reason this client does not know',
   const ctx = await setupTest();
   const harness = await ctx.startImpd();
 
-  const newer = buildStubImpdWithNewReason(
+  const newer = makeStubImpdWithNewReason(
     (request) => harness.impd.api.app.handle(request),
     'from-the-future',
   );

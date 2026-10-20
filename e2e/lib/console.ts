@@ -23,7 +23,7 @@ export async function runConsole(
 
   let output = '';
 
-  const proc = Bun.spawn([join(REPO_ROOT, 'scripts', 'impz'), 'console', name], {
+  const subprocess = Bun.spawn([join(REPO_ROOT, 'scripts', 'impz'), 'console', name], {
     env: { ...process.env, ...impEnv },
     terminal: {
       cols: 80,
@@ -56,12 +56,12 @@ export async function runConsole(
       );
     }
 
-    proc.terminal?.write(`${step.line}\n`);
+    subprocess.terminal?.write(`${step.line}\n`);
   }
 
-  const exitCode = await proc.exited;
+  const exitCode = await subprocess.exited;
 
-  proc.terminal?.close();
+  subprocess.terminal?.close();
 
   return { exitCode, output: output.replaceAll('\r', '') };
 }

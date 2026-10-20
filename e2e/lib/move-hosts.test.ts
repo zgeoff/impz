@@ -9,9 +9,9 @@ import { updateEnv } from '@impz/test-utils/update-env';
 import { REPO_ROOT, instance } from './instance';
 import type { HostBFixtureDeps } from './move-hosts';
 import {
-  buildHostBFixture,
   buildMoveNetwork,
   buildMoveSettings,
+  createHostBFixture,
   readMoveHosts,
   readMoveOptions,
 } from './move-hosts';
@@ -19,11 +19,11 @@ import {
 // a temp dir for the fixture's CLI config, and deps that record each step
 // in order
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'move-hosts-'));
+  const directory = await mkdtemp(join(tmpdir(), 'move-hosts-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const cliDir = join(dir, 'cli');
+  const cliDir = join(directory, 'cli');
   const steps: string[] = [];
 
   const deps: HostBFixtureDeps = {
@@ -119,10 +119,10 @@ test('#readMoveHosts names B, its network and the CLI config beside the run’s 
 
   const hosts = readMoveHosts({ tailnet: false });
 
-  expect(hosts.a).toBe(instance);
-  expect(hosts.b.container).toBe(`${instance.container}-mv-b`);
-  expect(hosts.b.dataDir).toBe(`${instance.dataDir}-mv-b`);
-  expect(hosts.b.apiUrl).toBe('http://10.105.120.11:7070');
+  expect(hosts.hostA).toBe(instance);
+  expect(hosts.hostB.container).toBe(`${instance.container}-mv-b`);
+  expect(hosts.hostB.dataDir).toBe(`${instance.dataDir}-mv-b`);
+  expect(hosts.hostB.apiUrl).toBe('http://10.105.120.11:7070');
   expect(hosts.network).toBe(`${instance.container}-mv`);
   expect(hosts.gateway).toBe('10.105.120.1');
 
@@ -137,7 +137,7 @@ test('#readMoveHosts puts B on a ZFS root dataset of its own beside the run’s'
 
   const hosts = readMoveHosts({ tailnet: false });
 
-  expect(hosts.b.env['IMP_ZFS_ROOT']).toBe('impbench42/imp-mv-b');
+  expect(hosts.hostB.env['IMP_ZFS_ROOT']).toBe('impbench42/imp-mv-b');
 });
 
 test('#readMoveHosts gives B no ZFS root on XFS', () => {
@@ -145,7 +145,7 @@ test('#readMoveHosts gives B no ZFS root on XFS', () => {
 
   const hosts = readMoveHosts({ tailnet: false });
 
-  expect(hosts.b.env).not.toContainKey('IMP_ZFS_ROOT');
+  expect(hosts.hostB.env).not.toContainKey('IMP_ZFS_ROOT');
 });
 
 test('#readMoveHosts counts A as rebooted onto the network for a move off the tailnet', () => {
@@ -205,7 +205,7 @@ test('#readMoveHosts counts A as rebooted for a move over the tailnet with setti
   expect(readMoveHosts({ tailnet: true, env: { IMP_TAILNET_NAMES: '1' } }).isARebooted).toBeTrue();
 });
 
-test('#buildHostBFixture starts B on the move network once leftovers are gone, saves it in a fresh CLI config, then resets it', async () => {
+test('#createHostBFixture starts B on the move network once leftovers are gone, saves it in a fresh CLI config, then resets it', async () => {
   const ctx = await setupTest();
 
   updateEnv('IMP_DEV_PORT_OFFSET', '1400');
@@ -213,7 +213,7 @@ test('#buildHostBFixture starts B on the move network once leftovers are gone, s
   // a config an earlier run left
   await mkdir(ctx.cliDir);
   await writeFile(join(ctx.cliDir, 'stale'), '');
-  await buildHostBFixture({ tailnet: false }, 'e2e-mv-', ctx.deps).start();
+  await createHostBFixture({ tailnet: false }, 'e2e-mv-', ctx.deps).start();
 
   expect(ctx.steps).toStrictEqual([
     'leftovers',
@@ -224,7 +224,7 @@ test('#buildHostBFixture starts B on the move network once leftovers are gone, s
   ]);
 });
 
-test('#buildHostBFixture makes B from nothing and resets it again when its reset at start fails', async () => {
+test('#createHostBFixture makes B from nothing and resets it again when its reset at start fails', async () => {
   const ctx = await setupTest();
 
   updateEnv('IMP_DEV_PORT_OFFSET', '1400');
@@ -235,7 +235,7 @@ test('#buildHostBFixture makes B from nothing and resets it again when its reset
     () => Promise.resolve(),
   ]);
 
-  await buildHostBFixture({ tailnet: false }, 'e2e-mv-', {
+  await createHostBFixture({ tailnet: false }, 'e2e-mv-', {
     ...ctx.deps,
     resetHost: (host, prefix) => {
       ctx.steps.push(`reset ${host.container} ${prefix}`);
@@ -258,10 +258,10 @@ test('#buildHostBFixture makes B from nothing and resets it again when its reset
   ]);
 });
 
-test('#buildHostBFixture rejects the start when B made from nothing still fails its reset', async () => {
+test('#createHostBFixture rejects the start when B made from nothing still fails its reset', async () => {
   const ctx = await setupTest();
 
-  const start = buildHostBFixture({ tailnet: false }, 'e2e-mv-', {
+  const start = createHostBFixture({ tailnet: false }, 'e2e-mv-', {
     ...ctx.deps,
     resetHost: () => Promise.reject(new Error('impd refused the removal')),
   }).start();
@@ -269,10 +269,10 @@ test('#buildHostBFixture rejects the start when B made from nothing still fails 
   expect(start).rejects.toThrowWithMessage(Error, 'impd refused the removal');
 });
 
-test('#buildHostBFixture keeps B’s data under --keep and rejects the start when its reset fails', async () => {
+test('#createHostBFixture keeps B’s data under --keep and rejects the start when its reset fails', async () => {
   const ctx = await setupTest();
 
-  const start = buildHostBFixture({ tailnet: false }, 'e2e-mv-', {
+  const start = createHostBFixture({ tailnet: false }, 'e2e-mv-', {
     ...ctx.deps,
     keep: true,
     resetHost: (host, prefix) => {
@@ -293,19 +293,19 @@ test('#buildHostBFixture keeps B’s data under --keep and rejects the start whe
   ]);
 });
 
-test('#buildHostBFixture resets B for the suite’s prefix', async () => {
+test('#createHostBFixture resets B for the suite’s prefix', async () => {
   const ctx = await setupTest();
 
-  await buildHostBFixture({ tailnet: false }, 'e2e-mv-', ctx.deps).reset();
+  await createHostBFixture({ tailnet: false }, 'e2e-mv-', ctx.deps).reset();
 
   expect(ctx.steps).toStrictEqual([`reset ${instance.container}-mv-b e2e-mv-`]);
 });
 
-test('#buildHostBFixture stops B and removes its CLI config', async () => {
+test('#createHostBFixture stops B and removes its CLI config', async () => {
   const ctx = await setupTest();
 
   await mkdir(ctx.cliDir);
-  await buildHostBFixture({ tailnet: false }, 'e2e-mv-', ctx.deps).stop();
+  await createHostBFixture({ tailnet: false }, 'e2e-mv-', ctx.deps).stop();
 
   expect(ctx.steps).toStrictEqual(['leftovers']);
   expect(existsSync(ctx.cliDir)).toBeFalse();

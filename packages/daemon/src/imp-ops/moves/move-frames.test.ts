@@ -17,17 +17,17 @@ import {
 } from './move-frames';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'move-frames-'));
+  const directory = await mkdtemp(join(tmpdir(), 'move-frames-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#encodeFile sends a sparse file as its FILE frame, its data blocks and its FILE_END', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'disk');
+  const path = join(ctx.directoryPath, 'disk');
   const fd = openSync(path, 'w');
 
   onTestFinished(() => {
@@ -69,7 +69,7 @@ test('#encodeFile sends a sparse file as its FILE frame, its data blocks and its
 test('#encodeFile places each data block of a sparse file at its offset', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'disk');
+  const path = join(ctx.directoryPath, 'disk');
   const fd = openSync(path, 'w');
 
   onTestFinished(() => {
@@ -106,7 +106,7 @@ test('#encodeFile places each data block of a sparse file at its offset', async 
 test('#encodeFile hands over the sha256 that its FILE_END frame carries', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'disk');
+  const path = join(ctx.directoryPath, 'disk');
   const sums: string[] = [];
 
   await Bun.write(path, 'data');
@@ -135,7 +135,7 @@ test('#encodeFile hands over the sha256 that its FILE_END frame carries', async 
 test('#countDataBytes counts only the data blocks of a sparse file', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'disk');
+  const path = join(ctx.directoryPath, 'disk');
   const fd = openSync(path, 'w');
 
   onTestFinished(() => {

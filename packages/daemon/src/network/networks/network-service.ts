@@ -2,11 +2,11 @@ import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressMode, Network, NetworkJoin } from '@impz/api';
 import type { ImpCheckpointHooks } from '../../imps/imps/imp-service';
 import { listEgressSlots } from '../../platform/db/egress';
-import { findImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/imps';
 import {
-  findNetworkByName,
   listNetworkMembers,
   listNetworks,
+  readNetworkByName,
   removeMember,
   removeNetwork,
   writeMember,
@@ -33,7 +33,7 @@ export interface NetworkDeps {
 export interface NetworkService {
   readonly listNetworks: () => Promise<Network[]>;
   readonly createNetwork: (name: string) => Promise<Network>;
-  readonly deleteNetwork: (name: string) => Promise<void>;
+  readonly removeNetwork: (name: string) => Promise<void>;
   readonly joinNetwork: (network: string, imp: string) => Promise<NetworkJoin>;
   readonly leaveNetwork: (network: string, imp: string) => Promise<Network>;
 
@@ -61,7 +61,7 @@ export function createNetworkService(deps: NetworkDeps): NetworkService {
   const db = deps.db;
 
   const requireNetwork = async (name: string): Promise<NetworkRecord> => {
-    const network = await findNetworkByName(db, name);
+    const network = await readNetworkByName(db, name);
 
     if (network === undefined) {
       throw buildNotFoundError('network', name);
@@ -71,7 +71,7 @@ export function createNetworkService(deps: NetworkDeps): NetworkService {
   };
 
   const requireImpId = async (name: string): Promise<string> => {
-    const imp = await findImpByName(db, name);
+    const imp = await readImpByName(db, name);
 
     if (imp === undefined) {
       throw buildNotFoundError('imp', name);
@@ -93,7 +93,7 @@ export function createNetworkService(deps: NetworkDeps): NetworkService {
 
   const removeEmpty = async (names: readonly string[]): Promise<void> => {
     for (const name of names) {
-      const network = await findNetworkByName(db, name);
+      const network = await readNetworkByName(db, name);
 
       if (network !== undefined && network.imps.length === 0) {
         await removeNetwork(db, network.id);
@@ -169,7 +169,7 @@ export function createNetworkService(deps: NetworkDeps): NetworkService {
 
     // the members are read under the lock, so a join just before is put
     // back with the rest
-    deleteNetwork: async (name) => {
+    removeNetwork: async (name) => {
       const network = await requireNetwork(name);
 
       await deps.egress.changeNetworks({
@@ -259,7 +259,7 @@ export function createNetworkService(deps: NetworkDeps): NetworkService {
           const created: string[] = [];
 
           for (const name of new Set(names)) {
-            const found = await findNetworkByName(db, name);
+            const found = await readNetworkByName(db, name);
 
             if (found !== undefined) {
               ids.push(found.id);
@@ -283,10 +283,6 @@ export function createNetworkService(deps: NetworkDeps): NetworkService {
   };
 }
 
-function toApiNetwork(network: Readonly<NetworkRecord>): Network {
-  return { name: network.name, imps: network.imps, createdAt: network.createdAt };
-}
-
 function isOpen(mode: EgressMode | undefined): boolean {
   return mode !== undefined && EGRESS_MODE_TRAITS[mode].isOpen;
 }
@@ -300,4 +296,8 @@ function isBoxOrNone(mode: EgressMode | undefined): boolean {
   return (
     mode !== undefined && !EGRESS_MODE_TRAITS[mode].isOpen && !EGRESS_MODE_TRAITS[mode].isPublic
   );
+}
+
+function toApiNetwork(network: Readonly<NetworkRecord>): Network {
+  return { name: network.name, imps: network.imps, createdAt: network.createdAt };
 }

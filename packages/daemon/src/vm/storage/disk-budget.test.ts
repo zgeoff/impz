@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import invariant from 'tiny-invariant';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import type { TestImpdOptions } from '../../../testing/start-test-impd';
-import { findImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/imps';
 import { buildImpPaths } from './data-layout';
 import { createDiskBudget } from './disk-budget';
 
@@ -439,7 +439,7 @@ test('it refuses a write with an estimate of 0 once the reserve is reached', () 
 });
 
 test('it keeps a hold for the release delay after its write ends', async () => {
-  const startTimer = mock<(fire: () => void, ms: number) => () => void>(() => () => {});
+  const startTimer = mock<(fire: () => void, durationMs: number) => () => void>(() => () => {});
 
   const budget = createDiskBudget({
     storage: {
@@ -461,7 +461,7 @@ test('it keeps a hold for the release delay after its write ends', async () => {
 });
 
 test('it frees a hold once its release delay is up', async () => {
-  const startTimer = mock<(fire: () => void, ms: number) => () => void>(() => () => {});
+  const startTimer = mock<(fire: () => void, durationMs: number) => () => void>(() => () => {});
 
   const budget = createDiskBudget({
     storage: {
@@ -487,7 +487,7 @@ test('it frees a hold once its release delay is up', async () => {
 });
 
 test('it starts no release timer for a zero-byte hold', async () => {
-  const startTimer = mock<(fire: () => void, ms: number) => () => void>(() => () => {});
+  const startTimer = mock<(fire: () => void, durationMs: number) => () => void>(() => () => {});
 
   const budget = createDiskBudget({
     storage: {
@@ -590,7 +590,7 @@ test('it refuses a sleep the disk cannot take with DISK_FULL and leaves the imp 
 
   expect(sleeping).rejects.toMatchObject({ code: 'DISK_FULL' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(imp?.state).toBe('running');
   expect(existsSync(buildImpPaths(ctx.dataDir, created.id).vmstate)).toBeFalse();

@@ -5,30 +5,30 @@ import { join } from 'node:path';
 import { listTree } from './list-tree';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'list-tree-'));
+  const directory = await mkdtemp(join(tmpdir(), 'list-tree-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it marks directories, symlinks and executable files in sorted order', async () => {
   const ctx = await setupTest();
 
-  await mkdir(join(ctx.dir, 'sub'));
-  await writeFile(join(ctx.dir, 'sub', 'b.txt'), '');
-  await writeFile(join(ctx.dir, 'run'), '');
-  await chmod(join(ctx.dir, 'run'), 0o755);
-  await symlink('run', join(ctx.dir, 'start'));
+  await mkdir(join(ctx.directoryPath, 'sub'));
+  await writeFile(join(ctx.directoryPath, 'sub', 'b.txt'), '');
+  await writeFile(join(ctx.directoryPath, 'run'), '');
+  await chmod(join(ctx.directoryPath, 'run'), 0o755);
+  await symlink('run', join(ctx.directoryPath, 'start'));
 
-  const tree = await listTree(ctx.dir);
+  const tree = await listTree(ctx.directoryPath);
 
   expect(tree).toStrictEqual(['run*', 'start@', 'sub/', 'sub/b.txt']);
 });
 
 test('it lists nothing for an empty directory', async () => {
   const ctx = await setupTest();
-  const tree = await listTree(ctx.dir);
+  const tree = await listTree(ctx.directoryPath);
 
   expect(tree).toStrictEqual([]);
 });

@@ -3,7 +3,7 @@ import { createImpClient } from '@impz/client';
 import { createImage } from '@impz/daemon/src/platform/db/images';
 import { buildImagePaths, buildMockNewImage, startTestImpd } from '@impz/daemon/testing';
 import * as z from 'zod';
-import { createImpGuard } from '../imp-guard';
+import { buildImpGuard } from '../imp-guard';
 import { createMcpServer } from '../test-utils/create-mcp-server';
 
 // impd's real app on stub VMs, a root client for the scenario, `sendToImpd`,
@@ -78,7 +78,7 @@ test.each([
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -132,7 +132,7 @@ test.each([
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'read',
     },
   );
@@ -186,7 +186,7 @@ test.each([
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -246,7 +246,7 @@ test.each([
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -287,7 +287,7 @@ test('it answers a restore to a checkpoint that does not exist with an isError r
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );

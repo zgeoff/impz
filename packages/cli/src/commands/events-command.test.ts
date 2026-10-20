@@ -262,7 +262,7 @@ test('it rethrows impd’s refusal of a token it does not know, without retrying
     fetch: ctx.sendRequest,
   });
 
-  const wait = mock<(ms: number) => Promise<void>>(() => Promise.resolve());
+  const wait = mock<(durationMs: number) => Promise<void>>(() => Promise.resolve());
 
   const printing = printEvents(
     {
@@ -294,7 +294,7 @@ test('it says to upgrade an impd that has no stream procedure, without retrying'
 
   const info = await ctx.client.system.info();
 
-  const wait = mock<(ms: number) => Promise<void>>(() => Promise.resolve());
+  const wait = mock<(durationMs: number) => Promise<void>>(() => Promise.resolve());
   const warn = mock<(line: string) => void>();
 
   const printing = printEvents(

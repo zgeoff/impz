@@ -17,7 +17,7 @@ const BACKUP_REPOSITORY = `s3:http://127.0.0.1:9000/${BUCKET}`;
 
 export interface BackupSecrets {
   // under the repo, which the dev container mounts at /src
-  readonly dir: string;
+  readonly directory: string;
   readonly envFile: string;
   readonly passwordInContainer: string;
   readonly accessKey: string;
@@ -71,18 +71,18 @@ export async function writeBackupSecrets(): Promise<BackupSecrets> {
 
   await mkdir(parent, { recursive: true });
 
-  const dir = await mkdtemp(join(parent, 'backups-'));
+  const directory = await mkdtemp(join(parent, 'backups-'));
 
   const accessKey = 'e2e-backups';
   const secretKey = randomBytes(18).toString('hex');
-  const envFile = join(dir, 'restic.env');
-  const passwordFile = join(dir, 'restic-password');
+  const envFile = join(directory, 'restic.env');
+  const passwordFile = join(directory, 'restic-password');
 
   await writeFile(passwordFile, randomBytes(24).toString('hex'), { mode: 0o644 });
   await writeFile(envFile, `AWS_ACCESS_KEY_ID=${accessKey}\nAWS_SECRET_ACCESS_KEY=${secretKey}\n`);
 
   return {
-    dir,
+    directory,
     envFile,
     passwordInContainer: `/src/${passwordFile.slice(REPO_ROOT.length + 1)}`,
     accessKey,
@@ -91,7 +91,7 @@ export async function writeBackupSecrets(): Promise<BackupSecrets> {
 }
 
 export function removeBackupSecrets(secrets: Readonly<BackupSecrets>): Promise<void> {
-  return rm(secrets.dir, { recursive: true, force: true });
+  return rm(secrets.directory, { recursive: true, force: true });
 }
 
 function readMinioName(): string {

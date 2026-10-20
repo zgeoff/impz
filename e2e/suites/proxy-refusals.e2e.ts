@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createServer } from 'node:net';
 import { tryImp } from '../lib/imp-cli';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // `impz proxy` refusals that boot no imp: the local ports bind before the
 // command checks the imp, so a busy port fails first.
 
 test('it refuses a busy local port before it checks the imp', async () => {
-  const name = `${readSuitePrefix('proxy')}nope`;
+  const name = `${getSuitePrefix('proxy')}nope`;
   const busy = createServer();
   const listening = Promise.withResolvers<void>();
 
@@ -42,7 +42,7 @@ test('it refuses a busy local port before it checks the imp', async () => {
 });
 
 test('it refuses an imp that does not exist', async () => {
-  const name = `${readSuitePrefix('proxy')}nope`;
+  const name = `${getSuitePrefix('proxy')}nope`;
 
   const refused = await tryImp(['proxy', name, '0:8080']);
 

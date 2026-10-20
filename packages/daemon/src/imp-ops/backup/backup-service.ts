@@ -19,9 +19,9 @@ import type { NetworkService } from '../../network/networks/network-service';
 import { parseStoredPolicy } from '../../platform/db/egress';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
-import { createKeyedMutex } from '../../platform/process/keyed-mutex';
+import { getErrorMessage } from '../../platform/process/get-error-message';
+import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { printLog } from '../../platform/process/print-log';
-import { readErrorMessage } from '../../platform/process/read-error-message';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
 import { NOT_BACKED_UP_REASON } from '../../surface/api-errors';
 import { sendFreeze, sendThaw } from '../../vm/agent-client/agent-requests';
@@ -131,14 +131,14 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
   const restoreDeps = { ...deps, restic, paths, log, now };
 
   // a run, a restore, a prune and a check never overlap
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const runExclusive = <T>(task: () => Promise<T>) => mutex.runExclusive('backup', task);
 
   // pruneLocks: prunes in a row that found another restic's lock. The next
   // tick tries again, up to PRUNE_LOCK_TRIES, instead of waiting for a run.
   const retry = { failures: 0, lastFailureAt: 0, pruneLocks: 0 };
 
-  const isRunDue = (): boolean => {
+  const probeRunDue = (): boolean => {
     const at = now().getTime();
     const intervalMs = deps.backup.intervalS * 1000;
 
@@ -160,7 +160,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
   };
 
   const writeState = (change: Partial<BackupState>): void => {
-    mkdirSync(paths.dir, { recursive: true });
+    mkdirSync(paths.directoryPath, { recursive: true });
     writeFileDurably(paths.state, JSON.stringify({ ...readState(), ...change }));
   };
 
@@ -179,7 +179,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
     try {
       await freezer.freeze(vsock, FREEZE_TIMEOUT_MS);
     } catch (error) {
-      log(`impd: backup: ${imp.name}: no freeze, copied unsynced: ${readErrorMessage(error)}`);
+      log(`impd: backup: ${imp.name}: no freeze, copied unsynced: ${getErrorMessage(error)}`);
 
       await storage.createBackupCopy(imp.id, runId, { isReusable: false });
 
@@ -191,7 +191,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
     } finally {
       await freezer.thaw(vsock).catch((error: unknown) => {
         log(
-          `impd: backup: ${imp.name}: thaw failed (the agent thaws on its own): ${readErrorMessage(error)}`,
+          `impd: backup: ${imp.name}: thaw failed (the agent thaws on its own): ${getErrorMessage(error)}`,
         );
       });
     }
@@ -202,7 +202,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
   // a sparse disk's blocks, which restic restores sparse again
   const readTreeUsedBytes = (file: string): number => statSync(join(paths.tree, file)).blocks * 512;
 
-  const buildManifest = (
+  const readManifest = (
     runId: string,
     copy: DatabaseCopy,
     copies: ReadonlyMap<string, DiskCopy>,
@@ -228,6 +228,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
           httpPort: imp.httpPort,
           state: copies.get(imp.id)?.state ?? imp.state,
           synced: copies.get(imp.id)?.synced ?? false,
+          // oxlint-disable-next-line zgeoff/no-abbreviated-names -- a key of the manifest that backups store
           dir: BACKUP_TREE.buildImpDir(imp.id),
           egressPolicy: parseStoredPolicy(imp.egressPolicy, imp.egressAllow).mode,
           egressAllow: parseStoredPolicy(imp.egressPolicy, imp.egressAllow).allow,
@@ -269,6 +270,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
           source: image.source,
           sourceImp: image.sourceImp,
           sizeBytes: image.sizeBytes,
+          // oxlint-disable-next-line zgeoff/no-abbreviated-names -- a key of the manifest that backups store
           dir: BACKUP_TREE.buildImageDir(image.digest),
         })),
       database,
@@ -293,7 +295,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
     // outside the tree: the manifest is what a restore reads, and the
     // database copy would carry whatever later tables hold, so only
     // IMP_BACKUP_DATABASE puts it in
-    const copyPath = join(paths.dir, 'db.sqlite');
+    const copyPath = join(paths.directoryPath, 'db.sqlite');
 
     const copy = await readDatabaseCopy(deps.db, copyPath);
 
@@ -325,9 +327,9 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
 
         copies.set(imp.id, made);
       } catch (error) {
-        skipped.push({ name: imp.name, reason: readErrorMessage(error) });
+        skipped.push({ name: imp.name, reason: getErrorMessage(error) });
 
-        log(`impd: backup: ${imp.name}: left out: ${readErrorMessage(error)}`);
+        log(`impd: backup: ${imp.name}: left out: ${getErrorMessage(error)}`);
       }
     }
 
@@ -348,7 +350,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
       ? { file: BACKUP_TREE.database, sizeBytes: statSync(copyPath).size }
       : null;
 
-    const manifest = buildManifest(runId, copy, copies, tree, excluded, database);
+    const manifest = readManifest(runId, copy, copies, tree, excluded, database);
 
     try {
       mkdirSync(paths.tree, { recursive: true });
@@ -423,7 +425,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
 
       writeState({ lastCheckAt: now(), lastCheckError: null });
     } catch (error) {
-      const message = readErrorMessage(error);
+      const message = getErrorMessage(error);
 
       writeState({ lastCheckAt: now(), lastCheckError: message });
       log(`impd: backup: CHECK FAILED, the repository may be damaged: ${message}`);
@@ -442,7 +444,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
     } catch (error) {
       retry.pruneLocks = isResticLocked(error) ? retry.pruneLocks + 1 : 0;
 
-      log(`impd: backup: PRUNE FAILED: ${readErrorMessage(error)}`);
+      log(`impd: backup: PRUNE FAILED: ${getErrorMessage(error)}`);
     }
   };
 
@@ -494,7 +496,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
 
     runScheduled: () =>
       runExclusive(async () => {
-        if (!isRunDue()) {
+        if (!probeRunDue()) {
           if (retry.pruneLocks > 0 && retry.pruneLocks < PRUNE_LOCK_TRIES) {
             await runPrune();
           }

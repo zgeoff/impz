@@ -3,10 +3,10 @@ import { createConnection } from 'node:net';
 import type { EgressMode } from '@impz/api';
 import { startStubBrokerGuestSocket } from '../../../testing/network/start-stub-broker-guest-socket';
 import { startStubBrokerReplyTarget } from '../../../testing/network/start-stub-broker-reply-target';
-import { findFreePorts } from '../../../testing/platform/find-free-ports';
+import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { parseSubnet } from '../../host-net/net/addressing';
 import type { NewAuditEntry } from '../../platform/db/broker-audit';
-import type { BrokerPeer } from '../../platform/db/find-broker-peer';
+import type { BrokerPeer } from '../../platform/db/read-broker-peer';
 import { startBrokerFront } from './broker-front';
 import { TunnelRefusedError, resolveTunnelTarget } from './tunnel-target';
 
@@ -29,7 +29,7 @@ test('it turns away an imp past its connection cap with 503', async () => {
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -62,7 +62,7 @@ test('it cuts off a client whose time to finish its head runs out mid-head', asy
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -98,7 +98,7 @@ test('it cuts off a client whose time is up before its head is read', async () =
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -121,12 +121,15 @@ test('it cuts off a client whose time is up before its head is read', async () =
 
 test('it gives a client 10 seconds to send its head', async () => {
   const ctx = setupTest();
-  const startHeadDeadline = mock<(ms: number) => AbortSignal>(() => new AbortController().signal);
+
+  const startHeadDeadline = mock<(durationMs: number) => AbortSignal>(
+    () => new AbortController().signal,
+  );
 
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -155,7 +158,7 @@ test('it cuts off a head past the size limit', async () => {
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -181,7 +184,7 @@ test('it closes a connection from a slot with no imp', async () => {
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () => Promise.resolve(undefined),
+    readPeer: () => Promise.resolve(undefined),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
@@ -202,16 +205,16 @@ test('it closes a connection from a slot with no imp', async () => {
 
 test('it closes a connection whose slot changed imps while its head came', async () => {
   const ctx = setupTest();
-  const findPeer = mock<(slot: number) => Promise<BrokerPeer | undefined>>();
+  const readPeer = mock<(slot: number) => Promise<BrokerPeer | undefined>>();
 
-  findPeer
+  readPeer
     .mockResolvedValueOnce({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } })
     .mockResolvedValueOnce({ id: 'imp-2', name: 'other', egress: { mode: 'open', allow: [] } });
 
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer,
+    readPeer,
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),
@@ -236,7 +239,7 @@ test('it refuses a tunnel to a target the check refuses with a 403 that says why
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -271,7 +274,7 @@ test("it resolves a public imp's tunnel under the public policy", async () => {
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'public', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -299,7 +302,7 @@ test('it answers 502 when resolving the target fails for another reason', async 
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -327,12 +330,12 @@ test('it answers 502 when resolving the target fails for another reason', async 
 
 test('it answers 502 when the tunnel target refuses the connection', async () => {
   const ctx = setupTest();
-  const deadPort = findFreePorts(1).take();
+  const deadPort = claimFreePorts(1).take();
 
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -365,7 +368,7 @@ test('it tunnels a granted host on a port other than 443 without a grant lookup'
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted,
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -402,7 +405,7 @@ test('it logs a failure of the connection and closes it', async () => {
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(true),
     openTerminator: () => Promise.reject(new Error('the terminator would not start')),
@@ -434,7 +437,7 @@ test('it records a refused audit row for an imp past its connection cap', async 
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit,
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -477,7 +480,7 @@ test('it records a refused audit row with the method of a head that is not a CON
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit,
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -521,7 +524,7 @@ test('it cuts the host of a refused audit row at 253 characters', async () => {
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit,
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'none', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -553,7 +556,7 @@ test('it records a refused audit row for a tunnel the egress policy does not all
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit,
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'none', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -595,7 +598,7 @@ test('it records a refused audit row for a tunnel to an address the check refuse
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit,
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -641,7 +644,7 @@ test('it records no audit row when resolving the target fails', async () => {
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit,
-    findPeer: () =>
+    readPeer: () =>
       Promise.resolve({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } }),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
@@ -674,7 +677,7 @@ test('it records no audit row for a connection from a slot with no imp', async (
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit,
-    findPeer: () => Promise.resolve(undefined),
+    readPeer: () => Promise.resolve(undefined),
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),

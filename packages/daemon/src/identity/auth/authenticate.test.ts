@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { buildStubTailscale } from '../../../testing/network/build-stub-tailscale';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
-import { createEd25519Key } from '../../surface/ssh/host-key';
+import { generateEd25519Key } from '../../surface/ssh/host-key';
 import { createKnownHosts } from './ambient-request';
 import { isSameOrigin, resolveCaller } from './authenticate';
 import { buildSessionValue } from './session-cookie';
@@ -88,7 +88,7 @@ test('#resolveCaller makes a token, its dashboard session and its bound key one 
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
 
   const made = await tokens.create({ name: 'ci', scope: 'exec', imps: null, sshKeys: [line] });
 

@@ -1,5 +1,5 @@
-import type { ImpdStorage } from './build-impd-storage';
 import type { Config } from './config';
+import type { ImpdStorage } from './create-impd-storage';
 import { createMoveService } from './imp-ops/moves/move-service';
 import type { MoveServiceDeps } from './imp-ops/moves/move-service';
 import type { ImpdDeps } from './impd-deps';

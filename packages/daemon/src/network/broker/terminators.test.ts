@@ -15,21 +15,21 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-term-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-term-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   // the CA every leaf comes from
-  const ca = await loadOrCreateBrokerCa(join(dir, 'ca'));
+  const ca = await loadOrCreateBrokerCa(join(directory, 'ca'));
 
-  return { dir, ca, stack };
+  return { directoryPath: directory, ca, stack };
 }
 
 test('it serves the handler for its pair over TLS on the socket it opens', async () => {
   const ctx = await setupTest();
 
   const terminators = createTerminators({
-    socketDir: join(ctx.dir, 'run'),
+    socketDir: join(ctx.directoryPath, 'run'),
     issueLeaf: ctx.ca.issueLeaf,
     isLeafDue: () => false,
     createHandler: (key) => () => Promise.resolve(new Response(`${key.impId} ${key.host}`)),
@@ -52,11 +52,11 @@ test('it serves the handler for its pair over TLS on the socket it opens', async
 test('it removes the sockets an earlier run left', async () => {
   const ctx = await setupTest();
 
-  mkdirSync(join(ctx.dir, 'run'));
-  writeFileSync(join(ctx.dir, 'run', '1.sock'), '');
+  mkdirSync(join(ctx.directoryPath, 'run'));
+  writeFileSync(join(ctx.directoryPath, 'run', '1.sock'), '');
 
   const terminators = createTerminators({
-    socketDir: join(ctx.dir, 'run'),
+    socketDir: join(ctx.directoryPath, 'run'),
     issueLeaf: ctx.ca.issueLeaf,
     isLeafDue: () => false,
     createHandler: () => () => Promise.resolve(new Response('ok')),
@@ -64,14 +64,14 @@ test('it removes the sockets an earlier run left', async () => {
 
   ctx.stack.defer(() => terminators.stop());
 
-  expect(readdirSync(join(ctx.dir, 'run'))).toStrictEqual([]);
+  expect(readdirSync(join(ctx.directoryPath, 'run'))).toStrictEqual([]);
 });
 
 test('it makes the socket directory owner-only', async () => {
   const ctx = await setupTest();
 
   const terminators = createTerminators({
-    socketDir: join(ctx.dir, 'run'),
+    socketDir: join(ctx.directoryPath, 'run'),
     issueLeaf: ctx.ca.issueLeaf,
     isLeafDue: () => false,
     createHandler: () => () => Promise.resolve(new Response('ok')),
@@ -79,7 +79,7 @@ test('it makes the socket directory owner-only', async () => {
 
   ctx.stack.defer(() => terminators.stop());
 
-  expect(statSync(join(ctx.dir, 'run')).mode & 0o777).toBe(0o700);
+  expect(statSync(join(ctx.directoryPath, 'run')).mode & 0o777).toBe(0o700);
 });
 
 test('it starts one server for a pair opened twice at once', async () => {
@@ -88,7 +88,7 @@ test('it starts one server for a pair opened twice at once', async () => {
   const issueLeaf = mock(ctx.ca.issueLeaf);
 
   const terminators = createTerminators({
-    socketDir: join(ctx.dir, 'run'),
+    socketDir: join(ctx.directoryPath, 'run'),
     issueLeaf,
     isLeafDue: () => false,
     createHandler: () => () => Promise.resolve(new Response('ok')),
@@ -109,7 +109,7 @@ test('it starts a server for each pair', async () => {
   const ctx = await setupTest();
 
   const terminators = createTerminators({
-    socketDir: join(ctx.dir, 'run'),
+    socketDir: join(ctx.directoryPath, 'run'),
     issueLeaf: ctx.ca.issueLeaf,
     isLeafDue: () => false,
     createHandler: () => () => Promise.resolve(new Response('ok')),
@@ -133,7 +133,7 @@ test('it starts a server again for a pair whose start failed', async () => {
   issueLeaf.mockImplementationOnce(() => Promise.reject(new Error('no key')));
 
   const terminators = createTerminators({
-    socketDir: join(ctx.dir, 'run'),
+    socketDir: join(ctx.directoryPath, 'run'),
     issueLeaf,
     isLeafDue: () => false,
     createHandler: () => () => Promise.resolve(new Response('ok')),
@@ -155,7 +155,7 @@ test('it rejects an open whose server cannot start', async () => {
   const ctx = await setupTest();
 
   const terminators = createTerminators({
-    socketDir: join(ctx.dir, 'run'),
+    socketDir: join(ctx.directoryPath, 'run'),
     issueLeaf: () => Promise.reject(new Error('no key')),
     isLeafDue: () => false,
     createHandler: () => () => Promise.resolve(new Response('ok')),
@@ -172,7 +172,7 @@ test('it stops the server of a pair the prune does not keep', async () => {
   const ctx = await setupTest();
 
   const terminators = createTerminators({
-    socketDir: join(ctx.dir, 'run'),
+    socketDir: join(ctx.directoryPath, 'run'),
     issueLeaf: ctx.ca.issueLeaf,
     isLeafDue: () => false,
     createHandler: () => () => Promise.resolve(new Response('ok')),
@@ -198,7 +198,7 @@ test('it keeps the server of a pair the prune keeps', async () => {
   const ctx = await setupTest();
 
   const terminators = createTerminators({
-    socketDir: join(ctx.dir, 'run'),
+    socketDir: join(ctx.directoryPath, 'run'),
     issueLeaf: ctx.ca.issueLeaf,
     isLeafDue: () => false,
     createHandler: () => () => Promise.resolve(new Response('ok')),
@@ -221,7 +221,7 @@ test('it issues a new leaf for a kept pair whose leaf is due', async () => {
   const issued: LeafCertificate[] = [];
 
   const terminators = createTerminators({
-    socketDir: join(ctx.dir, 'run'),
+    socketDir: join(ctx.directoryPath, 'run'),
     issueLeaf: async (host) => {
       const leaf = await ctx.ca.issueLeaf(host);
 
@@ -250,7 +250,7 @@ test('it removes the socket directory when it stops', async () => {
   const ctx = await setupTest();
 
   const terminators = createTerminators({
-    socketDir: join(ctx.dir, 'run'),
+    socketDir: join(ctx.directoryPath, 'run'),
     issueLeaf: ctx.ca.issueLeaf,
     isLeafDue: () => false,
     createHandler: () => () => Promise.resolve(new Response('ok')),
@@ -261,5 +261,5 @@ test('it removes the socket directory when it stops', async () => {
   await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
   await terminators.stop();
 
-  expect(existsSync(join(ctx.dir, 'run'))).toBeFalse();
+  expect(existsSync(join(ctx.directoryPath, 'run'))).toBeFalse();
 });

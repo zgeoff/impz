@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import {
   FRAME_TYPES,
-  createFrameDecoder,
+  buildFrameDecoder,
   encodeFrame,
   encodeJsonFrame,
 } from '../../src/vm/agent-client/frame-codec';
@@ -16,11 +16,11 @@ import { startStubAgent } from './start-stub-agent';
 
 // a temp dir that holds the agent's socket
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-exec-replies-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-exec-replies-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir, socket: join(dir, 'v.sock') };
+  return { directoryPath: directory, socket: join(directory, 'v.sock') };
 }
 
 test('it answers the request with the started frames, and nothing more before stdin ends', async () => {
@@ -42,7 +42,7 @@ test('it answers the request with the started frames, and nothing more before st
     client.destroy();
   });
 
-  const decoder = createFrameDecoder();
+  const decoder = buildFrameDecoder();
   const replies: AgentFrame[] = [];
   const answered = Promise.withResolvers<void>();
 
@@ -95,7 +95,7 @@ test('it passes each stdin payload on, then answers the end of stdin with the ex
     client.destroy();
   });
 
-  const decoder = createFrameDecoder();
+  const decoder = buildFrameDecoder();
   const replies: AgentFrame[] = [];
   const answered = Promise.withResolvers<void>();
 

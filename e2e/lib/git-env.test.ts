@@ -6,11 +6,11 @@ import { updateEnv } from '@impz/test-utils/update-env';
 import { GIT_REPO_ENV_VARS, createGitFreeEnv, runGitChecked, runGitCommand } from './git-env';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'git-env-'));
+  const directory = await mkdtemp(join(tmpdir(), 'git-env-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#GIT_REPO_ENV_VARS holds every variable this git ties to a repository', async () => {
@@ -35,8 +35,8 @@ test('#createGitFreeEnv drops the repository variables and keeps the rest', () =
 test('#runGitCommand runs git in its own repo when this process names another', async () => {
   const ctx = await setupTest();
 
-  const repo = join(ctx.dir, 'repo');
-  const other = join(ctx.dir, 'other');
+  const repo = join(ctx.directoryPath, 'repo');
+  const other = join(ctx.directoryPath, 'other');
 
   await runGitChecked(['git', 'init', '-q', '-b', 'main', repo]);
   await runGitChecked(['git', 'init', '-q', '-b', 'main', other]);
@@ -60,7 +60,7 @@ test('#runGitCommand passes the call’s env over this process’s', async () =>
 test('#runGitChecked rejects on a non-zero exit', async () => {
   const ctx = await setupTest();
 
-  const attempt = runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'main']);
+  const attempt = runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'main']);
 
   await Promise.allSettled([attempt]);
 

@@ -18,14 +18,14 @@ import { readMcpAnswer } from '../../../../mcp/src/test-utils/read-mcp-answer';
 import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
 import { runOAuthSignIn } from '../../../testing/identity/run-oauth-sign-in';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
-import { findFreePorts } from '../../../testing/platform/find-free-ports';
+import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubMcpTransport } from '../../../testing/surface/build-stub-mcp-transport';
 import { buildStubExecGuest } from '../../../testing/vm/build-stub-exec-guest';
 import { startStubExecAgent } from '../../../testing/vm/start-stub-exec-agent';
 import { listApiCalls } from '../../platform/db/api-audit';
 import { createImage } from '../../platform/db/images';
-import { findImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/imps';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 import { createPublicHandler, startPublicListener } from './public-listener';
 
@@ -38,7 +38,7 @@ async function setupTest() {
   const rootToken = randomUUID();
 
   // the port impd's own public listener takes, below the imps' ports
-  const publicPort = findFreePorts(1, {
+  const publicPort = claimFreePorts(1, {
     pick: () => 10_000 + Math.floor(Math.random() * 10_000),
   }).take();
 
@@ -258,7 +258,7 @@ test('it sends the sign-in page with headers that keep it from being framed, cac
   const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
 
   const pending = await createPendingSignIn({
-    handle: (request) => ctx.handle(request, null),
+    respond: (request) => ctx.handle(request, null),
     origin: 'http://127.0.0.1:7171',
     clientID: oauthClient.clientId,
     redirectURI: 'https://client.example/callback',
@@ -302,7 +302,7 @@ test('it escapes the redirect URI that the consent page shows after approval', a
   invariant(approver);
 
   const pending = await createPendingSignIn({
-    handle: (request) => ctx.handle(request, null),
+    respond: (request) => ctx.handle(request, null),
     origin: 'http://127.0.0.1:7171',
     clientID: oauthClient.clientId,
     redirectURI: 'https://client.example/cb?next=%22%3E&x=<b>"\'',
@@ -412,7 +412,7 @@ test.each([
   const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
 
   const pending = await createPendingSignIn({
-    handle: (request) => ctx.handle(request, null),
+    respond: (request) => ctx.handle(request, null),
     origin: 'http://127.0.0.1:7171',
     clientID: oauthClient.clientId,
     redirectURI: 'https://client.example/callback',
@@ -440,7 +440,7 @@ test('it refuses a sign-in form with an action it does not know', async () => {
   const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
 
   const pending = await createPendingSignIn({
-    handle: (request) => ctx.handle(request, null),
+    respond: (request) => ctx.handle(request, null),
     origin: 'http://127.0.0.1:7171',
     clientID: oauthClient.clientId,
     redirectURI: 'https://client.example/callback',
@@ -494,7 +494,7 @@ test('it ends the grant whose client revokes its refresh token, and refuses its 
 
   const tokens = await runOAuthSignIn(
     {
-      handle: (request) => ctx.handle(request, null),
+      respond: (request) => ctx.handle(request, null),
       origin: 'http://127.0.0.1:7171',
       clientID: oauthClient.clientId,
       redirectURI: 'https://client.example/callback',
@@ -548,7 +548,7 @@ test('it signs a client in over HTTP to tokens for the approved scope, sending n
   invariant(approver);
 
   const pending = await createPendingSignIn({
-    handle: (request) => ctx.handle(request, null),
+    respond: (request) => ctx.handle(request, null),
     origin: 'http://127.0.0.1:7171',
     clientID: oauthClient.clientId,
     redirectURI: 'https://client.example/callback',
@@ -780,7 +780,7 @@ test('it lists an exec grant’s tools over /mcp, without the manage ones', asyn
 
   const tokens = await runOAuthSignIn(
     {
-      handle: (request) => ctx.handle(request, null),
+      respond: (request) => ctx.handle(request, null),
       origin: 'http://127.0.0.1:7171',
       clientID: oauthClient.clientId,
       redirectURI: 'https://client.example/callback',
@@ -855,7 +855,7 @@ test('it ends a grant’s running command when the grant is revoked', async () =
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const boxImp = await findImpByName(ctx.db, 'box');
+  const boxImp = await readImpByName(ctx.db, 'box');
 
   invariant(boxImp);
 
@@ -878,7 +878,7 @@ test('it ends a grant’s running command when the grant is revoked', async () =
 
   const tokens = await runOAuthSignIn(
     {
-      handle: (request) => ctx.handle(request, null),
+      respond: (request) => ctx.handle(request, null),
       origin: 'http://127.0.0.1:7171',
       clientID: oauthClient.clientId,
       redirectURI: 'https://client.example/callback',
@@ -972,7 +972,7 @@ test('it refuses /mcp to a revoked grant’s session', async () => {
 
   const tokens = await runOAuthSignIn(
     {
-      handle: (request) => ctx.handle(request, null),
+      respond: (request) => ctx.handle(request, null),
       origin: 'http://127.0.0.1:7171',
       clientID: oauthClient.clientId,
       redirectURI: 'https://client.example/callback',
@@ -1047,7 +1047,7 @@ test('it ends the grant a removed token approved, and its running command', asyn
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const boxImp = await findImpByName(ctx.db, 'box');
+  const boxImp = await readImpByName(ctx.db, 'box');
 
   invariant(boxImp);
 
@@ -1070,7 +1070,7 @@ test('it ends the grant a removed token approved, and its running command', asyn
 
   const tokens = await runOAuthSignIn(
     {
-      handle: (request) => ctx.handle(request, null),
+      respond: (request) => ctx.handle(request, null),
       origin: 'http://127.0.0.1:7171',
       clientID: oauthClient.clientId,
       redirectURI: 'https://client.example/callback',
@@ -1175,7 +1175,7 @@ test('it lists only the read tools to a read grant', async () => {
 
   const tokens = await runOAuthSignIn(
     {
-      handle: (request) => ctx.handle(request, null),
+      respond: (request) => ctx.handle(request, null),
       origin: 'http://127.0.0.1:7171',
       clientID: oauthClient.clientId,
       redirectURI: 'https://client.example/callback',
@@ -1259,7 +1259,7 @@ test.each([
 
     await ctx.client.imps.create({ name: 'box' });
 
-    const boxImp = await findImpByName(ctx.db, 'box');
+    const boxImp = await readImpByName(ctx.db, 'box');
 
     invariant(boxImp);
 
@@ -1275,7 +1275,7 @@ test.each([
 
     await ctx.client.imps.create({ name: 'dev-a' });
 
-    const devaImp = await findImpByName(ctx.db, 'dev-a');
+    const devaImp = await readImpByName(ctx.db, 'dev-a');
 
     invariant(devaImp);
 
@@ -1298,7 +1298,7 @@ test.each([
 
     const tokens = await runOAuthSignIn(
       {
-        handle: (request) => ctx.handle(request, null),
+        respond: (request) => ctx.handle(request, null),
         origin: 'http://127.0.0.1:7171',
         clientID: oauthClient.clientId,
         redirectURI: 'https://client.example/callback',
@@ -1387,7 +1387,7 @@ test('it audits a grant’s change under its client and grant id', async () => {
 
   await ctx.client.imps.create({ name: 'dev-a' });
 
-  const devaImp = await findImpByName(ctx.db, 'dev-a');
+  const devaImp = await readImpByName(ctx.db, 'dev-a');
 
   invariant(devaImp);
 
@@ -1410,7 +1410,7 @@ test('it audits a grant’s change under its client and grant id', async () => {
 
   const tokens = await runOAuthSignIn(
     {
-      handle: (request) => ctx.handle(request, null),
+      respond: (request) => ctx.handle(request, null),
       origin: 'http://127.0.0.1:7171',
       clientID: oauthClient.clientId,
       redirectURI: 'https://client.example/callback',
@@ -1493,7 +1493,7 @@ test('it audits a grant’s change refused past its patterns as FORBIDDEN', asyn
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const boxImp = await findImpByName(ctx.db, 'box');
+  const boxImp = await readImpByName(ctx.db, 'box');
 
   invariant(boxImp);
 
@@ -1516,7 +1516,7 @@ test('it audits a grant’s change refused past its patterns as FORBIDDEN', asyn
 
   const tokens = await runOAuthSignIn(
     {
-      handle: (request) => ctx.handle(request, null),
+      respond: (request) => ctx.handle(request, null),
       origin: 'http://127.0.0.1:7171',
       clientID: oauthClient.clientId,
       redirectURI: 'https://client.example/callback',
@@ -1881,7 +1881,7 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const boxImp = await findImpByName(ctx.db, 'box');
+  const boxImp = await readImpByName(ctx.db, 'box');
 
   invariant(boxImp);
 
@@ -1904,7 +1904,7 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
 
   const tokens = await runOAuthSignIn(
     {
-      handle: (request) => ctx.handle(request, null),
+      respond: (request) => ctx.handle(request, null),
       origin: 'http://127.0.0.1:7171',
       clientID: oauthClient.clientId,
       redirectURI: 'https://client.example/callback',
@@ -2093,7 +2093,7 @@ test('it refuses a signed-in notification too large for the allowance with every
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const boxImp = await findImpByName(ctx.db, 'box');
+  const boxImp = await readImpByName(ctx.db, 'box');
 
   invariant(boxImp);
 
@@ -2116,7 +2116,7 @@ test('it refuses a signed-in notification too large for the allowance with every
 
   const tokens = await runOAuthSignIn(
     {
-      handle: (request) => ctx.handle(request, null),
+      respond: (request) => ctx.handle(request, null),
       origin: 'http://127.0.0.1:7171',
       clientID: oauthClient.clientId,
       redirectURI: 'https://client.example/callback',
@@ -2224,7 +2224,7 @@ test('it ends a signed-in session with its DELETE with every slot held', async (
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const boxImp = await findImpByName(ctx.db, 'box');
+  const boxImp = await readImpByName(ctx.db, 'box');
 
   invariant(boxImp);
 
@@ -2247,7 +2247,7 @@ test('it ends a signed-in session with its DELETE with every slot held', async (
 
   const tokens = await runOAuthSignIn(
     {
-      handle: (request) => ctx.handle(request, null),
+      respond: (request) => ctx.handle(request, null),
       origin: 'http://127.0.0.1:7171',
       clientID: oauthClient.clientId,
       redirectURI: 'https://client.example/callback',

@@ -74,9 +74,9 @@ test('it relays a client in the imp to the local unix socket, both ways', async 
     { stack: ctx.stack },
   );
 
-  const dir = await mkdtemp(join(tmpdir(), 'reverse-local-'));
+  const directory = await mkdtemp(join(tmpdir(), 'reverse-local-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   // the local app: answers each chunk in capitals, then closes
   const app = createServer({ allowHalfOpen: true }, (socket) => {
@@ -89,12 +89,12 @@ test('it relays a client in the imp to the local unix socket, both ways', async 
     app.close();
   });
 
-  app.listen(join(dir, 'app.sock'));
+  app.listen(join(directory, 'app.sock'));
 
   const forwarding = await startReverseForward(
     { url: ctx.url, token: ctx.rootToken, host: null },
     'box',
-    parseReverse(`:${join(dir, 'app.sock')}`),
+    parseReverse(`:${join(directory, 'app.sock')}`),
     { writeNotice: () => {} },
   );
 
@@ -375,7 +375,7 @@ test('it listens again once the grace passes on an imp that stayed running', asy
     expect(agent.listens).toHaveLength(2);
   });
 
-  expect(grace.ms).toBe(30_000);
+  expect(grace.durationMs).toBe(30_000);
 });
 
 test('it fails the forward for good when the agent refuses the listen after a loss', async () => {
@@ -593,7 +593,7 @@ test('it listens again after the retry time when impd closes the tunnel to resta
     expect(writeNotice).toHaveBeenCalledTimes(2);
   });
 
-  expect(retry.ms).toBe(2000);
+  expect(retry.durationMs).toBe(2000);
 
   expect(writeNotice.mock.calls).toStrictEqual([
     [

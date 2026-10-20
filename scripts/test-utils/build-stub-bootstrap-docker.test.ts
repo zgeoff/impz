@@ -6,14 +6,14 @@ import { buildStubBootstrapDocker } from './build-stub-bootstrap-docker';
 import { createStubBin } from './create-stub-bin';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-bootstrap-docker-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-bootstrap-docker-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   return {
-    dir,
+    directoryPath: directory,
   };
 }
 
@@ -21,7 +21,7 @@ test('it answers the daemon version', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ serverVersion: '27.3.1' }),
   );
@@ -38,7 +38,7 @@ test('it answers the daemon version', () => {
 
 test('it fails the daemon version when no version is set, as a daemon that is down', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubBootstrapDocker({}));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
 
   const result = Bun.spawnSync([
     join(docker.bin, 'docker'),
@@ -57,7 +57,7 @@ test('it answers the imp-host network in any format but the container list', () 
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({
       hostNetwork: 'true br-imphost fd12::/64',
@@ -81,7 +81,7 @@ test('it answers the containers on the imp-host network, each followed by a blan
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({
       hostNetwork: 'true br-imphost fd12::/64',
@@ -103,7 +103,7 @@ test('it answers the containers on the imp-host network, each followed by a blan
 
 test('it fails each inspect of the imp-host network when there is none', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubBootstrapDocker({}));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
 
   const result = Bun.spawnSync(
     [
@@ -125,7 +125,7 @@ test('it inspects an image the host holds and fails one it lacks', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ images: ['imp-host:1'] }),
   );
@@ -147,7 +147,7 @@ test('it inspects an image the host holds and fails one it lacks', () => {
 
 test('it loads an archive without adding the image a caller then inspects', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubBootstrapDocker({}));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
 
   const result = Bun.spawnSync(
     [
@@ -165,7 +165,7 @@ test('it prints the seccomp profile of an image that carries one', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ images: ['imp-host:1'], seccompImages: ['imp-host:1'] }),
   );
@@ -186,7 +186,7 @@ test('it fails the cat of the seccomp profile in an image without one', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ images: ['imp-host:1'] }),
   );
@@ -210,7 +210,7 @@ test('it answers the imp-host container with what each of its fields sets', () =
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({
       impInfo: '{"storage":{"backend":"xfs"}}',
@@ -240,7 +240,7 @@ test('it answers the imp-host container with what each of its fields sets', () =
 
 test('it answers the imp-host container with nothing for each field left out', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubBootstrapDocker({}));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
 
   const result = Bun.spawnSync(
     ['bash', '-c', 'docker port imp-host; docker exec imp-host ip -6 route show default; echo $?'],
@@ -252,7 +252,7 @@ test('it answers the imp-host container with nothing for each field left out', (
 
 test('it fails a call bootstrap.sh does not make as unexpected', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubBootstrapDocker({}));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
   const result = Bun.spawnSync([join(docker.bin, 'docker'), 'ps']);
 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({

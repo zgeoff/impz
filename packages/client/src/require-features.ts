@@ -112,7 +112,7 @@ export async function readFeatures(
 
 // the features of `wanted` a system.info answer lacks, for a caller that
 // read it anyway
-export function findMissingFeatures(
+export function collectMissingFeatures(
   info: Pick<SystemInfo, 'features'>,
   wanted: readonly ImpdFeature[],
 ): ImpdFeature[] {

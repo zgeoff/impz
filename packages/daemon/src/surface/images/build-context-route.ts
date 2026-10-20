@@ -13,20 +13,16 @@ import type { BuildRun } from '../../imps/images/create-build-runs';
 import type { ImageService } from '../../imps/images/image-service';
 import type { ApiAudit } from '../../platform/audit/api-audit';
 import type { ImageRecord } from '../../platform/db/images';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { readErrorMessage } from '../../platform/process/read-error-message';
 import { buildUploadsDir } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 
 const PROCEDURE = 'images.build';
 
-function readNoSecret(): Promise<null> {
-  return Promise.resolve(null);
-}
-
 export interface BuildContextRoute {
   // `toApi` turns the image into what the API shows
-  readonly handle: (
+  readonly respond: (
     request: Request,
     caller: Readonly<Caller>,
     toApi: (image: ImageRecord) => Image,
@@ -100,7 +96,7 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
   };
 
   return {
-    handle: async (request, caller, toApi) => {
+    respond: async (request, caller, toApi) => {
       const startedAt = deps.now();
       const params = Object.fromEntries(new URL(request.url).searchParams);
       const parsed = ImageBuildQuerySchema.safeParse(params);
@@ -115,7 +111,7 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
         const known =
           error instanceof ORPCError
             ? error
-            : new ORPCError('INTERNAL_SERVER_ERROR', { message: readErrorMessage(error) });
+            : new ORPCError('INTERNAL_SERVER_ERROR', { message: getErrorMessage(error) });
 
         return { code: String(known.code), message: known.message, status: known.status };
       };
@@ -237,43 +233,6 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
   };
 }
 
-// a client from before the stream sends no Accept, and gets JSON at the end
-function isStreamAccepted(request: Request): boolean {
-  return request.headers.get('accept')?.includes(IMAGE_BUILD_STREAM_TYPE) === true;
-}
-
-// answered with its code, as oRPC would
-function sendError(failure: BuildFailure): Response {
-  return Response.json(
-    { code: failure.code, message: failure.message },
-    { status: failure.status },
-  );
-}
-
-// The bytes the body may hold. A Content-Length can only lower the limit:
-// writeBody counts the bytes that come, whatever the header said.
-function readLimit(request: Request, maxBytes: number): number {
-  const declared = Number(request.headers.get('content-length') ?? Number.NaN);
-
-  if (!Number.isSafeInteger(declared) || declared < 0) {
-    return maxBytes;
-  }
-
-  if (declared > maxBytes) {
-    throw buildTooLargeError(maxBytes);
-  }
-
-  return declared;
-}
-
-function buildTooLargeError(maxBytes: number): ORPCError<string, unknown> {
-  const mib = String(Math.floor(maxBytes / 1024 ** 2));
-
-  return new ORPCError('PAYLOAD_TOO_LARGE', {
-    message: `the build context is larger than the limit, ${mib} MiB (IMP_BUILD_CONTEXT_MAX_MIB)`,
-  });
-}
-
 // Streams the body to `path` and stops past `limitBytes`
 async function writeBody(
   request: Request,
@@ -312,4 +271,45 @@ async function writeBody(
   if (written === 0) {
     throw new ORPCError('BAD_REQUEST', { message: 'the build context is empty: send a tar' });
   }
+}
+
+function buildTooLargeError(maxBytes: number): ORPCError<string, unknown> {
+  const mib = String(Math.floor(maxBytes / 1024 ** 2));
+
+  return new ORPCError('PAYLOAD_TOO_LARGE', {
+    message: `the build context is larger than the limit, ${mib} MiB (IMP_BUILD_CONTEXT_MAX_MIB)`,
+  });
+}
+
+function readNoSecret(): Promise<null> {
+  return Promise.resolve(null);
+}
+
+// answered with its code, as oRPC would
+function sendError(failure: BuildFailure): Response {
+  return Response.json(
+    { code: failure.code, message: failure.message },
+    { status: failure.status },
+  );
+}
+
+// The bytes the body may hold. A Content-Length can only lower the limit:
+// writeBody counts the bytes that come, whatever the header said.
+function readLimit(request: Request, maxBytes: number): number {
+  const declared = Number(request.headers.get('content-length') ?? Number.NaN);
+
+  if (!Number.isSafeInteger(declared) || declared < 0) {
+    return maxBytes;
+  }
+
+  if (declared > maxBytes) {
+    throw buildTooLargeError(maxBytes);
+  }
+
+  return declared;
+}
+
+// a client from before the stream sends no Accept, and gets JSON at the end
+function isStreamAccepted(request: Request): boolean {
+  return request.headers.get('accept')?.includes(IMAGE_BUILD_STREAM_TYPE) === true;
 }

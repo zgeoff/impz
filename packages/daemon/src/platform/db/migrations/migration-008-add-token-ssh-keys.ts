@@ -8,16 +8,16 @@ export const MIGRATION_008_ADD_TOKEN_SSH_KEYS: Migration = {
     // an SSH key bound to a token (docs/guides/ssh.md#keys-bound-to-tokens)
     await db.schema
       .createTable('token_ssh_keys')
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('token_id', 'text', (c) => c.notNull().references('tokens.id'))
+      .addColumn('id', 'text', (column) => column.primaryKey())
+      .addColumn('token_id', 'text', (column) => column.notNull().references('tokens.id'))
 
       // `SHA256:<base64>` of the key blob; a key binds to one token at most
-      .addColumn('fingerprint', 'text', (c) => c.notNull().unique())
+      .addColumn('fingerprint', 'text', (column) => column.notNull().unique())
 
       // `<type> <base64>`, without the comment
-      .addColumn('public_key', 'text', (c) => c.notNull())
-      .addColumn('comment', 'text', (c) => c.notNull())
-      .addColumn('created_at', 'integer', (c) => c.notNull())
+      .addColumn('public_key', 'text', (column) => column.notNull())
+      .addColumn('comment', 'text', (column) => column.notNull())
+      .addColumn('created_at', 'integer', (column) => column.notNull())
       .execute();
 
     await db.schema

@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { utils } from 'ssh2';
-import { createEd25519Key, loadOrCreateHostKey, readFingerprint, setupSshDir } from './host-key';
+import { generateEd25519Key, loadOrCreateHostKey, readFingerprint, setupSshDir } from './host-key';
 
 async function setupTest() {
   const dataDir = await mkdtemp(join(tmpdir(), 'imp-hostkey-'));
@@ -52,7 +52,7 @@ test('it makes an ed25519 host key that ssh2 reads back', async () => {
 });
 
 test('it reads a key’s fingerprint as SHA256 and unpadded base64', () => {
-  expect(readFingerprint(createEd25519Key().private)).toMatch(/^SHA256:[\w+\/]{43}$/v);
+  expect(readFingerprint(generateEd25519Key().private)).toMatch(/^SHA256:[\w+\/]{43}$/v);
 });
 
 test('it rejects a fingerprint of a key it cannot parse', () => {
@@ -61,9 +61,9 @@ test('it rejects a fingerprint of a key it cannot parse', () => {
 
 // ssh2's generator makes a key that does not parse about once in 256
 test('it makes the key again when the first one does not read back', () => {
-  const readable = createEd25519Key();
+  const readable = generateEd25519Key();
   const pairs = [{ private: 'garbage', public: 'garbage' }, readable];
-  const made = createEd25519Key(() => pairs.shift() ?? readable);
+  const made = generateEd25519Key(() => pairs.shift() ?? readable);
 
   expect(made).toBe(readable);
 });
@@ -72,7 +72,7 @@ test('it gives up after 16 keys that do not read back', () => {
   const tries = { count: 0 };
 
   const createKey = () =>
-    createEd25519Key(() => {
+    generateEd25519Key(() => {
       tries.count += 1;
 
       return { private: 'garbage', public: 'garbage' };

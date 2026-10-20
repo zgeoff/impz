@@ -15,7 +15,7 @@ export const LAYER_TABLE = {
     process: 'platform/process',
     telemetry: 'platform/telemetry',
     'merge-signals': 'platform/process/merge-signals',
-    'read-error-message': 'platform/process/read-error-message',
+    'get-error-message': 'platform/process/get-error-message',
 
     // host-net: the host's addressing, TAP devices and routes
     net: 'host-net/net',
@@ -68,18 +68,18 @@ export const LAYER_TABLE = {
     'api-errors': 'surface/api-errors',
     'api-listen-options': 'surface/api-listen-options',
     'auth/session-routes': 'surface/auth/session-routes',
-    'build-app': 'surface/build-app',
     'build-audit-routes': 'surface/build-audit-routes',
-    'build-dashboard-routes': 'surface/build-dashboard-routes',
-    'build-grant-routes': 'surface/build-grant-routes',
-    'build-image-routes': 'surface/build-image-routes',
-    'build-implementer': 'surface/build-implementer',
-    'build-network-routes': 'surface/build-network-routes',
-    'build-oauth-routes': 'surface/build-oauth-routes',
-    'build-router': 'surface/build-router',
-    'build-secret-routes': 'surface/build-secret-routes',
-    'build-system-routes': 'surface/build-system-routes',
-    'build-token-routes': 'surface/build-token-routes',
+    'create-app': 'surface/create-app',
+    'create-dashboard-routes': 'surface/create-dashboard-routes',
+    'create-grant-routes': 'surface/create-grant-routes',
+    'create-image-routes': 'surface/create-image-routes',
+    'create-implementer': 'surface/create-implementer',
+    'create-network-routes': 'surface/create-network-routes',
+    'create-oauth-routes': 'surface/create-oauth-routes',
+    'create-router': 'surface/create-router',
+    'create-secret-routes': 'surface/create-secret-routes',
+    'create-system-routes': 'surface/create-system-routes',
+    'create-token-routes': 'surface/create-token-routes',
     dashboard: 'surface/dashboard',
     'exec/exec-grant': 'surface/exec/exec-grant',
     'exec/exec-tickets': 'surface/exec/exec-tickets',
@@ -99,15 +99,15 @@ export const LAYER_TABLE = {
 
   // the composition root's files, which import every layer and stay at the top of src
   rootStems: [
-    'build-impd-app',
-    'build-impd-services',
-    'build-impd-storage',
-    'build-tailnet-access',
     'config',
     'create-impd',
+    'create-impd-app',
     'create-impd-firewall',
     'create-impd-imps',
     'create-impd-moves',
+    'create-impd-services',
+    'create-impd-storage',
+    'create-tailnet-access',
     'impd-deps',
     'impd-startup-steps',
     'index',
@@ -127,7 +127,9 @@ const PLACED_PREFIXES = new Set(
   Object.values(LAYER_TABLE.moves).map((target) => target.split('/').slice(0, 2).join('/')),
 );
 
-const MOVE_KEYS = Object.keys(LAYER_TABLE.moves).toSorted((a, b) => b.length - a.length);
+const MOVE_KEYS = Object.keys(LAYER_TABLE.moves).toSorted(
+  (left, right) => right.length - left.length,
+);
 
 // the path under src that `path` moves to, or `path` itself when it is already placed or stays
 export function planLayerPath(path: string): string {

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { loadConfig } from '../../src/config';
 import { createDockerProxy } from '../../src/imps/docker-proxy/proxy';
-import { createActivityTracker } from '../../src/imps/imps/activity-tracker';
+import { buildActivityTracker } from '../../src/imps/imps/activity-tracker';
 import { createForwardedPeers } from '../../src/network/proxy/forwarded-peers';
 import { startWakeProxy } from '../../src/network/proxy/wake-proxy';
 import { openDatabase } from '../../src/platform/db/open-database';
@@ -63,7 +63,7 @@ async function startProxy(stack: Readonly<AsyncDisposableStack>, origin: string)
     db,
     imps: {
       requireRunning: () => Promise.reject(new Error('no imp behind this proxy')),
-      tracker: createActivityTracker(),
+      tracker: buildActivityTracker(),
       recordActivity: () => Promise.resolve(),
     },
     log: () => {},
@@ -85,7 +85,7 @@ async function startProxy(stack: Readonly<AsyncDisposableStack>, origin: string)
 }
 
 // imp-docker-proxy's pull and export, to the engine at `socket`
-function buildDockerProxyCalls(socket: string): [string, () => Promise<Response>][] {
+function makeDockerProxyCalls(socket: string): [string, () => Promise<Response>][] {
   const proxy = createDockerProxy({
     upstreamSocket: socket,
     token: 'test-token',
@@ -118,9 +118,9 @@ function buildDockerProxyCalls(socket: string): [string, () => Promise<Response>
 
 const stack = new AsyncDisposableStack();
 
-function buildCalls(): [string, () => Promise<Response>][] {
+function makeCalls(): [string, () => Promise<Response>][] {
   if (args.via === 'docker-proxy') {
-    return buildDockerProxyCalls(args.socket);
+    return makeDockerProxyCalls(args.socket);
   }
 
   const origin = args.origin;
@@ -146,7 +146,7 @@ function buildCalls(): [string, () => Promise<Response>][] {
   ];
 }
 
-await Promise.all(buildCalls().map(([kind, send]) => runCall(kind, send)));
+await Promise.all(makeCalls().map(([kind, send]) => runCall(kind, send)));
 await stack.disposeAsync();
 
 process.exit(0);

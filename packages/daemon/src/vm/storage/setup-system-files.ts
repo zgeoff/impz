@@ -29,7 +29,7 @@ export async function setupSystemFiles(config: Config): Promise<SystemFiles> {
   const guestKernel = readKernelInfo(kernel);
 
   // renamed over: a VM that has the old file open keeps the old inode
-  if (config.kernelSource !== null && !hasContent(config.kernelPath, kernel)) {
+  if (config.kernelSource !== null && !probeContent(config.kernelPath, kernel)) {
     writeCopy(config.kernelSource, config.kernelPath);
   }
 
@@ -54,7 +54,7 @@ export async function setupSystemFiles(config: Config): Promise<SystemFiles> {
 }
 
 // compared byte for byte: the source is hashed once already
-function hasContent(path: string, content: Uint8Array): boolean {
+function probeContent(path: string, content: Uint8Array): boolean {
   return existsSync(path) && Buffer.from(content).equals(readFileSync(path));
 }
 

@@ -123,7 +123,7 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
 
   // The zone that holds the name: walk up its labels until one is a zone
   // the token can see, so imp.example.com and imp.example.co.uk both work.
-  const findZone = async (fqdn: string): Promise<Zone> => {
+  const readZone = async (fqdn: string): Promise<Zone> => {
     const cached = zones.get(fqdn);
 
     if (cached !== undefined) {
@@ -158,7 +158,7 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
   };
 
   // the A records named exactly `fqdn` that carry this owner's comment
-  const findOwnA = async (zoneId: string, fqdn: string, owner: string) => {
+  const readOwnA = async (zoneId: string, fqdn: string, owner: string) => {
     const query = `type=A&name=${encodeURIComponent(fqdn)}`;
 
     const result = await sendRequest('GET', `/zones/${zoneId}/dns_records?${query}`);
@@ -168,7 +168,7 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
 
   return {
     addTxt: async (fqdn, value) => {
-      const zone = await findZone(fqdn);
+      const zone = await readZone(fqdn);
 
       const result = await sendRequest('POST', `/zones/${zone.id}/dns_records`, {
         type: 'TXT',
@@ -185,12 +185,12 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
       await sendRequest('DELETE', `/zones/${record.id.replace('/', '/dns_records/')}`);
     },
     waitForTxt: async (fqdn, values) => {
-      const zone = await findZone(fqdn);
+      const zone = await readZone(fqdn);
 
       await waitForTxt(zone.name_servers, fqdn, values, options.propagation);
     },
     setA: async (fqdn, ip, owner = MANAGED_COMMENT) => {
-      const zone = await findZone(fqdn);
+      const zone = await readZone(fqdn);
 
       const query = `name=${encodeURIComponent(fqdn)}`;
 
@@ -232,7 +232,7 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
       }
     },
     listA: async (domain, owner) => {
-      const zone = await findZone(domain);
+      const zone = await readZone(domain);
 
       const found = new Map<string, string>();
 
@@ -266,22 +266,14 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
       }
     },
     removeA: async (fqdn, owner) => {
-      const zone = await findZone(fqdn);
-      const records = await findOwnA(zone.id, fqdn, owner);
+      const zone = await readZone(fqdn);
+      const records = await readOwnA(zone.id, fqdn, owner);
 
       for (const record of records) {
         await sendRequest('DELETE', `/zones/${zone.id}/dns_records/${record.id}`);
       }
     },
   };
-}
-
-function parseJsonOrNull(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
 }
 
 // fetch, with the token cut out of its errors: Bun names a header value it
@@ -307,5 +299,13 @@ async function sendFetch(
 
     // oxlint-disable-next-line preserve-caught-error -- the cause holds the token
     throw new Error(message.replaceAll(token, '<token>'));
+  }
+}
+
+function parseJsonOrNull(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
   }
 }

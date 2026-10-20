@@ -1,7 +1,7 @@
 import { isDiskFullError } from '../../surface/api-errors';
 import type { ExecStream } from '../../vm/agent-client/exec-stream';
 import type { SessionLogState } from './create-session-log-state';
-import { readGenerationBounds } from './generation-log';
+import { getGenerationBounds } from './generation-log';
 import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp } from './session-log-service';
 
@@ -56,7 +56,7 @@ export function makeRunTap(
             ctx.send({ type: 'bytes.add', impId: imp.id, bytes: event.data.byteLength });
           }
         } else if (event.type === 'exit') {
-          const end = readGenerationBounds(entry.log.readMeta()).logEnd;
+          const end = getGenerationBounds(entry.log.readMeta()).logEnd;
 
           await ctx.writeEnd(entry, { end, exitCode: toExitCode(event.code, event.signal) });
         }

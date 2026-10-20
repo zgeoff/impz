@@ -8,7 +8,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import type { CpuSettings } from '../../platform/db/imps';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { readProcessCgroup } from './process-owner';
 
 // cpu.max's period: a limit of 1.5 cores is a quota of 150000 per 100000 µs
@@ -81,7 +81,7 @@ export interface CpuCgroups {
 
   // whether it did since the last setup or adopt, for a VM found dead: a
   // cgroup that a busy remove kept still counts an older VM's kill
-  readonly hasOomKillSinceStart: (impId: string) => boolean;
+  readonly probeOomKillSinceStart: (impId: string) => boolean;
 
   // SIGKILL to every process in the cgroup at once (cgroup.kill), so one that
   // forked from Firecracker cannot outlive it; nothing without the cgroup
@@ -99,7 +99,7 @@ interface CpuCgroupOptions {
   // how remove takes a cgroup and waits between tries; rmdirSync and
   // Bun.sleep by default
   readonly rmdir?: (path: string) => void;
-  readonly sleep?: (ms: number) => Promise<void>;
+  readonly sleep?: (durationMs: number) => Promise<void>;
 }
 
 export function formatCpuMax(limit: number | null): string {
@@ -148,9 +148,9 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
   const procRoot = options.procRoot ?? '/proc';
   const rmdir = options.rmdir ?? rmdirSync;
   const sleep = options.sleep ?? Bun.sleep;
-  const isEnforced = isControllerDelegated(imps, 'cpu');
-  const isMemoryEnforced = isEnforced && isControllerDelegated(imps, 'memory');
-  const findDir = (impId: string): string => join(imps, impId);
+  const isEnforced = probeControllerDelegated(imps, 'cpu');
+  const isMemoryEnforced = isEnforced && probeControllerDelegated(imps, 'memory');
+  const getDir = (impId: string): string => join(imps, impId);
 
   const guestMibs = new Map<string, number>();
 
@@ -159,7 +159,7 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
 
   const readOomKills = (impId: string): number | null => {
     try {
-      const events = readFileSync(join(findDir(impId), 'memory.events'), 'utf8');
+      const events = readFileSync(join(getDir(impId), 'memory.events'), 'utf8');
 
       return parseOomKills(events);
     } catch {
@@ -172,8 +172,8 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
   };
 
   const writeSettings = (impId: string, cpu: CpuSettings, limit: number | null): void => {
-    writeFileSync(join(findDir(impId), 'cpu.weight'), String(cpu.weight));
-    writeFileSync(join(findDir(impId), 'cpu.max'), formatCpuMax(limit));
+    writeFileSync(join(getDir(impId), 'cpu.weight'), String(cpu.weight));
+    writeFileSync(join(getDir(impId), 'cpu.max'), formatCpuMax(limit));
   };
 
   // No swap, and an OOM kill takes the whole VM, never one thread of it. No
@@ -185,12 +185,12 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
       return;
     }
 
-    const dir = findDir(impId);
+    const directory = getDir(impId);
 
-    writeFileSync(join(dir, 'memory.max'), buildMemoryMax(guestMib));
-    writeFileSync(join(dir, 'memory.high'), 'max');
-    writeFileSync(join(dir, 'memory.swap.max'), '0');
-    writeFileSync(join(dir, 'memory.oom.group'), '1');
+    writeFileSync(join(directory, 'memory.max'), buildMemoryMax(guestMib));
+    writeFileSync(join(directory, 'memory.high'), 'max');
+    writeFileSync(join(directory, 'memory.swap.max'), '0');
+    writeFileSync(join(directory, 'memory.oom.group'), '1');
   };
 
   // a failed write costs the limit, never the boot or the wake
@@ -198,7 +198,7 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
     try {
       write();
     } catch (error) {
-      options.log(`impd: cgroup ${impId}: ${what}: ${readErrorMessage(error)}`);
+      options.log(`impd: cgroup ${impId}: ${what}: ${getErrorMessage(error)}`);
     }
   };
 
@@ -213,18 +213,18 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
         guestMibs.set(impId, memoryMib);
       }
 
-      mkdirSync(findDir(impId), { recursive: true });
+      mkdirSync(getDir(impId), { recursive: true });
       setOomBaseline(impId);
       writeSettings(impId, cpu, cpu.limit);
       writeMemory(impId);
     } catch (error) {
-      options.log(`impd: cgroup ${impId}: ${readErrorMessage(error)}; this VM runs unlimited`);
+      options.log(`impd: cgroup ${impId}: ${getErrorMessage(error)}; this VM runs unlimited`);
 
       return null;
     }
 
     return {
-      procsPath: join(findDir(impId), 'cgroup.procs'),
+      procsPath: join(getDir(impId), 'cgroup.procs'),
       liftLimit: () => {
         tryWrite(impId, 'lift the limit', () => {
           writeSettings(impId, cpu, null);
@@ -243,7 +243,7 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
     isMemoryEnforced,
     setup,
     apply: (impId, cpu) => {
-      if (isEnforced && existsSync(findDir(impId))) {
+      if (isEnforced && existsSync(getDir(impId))) {
         tryWrite(impId, 'apply the limit', () => {
           writeSettings(impId, cpu, cpu.limit);
         });
@@ -271,7 +271,7 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
     setGuestMib: (impId, guestMib) => {
       guestMibs.set(impId, guestMib);
 
-      if (isMemoryEnforced && existsSync(findDir(impId))) {
+      if (isMemoryEnforced && existsSync(getDir(impId))) {
         tryWrite(impId, 'set the memory limit', () => {
           writeMemory(impId);
         });
@@ -285,14 +285,14 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
         return;
       }
 
-      for (let attempt = 1; existsSync(findDir(impId)); attempt += 1) {
+      for (let attempt = 1; existsSync(getDir(impId)); attempt += 1) {
         try {
-          rmdir(findDir(impId));
+          rmdir(getDir(impId));
 
           return;
         } catch (error) {
           if (!isBusy(error) || attempt === REMOVE_TRIES) {
-            options.log(`impd: cgroup ${impId}: remove: ${readErrorMessage(error)}`);
+            options.log(`impd: cgroup ${impId}: remove: ${getErrorMessage(error)}`);
 
             return;
           }
@@ -312,28 +312,28 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
 
       for (const impId of orphans) {
         tryWrite(impId, 'remove an orphan', () => {
-          rmdirSync(findDir(impId));
+          rmdirSync(getDir(impId));
         });
       }
 
       return orphans;
     },
     kill: (impId) => {
-      if (isEnforced && existsSync(findDir(impId))) {
+      if (isEnforced && existsSync(getDir(impId))) {
         tryWrite(impId, 'kill', () => {
-          writeFileSync(join(findDir(impId), 'cgroup.kill'), '1');
+          writeFileSync(join(getDir(impId), 'cgroup.kill'), '1');
         });
       }
     },
     readOomKills,
-    hasOomKillSinceStart: (impId) => {
+    probeOomKillSinceStart: (impId) => {
       const baseline = oomBaselines.get(impId);
 
       return baseline !== undefined && (readOomKills(impId) ?? 0) > baseline;
     },
     readCpuStat: (impId) => {
       try {
-        const stat = readFileSync(join(findDir(impId), 'cpu.stat'), 'utf8');
+        const stat = readFileSync(join(getDir(impId), 'cpu.stat'), 'utf8');
 
         return parseCpuStat(stat);
       } catch {
@@ -345,7 +345,7 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
 
 // the entrypoint hands controllers to imps/ only in a private cgroup v2
 // namespace
-function isControllerDelegated(imps: string, controller: string): boolean {
+function probeControllerDelegated(imps: string, controller: string): boolean {
   try {
     const delegated = readFileSync(join(imps, 'cgroup.subtree_control'), 'utf8');
 

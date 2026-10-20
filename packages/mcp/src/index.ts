@@ -6,7 +6,7 @@ export type {
   McpPrincipal,
 } from './http/create-http-transport';
 
-export { GuardError, createImpGuard, createPatternGuard } from './imp-guard';
+export { GuardError, buildImpGuard, createPatternGuard } from './imp-guard';
 export type { GuardOptions, ImpGuard } from './imp-guard';
 export type { ToolClient } from './tools/tool-client';
 export { runImpStdio } from './run-imp-stdio';

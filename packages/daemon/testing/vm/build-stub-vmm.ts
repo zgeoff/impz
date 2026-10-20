@@ -53,6 +53,16 @@ export function buildStubBootId(pid: number): string {
   return `00000000-0000-4000-8000-${String(pid).padStart(12, '0')}`;
 }
 
+interface FakeGuestMemory {
+  baseMib: number;
+  pluggedMib: number;
+  requestedMib: number;
+  usedMib: number;
+
+  // an unplug stops here, as a guest stops at memory it cannot migrate
+  unplugFloorMib: number;
+}
+
 // One fake host for every impd the test starts. Firecrackers outlive impd, so
 // `alive` is shared; each impd gets its own runner, and a runner whose impd
 // was replaced never settles a call again, like a process that is gone.
@@ -113,8 +123,8 @@ export function buildStubVmm() {
   const guestMemory = new Map<string, FakeGuestMemory>();
 
   // a guest no test set up: 512 MiB, nothing plugged
-  const readFakeGuestMemory = (dir: string): FakeGuestMemory => {
-    const known = guestMemory.get(dir);
+  const readFakeGuestMemory = (directory: string): FakeGuestMemory => {
+    const known = guestMemory.get(directory);
 
     if (known !== undefined) {
       return known;
@@ -128,7 +138,7 @@ export function buildStubVmm() {
       unplugFloorMib: 0,
     };
 
-    guestMemory.set(dir, created);
+    guestMemory.set(directory, created);
 
     return created;
   };
@@ -149,7 +159,7 @@ export function buildStubVmm() {
   // scheduler to order the steps of concurrent calls
   const pacer: { pace: (step: VmStep) => Promise<void> } = { pace: () => Promise.resolve() };
 
-  const pickOutcome = async (step: VmStep): Promise<Exclude<VmOutcome, 'hang'>> => {
+  const chooseOutcome = async (step: VmStep): Promise<Exclude<VmOutcome, 'hang'>> => {
     const hold = holds.get(step);
 
     if (hold !== undefined) {
@@ -235,7 +245,7 @@ export function buildStubVmm() {
     };
 
     // a synchronous read by a replaced impd throws instead of answering
-    const readInGeneration = <T>(read: () => T): T => {
+    const withGeneration = <T>(read: () => T): T => {
       if (generation !== counter.generation) {
         throw new Error('this impd was replaced');
       }
@@ -248,7 +258,7 @@ export function buildStubVmm() {
       step: 'boot' | 'wake' | 'restore',
       paths: Readonly<FirecrackerPaths>,
     ) => {
-      const outcome = await pickOutcome(step);
+      const outcome = await chooseOutcome(step);
 
       if (outcome === 'fail') {
         throw new StubVmError(`${step} failed: no agent\nlog tail`);
@@ -317,7 +327,7 @@ export function buildStubVmm() {
           }
 
           // fail resumes the VM; die fails after the kill, with no snapshot
-          const outcome = await pickOutcome('sleep');
+          const outcome = await chooseOutcome('sleep');
 
           if (outcome === 'fail') {
             if (vm !== undefined) {
@@ -355,7 +365,7 @@ export function buildStubVmm() {
       stopVm: (pid, _paths, graceful) =>
         runInGeneration(async () => {
           // fail and die: the VM survived SIGKILL
-          const outcome = await pickOutcome('stop');
+          const outcome = await chooseOutcome('stop');
 
           if (outcome !== 'ok' && alive.has(pid)) {
             throw new StubVmError(`firecracker ${String(pid)} survived SIGKILL`);
@@ -364,12 +374,12 @@ export function buildStubVmm() {
           alive.delete(pid);
           stops.push({ pid, graceful });
         }),
-      isVmAlive: (pid) => readInGeneration(() => alive.has(pid)),
+      probeVmAlive: (pid) => withGeneration(() => alive.has(pid)),
 
       // fail: the guest did not grow; die: its agent is from before grow
       growDrive: (paths, diskBytes) =>
         runInGeneration(async () => {
-          const outcome = await pickOutcome('grow');
+          const outcome = await chooseOutcome('grow');
 
           if (outcome === 'die') {
             throw buildAgentOutdatedError('grow');
@@ -381,9 +391,9 @@ export function buildStubVmm() {
 
           grows.push({ disk: paths.disk, diskBytes });
         }),
-      isAgentReady: () =>
+      probeAgentReady: () =>
         runInGeneration(async () => {
-          const outcome = await pickOutcome('agentReady');
+          const outcome = await chooseOutcome('agentReady');
 
           return outcome === 'ok';
         }),
@@ -392,7 +402,7 @@ export function buildStubVmm() {
       // fail: the API does not answer, as while a large load runs
       readVmState: (paths) =>
         runInGeneration(async () => {
-          const outcome = await pickOutcome('vmState');
+          const outcome = await chooseOutcome('vmState');
 
           return outcome === 'ok' ? (findServing(paths)?.state ?? null) : null;
         }),
@@ -406,17 +416,17 @@ export function buildStubVmm() {
 
           return Promise.resolve();
         }),
-      readPid: (paths) => readInGeneration(() => pidFiles.get(paths.pidFile) ?? null),
+      readPid: (paths) => withGeneration(() => pidFiles.get(paths.pidFile) ?? null),
       listVms: () =>
-        readInGeneration(() =>
+        withGeneration(() =>
           [...vms]
             .filter(([pid]) => alive.has(pid))
             .map(([pid, vm]) => ({ pid, apiSocket: vm.apiSocket, owner: vm.owner })),
         ),
-      readVmOwner: (pid) => readInGeneration(() => vms.get(pid)?.owner ?? IMPD_OWNER),
+      readVmOwner: (pid) => withGeneration(() => vms.get(pid)?.owner ?? IMPD_OWNER),
       finishWake: (paths) =>
         runInGeneration(async () => {
-          const outcome = await pickOutcome('agentReady');
+          const outcome = await chooseOutcome('agentReady');
 
           if (outcome !== 'ok') {
             throw new StubVmError('the agent did not answer after the load');
@@ -430,9 +440,9 @@ export function buildStubVmm() {
         }),
 
       // fail and die: no snapshot
-      buildTemplateVm: (plan) =>
+      createTemplateVm: (plan) =>
         runInGeneration(async () => {
-          const outcome = await pickOutcome('template');
+          const outcome = await chooseOutcome('template');
 
           if (outcome !== 'ok') {
             throw new StubVmError('template build failed');
@@ -462,7 +472,7 @@ export function buildStubVmm() {
             throw new TemplateRestoreError('disk failed', false, error);
           });
 
-          if ((await pickOutcome('claim')) !== 'ok') {
+          if ((await chooseOutcome('claim')) !== 'ok') {
             alive.delete(vm.pid);
             throw new TemplateRestoreError('claim failed', false, null);
           }
@@ -481,7 +491,7 @@ export function buildStubVmm() {
         }),
       readGuestMemory: (paths) =>
         runInGeneration(() => {
-          const memory = readFakeGuestMemory(paths.dir);
+          const memory = readFakeGuestMemory(paths.directory);
 
           return Promise.resolve({
             pluggedMib: memory.pluggedMib,
@@ -492,7 +502,7 @@ export function buildStubVmm() {
         }),
       requestPluggedMib: (paths, mib) =>
         runInGeneration(() => {
-          const memory = readFakeGuestMemory(paths.dir);
+          const memory = readFakeGuestMemory(paths.directory);
 
           memory.requestedMib = mib;
           memory.pluggedMib = Math.max(mib, Math.min(memory.pluggedMib, memory.unplugFloorMib));
@@ -634,14 +644,4 @@ export function buildStubVmm() {
     // what the VM `pid` does now, as GET / reports it
     readState: (pid: number): InstanceState | undefined => vms.get(pid)?.state,
   };
-}
-
-interface FakeGuestMemory {
-  baseMib: number;
-  pluggedMib: number;
-  requestedMib: number;
-  usedMib: number;
-
-  // an unplug stops here, as a guest stops at memory it cannot migrate
-  unplugFloorMib: number;
 }

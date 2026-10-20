@@ -33,6 +33,8 @@ import type { ResourceDelta } from './resource-sampler';
 
 export type { ImpServiceDeps } from './imp-context';
 
+type ResourceListener = (deltas: readonly ResourceDelta[]) => void;
+
 // The imp API: what the router and the exec and tunnel endpoints call.
 export type ImpService = ImpCommands &
   ImpLeases &
@@ -68,8 +70,6 @@ export type ImpService = ImpCommands &
     // why the host needs a reboot, such as `a kernel oops`; null when it does not
     readonly readRebootReason: () => string | null;
   };
-
-type ResourceListener = (deltas: readonly ResourceDelta[]) => void;
 
 // For checkpoints/checkpoint-service.ts. `lockImp` runs `action` under the
 // imp's lifecycle lock with a fresh record; the other hooks take that record.
@@ -116,7 +116,7 @@ export function createImpService(deps: ImpServiceDeps): Imps {
   startImpEventPublisher({
     db: context.db,
     bus: events,
-    toApi: presenter.toApi,
+    toApi: presenter.readApi,
     now: context.now,
     log: context.log,
   });
@@ -152,7 +152,7 @@ export function createImpService(deps: ImpServiceDeps): Imps {
     haltImp: ops.stopImpVm,
     bootImp: (imp) => ops.startImpVm(imp, 'restore'),
     requireRunningImp: ops.requireRunningImp,
-    toApi: presenter.toApi,
+    toApi: presenter.readApi,
     events,
     sampleResources: async () => {
       const deltas = await readRunningImpUsage(context);

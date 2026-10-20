@@ -143,7 +143,7 @@ const HostArgsSchema = z.object({
   addresses: AddressesSchema,
 });
 
-export function readHostArgs(json: string): HostArgs {
+export function parseHostArgs(json: string): HostArgs {
   const parsed = HostArgsSchema.safeParse(JSON.parse(json));
 
   if (!parsed.success) {
@@ -449,7 +449,7 @@ export interface BootstrapSources {
 }
 
 export function render(argsJson: string, current: Rendered, sources: BootstrapSources): Rendered {
-  const args = readHostArgs(argsJson);
+  const args = parseHostArgs(argsJson);
   const unit = renderUnit(current.unit, args);
   const proxyUnit = renderProxyUnit(current.proxyUnit, args.proxy);
   const hostEnv = renderHostEnv(current.hostEnv, args);

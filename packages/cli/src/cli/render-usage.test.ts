@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import packageJson from '../../package.json' with { type: 'json' };
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { mainCommand } from './command-tree';
-import { buildCompletionTree, collectNodes } from './completion';
+import { collectNodes, readCompletionTree } from './completion';
 
 // every command of impz, the root first
 test.each([
@@ -233,7 +233,7 @@ OPTIONS
 });
 
 test('it pins the help of every command in the tree', async () => {
-  const tree = await buildCompletionTree(mainCommand);
+  const tree = await readCompletionTree(mainCommand);
 
   expect(collectNodes(tree).map((node) => node.path)).toStrictEqual([
     'impz',

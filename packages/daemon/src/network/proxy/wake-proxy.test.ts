@@ -7,7 +7,7 @@ import { startStubCutStream } from '../../../testing/network/start-stub-cut-stre
 import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
 import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
-import { findFreePorts } from '../../../testing/platform/find-free-ports';
+import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { createImage } from '../../platform/db/images';
 import { removeImp, updateImpMove } from '../../platform/db/imps';
@@ -72,7 +72,7 @@ test('it ends overlapping listener syncs with no listener for an imp the databas
 test('it listens on the proxy port and on the port base plus each imp’s slot by default', async () => {
   const ctx = await setupTest();
 
-  const free = findFreePorts(2);
+  const free = claimFreePorts(2);
   const proxyPort = free.take();
   const portBase = free.take();
 
@@ -135,14 +135,16 @@ test('it keeps the dashboard session cookie from an imp over HTTP', async () => 
 
   const cookies: (string | null)[] = [];
 
+  const handleUpstreamRequest = (request: Request) => {
+    cookies.push(request.headers.get('cookie'));
+
+    return new Response('ok');
+  };
+
   const upstream = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: (request) => {
-      cookies.push(request.headers.get('cookie'));
-
-      return new Response('ok');
-    },
+    fetch: handleUpstreamRequest,
   });
 
   ctx.stack.defer(() => upstream.stop(true));
@@ -178,14 +180,16 @@ test('it keeps the dashboard session cookie from an imp over a WebSocket', async
 
   const cookies: (string | null)[] = [];
 
+  const handleUpstreamRequest = (request: Request, server: Bun.Server<undefined>) => {
+    cookies.push(request.headers.get('cookie'));
+
+    return server.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 });
+  };
+
   const upstream = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: (request, server) => {
-      cookies.push(request.headers.get('cookie'));
-
-      return server.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 });
-    },
+    fetch: handleUpstreamRequest,
     websocket: { message: () => {} },
   });
 
@@ -282,15 +286,17 @@ test.each([['/ui/'], ['/ui/assets/app.js'], ['/health'], ['/rpcx']])(
 
     const seen: (string | null)[] = [];
 
+    const handleApiRequest = (request: Request) => {
+      seen.push(request.headers.get(PEER_HEADER));
+
+      return new Response('ok');
+    };
+
     // impd's API, as far as the proxy can tell
     const api = Bun.serve({
       port: 0,
       hostname: '127.0.0.1',
-      fetch: (request) => {
-        seen.push(request.headers.get(PEER_HEADER));
-
-        return new Response('ok');
-      },
+      fetch: handleApiRequest,
     });
 
     ctx.stack.defer(() => api.stop(true));
@@ -332,15 +338,17 @@ test('it hands the API a peer handle for the client’s address on a path that r
 
   const seen: (string | null)[] = [];
 
+  const handleApiRequest = (request: Request) => {
+    seen.push(request.headers.get(PEER_HEADER));
+
+    return new Response('ok');
+  };
+
   // impd's API, as far as the proxy can tell
   const api = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: (request) => {
-      seen.push(request.headers.get(PEER_HEADER));
-
-      return new Response('ok');
-    },
+    fetch: handleApiRequest,
   });
 
   ctx.stack.defer(() => api.stop(true));
@@ -389,23 +397,25 @@ test('it passes the first line of a streamed API answer on while the API holds t
     second.resolve();
   });
 
+  const handleApiRequest = () => {
+    const body = new ReadableStream<Uint8Array>({
+      start: async (controller) => {
+        controller.enqueue(new TextEncoder().encode('first\n'));
+
+        await second.promise;
+
+        controller.enqueue(new TextEncoder().encode('second\n'));
+        controller.close();
+      },
+    });
+
+    return new Response(body, { headers: { 'content-type': 'application/x-ndjson' } });
+  };
+
   const api = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: () => {
-      const body = new ReadableStream<Uint8Array>({
-        start: async (controller) => {
-          controller.enqueue(new TextEncoder().encode('first\n'));
-
-          await second.promise;
-
-          controller.enqueue(new TextEncoder().encode('second\n'));
-          controller.close();
-        },
-      });
-
-      return new Response(body, { headers: { 'content-type': 'application/x-ndjson' } });
-    },
+    fetch: handleApiRequest,
   });
 
   ctx.stack.defer(() => api.stop(true));
@@ -494,17 +504,19 @@ test('it passes on an API answer that comes after 400 s of fake time', async () 
     release.resolve(undefined);
   });
 
+  const handleApiRequest = async () => {
+    held.resolve(undefined);
+
+    await release.promise;
+
+    return new Response('the long answer');
+  };
+
   const api = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
     idleTimeout: 0,
-    fetch: async () => {
-      held.resolve(undefined);
-
-      await release.promise;
-
-      return new Response('the long answer');
-    },
+    fetch: handleApiRequest,
   });
 
   ctx.stack.defer(() => api.stop(true));
@@ -558,23 +570,25 @@ test('it passes the rest of a streamed API answer on once the API sends it', asy
 
   const second = Promise.withResolvers<void>();
 
+  const handleApiRequest = () => {
+    const body = new ReadableStream<Uint8Array>({
+      start: async (controller) => {
+        controller.enqueue(new TextEncoder().encode('first\n'));
+
+        await second.promise;
+
+        controller.enqueue(new TextEncoder().encode('second\n'));
+        controller.close();
+      },
+    });
+
+    return new Response(body, { headers: { 'content-type': 'application/x-ndjson' } });
+  };
+
   const api = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: () => {
-      const body = new ReadableStream<Uint8Array>({
-        start: async (controller) => {
-          controller.enqueue(new TextEncoder().encode('first\n'));
-
-          await second.promise;
-
-          controller.enqueue(new TextEncoder().encode('second\n'));
-          controller.close();
-        },
-      });
-
-      return new Response(body, { headers: { 'content-type': 'application/x-ndjson' } });
-    },
+    fetch: handleApiRequest,
   });
 
   ctx.stack.defer(() => api.stop(true));
@@ -623,19 +637,23 @@ test.each([['box.tail1234.ts.net'], ['imp.example.com'], ['imp.tail1234.ts.net']
     const upstream = Bun.serve({
       port: 0,
       hostname: '127.0.0.1',
-      fetch: (request) => new Response(`imp got ${request.headers.get('host') ?? ''}`),
+      routes: {
+        '/*': (request: Request) => new Response(`imp got ${request.headers.get('host') ?? ''}`),
+      },
     });
 
     ctx.stack.defer(() => upstream.stop(true));
 
+    const handleApiRequest = () => {
+      toApi();
+
+      return new Response('api');
+    };
+
     const api = Bun.serve({
       port: 0,
       hostname: '127.0.0.1',
-      fetch: () => {
-        toApi();
-
-        return new Response('api');
-      },
+      fetch: handleApiRequest,
     });
 
     ctx.stack.defer(() => api.stop(true));
@@ -674,14 +692,16 @@ test('it passes tailscale serve’s headers on to the imp, with the session and 
 
   const received: Headers[] = [];
 
+  const handleUpstreamRequest = (request: Request) => {
+    received.push(request.headers);
+
+    return new Response('imp');
+  };
+
   const upstream = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: (request) => {
-      received.push(request.headers);
-
-      return new Response('imp');
-    },
+    fetch: handleUpstreamRequest,
   });
 
   ctx.stack.defer(() => upstream.stop(true));
@@ -737,7 +757,7 @@ test('it routes the Host-named imp on the proxy port', async () => {
   const upstream = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: () => new Response('imp'),
+    routes: { '/*': () => new Response('imp') },
   });
 
   ctx.stack.defer(() => upstream.stop(true));
@@ -946,7 +966,7 @@ test('it wakes a sleeping imp and says how long the wake took', async () => {
   const upstream = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: () => new Response('imp'),
+    routes: { '/*': () => new Response('imp') },
   });
 
   ctx.stack.defer(() => upstream.stop(true));
@@ -994,21 +1014,23 @@ test('it stops the request to the imp when the client goes away', async () => {
     aborted.resolve();
   });
 
+  const handleUpstreamRequest = async (request: Request) => {
+    request.signal.addEventListener('abort', () => {
+      aborted.resolve();
+    });
+
+    reached.resolve(request.signal);
+
+    await aborted.promise;
+
+    return new Response('late');
+  };
+
   // answers only once the request is aborted
   const upstream = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: async (request) => {
-      request.signal.addEventListener('abort', () => {
-        aborted.resolve();
-      });
-
-      reached.resolve(request.signal);
-
-      await aborted.promise;
-
-      return new Response('late');
-    },
+    fetch: handleUpstreamRequest,
   });
 
   ctx.stack.defer(() => upstream.stop(true));
@@ -1316,7 +1338,7 @@ test('it warns once about a slot whose port another process holds', async () => 
   const squatter = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: () => new Response('squatter'),
+    routes: { '/*': () => new Response('squatter') },
   });
 
   ctx.stack.defer(() => squatter.stop(true));
@@ -1352,7 +1374,7 @@ test('it warns again about a slot that could not listen once a new imp holds it'
   const squatter = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: () => new Response('squatter'),
+    routes: { '/*': () => new Response('squatter') },
   });
 
   ctx.stack.defer(() => squatter.stop(true));

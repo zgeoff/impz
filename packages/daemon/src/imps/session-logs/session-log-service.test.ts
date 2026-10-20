@@ -850,7 +850,7 @@ test('it closes the tap and removes the log when a live log is deleted', async (
     expect(logs.listLogs(imp)[0]?.logEnd).toBe(6);
   });
 
-  const count = logs.deleteLogs(imp, { session: 'main' });
+  const count = logs.removeLogs(imp, { session: 'main' });
 
   expect(count).toBe(1);
   expect(tap.state.closed).toBe(true);
@@ -906,7 +906,7 @@ test('it never taps a deleted live log again', async () => {
     expect(ctx.looks.done).toBe(1);
   });
 
-  logs.deleteLogs(imp, { session: 'main' });
+  logs.removeLogs(imp, { session: 'main' });
 
   logs.observe(imp, [
     buildMockAgentSession({
@@ -959,24 +959,24 @@ test("it never deletes another session's log or another imp's logs", async () =>
   const planted = await Promise.all(
     [
       {
-        dir: join(imp.sessionLogsDir, 'a'.repeat(32)),
+        directory: join(imp.sessionLogsDir, 'a'.repeat(32)),
         session: 'main',
         generation: 'a'.repeat(32),
       },
       {
-        dir: join(imp.sessionLogsDir, 'b'.repeat(32)),
+        directory: join(imp.sessionLogsDir, 'b'.repeat(32)),
         session: 'other',
         generation: 'b'.repeat(32),
       },
       {
-        dir: join(neighbour.sessionLogsDir, 'c'.repeat(32)),
+        directory: join(neighbour.sessionLogsDir, 'c'.repeat(32)),
         session: 'main',
         generation: 'c'.repeat(32),
       },
     ].map((each) =>
       createGenerationLog(
         {
-          dir: each.dir,
+          directory: each.directory,
           segmentBytes: 512,
           maxBytes: 1024,
           requireRoom: () => Promise.resolve(),
@@ -1001,7 +1001,7 @@ test("it never deletes another session's log or another imp's logs", async () =>
 
   await Promise.all(planted.map((log) => log.finish({ end: 0, exitCode: 0 })));
 
-  const count = logs.deleteLogs(imp, { session: 'main' });
+  const count = logs.removeLogs(imp, { session: 'main' });
 
   expect(count).toBe(1);
   expect(readdirSync(imp.sessionLogsDir)).toStrictEqual(['b'.repeat(32)]);
@@ -1096,7 +1096,7 @@ test('it keeps an ended log until it is past its age when it sweeps', async () =
 
   const planted = await createGenerationLog(
     {
-      dir: join(imp.sessionLogsDir, 'a'.repeat(32)),
+      directory: join(imp.sessionLogsDir, 'a'.repeat(32)),
       segmentBytes: 512,
       maxBytes: 1024,
       requireRoom: () => Promise.resolve(),
@@ -1152,7 +1152,7 @@ test('it removes an ended log past its age when it sweeps', async () => {
 
   const planted = await createGenerationLog(
     {
-      dir: join(imp.sessionLogsDir, 'a'.repeat(32)),
+      directory: join(imp.sessionLogsDir, 'a'.repeat(32)),
       segmentBytes: 512,
       maxBytes: 1024,
       requireRoom: () => Promise.resolve(),
@@ -1215,14 +1215,22 @@ test('it never sweeps a live log, a young ended log, or the logs of an imp it wa
   // past it, and one past it of the other imp
   const planted = await Promise.all(
     [
-      { dir: join(imp.sessionLogsDir, 'a'.repeat(32)), generation: 'a'.repeat(32), at: 1000 },
-      { dir: join(imp.sessionLogsDir, 'b'.repeat(32)), generation: 'b'.repeat(32), at: 99_500 },
-      { dir: join(imp.sessionLogsDir, 'c'.repeat(32)), generation: 'c'.repeat(32), at: 1000 },
-      { dir: join(neighbour.sessionLogsDir, 'd'.repeat(32)), generation: 'd'.repeat(32), at: 1000 },
+      { directory: join(imp.sessionLogsDir, 'a'.repeat(32)), generation: 'a'.repeat(32), at: 1000 },
+      {
+        directory: join(imp.sessionLogsDir, 'b'.repeat(32)),
+        generation: 'b'.repeat(32),
+        at: 99_500,
+      },
+      { directory: join(imp.sessionLogsDir, 'c'.repeat(32)), generation: 'c'.repeat(32), at: 1000 },
+      {
+        directory: join(neighbour.sessionLogsDir, 'd'.repeat(32)),
+        generation: 'd'.repeat(32),
+        at: 1000,
+      },
     ].map((each) =>
       createGenerationLog(
         {
-          dir: each.dir,
+          directory: each.directory,
           segmentBytes: 512,
           maxBytes: 1024,
           requireRoom: () => Promise.resolve(),
@@ -3802,7 +3810,7 @@ test("it removes none of the imp's next life's logs for a limit check from befor
   // the next life holds an ended log past the limit, as one moved home with it would
   const planted = await createGenerationLog(
     {
-      dir: join(imp.sessionLogsDir, 'b'.repeat(32)),
+      directory: join(imp.sessionLogsDir, 'b'.repeat(32)),
       segmentBytes: 1024,
       maxBytes: 2048,
       requireRoom: () => Promise.resolve(),
@@ -4096,7 +4104,7 @@ test('it never taps a deleted live log again after impd restarts', async () => {
     expect(ctx.looks.done).toBe(1);
   });
 
-  logs.deleteLogs(imp, { session: 'main' });
+  logs.removeLogs(imp, { session: 'main' });
   logs.forgetImp(imp.id);
 
   const restarted = createSessionLogs({
@@ -4179,7 +4187,7 @@ test('it removes the tombstone of a deleted generation once the agent no longer 
     expect(ctx.looks.done).toBe(1);
   });
 
-  logs.deleteLogs(imp, { session: 'main' });
+  logs.removeLogs(imp, { session: 'main' });
 
   const tombstone = join(imp.sessionLogsDir, '.deleted', 'a'.repeat(32));
   const isMarkedBefore = existsSync(tombstone);

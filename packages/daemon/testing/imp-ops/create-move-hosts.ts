@@ -91,7 +91,7 @@ export async function createMoveHosts(
   const facts = readWarmHost(target.config, target.readIdentity(), target.storage.kind);
   const shared = options.isShared === true ? { readWarmHost: () => facts } : {};
   const slotPlan = { subnet: target.config.subnet, portBase: 0 };
-  const sendToTarget = (request: Request) => target.moves.handle(request, SOURCE_PEER);
+  const sendToTarget = (request: Request) => target.moves.respond(request, SOURCE_PEER);
   const hook = options.hook;
 
   // the source, once started, for the hook to see; no request goes before
@@ -103,6 +103,9 @@ export async function createMoveHosts(
     return call(request, (replacement) => sendToTarget(replacement ?? request), built.hosts);
   };
 
+  const sendSourceRequest = (request: Request) =>
+    hook === undefined ? sendToTarget(request) : runHook(request, hook);
+
   const source = await startTestImpd(stack, {
     ...options.source,
     boundaries: {
@@ -112,7 +115,7 @@ export async function createMoveHosts(
         readTapMac:
           options.readTapMac ??
           ((tap) => deriveSlotAddress(Number(tap.slice('imp'.length)), slotPlan).hostMac),
-        fetch: (request) => (hook === undefined ? sendToTarget(request) : runHook(request, hook)),
+        fetch: sendSourceRequest,
         ...(options.startPeerDeadline !== undefined && {
           startPeerDeadline: options.startPeerDeadline,
         }),

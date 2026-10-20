@@ -10,7 +10,7 @@ import {
   checkPullQuery,
   checkReferenceRegistry,
   checkRemoveQuery,
-  readImageReference,
+  parseImageReference,
 } from './rules';
 
 // the query impd sends for a build: one tag, the frontend pinned
@@ -250,8 +250,8 @@ test.each([
   ['LocalHost/name', 'LocalHost', 'name'],
   ['imp-host:dev', 'docker.io', 'library/imp-host'],
   ['zgeoff/impz:1', 'docker.io', 'zgeoff/impz'],
-])('#readImageReference reads %s as registry %s and path %s', (reference, registry, path) => {
-  expect(readImageReference(reference)).toStrictEqual({ registry, path });
+])('#parseImageReference reads %s as registry %s and path %s', (reference, registry, path) => {
+  expect(parseImageReference(reference)).toStrictEqual({ registry, path });
 });
 
 test.each([
@@ -519,7 +519,7 @@ test('#checkCreateBody refuses a create body with another command', () => {
 
 test.each([
   ['Entrypoint', ['/bin/sh']],
-  ['Labels', { a: 'b' }],
+  ['Labels', { team: 'web' }],
   ['Volumes', { '/x': {} }],
   ['Env', ['A=1']],
   ['User', 'root'],

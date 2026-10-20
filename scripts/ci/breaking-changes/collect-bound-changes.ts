@@ -1,11 +1,11 @@
 import { collectBoundChange } from './collect-bound-change';
 import type { Comparison } from './comparison';
+import { findInclusive } from './find-inclusive';
+import { findLower } from './find-lower';
+import { findUpper } from './find-upper';
 import { formatChange } from './format-change';
 import { formatSides } from './format-sides';
 import { formatValue } from './format-value';
-import { readInclusive } from './read-inclusive';
-import { readLower } from './read-lower';
-import { readUpper } from './read-upper';
 import type { SchemaObject } from './schema';
 
 export function collectBoundChanges(
@@ -23,10 +23,10 @@ export function collectBoundChanges(
   const stepChange = formatSides(comparison, narrowStep, step, formatValue);
 
   const pairs = [
-    ['lower bound', readLower(narrow), readLower(wide), 'lower'],
-    ['upper bound', readUpper(narrow), readUpper(wide), 'upper'],
-    ['min items', readInclusive(narrow, 'minItems'), readInclusive(wide, 'minItems'), 'lower'],
-    ['max items', readInclusive(narrow, 'maxItems'), readInclusive(wide, 'maxItems'), 'upper'],
+    ['lower bound', findLower(narrow), findLower(wide), 'lower'],
+    ['upper bound', findUpper(narrow), findUpper(wide), 'upper'],
+    ['min items', findInclusive(narrow, 'minItems'), findInclusive(wide, 'minItems'), 'lower'],
+    ['max items', findInclusive(narrow, 'maxItems'), findInclusive(wide, 'maxItems'), 'upper'],
   ] as const;
 
   return [

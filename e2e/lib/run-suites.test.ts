@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { checkRunPassed, runSuites } from './run-suites';
+import { hasRunPassed, runSuites } from './run-suites';
 
 // one recorder for every step, so a test reads their order; what each
 // scenario depends on is passed in its own test
@@ -103,7 +103,7 @@ test('#runSuites resets the suite’s prefix after each of its journeys', async 
     'reset e2e-proxy-',
   ]);
 
-  expect(outcome.results).toStrictEqual([{ name: 'proxy', passed: true, ms: 0 }]);
+  expect(outcome.results).toStrictEqual([{ name: 'proxy', passed: true, durationMs: 0 }]);
 });
 
 test('#runSuites reboots and resets after a journey that fails, runs the next on the baseline, and fails the suite', async () => {
@@ -136,7 +136,7 @@ test('#runSuites reboots and resets after a journey that fails, runs the next on
     'reset e2e-proxy-',
   ]);
 
-  expect(outcome.results).toStrictEqual([{ name: 'proxy', passed: false, ms: 0 }]);
+  expect(outcome.results).toStrictEqual([{ name: 'proxy', passed: false, durationMs: 0 }]);
 });
 
 test('#runSuites reboots the instance before the reset after a suite that fails', async () => {
@@ -211,7 +211,7 @@ test('#runSuites resets after the journey an interrupt stopped, runs no more of 
   expect(ctx.steps).toStrictEqual(['run proxy-refusals', 'reset e2e-proxy-']);
 
   expect(outcome).toStrictEqual({
-    results: [{ name: 'proxy', passed: false, ms: 0 }],
+    results: [{ name: 'proxy', passed: false, durationMs: 0 }],
     stoppedBecause: 'interrupted',
   });
 });
@@ -239,7 +239,7 @@ test('#runSuites reports an interrupt that comes after the last suite', async ()
   });
 
   expect(outcome).toStrictEqual({
-    results: [{ name: 'sleep', passed: true, ms: 0 }],
+    results: [{ name: 'sleep', passed: true, durationMs: 0 }],
     stoppedBecause: 'interrupted',
   });
 });
@@ -274,7 +274,7 @@ test('#runSuites neither makes the instance anew nor runs on when a reset fails 
   ]);
 
   expect(outcome).toStrictEqual({
-    results: [{ name: 'sleep', passed: false, ms: 0 }],
+    results: [{ name: 'sleep', passed: false, durationMs: 0 }],
     stoppedBecause: 'interrupted',
   });
 });
@@ -591,7 +591,7 @@ test('#runSuites stops before the next journey of a suite when the instance cann
   ]);
 
   expect(outcome).toStrictEqual({
-    results: [{ name: 'proxy', passed: false, ms: 0 }],
+    results: [{ name: 'proxy', passed: false, durationMs: 0 }],
     stoppedBecause: 'the instance could not be made anew after proxy-refusals: dev.sh up exited 1',
   });
 });
@@ -619,7 +619,7 @@ test('#runSuites runs every journey of a suite and resets after none with --keep
   });
 
   expect(ctx.steps).toStrictEqual(['run proxy-refusals', 'run proxy-forwards']);
-  expect(outcome.results).toStrictEqual([{ name: 'proxy', passed: false, ms: 0 }]);
+  expect(outcome.results).toStrictEqual([{ name: 'proxy', passed: false, durationMs: 0 }]);
 });
 
 test('#runSuites makes the instance anew when the reboot after a failure throws', async () => {
@@ -708,8 +708,8 @@ test('#runSuites fails a suite that throws, restores the baseline, and runs on',
 
   expect(outcome).toStrictEqual({
     results: [
-      { name: 'sleep', passed: false, ms: 0 },
-      { name: 'jail', passed: true, ms: 0 },
+      { name: 'sleep', passed: false, durationMs: 0 },
+      { name: 'jail', passed: true, durationMs: 0 },
     ],
     stoppedBecause: null,
   });
@@ -751,7 +751,7 @@ test('#runSuites fails a suite whose checks fail', async () => {
     checkJourney: () => Promise.resolve(false),
   });
 
-  expect(outcome.results).toStrictEqual([{ name: 'chaos', passed: false, ms: 0 }]);
+  expect(outcome.results).toStrictEqual([{ name: 'chaos', passed: false, durationMs: 0 }]);
 });
 
 test('#runSuites checks each journey under its suite’s name', async () => {
@@ -808,7 +808,7 @@ test('#runSuites times each suite from its start to the end of its last reset', 
     },
   });
 
-  expect(outcome.results).toStrictEqual([{ name: 'proxy', passed: true, ms: 520 }]);
+  expect(outcome.results).toStrictEqual([{ name: 'proxy', passed: true, durationMs: 520 }]);
 });
 
 test('#runSuites reports each suite as it starts and ends', async () => {
@@ -869,8 +869,8 @@ test('#runSuites reboots onto a suite’s settings before its first journey and 
 
   expect(outcome).toStrictEqual({
     results: [
-      { name: 'https', passed: true, ms: 0 },
-      { name: 'sleep', passed: true, ms: 0 },
+      { name: 'https', passed: true, durationMs: 0 },
+      { name: 'sleep', passed: true, durationMs: 0 },
     ],
     stoppedBecause: null,
   });
@@ -907,7 +907,7 @@ test('#runSuites reboots onto the suite’s settings after a journey that fails,
     'reboot',
   ]);
 
-  expect(outcome.results).toStrictEqual([{ name: 'https', passed: false, ms: 0 }]);
+  expect(outcome.results).toStrictEqual([{ name: 'https', passed: false, durationMs: 0 }]);
 });
 
 test('#runSuites reboots back onto the run’s settings after an interrupt stops a suite with its own', async () => {
@@ -941,7 +941,7 @@ test('#runSuites reboots back onto the run’s settings after an interrupt stops
   ]);
 
   expect(outcome).toStrictEqual({
-    results: [{ name: 'https', passed: false, ms: 0 }],
+    results: [{ name: 'https', passed: false, durationMs: 0 }],
     stoppedBecause: 'interrupted',
   });
 });
@@ -977,7 +977,7 @@ test('#runSuites starts no journey after an interrupt during the reboot onto a s
   expect(ctx.steps).toStrictEqual(['reboot onto {"IMP_DOMAIN":"e2e.test"}', 'reboot']);
 
   expect(outcome).toStrictEqual({
-    results: [{ name: 'https', passed: false, ms: 0 }],
+    results: [{ name: 'https', passed: false, durationMs: 0 }],
     stoppedBecause: 'interrupted',
   });
 });
@@ -1012,8 +1012,8 @@ test('#runSuites fails a suite whose reboot onto its settings throws, runs none 
 
   expect(outcome).toStrictEqual({
     results: [
-      { name: 'https', passed: false, ms: 0 },
-      { name: 'sleep', passed: true, ms: 0 },
+      { name: 'https', passed: false, durationMs: 0 },
+      { name: 'sleep', passed: true, durationMs: 0 },
     ],
     stoppedBecause: null,
   });
@@ -1045,7 +1045,7 @@ test('#runSuites fails a suite whose settings cannot be read, without a reboot o
     "log the https suite's settings could not be read: no Pebble network",
   ]);
 
-  expect(outcome.results).toStrictEqual([{ name: 'https', passed: false, ms: 0 }]);
+  expect(outcome.results).toStrictEqual([{ name: 'https', passed: false, durationMs: 0 }]);
 });
 
 test('#runSuites makes the instance anew and runs on when the reboot off a suite’s settings throws', async () => {
@@ -1080,8 +1080,8 @@ test('#runSuites makes the instance anew and runs on when the reboot off a suite
   ]);
 
   expect(outcome.results).toStrictEqual([
-    { name: 'https', passed: false, ms: 0 },
-    { name: 'sleep', passed: true, ms: 0 },
+    { name: 'https', passed: false, durationMs: 0 },
+    { name: 'sleep', passed: true, durationMs: 0 },
   ]);
 });
 
@@ -1108,7 +1108,7 @@ test('#runSuites stops the run when the instance cannot be made anew after the r
   });
 
   expect(outcome).toStrictEqual({
-    results: [{ name: 'https', passed: false, ms: 0 }],
+    results: [{ name: 'https', passed: false, durationMs: 0 }],
     stoppedBecause: 'the instance could not be made anew after the https suite: dev.sh up exited 1',
   });
 });
@@ -1190,7 +1190,7 @@ test('#runSuites makes no fresh instance when the reboot off a suite’s setting
   ]);
 
   expect(outcome).toStrictEqual({
-    results: [{ name: 'https', passed: false, ms: 0 }],
+    results: [{ name: 'https', passed: false, durationMs: 0 }],
     stoppedBecause: 'interrupted',
   });
 });
@@ -1305,8 +1305,8 @@ test('#runSuites reboots back off the settings of scale kept for restart after r
   ]);
 
   expect(result.results).toStrictEqual([
-    { name: 'scale', passed: true, ms: 0 },
-    { name: 'restart', passed: false, ms: 0 },
+    { name: 'scale', passed: true, durationMs: 0 },
+    { name: 'restart', passed: false, durationMs: 0 },
   ]);
 });
 
@@ -1461,7 +1461,7 @@ test('#runSuites stops a suite’s fixture after an interrupt, without its reset
   ]);
 
   expect(outcome).toStrictEqual({
-    results: [{ name: 'moves', passed: false, ms: 0 }],
+    results: [{ name: 'moves', passed: false, durationMs: 0 }],
     stoppedBecause: 'interrupted',
   });
 });
@@ -1721,6 +1721,6 @@ test.each([
     false,
   ],
   ['fails a run that a signal reached after every section passed', [true, true], null, true, false],
-])('#checkRunPassed %s', (_, passed, stoppedBecause, interrupted, expected) => {
-  expect(checkRunPassed({ passed, stoppedBecause, interrupted })).toBe(expected);
+])('#hasRunPassed %s', (_, passed, stoppedBecause, interrupted, expected) => {
+  expect(hasRunPassed({ passed, stoppedBecause, interrupted })).toBe(expected);
 });

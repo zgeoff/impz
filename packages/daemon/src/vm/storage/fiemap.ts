@@ -1,6 +1,6 @@
 import { ptr } from 'bun:ffi';
 import { closeSync, openSync } from 'node:fs';
-import { getLibc, readErrno } from '../../platform/process/libc';
+import { readErrno, readLibc } from '../../platform/process/libc';
 
 // _IOWR('f', 11, struct fiemap): the 32-byte header; extents follow it
 const FS_IOC_FIEMAP = 0xc0_20_66_0b;
@@ -43,7 +43,7 @@ function readBatch(fd: number, start: number, buffer: Uint8Array): Extent[] {
   view.setBigUint64(8, 0xff_ff_ff_ff_ff_ff_ff_ffn, true);
   view.setUint32(24, BATCH_EXTENTS, true);
 
-  const result = getLibc()?.ioctl(fd, FS_IOC_FIEMAP, ptr(buffer));
+  const result = readLibc()?.ioctl(fd, FS_IOC_FIEMAP, ptr(buffer));
 
   if (result !== 0) {
     throw new Error(`FIEMAP failed: errno ${String(readErrno())}`);

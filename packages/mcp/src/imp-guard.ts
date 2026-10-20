@@ -35,7 +35,7 @@ const MAX_NAME_LENGTH = 31;
 
 // Throws a GuardError for a missing or broken guard: a server for every imp
 // must say so with `all`.
-export function createImpGuard(options: Readonly<GuardOptions>): ImpGuard {
+export function buildImpGuard(options: Readonly<GuardOptions>): ImpGuard {
   const prefix = options.prefix ?? '';
 
   const allow = new Set(options.allow);
@@ -124,7 +124,7 @@ function buildSuffix(): string {
 // create. It picks a name for one `prefix*` pattern; other patterns need one.
 export function createPatternGuard(patterns: readonly string[] | null): ImpGuard {
   if (patterns === null) {
-    return createImpGuard({ all: true });
+    return buildImpGuard({ all: true });
   }
 
   const summary = `imps matching ${patterns.join(', ')}`;

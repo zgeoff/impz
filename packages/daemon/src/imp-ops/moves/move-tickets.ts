@@ -34,9 +34,9 @@ export function buildSecretHash(secret: string): string {
   return createHash('sha256').update(secret).digest('hex');
 }
 
-export function isSameHash(a: string, b: string): boolean {
-  const left = Buffer.from(a, 'hex');
-  const right = Buffer.from(b, 'hex');
+export function isSameHash(leftItem: string, rightItem: string): boolean {
+  const left = Buffer.from(leftItem, 'hex');
+  const right = Buffer.from(rightItem, 'hex');
 
   return left.length === right.length && timingSafeEqual(left, right);
 }

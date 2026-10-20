@@ -1,9 +1,8 @@
-import type { ReadAllocated, SeekFile } from '../../src/imp-ops/backup/find-data-blocks';
+import type { ReadAllocated, SeekFile } from '../../src/imp-ops/backup/read-data-blocks';
 
 // lseek(2) on Linux: whence values and the errno that means no more data
 const SEEK_DATA = 3;
 const SEEK_HOLE = 4;
-const ENXIO = 6;
 
 interface StubLseekOptions {
   // the file's length, and its data as sorted [start, end) byte ranges
@@ -22,7 +21,7 @@ interface StubLseekOptions {
 }
 
 // lseek's SEEK_DATA and SEEK_HOLE over a sparse file's extents, and fstat's
-// allocated bytes, as findDataBlocks reads them; with the faults a test sets
+// allocated bytes, as readDataBlocks reads them; with the faults a test sets
 export function buildStubLseek(options: Readonly<StubLseekOptions>) {
   const runSeek: SeekFile = (_fd, offset, whence) => {
     if (whence === SEEK_DATA) {
@@ -41,6 +40,8 @@ export function buildStubLseek(options: Readonly<StubLseekOptions>) {
 
   return { seek: runSeek, readAllocated };
 }
+
+const ENXIO = 6;
 
 // the start of the data at or after offset; ENXIO past the last data or EOF
 function findData(options: Readonly<StubLseekOptions>, offset: number) {

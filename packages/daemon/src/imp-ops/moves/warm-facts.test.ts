@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { buildMockWarmHost } from '../../../testing/imp-ops/build-mock-warm-host';
 import { buildMockWarmMove } from '../../../testing/imp-ops/build-mock-warm-move';
 import { parseSubnet } from '../../host-net/net/addressing';
-import { buildWarmMove, findWarmMismatches, readWarmHost } from './warm-facts';
+import { buildWarmMove, collectWarmMismatches, readWarmHost } from './warm-facts';
 
 test('#readWarmHost reports the identity, the config and the storage a warm move needs', () => {
   const host = readWarmHost(
@@ -145,7 +145,7 @@ test('#findWarmMismatches finds nothing when the target shares every fact of an 
     },
   });
 
-  expect(findWarmMismatches(move, target)).toStrictEqual([]);
+  expect(collectWarmMismatches(move, target)).toStrictEqual([]);
 });
 
 test.each([
@@ -269,7 +269,7 @@ test.each([
       },
     });
 
-    expect(findWarmMismatches(move, target)).toStrictEqual(expected);
+    expect(collectWarmMismatches(move, target)).toStrictEqual(expected);
   },
 );
 
@@ -295,7 +295,7 @@ test('#findWarmMismatches ignores IMP_DNS for a box imp, which asks the host res
     },
   });
 
-  expect(findWarmMismatches(move, target)).toStrictEqual([]);
+  expect(collectWarmMismatches(move, target)).toStrictEqual([]);
 });
 
 test('#findWarmMismatches refuses a slot past the target slot count', () => {
@@ -319,7 +319,9 @@ test('#findWarmMismatches refuses a slot past the target slot count', () => {
     },
   });
 
-  expect(findWarmMismatches(move, target)).toStrictEqual(["slot 16 is past the target's 16 slots"]);
+  expect(collectWarmMismatches(move, target)).toStrictEqual([
+    "slot 16 is past the target's 16 slots",
+  ]);
 });
 
 test('#findWarmMismatches reports every fact that differs, in order', () => {
@@ -344,7 +346,7 @@ test('#findWarmMismatches reports every fact that differs, in order', () => {
     },
   });
 
-  expect(findWarmMismatches(move, target)).toStrictEqual([
+  expect(collectWarmMismatches(move, target)).toStrictEqual([
     'the snapshot does not record its CPU (it is from an older impd)',
     "the imp has an IPv6 address in fd00::/64, this host's prefix",
     "slot 20 is past the target's 16 slots",

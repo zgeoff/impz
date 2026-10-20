@@ -1,10 +1,8 @@
 import { expect, test } from 'bun:test';
 import { isSameOriginForm } from './is-same-origin-form';
 
-const ORIGIN = 'https://imp.example.test';
-
 test.each([
-  ['the route’s own origin', { origin: ORIGIN }, true],
+  ['the route’s own origin', { origin: 'https://imp.example.test' }, true],
   [
     'the null origin from a same-origin page',
     { origin: 'null', 'sec-fetch-site': 'same-origin' },
@@ -15,14 +13,14 @@ test.each([
   ['the null origin with no fetch site', { origin: 'null' }, false],
   ['the null origin from another site', { origin: 'null', 'sec-fetch-site': 'cross-site' }, false],
   ['an origin that differs only in case', { origin: 'https://IMP.example.test' }, false],
-  ['an origin with a trailing slash', { origin: `${ORIGIN}/` }, false],
+  ['an origin with a trailing slash', { origin: `https://imp.example.test/` }, false],
   ['an empty origin', { origin: '' }, false],
 ])(
   'it takes a consent form only from the route’s own origin, given %s',
   (_kind, headers, expected) => {
-    const request = new Request(`${ORIGIN}/consent`, { method: 'POST', headers });
+    const request = new Request(`https://imp.example.test/consent`, { method: 'POST', headers });
 
-    const isSame = isSameOriginForm(request, ORIGIN);
+    const isSame = isSameOriginForm(request, 'https://imp.example.test');
 
     expect(isSame).toBe(expected);
   },

@@ -9,16 +9,6 @@ import type { AgentFrame } from '@impz/daemon/src/vm/agent-client/frame-codec';
 import type { StubAgentHandler } from '@impz/daemon/testing';
 import * as z from 'zod';
 
-// the bytes `big` writes to each of stdout and stderr
-export const STUB_FLOOD_BYTES = 512 * 1024;
-
-// the boot and generation of the `counted` session, as the agent names them
-export const STUB_BOOT_ID = '6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f';
-export const STUB_GENERATION = 'd'.repeat(32);
-
-// the end of the `counted` session's output, and of the `ended` one's
-const OUTPUT_END = 100;
-
 // what an exec or an attach asks the agent, in its wire form
 const RequestSchema = z.looseObject({
   op: z.string(),
@@ -30,9 +20,6 @@ const RequestSchema = z.looseObject({
 
 type StubRequest = z.infer<typeof RequestSchema>;
 
-const ResizeSchema = z.object({ cols: z.int(), rows: z.int() });
-const SignalSchema = z.object({ signal: z.int() });
-
 interface Run {
   readonly command: string;
 
@@ -40,11 +27,119 @@ interface Run {
   ended: boolean;
 }
 
-const encoder = new TextEncoder();
+// An imp's guest agent for exec and attach, for startStubAgent. It records
+// each request, what each command got (stdin as text, `eof`, `resize:CxR`,
+// `signal:N`), and each command whose connection impd closed as it ran.
+export function buildStubExecAgent() {
+  const requests: StubRequest[] = [];
+  const input: string[] = [];
+  const closed: string[] = [];
+
+  const runs = new WeakMap<Socket, Run>();
+
+  const writeInput = (entry: string): void => {
+    input.push(entry);
+  };
+
+  const readFrame: StubAgentHandler = (socket, request, frames) => {
+    const known = runs.get(socket);
+
+    if (known !== undefined) {
+      if (!known.ended) {
+        readInput(socket, known, frames.at(-1) ?? request, writeInput);
+      }
+
+      return;
+    }
+
+    const parsed = RequestSchema.parse(decodeJsonPayload(request));
+
+    const command =
+      parsed.op === 'session.attach'
+        ? `attach ${String(parsed.session)}`
+        : (parsed.argv?.[0] ?? '');
+
+    const run: Run = { command, ended: false };
+
+    runs.set(socket, run);
+    requests.push(parsed);
+
+    // impd may close the connection while a command still writes, as a
+    // client that stopped reading does
+    socket.on('error', () => {});
+
+    socket.on('close', () => {
+      if (!run.ended) {
+        closed.push(command);
+      }
+    });
+
+    if (parsed.op === 'exec') {
+      startExec(socket, run, parsed);
+    } else if (parsed.op === 'session.attach') {
+      startAttach(socket, run, parsed);
+    } else {
+      sendRefusal(socket, run, { code: 'UNKNOWN_OP', message: `unknown op ${parsed.op}` });
+    }
+  };
+
+  return { requests, input, closed, readFrame };
+}
+
+const ResizeSchema = z.object({ cols: z.int(), rows: z.int() });
+const SignalSchema = z.object({ signal: z.int() });
+
 const decoder = new TextDecoder();
 
-function writeText(socket: Socket, type: 8 | 9, text: string): void {
-  socket.write(encodeFrame(type, encoder.encode(text)));
+// what a running command does with a frame from impd after its start
+function readInput(
+  socket: Socket,
+  run: Run,
+  frame: AgentFrame,
+  writeInput: (entry: string) => void,
+) {
+  if (frame.type === FRAME_TYPES.stdin) {
+    const text = decoder.decode(frame.payload);
+
+    writeInput(text);
+
+    if (run.command === 'cat') {
+      socket.write(encodeFrame(FRAME_TYPES.stdout, frame.payload));
+    }
+
+    if ((run.command === 'wait' || run.command === '/bin/sh') && text.includes('\u0003')) {
+      sendExit(socket, run, 130, 2);
+    }
+
+    if (run.command === 'attach main' && text === 'taken') {
+      stopRun(socket, run, encodeJsonFrame(FRAME_TYPES.detached, { reason: 'taken_over' }));
+    }
+  }
+
+  if (frame.type === FRAME_TYPES.stdinEof) {
+    writeInput('eof');
+
+    if (run.command === 'cat') {
+      sendExit(socket, run, 0, 0);
+    }
+  }
+
+  if (frame.type === FRAME_TYPES.resize) {
+    const size = ResizeSchema.parse(decodeJsonPayload(frame));
+
+    writeInput(`resize:${String(size.cols)}x${String(size.rows)}`);
+  }
+
+  if (frame.type === FRAME_TYPES.signal) {
+    const signal = SignalSchema.parse(decodeJsonPayload(frame)).signal;
+
+    writeInput(`signal:${String(signal)}`);
+    sendExit(socket, run, 128 + signal, signal);
+  }
+}
+
+function sendExit(socket: Socket, run: Run, code: number, signal: number): void {
+  stopRun(socket, run, encodeJsonFrame(FRAME_TYPES.exit, { code, signal }));
 }
 
 function stopRun(socket: Socket, run: Run, frame: Uint8Array): void {
@@ -53,13 +148,8 @@ function stopRun(socket: Socket, run: Run, frame: Uint8Array): void {
   socket.end(frame);
 }
 
-function sendRefusal(socket: Socket, run: Run, error: Readonly<Record<string, unknown>>): void {
-  stopRun(socket, run, encodeJsonFrame(FRAME_TYPES.response, { error }));
-}
-
-function sendExit(socket: Socket, run: Run, code: number, signal: number): void {
-  stopRun(socket, run, encodeJsonFrame(FRAME_TYPES.exit, { code, signal }));
-}
+// the bytes `big` writes to each of stdout and stderr
+export const STUB_FLOOD_BYTES = 512 * 1024;
 
 // An exec, by argv[0]: `nope`, `fail`, `tick` and `big` answer at once;
 // `cat`, `wait`, `old` (an agent from before the group kill) and /bin/sh
@@ -100,6 +190,24 @@ function startExec(socket: Socket, run: Run, request: StubRequest): void {
     sendExit(socket, run, 0, 0);
   }
 }
+
+function sendRefusal(socket: Socket, run: Run, error: Readonly<Record<string, unknown>>): void {
+  stopRun(socket, run, encodeJsonFrame(FRAME_TYPES.response, { error }));
+}
+
+const encoder = new TextEncoder();
+
+function writeText(socket: Socket, type: 8 | 9, text: string): void {
+  socket.write(encodeFrame(type, encoder.encode(text)));
+}
+
+// the boot and generation of the `counted` session, as the agent names them
+export const STUB_BOOT_ID = '6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f';
+
+// the end of the `counted` session's output, and of the `ended` one's
+const OUTPUT_END = 100;
+
+export const STUB_GENERATION = 'd'.repeat(32);
 
 // An attach, by session: `main` runs until a write of `taken` detaches it,
 // `counted` resumes at 95 of 100 and exits, `ended` exited earlier, and any
@@ -168,110 +276,4 @@ function startAttach(socket: Socket, run: Run, request: StubRequest): void {
   socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 42, session: 'main', created: false }));
 
   writeText(socket, FRAME_TYPES.stdout, 'replay');
-}
-
-// what a running command does with a frame from impd after its start
-function readInput(
-  socket: Socket,
-  run: Run,
-  frame: AgentFrame,
-  writeInput: (entry: string) => void,
-) {
-  if (frame.type === FRAME_TYPES.stdin) {
-    const text = decoder.decode(frame.payload);
-
-    writeInput(text);
-
-    if (run.command === 'cat') {
-      socket.write(encodeFrame(FRAME_TYPES.stdout, frame.payload));
-    }
-
-    if ((run.command === 'wait' || run.command === '/bin/sh') && text.includes('\u0003')) {
-      sendExit(socket, run, 130, 2);
-    }
-
-    if (run.command === 'attach main' && text === 'taken') {
-      stopRun(socket, run, encodeJsonFrame(FRAME_TYPES.detached, { reason: 'taken_over' }));
-    }
-  }
-
-  if (frame.type === FRAME_TYPES.stdinEof) {
-    writeInput('eof');
-
-    if (run.command === 'cat') {
-      sendExit(socket, run, 0, 0);
-    }
-  }
-
-  if (frame.type === FRAME_TYPES.resize) {
-    const size = ResizeSchema.parse(decodeJsonPayload(frame));
-
-    writeInput(`resize:${String(size.cols)}x${String(size.rows)}`);
-  }
-
-  if (frame.type === FRAME_TYPES.signal) {
-    const signal = SignalSchema.parse(decodeJsonPayload(frame)).signal;
-
-    writeInput(`signal:${String(signal)}`);
-    sendExit(socket, run, 128 + signal, signal);
-  }
-}
-
-// An imp's guest agent for exec and attach, for startStubAgent. It records
-// each request, what each command got (stdin as text, `eof`, `resize:CxR`,
-// `signal:N`), and each command whose connection impd closed as it ran.
-export function buildStubExecAgent() {
-  const requests: StubRequest[] = [];
-  const input: string[] = [];
-  const closed: string[] = [];
-
-  const runs = new WeakMap<Socket, Run>();
-
-  const writeInput = (entry: string): void => {
-    input.push(entry);
-  };
-
-  const readFrame: StubAgentHandler = (socket, request, frames) => {
-    const known = runs.get(socket);
-
-    if (known !== undefined) {
-      if (!known.ended) {
-        readInput(socket, known, frames.at(-1) ?? request, writeInput);
-      }
-
-      return;
-    }
-
-    const parsed = RequestSchema.parse(decodeJsonPayload(request));
-
-    const command =
-      parsed.op === 'session.attach'
-        ? `attach ${String(parsed.session)}`
-        : (parsed.argv?.[0] ?? '');
-
-    const run: Run = { command, ended: false };
-
-    runs.set(socket, run);
-    requests.push(parsed);
-
-    // impd may close the connection while a command still writes, as a
-    // client that stopped reading does
-    socket.on('error', () => {});
-
-    socket.on('close', () => {
-      if (!run.ended) {
-        closed.push(command);
-      }
-    });
-
-    if (parsed.op === 'exec') {
-      startExec(socket, run, parsed);
-    } else if (parsed.op === 'session.attach') {
-      startAttach(socket, run, parsed);
-    } else {
-      sendRefusal(socket, run, { code: 'UNKNOWN_OP', message: `unknown op ${parsed.op}` });
-    }
-  };
-
-  return { requests, input, closed, readFrame };
 }

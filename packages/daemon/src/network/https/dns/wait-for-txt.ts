@@ -14,7 +14,7 @@ export interface WaitForTxtOptions {
   readonly now?: () => number;
 
   // waits out the interval between rounds
-  readonly wait?: (ms: number) => Promise<void>;
+  readonly wait?: (durationMs: number) => Promise<void>;
 }
 
 // Waits until every one of the zone's nameservers answers every value. A CA
@@ -42,7 +42,7 @@ export async function waitForTxt(
   }
 
   for (;;) {
-    const missing = await findMissing(servers, fqdn, values, readTxt);
+    const missing = await readMissing(servers, fqdn, values, readTxt);
 
     if (missing === null) {
       return;
@@ -56,31 +56,6 @@ export async function waitForTxt(
 
     await wait(intervalMs);
   }
-}
-
-// the first server that lacks a value, or null when all have every one
-async function findMissing(
-  servers: readonly string[],
-  fqdn: string,
-  values: readonly string[],
-  readTxt: (server: string, fqdn: string) => Promise<readonly string[]>,
-): Promise<string | null> {
-  for (const server of servers) {
-    let answer: readonly string[];
-
-    try {
-      answer = await readTxt(server, fqdn);
-    } catch {
-      // NXDOMAIN or a timeout: not there yet
-      return server;
-    }
-
-    if (!values.every((value) => answer.includes(value))) {
-      return server;
-    }
-  }
-
-  return null;
 }
 
 async function readTxtFromServer(server: string, fqdn: string): Promise<readonly string[]> {
@@ -102,4 +77,29 @@ async function resolveServerAddresses(hostname: string): Promise<readonly string
   } catch {
     return [];
   }
+}
+
+// the first server that lacks a value, or null when all have every one
+async function readMissing(
+  servers: readonly string[],
+  fqdn: string,
+  values: readonly string[],
+  readTxt: (server: string, fqdn: string) => Promise<readonly string[]>,
+): Promise<string | null> {
+  for (const server of servers) {
+    let answer: readonly string[];
+
+    try {
+      answer = await readTxt(server, fqdn);
+    } catch {
+      // NXDOMAIN or a timeout: not there yet
+      return server;
+    }
+
+    if (!values.every((value) => answer.includes(value))) {
+      return server;
+    }
+  }
+
+  return null;
 }

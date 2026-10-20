@@ -1,4 +1,4 @@
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildErrorPage } from '../proxy/error-pages';
 import type { ProxyListenOptions, ProxyRoute } from '../proxy/wake-proxy';
 import type { Certificate } from './acme/cert-store';
@@ -29,6 +29,20 @@ export interface ProxyListen {
   readonly startListener: (options: ProxyListenOptions) => Listener;
 }
 
+export type ListenerScope =
+  | { readonly kind: 'tailnet' }
+  | {
+      readonly kind: 'public';
+
+      // the imp's route, or null while it is not public; it takes a slot
+      // and maybe a wake, which the request gives back as it ends
+      readonly routeImp: (name: string, request: Request) => Promise<ProxyRoute | null>;
+
+      // whether the name is a public imp, and nothing else: the redirect
+      // only answers, so it takes no slot and no wake
+      readonly probePublic: (name: string) => Promise<boolean>;
+    };
+
 interface HttpsListenersOptions {
   readonly proxy: ProxyListen;
   readonly domain: string;
@@ -43,20 +57,6 @@ interface HttpsListenersOptions {
   // domain, and a tailnet-only imp is a 404 like an unknown one
   readonly scope: ListenerScope;
 }
-
-export type ListenerScope =
-  | { readonly kind: 'tailnet' }
-  | {
-      readonly kind: 'public';
-
-      // the imp's route, or null while it is not public; it takes a slot
-      // and maybe a wake, which the request gives back as it ends
-      readonly routeImp: (name: string, request: Request) => Promise<ProxyRoute | null>;
-
-      // whether the name is a public imp, and nothing else: the redirect
-      // only answers, so it takes no slot and no wake
-      readonly isPublic: (name: string) => Promise<boolean>;
-    };
 
 interface AddressListeners {
   tls: Listener | null;
@@ -110,7 +110,7 @@ export function createHttpsListeners(options: HttpsListenersOptions): HttpsListe
       return Promise.resolve(parsed !== null);
     }
 
-    return parsed.kind === 'imp' ? scope.isPublic(parsed.name) : Promise.resolve(false);
+    return parsed.kind === 'imp' ? scope.probePublic(parsed.name) : Promise.resolve(false);
   };
 
   const tryBind = (
@@ -134,7 +134,7 @@ export function createHttpsListeners(options: HttpsListenersOptions): HttpsListe
       if (!failed.has(key)) {
         failed.add(key);
 
-        log(`impd: https: cannot listen on ${key}: ${readErrorMessage(error)}`);
+        log(`impd: https: cannot listen on ${key}: ${getErrorMessage(error)}`);
       }
 
       return null;
@@ -152,18 +152,20 @@ export function createHttpsListeners(options: HttpsListenersOptions): HttpsListe
       }),
     );
 
+  const handleRedirectRequest = async (request: Request) => {
+    const isRedirected = await checkRedirect(request);
+
+    return isRedirected
+      ? buildRedirect(request, domain, readRedirectPort(), hint)
+      : buildErrorPage(404, hint);
+  };
+
   const startRedirect = (address: string): Listener | null =>
     tryBind(address, 'http', () =>
       Bun.serve({
         hostname: address,
         port: ports.http,
-        fetch: async (request) => {
-          const isRedirected = await checkRedirect(request);
-
-          return isRedirected
-            ? buildRedirect(request, domain, readRedirectPort(), hint)
-            : buildErrorPage(404, hint);
-        },
+        fetch: handleRedirectRequest,
       }),
     );
 

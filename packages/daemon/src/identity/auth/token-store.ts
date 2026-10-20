@@ -5,7 +5,7 @@ import { ORPCError } from '@orpc/server';
 import { formatKeyFingerprint, parsePublicKey } from '../../imps/ssh/authorized-keys';
 import type { AuthorizedKey } from '../../imps/ssh/authorized-keys';
 import type { ImpDatabase, ImpQueries } from '../../platform/db/open-database';
-import { findSecret } from '../../platform/db/secrets';
+import { readSecret } from '../../platform/db/secrets';
 import {
   listTokenRecords,
   listTokenSshKeyRecords,
@@ -248,7 +248,7 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
     list: () =>
       [...byId.values()]
         .map((record) => toFullToken(record))
-        .toSorted((a, b) => a.name.localeCompare(b.name)),
+        .toSorted((left, right) => left.name.localeCompare(right.name)),
     create: async (token) => {
       if (token.name === ROOT_NAME || findByName(token.name) !== null) {
         throw buildConflictError('token', token.name);
@@ -483,7 +483,7 @@ async function readGrantable(
   const grantable: GrantableSecret[] = [];
 
   for (const name of names) {
-    const secret = await findSecret(db, name);
+    const secret = await readSecret(db, name);
 
     if (secret === undefined) {
       throw buildNotFoundError('secret', name);
@@ -526,7 +526,7 @@ function buildKeyEntries(lines: readonly string[], build: (line: string) => KeyE
 }
 
 // the secret of a bearer header, or null for none
-export function readBearer(header: string | null): string | null {
+export function findBearer(header: string | null): string | null {
   return header !== null && header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
 }
 

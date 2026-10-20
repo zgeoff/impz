@@ -4,8 +4,8 @@ import type { EventBus } from '../../platform/events/event-bus';
 import { createSemaphore } from '../../platform/process/semaphore';
 import {
   buildImpOverBudgetError,
+  buildNeededMib,
   buildRamBudgetError,
-  readNeededMib,
 } from '../../surface/api-errors';
 import type { ProtectedImp } from '../../surface/api-errors';
 import { pickSleepVictims } from './pick-sleep-victims';
@@ -404,7 +404,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           const usage = await readEffectiveUsage(request.id);
 
           emitAdmission(request, 'refused', usage.effectiveMib, {
-            neededMib: readNeededMib(usage.effectiveMib, request.memoryMib, deps.budgetMib),
+            neededMib: buildNeededMib(usage.effectiveMib, request.memoryMib, deps.budgetMib),
             protectedCount: 0,
           });
 
@@ -435,7 +435,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           const usage = await readEffectiveUsage(request.id);
 
           emitAdmission(request, 'refused', usage.effectiveMib, {
-            neededMib: readNeededMib(usage.effectiveMib, request.reserveMib, deps.budgetMib),
+            neededMib: buildNeededMib(usage.effectiveMib, request.reserveMib, deps.budgetMib),
             protectedCount: room.protected.length,
           });
 
@@ -488,7 +488,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           usedMib: usage.effectiveMib,
           reserveMib: request.mib,
           ...(!fits && {
-            neededMib: readNeededMib(usage.effectiveMib, request.mib, deps.budgetMib),
+            neededMib: buildNeededMib(usage.effectiveMib, request.mib, deps.budgetMib),
             protectedCount: room.protected.length,
           }),
         });

@@ -23,6 +23,46 @@ const LoginSchema = z.object({ token: z.string() });
 
 const rpc = new RPCHandler(impdRouter);
 
+export function resolveLogin(context: RouteContext): Promise<Response> {
+  if (!isSameOrigin(context.request)) {
+    return Promise.resolve(HttpResponse.json({ error: 'cross-origin' }, { status: 403 }));
+  }
+
+  return readJson(context.request).then((json) => resolveLoginBody(json));
+}
+
+export function resolveLogout(context: RouteContext): Response {
+  if (!isSameOrigin(context.request)) {
+    return HttpResponse.json({ error: 'cross-origin' }, { status: 403 });
+  }
+
+  sessionCollection.clear();
+  impdLogouts.logOut();
+
+  return new HttpResponse(null, { status: 204 });
+}
+
+// impd's /rpc (packages/daemon create-app.ts): the browser's session, only
+// from impd's own origin and before it expires, or impd's 401; oRPC's own
+// fetch handler answers through impdRouter
+export async function resolveRpc(context: RouteContext): Promise<Response> {
+  const session = readSession(context.request);
+
+  if (session === null) {
+    return HttpResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  const handled = await rpc.handle(context.request, { prefix: '/rpc', context: { session } });
+
+  return handled.matched ? handled.response : new Response('not found', { status: 404 });
+}
+
+export const handlers = [
+  http.post(LOGIN_URL, resolveLogin),
+  http.post(LOGOUT_URL, resolveLogout),
+  http.all(`${RPC_URL}/*`, resolveRpc),
+];
+
 function readJson(request: Readonly<Request>): Promise<unknown> {
   return request.json().then(
     (json: unknown) => json,
@@ -46,25 +86,6 @@ async function resolveLoginBody(json: unknown): Promise<Response> {
   sessionCollection.clear();
 
   await sessionCollection.create({ tokenId: readTokenId(token.secret) });
-
-  return new HttpResponse(null, { status: 204 });
-}
-
-export function resolveLogin(context: RouteContext): Promise<Response> {
-  if (!isSameOrigin(context.request)) {
-    return Promise.resolve(HttpResponse.json({ error: 'cross-origin' }, { status: 403 }));
-  }
-
-  return readJson(context.request).then((json) => resolveLoginBody(json));
-}
-
-export function resolveLogout(context: RouteContext): Response {
-  if (!isSameOrigin(context.request)) {
-    return HttpResponse.json({ error: 'cross-origin' }, { status: 403 });
-  }
-
-  sessionCollection.clear();
-  impdLogouts.logOut();
 
   return new HttpResponse(null, { status: 204 });
 }
@@ -97,24 +118,3 @@ function readSession(request: Request): ImpdSession | null {
     expiresAt: session.expiresAt,
   };
 }
-
-// impd's /rpc (packages/daemon build-app.ts): the browser's session, only
-// from impd's own origin and before it expires, or impd's 401; oRPC's own
-// fetch handler answers through impdRouter
-export async function resolveRpc(context: RouteContext): Promise<Response> {
-  const session = readSession(context.request);
-
-  if (session === null) {
-    return HttpResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
-
-  const handled = await rpc.handle(context.request, { prefix: '/rpc', context: { session } });
-
-  return handled.matched ? handled.response : new Response('not found', { status: 404 });
-}
-
-export const handlers = [
-  http.post(LOGIN_URL, resolveLogin),
-  http.post(LOGOUT_URL, resolveLogout),
-  http.all(`${RPC_URL}/*`, resolveRpc),
-];

@@ -5,7 +5,7 @@ import { buildStubMcpTransport } from './build-stub-mcp-transport';
 test('it answers each request with an open event stream', async () => {
   const transport = buildStubMcpTransport();
 
-  const response = await transport.handle(new Request('http://imp.test/mcp', { method: 'POST' }));
+  const response = await transport.respond(new Request('http://imp.test/mcp', { method: 'POST' }));
 
   expect({
     status: response.status,
@@ -20,8 +20,8 @@ test('it records each request it took, in order', async () => {
   const first = new Request('http://imp.test/mcp', { method: 'POST' });
   const second = new Request('http://imp.test/mcp', { method: 'DELETE' });
 
-  await transport.handle(first);
-  await transport.handle(second);
+  await transport.respond(first);
+  await transport.respond(second);
 
   expect(transport.calls.map((call) => call.request)).toStrictEqual([first, second]);
 });
@@ -29,7 +29,7 @@ test('it records each request it took, in order', async () => {
 test('it ends a call’s tool only when the test ends it', async () => {
   const transport = buildStubMcpTransport();
 
-  const response = await transport.handle(new Request('http://imp.test/mcp', { method: 'POST' }));
+  const response = await transport.respond(new Request('http://imp.test/mcp', { method: 'POST' }));
 
   const ended = transport.readCallEnd(response);
 
@@ -50,7 +50,7 @@ test('it ends a call’s tool only when the test ends it', async () => {
 
 test('it rejects each request with the failure it was given, and records none', () => {
   const transport = buildStubMcpTransport({ failure: new Error('the transport broke') });
-  const handled = transport.handle(new Request('http://imp.test/mcp', { method: 'POST' }));
+  const handled = transport.respond(new Request('http://imp.test/mcp', { method: 'POST' }));
 
   expect(handled).rejects.toThrow(new Error('the transport broke'));
   expect(transport.calls).toStrictEqual([]);

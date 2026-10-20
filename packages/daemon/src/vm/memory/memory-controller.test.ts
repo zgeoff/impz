@@ -65,8 +65,8 @@ function setupTest() {
     releases,
     logs,
     plugged,
-    advance: (ms: number) => {
-      clock.now += ms;
+    advance: (durationMs: number) => {
+      clock.now += durationMs;
     },
   };
 }
@@ -885,8 +885,8 @@ test('it counts no part of a plug that a reclaim stopped in the grow after it', 
   const controller = createMemoryController({
     ...ctx.deps,
     readRamMib: () => 400,
-    sleep: (ms) => {
-      ctx.advance(ms);
+    sleep: (durationMs) => {
+      ctx.advance(durationMs);
 
       return Promise.resolve();
     },
@@ -935,8 +935,8 @@ test('it counts what a reclaim unplugs from a plug that moves after its first re
   const controller = createMemoryController({
     ...ctx.deps,
     readRamMib: () => 400,
-    sleep: (ms) => {
-      ctx.advance(ms);
+    sleep: (durationMs) => {
+      ctx.advance(durationMs);
 
       return Promise.resolve();
     },

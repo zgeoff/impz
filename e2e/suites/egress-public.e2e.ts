@@ -16,7 +16,7 @@ import {
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { startStubPrivateService } from '../lib/start-stub-private-service';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
 // The public policy (docs/architecture/network/egress.md): the internet,
@@ -36,7 +36,7 @@ async function setupTest() {
   const client = await createInstanceClient();
   const gateway = await readContainerGateway();
 
-  return { prefix: readSuitePrefix('egress'), stack, client, gateway };
+  return { prefix: getSuitePrefix('egress'), stack, client, gateway };
 }
 
 test('it lets an open imp reach each private listener, before and after a public imp is refused them at once with a reset', async () => {
@@ -99,12 +99,12 @@ test('it lets an open imp reach each private listener, before and after a public
   const acceptedAfter = listener.readAccepted();
   const refusals = [toGateway, toPrivate, toLinkLocal, toMetadata];
 
-  writeMetric('egressPublicRefusalMs', Math.max(...refusals.map((dial) => dial.ms)));
+  writeMetric('egressPublicRefusalMs', Math.max(...refusals.map((dial) => dial.durationMs)));
 
   // a reset at once, where a drop would take all 5 s of nc's -w
   expect(refusals).toSatisfyAll(
     (dial: (typeof refusals)[number]) =>
-      !dial.isConnected && dial.error.includes('Connection refused') && dial.ms < 1000,
+      !dial.isConnected && dial.error.includes('Connection refused') && dial.durationMs < 1000,
   );
 
   // no listener saw a connection: the firewall refused it, no dead listener

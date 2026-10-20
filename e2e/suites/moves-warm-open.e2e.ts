@@ -4,7 +4,7 @@ import { resolveImageName } from '../lib/fixtures';
 import {
   assertState,
   createInstanceClient,
-  findImp,
+  readImp,
   requireImp,
   runImp,
   runImpWith,
@@ -14,7 +14,7 @@ import { HOST_B, readMoveHosts } from '../lib/move-hosts';
 import { readJailOwners } from '../lib/move-steps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // A warm move of a sleeping open imp, memory and all, between A and B on
@@ -29,9 +29,9 @@ async function setupTest() {
   const hosts = readMoveHosts({ tailnet: false });
 
   const client = await createInstanceClient();
-  const clientB = await createInstanceClient(hosts.b);
+  const clientB = await createInstanceClient(hosts.hostB);
 
-  return { prefix: readSuitePrefix('moves'), stack, hosts, client, clientB };
+  return { prefix: getSuitePrefix('moves'), stack, hosts, client, clientB };
 }
 
 test('it moves a sleeping open imp with its memory, and it reaches out at once on the target', async () => {
@@ -72,15 +72,15 @@ test('it moves a sleeping open imp with its memory, and it reaches out at once o
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, open));
 
-  const left = await findImp(open);
-  const moved = await requireImp(open, ctx.hosts.b);
+  const left = await readImp(open);
+  const moved = await requireImp(open, ctx.hosts.hostB);
 
   expect(out).toContain(`${open}: moved to ${HOST_B}, asleep with its memory`);
   expect(left).toBeUndefined();
   expect(moved.state).toBe('sleeping');
 
   // the first exec wakes it on B
-  const onB = { target: ctx.hosts.b };
+  const onB = { target: ctx.hosts.hostB };
 
   const mark = await runImpWith(onB, 'exec', open, '--', 'cat', '/dev/shm/mark');
 
@@ -116,8 +116,8 @@ test('it moves a sleeping open imp with its memory, and it reaches out at once o
     'wget -q -T 10 -O /dev/null http://example.com/ && echo http-ok',
   );
 
-  const row = await requireImp(open, ctx.hosts.b);
-  const owners = await readJailOwners(ctx.hosts.b, row.id, row.slot);
+  const row = await requireImp(open, ctx.hosts.hostB);
+  const owners = await readJailOwners(ctx.hosts.hostB, row.id, row.slot);
 
   const [uid = ''] = owners;
 

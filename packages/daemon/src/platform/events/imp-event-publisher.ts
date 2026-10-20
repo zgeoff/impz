@@ -3,10 +3,10 @@ import type { Imp, ImpEvent } from '@impz/api';
 import { P, match } from 'ts-pattern';
 import { toApiCheckpoint } from '../db/checkpoints';
 import type { ImpWrite } from '../db/imp-write-feed';
-import { findImpById } from '../db/imps';
+import { readImpById } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
-import { readErrorMessage } from '../process/read-error-message';
+import { getErrorMessage } from '../process/get-error-message';
 import type { EventBus } from './event-bus';
 
 interface PublisherDeps {
@@ -29,13 +29,13 @@ export function startImpEventPublisher(deps: PublisherDeps): () => void {
 
     for (let write = pending.shift(); write !== undefined; write = pending.shift()) {
       try {
-        const event = await buildEvent(deps, write);
+        const event = await readEvent(deps, write);
 
         if (event !== null) {
           deps.bus.publish(event);
         }
       } catch (error) {
-        deps.log(`impd: events: ${readErrorMessage(error)}`);
+        deps.log(`impd: events: ${getErrorMessage(error)}`);
       }
     }
 
@@ -51,7 +51,7 @@ export function startImpEventPublisher(deps: PublisherDeps): () => void {
   });
 }
 
-function buildEvent(deps: PublisherDeps, write: Readonly<ImpWrite>): Promise<ImpEvent | null> {
+function readEvent(deps: PublisherDeps, write: Readonly<ImpWrite>): Promise<ImpEvent | null> {
   const envelope = { v: EVENT_VERSION, at: new Date(deps.now()) } as const;
 
   return match(write)
@@ -75,7 +75,7 @@ function buildEvent(deps: PublisherDeps, write: Readonly<ImpWrite>): Promise<Imp
       imp: await deps.toApi(removed.imp),
     }))
     .with({ kind: P.union('checkpointAdded', 'checkpointRemoved') }, async (checkpointWrite) => {
-      const imp = await findImpById(deps.db, checkpointWrite.checkpoint.impId);
+      const imp = await readImpById(deps.db, checkpointWrite.checkpoint.impId);
 
       if (imp === undefined) {
         return null;

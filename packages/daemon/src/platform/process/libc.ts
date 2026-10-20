@@ -28,7 +28,7 @@ const opened: { core?: CoreLibc | null; pidfd?: PidfdLibc | null } = {};
 
 // libc's ioctl, lseek and errno, opened once on first use; null where libc
 // cannot be opened
-export function getLibc(): CoreLibc | null {
+export function readLibc(): CoreLibc | null {
   // undefined until the first open; null caches a failed one
   if (opened.core === undefined) {
     opened.core = openSymbols(CORE_SYMBOLS);
@@ -39,7 +39,7 @@ export function getLibc(): CoreLibc | null {
 
 // libc's pidfd wrappers, opened once on first use; null where they are
 // missing
-export function getPidfdLibc(): PidfdLibc | null {
+export function readPidfdLibc(): PidfdLibc | null {
   if (opened.pidfd === undefined) {
     opened.pidfd = openSymbols(PIDFD_SYMBOLS);
   }
@@ -51,7 +51,7 @@ export function getPidfdLibc(): PidfdLibc | null {
 // libc is not open.
 export function readErrno(): number {
   // oxlint-disable-next-line no-underscore-dangle -- libc's name for the thread's errno
-  const at = getLibc()?.__errno_location();
+  const at = readLibc()?.__errno_location();
 
   return at === null || at === undefined ? -1 : read.i32(at);
 }

@@ -12,6 +12,20 @@ export interface LayerPlace {
   readonly exists?: (path: string) => boolean;
 }
 
+const CODE_FILE = /\.(?:[cm]?[jt]sx?)$/u;
+
+// the relative paths in code: an import, export, dynamic import, require or module mock, and a
+// path from the file's own folder through `join(import.meta.dir, …)` or `new URL(…, import.meta.url)`
+const RELATIVE_PATHS = [
+  /(?<head>\b(?:from|import|require|mock\.module)\s*\(?\s*)(?<quote>['"])(?<specifier>\.{1,2}(?:\/[^'"\n]*)?)\k<quote>/gu,
+  /(?<head>\bjoin\(\s*import\.meta\.dir\s*,\s*)(?<quote>['"])(?<specifier>[\w.-][^'"\n]*)\k<quote>/gu,
+  /(?<head>\bnew URL\(\s*)(?<quote>['"])(?<specifier>[\w.-][^'"\n:]*)\k<quote>(?=\s*,\s*import\.meta\.url)/gu,
+];
+
+// a path under the daemon's src in any text: `@impz/daemon/src/db/imps`, a relative import from
+// another package, a doc, a config file or a comment
+const DAEMON_PATH = /(?<head>daemon\/src\/)(?<path>[\w.@-]+(?:\/[\w.@-]+)*)/gu;
+
 // the text of the file at `place` with every path that names a moved daemon file rewritten
 export function transformLayerPaths(text: string, place: LayerPlace): string {
   const relinked = CODE_FILE.test(place.current)
@@ -36,21 +50,11 @@ export function transformLayerPaths(text: string, place: LayerPlace): string {
   return place.current === 'knip.json' ? buildKnipConfig(repathed) : repathed;
 }
 
-const CODE_FILE = /\.(?:[cm]?[jt]sx?)$/u;
-
-// the relative paths in code: an import, export, dynamic import, require or module mock, and a
-// path from the file's own folder through `join(import.meta.dir, …)` or `new URL(…, import.meta.url)`
-const RELATIVE_PATHS = [
-  /(?<head>\b(?:from|import|require|mock\.module)\s*\(?\s*)(?<quote>['"])(?<specifier>\.{1,2}(?:\/[^'"\n]*)?)\k<quote>/gu,
-  /(?<head>\bjoin\(\s*import\.meta\.dir\s*,\s*)(?<quote>['"])(?<specifier>[\w.-][^'"\n]*)\k<quote>/gu,
-  /(?<head>\bnew URL\(\s*)(?<quote>['"])(?<specifier>[\w.-][^'"\n:]*)\k<quote>(?=\s*,\s*import\.meta\.url)/gu,
-];
-
 // the specifier that `specifier` becomes once the file sits at `current` and its target has moved
 function planSpecifier(place: LayerPlace, specifier: string): string {
-  const src = resolve(place.root, LAYER_TABLE.daemonSrc);
+  const source = resolve(place.root, LAYER_TABLE.daemonSrc);
   const target = resolve(place.root, dirname(place.file), specifier);
-  const movedTarget = planStaleTarget(place, src, specifier) ?? planTarget(src, target);
+  const movedTarget = planStaleTarget(place, source, specifier) ?? planTarget(source, target);
 
   if (movedTarget === target && place.file === place.current) {
     return specifier;
@@ -72,17 +76,10 @@ function planSpecifier(place: LayerPlace, specifier: string): string {
   return `${prefix}${path}${trailing}`;
 }
 
-// where an absolute `target` under src moves to; a target outside src stays
-function planTarget(src: string, target: string): string {
-  const isInSrc = target === src || target.startsWith(`${src}${sep}`);
-
-  return isInSrc ? join(src, planLayerPath(relative(src, target).split(sep).join('/'))) : target;
-}
-
 // A merge can carry a file to its layer folder with an import that a branch wrote from its old
 // folder. When that import resolves nowhere, this resolves it from the old folder instead and
 // returns where its target sits now; an import that resolves from neither folder stays as it is.
-function planStaleTarget(place: LayerPlace, src: string, specifier: string): string | undefined {
+function planStaleTarget(place: LayerPlace, source: string, specifier: string): string | undefined {
   const exists = place.exists;
 
   if (exists === undefined || place.file !== place.current) {
@@ -91,18 +88,18 @@ function planStaleTarget(place: LayerPlace, src: string, specifier: string): str
 
   const target = resolve(place.root, dirname(place.file), specifier);
 
-  if (canResolve(exists, target) || canResolve(exists, planTarget(src, target))) {
+  if (canResolve(exists, target) || canResolve(exists, planTarget(source, target))) {
     return undefined;
   }
 
-  const path = relative(src, resolve(place.root, place.file)).split(sep).join('/');
+  const path = relative(source, resolve(place.root, place.file)).split(sep).join('/');
   const original = planOriginalLayerPath(path);
 
   if (original === path || path.startsWith('..')) {
     return undefined;
   }
 
-  const movedTarget = planTarget(src, resolve(src, dirname(original), specifier));
+  const movedTarget = planTarget(source, resolve(source, dirname(original), specifier));
 
   return canResolve(exists, movedTarget) ? movedTarget : target;
 }
@@ -114,9 +111,14 @@ function canResolve(exists: (path: string) => boolean, path: string): boolean {
   return RESOLVED_SUFFIXES.some((suffix) => exists(`${path}${suffix}`));
 }
 
-// a path under the daemon's src in any text: `@impz/daemon/src/db/imps`, a relative import from
-// another package, a doc, a config file or a comment
-const DAEMON_PATH = /(?<head>daemon\/src\/)(?<path>[\w.@-]+(?:\/[\w.@-]+)*)/gu;
+// where an absolute `target` under the daemon's `source` folder moves to; a target outside it stays
+function planTarget(source: string, target: string): string {
+  const isInSource = target === source || target.startsWith(`${source}${sep}`);
+
+  return isInSource
+    ? join(source, planLayerPath(relative(source, target).split(sep).join('/')))
+    : target;
+}
 
 // knip's daemon workspace names its files from the package root, as `src/docker-proxy/main.ts`
 const KNIP_DAEMON_WORKSPACE = /"packages\/daemon": \{[^}]*(?:\{[^}]*\}[^}]*)*\}/u;

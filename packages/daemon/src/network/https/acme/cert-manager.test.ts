@@ -2,18 +2,18 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildMockCertificate } from '../../../../testing/network/build-mock-certificate';
+import { createMockCertificate } from '../../../../testing/network/create-mock-certificate';
 import { createDnsToken } from '../dns/dns-token';
 import { createCertManager } from './cert-manager';
 import type { Certificate } from './cert-store';
 import { createCertStore } from './cert-store';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-certs-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-certs-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir, store: createCertStore(dir) };
+  return { directoryPath: directory, store: createCertStore(directory) };
 }
 
 test('it loads no certificate before one is issued', async () => {
@@ -32,7 +32,7 @@ test('it loads no certificate before one is issued', async () => {
 
 test('it issues and stores a certificate when there is none', async () => {
   const ctx = await setupTest();
-  const fresh = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const fresh = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   const manager = createCertManager({
     domain: 'imp.test',
@@ -60,7 +60,7 @@ test('it issues and stores a certificate when there is none', async () => {
 
 test('it logs what it asks the CA for and why', async () => {
   const ctx = await setupTest();
-  const fresh = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const fresh = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   const log = mock<(message: string) => void>();
 
@@ -85,7 +85,7 @@ test('it logs the new certificate’s expiry and how long the CA took', async ()
   const clock = { now: Date.parse('2030-01-10T00:00:00Z') };
   const log = mock<(message: string) => void>();
 
-  const fresh = await buildMockCertificate({
+  const fresh = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
     notBefore: new Date('2030-01-10T00:00:00Z'),
     notAfter: new Date('2030-04-10T00:00:00Z'),
@@ -115,7 +115,7 @@ test('it asks the CA nothing while the stored certificate is fresh', async () =>
 
   const issue = mock();
 
-  const fresh = await buildMockCertificate({
+  const fresh = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
     notBefore: new Date('2030-01-01T00:00:00Z'),
     notAfter: new Date('2030-04-01T00:00:00Z'),
@@ -170,7 +170,7 @@ test('it counts an attempt as failed while it runs, so a crash still backs off',
 
   const seen: number[] = [];
 
-  const fresh = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const fresh = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   const manager = createCertManager({
     domain: 'imp.test',
@@ -283,7 +283,7 @@ test('it logs a wait for the backoff once, not at every try', async () => {
 
 test('it asks the CA once for two renewals at once', async () => {
   const ctx = await setupTest();
-  const fresh = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const fresh = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   const answer = Promise.withResolvers<Certificate>();
   const issue = mock(() => answer.promise);
@@ -312,7 +312,7 @@ test('it loads an expired certificate on disk, with a warning', async () => {
 
   const log = mock<(message: string) => void>();
 
-  const expired = await buildMockCertificate({
+  const expired = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
     notBefore: new Date('2029-10-01T00:00:00Z'),
     notAfter: new Date('2030-01-01T00:00:00Z'),
@@ -340,7 +340,7 @@ test('it loads an expired certificate on disk, with a warning', async () => {
 test('it keeps serving an expired certificate after a renewal fails', async () => {
   const ctx = await setupTest();
 
-  const expired = await buildMockCertificate({
+  const expired = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
     notBefore: new Date('2029-10-01T00:00:00Z'),
     notAfter: new Date('2030-01-01T00:00:00Z'),
@@ -366,14 +366,14 @@ test('it replaces a certificate for another domain', async () => {
 
   const log = mock<(message: string) => void>();
 
-  const fresh = await buildMockCertificate({
+  const fresh = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
     notBefore: new Date('2030-01-10T00:00:00Z'),
     notAfter: new Date('2030-04-10T00:00:00Z'),
   });
 
   // still valid for months at the manager's now: only its names are wrong
-  const other = await buildMockCertificate({
+  const other = await createMockCertificate({
     names: ['other.test', '*.other.test'],
     notBefore: new Date('2030-01-01T00:00:00Z'),
     notAfter: new Date('2030-04-01T00:00:00Z'),
@@ -403,13 +403,13 @@ test('it loads no certificate it cannot read, and logs why', async () => {
 
   const log = mock<(message: string) => void>();
 
-  const certificate = await buildMockCertificate();
+  const certificate = await createMockCertificate();
 
   // a certificate block whose body is not a certificate
-  await mkdir(join(ctx.dir, 'tls'), { recursive: true });
+  await mkdir(join(ctx.directoryPath, 'tls'), { recursive: true });
 
   await writeFile(
-    join(ctx.dir, 'tls', 'certificate.pem'),
+    join(ctx.directoryPath, 'tls', 'certificate.pem'),
     `${certificate.keyPem}\n-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n`,
   );
 
@@ -432,13 +432,13 @@ test('it loads no certificate it cannot read, and logs why', async () => {
 
 test('it asks for a new certificate when the stored one cannot be read', async () => {
   const ctx = await setupTest();
-  const certificate = await buildMockCertificate();
-  const fresh = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate();
+  const fresh = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
-  await mkdir(join(ctx.dir, 'tls'), { recursive: true });
+  await mkdir(join(ctx.directoryPath, 'tls'), { recursive: true });
 
   await writeFile(
-    join(ctx.dir, 'tls', 'certificate.pem'),
+    join(ctx.directoryPath, 'tls', 'certificate.pem'),
     `${certificate.keyPem}\n-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n`,
   );
 
@@ -463,7 +463,7 @@ test('it logs a renewal that fails outside the CA call, and answers no certifica
 
   // a directory where the attempts file's temporary copy goes: the first
   // write of the attempts fails
-  await mkdir(join(ctx.dir, 'tls', 'attempts.json.new'), { recursive: true });
+  await mkdir(join(ctx.directoryPath, 'tls', 'attempts.json.new'), { recursive: true });
 
   const manager = createCertManager({
     domain: 'imp.test',
@@ -485,9 +485,9 @@ test('it logs a renewal that fails outside the CA call, and answers no certifica
 
 test('it runs a new renewal after one that failed outside the CA call', async () => {
   const ctx = await setupTest();
-  const fresh = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const fresh = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
-  const blocker = join(ctx.dir, 'tls', 'attempts.json.new');
+  const blocker = join(ctx.directoryPath, 'tls', 'attempts.json.new');
 
   await mkdir(blocker, { recursive: true });
 
@@ -511,7 +511,7 @@ test('it runs a new renewal after one that failed outside the CA call', async ()
 test('it backs off when the DNS token file holds no token', async () => {
   const ctx = await setupTest();
 
-  const tokenPath = join(ctx.dir, 'token');
+  const tokenPath = join(ctx.directoryPath, 'token');
   const log = mock<(message: string) => void>();
   const dnsToken = createDnsToken({ kind: 'file', path: tokenPath }, () => 0);
 
@@ -525,7 +525,7 @@ test('it backs off when the DNS token file holds no token', async () => {
     issue: async () => {
       await dnsToken.read();
 
-      return buildMockCertificate();
+      return createMockCertificate();
     },
     now: () => Date.parse('2030-01-10T00:00:00Z'),
     log,
@@ -544,13 +544,13 @@ test('it backs off when the DNS token file holds no token', async () => {
 test('it uses a token put in place once the backoff has passed, and never logs it', async () => {
   const ctx = await setupTest();
 
-  const tokenPath = join(ctx.dir, 'token');
+  const tokenPath = join(ctx.directoryPath, 'token');
   const clock = { now: Date.parse('2030-01-10T00:00:00Z') };
   const log = mock<(message: string) => void>();
   const tokens: string[] = [];
   const dnsToken = createDnsToken({ kind: 'file', path: tokenPath }, () => clock.now);
 
-  const fresh = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const fresh = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   const manager = createCertManager({
     domain: 'imp.test',

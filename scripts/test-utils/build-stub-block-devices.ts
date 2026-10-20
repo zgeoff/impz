@@ -27,22 +27,6 @@ export interface StubBlockDeviceScripts {
   readonly blkid: string;
 }
 
-function buildShellWord(value: string): string {
-  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
-}
-
-function buildPrintLines(lines: readonly string[]): string {
-  return `printf '%s\\n' ${lines.map((line) => buildShellWord(line)).join(' ')}`;
-}
-
-function buildBlkidProbe(path: string, device: StubBlockDevice): string {
-  if (device.type !== undefined) {
-    return `echo ${buildShellWord(`${path}: TYPE="${device.type}"`)}`;
-  }
-
-  return device.signature === true ? `echo ${buildShellWord(`${path}: PTTYPE="gpt"`)}` : 'exit 2';
-}
-
 // Scripts for createStubBin that answer, for a table of block devices, the calls deploy/
 // bootstrap.sh makes before it formats a device. A path the table lacks is no block device,
 // a tag blkid does not find exits 2 as blkid does, and any other call fails as unexpected.
@@ -86,4 +70,20 @@ ${entries
 esac`;
 
   return { stat, findmnt, lsblk, blkid };
+}
+
+function buildShellWord(value: string): string {
+  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
+}
+
+function buildPrintLines(lines: readonly string[]): string {
+  return `printf '%s\\n' ${lines.map((line) => buildShellWord(line)).join(' ')}`;
+}
+
+function buildBlkidProbe(path: string, device: StubBlockDevice): string {
+  if (device.type !== undefined) {
+    return `echo ${buildShellWord(`${path}: TYPE="${device.type}"`)}`;
+  }
+
+  return device.signature === true ? `echo ${buildShellWord(`${path}: PTTYPE="gpt"`)}` : 'exit 2';
 }

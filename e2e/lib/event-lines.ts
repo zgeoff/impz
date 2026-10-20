@@ -29,7 +29,7 @@ export function formatEventLine(line: string): string | null {
 
 // Passes each formatted line of an `impz events` stdout to `onLine` as it
 // comes, until the stream ends.
-export async function collectEventLines(
+export async function readEventLines(
   stdout: ReadableStream<Uint8Array>,
   onLine: (line: string) => void,
 ): Promise<void> {

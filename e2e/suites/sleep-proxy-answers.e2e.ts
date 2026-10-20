@@ -6,7 +6,7 @@ import { createInstanceClient, runImp } from '../lib/imp-cli';
 import { waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { openProxySocket } from '../lib/websocket';
 
 // What the wake proxy answers when no imp, or nothing in an awake imp, can
@@ -19,7 +19,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('sleep'), stack, client };
+  return { prefix: getSuitePrefix('sleep'), stack, client };
 }
 
 test('it answers 404 for an unknown imp, and 502 when nothing in the imp listens', async () => {

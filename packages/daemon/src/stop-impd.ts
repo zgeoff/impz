@@ -1,5 +1,5 @@
 import type { Imps } from './imps/imps/imp-service';
-import { readErrorMessage } from './platform/process/read-error-message';
+import { getErrorMessage } from './platform/process/get-error-message';
 import type { Ticker } from './platform/process/ticker';
 import { waitWithin } from './platform/process/wait-within';
 
@@ -77,21 +77,21 @@ export async function stopImpd(
   // A ticker stop waits for a pass under way.
   const runStep = async (
     step: string,
-    ms: number,
+    durationMs: number,
     task: () => Promise<unknown> | void,
   ): Promise<boolean> => {
     try {
-      const finished = await waitWithin(Promise.resolve(task()), ms);
+      const finished = await waitWithin(Promise.resolve(task()), durationMs);
 
       if (!finished) {
-        parts.log(`impd: stop: ${step} still running after ${String(ms)}ms; going on`);
+        parts.log(`impd: stop: ${step} still running after ${String(durationMs)}ms; going on`);
       }
 
       steps.push({ step, outcome: finished ? 'stopped' : 'timed-out' });
 
       return finished;
     } catch (error) {
-      parts.log(`impd: stop: ${step} failed: ${readErrorMessage(error)}`);
+      parts.log(`impd: stop: ${step} failed: ${getErrorMessage(error)}`);
       steps.push({ step, outcome: 'failed' });
 
       return true;

@@ -4,19 +4,16 @@ import type {
   ExecStream,
 } from '../../src/vm/agent-client/exec-stream';
 
-const SIGKILL = 9;
-const SIGTERM = 15;
-
 interface StubExecGuestOptions {
   // the agent predates the group kill (protocol 0.8.0)
   readonly oldAgent?: boolean;
 
   // waits out a `wait N` command
-  readonly wait?: (ms: number) => Promise<void>;
+  readonly wait?: (durationMs: number) => Promise<void>;
 }
 
 // An imp's guest agent for the fake VMs, by argv: `head -c N PATH` reads from `files`, the
-// write script stores its stdin there, `/bin/sh -c` runs buildShellStream's
+// write script stores its stdin there, `/bin/sh -c` runs createShellStream's
 // scripts, and `signals` holds each signal a command got as `command:number`.
 export function buildStubExecGuest(options: Readonly<StubExecGuestOptions> = {}) {
   const oldAgent = options.oldAgent ?? false;
@@ -51,7 +48,7 @@ export function buildStubExecGuest(options: Readonly<StubExecGuestOptions> = {})
 
     const command = program === '/bin/sh' ? script : request.argv.join(' ');
 
-    const stream = buildShellStream(command, wait, (signal) => {
+    const stream = createShellStream(command, wait, (signal) => {
       signals.push(`${command}:${String(signal)}`);
     });
 
@@ -86,6 +83,72 @@ function buildReadStream(files: ReadonlyMap<string, Uint8Array>, count: number, 
   return stream.toExecStream();
 }
 
+type StreamHooks = Partial<Pick<ExecStream, 'writeStdin' | 'closeStdin' | 'sendSignal'>>;
+
+interface EventQueue {
+  readonly events: ExecEvent[];
+  wake: (() => void) | null;
+}
+
+function buildEventStream() {
+  const queue: EventQueue = { events: [], wake: null };
+
+  const emit = (event: ExecEvent): void => {
+    queue.events.push(event);
+    queue.wake?.();
+  };
+
+  const waitForEvent = async (): Promise<ExecEvent> => {
+    for (;;) {
+      const event = queue.events.shift();
+
+      if (event !== undefined) {
+        return event;
+      }
+
+      await new Promise<void>((resolve) => {
+        queue.wake = resolve;
+      });
+    }
+  };
+
+  return {
+    emit,
+    emitText: (type: 'stdout' | 'stderr', text: string) => {
+      emit({ type, data: new TextEncoder().encode(text) });
+    },
+    toExecStream: (hooks: Readonly<StreamHooks> = {}): ExecStream => ({
+      pid: 42,
+      session: null,
+      created: true,
+      groupKill: false,
+      output: null,
+      writeStdin: hooks.writeStdin ?? (() => {}),
+      stdinDrained: () => Promise.resolve(),
+      closeStdin: hooks.closeStdin ?? (() => {}),
+      resize: () => {},
+      sendSignal: hooks.sendSignal ?? (() => {}),
+      events: () => readEvents(waitForEvent),
+      close: () => {},
+    }),
+  };
+}
+
+// the events in order, up to and including the exit
+async function* readEvents(
+  next: () => Promise<ExecEvent>,
+): AsyncGenerator<ExecEvent, void, undefined> {
+  for (;;) {
+    const event = await next();
+
+    yield event;
+
+    if (event.type === 'exit') {
+      return;
+    }
+  }
+}
+
 // /readonly/... fails, as a read-only file system would
 function buildWriteStream(path: string, store: (data: Uint8Array) => void) {
   const stream = buildEventStream();
@@ -114,12 +177,15 @@ function buildWriteStream(path: string, store: (data: Uint8Array) => void) {
   });
 }
 
+const SIGKILL = 9;
+const SIGTERM = 15;
+
 // `echo TEXT`, `kill …` (exits 0), `fail` (stderr and exit 3), `flood N` (N
 // bytes from HEAD to TAIL), `cat` (echoes stdin), `sleepy` (runs until
 // SIGTERM) and `stubborn` (ignores SIGTERM, as a trap or a nohup'd child does)
-function buildShellStream(
+function createShellStream(
   command: string,
-  wait: (ms: number) => Promise<void>,
+  wait: (durationMs: number) => Promise<void>,
   recordSignal: (signal: number) => void,
 ) {
   const stream = buildEventStream();
@@ -189,70 +255,4 @@ function buildShellStream(
       }
     },
   });
-}
-
-type StreamHooks = Partial<Pick<ExecStream, 'writeStdin' | 'closeStdin' | 'sendSignal'>>;
-
-interface EventQueue {
-  readonly events: ExecEvent[];
-  wake: (() => void) | null;
-}
-
-// the events in order, up to and including the exit
-async function* readEvents(
-  next: () => Promise<ExecEvent>,
-): AsyncGenerator<ExecEvent, void, undefined> {
-  for (;;) {
-    const event = await next();
-
-    yield event;
-
-    if (event.type === 'exit') {
-      return;
-    }
-  }
-}
-
-function buildEventStream() {
-  const queue: EventQueue = { events: [], wake: null };
-
-  const emit = (event: ExecEvent): void => {
-    queue.events.push(event);
-    queue.wake?.();
-  };
-
-  const waitForEvent = async (): Promise<ExecEvent> => {
-    for (;;) {
-      const event = queue.events.shift();
-
-      if (event !== undefined) {
-        return event;
-      }
-
-      await new Promise<void>((resolve) => {
-        queue.wake = resolve;
-      });
-    }
-  };
-
-  return {
-    emit,
-    emitText: (type: 'stdout' | 'stderr', text: string) => {
-      emit({ type, data: new TextEncoder().encode(text) });
-    },
-    toExecStream: (hooks: Readonly<StreamHooks> = {}): ExecStream => ({
-      pid: 42,
-      session: null,
-      created: true,
-      groupKill: false,
-      output: null,
-      writeStdin: hooks.writeStdin ?? (() => {}),
-      stdinDrained: () => Promise.resolve(),
-      closeStdin: hooks.closeStdin ?? (() => {}),
-      resize: () => {},
-      sendSignal: hooks.sendSignal ?? (() => {}),
-      events: () => readEvents(waitForEvent),
-      close: () => {},
-    }),
-  };
 }

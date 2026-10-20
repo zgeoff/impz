@@ -9,10 +9,10 @@ import { BUILD_LOG_QUEUE_MAX_BYTES, createLogBudget } from './create-log-budget'
 export const BUILD_KEEPALIVE_MS = 15_000;
 
 // runs tick every ms until the returned stop is called
-export type Repeat = (ms: number, tick: () => void) => () => void;
+export type Repeat = (durationMs: number, tick: () => void) => () => void;
 
-export function runOnInterval(ms: number, tick: () => void): () => void {
-  const timer = setInterval(tick, ms);
+export function runOnInterval(durationMs: number, tick: () => void): () => void {
+  const timer = setInterval(tick, durationMs);
 
   return () => {
     clearInterval(timer);

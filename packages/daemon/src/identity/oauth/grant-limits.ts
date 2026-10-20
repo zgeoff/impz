@@ -36,8 +36,8 @@ function isPatternWithin(pattern: string, own: string): boolean {
   return star === own.length - 1 && pattern.startsWith(own.slice(0, -1));
 }
 
-export function readLowerScope(a: Scope, b: Scope): Scope {
-  return hasScope(a, b) ? b : a;
+export function readLowerScope(left: Scope, right: Scope): Scope {
+  return hasScope(left, right) ? right : left;
 }
 
 // the scopes a granted one holds, as an OAuth `scope` lists them

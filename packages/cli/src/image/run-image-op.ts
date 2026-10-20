@@ -16,7 +16,7 @@ export async function runImageAdd(
   label: string,
   output: ProgressOutput,
 ): Promise<Image> {
-  if (!(await hasImageOpStream(client))) {
+  if (!(await probeImageOpStream(client))) {
     return client.images.add(input);
   }
 
@@ -33,7 +33,7 @@ export async function runOnHostBuild(
   output: ProgressOutput,
   quiet = false,
 ): Promise<Image> {
-  if (!(await hasImageOpStream(client))) {
+  if (!(await probeImageOpStream(client))) {
     return client.images.build(input);
   }
 
@@ -44,7 +44,7 @@ export async function runOnHostBuild(
 
 // An impd from before the streams answers only when the work ends, so a
 // pull or a build longer than the client's fetch waits fails there
-async function hasImageOpStream(client: Pick<ImpClient, 'system'>): Promise<boolean> {
+async function probeImageOpStream(client: Pick<ImpClient, 'system'>): Promise<boolean> {
   const features = await readFeatures(client);
 
   return features.imageOpStream === true;

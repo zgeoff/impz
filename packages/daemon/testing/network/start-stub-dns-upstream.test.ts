@@ -1,14 +1,14 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:net';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { findFreePorts } from '../platform/find-free-ports';
+import { claimFreePorts } from '../platform/claim-free-ports';
 import { buildMockDnsQuery } from './build-mock-dns-query';
 import { buildMockDnsReply } from './build-mock-dns-reply';
 import { startStubDnsUpstream } from './start-stub-dns-upstream';
 
 test('it answers a UDP query with its records, under the query id', async () => {
   const upstream = await startStubDnsUpstream({
-    port: findFreePorts(1).take(),
+    port: claimFreePorts(1).take(),
     answers: [{ type: 'A', name: 'example.com', ttl: 60, data: '192.0.2.1' }],
   });
 
@@ -43,7 +43,7 @@ test('it answers a UDP query with its records, under the query id', async () => 
 
 test('it answers a truncated UDP reply with TC set and no records', async () => {
   const upstream = await startStubDnsUpstream({
-    port: findFreePorts(1).take(),
+    port: claimFreePorts(1).take(),
     answers: [{ type: 'A', name: 'example.com', ttl: 60, data: '192.0.2.1' }],
     udp: 'truncate',
   });
@@ -72,7 +72,7 @@ test('it answers a truncated UDP reply with TC set and no records', async () => 
 });
 
 test('it answers a UDP query with the next id when told to', async () => {
-  const upstream = await startStubDnsUpstream({ port: findFreePorts(1).take(), udp: 'wrong-id' });
+  const upstream = await startStubDnsUpstream({ port: claimFreePorts(1).take(), udp: 'wrong-id' });
 
   const query = buildMockDnsQuery({ name: 'example.com', type: 'A', id: 7 });
   const reply = Promise.withResolvers<Uint8Array>();
@@ -98,7 +98,7 @@ test('it answers a UDP query with the next id when told to', async () => {
 });
 
 test('it reads a dropped UDP query and sends nothing back', async () => {
-  const upstream = await startStubDnsUpstream({ port: findFreePorts(1).take(), udp: 'drop' });
+  const upstream = await startStubDnsUpstream({ port: claimFreePorts(1).take(), udp: 'drop' });
 
   const received: string[] = [];
 
@@ -138,7 +138,7 @@ test('it reads a dropped UDP query and sends nothing back', async () => {
 
 test('it answers a TCP query that comes in two writes, with the length in front', async () => {
   const upstream = await startStubDnsUpstream({
-    port: findFreePorts(1).take(),
+    port: claimFreePorts(1).take(),
     answers: [{ type: 'A', name: 'example.com', ttl: 60, data: '192.0.2.1' }],
   });
 
@@ -177,7 +177,7 @@ test('it answers a TCP query that comes in two writes, with the length in front'
 });
 
 test('it closes a TCP connection at once without a reply when told to hang up', async () => {
-  const upstream = await startStubDnsUpstream({ port: findFreePorts(1).take(), tcp: 'hang-up' });
+  const upstream = await startStubDnsUpstream({ port: claimFreePorts(1).take(), tcp: 'hang-up' });
 
   const query = buildMockDnsQuery({ name: 'example.com', type: 'A', id: 7, edns: false });
   const framed = Buffer.alloc(2 + query.byteLength);
@@ -210,7 +210,7 @@ test('it closes a TCP connection at once without a reply when told to hang up', 
 });
 
 test('it holds a dropped TCP query open without a reply', async () => {
-  const upstream = await startStubDnsUpstream({ port: findFreePorts(1).take(), tcp: 'drop' });
+  const upstream = await startStubDnsUpstream({ port: claimFreePorts(1).take(), tcp: 'drop' });
 
   const query = buildMockDnsQuery({ name: 'example.com', type: 'A', id: 7, edns: false });
   const framed = Buffer.alloc(2 + query.byteLength);
@@ -240,7 +240,7 @@ test('it holds a dropped TCP query open without a reply', async () => {
 });
 
 test('it answers a TCP query with the next id when told to', async () => {
-  const upstream = await startStubDnsUpstream({ port: findFreePorts(1).take(), tcp: 'wrong-id' });
+  const upstream = await startStubDnsUpstream({ port: claimFreePorts(1).take(), tcp: 'wrong-id' });
 
   const query = buildMockDnsQuery({ name: 'example.com', type: 'A', id: 7, edns: false });
   const framed = Buffer.alloc(2 + query.byteLength);
@@ -268,7 +268,7 @@ test('it answers a TCP query with the next id when told to', async () => {
 
 test('it listens on the loopback address it is given', async () => {
   const upstream = await startStubDnsUpstream({
-    port: findFreePorts(1).take(),
+    port: claimFreePorts(1).take(),
     hostname: '127.0.0.2',
   });
 
@@ -296,7 +296,7 @@ test('it listens on the loopback address it is given', async () => {
 });
 
 test('it frees its port when the test that started it finishes', async () => {
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
 
   await startStubDnsUpstream({ port });
 

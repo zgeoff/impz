@@ -15,7 +15,7 @@ import type { CopyProgress, ProgressOutput } from '../cp/copy-progress';
 import { createBuildStatus } from './build-status';
 
 export interface ImageBuildOptions {
-  readonly dir: string;
+  readonly directory: string;
   readonly name: string;
   readonly dockerfile: string | undefined;
 
@@ -59,7 +59,7 @@ export function createContextStream(
   return pipe.readable;
 }
 
-// `impz image build <dir>`: packs the directory here, honoring its
+// `impz image build <directory>`: packs the directory here, honoring its
 // .dockerignore, and uploads it for impd to build
 export async function runImageBuild(
   client: ImpClient,
@@ -67,7 +67,7 @@ export async function runImageBuild(
 ): Promise<Image> {
   const dockerfile = options.dockerfile ?? 'Dockerfile';
 
-  const entries = await listContextEntries(resolve(options.dir), dockerfile).catch(
+  const entries = await listContextEntries(resolve(options.directory), dockerfile).catch(
     (error: unknown) => {
       throw error instanceof MissingDockerfileError ? new UsageError(error.message) : error;
     },

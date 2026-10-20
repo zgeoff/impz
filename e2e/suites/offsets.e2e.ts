@@ -8,7 +8,7 @@ import { waitForExec } from '../lib/imps';
 import { stopFirecrackerHard } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -24,7 +24,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('offsets'), stack, client };
+  return { prefix: getSuitePrefix('offsets'), stack, client };
 }
 
 test('it resumes session output from the offset a client saw, and names the gap, the new generation and the cause of each cold boot', async () => {

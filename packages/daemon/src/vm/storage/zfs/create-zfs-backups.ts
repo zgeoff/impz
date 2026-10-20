@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { readErrorMessage } from '../../../platform/process/read-error-message';
+import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { BACKUP_TREE, buildBackupPaths, toDigestHex } from '../data-layout';
 import type { StorageBackend } from '../storage-backend';
 import { listCheckpointSnapshots, parseZfsMounts } from './zfs-commands';
@@ -17,8 +17,8 @@ interface ZfsBackupContext {
   readonly listAll: () => Promise<ZfsEntry[]>;
   readonly log: (message: string) => void;
   readonly readMounts: () => string;
-  readonly setupMount: (name: string, dir: string, isReadOnly?: boolean) => Promise<void>;
-  readonly removeMount: (dir: string) => Promise<void>;
+  readonly setupMount: (name: string, directory: string, isReadOnly?: boolean) => Promise<void>;
+  readonly removeMount: (directory: string) => Promise<void>;
   readonly startReclaim: () => void;
   readonly buildDiskName: (impId: string) => string;
   readonly buildImageName: (digest: string) => string;
@@ -39,7 +39,7 @@ export function createZfsBackups(
     // retired disk goes once the run closes.
     openBackupTree: async (request) => {
       const tree = buildBackupPaths(ctx.dataDir).tree;
-      const clones: { name: string; dir: string }[] = [];
+      const clones: { name: string; directory: string }[] = [];
 
       const impIds = new Set<string>();
       const checkpointIds = new Set<string>();
@@ -48,7 +48,7 @@ export function createZfsBackups(
       const removeClones = async () => {
         await ctx.runSerial(async () => {
           for (const clone of clones.splice(0)) {
-            await ctx.removeMount(clone.dir);
+            await ctx.removeMount(clone.directory);
             await ctx.zfs.destroy(clone.name);
           }
 
@@ -68,18 +68,18 @@ export function createZfsBackups(
       };
 
       const createTreeClone = async (snapshot: string, name: string, relativeDir: string) => {
-        const dir = join(tree, relativeDir);
+        const directory = join(tree, relativeDir);
 
         await ctx.zfs.clone(snapshot, name, { readonly: 'on' });
 
-        clones.push({ name, dir });
+        clones.push({ name, directory });
 
-        await ctx.setupMount(name, dir, true);
+        await ctx.setupMount(name, directory, true);
       };
 
       const createTreeClones = async () => {
-        const mounted = [...parseZfsMounts(ctx.readMounts()).keys()].find((dir) =>
-          dir.startsWith(`${tree}/`),
+        const mounted = [...parseZfsMounts(ctx.readMounts()).keys()].find((directory) =>
+          directory.startsWith(`${tree}/`),
         );
 
         if (mounted !== undefined) {
@@ -149,7 +149,7 @@ export function createZfsBackups(
         await ctx.runSerial(createTreeClones);
       } catch (error) {
         await removeClones().catch((closeError: unknown) => {
-          ctx.log(`impd: zfs: could not close the backup tree: ${readErrorMessage(closeError)}`);
+          ctx.log(`impd: zfs: could not close the backup tree: ${getErrorMessage(closeError)}`);
         });
 
         throw error;

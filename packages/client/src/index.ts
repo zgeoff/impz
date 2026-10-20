@@ -32,7 +32,7 @@ export { CLIENT_VERSION } from './check-server';
 export type { CheckServerOptions, ServerCheck } from './check-server';
 export { createImpClient } from './create-imp-client';
 export type { ImpClient, ImpClientOptions } from './create-imp-client';
-export type { BuildContext, BuildImageOptions } from './build-image';
+export type { BuildContext, BuildImageOptions } from './run-image-build';
 export type { RequireAwakeOptions } from './require-awake';
 export { openExecSession } from './exec/open-exec-session';
 export { openToolExec } from './exec/open-tool-exec';
@@ -44,7 +44,7 @@ export type { EventSource, WatchEventsOptions, WatchReconnect } from './events/w
 
 export {
   MissingFeatureError,
-  findMissingFeatures,
+  collectMissingFeatures as findMissingFeatures,
   readFeatures,
   requireFeatures,
 } from './require-features';

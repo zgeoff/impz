@@ -8,17 +8,16 @@ interface StubNftBinOptions {
   readonly exitCode?: number;
 }
 
-function formatShellWord(text: string): string {
-  return `'${text.replaceAll("'", String.raw`'\''`)}'`;
-}
-
 // An executable `nft` in `dir`, for createNftRunner's binary: it records its
 // arguments and the script it reads on stdin in files beside it, then prints
 // `stderr` and exits with `exitCode`.
-export async function createStubNftBin(dir: string, options: Readonly<StubNftBinOptions> = {}) {
-  const path = join(dir, 'nft');
-  const argvPath = join(dir, 'nft-argv');
-  const stdinPath = join(dir, 'nft-stdin');
+export async function createStubNftBin(
+  directory: string,
+  options: Readonly<StubNftBinOptions> = {},
+) {
+  const path = join(directory, 'nft');
+  const argvPath = join(directory, 'nft-argv');
+  const stdinPath = join(directory, 'nft-stdin');
 
   await writeFile(
     path,
@@ -43,4 +42,8 @@ export async function createStubNftBin(dir: string, options: Readonly<StubNftBin
     // the script the last run read on stdin
     readStdin: (): Promise<string> => readFile(stdinPath, 'utf8'),
   };
+}
+
+function formatShellWord(text: string): string {
+  return `'${text.replaceAll("'", String.raw`'\''`)}'`;
 }

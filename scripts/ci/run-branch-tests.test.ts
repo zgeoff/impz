@@ -5,42 +5,45 @@ import { join } from 'node:path';
 
 // A temp repo root with an empty src/ and an empty dashboard package src/.
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-branch-tests-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-branch-tests-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  await mkdir(join(dir, 'src'));
-  await mkdir(join(dir, 'packages/dashboard/src'), { recursive: true });
+  await mkdir(join(directory, 'src'));
+  await mkdir(join(directory, 'packages/dashboard/src'), { recursive: true });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it runs a dashboard test from the dashboard package and every other test from the root', async () => {
   const ctx = await setupTest();
 
-  await writeFile(join(ctx.dir, 'package.json'), '{"scripts":{"test":"echo root"}}');
+  await writeFile(join(ctx.directoryPath, 'package.json'), '{"scripts":{"test":"echo root"}}');
 
   await writeFile(
-    join(ctx.dir, 'packages/dashboard/package.json'),
+    join(ctx.directoryPath, 'packages/dashboard/package.json'),
     '{"scripts":{"test":"echo dashboard"}}',
   );
 
-  await writeFile(join(ctx.dir, 'src/a.ts'), '');
-  await writeFile(join(ctx.dir, 'src/a.test.ts'), '');
-  await writeFile(join(ctx.dir, 'packages/dashboard/src/view.tsx'), '');
-  await writeFile(join(ctx.dir, 'packages/dashboard/src/view.test.tsx'), '');
+  await writeFile(join(ctx.directoryPath, 'src/a.ts'), '');
+  await writeFile(join(ctx.directoryPath, 'src/a.test.ts'), '');
+  await writeFile(join(ctx.directoryPath, 'packages/dashboard/src/view.tsx'), '');
+  await writeFile(join(ctx.directoryPath, 'packages/dashboard/src/view.test.tsx'), '');
 
-  const proc = Bun.spawn(
+  const subprocess = Bun.spawn(
     [
       process.execPath,
       join(import.meta.dir, 'run-branch-tests.ts'),
       'src/a.ts',
       'packages/dashboard/src/view.tsx',
     ],
-    { cwd: ctx.dir, stdout: 'pipe', stderr: 'pipe' },
+    { cwd: ctx.directoryPath, stdout: 'pipe', stderr: 'pipe' },
   );
 
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    subprocess.exited,
+  ]);
 
   expect({ stdout, exitCode }).toStrictEqual({
     stdout: 'root ./src/a.test.ts\ndashboard ./src/view.test.tsx\n',
@@ -51,27 +54,30 @@ test('it runs a dashboard test from the dashboard package and every other test f
 test('it fails and still runs the dashboard tests when the root tests fail', async () => {
   const ctx = await setupTest();
 
-  await writeFile(join(ctx.dir, 'package.json'), '{"scripts":{"test":"exit 1"}}');
+  await writeFile(join(ctx.directoryPath, 'package.json'), '{"scripts":{"test":"exit 1"}}');
 
   await writeFile(
-    join(ctx.dir, 'packages/dashboard/package.json'),
+    join(ctx.directoryPath, 'packages/dashboard/package.json'),
     '{"scripts":{"test":"echo dashboard"}}',
   );
 
-  await writeFile(join(ctx.dir, 'src/a.test.ts'), '');
-  await writeFile(join(ctx.dir, 'packages/dashboard/src/view.test.tsx'), '');
+  await writeFile(join(ctx.directoryPath, 'src/a.test.ts'), '');
+  await writeFile(join(ctx.directoryPath, 'packages/dashboard/src/view.test.tsx'), '');
 
-  const proc = Bun.spawn(
+  const subprocess = Bun.spawn(
     [
       process.execPath,
       join(import.meta.dir, 'run-branch-tests.ts'),
       'src/a.test.ts',
       'packages/dashboard/src/view.test.tsx',
     ],
-    { cwd: ctx.dir, stdout: 'pipe', stderr: 'pipe' },
+    { cwd: ctx.directoryPath, stdout: 'pipe', stderr: 'pipe' },
   );
 
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    subprocess.exited,
+  ]);
 
   expect({ stdout, exitCode }).toStrictEqual({
     stdout: 'dashboard ./src/view.test.tsx\n',
@@ -82,25 +88,28 @@ test('it fails and still runs the dashboard tests when the root tests fail', asy
 test('it fails when only the dashboard tests fail', async () => {
   const ctx = await setupTest();
 
-  await writeFile(join(ctx.dir, 'package.json'), '{"scripts":{"test":"echo root"}}');
+  await writeFile(join(ctx.directoryPath, 'package.json'), '{"scripts":{"test":"echo root"}}');
 
   await writeFile(
-    join(ctx.dir, 'packages/dashboard/package.json'),
+    join(ctx.directoryPath, 'packages/dashboard/package.json'),
     '{"scripts":{"test":"exit 1"}}',
   );
 
-  await writeFile(join(ctx.dir, 'packages/dashboard/src/view.test.tsx'), '');
+  await writeFile(join(ctx.directoryPath, 'packages/dashboard/src/view.test.tsx'), '');
 
-  const proc = Bun.spawn(
+  const subprocess = Bun.spawn(
     [
       process.execPath,
       join(import.meta.dir, 'run-branch-tests.ts'),
       'packages/dashboard/src/view.test.tsx',
     ],
-    { cwd: ctx.dir, stdout: 'pipe', stderr: 'pipe' },
+    { cwd: ctx.directoryPath, stdout: 'pipe', stderr: 'pipe' },
   );
 
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    subprocess.exited,
+  ]);
 
   expect({ stdout, exitCode }).toStrictEqual({
     stdout: 'run-related-tests: no related tests\n',

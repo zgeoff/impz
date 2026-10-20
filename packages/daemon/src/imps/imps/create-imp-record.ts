@@ -2,14 +2,13 @@ import type { EgressPolicy, ImpKind } from '@impz/api';
 import { countSlots } from '../../host-net/net/addressing';
 import type { ImageRecord } from '../../platform/db/images';
 import { ImpClashError } from '../../platform/db/imp-clash-error';
-import { createImpInFreeSlot, findImpByName } from '../../platform/db/imps';
+import { createImpInFreeSlot, readImpByName } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { buildConflictError } from '../../surface/api-errors';
 import { resolveCpuSettings } from './cpu-limit';
 import type { ImpClock, ImpHost, ImpVms } from './imp-context';
 
 const CREATE_TRIES = 3;
-const NAME_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
 
 interface NewImpInput {
   readonly name?: string | undefined;
@@ -92,6 +91,8 @@ export async function createImpRecord(
   }
 }
 
+const NAME_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
+
 // the requested name, else a free `imp-xxxx`
 async function resolveImpName(context: ImpHost, requested: string | undefined): Promise<string> {
   if (requested !== undefined) {
@@ -103,7 +104,7 @@ async function resolveImpName(context: ImpHost, requested: string | undefined): 
     const suffix = picks.map((pick) => NAME_ALPHABET[Math.floor(pick)]).join('');
     const name = `imp-${suffix}`;
 
-    const taken = await findImpByName(context.db, name);
+    const taken = await readImpByName(context.db, name);
 
     if (taken === undefined) {
       return name;

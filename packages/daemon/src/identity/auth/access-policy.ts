@@ -157,7 +157,7 @@ export const PROCEDURE_ACCESS: Readonly<Record<ImpProcedurePath, Access>> = {
   'images.add': { scope: 'manage', on: 'image' },
   'images.build': manageHost,
 
-  // audited as the work ends, with its outcome (build-image-routes.ts)
+  // audited as the work ends, with its outcome (create-image-routes.ts)
   'images.addStream': { scope: 'manage', on: 'image', audit: 'refusals' },
   'images.buildStream': { scope: 'manage', on: 'host', audit: 'refusals' },
   'images.delete': manageHost,
@@ -302,8 +302,8 @@ export async function checkAccess(
 
   if (access.on === 'image') {
     return checkImageAdd(caller, caller.imps, {
-      ref: readField(input, 'ref'),
-      name: readField(input, 'name'),
+      ref: findField(input, 'ref'),
+      name: findField(input, 'name'),
       hasImp: typeof input === 'object' && input !== null && 'imp' in input,
     });
   }
@@ -323,7 +323,7 @@ export async function checkAccess(
 
   const refusal = await checkGrantable(
     caller,
-    readField(input, access.secretField),
+    findField(input, access.secretField),
     readSecretGeneration,
   );
 
@@ -365,7 +365,7 @@ function findOutsideImp(
   input: unknown,
 ): Refusal | null {
   for (const field of fields) {
-    const name = readField(input, field);
+    const name = findField(input, field);
 
     if (name === null) {
       return {
@@ -385,7 +385,7 @@ function findOutsideImp(
   return null;
 }
 
-export function readField(input: unknown, field: string): string | null {
+export function findField(input: unknown, field: string): string | null {
   if (typeof input !== 'object' || input === null) {
     return null;
   }

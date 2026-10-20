@@ -1,4 +1,4 @@
-import { LIB_SCRIPT, getHostImage, runChecked } from './instance';
+import { LIB_SCRIPT, readHostImageFromEnv, runChecked } from './instance';
 import { runHostZfs } from './run-host-zfs';
 import type { WipeTarget } from './wipe-target';
 import { ZFS_OWNER_FILE, resetZfsRoot } from './zfs-owner';
@@ -7,7 +7,7 @@ import { ZFS_OWNER_FILE, resetZfsRoot } from './zfs-owner';
 // which the next wipe still needs to prove the dir; on ZFS, the root dataset
 // made anew too. The instance's next start begins from nothing.
 export async function removeDataDir(target: Readonly<WipeTarget>): Promise<void> {
-  const hostImage = getHostImage();
+  const hostImage = readHostImageFromEnv();
 
   // scripts/lib.sh knows how the host image builds
   await runChecked(['bash', '-c', 'source "$1" && ensure_host_image', 'bash', LIB_SCRIPT]);
@@ -19,7 +19,7 @@ export async function removeDataDir(target: Readonly<WipeTarget>): Promise<void>
     '--rm',
     '--privileged',
     '-v',
-    `${target.dir}:/d`,
+    `${target.directory}:/d`,
     hostImage,
     'bash',
     '-c',

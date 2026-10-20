@@ -31,12 +31,6 @@ const START_BUCKET = { size: 10, refillMs: 6000 };
 // approvals per token that match no sign-in, so codes cannot be tried fast
 const APPROVE_FAILURE_BUCKET = { size: 20, refillMs: 3000 };
 
-// 32 symbols, with no 0, O, 1 or I to misread: 8 of them are 40 bits,
-// enough because only a holder of a named imp token can try one, at a
-// limited rate, within its 10 minutes
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const CODE_LENGTH = 8;
-
 // what the approver gave
 export interface Approval {
   readonly tokenID: string;
@@ -107,7 +101,7 @@ export function createSignIns(deps: Readonly<SignInsDeps>): SignIns {
     byCode.delete(entry.approvalCode);
   };
 
-  const removeStale = (): void => {
+  const dropStale = (): void => {
     const at = deps.now();
 
     for (const entry of pending.values()) {
@@ -122,7 +116,7 @@ export function createSignIns(deps: Readonly<SignInsDeps>): SignIns {
   const requirePending = (code: string, approver: Readonly<Caller>): SignIn => {
     const tokenID = requireNamedToken(approver);
 
-    removeStale();
+    dropStale();
 
     const key = byCode.get(code);
     const entry = key === undefined ? undefined : pending.get(key);
@@ -142,7 +136,7 @@ export function createSignIns(deps: Readonly<SignInsDeps>): SignIns {
 
   return {
     start: (entry) => {
-      removeStale();
+      dropStale();
 
       if (!tryStart(entry.clientID)) {
         return { kind: 'too-many', retryS: START_BUCKET.refillMs / 1000 };
@@ -181,7 +175,7 @@ export function createSignIns(deps: Readonly<SignInsDeps>): SignIns {
     },
 
     find: (key) => {
-      removeStale();
+      dropStale();
 
       return pending.get(key) ?? null;
     },
@@ -288,6 +282,12 @@ function requireNamedToken(approver: Readonly<Caller>): string {
 
   return approver.tokenId;
 }
+
+// 32 symbols, with no 0, O, 1 or I to misread: 8 of them are 40 bits,
+// enough because only a holder of a named imp token can try one, at a
+// limited rate, within its 10 minutes
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const CODE_LENGTH = 8;
 
 function createUniqueApprovalCode(taken: ReadonlyMap<string, string>): string {
   for (;;) {

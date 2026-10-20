@@ -1,11 +1,11 @@
 import { expect, mock, test } from 'bun:test';
 import { ExecError } from '@impz/client';
 import { buildStubExecHandle } from '../../test-utils/build-stub-exec-handle';
-import { createConsoleSource, toTerminalConnection } from './create-console-source';
+import { createConsoleSource, readTerminalConnection } from './create-console-source';
 
 test('#toTerminalConnection merges stdout and stderr into one output that ends when both do', async () => {
   const stub = buildStubExecHandle({ exit: Promise.resolve({ code: 0, signal: null }) });
-  const connection = toTerminalConnection(stub.handle);
+  const connection = readTerminalConnection(stub.handle);
 
   const reading = new Response(connection.output).text();
 
@@ -21,7 +21,7 @@ test('#toTerminalConnection merges stdout and stderr into one output that ends w
 
 test('#toTerminalConnection fails the output when stdout fails', async () => {
   const stub = buildStubExecHandle({ exit: new Promise(() => {}) });
-  const connection = toTerminalConnection(stub.handle);
+  const connection = readTerminalConnection(stub.handle);
 
   const reading = new Response(connection.output).text();
 
@@ -32,7 +32,7 @@ test('#toTerminalConnection fails the output when stdout fails', async () => {
 
 test('#toTerminalConnection cancels stdout and stderr when the output is cancelled', async () => {
   const stub = buildStubExecHandle({ exit: new Promise(() => {}) });
-  const connection = toTerminalConnection(stub.handle);
+  const connection = readTerminalConnection(stub.handle);
 
   await connection.output.cancel();
 
@@ -44,7 +44,7 @@ test('#toTerminalConnection cancels stdout and stderr when the output is cancell
 
 test('#toTerminalConnection reports the exit of the program', () => {
   const stub = buildStubExecHandle({ exit: Promise.resolve({ code: 3, signal: null }) });
-  const connection = toTerminalConnection(stub.handle);
+  const connection = readTerminalConnection(stub.handle);
 
   expect(connection.ended).resolves.toStrictEqual({ kind: 'exit', code: 3, signal: null });
 });
@@ -54,7 +54,7 @@ test('#toTerminalConnection reports a dropped connection as an error', () => {
     exit: Promise.reject(new ExecError('CONNECTION_CLOSED', 'impd went away')),
   });
 
-  const connection = toTerminalConnection(stub.handle);
+  const connection = readTerminalConnection(stub.handle);
 
   expect(connection.ended).resolves.toStrictEqual({ kind: 'error', message: 'impd went away' });
 });
@@ -62,7 +62,7 @@ test('#toTerminalConnection reports a dropped connection as an error', () => {
 test('#toTerminalConnection reports a rejection that is not an Error by its text', () => {
   // oxlint-disable-next-line prefer-promise-reject-errors -- the branch under test
   const stub = buildStubExecHandle({ exit: Promise.reject('impd went away') });
-  const connection = toTerminalConnection(stub.handle);
+  const connection = readTerminalConnection(stub.handle);
 
   expect(connection.ended).resolves.toStrictEqual({ kind: 'error', message: 'impd went away' });
 });

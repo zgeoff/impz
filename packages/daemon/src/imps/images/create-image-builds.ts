@@ -16,7 +16,7 @@ import type { ImageRecord } from '../../platform/db/images';
 import { runCommand } from '../../platform/process/run-command';
 import { buildUploadsDir } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
-import { checkReferenceRegistry, readImageReference } from '../docker-proxy/rules';
+import { checkReferenceRegistry, parseImageReference } from '../docker-proxy/rules';
 import { createBuildEngine, toEngineRun } from './build-engine';
 import type { BuildEngine, EngineRun } from './build-engine';
 import { createBuildSlots } from './build-slots';
@@ -53,7 +53,7 @@ interface ImageOpOptions {
 }
 
 export interface ImageBuilds {
-  readonly buildImage: (
+  readonly runImageBuild: (
     contextDir: string,
     name: string,
     dockerfile?: string,
@@ -73,7 +73,7 @@ export interface ImageBuilds {
   // TOO_MANY_REQUESTS when all are taken
   readonly claimBuildSlot: () => () => void;
 
-  // an upload's entry in images.builds; buildImage makes its own
+  // an upload's entry in images.builds; runImageBuild makes its own
   readonly startBuildRun: BuildRuns['start'];
   readonly listBuildRuns: BuildRuns['list'];
 }
@@ -185,7 +185,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
       }),
     );
 
-  const buildFromContext = async (
+  const createFromContext = async (
     tarPath: string,
     name: string,
     givenDockerfile: string | undefined,
@@ -333,7 +333,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
   // packed on the impd host, as the CLI packs an upload; holds a build slot
   // from the first check to the image
-  const buildOnHost = async (
+  const createOnHost = async (
     contextDir: string,
     name: string,
     dockerfile: string | undefined,
@@ -387,7 +387,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
         options.setPhase?.('build');
 
         // images.build has no signal: its call waits for the image
-        return await buildFromContext(tarPath, name, dockerfile, {
+        return await createFromContext(tarPath, name, dockerfile, {
           ...options,
           signal: options.signal ?? new AbortController().signal,
         });
@@ -398,12 +398,12 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
   };
 
   return {
-    buildImage: async (contextDir, name, dockerfile, options = {}) => {
+    runImageBuild: async (contextDir, name, dockerfile, options = {}) => {
       const release = buildSlots.claim();
       const run = buildRuns.start(name, 'host');
 
       try {
-        return await buildOnHost(contextDir, name, dockerfile, {
+        return await createOnHost(contextDir, name, dockerfile, {
           ...options,
           setPhase: (phase) => {
             run.setPhase(phase);
@@ -429,30 +429,17 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
         release();
       }
     },
-    buildImageFromContext: buildFromContext,
+    buildImageFromContext: createFromContext,
     claimBuildSlot: buildSlots.claim,
     startBuildRun: buildRuns.start,
     listBuildRuns: buildRuns.list,
   };
 }
 
-// the host's engine, through imp-docker-proxy
-function runOnHost(argv: readonly string[], signal: AbortSignal): ReturnType<EngineRun> {
-  const [command, ...args] = argv;
-
-  return command === 'docker' ? runDocker(args, { signal }) : runCommand(argv, { signal });
-}
-
-function toBadRequest(error: unknown): unknown {
-  return error instanceof DockerfileError
-    ? new ORPCError('BAD_REQUEST', { message: `the Dockerfile: ${error.message}` })
-    : error;
-}
-
 // one image's every spelling: the engine's registry and path, and the tag
 // (latest when none) and digest
 function toImageKey(ref: string): string {
-  const named = readImageReference(ref);
+  const named = parseImageReference(ref);
   const [withoutDigest = '', digest = ''] = ref.split('@');
   const lastSlash = withoutDigest.lastIndexOf('/');
   const tagColon = withoutDigest.indexOf(':', lastSlash + 1);
@@ -505,6 +492,19 @@ function pickPin(
   }
 
   return pin;
+}
+
+function toBadRequest(error: unknown): unknown {
+  return error instanceof DockerfileError
+    ? new ORPCError('BAD_REQUEST', { message: `the Dockerfile: ${error.message}` })
+    : error;
+}
+
+// the host's engine, through imp-docker-proxy
+function runOnHost(argv: readonly string[], signal: AbortSignal): ReturnType<EngineRun> {
+  const [command, ...args] = argv;
+
+  return command === 'docker' ? runDocker(args, { signal }) : runCommand(argv, { signal });
 }
 
 // The Dockerfile's path in the context in one spelling, `./a//Dockerfile`

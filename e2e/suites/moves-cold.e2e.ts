@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, findImp, requireImp, runImp, runImpWith } from '../lib/imp-cli';
+import { createInstanceClient, readImp, requireImp, runImp, runImpWith } from '../lib/imp-cli';
 import { waitForExec, writeGuestFile } from '../lib/imps';
 import { readImpdLogSince } from '../lib/instance';
 import { HOST_B, readMoveHosts } from '../lib/move-hosts';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // Moves between A and B on a Docker network, which the harness keeps up for
@@ -23,9 +23,9 @@ async function setupTest() {
   const hosts = readMoveHosts({ tailnet: false });
 
   const client = await createInstanceClient();
-  const clientB = await createInstanceClient(hosts.b);
+  const clientB = await createInstanceClient(hosts.hostB);
 
-  return { prefix: readSuitePrefix('moves'), stack, hosts, client, clientB };
+  return { prefix: getSuitePrefix('moves'), stack, hosts, client, clientB };
 }
 
 test('it moves a stopped imp cold with its disk and checkpoint, and boots it on the target', async () => {
@@ -48,7 +48,7 @@ test('it moves a stopped imp cold with its disk and checkpoint, and boots it on 
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, cold));
 
-  const left = await findImp(cold);
+  const left = await readImp(cold);
 
   expect(out).toContain(`${cold}: moved to ${HOST_B}`);
   expect(left).toBeUndefined();
@@ -57,20 +57,20 @@ test('it moves a stopped imp cold with its disk and checkpoint, and boots it on 
   // target's backend would send files between two ZFS hosts
   const form = process.env['IMP_STORAGE_BACKEND'] === 'zfs' ? 'zfs streams' : 'files';
 
-  const logB = await readImpdLogSince(since, ctx.hosts.b);
+  const logB = await readImpdLogSince(since, ctx.hosts.hostB);
 
   expect(logB).toContain(`impd: move: ${cold}: received as ${form}, waiting for the commit`);
 
-  const row = await requireImp(cold, ctx.hosts.b);
-  const checkpoints = await runImpWith({ target: ctx.hosts.b }, 'checkpoints', cold, '--json');
+  const row = await requireImp(cold, ctx.hosts.hostB);
+  const checkpoints = await runImpWith({ target: ctx.hosts.hostB }, 'checkpoints', cold, '--json');
 
   expect(row.state).toBe('stopped');
   expect(checkpoints).toContain('"mv1"');
 
-  await runImpWith({ target: ctx.hosts.b }, 'start', cold);
+  await runImpWith({ target: ctx.hosts.hostB }, 'start', cold);
 
   const content = await waitFor(`${cold} to boot on B`, () =>
-    runImpWith({ target: ctx.hosts.b }, 'exec', cold, '--', 'cat', '/root/moved'),
+    runImpWith({ target: ctx.hosts.hostB }, 'exec', cold, '--', 'cat', '/root/moved'),
   );
 
   expect(content).toBe('cold-ok\n');

@@ -15,24 +15,6 @@ export class PromptCancelledError extends Error {
   override name = 'PromptCancelledError';
 }
 
-const ENTER = new Set(['\r', '\n', '\u0004']);
-
-const CTRL_C = '\u0003';
-
-const BACKSPACE = new Set(['\u007F', '\b']);
-
-const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
-
-// an arrow key, a function key or a bracketed-paste marker (ESC [ 200 ~):
-// CSI and SS3 sequences, else ESC and the one key after it
-// oxlint-disable-next-line no-control-regex -- matching ESC is the point
-const ESCAPE_SEQUENCE = /\u001B(?:\[[0-?]*[ -/]*[@-~]|O.|.)?/gu;
-
-interface KeyResult {
-  readonly token: string;
-  readonly end: 'enter' | 'cancel' | null;
-}
-
 // The signals that cancel a prompt from elsewhere; process is one
 export interface SignalSource {
   readonly on: (signal: NodeJS.Signals, listener: () => void) => unknown;
@@ -46,19 +28,6 @@ export interface TokenTerminal {
   readonly write: (text: string) => void;
   readonly readPiped: () => Promise<string>;
   readonly signals: SignalSource;
-}
-
-// built per call: touching process.stdin opens it, and an open stdin keeps
-// the process alive
-function buildProcessTerminal(): TokenTerminal {
-  return {
-    input: process.stdin,
-    write: (text) => {
-      process.stderr.write(text);
-    },
-    readPiped: () => Bun.stdin.text(),
-    signals: process,
-  };
 }
 
 // what a prompt touches when the command's stdin is piped: no keys to read,
@@ -92,6 +61,21 @@ export async function readToken(prompt: string, terminal: TokenTerminal): Promis
 
   return piped.split('\n')[0]?.trim() ?? '';
 }
+
+// built per call: touching process.stdin opens it, and an open stdin keeps
+// the process alive
+function buildProcessTerminal(): TokenTerminal {
+  return {
+    input: process.stdin,
+    write: (text) => {
+      process.stderr.write(text);
+    },
+    readPiped: () => Bun.stdin.text(),
+    signals: process,
+  };
+}
+
+const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
 
 // Raw mode turns echo off. Every way out (Enter, Ctrl-C, a signal from
 // elsewhere) puts the terminal back first, so a cancelled prompt never
@@ -145,6 +129,22 @@ function readHiddenToken(terminal: TokenTerminal, prompt: string): Promise<strin
   input.resume();
 
   return settled.promise;
+}
+
+const ENTER = new Set(['\r', '\n', '\u0004']);
+
+const CTRL_C = '\u0003';
+
+const BACKSPACE = new Set(['\u007F', '\b']);
+
+// an arrow key, a function key or a bracketed-paste marker (ESC [ 200 ~):
+// CSI and SS3 sequences, else ESC and the one key after it
+// oxlint-disable-next-line no-control-regex -- matching ESC is the point
+const ESCAPE_SEQUENCE = /\u001B(?:\[[0-?]*[ -/]*[@-~]|O.|.)?/gu;
+
+interface KeyResult {
+  readonly token: string;
+  readonly end: 'enter' | 'cancel' | null;
 }
 
 function applyKeys(start: string, keys: string): KeyResult {

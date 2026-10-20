@@ -38,7 +38,7 @@ export function canTransition(from: ImpState, to: ImpState, via: TransitionVia =
 }
 
 // the states `to` is reachable from, for an INVALID_STATE answer
-export function findStatesLeadingTo(to: ImpState, via: TransitionVia = 'any'): ImpState[] {
+export function collectStatesLeadingTo(to: ImpState, via: TransitionVia = 'any'): ImpState[] {
   return STATES.filter((from) => canTransition(from, to, via));
 }
 
@@ -49,6 +49,6 @@ export function requireTransition(
   via: TransitionVia = 'any',
 ): void {
   if (!canTransition(from, to, via)) {
-    throw buildInvalidStateError(from, findStatesLeadingTo(to, via), action);
+    throw buildInvalidStateError(from, collectStatesLeadingTo(to, via), action);
   }
 }

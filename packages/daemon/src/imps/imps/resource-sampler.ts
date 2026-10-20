@@ -218,11 +218,6 @@ export function createResourceSampler(readers: SamplerReaders): ResourceSampler 
   };
 }
 
-// a counter that went down was reset; all of its value is new
-function readStep(last: number, current: number): number {
-  return current >= last ? current - last : current;
-}
-
 function buildSample(
   now: number,
   since: number,
@@ -240,4 +235,9 @@ function buildSample(
     ramMib: memory.ramMib,
     rssMib: memory.rssMib,
   };
+}
+
+// a counter that went down was reset; all of its value is new
+function readStep(last: number, current: number): number {
+  return current >= last ? current - last : current;
 }

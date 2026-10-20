@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { $ } from 'bun';
-import { buildStubTar } from './test-utils/build-stub-tar';
-import { parseTarEntries } from './test-utils/parse-tar-entries';
+import { createStubTar } from './test-utils/create-stub-tar';
+import { readTarEntries } from './test-utils/read-tar-entries';
 import {
   BuildContextError,
   listDockerfileCandidates,
@@ -20,19 +20,19 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-build-context-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-build-context-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir, stack };
+  return { directoryPath: directory, stack };
 }
 
 test('#readBuildContext returns the Dockerfile at the asked path and its text', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     { name: 'app.js', content: 'x' },
     { name: 'docker/web.Dockerfile', content: 'FROM busybox:1.37\n' },
   ]);
@@ -50,9 +50,9 @@ test('#readBuildContext returns the Dockerfile at the asked path and its text', 
 test('#readBuildContext falls back to a lowercase dockerfile beside a missing Dockerfile', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([{ name: 'dockerfile', content: 'FROM busybox:1.37\n' }]);
+  const bytes = await createStubTar([{ name: 'dockerfile', content: 'FROM busybox:1.37\n' }]);
 
   await Bun.write(input, bytes);
 
@@ -67,9 +67,9 @@ test('#readBuildContext falls back to a lowercase dockerfile beside a missing Do
 test('#readBuildContext prefers Dockerfile to the lowercase dockerfile beside it', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     { name: 'dockerfile', content: 'FROM evil/lower:1\n' },
     { name: 'Dockerfile', content: 'FROM busybox:1.37\n' },
   ]);
@@ -87,9 +87,9 @@ test('#readBuildContext prefers Dockerfile to the lowercase dockerfile beside it
 test('#readBuildContext falls back to a lowercase dockerfile in a subdirectory', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([{ name: 'sub/dockerfile', content: 'FROM busybox:1.37\n' }]);
+  const bytes = await createStubTar([{ name: 'sub/dockerfile', content: 'FROM busybox:1.37\n' }]);
 
   await Bun.write(input, bytes);
 
@@ -113,9 +113,9 @@ test.each([
 test('#readBuildContext rejects a context without the named Dockerfile', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([{ name: 'containerfile', content: 'FROM busybox:1.37\n' }]);
+  const bytes = await createStubTar([{ name: 'containerfile', content: 'FROM busybox:1.37\n' }]);
 
   await Bun.write(input, bytes);
 
@@ -128,9 +128,9 @@ test('#readBuildContext rejects a context without the named Dockerfile', async (
 test('#readBuildContext rejects a Dockerfile that is a directory', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     { name: 'Dockerfile/', type: 'directory' },
     { name: 'dockerfile', content: 'FROM busybox:1.37\n' },
   ]);
@@ -146,9 +146,9 @@ test('#readBuildContext rejects a Dockerfile that is a directory', async () => {
 test('#readBuildContext rejects a Dockerfile that is a symlink', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     { name: 'Dockerfile', type: 'symlink', linkname: 'other' },
     { name: 'other', content: 'FROM busybox:1.37\n' },
   ]);
@@ -164,9 +164,9 @@ test('#readBuildContext rejects a Dockerfile that is a symlink', async () => {
 test('#readBuildContext rejects a Dockerfile larger than the limit', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([{ name: 'Dockerfile', content: 'x'.repeat(2048) }]);
+  const bytes = await createStubTar([{ name: 'Dockerfile', content: 'x'.repeat(2048) }]);
 
   await Bun.write(input, bytes);
 
@@ -179,9 +179,9 @@ test('#readBuildContext rejects a Dockerfile larger than the limit', async () =>
 test('#readBuildContext rejects two entries at one name', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     { name: 'Dockerfile', content: 'FROM busybox:1.37\n' },
     { name: './Dockerfile', content: 'FROM evil/second:1\n' },
   ]);
@@ -197,9 +197,9 @@ test('#readBuildContext rejects two entries at one name', async () => {
 test('#readBuildContext rejects an entry under a symlink', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     { name: 'sub', type: 'symlink', linkname: 'real' },
     { name: 'real/', type: 'directory' },
     { name: 'sub/Dockerfile', content: 'FROM busybox:1.37\n' },
@@ -216,9 +216,9 @@ test('#readBuildContext rejects an entry under a symlink', async () => {
 test('#readBuildContext rejects an entry under a file', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     { name: 'Dockerfile', content: 'FROM busybox:1.37\n' },
     { name: 'app', content: 'a file' },
     { name: 'app/x', content: 'under it' },
@@ -287,9 +287,12 @@ test.each([
 ] as const)('#readBuildContext rejects %s', async (_case, entry, message) => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }, entry]);
+  const bytes = await createStubTar([
+    { name: 'Dockerfile', content: 'FROM busybox:1.37\n' },
+    entry,
+  ]);
 
   await Bun.write(input, bytes);
 
@@ -302,9 +305,9 @@ test.each([
 test('#readBuildContext rejects a gzipped tar as not a tar', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
+  const bytes = await createStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
 
   await Bun.write(input, gzipSync(bytes));
 
@@ -317,7 +320,7 @@ test('#readBuildContext rejects a gzipped tar as not a tar', async () => {
 test('#readBuildContext rejects plain text as not a tar', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
   await Bun.write(input, 'FROM evil/raw:1\n'.repeat(64));
 
@@ -330,11 +333,11 @@ test('#readBuildContext rejects plain text as not a tar', async () => {
 test('#readBuildContext rejects with the reason of a signal aborted before the read', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
   const reason = new Error('the client went');
 
-  const bytes = await buildStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
+  const bytes = await createStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
 
   await Bun.write(input, bytes);
 
@@ -346,11 +349,11 @@ test('#readBuildContext rejects with the reason of a signal aborted before the r
 test('#writeBuildContext writes the files, directories, symlinks and long names again', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
-  const output = join(ctx.dir, 'out.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
+  const output = join(ctx.directoryPath, 'out.tar');
   const longName = `${'deep/'.repeat(60)}file.txt`;
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     { name: './', type: 'directory' },
     { name: './Dockerfile', content: 'FROM busybox:1.37\n' },
     { name: 'app/', type: 'directory' },
@@ -366,7 +369,7 @@ test('#writeBuildContext writes the files, directories, symlinks and long names 
   await writeBuildContext(input, output, checked, checked.dockerfile, 1024);
 
   const writtenBytes = await readFile(output);
-  const written = await parseTarEntries(writtenBytes);
+  const written = await readTarEntries(writtenBytes);
 
   expect(
     written.map((entry) => [
@@ -387,10 +390,10 @@ test('#writeBuildContext writes the files, directories, symlinks and long names 
 test('#writeBuildContext keeps the permission bits and cuts the mtime to whole seconds', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
-  const output = join(ctx.dir, 'out.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
+  const output = join(ctx.directoryPath, 'out.tar');
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     {
       name: 'Dockerfile',
       content: 'FROM busybox:1.37\n',
@@ -406,7 +409,7 @@ test('#writeBuildContext keeps the permission bits and cuts the mtime to whole s
   await writeBuildContext(input, output, checked, checked.dockerfile, 1024);
 
   const writtenBytes = await readFile(output);
-  const written = await parseTarEntries(writtenBytes);
+  const written = await readTarEntries(writtenBytes);
 
   expect(written.map((entry) => [entry.header.mode, entry.header.mtime])).toStrictEqual([
     [0o4755, new Date(1_700_000_000_000)],
@@ -416,10 +419,10 @@ test('#writeBuildContext keeps the permission bits and cuts the mtime to whole s
 test('#writeBuildContext puts the given text in place of the Dockerfile the check read', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
-  const output = join(ctx.dir, 'out.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
+  const output = join(ctx.directoryPath, 'out.tar');
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     { name: 'dockerfile', content: 'FROM busybox:1.37\n' },
     { name: 'Dockerfile.txt', content: 'FROM busybox:1.37\n' },
     { name: 'app.txt', content: 'app' },
@@ -432,7 +435,7 @@ test('#writeBuildContext puts the given text in place of the Dockerfile the chec
   await writeBuildContext(input, output, checked, 'FROM busybox@sha256:aaaa\n', 1024);
 
   const writtenBytes = await readFile(output);
-  const written = await parseTarEntries(writtenBytes);
+  const written = await readTarEntries(writtenBytes);
 
   expect(written.map((entry) => [entry.header.name, entry.content])).toStrictEqual([
     ['dockerfile', 'FROM busybox@sha256:aaaa\n'],
@@ -444,10 +447,10 @@ test('#writeBuildContext puts the given text in place of the Dockerfile the chec
 test('#writeBuildContext drops a user xattr', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
-  const output = join(ctx.dir, 'out.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
+  const output = join(ctx.directoryPath, 'out.tar');
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     { name: 'Dockerfile', content: 'FROM busybox:1.37\n', pax: { 'SCHILY.xattr.user.note': 'x' } },
   ]);
 
@@ -458,7 +461,7 @@ test('#writeBuildContext drops a user xattr', async () => {
   await writeBuildContext(input, output, checked, checked.dockerfile, 1024);
 
   const writtenBytes = await readFile(output);
-  const written = await parseTarEntries(writtenBytes);
+  const written = await readTarEntries(writtenBytes);
 
   expect(written.map((entry) => [entry.header.name, entry.header.pax])).toStrictEqual([
     ['Dockerfile', null],
@@ -468,16 +471,16 @@ test('#writeBuildContext drops a user xattr', async () => {
 test('#writeBuildContext rejects a context whose Dockerfile differs from the one the check read', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
 
-  const bytes = await buildStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
+  const bytes = await createStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
 
   await Bun.write(input, bytes);
 
   expect(
     writeBuildContext(
       input,
-      join(ctx.dir, 'out.tar'),
+      join(ctx.directoryPath, 'out.tar'),
       { dockerfilePath: 'Dockerfile', dockerfile: 'FROM busybox:1.36\n' },
       'FROM busybox:1.36\n',
       1024,
@@ -491,13 +494,13 @@ test('#writeBuildContext rejects a context whose Dockerfile differs from the one
 test('#writeBuildContext rejects with the reason of a signal aborted during its read', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
-  const output = join(ctx.dir, 'out.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
+  const output = join(ctx.directoryPath, 'out.tar');
 
   const reason = new Error('the client went');
   const controller = new AbortController();
 
-  const bytes = await buildStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
+  const bytes = await createStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
 
   // a FIFO the test feeds, so the read waits for the rest of the tar
   await $`mkfifo ${input}`;
@@ -542,12 +545,12 @@ test('#writeBuildContext rejects with the reason of a signal aborted during its 
 test('#writeBuildContext rejects with an error of the text of a reason that is not an error', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
-  const output = join(ctx.dir, 'out.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
+  const output = join(ctx.directoryPath, 'out.tar');
 
   const controller = new AbortController();
 
-  const bytes = await buildStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
+  const bytes = await createStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
 
   // a FIFO the test feeds, so the read waits for the rest of the tar
   await $`mkfifo ${input}`;
@@ -592,10 +595,10 @@ test('#writeBuildContext rejects with an error of the text of a reason that is n
 test('#writeBuildContext rejects with the write failure as it is', async () => {
   const ctx = await setupTest();
 
-  const input = join(ctx.dir, 'in.tar');
-  const output = join(ctx.dir, 'out.tar');
+  const input = join(ctx.directoryPath, 'in.tar');
+  const output = join(ctx.directoryPath, 'out.tar');
 
-  const bytes = await buildStubTar([
+  const bytes = await createStubTar([
     { name: 'Dockerfile', content: 'FROM busybox:1.37\n' },
     { name: 'big', content: 'x'.repeat(200_000) },
   ]);

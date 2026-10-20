@@ -11,17 +11,19 @@ export const MIGRATION_030_ADD_BROKER_AUDIT_REFUSALS: Migration = {
     await db.transaction().execute(async (trx) => {
       await trx.schema
         .createTable('broker_audit_refusals')
-        .addColumn('id', 'integer', (c) => c.primaryKey().autoIncrement())
-        .addColumn('imp_id', 'text', (c) => c.notNull().references('imps.id').onDelete('cascade'))
+        .addColumn('id', 'integer', (column) => column.primaryKey().autoIncrement())
+        .addColumn('imp_id', 'text', (column) =>
+          column.notNull().references('imps.id').onDelete('cascade'),
+        )
         .addColumn('secret_name', 'text')
-        .addColumn('at', 'integer', (c) => c.notNull())
+        .addColumn('at', 'integer', (column) => column.notNull())
         .addColumn('method', 'text')
         .addColumn('host', 'text')
         .addColumn('path', 'text')
-        .addColumn('status', 'integer', (c) => c.notNull())
-        .addColumn('request_bytes', 'integer', (c) => c.notNull())
-        .addColumn('response_bytes', 'integer', (c) => c.notNull())
-        .addColumn('duration_ms', 'integer', (c) => c.notNull())
+        .addColumn('status', 'integer', (column) => column.notNull())
+        .addColumn('request_bytes', 'integer', (column) => column.notNull())
+        .addColumn('response_bytes', 'integer', (column) => column.notNull())
+        .addColumn('duration_ms', 'integer', (column) => column.notNull())
 
         // null for a request the broker sent upstream
         .addColumn('reason', 'text')

@@ -35,7 +35,7 @@ export async function writeNetwork(db: ImpDatabase, name: string): Promise<Netwo
     : { id: row.id, name: row.name, createdAt: new Date(row.created_at), imps: [] };
 }
 
-export async function findNetworkByName(
+export async function readNetworkByName(
   db: ImpDatabase,
   name: string,
 ): Promise<NetworkRecord | undefined> {

@@ -29,13 +29,13 @@ export function buildStubRestic(options: Readonly<StubResticOptions>) {
     pruneErrors: [] as Error[],
 
     // runs as each restore starts, with the dir it restores
-    onRestore: null as ((dir: string) => Promise<void>) | null,
+    onRestore: null as ((directory: string) => Promise<void>) | null,
   };
 
   const readSnapshots = (): ResticSnapshot[] =>
     existsSync(indexPath) ? parseSnapshots(readFileSync(indexPath, 'utf8')) : [];
 
-  const findSnapshot = (id: string): ResticSnapshot => {
+  const readSnapshot = (id: string): ResticSnapshot => {
     const found = readSnapshots().find((snapshot) => snapshot.id === id);
 
     if (found === undefined) {
@@ -47,7 +47,7 @@ export function buildStubRestic(options: Readonly<StubResticOptions>) {
 
   const restic: Restic = {
     setupRepository: () => Promise.resolve(),
-    backup: (dir, tags) => {
+    backup: (directory, tags) => {
       if (state.failBackup) {
         return Promise.reject(new Error('Fatal: unable to save snapshot: bucket full'));
       }
@@ -55,12 +55,12 @@ export function buildStubRestic(options: Readonly<StubResticOptions>) {
       const snapshots = readSnapshots();
       const id = `snap${String(snapshots.length + 1)}`;
 
-      cpSync(dir, join(options.repoDir, id), { recursive: true });
+      cpSync(directory, join(options.repoDir, id), { recursive: true });
 
       const snapshot: ResticSnapshot = {
         id,
         time: options.now(),
-        paths: [dir],
+        paths: [directory],
         tags: ['imp-backup', ...tags],
       };
 
@@ -103,17 +103,17 @@ export function buildStubRestic(options: Readonly<StubResticOptions>) {
     listSnapshots: () => Promise.resolve(readSnapshots()),
     dump: (id, path) =>
       Promise.try(() => {
-        const snapshot = findSnapshot(id);
+        const snapshot = readSnapshot(id);
 
         return readFileSync(join(options.repoDir, id, readInside(snapshot, path)), 'utf8');
       }),
-    restore: async (id, dir, target, includes) => {
+    restore: async (id, directory, target, includes) => {
       if (includes.length > 0) {
         throw new Error('the stub restic restores whole dirs, without includes');
       }
 
-      const snapshot = findSnapshot(id);
-      const inside = readInside(snapshot, dir);
+      const snapshot = readSnapshot(id);
+      const inside = readInside(snapshot, directory);
 
       restores.push(inside);
 

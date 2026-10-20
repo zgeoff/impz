@@ -21,9 +21,9 @@ import { readBodyText } from './read-body-text';
 import { readErrorDescription } from './read-error-description';
 import { readForm } from './read-form';
 import { readURLField } from './read-url-field';
-import { removeDpopProof } from './remove-dpop-proof';
 import { removeReplayedGrant } from './remove-replayed-grant';
 import { removeTokenSessions } from './remove-token-sessions';
+import { stripDpopProof } from './strip-dpop-proof';
 
 // The public route's OAuth paths (docs/guides/mcp.md#public-route): better-auth
 // runs the protocol, and impd serves the two pages it sends a browser to,
@@ -49,7 +49,7 @@ export interface AuthServer {
 
   // makes the approval's user and session, and resumes the authorization
   readonly signIn: (oauthQuery: string, approval: Readonly<Approval>) => Promise<Response>;
-  readonly findSessionID: (cookie: string) => Promise<string | null>;
+  readonly readSessionID: (cookie: string) => Promise<string | null>;
   readonly readSecret: () => Promise<string>;
   readonly readSessionCookie: () => Promise<{ readonly name: string; readonly secure: boolean }>;
 }
@@ -130,7 +130,7 @@ export function makeOAuthRouter(
   ): Request =>
     new Request(`${deps.origin}${url.pathname}${url.search}`, {
       method: request.method,
-      headers: removeDpopProof(request),
+      headers: stripDpopProof(request),
       body,
     });
 
@@ -205,7 +205,7 @@ export function makeOAuthRouter(
 
     const clientID = target.searchParams.get('client_id') ?? '';
 
-    const clientName = await findClientName(deps.db, clientID);
+    const clientName = await readClientName(deps.db, clientID);
 
     const started = deps.signIns.start({
       key: target.search.slice(1),
@@ -290,7 +290,7 @@ export function makeOAuthRouter(
     const setCookies = signedInResponse.headers.getSetCookie();
     const cookie = setCookies.map((line) => line.split(';')[0]).join('; ');
 
-    const sessionID = await deps.auth.findSessionID(cookie);
+    const sessionID = await deps.auth.readSessionID(cookie);
 
     if (!signedInResponse.ok || next === null || sessionID === null) {
       deps.log(`impd: oauth: a sign-in for ${entry.clientName} could not reach consent`);
@@ -331,7 +331,7 @@ export function makeOAuthRouter(
     const secret = await deps.auth.readSecret();
     const isSigned = await verifyOAuthQueryParams(oauthQuery, secret);
 
-    const sessionID = cookie === '' ? null : await deps.auth.findSessionID(cookie);
+    const sessionID = cookie === '' ? null : await deps.auth.readSessionID(cookie);
     const entry = sessionID === null ? null : findSignedIn(sessionID);
 
     if (
@@ -583,7 +583,7 @@ export function makeOAuthRouter(
   };
 }
 
-async function findClientName(db: ImpDatabase, clientID: string): Promise<string> {
+async function readClientName(db: ImpDatabase, clientID: string): Promise<string> {
   const row = await db
     .selectFrom('oauthClient')
     .select('name')

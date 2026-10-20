@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { onTestFinished } from 'bun:test';
 import { Kysely, SqliteAdapter, SqliteIntrospector, SqliteQueryCompiler } from 'kysely';
-import { BunSqliteDriver } from '../../src/platform/db/bun-sqlite-driver';
+import { createBunSqliteDriver } from '../../src/platform/db/create-bun-sqlite-driver';
 import type { ImpWrite } from '../../src/platform/db/imp-write-feed';
 import type { ImpDatabase } from '../../src/platform/db/open-database';
 import type { DB } from '../../src/platform/db/schema';
@@ -19,7 +19,7 @@ export function createUnmigratedDatabase(path = ':memory:'): ImpDatabase {
   const builder = new Kysely<DB>({
     dialect: {
       createAdapter: () => new SqliteAdapter(),
-      createDriver: () => new BunSqliteDriver(sqlite),
+      createDriver: () => createBunSqliteDriver(sqlite),
       createIntrospector: (kysely) => new SqliteIntrospector(kysely),
       createQueryCompiler: () => new SqliteQueryCompiler(),
     },

@@ -1,10 +1,5 @@
 import { expect, test } from 'bun:test';
-import {
-  checkKernelSupportsKsm,
-  parseCpuMsFromStat,
-  parseGuestMappings,
-  parsePssMib,
-} from './ksm-host';
+import { isKsmSupported, parseCpuMsFromStat, parseGuestMappings, parsePssMib } from './ksm-host';
 
 test.each([
   ['6.10.0-1-generic', true],
@@ -12,8 +7,8 @@ test.each([
   ['6.9.12', false],
   ['5.15.167.4-microsoft-standard-WSL2', false],
   ['', false],
-])('#checkKernelSupportsKsm reads release %s as %p', (release, expected) => {
-  expect(checkKernelSupportsKsm(release)).toBe(expected);
+])('#isKsmSupported reads release %s as %p', (release, expected) => {
+  expect(isKsmSupported(release)).toBe(expected);
 });
 
 test('#parseCpuMsFromStat adds utime and stime past a name with spaces', () => {
