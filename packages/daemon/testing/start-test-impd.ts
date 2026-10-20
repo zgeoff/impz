@@ -1,4 +1,5 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import type { ImpContract } from '@impz/api';
@@ -158,7 +159,7 @@ export async function startTestImpd(
   const dataDir = options.dataDir ?? mkdtempSync(`${tmpdir()}/impd-test-`);
 
   if (options.dataDir === undefined) {
-    stack.defer(() => rmSync(dataDir, { recursive: true, force: true }));
+    stack.defer(() => rm(dataDir, { recursive: true, force: true }));
   }
 
   const db = await openDatabase(':memory:');
@@ -455,8 +456,6 @@ export async function startTestImpd(
   };
 
   const current = { impd: await startImpd(host.identity, fake.startGeneration()) };
-
-  // the impd running now, which a restart replaces
   const sendRequest = (request: Request) => current.impd.api.app.handle(request);
 
   const buildClient = (token: string): ContractRouterClient<ImpContract> =>

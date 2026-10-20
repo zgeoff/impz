@@ -22,9 +22,6 @@ export function startStubDockerEngine(options: StubDockerEngineOptions) {
   const signals: AbortSignal[] = [];
   const unexpected: string[] = [];
 
-  // a held build stays open however long it is silent, as docker keeps it;
-  // Bun's types leave idleTimeout off unix servers, but it applies there too
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
   const handleRequest = async (request: Request) => {
     const call = `${request.method} ${new URL(request.url).pathname}`;
 
@@ -64,6 +61,9 @@ export function startStubDockerEngine(options: StubDockerEngineOptions) {
     });
   };
 
+  // a held build stays open however long it is silent, as docker keeps it;
+  // Bun's types leave idleTimeout off unix servers, but it applies there too
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
   const server = Bun.serve({
     unix: options.socketPath,
     idleTimeout: 0,

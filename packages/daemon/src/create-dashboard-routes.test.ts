@@ -79,9 +79,9 @@ test('it accepts the session from its own page', async () => {
 
   invariant(cookie !== undefined);
 
-  // what a browser on the dashboard's page sends
   const sendBrowserRequest = (request: Request) => ctx.sendToImpd(request);
 
+  // what a browser on the dashboard's page sends
   const browser: ContractRouterClient<ImpContract> = createORPCClient(
     new RPCLink({
       url: 'http://impd.test/rpc',
@@ -137,9 +137,9 @@ test('it accepts the __Host- session from its own page', async () => {
 
   invariant(cookie !== undefined);
 
-  // what a browser on the dashboard's page sends
   const sendBrowserRequest = (request: Request) => ctx.sendToImpd(request);
 
+  // what a browser on the dashboard's page sends
   const browser: ContractRouterClient<ImpContract> = createORPCClient(
     new RPCLink({
       url: 'http://impd.test/rpc',

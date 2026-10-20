@@ -286,13 +286,13 @@ test.each([['/ui/'], ['/ui/assets/app.js'], ['/health'], ['/rpcx']])(
 
     const seen: (string | null)[] = [];
 
-    // impd's API, as far as the proxy can tell
     const handleApiRequest = (request: Request) => {
       seen.push(request.headers.get(PEER_HEADER));
 
       return new Response('ok');
     };
 
+    // impd's API, as far as the proxy can tell
     const api = Bun.serve({
       port: 0,
       hostname: '127.0.0.1',
@@ -338,13 +338,13 @@ test('it hands the API a peer handle for the client’s address on a path that r
 
   const seen: (string | null)[] = [];
 
-  // impd's API, as far as the proxy can tell
   const handleApiRequest = (request: Request) => {
     seen.push(request.headers.get(PEER_HEADER));
 
     return new Response('ok');
   };
 
+  // impd's API, as far as the proxy can tell
   const api = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
@@ -1014,7 +1014,6 @@ test('it stops the request to the imp when the client goes away', async () => {
     aborted.resolve();
   });
 
-  // answers only once the request is aborted
   const handleUpstreamRequest = async (request: Request) => {
     request.signal.addEventListener('abort', () => {
       aborted.resolve();
@@ -1027,6 +1026,7 @@ test('it stops the request to the imp when the client goes away', async () => {
     return new Response('late');
   };
 
+  // answers only once the request is aborted
   const upstream = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
