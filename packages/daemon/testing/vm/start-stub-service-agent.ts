@@ -87,7 +87,7 @@ export async function startStubServiceAgent(
   // or it names another file, which sends the whole log
   const getLogStart = (log: Buffer, request: Request): number => {
     if (request.cursor === undefined) {
-      return collectLastLines(log, request.lines ?? 0);
+      return getLastLinesStartOffset(log, request.lines ?? 0);
     }
 
     const cursor = request.cursor;
@@ -270,10 +270,10 @@ export async function startStubServiceAgent(
 // the newline byte, which ends each line of a log
 const NEWLINE = 0x0a;
 
-// Where the last `count` lines of `log` start, as the agent's collectLastLines
+// Where the last `count` lines of `log` start, as the agent's findLastLines
 // reads them: the newline that ends the log ends its last line, and a last
 // line without one counts as a line.
-function collectLastLines(log: Buffer, count: number): number {
+function getLastLinesStartOffset(log: Buffer, count: number): number {
   if (count === 0) {
     return log.length;
   }
