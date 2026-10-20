@@ -2,15 +2,10 @@ import { createConnection } from 'node:net';
 import type { Socket } from 'node:net';
 import type { JsonValue } from '@bufbuild/protobuf';
 import { requireSocket } from '../vmm/vm-files';
-import { createFrameDecoder, encodeFrame, encodeJsonFrame } from './frame-codec';
+import { buildFrameDecoder, encodeFrame, encodeJsonFrame } from './frame-codec';
 import type { AgentFrame, FrameType } from './frame-codec';
 
 const AGENT_PORT = 1024;
-
-// frames queued before the socket stops reading, and when it reads again: a
-// reader that falls behind pushes back on the guest through vsock
-const PAUSE_FRAMES = 64;
-const RESUME_FRAMES = 16;
 
 // One agent connection carries one request
 // (docs/architecture/guest/protocol.md#one-request-per-connection).
@@ -91,7 +86,7 @@ export function openAgentConnection(vsockPath: string, timeoutMs = 2000): Promis
         return;
       }
 
-      resolve(buildConnection(socket, chunk.subarray(newline + 1)));
+      resolve(wrapConnection(socket, chunk.subarray(newline + 1)));
     };
 
     socket.on('data', onData);
@@ -112,8 +107,13 @@ export function openAgentConnection(vsockPath: string, timeoutMs = 2000): Promis
   });
 }
 
-function buildConnection(socket: Socket, leftover: Uint8Array): AgentConnection {
-  const decoder = createFrameDecoder();
+// frames queued before the socket stops reading, and when it reads again: a
+// reader that falls behind pushes back on the guest through vsock
+const PAUSE_FRAMES = 64;
+const RESUME_FRAMES = 16;
+
+function wrapConnection(socket: Socket, leftover: Uint8Array): AgentConnection {
+  const decoder = buildFrameDecoder();
   const frames: AgentFrame[] = [];
 
   // an object, not lets: the closures below mutate it and read it back

@@ -27,15 +27,15 @@ export function countLanConnections(
 
 export interface Dial {
   readonly isConnected: boolean;
-  readonly ms: number;
+  readonly durationMs: number;
   readonly error: string;
 }
 
 // `<nc exit code> <ms> <wget's error>`, as runTimedDial's script prints it
 export function parseTimedDial(out: string): Dial {
-  const [rc = '', ms = '', ...words] = out.trim().split(' ');
+  const [rc = '', durationMs = '', ...words] = out.trim().split(' ');
 
-  return { isConnected: rc === '0', ms: Number(ms), error: words.join(' ') };
+  return { isConnected: rc === '0', durationMs: Number(durationMs), error: words.join(' ') };
 }
 
 // Thin glue over the host container and live guests below.

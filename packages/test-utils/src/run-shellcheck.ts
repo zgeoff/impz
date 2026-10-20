@@ -14,16 +14,16 @@ export interface ShellcheckResult {
 // holds as text, in a temp file the test's end removes. The dialect is the
 // shell that runs the script, which carries no shebang to name it.
 export function runShellcheck(script: string, dialect: 'sh' | 'bash'): ShellcheckResult {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-shellcheck-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-shellcheck-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  writeFileSync(join(dir, 'script'), script);
+  writeFileSync(join(directory, 'script'), script);
 
   const run = Bun.spawnSync(['shellcheck', '--norc', `--shell=${dialect}`, 'script'], {
-    cwd: dir,
+    cwd: directory,
   });
 
   return { exitCode: run.exitCode, output: run.stdout.toString() };

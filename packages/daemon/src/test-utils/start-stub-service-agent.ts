@@ -21,9 +21,6 @@ const LOG_INODE = 7;
 // the most lines a logs call may ask for, as the agent's MaxLogLines
 const MAX_LOG_LINES = 100_000;
 
-// the newline byte, which ends each line of a log
-const NEWLINE = 0x0a;
-
 // one open follow of a service's log
 interface Follow {
   readonly service: string;
@@ -38,38 +35,6 @@ interface StubServiceAgentOptions {
 
   // closes with this stack, else at the test's end
   readonly stack?: Readonly<AsyncDisposableStack>;
-}
-
-function sendResponse(socket: Socket, value: JsonValue): void {
-  socket.end(encodeJsonFrame(FRAME_TYPES.response, value));
-}
-
-function sendError(socket: Socket, code: string, message: string): void {
-  sendResponse(socket, { error: { code, message } });
-}
-
-// Where the last `count` lines of `log` start, as the agent's findLastLines
-// reads them: the newline that ends the log ends its last line, and a last
-// line without one counts as a line.
-function findLastLines(log: Buffer, count: number): number {
-  if (count === 0) {
-    return log.length;
-  }
-
-  const body = log.at(-1) === NEWLINE ? log.length - 1 : log.length;
-  let found = 0;
-
-  for (let at = body - 1; at >= 0; at -= 1) {
-    if (log[at] === NEWLINE) {
-      found += 1;
-
-      if (found === count) {
-        return at + 1;
-      }
-    }
-  }
-
-  return 0;
 }
 
 // An imp's guest agent on `vsockPath` that keeps services as
@@ -93,7 +58,7 @@ export async function startStubServiceAgent(
   // a new process
   const pids = { next: 40 };
 
-  const startProcess = (): number => {
+  const allocatePid = (): number => {
     const pid = pids.next;
 
     pids.next += 1;
@@ -105,7 +70,7 @@ export async function startStubServiceAgent(
     create(ServiceStatusSchema, {
       name: def.name ?? '',
       state: 'running',
-      pid: startProcess(),
+      pid: allocatePid(),
       restarts: 0,
       ...(options.knowsServices && {
         def: { ...def, restart: def.restart ?? 'always', source: 'api' },
@@ -120,9 +85,9 @@ export async function startStubServiceAgent(
 
   // the last `lines` lines; or from a cursor, unless the log shrank below it
   // or it names another file, which sends the whole log
-  const findLogStart = (log: Buffer, request: Request): number => {
+  const getLogStart = (log: Buffer, request: Request): number => {
     if (request.cursor === undefined) {
-      return findLastLines(log, request.lines ?? 0);
+      return collectLastLines(log, request.lines ?? 0);
     }
 
     const cursor = request.cursor;
@@ -147,7 +112,7 @@ export async function startStubServiceAgent(
       return;
     }
 
-    const from = findLogStart(log, request);
+    const from = getLogStart(log, request);
 
     socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
 
@@ -213,7 +178,7 @@ export async function startStubServiceAgent(
       // a new process, which has no last exit yet
       const { lastExit: _lastExit, ...kept } = service;
 
-      services.splice(index, 1, { ...kept, state: 'running', pid: startProcess(), restarts: 0 });
+      services.splice(index, 1, { ...kept, state: 'running', pid: allocatePid(), restarts: 0 });
     }
 
     sendResponse(socket, { ok: true });
@@ -300,4 +265,39 @@ export async function startStubServiceAgent(
       }
     },
   };
+}
+
+// the newline byte, which ends each line of a log
+const NEWLINE = 0x0a;
+
+// Where the last `count` lines of `log` start, as the agent's collectLastLines
+// reads them: the newline that ends the log ends its last line, and a last
+// line without one counts as a line.
+function collectLastLines(log: Buffer, count: number): number {
+  if (count === 0) {
+    return log.length;
+  }
+
+  const body = log.at(-1) === NEWLINE ? log.length - 1 : log.length;
+  let found = 0;
+
+  for (let at = body - 1; at >= 0; at -= 1) {
+    if (log[at] === NEWLINE) {
+      found += 1;
+
+      if (found === count) {
+        return at + 1;
+      }
+    }
+  }
+
+  return 0;
+}
+
+function sendError(socket: Socket, code: string, message: string): void {
+  sendResponse(socket, { error: { code, message } });
+}
+
+function sendResponse(socket: Socket, value: JsonValue): void {
+  socket.end(encodeJsonFrame(FRAME_TYPES.response, value));
 }

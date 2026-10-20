@@ -13,15 +13,15 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'stub-engine-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-engine-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  const engine = startStubDockerEngine({ dir });
+  const engine = startStubDockerEngine({ directoryPath: directory });
 
   stack.defer(() => engine.stop());
 
-  return { dir, engine };
+  return { directoryPath: directory, engine };
 }
 
 test('it answers a ping with the API version header', async () => {
@@ -464,11 +464,11 @@ test('it stops a second time without an error', async () => {
 test('it stops when the test that started it ends', async () => {
   const ctx = await setupTest();
 
-  const dir = join(ctx.dir, 'second');
+  const directory = join(ctx.directoryPath, 'second');
 
-  await mkdir(dir);
+  await mkdir(directory);
 
-  const engine = startStubDockerEngine({ dir });
+  const engine = startStubDockerEngine({ directoryPath: directory });
 
   // a ping the engine holds open, which only its stop ends
   engine.setAnswer(() => new Promise<Response>(() => {}));

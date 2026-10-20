@@ -17,12 +17,12 @@ test('it keeps a budget of its own for each imp', () => {
 });
 
 test('it gives an imp its whole budget again once the next second starts', () => {
-  const clock = { ms: 5999 };
-  const budget = createRefusalBudget({ perSecond: 1, now: () => clock.ms });
+  const clock = { durationMs: 5999 };
+  const budget = createRefusalBudget({ perSecond: 1, now: () => clock.durationMs });
 
   budget.tryClaim('imp-1');
 
-  clock.ms = 6000;
+  clock.durationMs = 6000;
 
   expect(budget.tryClaim('imp-1')).toBeTrue();
 });

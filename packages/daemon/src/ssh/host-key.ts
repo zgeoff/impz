@@ -5,11 +5,11 @@ import { formatKeyFingerprint } from './authorized-keys';
 
 // The gateway's files live in <dataDir>/ssh, owner-only.
 export function setupSshDir(dataDir: string): string {
-  const dir = join(dataDir, 'ssh');
+  const directory = join(dataDir, 'ssh');
 
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
 
-  return dir;
+  return directory;
 }
 
 // ed25519, made on first start, owner-only. The data directory outlives the
@@ -22,7 +22,7 @@ export function loadOrCreateHostKey(sshDir: string): string {
     return readFileSync(path, 'utf8');
   }
 
-  const pair = createEd25519Key();
+  const pair = generateEd25519Key();
 
   writeFileSync(path, pair.private, { mode: 0o600, flag: 'wx' });
 
@@ -40,7 +40,7 @@ interface KeyPair {
 
 // an ed25519 key pair in OpenSSH format that ssh2 can read back; `generate`
 // is ssh2's generator outside tests
-export function createEd25519Key(
+export function generateEd25519Key(
   generate: () => KeyPair = () => utils.generateKeyPairSync('ed25519'),
 ): KeyPair {
   for (let attempt = 0; attempt < MAX_KEY_ATTEMPTS; attempt += 1) {

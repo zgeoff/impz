@@ -34,20 +34,20 @@ const STRUCT_PAGE_MIB_PER_GIB = 16;
 
 // the hot-plug region of an imp, in MiB: whole slots covering max − memory;
 // 0 for an imp that does not grow
-export function findRegionMib(memoryMib: number, maxMemoryMib: number): number {
+export function getRegionMib(memoryMib: number, maxMemoryMib: number): number {
   const growth = maxMemoryMib - memoryMib;
 
   return growth <= 0 ? 0 : Math.ceil(growth / SLOT_MIB) * SLOT_MIB;
 }
 
 // below this much available, a guest of `totalMib` grows
-export function findLowMib(totalMib: number): number {
+export function getLowMib(totalMib: number): number {
   return Math.max(LOW_FLOOR_MIB, totalMib * LOW_FRACTION);
 }
 
 // The least total that leaves a guest using `usedMib` a step more available
 // than its grow mark, so that a shrink to it is not undone by the next grow.
-export function findSpareTotalMib(usedMib: number): number {
+export function getSpareTotalMib(usedMib: number): number {
   return Math.max(
     usedMib + LOW_FLOOR_MIB + GROW_STEP_MIB,
     Math.ceil((usedMib + GROW_STEP_MIB) / (1 - LOW_FRACTION)),
@@ -55,7 +55,7 @@ export function findSpareTotalMib(usedMib: number): number {
 }
 
 // what a plug of `mib` costs the host beyond the memory itself
-export function findStructPageMib(mib: number): number {
+export function getStructPageMib(mib: number): number {
   return Math.ceil((mib * STRUCT_PAGE_MIB_PER_GIB) / 1024);
 }
 

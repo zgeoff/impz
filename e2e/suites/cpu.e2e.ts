@@ -7,7 +7,7 @@ import { holdImp, waitForExec } from '../lib/imps';
 import { runInContainer } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -27,7 +27,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('cpu'), stack, client };
+  return { prefix: getSuitePrefix('cpu'), stack, client };
 }
 
 // the entrypoint moved every process out of the root cgroup when it could
@@ -57,9 +57,9 @@ test.skipIf(cpuLimitsMissing)(
     await waitForExec(name);
     await holdImp(name);
 
-    const dir = await readImpCgroupDir(name);
-    const cpuMax = await readContainerFile(`${dir}/cpu.max`);
-    const procs = await readContainerFile(`${dir}/cgroup.procs`);
+    const directory = await readImpCgroupDir(name);
+    const cpuMax = await readContainerFile(`${directory}/cpu.max`);
+    const procs = await readContainerFile(`${directory}/cgroup.procs`);
 
     // one guest core busy for 5 s against half a core: an upper bound only
     const busy = await runBusyLoop(name, 5);

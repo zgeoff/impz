@@ -8,10 +8,10 @@ import { startStubFirecrackerProcess } from '../test-utils/start-stub-firecracke
 import {
   buildFirecrackerCommand,
   buildSpawnArgv,
-  isFirecrackerAlive,
   isImpVm,
-  isJailedFirecracker,
   listFirecrackers,
+  probeFirecrackerAlive,
+  probeJailedFirecracker,
   readLogTail,
   readPidFile,
   readVmOwner,
@@ -22,18 +22,18 @@ import { buildJailerCommand } from './jail';
 import { readProcessCgroup } from './process-owner';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-fc-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-fc-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#listFirecrackers finds a live firecracker with the socket it serves and its owner', async () => {
   const ctx = setupTest();
-  const apiSocket = join(ctx.dir, 'api.sock');
+  const apiSocket = join(ctx.directoryPath, 'api.sock');
 
   const child = await startStubFirecrackerProcess(apiSocket);
 
@@ -47,77 +47,93 @@ test('#listFirecrackers finds a live firecracker with the socket it serves and i
   });
 });
 
-test('#isFirecrackerAlive finds a live firecracker serving its socket in the host /proc by default', async () => {
+test('#probeFirecrackerAlive finds a live firecracker serving its socket in the host /proc by default', async () => {
   const ctx = setupTest();
 
-  const child = await startStubFirecrackerProcess(join(ctx.dir, 'api.sock'));
+  const child = await startStubFirecrackerProcess(join(ctx.directoryPath, 'api.sock'));
 
-  expect(isFirecrackerAlive(child.pid, join(ctx.dir, 'api.sock'))).toBeTrue();
+  expect(probeFirecrackerAlive(child.pid, join(ctx.directoryPath, 'api.sock'))).toBeTrue();
 });
 
-test('#isFirecrackerAlive finds a running firecracker serving its socket', () => {
+test('#probeFirecrackerAlive finds a running firecracker serving its socket', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'proc', '42'), { recursive: true });
-  writeFileSync(join(ctx.dir, 'proc', '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
-  writeFileSync(join(ctx.dir, 'proc', '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
-
-  expect(isFirecrackerAlive(42, '/run/api.sock', join(ctx.dir, 'proc'))).toBeTrue();
-});
-
-test('#isFirecrackerAlive finds no firecracker serving another socket under the pid', () => {
-  const ctx = setupTest();
-
-  mkdirSync(join(ctx.dir, 'proc', '42'), { recursive: true });
-  writeFileSync(join(ctx.dir, 'proc', '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
+  mkdirSync(join(ctx.directoryPath, 'proc', '42'), { recursive: true });
+  writeFileSync(join(ctx.directoryPath, 'proc', '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
 
   writeFileSync(
-    join(ctx.dir, 'proc', '42', 'cmdline'),
+    join(ctx.directoryPath, 'proc', '42', 'cmdline'),
+    'firecracker\0--api-sock\0/run/api.sock\0',
+  );
+
+  expect(probeFirecrackerAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeTrue();
+});
+
+test('#probeFirecrackerAlive finds no firecracker serving another socket under the pid', () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'proc', '42'), { recursive: true });
+  writeFileSync(join(ctx.directoryPath, 'proc', '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
+
+  writeFileSync(
+    join(ctx.directoryPath, 'proc', '42', 'cmdline'),
     'firecracker\0--api-sock\0/run/other.sock\0',
   );
 
-  expect(isFirecrackerAlive(42, '/run/api.sock', join(ctx.dir, 'proc'))).toBeFalse();
+  expect(probeFirecrackerAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeFalse();
 });
 
 test.each([
   ['a zombie', 'Z'],
   ['dead', 'X'],
-])('#isFirecrackerAlive finds no firecracker that is %s', (_label, state) => {
+])('#probeFirecrackerAlive finds no firecracker that is %s', (_label, state) => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'proc', '42'), { recursive: true });
-  writeFileSync(join(ctx.dir, 'proc', '42', 'stat'), `42 (firecracker) ${state} 1 42 42 0 -1`);
-  writeFileSync(join(ctx.dir, 'proc', '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+  mkdirSync(join(ctx.directoryPath, 'proc', '42'), { recursive: true });
 
-  expect(isFirecrackerAlive(42, '/run/api.sock', join(ctx.dir, 'proc'))).toBeFalse();
+  writeFileSync(
+    join(ctx.directoryPath, 'proc', '42', 'stat'),
+    `42 (firecracker) ${state} 1 42 42 0 -1`,
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'proc', '42', 'cmdline'),
+    'firecracker\0--api-sock\0/run/api.sock\0',
+  );
+
+  expect(probeFirecrackerAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeFalse();
 });
 
-test('#isFirecrackerAlive reads the state past a command name with spaces and parentheses', () => {
+test('#probeFirecrackerAlive reads the state past a command name with spaces and parentheses', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'proc', '42'), { recursive: true });
-  writeFileSync(join(ctx.dir, 'proc', '42', 'stat'), '42 (fc (Z) x) S 1 42 42 0 -1');
-  writeFileSync(join(ctx.dir, 'proc', '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+  mkdirSync(join(ctx.directoryPath, 'proc', '42'), { recursive: true });
+  writeFileSync(join(ctx.directoryPath, 'proc', '42', 'stat'), '42 (fc (Z) x) S 1 42 42 0 -1');
 
-  expect(isFirecrackerAlive(42, '/run/api.sock', join(ctx.dir, 'proc'))).toBeTrue();
+  writeFileSync(
+    join(ctx.directoryPath, 'proc', '42', 'cmdline'),
+    'firecracker\0--api-sock\0/run/api.sock\0',
+  );
+
+  expect(probeFirecrackerAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeTrue();
 });
 
-test('#isFirecrackerAlive finds no firecracker once its pid is gone', () => {
+test('#probeFirecrackerAlive finds no firecracker once its pid is gone', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'proc'));
+  mkdirSync(join(ctx.directoryPath, 'proc'));
 
-  expect(isFirecrackerAlive(42, '/run/api.sock', join(ctx.dir, 'proc'))).toBeFalse();
+  expect(probeFirecrackerAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeFalse();
 });
 
 test('#waitForExit resolves true once the firecracker is gone', async () => {
   const ctx = setupTest();
 
-  const child = await startStubFirecrackerProcess(join(ctx.dir, 'api.sock'));
+  const child = await startStubFirecrackerProcess(join(ctx.directoryPath, 'api.sock'));
 
   child.kill('SIGKILL');
 
-  const exited = await waitForExit(child.pid, join(ctx.dir, 'api.sock'), 4000);
+  const exited = await waitForExit(child.pid, join(ctx.directoryPath, 'api.sock'), 4000);
 
   expect(exited).toBeTrue();
 });
@@ -125,8 +141,8 @@ test('#waitForExit resolves true once the firecracker is gone', async () => {
 test('#waitForExit resolves false at the timeout while the firecracker still runs', async () => {
   const ctx = setupTest();
 
-  const child = await startStubFirecrackerProcess(join(ctx.dir, 'api.sock'));
-  const exited = await waitForExit(child.pid, join(ctx.dir, 'api.sock'), 20);
+  const child = await startStubFirecrackerProcess(join(ctx.directoryPath, 'api.sock'));
+  const exited = await waitForExit(child.pid, join(ctx.directoryPath, 'api.sock'), 20);
 
   expect(exited).toBeFalse();
 });
@@ -134,7 +150,7 @@ test('#waitForExit resolves false at the timeout while the firecracker still run
 test('#readPidFile reads a missing pid file as none', () => {
   const ctx = setupTest();
 
-  expect(readPidFile(join(ctx.dir, 'pid'))).toBeNull();
+  expect(readPidFile(join(ctx.directoryPath, 'pid'))).toBeNull();
 });
 
 test.each([
@@ -145,23 +161,23 @@ test.each([
 ])('#readPidFile reads a pid file of %j as %p', (content, expected) => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'pid'), content);
+  writeFileSync(join(ctx.directoryPath, 'pid'), content);
 
-  expect(readPidFile(join(ctx.dir, 'pid'))).toBe(expected);
+  expect(readPidFile(join(ctx.directoryPath, 'pid'))).toBe(expected);
 });
 
 test('#readLogTail reads the last lines of the log', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'log'), 'one\ntwo\nthree\n');
+  writeFileSync(join(ctx.directoryPath, 'log'), 'one\ntwo\nthree\n');
 
-  expect(readLogTail(join(ctx.dir, 'log'), 2)).toBe('two\nthree');
+  expect(readLogTail(join(ctx.directoryPath, 'log'), 2)).toBe('two\nthree');
 });
 
 test('#readLogTail reads a missing log as none', () => {
   const ctx = setupTest();
 
-  expect(readLogTail(join(ctx.dir, 'log'))).toBe('(no log)');
+  expect(readLogTail(join(ctx.directoryPath, 'log'))).toBe('(no log)');
 });
 
 test('#buildSpawnArgv detaches the command', () => {
@@ -199,7 +215,7 @@ test('#buildSpawnArgv puts the merge wrapper before the jailer, so the chroot ne
 // /usr/bin/env stands in for ksm-exec: it execs the rest of its argv
 test('#buildSpawnArgv records the pid in the cgroup and execs the wrapper and the command', () => {
   const ctx = setupTest();
-  const procs = join(ctx.dir, 'cgroup.procs');
+  const procs = join(ctx.directoryPath, 'cgroup.procs');
 
   const result = Bun.spawnSync(
     buildSpawnArgv(['echo', '--api-sock', 'api.sock'], procs, '/usr/bin/env'),
@@ -219,21 +235,21 @@ test('#buildFirecrackerCommand names the API socket', () => {
 
 test('#startFirecracker resolves with the pid and writes it to the pid file once the socket opens', async () => {
   const ctx = setupTest();
-  const apiSocket = join(ctx.dir, 'api.sock');
+  const apiSocket = join(ctx.directoryPath, 'api.sock');
 
   // stands in for Firecracker: it makes its API socket path, then runs on
   const pid = await startFirecracker(['sh', '-c', 'touch "$0"; exec sleep 30', apiSocket], {
     apiSocket,
-    vsockSocket: join(ctx.dir, 'vsock.sock'),
-    logFile: join(ctx.dir, 'log'),
-    pidFile: join(ctx.dir, 'pid'),
+    vsockSocket: join(ctx.directoryPath, 'vsock.sock'),
+    logFile: join(ctx.directoryPath, 'log'),
+    pidFile: join(ctx.directoryPath, 'pid'),
   });
 
   onTestFinished(() => {
     stopPid(pid);
   });
 
-  expect(readPidFile(join(ctx.dir, 'pid'))).toBe(pid);
+  expect(readPidFile(join(ctx.directoryPath, 'pid'))).toBe(pid);
 });
 
 test('#startFirecracker rejects with the log tail when the process exits before its socket opens', () => {
@@ -241,10 +257,10 @@ test('#startFirecracker rejects with the log tail when the process exits before 
 
   expect(
     startFirecracker(['sh', '-c', 'echo no kvm >&2; exit 1'], {
-      apiSocket: join(ctx.dir, 'api.sock'),
-      vsockSocket: join(ctx.dir, 'vsock.sock'),
-      logFile: join(ctx.dir, 'log'),
-      pidFile: join(ctx.dir, 'pid'),
+      apiSocket: join(ctx.directoryPath, 'api.sock'),
+      vsockSocket: join(ctx.directoryPath, 'vsock.sock'),
+      logFile: join(ctx.directoryPath, 'log'),
+      pidFile: join(ctx.directoryPath, 'pid'),
     }),
   ).rejects.toThrowWithMessage(Error, 'firecracker did not open its API socket (exit 1): no kvm');
 });
@@ -252,7 +268,7 @@ test('#startFirecracker rejects with the log tail when the process exits before 
 test('#readVmOwner reads the uid and the cgroup of a process', async () => {
   const ctx = setupTest();
 
-  const child = await startStubFirecrackerProcess(join(ctx.dir, 'api.sock'));
+  const child = await startStubFirecrackerProcess(join(ctx.directoryPath, 'api.sock'));
 
   expect(readVmOwner(child.pid)).toStrictEqual({
     uid: process.getuid?.() ?? 0,
@@ -276,7 +292,7 @@ test('#isImpVm refuses a VM of another uid in another cgroup', () => {
   expect(isImpVm({ uid: 900_002, cgroup: '/imps/i2' }, 'i1', 900_001)).toBeFalse();
 });
 
-test('#isJailedFirecracker finds a process run with --id', async () => {
+test('#probeJailedFirecracker finds a process run with --id', async () => {
   // `; true` keeps bash from execing sleep in place, so its argv keeps --id
   const child = Bun.spawn(['bash', '-c', 'sleep 30; true', 'x', '--id', 'i1']);
 
@@ -290,13 +306,13 @@ test('#isJailedFirecracker finds a process run with --id', async () => {
     );
   });
 
-  expect(isJailedFirecracker(child.pid)).toBeTrue();
+  expect(probeJailedFirecracker(child.pid)).toBeTrue();
 });
 
-test('#isJailedFirecracker finds an unjailed firecracker not jailed', async () => {
+test('#probeJailedFirecracker finds an unjailed firecracker not jailed', async () => {
   const ctx = setupTest();
 
-  const child = await startStubFirecrackerProcess(join(ctx.dir, 'api.sock'));
+  const child = await startStubFirecrackerProcess(join(ctx.directoryPath, 'api.sock'));
 
-  expect(isJailedFirecracker(child.pid)).toBeFalse();
+  expect(probeJailedFirecracker(child.pid)).toBeFalse();
 });

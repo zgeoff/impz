@@ -5,14 +5,6 @@ import { MAX_RELAYS_PER_FORWARD, runGuestListener } from '../reverse/run-guest-l
 import { formatFailure, runChannelRelay } from './channel-io';
 import type { SshBackend } from './ssh-connection-context';
 
-// The bind addresses a remote forward may name. As sshd with GatewayPorts
-// no, every one of them listens on the guest's 127.0.0.1: no other machine
-// reaches a reverse forward.
-const LOOPBACK_BINDS = new Set(['', '*', '0.0.0.0', '::', 'localhost', '127.0.0.1', '::1']);
-
-// impd's own sockets in the guest; the agent resolves the real path too
-const IMP_RUN_DIR = '/run/imp/';
-
 // a global request's answer; ssh2 leaves both out when no reply is wanted
 type AcceptRequest = ((chosenPort?: number) => void) | undefined;
 
@@ -60,38 +52,6 @@ interface OpenForward {
   readonly key: string;
   readonly listener: GuestListener;
   readonly label: string;
-}
-
-// the listener a request asks for, or null when it is refused
-function resolveRemoteForward(request: RemoteForwardRequest): ListenSpec | null {
-  if (request.kind === 'unix') {
-    const path = posix.normalize(request.socketPath);
-
-    return posix.isAbsolute(path) && !`${path}/`.startsWith(IMP_RUN_DIR)
-      ? { network: 'unix', path }
-      : null;
-  }
-
-  const port = request.bindPort;
-
-  if (
-    !LOOPBACK_BINDS.has(request.bindAddr) ||
-    !Number.isInteger(port) ||
-    port < 0 ||
-    port > 65_535
-  ) {
-    return null;
-  }
-
-  return { network: 'tcp', port };
-}
-
-// what the client names a forward by: its socket path, or its bind address
-// and the port it asked for
-function buildKey(request: RemoteForwardRequest): string {
-  return request.kind === 'unix'
-    ? `unix:${posix.normalize(request.socketPath)}`
-    : `tcp:${request.bindAddr}:${String(request.bindPort)}`;
 }
 
 // Each forward listens in the guest as the image's user, and each of its
@@ -285,4 +245,44 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
       forwards.clear();
     },
   };
+}
+
+// The bind addresses a remote forward may name. As sshd with GatewayPorts
+// no, every one of them listens on the guest's 127.0.0.1: no other machine
+// reaches a reverse forward.
+const LOOPBACK_BINDS = new Set(['', '*', '0.0.0.0', '::', 'localhost', '127.0.0.1', '::1']);
+
+// impd's own sockets in the guest; the agent resolves the real path too
+const IMP_RUN_DIR = '/run/imp/';
+
+// the listener a request asks for, or null when it is refused
+function resolveRemoteForward(request: RemoteForwardRequest): ListenSpec | null {
+  if (request.kind === 'unix') {
+    const path = posix.normalize(request.socketPath);
+
+    return posix.isAbsolute(path) && !`${path}/`.startsWith(IMP_RUN_DIR)
+      ? { network: 'unix', path }
+      : null;
+  }
+
+  const port = request.bindPort;
+
+  if (
+    !LOOPBACK_BINDS.has(request.bindAddr) ||
+    !Number.isInteger(port) ||
+    port < 0 ||
+    port > 65_535
+  ) {
+    return null;
+  }
+
+  return { network: 'tcp', port };
+}
+
+// what the client names a forward by: its socket path, or its bind address
+// and the port it asked for
+function buildKey(request: RemoteForwardRequest): string {
+  return request.kind === 'unix'
+    ? `unix:${posix.normalize(request.socketPath)}`
+    : `tcp:${request.bindAddr}:${String(request.bindPort)}`;
 }

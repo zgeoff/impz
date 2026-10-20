@@ -13,12 +13,6 @@ interface StubPrefixProxyOptions {
   readonly prefix: string;
 }
 
-// close codes a peer may send in a close frame; 1004, 1005, 1006 and 1015
-// only report what happened (RFC 6455 7.4.1)
-function isSendableCloseCode(code: number): boolean {
-  return (code >= 1000 && code <= 1003) || (code >= 1007 && code <= 1014) || code >= 3000;
-}
-
 // A loopback reverse proxy that serves `target` under `prefix`, as one in
 // front of impd does: 404 outside the prefix, and `paths` records each path
 // it was asked for. Its stop goes into `stack`.
@@ -126,4 +120,10 @@ export function startStubPrefixProxy(
   });
 
   return { url: `http://127.0.0.1:${String(server.port)}${options.prefix}`, paths };
+}
+
+// close codes a peer may send in a close frame; 1004, 1005, 1006 and 1015
+// only report what happened (RFC 6455 7.4.1)
+function isSendableCloseCode(code: number): boolean {
+  return (code >= 1000 && code <= 1003) || (code >= 1007 && code <= 1014) || code >= 3000;
 }

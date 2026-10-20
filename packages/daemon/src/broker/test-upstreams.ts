@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { rootCertificates } from 'node:tls';
 import * as z from 'zod';
-import { readErrorMessage } from '../read-error-message';
+import { getErrorMessage } from '../get-error-message';
 import type { Upstream } from './forward-request';
 
 // Tests only (IMP_BROKER_TEST_UPSTREAMS): a file that sends granted hosts to
@@ -52,7 +52,7 @@ export function createUpstreamResolver(
       } catch (error) {
         cache.file = null;
 
-        log(`impd: broker: ignoring ${path}: ${readErrorMessage(error)}`);
+        log(`impd: broker: ignoring ${path}: ${getErrorMessage(error)}`);
       }
     }
 

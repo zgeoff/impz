@@ -2,14 +2,7 @@ import type { NetworkMember } from '../db/networks';
 import { parseIpv4 } from '../net/addressing';
 import type { Subnet } from '../net/addressing';
 
-// impd's own answers for the names of imps on a network
-// (docs/guides/networks.md#names): `<imp>.<network>.internal`, a peer's bare
-// name, and the reverse names of IMP_SUBNET. They never go upstream.
-
-// short, so a join or a leave shows in a guest's cache soon after
-const LOCAL_TTL_S = 5;
 const INTERNAL = 'internal';
-const REVERSE_SUFFIX = '.in-addr.arpa';
 
 interface LocalRecordBase {
   readonly name: string;
@@ -74,6 +67,13 @@ export function resolveNetworkName(
   return peer === undefined ? null : buildAddressAnswer(query, peer.guestIp);
 }
 
+// impd's own answers for the names of imps on a network
+// (docs/guides/networks.md#names): `<imp>.<network>.internal`, a peer's bare
+// name, and the reverse names of IMP_SUBNET. They never go upstream.
+
+// short, so a join or a leave shows in a guest's cache soon after
+const LOCAL_TTL_S = 5;
+
 function buildAddressAnswer(
   query: Readonly<{ name: string; type: string }>,
   address: string,
@@ -84,30 +84,7 @@ function buildAddressAnswer(
   return { kind: 'records', records };
 }
 
-// a peer's address names it once for each network the guest shares with it
-function buildPointerAnswer(
-  query: Readonly<{ name: string; type: string }>,
-  address: string,
-  peers: readonly NetworkMember[],
-): LocalAnswer {
-  const named = peers.filter((peer) => peer.guestIp === address);
-
-  if (named.length === 0) {
-    return NXDOMAIN;
-  }
-
-  const records: LocalRecord[] =
-    query.type === 'PTR'
-      ? named.map((peer) => ({
-          type: 'PTR',
-          name: query.name,
-          ttl: LOCAL_TTL_S,
-          data: `${peer.name}.${peer.network}.${INTERNAL}`,
-        }))
-      : [];
-
-  return { kind: 'records', records };
-}
+const REVERSE_SUFFIX = '.in-addr.arpa';
 
 // For a reverse name inside the subnet: the address it names, or '' for one
 // that names a range within it. Null for any other name.
@@ -135,4 +112,29 @@ function readReverseAddress(name: string, subnet: Subnet): string | null {
   }
 
   return octets.length === 4 ? padded : '';
+}
+
+// a peer's address names it once for each network the guest shares with it
+function buildPointerAnswer(
+  query: Readonly<{ name: string; type: string }>,
+  address: string,
+  peers: readonly NetworkMember[],
+): LocalAnswer {
+  const named = peers.filter((peer) => peer.guestIp === address);
+
+  if (named.length === 0) {
+    return NXDOMAIN;
+  }
+
+  const records: LocalRecord[] =
+    query.type === 'PTR'
+      ? named.map((peer) => ({
+          type: 'PTR',
+          name: query.name,
+          ttl: LOCAL_TTL_S,
+          data: `${peer.name}.${peer.network}.${INTERNAL}`,
+        }))
+      : [];
+
+  return { kind: 'records', records };
 }

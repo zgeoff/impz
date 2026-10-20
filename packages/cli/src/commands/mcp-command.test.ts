@@ -6,7 +6,7 @@ import { createImpClient } from '@impz/client';
 import { loadConfig } from '@impz/daemon/src/config';
 import { createImpd } from '@impz/daemon/src/create-impd';
 import { createImage } from '@impz/daemon/src/db/images';
-import { findImpByName } from '@impz/daemon/src/db/imps';
+import { readImpByName } from '@impz/daemon/src/db/imps';
 import { openDatabase } from '@impz/daemon/src/db/open-database';
 import {
   buildImagePaths,
@@ -19,7 +19,7 @@ import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-im
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubExecGuest } from '@impz/daemon/src/test-utils/build-stub-exec-guest';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { startStubExecAgent } from '@impz/daemon/src/test-utils/start-stub-exec-agent';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
@@ -51,7 +51,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with, as setupSystemFiles installs it
@@ -163,7 +163,7 @@ async function setupTest() {
 test('it answers initialize over stdio, and nothing for a notification', async () => {
   const ctx = await setupTest();
 
-  const proc = Bun.spawn(['bun', ctx.main, 'mcp', '--prefix', 'agent-'], {
+  const subprocess = Bun.spawn(['bun', ctx.main, 'mcp', '--prefix', 'agent-'], {
     env: {
       PATH: process.env['PATH'] ?? '',
       HOME: ctx.home,
@@ -176,14 +176,14 @@ test('it answers initialize over stdio, and nothing for a notification', async (
   });
 
   ctx.stack.defer(async () => {
-    proc.kill();
+    subprocess.kill();
 
-    await proc.exited;
+    await subprocess.exited;
   });
 
-  const stdout = new Response(proc.stdout).text();
+  const stdout = new Response(subprocess.stdout).text();
 
-  await proc.stdin.write(
+  await subprocess.stdin.write(
     `${JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
@@ -196,9 +196,9 @@ test('it answers initialize over stdio, and nothing for a notification', async (
     })}\n${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
   );
 
-  await proc.stdin.end();
+  await subprocess.stdin.end();
 
-  const code = await proc.exited;
+  const code = await subprocess.exited;
   const text = await stdout;
 
   const messages = text
@@ -225,7 +225,7 @@ test('it answers initialize over stdio, and nothing for a notification', async (
 test('it lists its tools over stdio', async () => {
   const ctx = await setupTest();
 
-  const proc = Bun.spawn(['bun', ctx.main, 'mcp', '--prefix', 'agent-'], {
+  const subprocess = Bun.spawn(['bun', ctx.main, 'mcp', '--prefix', 'agent-'], {
     env: {
       PATH: process.env['PATH'] ?? '',
       HOME: ctx.home,
@@ -238,17 +238,20 @@ test('it lists its tools over stdio', async () => {
   });
 
   ctx.stack.defer(async () => {
-    proc.kill();
+    subprocess.kill();
 
-    await proc.exited;
+    await subprocess.exited;
   });
 
-  const stdout = new Response(proc.stdout).text();
+  const stdout = new Response(subprocess.stdout).text();
 
-  await proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })}\n`);
-  await proc.stdin.end();
+  await subprocess.stdin.write(
+    `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })}\n`,
+  );
 
-  const code = await proc.exited;
+  await subprocess.stdin.end();
+
+  const code = await subprocess.exited;
   const text = await stdout;
 
   const [listed] = text.split('\n');
@@ -266,7 +269,7 @@ test('it lists its tools over stdio', async () => {
 test('it answers an unknown method over stdio with method not found', async () => {
   const ctx = await setupTest();
 
-  const proc = Bun.spawn(['bun', ctx.main, 'mcp', '--prefix', 'agent-'], {
+  const subprocess = Bun.spawn(['bun', ctx.main, 'mcp', '--prefix', 'agent-'], {
     env: {
       PATH: process.env['PATH'] ?? '',
       HOME: ctx.home,
@@ -279,17 +282,20 @@ test('it answers an unknown method over stdio with method not found', async () =
   });
 
   ctx.stack.defer(async () => {
-    proc.kill();
+    subprocess.kill();
 
-    await proc.exited;
+    await subprocess.exited;
   });
 
-  const stdout = new Response(proc.stdout).text();
+  const stdout = new Response(subprocess.stdout).text();
 
-  await proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 5, method: 'prompts/list' })}\n`);
-  await proc.stdin.end();
+  await subprocess.stdin.write(
+    `${JSON.stringify({ jsonrpc: '2.0', id: 5, method: 'prompts/list' })}\n`,
+  );
 
-  const code = await proc.exited;
+  await subprocess.stdin.end();
+
+  const code = await subprocess.exited;
   const text = await stdout;
 
   expect(code).toBe(0);
@@ -306,7 +312,7 @@ test('it answers an unknown method over stdio with method not found', async () =
 test('it creates an imp through impd over stdio', async () => {
   const ctx = await setupTest();
 
-  const proc = Bun.spawn(['bun', ctx.main, 'mcp', '--prefix', 'agent-'], {
+  const subprocess = Bun.spawn(['bun', ctx.main, 'mcp', '--prefix', 'agent-'], {
     env: {
       PATH: process.env['PATH'] ?? '',
       HOME: ctx.home,
@@ -319,20 +325,20 @@ test('it creates an imp through impd over stdio', async () => {
   });
 
   ctx.stack.defer(async () => {
-    proc.kill();
+    subprocess.kill();
 
-    await proc.exited;
+    await subprocess.exited;
   });
 
   const stdout = { text: '' };
 
   void (async () => {
-    for await (const chunk of proc.stdout.pipeThrough(new TextDecoderStream())) {
+    for await (const chunk of subprocess.stdout.pipeThrough(new TextDecoderStream())) {
       stdout.text += chunk;
     }
   })();
 
-  await proc.stdin.write(
+  await subprocess.stdin.write(
     `${JSON.stringify({
       jsonrpc: '2.0',
       id: 3,
@@ -351,7 +357,7 @@ test('it creates an imp through impd over stdio', async () => {
     return line ?? '';
   });
 
-  await proc.stdin.end();
+  await subprocess.stdin.end();
 
   const imps = await ctx.client.imps.list();
 
@@ -370,7 +376,7 @@ test('it runs a command in the guest over stdio', async () => {
 
   await ctx.client.imps.create({ name: 'agent-a' });
 
-  const record = await findImpByName(ctx.db, 'agent-a');
+  const record = await readImpByName(ctx.db, 'agent-a');
 
   invariant(record);
 
@@ -380,7 +386,7 @@ test('it runs a command in the guest over stdio', async () => {
     agent.close();
   });
 
-  const proc = Bun.spawn(['bun', ctx.main, 'mcp', '--prefix', 'agent-'], {
+  const subprocess = Bun.spawn(['bun', ctx.main, 'mcp', '--prefix', 'agent-'], {
     env: {
       PATH: process.env['PATH'] ?? '',
       HOME: ctx.home,
@@ -393,20 +399,20 @@ test('it runs a command in the guest over stdio', async () => {
   });
 
   ctx.stack.defer(async () => {
-    proc.kill();
+    subprocess.kill();
 
-    await proc.exited;
+    await subprocess.exited;
   });
 
   const stdout = { text: '' };
 
   void (async () => {
-    for await (const chunk of proc.stdout.pipeThrough(new TextDecoderStream())) {
+    for await (const chunk of subprocess.stdout.pipeThrough(new TextDecoderStream())) {
       stdout.text += chunk;
     }
   })();
 
-  await proc.stdin.write(
+  await subprocess.stdin.write(
     `${JSON.stringify({
       jsonrpc: '2.0',
       id: 4,
@@ -425,7 +431,7 @@ test('it runs a command in the guest over stdio', async () => {
     return line ?? '';
   });
 
-  await proc.stdin.end();
+  await subprocess.stdin.end();
 
   expect(JSON.parse(answer)).toMatchObject({
     id: 4,
@@ -440,7 +446,7 @@ test('it stops a command still running in the guest when the client goes away', 
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const record = await findImpByName(ctx.db, 'box');
+  const record = await readImpByName(ctx.db, 'box');
 
   invariant(record);
 
@@ -450,7 +456,7 @@ test('it stops a command still running in the guest when the client goes away', 
     agent.close();
   });
 
-  const proc = Bun.spawn(['bun', ctx.main, 'mcp', '--allow', 'box'], {
+  const subprocess = Bun.spawn(['bun', ctx.main, 'mcp', '--allow', 'box'], {
     env: {
       PATH: process.env['PATH'] ?? '',
       HOME: ctx.home,
@@ -463,14 +469,14 @@ test('it stops a command still running in the guest when the client goes away', 
   });
 
   ctx.stack.defer(async () => {
-    proc.kill();
+    subprocess.kill();
 
-    await proc.exited;
+    await subprocess.exited;
   });
 
-  const stdout = new Response(proc.stdout).text();
+  const stdout = new Response(subprocess.stdout).text();
 
-  await proc.stdin.write(
+  await subprocess.stdin.write(
     `${JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
@@ -483,9 +489,9 @@ test('it stops a command still running in the guest when the client goes away', 
     invariant(guest.requests[0]);
   });
 
-  await proc.stdin.end();
+  await subprocess.stdin.end();
 
-  const code = await proc.exited;
+  const code = await subprocess.exited;
 
   await waitFor(() => {
     invariant(guest.signals[0] !== undefined);
@@ -501,7 +507,7 @@ test('it stops a command still running in the guest when the client goes away', 
 test('it exits 2 without a guard and says how to choose one', async () => {
   const ctx = await setupTest();
 
-  const proc = Bun.spawn(['bun', ctx.main, 'mcp'], {
+  const subprocess = Bun.spawn(['bun', ctx.main, 'mcp'], {
     env: { PATH: process.env['PATH'] ?? '', HOME: ctx.home, IMP_URL: 'http://127.0.0.1:1' },
     stdin: 'pipe',
     stdout: 'pipe',
@@ -509,12 +515,15 @@ test('it exits 2 without a guard and says how to choose one', async () => {
   });
 
   ctx.stack.defer(async () => {
-    proc.kill();
+    subprocess.kill();
 
-    await proc.exited;
+    await subprocess.exited;
   });
 
-  const [code, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+  const [code, stderr] = await Promise.all([
+    subprocess.exited,
+    new Response(subprocess.stderr).text(),
+  ]);
 
   expect(code).toBe(2);
   expect(stderr).toBe('impz: choose the imps this server may touch: --prefix, --allow or --all\n');

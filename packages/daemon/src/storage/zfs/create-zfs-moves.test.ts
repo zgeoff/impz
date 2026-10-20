@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import invariant from 'tiny-invariant';
 import { writeChangedBlocks } from '../../backup/write-changed-blocks';
 import { createImage } from '../../db/images';
-import { findImpByName } from '../../db/imps';
+import { readImpByName } from '../../db/imps';
 import { createMoveHosts } from '../../moves/test-moves';
 import { runChecked } from '../../process/run-command';
 import { readSnapshotMeta } from '../../sleep/snapshot-meta';
@@ -46,10 +46,10 @@ async function setupTest(options: Readonly<{ isShared?: boolean }> = {}) {
     isShared: options.isShared === true,
     source: {
       dataDir: sourceSet.dataDir,
-      createStorage: (dir) => {
+      createStorage: (directory) => {
         // the host's own module, whatever its version: no VM runs here
         const backend = createZfsBackend({
-          dataDir: dir,
+          dataDir: directory,
           root: sourceSet.root,
           log: () => {},
           isUiomoveBugAllowed: true,
@@ -62,9 +62,9 @@ async function setupTest(options: Readonly<{ isShared?: boolean }> = {}) {
     },
     target: {
       dataDir: targetSet.dataDir,
-      createStorage: (dir) => {
+      createStorage: (directory) => {
         const backend = createZfsBackend({
-          dataDir: dir,
+          dataDir: directory,
           root: targetSet.root,
           log: () => {},
           isUiomoveBugAllowed: true,
@@ -100,9 +100,9 @@ test.skipIf(readZfsTestPool() === null)(
   async () => {
     const ctx = await setupTest();
 
-    await ctx.source.storage.createImage('sha256:ubuntu', (dir) => {
-      writeSyncedFile(join(dir, 'rootfs.ext4'), 'rootfs');
-      writeSyncedFile(join(dir, 'config.json'), '{}');
+    await ctx.source.storage.createImage('sha256:ubuntu', (directory) => {
+      writeSyncedFile(join(directory, 'rootfs.ext4'), 'rootfs');
+      writeSyncedFile(join(directory, 'config.json'), '{}');
 
       return Promise.resolve();
     });
@@ -112,9 +112,9 @@ test.skipIf(readZfsTestPool() === null)(
       buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
     );
 
-    await ctx.target.storage.createImage('sha256:ubuntu', (dir) => {
-      writeSyncedFile(join(dir, 'rootfs.ext4'), 'rootfs');
-      writeSyncedFile(join(dir, 'config.json'), '{}');
+    await ctx.target.storage.createImage('sha256:ubuntu', (directory) => {
+      writeSyncedFile(join(directory, 'rootfs.ext4'), 'rootfs');
+      writeSyncedFile(join(directory, 'config.json'), '{}');
 
       return Promise.resolve();
     });
@@ -137,7 +137,7 @@ test.skipIf(readZfsTestPool() === null)(
     const status = await ctx.runMove('dev');
     const moved = await ctx.targetApp.client.imps.get({ name: 'dev' });
     const checkpoints = await ctx.targetApp.client.checkpoints.list({ name: 'dev' });
-    const left = await findImpByName(ctx.source.db, 'dev');
+    const left = await readImpByName(ctx.source.db, 'dev');
 
     const movedDisk = readFileSync(ctx.target.storage.resolveImpPaths(created.id).disk, 'utf8');
 
@@ -186,9 +186,9 @@ test.skipIf(readZfsTestPool() === null)(
   async () => {
     const ctx = await setupTest();
 
-    await ctx.source.storage.createImage('sha256:ubuntu', (dir) => {
-      writeSyncedFile(join(dir, 'rootfs.ext4'), 'rootfs');
-      writeSyncedFile(join(dir, 'config.json'), '{}');
+    await ctx.source.storage.createImage('sha256:ubuntu', (directory) => {
+      writeSyncedFile(join(directory, 'rootfs.ext4'), 'rootfs');
+      writeSyncedFile(join(directory, 'config.json'), '{}');
 
       return Promise.resolve();
     });
@@ -198,9 +198,9 @@ test.skipIf(readZfsTestPool() === null)(
       buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
     );
 
-    await ctx.target.storage.createImage('sha256:ubuntu', (dir) => {
-      writeSyncedFile(join(dir, 'rootfs.ext4'), 'rootfs');
-      writeSyncedFile(join(dir, 'config.json'), '{}');
+    await ctx.target.storage.createImage('sha256:ubuntu', (directory) => {
+      writeSyncedFile(join(directory, 'rootfs.ext4'), 'rootfs');
+      writeSyncedFile(join(directory, 'config.json'), '{}');
 
       return Promise.resolve();
     });
@@ -233,9 +233,9 @@ test.skipIf(readZfsTestPool() === null)(
     // target's facts, as two hosts with the same IMP_DATA_DIR would
     const ctx = await setupTest({ isShared: true });
 
-    await ctx.source.storage.createImage('sha256:ubuntu', (dir) => {
-      writeSyncedFile(join(dir, 'rootfs.ext4'), 'rootfs');
-      writeSyncedFile(join(dir, 'config.json'), '{}');
+    await ctx.source.storage.createImage('sha256:ubuntu', (directory) => {
+      writeSyncedFile(join(directory, 'rootfs.ext4'), 'rootfs');
+      writeSyncedFile(join(directory, 'config.json'), '{}');
 
       return Promise.resolve();
     });
@@ -245,9 +245,9 @@ test.skipIf(readZfsTestPool() === null)(
       buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
     );
 
-    await ctx.target.storage.createImage('sha256:ubuntu', (dir) => {
-      writeSyncedFile(join(dir, 'rootfs.ext4'), 'rootfs');
-      writeSyncedFile(join(dir, 'config.json'), '{}');
+    await ctx.target.storage.createImage('sha256:ubuntu', (directory) => {
+      writeSyncedFile(join(directory, 'rootfs.ext4'), 'rootfs');
+      writeSyncedFile(join(directory, 'config.json'), '{}');
 
       return Promise.resolve();
     });
@@ -267,14 +267,14 @@ test.skipIf(readZfsTestPool() === null)(
     await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
     const status = await ctx.runMove('dev');
-    const moved = await findImpByName(ctx.target.db, 'dev');
+    const moved = await readImpByName(ctx.target.db, 'dev');
 
     const paths = ctx.target.storage.resolveImpPaths(created.id);
     const meta = readSnapshotMeta(paths);
     const mem = readFileSync(paths.memFile, 'utf8');
     const movedDisk = readFileSync(paths.disk, 'utf8');
 
-    const left = await findImpByName(ctx.source.db, 'dev');
+    const left = await readImpByName(ctx.source.db, 'dev');
 
     const sourceSets = await runChecked([
       'zfs',
@@ -314,9 +314,9 @@ test.skipIf(readZfsTestPool() === null)(
     // target's facts, as two hosts with the same IMP_DATA_DIR would
     const ctx = await setupTest({ isShared: true });
 
-    await ctx.source.storage.createImage('sha256:ubuntu', (dir) => {
-      writeSyncedFile(join(dir, 'rootfs.ext4'), 'rootfs');
-      writeSyncedFile(join(dir, 'config.json'), '{}');
+    await ctx.source.storage.createImage('sha256:ubuntu', (directory) => {
+      writeSyncedFile(join(directory, 'rootfs.ext4'), 'rootfs');
+      writeSyncedFile(join(directory, 'config.json'), '{}');
 
       return Promise.resolve();
     });
@@ -326,9 +326,9 @@ test.skipIf(readZfsTestPool() === null)(
       buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
     );
 
-    await ctx.target.storage.createImage('sha256:ubuntu', (dir) => {
-      writeSyncedFile(join(dir, 'rootfs.ext4'), 'rootfs');
-      writeSyncedFile(join(dir, 'config.json'), '{}');
+    await ctx.target.storage.createImage('sha256:ubuntu', (directory) => {
+      writeSyncedFile(join(directory, 'rootfs.ext4'), 'rootfs');
+      writeSyncedFile(join(directory, 'config.json'), '{}');
 
       return Promise.resolve();
     });
@@ -358,14 +358,14 @@ test.skipIf(readZfsTestPool() === null)(
   async () => {
     const ctx = await setupTest();
 
-    await ctx.source.storage.createImage('sha256:real', (dir) => {
-      writeSyncedFile(join(dir, 'rootfs.ext4'), 'image');
+    await ctx.source.storage.createImage('sha256:real', (directory) => {
+      writeSyncedFile(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });
 
-    await ctx.target.storage.createImage('sha256:real', (dir) => {
-      writeSyncedFile(join(dir, 'rootfs.ext4'), 'image');
+    await ctx.target.storage.createImage('sha256:real', (directory) => {
+      writeSyncedFile(join(directory, 'rootfs.ext4'), 'image');
 
       return Promise.resolve();
     });

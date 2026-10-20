@@ -2,12 +2,12 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '../../packages/client/src/index';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, findImp, runImp, runShellInImp } from '../lib/imp-cli';
+import { createInstanceClient, readImp, runImp, runShellInImp } from '../lib/imp-cli';
 import { waitForExec } from '../lib/imps';
 import { instance } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent, removeTokenIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // Leases (docs/guides/leases.md): each owner's own hold on an imp, through
@@ -21,7 +21,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('leases'), stack, client };
+  return { prefix: getSuitePrefix('leases'), stack, client };
 }
 
 test('it reports the leases feature', async () => {
@@ -112,7 +112,7 @@ test('it refuses a sleep or stop of a leased imp with LEASED, and impz sleep for
   // the CLI passes force: a person typed it
   await runImp('sleep', name);
 
-  const imp = await findImp(name);
+  const imp = await readImp(name);
 
   expect(clientA.leases.renew({ name, label: 'job', ttlSeconds: 60 })).rejects.toMatchObject({
     code: 'LEASE_NOT_HELD',
@@ -142,7 +142,7 @@ test('it wakes the imp on an acquire, ends the lease at its end, and lets the im
 
   await clientA.leases.acquire({ name, label: 'short', ttlSeconds: 10 });
 
-  const awake = await findImp(name);
+  const awake = await readImp(name);
 
   expect(awake?.state).toBe('running');
 
@@ -165,7 +165,7 @@ test('it wakes the imp on an acquire, ends the lease at its end, and lets the im
   const idle = await waitFor(
     `${name} to sleep once idle`,
     async () => {
-      const imp = await findImp(name);
+      const imp = await readImp(name);
 
       if (imp?.state !== 'sleeping') {
         throw new Error(`${name} is ${imp?.state ?? 'gone'}`);

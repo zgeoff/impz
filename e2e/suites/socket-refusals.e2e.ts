@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { DOCKERFILE_FRONTEND } from '../../packages/daemon/src/docker-proxy/dockerfile-frontend';
 import { buildProxyBuildScript, parseProxyAnswer } from '../lib/docker-proxy-build';
-import { getHostImage, runChecked, runCommand, runInContainer } from '../lib/instance';
+import { readHostImageFromEnv, runChecked, runCommand, runInContainer } from '../lib/instance';
 
 // imp-docker-proxy (docs/architecture/host.md#the-docker-socket):
 // root in the dev container reaches Docker only through it. It closes the
@@ -104,7 +104,7 @@ test('it refuses every build under IMP_BUILD_ISOLATION=imp, even one a host buil
 });
 
 test("it refuses a pull of the host's repository, so its tag cannot move", async () => {
-  const hostImage = getHostImage();
+  const hostImage = readHostImageFromEnv();
   const hostRepo = hostImage.split(':')[0] ?? hostImage;
 
   const result = await runInContainer(['sh', '-c', `docker pull ${hostRepo}:e2e-socket`]);

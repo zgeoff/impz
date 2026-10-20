@@ -25,7 +25,7 @@ import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubExecGuest } from '../test-utils/build-stub-exec-guest';
 import { buildStubTailscale } from '../test-utils/build-stub-tailscale';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import { startStubExecAgent } from '../test-utils/start-stub-exec-agent';
 import { tryExecSocket, tryTunnelSocket } from '../test-utils/try-impd-sockets';
 import { PROCEDURE_ACCESS } from './access-policy';
@@ -58,7 +58,7 @@ async function setupTest(options: SetupOptions) {
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
       ...readImpEnv(),
     }),
 

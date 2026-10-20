@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import {
   BOOTSTRAP_PARTS,
-  readHostArgs,
+  parseHostArgs,
   render,
   renderBootstrap,
   renderCompose,
@@ -244,8 +244,8 @@ test('#render runs bootstrap.sh in the order of BOOTSTRAP_PARTS, with every part
   expect(BOOTSTRAP_PARTS).toIncludeSameMembers([...parts, 'deploy/lib/host-env.sh']);
 });
 
-test('#readHostArgs passes an unbraced $NAME in lines as env words', () => {
-  const args = readHostArgs(
+test('#parseHostArgs passes an unbraced $NAME in lines as env words', () => {
+  const args = parseHostArgs(
     '{"privileges": [["--init"]], "probed": [], "lines": [["$IMP_PUBLIC_PORTS"]], ' +
       '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
       '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
@@ -254,9 +254,9 @@ test('#readHostArgs passes an unbraced $NAME in lines as env words', () => {
   expect(args.lines).toStrictEqual([['$IMP_PUBLIC_PORTS']]);
 });
 
-test(`#readHostArgs refuses a braced \${NAME} in lines`, () => {
+test(`#parseHostArgs refuses a braced \${NAME} in lines`, () => {
   expect(() =>
-    readHostArgs(
+    parseHostArgs(
       `{"privileges": [["--init"]], "probed": [], "lines": [["\${IMP_PUBLIC_PORTS}"]], ` +
         '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
@@ -264,9 +264,9 @@ test(`#readHostArgs refuses a braced \${NAME} in lines`, () => {
   ).toThrowWithMessage(Error, /is not a plain word or \$NAME/u);
 });
 
-test('#readHostArgs refuses a $NAME in privileges', () => {
+test('#parseHostArgs refuses a $NAME in privileges', () => {
   expect(() =>
-    readHostArgs(
+    parseHostArgs(
       '{"privileges": [["$IMP_PUBLIC_PORTS"]], "probed": [], "lines": [["x"]], ' +
         '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
@@ -274,9 +274,9 @@ test('#readHostArgs refuses a $NAME in privileges', () => {
   ).toThrowWithMessage(Error, /is not a plain word/u);
 });
 
-test('#readHostArgs refuses a word that would need quoting', () => {
+test('#parseHostArgs refuses a word that would need quoting', () => {
   expect(() =>
-    readHostArgs(
+    parseHostArgs(
       '{"privileges": [["--init"]], "probed": [], "lines": [["-v", "/a b:/c"]], ' +
         '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
@@ -284,9 +284,9 @@ test('#readHostArgs refuses a word that would need quoting', () => {
   ).toThrowWithMessage(Error, /is not a plain word/u);
 });
 
-test('#readHostArgs refuses empty lines', () => {
+test('#parseHostArgs refuses empty lines', () => {
   expect(() =>
-    readHostArgs(
+    parseHostArgs(
       '{"privileges": [["--init"]], "probed": [], "lines": [], ' +
         '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
@@ -294,9 +294,9 @@ test('#readHostArgs refuses empty lines', () => {
   ).toThrowWithMessage(Error, /must be non-empty/u);
 });
 
-test('#readHostArgs refuses args without probed, naming the args file', () => {
+test('#parseHostArgs refuses args without probed, naming the args file', () => {
   expect(() =>
-    readHostArgs(
+    parseHostArgs(
       '{"privileges": [["--init"]], "lines": [["x"]], ' +
         '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
@@ -305,9 +305,9 @@ test('#readHostArgs refuses args without probed, naming the args file', () => {
 });
 
 // Linux names an interface in at most 15 bytes
-test('#readHostArgs refuses a bridge name longer than an interface name may be', () => {
+test('#parseHostArgs refuses a bridge name longer than an interface name may be', () => {
   expect(() =>
-    readHostArgs(
+    parseHostArgs(
       '{"privileges": [["--init"]], "probed": [], "lines": [["x"]], ' +
         '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "br-sixteen-bytes"}, "addresses": "ip -o addr"}',
@@ -316,9 +316,9 @@ test('#readHostArgs refuses a bridge name longer than an interface name may be',
 });
 
 // the pipeline goes into the unit's sh -c '...', which a quote would end
-test('#readHostArgs refuses an address pipeline with a quote', () => {
+test('#parseHostArgs refuses an address pipeline with a quote', () => {
   expect(() =>
-    readHostArgs(
+    parseHostArgs(
       '{"privileges": [["--init"]], "probed": [], "lines": [["x"]], ' +
         '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr | cut -d \' \' -f 4"}',

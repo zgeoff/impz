@@ -1,6 +1,6 @@
 import { expect } from 'bun:test';
 import { randomBytes } from 'node:crypto';
-import { getThroughProxy } from './http';
+import { readThroughProxy } from './http';
 import { runShellInImp } from './imp-cli';
 import { waitFor } from './wait-for';
 
@@ -44,7 +44,7 @@ export async function startMemoryProof(name: string): Promise<MemoryProof> {
   expect(identity.split(' ')).toHaveLength(3);
 
   await waitFor(`${name} to serve the token`, async () => {
-    const body = await getThroughProxy(name);
+    const body = await readThroughProxy(name);
 
     expect(body).toBe(token);
   });

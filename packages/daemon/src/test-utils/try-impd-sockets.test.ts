@@ -9,7 +9,7 @@ import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { listApiCalls } from '../db/api-audit';
 import { createImage } from '../db/images';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import {
   buildImagePaths,
@@ -23,7 +23,7 @@ import { buildQueryGate } from './build-query-gate';
 import { buildStubCpuCgroups } from './build-stub-cpu-cgroups';
 import { buildStubExecGuest } from './build-stub-exec-guest';
 import { buildStubVmm } from './build-stub-vmm';
-import { findFreePorts } from './find-free-ports';
+import { claimFreePorts } from './claim-free-ports';
 import { startStubExecAgent } from './start-stub-exec-agent';
 import { buildImpdSocketUrl, tryExecSocket, tryTunnelSocket } from './try-impd-sockets';
 
@@ -54,7 +54,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with, as setupSystemFiles installs it
@@ -286,7 +286,7 @@ test('#tryExecSocket starts true without a terminal', async () => {
 
   await ctx.client.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 

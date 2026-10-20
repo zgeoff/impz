@@ -188,7 +188,10 @@ export interface StorageBackend {
 
   // `write` puts rootfs.ext4 and config.json in the directory it gets; the
   // backend then makes it the image's directory
-  readonly createImage: (digest: string, write: (dir: string) => Promise<void>) => Promise<void>;
+  readonly createImage: (
+    digest: string,
+    write: (directory: string) => Promise<void>,
+  ) => Promise<void>;
 
   // A template's image (docs/guides/templates.md): a clone of the imp's disk
   // is its rootfs.ext4. `hold` runs the clone with the disk consistent, and
@@ -198,7 +201,7 @@ export interface StorageBackend {
     impId: string,
     steps: Readonly<{
       hold: (clone: () => Promise<void>) => Promise<void>;
-      write: (dir: string) => Promise<void>;
+      write: (directory: string) => Promise<void>;
     }>,
   ) => Promise<void>;
   readonly removeImage: (digest: string) => Promise<void>;

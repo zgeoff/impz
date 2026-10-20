@@ -17,14 +17,14 @@ import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { startStubAgent } from '@impz/daemon/src/test-utils/start-stub-agent';
 import { server } from '@impz/test-utils/mock-server';
 import { http } from 'msw';
 import { createImpClient } from '../create-imp-client';
 import { buildStubExecAgent } from '../test-utils/build-stub-exec-agent';
-import { buildStubImpdWithoutFeature } from '../test-utils/build-stub-impd-without-feature';
 import { createStubUndiciWebSocket } from '../test-utils/create-stub-undici-web-socket';
+import { makeStubImpdWithoutFeature } from '../test-utils/make-stub-impd-without-feature';
 import { startStubImpdSocket } from '../test-utils/start-stub-impd-socket';
 import { openExecSession } from './open-exec-session';
 import type { ExecSession, ExecStarted } from './open-exec-session';
@@ -132,7 +132,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   const impd = await createImpd(config, deps);
@@ -240,7 +240,7 @@ test('it asks impd before it sends a start that requires anything', async () => 
 
   const calls = mock<(path: string) => void>();
 
-  const older = buildStubImpdWithoutFeature(
+  const older = makeStubImpdWithoutFeature(
     (request) => ctx.impd.api.app.handle(request),
     'execRequire',
   );
@@ -367,7 +367,7 @@ test('it counts stdin held while the start waits on impd toward backpressure', a
 
 test('it reports an impd it cannot reach as unreachable', async () => {
   // nothing listens on a free port
-  const baseUrl = `http://127.0.0.1:${String(findFreePorts(1).take())}`;
+  const baseUrl = `http://127.0.0.1:${String(claimFreePorts(1).take())}`;
 
   const session = openExecSession({
     baseUrl,

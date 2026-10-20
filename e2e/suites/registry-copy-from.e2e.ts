@@ -7,17 +7,17 @@ import { createInstanceClient } from '../lib/imp-cli';
 import { REPO_ROOT } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import {
-  buildAndListRequests,
   checkRegistryReady,
+  collectUnpinnedRequests,
   createMovedTag,
-  findUnpinnedRequests,
   readBusyboxDigest,
   readFileInImage,
   removeStaleRegistries,
+  runBuildAndListRequests,
   startRegistry,
 } from '../lib/registry-steps';
 import { removeImageIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // #145 for the other stages a Dockerfile names: COPY --from and RUN --mount
 // from= a tag the registry moved, against a registry the journey owns
@@ -34,18 +34,18 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const prefix = readSuitePrefix('registry');
+  const prefix = getSuitePrefix('registry');
 
   // under the repo: scripts/dev/dev.sh mounts it at the same path in the container
-  const dir = await mkdtemp(join(REPO_ROOT, '.cache', 'e2e', 'registry-'));
+  const directory = await mkdtemp(join(REPO_ROOT, '.cache', 'e2e', 'registry-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   await removeStaleRegistries(prefix);
 
   const container = `${prefix}registry-${String(process.pid)}`;
 
-  const registry = await startRegistry(stack, config.registryName, container, dir);
+  const registry = await startRegistry(stack, config.registryName, container, directory);
 
   // the engine reads certs.d on each request: no restart
   const trust = await createRegistryTrust({
@@ -55,7 +55,13 @@ async function setupTest() {
 
   stack.defer(() => trust.remove());
 
-  return { prefix, stack, dir, registry, client: await createInstanceClient() };
+  return {
+    prefix,
+    stack,
+    directoryPath: directory,
+    registry,
+    client: await createInstanceClient(),
+  };
 }
 
 test.skipIf(registryMissing)(
@@ -67,7 +73,7 @@ test.skipIf(registryMissing)(
     const repository = 'e2e/source';
 
     const busybox = await readBusyboxDigest();
-    const moved = await createMovedTag(ctx.stack, ctx.registry, ctx.dir, repository);
+    const moved = await createMovedTag(ctx.stack, ctx.registry, ctx.directoryPath, repository);
 
     const dockerfile = [
       `FROM ${busybox}`,
@@ -78,11 +84,18 @@ test.skipIf(registryMissing)(
 
     registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, copied));
 
-    const seen = await buildAndListRequests(ctx.registry, ctx.dir, repository, dockerfile, copied);
+    const seen = await runBuildAndListRequests(
+      ctx.registry,
+      ctx.directoryPath,
+      repository,
+      dockerfile,
+      copied,
+    );
+
     const fromCopy = await readFileInImage(copied, '/copied');
     const fromMount = await readFileInImage(copied, '/mounted');
 
-    expect(findUnpinnedRequests(moved.pinned, seen)).toStrictEqual([]);
+    expect(collectUnpinnedRequests(moved.pinned, seen)).toStrictEqual([]);
     expect(fromCopy).toBe('old');
     expect(fromMount).toBe('old');
   },

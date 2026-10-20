@@ -1,13 +1,13 @@
 import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { getLibc, getPidfdLibc, readErrno } from './libc';
+import { readErrno, readLibc, readPidfdLibc } from './libc';
 
-test('#getLibc opens libc once', () => {
-  expect(getLibc()).toBe(getLibc());
+test('#readLibc opens libc once', () => {
+  expect(readLibc()).toBe(readLibc());
 });
 
-test('#getLibc gives lseek, which reports EBADF for a closed descriptor', () => {
-  const libc = getLibc();
+test('#readLibc gives lseek, which reports EBADF for a closed descriptor', () => {
+  const libc = readLibc();
 
   invariant(libc);
 
@@ -19,6 +19,6 @@ test('#getLibc gives lseek, which reports EBADF for a closed descriptor', () => 
   expect(readErrno()).toBe(9);
 });
 
-test('#getPidfdLibc opens the pidfd wrappers once', () => {
-  expect(getPidfdLibc()).toBe(getPidfdLibc());
+test('#readPidfdLibc opens the pidfd wrappers once', () => {
+  expect(readPidfdLibc()).toBe(readPidfdLibc());
 });

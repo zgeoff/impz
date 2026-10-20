@@ -21,7 +21,7 @@ import {
 import { waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -36,7 +36,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('proxy-wake'), stack, client };
+  return { prefix: getSuitePrefix('proxy-wake'), stack, client };
 }
 
 test('it keeps an imp awake while a proxied connection is open, wakes it on a connection, and drops connections on a forced sleep', async () => {

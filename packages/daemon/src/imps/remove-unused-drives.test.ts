@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { Imp } from '@impz/api';
 import invariant from 'tiny-invariant';
-import { createImp, findImpByName } from '../db/imps';
+import { createImp, readImpByName } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
 import { readSnapshotMeta, writeSnapshotMeta } from '../sleep/snapshot-meta';
 import { readVmIdentity } from '../sleep/vm-identity';
@@ -10,8 +10,8 @@ import { buildImpPaths, buildSystemDrivePath } from '../storage/data-layout';
 import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { STUB_AGENT_VERSION } from '../test-utils/build-stub-vmm';
-import { buildTestApp } from './build-test-app';
-import { findBrokenInvariants } from './find-broken-invariants';
+import { createTestApp } from './create-test-app';
+import { readBrokenInvariants } from './read-broken-invariants';
 import { removeUnusedDrives } from './remove-unused-drives';
 import { createImpTest } from './test-imps';
 import type { ImpTestOptions } from './test-imps';
@@ -36,7 +36,7 @@ async function setupTest(options: Pick<ImpTestOptions, 'env' | 'cgroups'> = {}) 
 
     // the drive the harness's impd started on, before any upgrade
     oldDrive: harness.readIdentity().systemDrive,
-    client: buildTestApp(harness, harness).client,
+    client: createTestApp(harness, harness).client,
   };
 }
 
@@ -81,7 +81,7 @@ test('it keeps every imp through an agent upgrade, and asleep on the kept drive'
     ctx.readIdentity().systemDrivePath,
   );
 
-  const imps = await buildTestApp(ctx, impd).client.imps.list();
+  const imps = await createTestApp(ctx, impd).client.imps.list();
 
   const listed = new Map(imps.map((imp) => [imp.name, imp]));
 
@@ -129,11 +129,11 @@ test('it wakes a kept imp on the old agent after an agent upgrade', async () => 
 
   const wakesBefore = ctx.fake.wakes.length;
 
-  const woken = await buildTestApp(ctx, impd).client.imps.wake({ name: 'asleep' });
+  const woken = await createTestApp(ctx, impd).client.imps.wake({ name: 'asleep' });
 
   const wokenDrive = readVmIdentity(buildImpPaths(ctx.dataDir, asleep.id))?.systemDrive;
 
-  const invariants = await findBrokenInvariants(ctx, true);
+  const invariants = await readBrokenInvariants(ctx, true);
 
   expect(ctx.fake.wakes).toHaveLength(wakesBefore + 1);
   expect(woken).toMatchObject({ state: 'running', outdated: ['agent'] });
@@ -164,11 +164,11 @@ test('it starts a stopped imp on the new agent after an agent upgrade', async ()
     ctx.readIdentity().systemDrivePath,
   );
 
-  const started = await buildTestApp(ctx, impd).client.imps.start({ name: 'off' });
+  const started = await createTestApp(ctx, impd).client.imps.start({ name: 'off' });
 
   const startedDrive = readVmIdentity(buildImpPaths(ctx.dataDir, off.id))?.systemDrive;
 
-  const invariants = await findBrokenInvariants(ctx, true);
+  const invariants = await readBrokenInvariants(ctx, true);
 
   expect(started.state).toBe('running');
   expect(started.outdated).toBeUndefined();
@@ -196,7 +196,7 @@ test('it says why a sleeping imp whose drive is gone boots cold', async () => {
 
   rmSync(buildSystemDrivePath(ctx.dataDir, ctx.oldDrive));
 
-  const asleep = await buildTestApp(ctx, impd).client.imps.get({ name: 'dev' });
+  const asleep = await createTestApp(ctx, impd).client.imps.get({ name: 'dev' });
 
   expect(asleep).toMatchObject({
     state: 'sleeping',
@@ -230,7 +230,7 @@ test('it boots cold a sleeping imp whose drive is gone, and keeps its disk', asy
 
   const wakesBefore = ctx.fake.wakes.length;
 
-  const woken = await buildTestApp(ctx, impd).client.imps.wake({ name: 'dev' });
+  const woken = await createTestApp(ctx, impd).client.imps.wake({ name: 'dev' });
 
   expect(ctx.fake.wakes).toHaveLength(wakesBefore);
   expect(woken.state).toBe('running');
@@ -261,7 +261,7 @@ test('it wakes a jailed imp with its memory on the old drive after an agent upgr
     ctx.readIdentity().systemDrivePath,
   );
 
-  const woken = await buildTestApp(ctx, impd).client.imps.wake({ name: 'dev' });
+  const woken = await createTestApp(ctx, impd).client.imps.wake({ name: 'dev' });
 
   const wokenDrive = readVmIdentity(buildImpPaths(ctx.dataDir, created.id))?.systemDrive;
 
@@ -287,7 +287,7 @@ test('it marks a VM re-adopted after a drive change as on the old agent', async 
     ctx.readIdentity().systemDrivePath,
   );
 
-  const awake = await buildTestApp(ctx, impd).client.imps.get({ name: 'dev' });
+  const awake = await createTestApp(ctx, impd).client.imps.get({ name: 'dev' });
 
   expect(pruned).toBeEmpty();
   expect(awake.outdated).toStrictEqual(['agent']);
@@ -311,7 +311,7 @@ test('it records in the snapshot the drive a re-adopted VM booted from', async (
     ctx.readIdentity().systemDrivePath,
   );
 
-  await buildTestApp(ctx, impd).client.imps.sleep({ name: 'dev' });
+  await createTestApp(ctx, impd).client.imps.sleep({ name: 'dev' });
 
   expect(readSnapshotMeta(buildImpPaths(ctx.dataDir, created.id))).toMatchObject({
     systemDrive: ctx.oldDrive,
@@ -336,7 +336,7 @@ test('it wakes a re-adopted VM from the old drive its snapshot names', async () 
     ctx.readIdentity().systemDrivePath,
   );
 
-  const upgraded = buildTestApp(ctx, impd).client;
+  const upgraded = createTestApp(ctx, impd).client;
 
   await upgraded.imps.sleep({ name: 'dev' });
 
@@ -363,7 +363,7 @@ test('it keeps the newer drive on a downgrade while a snapshot names it', async 
     ctx.readIdentity().systemDrivePath,
   );
 
-  const upgradedClient = buildTestApp(ctx, upgraded).client;
+  const upgradedClient = createTestApp(ctx, upgraded).client;
 
   await upgradedClient.imps.stop({ name: 'dev' });
   await upgradedClient.imps.start({ name: 'dev' });
@@ -400,7 +400,7 @@ test('it wakes on a downgrade the snapshot the newer drive wrote', async () => {
     ctx.readIdentity().systemDrivePath,
   );
 
-  const upgradedClient = buildTestApp(ctx, upgraded).client;
+  const upgradedClient = createTestApp(ctx, upgraded).client;
 
   await upgradedClient.imps.stop({ name: 'dev' });
   await upgradedClient.imps.start({ name: 'dev' });
@@ -417,7 +417,7 @@ test('it wakes on a downgrade the snapshot the newer drive wrote', async () => {
     ctx.readIdentity().systemDrivePath,
   );
 
-  const woken = await buildTestApp(ctx, downgraded).client.imps.wake({ name: 'dev' });
+  const woken = await createTestApp(ctx, downgraded).client.imps.wake({ name: 'dev' });
 
   const wokenDrive = readVmIdentity(buildImpPaths(ctx.dataDir, created.id))?.systemDrive;
 
@@ -442,7 +442,7 @@ test('it prunes the newer drive once nothing names it', async () => {
     ctx.readIdentity().systemDrivePath,
   );
 
-  const upgradedClient = buildTestApp(ctx, upgraded).client;
+  const upgradedClient = createTestApp(ctx, upgraded).client;
 
   await upgradedClient.imps.stop({ name: 'dev' });
   await upgradedClient.imps.start({ name: 'dev' });
@@ -459,7 +459,7 @@ test('it prunes the newer drive once nothing names it', async () => {
     ctx.readIdentity().systemDrivePath,
   );
 
-  const downgradedClient = buildTestApp(ctx, downgraded).client;
+  const downgradedClient = createTestApp(ctx, downgraded).client;
 
   await downgradedClient.imps.wake({ name: 'dev' });
   await downgradedClient.imps.stop({ name: 'dev' });
@@ -505,7 +505,7 @@ test('it says a snapshot from an older impd boots cold', async () => {
     ctx.readIdentity().systemDrivePath,
   );
 
-  const asleep = await buildTestApp(ctx, impd).client.imps.get({ name: 'dev' });
+  const asleep = await createTestApp(ctx, impd).client.imps.get({ name: 'dev' });
 
   expect(asleep).toMatchObject({
     state: 'sleeping',
@@ -544,7 +544,7 @@ test('it boots cold once a snapshot from an older impd, and keeps the disk', asy
     ctx.readIdentity().systemDrivePath,
   );
 
-  const woken = await buildTestApp(ctx, impd).client.imps.wake({ name: 'dev' });
+  const woken = await createTestApp(ctx, impd).client.imps.wake({ name: 'dev' });
 
   expect(woken.state).toBe('running');
   expect(ctx.fake.wakes).toBeEmpty();
@@ -591,8 +591,8 @@ test('it keeps the disk to a woken VM with the wrong agent that will not stop', 
   const waking = ctx.client.imps.wake({ name: 'dev' });
 
   const outcome = await waitForOutcome(waking, 10_000);
-  const imp = await findImpByName(ctx.db, 'dev');
-  const invariants = await findBrokenInvariants(ctx, true);
+  const imp = await readImpByName(ctx.db, 'dev');
+  const invariants = await readBrokenInvariants(ctx, true);
 
   // no cold boot: the VM that would not stop still has the disk open
   expect(outcome).toBe('failed');
@@ -647,7 +647,7 @@ test('it marks a VM booted by an impd that kept no identity as from an older imp
     ctx.readIdentity().systemDrivePath,
   );
 
-  const awake = await buildTestApp(ctx, impd).client.imps.get({ name: 'dev' });
+  const awake = await createTestApp(ctx, impd).client.imps.get({ name: 'dev' });
 
   expect(awake.outdated).toStrictEqual(['impd']);
 });
@@ -669,7 +669,7 @@ test('it says the next wake of a VM booted by an impd that kept no identity boot
     ctx.readIdentity().systemDrivePath,
   );
 
-  const upgraded = buildTestApp(ctx, impd).client;
+  const upgraded = createTestApp(ctx, impd).client;
 
   await upgraded.imps.sleep({ name: 'dev' });
 
@@ -697,7 +697,7 @@ test('it clears on a sleep the reason the last boot was cold', async () => {
 
   rmSync(buildSystemDrivePath(ctx.dataDir, ctx.oldDrive));
 
-  const upgraded = buildTestApp(ctx, impd).client;
+  const upgraded = createTestApp(ctx, impd).client;
 
   // the cold boot that sets the reason
   await upgraded.imps.wake({ name: 'dev' });
@@ -766,7 +766,7 @@ test('it counts in system.info the imps an agent upgrade left outdated or withou
   // a sleeping imp whose snapshot is gone has nothing to load
   rmSync(buildImpPaths(ctx.dataDir, lost.id).snapshotDir, { recursive: true });
 
-  const info = await buildTestApp(ctx, impd).client.system.info();
+  const info = await createTestApp(ctx, impd).client.system.info();
 
   expect(info.bootStatus).toStrictEqual({
     coldBoots: 1,
@@ -795,7 +795,7 @@ test('it boots cold a sleeping imp whose snapshot is gone after an agent upgrade
 
   const wakesBefore = ctx.fake.wakes.length;
 
-  const woken = await buildTestApp(ctx, impd).client.imps.wake({ name: 'lost' });
+  const woken = await createTestApp(ctx, impd).client.imps.wake({ name: 'lost' });
 
   expect(woken.state).toBe('running');
   expect(ctx.fake.wakes).toHaveLength(wakesBefore);
@@ -811,7 +811,7 @@ test('it counts in system.info a running imp on an older firecracker as a cold b
 
   await impd.imps.reconcileImps();
 
-  const info = await buildTestApp(ctx, impd).client.system.info();
+  const info = await createTestApp(ctx, impd).client.system.info();
 
   expect(info.bootStatus).toStrictEqual({
     coldBoots: 1,
@@ -829,7 +829,7 @@ test('it says a running imp on an older firecracker boots cold after its sleep',
 
   await impd.imps.reconcileImps();
 
-  const client = buildTestApp(ctx, impd).client;
+  const client = createTestApp(ctx, impd).client;
 
   await client.imps.sleep({ name: 'dev' });
 

@@ -27,7 +27,7 @@ export interface SessionService {
     name: string,
     request: Readonly<SessionLogReadRequest>,
   ) => Promise<SessionLogRead>;
-  readonly deleteSessionLogs: (name: string, target: Readonly<SessionLogTarget>) => Promise<number>;
+  readonly removeSessionLogs: (name: string, target: Readonly<SessionLogTarget>) => Promise<number>;
 }
 
 interface SessionServiceParts {
@@ -60,7 +60,7 @@ export function createSessionService(parts: SessionServiceParts): SessionService
     return readSeenSessions(context, imp) ?? [];
   };
 
-  const findLogImp = async (name: string) => {
+  const readLogImp = async (name: string) => {
     const imp = await parts.lock.findImp(name);
 
     return findSessionLogImp(context.findPaths, imp);
@@ -68,19 +68,19 @@ export function createSessionService(parts: SessionServiceParts): SessionService
 
   return {
     listSessionLogs: async (name, session) => {
-      const imp = await findLogImp(name);
+      const imp = await readLogImp(name);
 
       return context.sessionLogs.listLogs(imp, session);
     },
     readSessionLog: async (name, request) => {
-      const imp = await findLogImp(name);
+      const imp = await readLogImp(name);
 
       return context.sessionLogs.readLog(imp, request);
     },
-    deleteSessionLogs: async (name, target) => {
-      const imp = await findLogImp(name);
+    removeSessionLogs: async (name, target) => {
+      const imp = await readLogImp(name);
 
-      return context.sessionLogs.deleteLogs(imp, target);
+      return context.sessionLogs.removeLogs(imp, target);
     },
 
     listSessions: async (name) => {

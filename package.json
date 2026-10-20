@@ -50,7 +50,7 @@
       "@zgeoff/bun-test-extended": "0.2.0",
       "@zgeoff/bun-test-react": "0.2.1",
       "@zgeoff/format-codemod": "0.1.1",
-      "@zgeoff/oxlint-config": "0.2.6",
+      "@zgeoff/oxlint-config": "0.5.2",
       "@zgeoff/skill-gate": "0.1.0",
       "acme-client": "5.4.0",
       "better-auth": "1.7.7",

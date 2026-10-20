@@ -13,7 +13,7 @@ import { createImpd } from '../create-impd';
 import type { ImpdDeps } from '../create-impd';
 import { listColdBoots } from '../db/cold-boots';
 import { createImage } from '../db/images';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import {
   buildImagePaths,
@@ -26,7 +26,7 @@ import { createXfsBackend } from '../storage/xfs-backend';
 import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -47,7 +47,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with, as setupSystemFiles installs it
@@ -148,8 +148,8 @@ async function setupTest() {
     logs,
     disk,
     stack,
-    advance: (ms: number) => {
-      clock.nowMs += ms;
+    advance: (durationMs: number) => {
+      clock.nowMs += durationMs;
     },
   };
 }
@@ -179,7 +179,7 @@ test('it marks since when the agent is silent and keeps the imp running under re
 
   await client.imps.create({ name: 'dev' });
 
-  const created = await findImpByName(ctx.db, 'dev');
+  const created = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof created?.pid === 'number');
 
@@ -223,7 +223,7 @@ test('it kills the VM and boots the imp cold under restart, saying why', async (
 
   await client.imps.create({ name: 'dev' });
 
-  const created = await findImpByName(ctx.db, 'dev');
+  const created = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof created?.pid === 'number');
 
@@ -261,7 +261,7 @@ test('it records a watchdog restart as the cause of a cold boot', async () => {
 
   await impd.imps.createImp({ name: 'dev' });
 
-  const created = await findImpByName(ctx.db, 'dev');
+  const created = await readImpByName(ctx.db, 'dev');
 
   invariant(created);
 
@@ -295,7 +295,7 @@ test('it writes the memory to the owner-only watchdog slot under snapshot, then 
 
   await impd.imps.createImp({ name: 'dev' });
 
-  const created = await findImpByName(ctx.db, 'dev');
+  const created = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof created?.pid === 'number');
 
@@ -306,9 +306,9 @@ test('it writes the memory to the owner-only watchdog slot under snapshot, then 
 
   await impd.imps.watchdog.settle();
 
-  const slot = buildWatchdogSlot(buildImpPaths(ctx.dataDir, created.id).dir);
+  const slot = buildWatchdogSlot(buildImpPaths(ctx.dataDir, created.id).directory);
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
   const boots = await listColdBoots(ctx.db, created.id);
 
   expect(statSync(slot.snapshotDir).mode & 0o777).toBe(0o700);
@@ -336,7 +336,7 @@ test('it removes the watchdog slot with a destroyed imp', async () => {
 
   await impd.imps.createImp({ name: 'dev' });
 
-  const created = await findImpByName(ctx.db, 'dev');
+  const created = await readImpByName(ctx.db, 'dev');
 
   invariant(created);
 
@@ -348,7 +348,7 @@ test('it removes the watchdog slot with a destroyed imp', async () => {
   await impd.imps.watchdog.settle();
   await impd.imps.destroyImp('dev');
 
-  const slot = buildWatchdogSlot(buildImpPaths(ctx.dataDir, created.id).dir);
+  const slot = buildWatchdogSlot(buildImpPaths(ctx.dataDir, created.id).directory);
 
   expect(existsSync(slot.snapshotDir)).toBeFalse();
 });
@@ -370,7 +370,7 @@ test('it boots the imp cold with no slot under snapshot when the disk has no roo
 
   await impd.imps.createImp({ name: 'dev' });
 
-  const created = await findImpByName(ctx.db, 'dev');
+  const created = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof created?.pid === 'number');
 
@@ -384,9 +384,9 @@ test('it boots the imp cold with no slot under snapshot when the disk has no roo
 
   await impd.imps.watchdog.settle();
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
-  const slot = buildWatchdogSlot(buildImpPaths(ctx.dataDir, created.id).dir);
+  const slot = buildWatchdogSlot(buildImpPaths(ctx.dataDir, created.id).directory);
 
   expect(existsSync(slot.snapshotDir)).toBeFalse();
   expect(imp?.state).toBe('running');
@@ -410,7 +410,7 @@ test('it keeps the VM under restart when the agent answers again under the lock'
 
   await impd.imps.createImp({ name: 'dev' });
 
-  const created = await findImpByName(ctx.db, 'dev');
+  const created = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof created?.pid === 'number');
 
@@ -446,7 +446,7 @@ test('it leaves alone under restart a VM that a sleep and a wake replaced during
 
   await impd.imps.createImp({ name: 'dev' });
 
-  const created = await findImpByName(ctx.db, 'dev');
+  const created = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof created?.pid === 'number');
 

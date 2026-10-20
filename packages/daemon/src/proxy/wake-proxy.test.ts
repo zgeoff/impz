@@ -19,7 +19,7 @@ import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildStubClock } from '../test-utils/build-stub-clock';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import { startStubCutStream } from '../test-utils/start-stub-cut-stream';
 import { startStubHeaderEcho } from '../test-utils/start-stub-header-echo';
 import { startStubSilentOrigin } from '../test-utils/start-stub-silent-origin';
@@ -45,7 +45,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with, as setupSystemFiles installs it
@@ -185,7 +185,7 @@ test('it ends overlapping listener syncs with no listener for an imp the databas
 test('it listens on the proxy port and on the port base plus each imp’s slot by default', async () => {
   const ctx = await setupTest();
 
-  const free = findFreePorts(2);
+  const free = claimFreePorts(2);
   const proxyPort = free.take();
   const portBase = free.take();
 

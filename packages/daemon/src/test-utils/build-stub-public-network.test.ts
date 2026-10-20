@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test';
 import { buildStubPublicNetwork } from './build-stub-public-network';
-import { canUnshare } from './can-unshare';
+import { probeUnshare } from './probe-unshare';
 import { runInNetns } from './run-in-netns';
 
-test.skipIf(!canUnshare(['sh', '-c', 'ip link && command -v ping']))(
+test.skipIf(!probeUnshare(['sh', '-c', 'ip link && command -v ping']))(
   'it routes both guests to every address wan and ts answer on, with no ruleset',
   () => {
     // IPv6 neighbour discovery takes a second a hop on a first packet
@@ -56,7 +56,7 @@ done
   },
 );
 
-test.skipIf(!canUnshare(['ip', 'link']))(
+test.skipIf(!probeUnshare(['ip', 'link']))(
   'it leaves no IPv6 address tentative in any namespace once it returns',
   () => {
     const run = runInNetns({

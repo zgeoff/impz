@@ -15,10 +15,10 @@ import type { ImpdDeps } from '../create-impd';
 import { listApiCalls } from '../db/api-audit';
 import { createForkGrants } from '../db/create-fork-grants';
 import { createImage } from '../db/images';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import { listTokenRecords } from '../db/tokens';
-import { createEd25519Key } from '../ssh/host-key';
+import { generateEd25519Key } from '../ssh/host-key';
 import {
   buildImagePaths,
   buildSystemDrivePath,
@@ -28,7 +28,7 @@ import { createXfsBackend } from '../storage/xfs-backend';
 import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import { checkAccess, findAccess } from './access-policy';
 
 // Scoped tokens that may grant selected secrets (docs/guides/tokens.md#granting-secrets),
@@ -58,7 +58,7 @@ async function setupTest() {
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     }),
     defaultDiskBytes: 0,
   };
@@ -1033,7 +1033,7 @@ test('it refuses a grant of a deleted listed secret after a restart', async () =
 
   // the first impd still holds its resolver's port in this process
   const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     { ...ctx.deps, vms: ctx.vmm.startGeneration() },
   );
 
@@ -1074,7 +1074,7 @@ test('it refuses a fork by a token whose listed secret was deleted, after a rest
   await ctx.client.secrets.delete({ name: 'gh' });
 
   const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     { ...ctx.deps, vms: ctx.vmm.startGeneration() },
   );
 
@@ -1114,7 +1114,7 @@ test('it still names a deleted listed secret in the list after a restart', async
   await ctx.client.secrets.delete({ name: 'gh' });
 
   const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     { ...ctx.deps, vms: ctx.vmm.startGeneration() },
   );
 
@@ -1263,7 +1263,7 @@ test('it keeps a token’s grants through a restart', async () => {
   await agent.grants.add({ name: 'dev-a', secret: 'npm' });
 
   const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     { ...ctx.deps, vms: ctx.vmm.startGeneration() },
   );
 
@@ -1636,7 +1636,7 @@ test('it keeps an unchanged grant usable through sleep, wake and a checkpoint re
   await ctx.client.imps.wake({ name: 'dev-a' });
   await ctx.client.checkpoints.restore({ name: 'dev-a', checkpoint: checkpoint.id });
 
-  const imp = await findImpByName(ctx.db, 'dev-a');
+  const imp = await readImpByName(ctx.db, 'dev-a');
 
   invariant(imp);
 
@@ -1657,7 +1657,7 @@ test('it keeps a revoke made after the checkpoint through its restore', async ()
   await ctx.client.grants.delete({ name: 'dev-a', secret: 'gh' });
   await ctx.client.checkpoints.restore({ name: 'dev-a', checkpoint: checkpoint.id });
 
-  const imp = await findImpByName(ctx.db, 'dev-a');
+  const imp = await readImpByName(ctx.db, 'dev-a');
 
   invariant(imp);
 
@@ -1686,7 +1686,7 @@ test('it keeps a rebind made after the checkpoint through its restore', async ()
 
   await ctx.client.checkpoints.restore({ name: 'dev-a', checkpoint: checkpoint.id });
 
-  const imp = await findImpByName(ctx.db, 'dev-a');
+  const imp = await readImpByName(ctx.db, 'dev-a');
 
   invariant(imp);
 
@@ -1733,7 +1733,7 @@ test.each([['imps.fork'], ['moves.prepare'], ['moves.send'], ['moves.resume']])(
 
     await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
-    const key = createEd25519Key().public;
+    const key = generateEd25519Key().public;
     const parsed = utils.parseKey(key);
 
     if (parsed instanceof Error) {
@@ -2141,8 +2141,8 @@ test('it copies to a listed caller’s fork the secrets on its list, and names t
   });
 
   const [token] = await listTokenRecords(ctx.db);
-  const from = await findImpByName(ctx.db, 'dev-a');
-  const to = await findImpByName(ctx.db, 'dev-b');
+  const from = await readImpByName(ctx.db, 'dev-a');
+  const to = await readImpByName(ctx.db, 'dev-b');
 
   invariant(token);
   invariant(from);
@@ -2197,8 +2197,8 @@ test('it copies nothing of a secret whose list entry is from before a rebind', a
 
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
 
-  const from = await findImpByName(ctx.db, 'dev-a');
-  const to = await findImpByName(ctx.db, 'dev-b');
+  const from = await readImpByName(ctx.db, 'dev-a');
+  const to = await readImpByName(ctx.db, 'dev-b');
 
   invariant(from);
   invariant(to);
@@ -2243,8 +2243,8 @@ test('it copies no grant for a token removed after the access check', async () =
 
   await ctx.client.tokens.delete({ name: 'agent' });
 
-  const from = await findImpByName(ctx.db, 'dev-a');
-  const to = await findImpByName(ctx.db, 'dev-b');
+  const from = await readImpByName(ctx.db, 'dev-a');
+  const to = await readImpByName(ctx.db, 'dev-b');
 
   invariant(from);
   invariant(to);
@@ -2287,8 +2287,8 @@ test('it copies nothing of a secret taken off the list after the access check', 
   await ctx.client.tokens.update({ name: 'agent', grantable: ['npm'] });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
 
-  const from = await findImpByName(ctx.db, 'dev-a');
-  const to = await findImpByName(ctx.db, 'dev-b');
+  const from = await readImpByName(ctx.db, 'dev-a');
+  const to = await readImpByName(ctx.db, 'dev-b');
 
   invariant(from);
   invariant(to);
@@ -2342,8 +2342,8 @@ test.each([
     });
 
     const [token] = await listTokenRecords(ctx.db);
-    const from = await findImpByName(ctx.db, 'dev-a');
-    const to = await findImpByName(ctx.db, 'dev-b');
+    const from = await readImpByName(ctx.db, 'dev-a');
+    const to = await readImpByName(ctx.db, 'dev-b');
 
     invariant(token);
     invariant(from);

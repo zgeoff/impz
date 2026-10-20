@@ -25,9 +25,6 @@ export function decodeAgentMessage<Desc extends DescMessage>(
   return message;
 }
 
-// the doubles that are not counts, which need only be finite
-const NON_COUNT_FIELDS = new Set(['imp.agent.v1.Activity.load1']);
-
 // The full name of the first double that is not a count. A double's JSON form
 // reads "NaN", "Infinity", fractions and negatives, and impd puts offsets in
 // log bounds and file metadata.
@@ -47,6 +44,9 @@ function findBadCount(schema: DescMessage, message: object): string | undefined 
 
   return undefined;
 }
+
+// the doubles that are not counts, which need only be finite
+const NON_COUNT_FIELDS = new Set(['imp.agent.v1.Activity.load1']);
 
 function findBadFieldValue(field: DescField, value: unknown): string | undefined {
   if (typeof value === 'object' && value !== null && field.message !== undefined) {

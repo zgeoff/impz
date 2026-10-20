@@ -10,20 +10,20 @@ import type { BootStatus } from './boot-status';
 import { writeTestSnapshot } from './test-imps';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-boot-status-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-boot-status-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  const paths = buildImpPaths(dir, 'imp-a');
+  const paths = buildImpPaths(directory, 'imp-a');
 
   // vm.json sits in the imp's dir, which a create makes
-  mkdirSync(paths.dir, { recursive: true });
+  mkdirSync(paths.directory, { recursive: true });
 
   // the agent drive a snapshot reopens by path; a snapshot whose drive is
   // missing boots cold
-  const systemDrivePath = join(dir, 'system-drive.squashfs');
+  const systemDrivePath = join(directory, 'system-drive.squashfs');
 
   writeFileSync(systemDrivePath, 'drive');
 

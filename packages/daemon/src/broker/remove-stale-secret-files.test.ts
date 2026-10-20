@@ -6,7 +6,7 @@ import invariant from 'tiny-invariant';
 import { loadConfig } from '../config';
 import { writeConsistentCopy } from '../db/database-copy';
 import { openDatabase } from '../db/open-database';
-import { findSecret, listFileRemovals } from '../db/secrets';
+import { listFileRemovals, readSecret } from '../db/secrets';
 import { createBroker } from './broker-service';
 
 // A restore puts back an older database: the values of secrets added since
@@ -53,7 +53,7 @@ test('it keeps aside a value no row of an older database names', async () => {
   await first.addSecret({ name: 'late', kind: 'npm', value: 'npm_LATE' });
   await first.stop();
 
-  const late = await findSecret(ctx.db, 'late');
+  const late = await readSecret(ctx.db, 'late');
 
   invariant(late);
 
@@ -102,7 +102,7 @@ test('it removes the old file of a delete that stopped before removing it, on th
 
   await first.addSecret({ name: 'gone', kind: 'github', value: 'ghp_OLD' });
 
-  const saved = await findSecret(ctx.db, 'gone');
+  const saved = await readSecret(ctx.db, 'gone');
 
   invariant(saved);
 
@@ -150,7 +150,7 @@ test('it removes the old file of a replace that stopped before removing it, on t
 
   await first.addSecret({ name: 'gone', kind: 'github', value: 'ghp_OLD' });
 
-  const saved = await findSecret(ctx.db, 'gone');
+  const saved = await readSecret(ctx.db, 'gone');
 
   invariant(saved);
 
@@ -177,7 +177,7 @@ test('it removes the old file of a replace that stopped before removing it, on t
 
   ctx.stack.defer(() => restarted.stop());
 
-  const current = await findSecret(ctx.db, 'gone');
+  const current = await readSecret(ctx.db, 'gone');
 
   invariant(current);
 
@@ -202,7 +202,7 @@ test('it keeps the record of a file whose removal fails again, and keeps the fil
 
   await first.addSecret({ name: 'gone', kind: 'github', value: 'ghp_OLD' });
 
-  const saved = await findSecret(ctx.db, 'gone');
+  const saved = await readSecret(ctx.db, 'gone');
 
   invariant(saved);
 
@@ -255,7 +255,7 @@ test('it never removes a recorded file that a row still names', async () => {
   await first.addSecret({ name: 'kept', kind: 'github', value: 'ghp_KEPT' });
   await first.stop();
 
-  const saved = await findSecret(ctx.db, 'kept');
+  const saved = await readSecret(ctx.db, 'kept');
 
   invariant(saved);
 

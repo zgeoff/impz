@@ -60,7 +60,7 @@ export function createPublicHandler(
     if (path === MCP_PATH) {
       server?.timeout(request, 0);
 
-      return deps.mcp.handle(request);
+      return deps.mcp.respond(request);
     }
 
     const answered = await deps.oauth.handle(request);

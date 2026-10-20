@@ -7,7 +7,7 @@ import { buildApiListenOptions } from '@impz/daemon/src/api-listen-options';
 import { loadConfig } from '@impz/daemon/src/config';
 import { createImpd } from '@impz/daemon/src/create-impd';
 import { createImage } from '@impz/daemon/src/db/images';
-import { findImpByName } from '@impz/daemon/src/db/imps';
+import { readImpByName } from '@impz/daemon/src/db/imps';
 import { openDatabase } from '@impz/daemon/src/db/open-database';
 import {
   buildImagePaths,
@@ -20,13 +20,13 @@ import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-im
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubExecGuest } from '@impz/daemon/src/test-utils/build-stub-exec-guest';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { startStubExecAgent } from '@impz/daemon/src/test-utils/start-stub-exec-agent';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
-import { createImpGuard } from '../imp-guard';
-import { buildStubOlderImpdFetch } from '../test-utils/build-stub-older-impd-fetch';
+import { buildImpGuard } from '../imp-guard';
 import { createMcpServer } from '../test-utils/create-mcp-server';
+import { makeStubOlderImpdFetch } from '../test-utils/make-stub-older-impd-fetch';
 
 // impd's real app on a loopback port for an exec's socket and through
 // `sendToImpd` without one, a root client, `stack`, whose releases run before
@@ -51,7 +51,7 @@ async function setupTest() {
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     }),
 
     // a new disk stays the size of its image, since the plain-copy clone of
@@ -197,7 +197,7 @@ test('it creates an imp and answers with it as impd stores it', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -248,7 +248,7 @@ test('it lists the imps with their state', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'read',
     },
   );
@@ -311,7 +311,7 @@ test('it gives the list as JSON text, dates as ISO strings, that parses to its s
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'read',
     },
   );
@@ -339,7 +339,7 @@ test('it hides the imps the guard does not allow from the list', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ prefix: 'agent-' }),
+      guard: buildImpGuard({ prefix: 'agent-' }),
       scope: 'manage',
     },
   );
@@ -389,7 +389,7 @@ test.each([
   await ctx.rootClient.imps.create({ name: 'prod' });
   await ctx.rootClient.imps.create({ name: 'agent-one' });
 
-  const record = await findImpByName(ctx.db, 'prod');
+  const record = await readImpByName(ctx.db, 'prod');
 
   invariant(record);
 
@@ -409,7 +409,7 @@ test.each([
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ prefix: 'agent-' }),
+      guard: buildImpGuard({ prefix: 'agent-' }),
       scope: 'manage',
     },
   );
@@ -444,7 +444,7 @@ test('it names a nameless create under the prefix', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ prefix: 'agent-' }),
+      guard: buildImpGuard({ prefix: 'agent-' }),
       scope: 'manage',
     },
   );
@@ -491,7 +491,7 @@ test('it refuses a nameless create under an allow-list alone', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ allow: ['box'] }),
+      guard: buildImpGuard({ allow: ['box'] }),
       scope: 'manage',
     },
   );
@@ -525,7 +525,7 @@ test('it creates an imp the allow-list names', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ allow: ['box'] }),
+      guard: buildImpGuard({ allow: ['box'] }),
       scope: 'manage',
     },
   );
@@ -572,7 +572,7 @@ test('it puts an imp to sleep', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -621,7 +621,7 @@ test("it answers with an imp's URLs", async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'read',
     },
   );
@@ -662,7 +662,7 @@ test('it destroys an imp', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -697,7 +697,7 @@ test("it answers impd's error as an isError result led by its code", async () =>
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -727,7 +727,7 @@ test('it answers arguments that fail the schema with an isError result naming ea
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -767,7 +767,7 @@ test('it lists the images', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'read',
     },
   );
@@ -813,7 +813,7 @@ test('it forks a sleeping imp from a checkpoint', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -862,7 +862,7 @@ test('it forks a stopped imp as it is now', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -919,7 +919,7 @@ test('it names beside the fork the grants a scoped token could not copy', async 
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: made.secret }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -985,7 +985,7 @@ test('it reports beside the fork each grant it did not get', async () => {
         token: made.secret,
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -1044,7 +1044,7 @@ test('it reports an empty grant report beside a fork that got every grant', asyn
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -1106,7 +1106,7 @@ test('it reports beside the fork why it got none of the grants', async () => {
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -1167,9 +1167,9 @@ test('it leaves the grant report out of a fork from an impd that sends none', as
         token: 'root-token',
 
         // an impd release from before the fork's grant report
-        fetch: buildStubOlderImpdFetch(ctx.sendToImpd),
+        fetch: makeStubOlderImpdFetch(ctx.sendToImpd),
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -1225,7 +1225,7 @@ test('it gives the fork as indented JSON text beside its structured content', as
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );

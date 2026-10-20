@@ -12,10 +12,10 @@ import { buildSystemDrivePath, buildSystemDrivesDir } from '@impz/daemon/src/sto
 import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
-import { parseJsonOutput } from '../test-utils/parse-json-output';
+import { readJsonOutput } from '../test-utils/read-json-output';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startStubOlderImpd } from '../test-utils/start-stub-older-impd';
 
@@ -39,7 +39,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots with
@@ -208,5 +208,5 @@ test('it prints the database copy as --json output in the shape of the committed
   });
 
   expect(result.code).toBe(0);
-  expect(parseJsonOutput('db copy', result.stdout).data).toStrictEqual(JSON.parse(result.stdout));
+  expect(readJsonOutput('db copy', result.stdout).data).toStrictEqual(JSON.parse(result.stdout));
 });

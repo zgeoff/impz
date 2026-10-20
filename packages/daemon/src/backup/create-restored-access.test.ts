@@ -6,7 +6,7 @@ import invariant from 'tiny-invariant';
 import { loadTokenStore } from '../auth/token-store';
 import { writeConsistentCopy } from '../db/database-copy';
 import { runMigrationsTo } from '../db/run-migrations';
-import { createSecret, findSecret } from '../db/secrets';
+import { createSecret, readSecret } from '../db/secrets';
 import { writeTokenRecord } from '../db/tokens';
 import { buildMockTokenRecord } from '../test-utils/build-mock-token-record';
 import { createTestDatabase } from '../test-utils/create-test-database';
@@ -17,10 +17,10 @@ import { createRestoredAccess } from './create-restored-access';
 // This host's database and token store, and a directory for the copy a test
 // writes from a database of its own.
 async function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'impd-restored-access-'));
+  const directory = mkdtempSync(join(tmpdir(), 'impd-restored-access-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   const host = await createTestDatabase();
@@ -33,7 +33,7 @@ async function setupTest() {
     isFileKey: () => false,
   });
 
-  return { db: host.db, tokens, copyPath: join(dir, 'copy.sqlite') };
+  return { db: host.db, tokens, copyPath: join(directory, 'copy.sqlite') };
 }
 
 test('it writes the copy’s secrets and tokens, each secret with its generation and value file', async () => {
@@ -63,7 +63,7 @@ test('it writes the copy’s secrets and tokens, each secret with its generation
   await writeConsistentCopy(source.db, ctx.copyPath);
 
   const result = await createRestoredAccess(ctx.db, ctx.tokens, ctx.copyPath);
-  const restored = await findSecret(ctx.db, 'gh');
+  const restored = await readSecret(ctx.db, 'gh');
 
   expect(result).toStrictEqual({ tokens: ['agent'], secrets: ['gh'], skipped: [] });
   expect(restored).toStrictEqual(secret);
@@ -84,7 +84,7 @@ test('it keeps this host’s own secret under a name the copy has', async () => 
   await writeConsistentCopy(source.db, ctx.copyPath);
 
   const result = await createRestoredAccess(ctx.db, ctx.tokens, ctx.copyPath);
-  const kept = await findSecret(ctx.db, 'gh');
+  const kept = await readSecret(ctx.db, 'gh');
 
   expect(result.secrets).toStrictEqual([]);
   expect(kept?.valueFile).toBe('gh.here');
@@ -114,7 +114,7 @@ test('it migrates a copy from an older impd forward before it reads the copy', a
   await writeConsistentCopy(source, ctx.copyPath);
 
   const result = await createRestoredAccess(ctx.db, ctx.tokens, ctx.copyPath);
-  const restored = await findSecret(ctx.db, 'gh');
+  const restored = await readSecret(ctx.db, 'gh');
 
   expect(result).toStrictEqual({ tokens: ['agent'], secrets: ['gh'], skipped: [] });
   expect(restored?.generation).toMatch(/^[0-9a-f]{32}$/v);
@@ -140,7 +140,7 @@ test('it refuses a copy from a newer impd and writes nothing', async () => {
     /the database is at migration 999_from_a_newer_impd, newer than this impd's last/v,
   );
 
-  const found = await findSecret(ctx.db, 'gh');
+  const found = await readSecret(ctx.db, 'gh');
 
   expect(found).toBeUndefined();
   expect(tokens.createRestored).not.toHaveBeenCalled();
@@ -162,7 +162,7 @@ test('it leaves out a secret whose value file names a path outside the secrets d
   await writeConsistentCopy(source.db, ctx.copyPath);
 
   const result = await createRestoredAccess(ctx.db, ctx.tokens, ctx.copyPath);
-  const found = await findSecret(ctx.db, 'gh');
+  const found = await readSecret(ctx.db, 'gh');
 
   expect(result).toStrictEqual({
     tokens: [],

@@ -2,7 +2,7 @@ import { ORPCError } from '@orpc/server';
 import type { AuditActor } from '../auth/caller';
 import { writeApiCall } from '../db/api-audit';
 import type { ImpDatabase } from '../db/open-database';
-import { readErrorMessage } from '../read-error-message';
+import { getErrorMessage } from '../get-error-message';
 
 // namespaces whose input `name` is an imp's; a secret's or an image's is not
 const IMP_NAMESPACES: ReadonlySet<string> = new Set([
@@ -46,22 +46,22 @@ export function createApiAudit(deps: ApiAuditDeps): ApiAudit {
 
 // The imp a call named, from its input, else from its result (`imps.create`
 // with no name gets one). Only the name: the input itself is never kept.
-export function readImpName(procedure: string, input: unknown, output: unknown): string | null {
+export function findImpName(procedure: string, input: unknown, output: unknown): string | null {
   const namespace = procedure.split('.')[0] ?? '';
 
   // a template reads its source imp's disk
   if (procedure === 'images.add' || procedure === 'images.addStream') {
-    return readField(input, 'imp');
+    return findField(input, 'imp');
   }
 
   if (!IMP_NAMESPACES.has(namespace)) {
     return null;
   }
 
-  return readField(input, 'name') ?? readField(output, 'name');
+  return findField(input, 'name') ?? findField(output, 'name');
 }
 
-function readField(value: unknown, key: string): string | null {
+function findField(value: unknown, key: string): string | null {
   if (typeof value !== 'object' || value === null || !(key in value)) {
     return null;
   }
@@ -114,6 +114,6 @@ async function writeCall(deps: ApiAuditDeps, call: AuditedCall, failure: unknown
       detail: call.detail ?? null,
     });
   } catch (error) {
-    deps.log(`impd: audit: ${call.procedure}: ${readErrorMessage(error)}`);
+    deps.log(`impd: audit: ${call.procedure}: ${getErrorMessage(error)}`);
   }
 }

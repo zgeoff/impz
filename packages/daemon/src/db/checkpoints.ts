@@ -63,7 +63,7 @@ export async function listCheckpoints(db: ImpDatabase, impId: string): Promise<C
 }
 
 // `ref` is a checkpoint id or label, scoped to one imp
-export async function findCheckpoint(
+export async function readCheckpoint(
   db: ImpDatabase,
   impId: string,
   ref: string,

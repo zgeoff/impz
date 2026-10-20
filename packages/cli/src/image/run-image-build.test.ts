@@ -81,14 +81,14 @@ test.skipIf(!checkDockerBuildx())(
 
     runDockerBuild({
       dockerfile: join(ctx.context, 'Dockerfile'),
-      context: { dir: ctx.context },
-      dest: ctx.fromDir,
+      context: { directory: ctx.context },
+      destination: ctx.fromDir,
     });
 
     runDockerBuild({
       dockerfile: 'Dockerfile',
       context: { tarPath: ctx.tarPath },
-      dest: ctx.fromTar,
+      destination: ctx.fromTar,
     });
 
     // the Content-Length the CLI sends
@@ -151,14 +151,14 @@ test.skipIf(!checkDockerBuildx())(
 
     runDockerBuild({
       dockerfile: join(ctx.context, 'web.Dockerfile'),
-      context: { dir: ctx.context },
-      dest: ctx.fromDir,
+      context: { directory: ctx.context },
+      destination: ctx.fromDir,
     });
 
     runDockerBuild({
       dockerfile: 'web.Dockerfile',
       context: { tarPath: ctx.tarPath },
-      dest: ctx.fromTar,
+      destination: ctx.fromTar,
     });
 
     const counted = await countTarBytes(entries);
@@ -211,14 +211,14 @@ test.skipIf(!checkDockerBuildx())(
 
     runDockerBuild({
       dockerfile: join(ctx.context, 'dockerfile'),
-      context: { dir: ctx.context },
-      dest: ctx.fromDir,
+      context: { directory: ctx.context },
+      destination: ctx.fromDir,
     });
 
     runDockerBuild({
       dockerfile: 'dockerfile',
       context: { tarPath: ctx.tarPath },
-      dest: ctx.fromTar,
+      destination: ctx.fromTar,
     });
 
     const counted = await countTarBytes(entries);

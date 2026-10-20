@@ -1,7 +1,7 @@
 import type { Broker } from './broker/broker-service';
-import type { ImpdStorage } from './build-impd-storage';
 import type { Config } from './config';
 import type { ImpdDeps } from './create-impd';
+import type { ImpdStorage } from './create-impd-storage';
 import type { EgressService } from './egress/egress-service';
 import { createGovernedImps } from './governor/create-governed-imps';
 import { createKernelOopsWatch } from './imps/kernel-oops-watch';

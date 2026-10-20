@@ -61,21 +61,6 @@ export interface ForwardDeps {
   ) => Promise<boolean>;
 }
 
-// Per RFC 9110 these describe one connection, not the message; the proxy
-// ones are the guest's to its proxy. `expect` is answered here.
-const HOP_HEADERS = [
-  'connection',
-  'expect',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'proxy-connection',
-  'te',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
-];
-
 // Some frameworks run the method one of these names in place of the
 // request's own, so on a filtered grant they could turn an allowed POST into
 // a method the filter refused.
@@ -114,7 +99,7 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
       return new Response(`${message}\n`, { status });
     };
 
-    if (readHostName(request.headers.get('host')) !== deps.host) {
+    if (findHostName(request.headers.get('host')) !== deps.host) {
       return sendRefusal(421, `this connection is for ${deps.host}`, 'wrong-host');
     }
 
@@ -287,15 +272,8 @@ function sendUpstream(url: string, init: UpstreamInit): Promise<Response> {
   return fetch(url, { ...init, ...tls });
 }
 
-// `Upgrade: websocket`, in a list of protocols and in any case
-function isWebSocketUpgrade(headers: Headers): boolean {
-  return (headers.get('upgrade') ?? '')
-    .split(',')
-    .some((protocol) => protocol.trim().toLowerCase().split('/')[0] === 'websocket');
-}
-
 // the host part of a Host header: lowercased, without :443
-function readHostName(value: string | null): string | null {
+function findHostName(value: string | null): string | null {
   if (value === null) {
     return null;
   }
@@ -304,6 +282,28 @@ function readHostName(value: string | null): string | null {
 
   return lower.endsWith(':443') ? lower.slice(0, -':443'.length) : lower;
 }
+
+// `Upgrade: websocket`, in a list of protocols and in any case
+function isWebSocketUpgrade(headers: Headers): boolean {
+  return (headers.get('upgrade') ?? '')
+    .split(',')
+    .some((protocol) => protocol.trim().toLowerCase().split('/')[0] === 'websocket');
+}
+
+// Per RFC 9110 these describe one connection, not the message; the proxy
+// ones are the guest's to its proxy. `expect` is answered here.
+const HOP_HEADERS = [
+  'connection',
+  'expect',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+];
 
 // the end-to-end headers: hop-by-hop ones and those Connection names dropped
 function buildEndToEndHeaders(source: Headers): Headers {

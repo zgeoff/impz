@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { readStatFields } from '../process/proc';
-import { isFirecrackerAlive } from './firecracker-process';
+import { probeFirecrackerAlive } from './firecracker-process';
 
 const KIB_PER_MIB = 1024;
 
@@ -39,7 +39,7 @@ export async function readOwnedRamMibAsync(
   apiSocket: string,
   procRoot = '/proc',
 ): Promise<number | null> {
-  if (!isFirecrackerAlive(pid, apiSocket, procRoot)) {
+  if (!probeFirecrackerAlive(pid, apiSocket, procRoot)) {
     return null;
   }
 
@@ -106,7 +106,7 @@ function readVmSmaps(
   apiSocket: string,
   procRoot: string,
 ): ReadonlyMap<string, number> | null {
-  if (!isFirecrackerAlive(pid, apiSocket, procRoot)) {
+  if (!probeFirecrackerAlive(pid, apiSocket, procRoot)) {
     return null;
   }
 

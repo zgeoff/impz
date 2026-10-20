@@ -1,5 +1,5 @@
-import type { RpcImplementer } from './build-implementer';
-import type { RouterDeps } from './build-router';
+import type { RpcImplementer } from './create-implementer';
+import type { RouterDeps } from './create-router';
 import { listApiCalls } from './db/api-audit';
 import { requireNamedImp } from './require-named-imp';
 

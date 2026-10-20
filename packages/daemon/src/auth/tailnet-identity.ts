@@ -98,7 +98,7 @@ export function createTailnetIdentities(deps: Readonly<TailnetIdentitiesDeps>): 
 
       // impd itself, or an imp's traffic leaving through the node: the raw
       // rule lets local sources pass, and whois names the node's own tags
-      const own = await isOwnAddress(deps.readTailscale, plain);
+      const own = await probeOwnAddress(deps.readTailscale, plain);
 
       if (own) {
         return null;
@@ -133,7 +133,7 @@ export function findTailnetCaller(
     tokenId: null,
     grantId: null,
     expiresAt: null,
-    principal: readTailnetPrincipal(peer),
+    principal: findTailnetPrincipal(peer),
     display: peer.node,
   };
 }
@@ -141,7 +141,7 @@ export function findTailnetCaller(
 // A user owns leases across all of its nodes. A tagged node has no user, so
 // it owns them by its stable ID; without one it owns none, since a later
 // node can take its name.
-function readTailnetPrincipal(peer: Readonly<TailnetPeer>): string | null {
+function findTailnetPrincipal(peer: Readonly<TailnetPeer>): string | null {
   if (peer.login !== null) {
     return `tailnet-user:${peer.login}`;
   }
@@ -191,7 +191,7 @@ async function readWhois(
   }
 }
 
-async function isOwnAddress(
+async function probeOwnAddress(
   readTailscale: TailnetIdentitiesDeps['readTailscale'],
   address: string,
 ): Promise<boolean> {

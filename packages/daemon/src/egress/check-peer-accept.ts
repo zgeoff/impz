@@ -1,4 +1,4 @@
-import { readErrorMessage } from '../read-error-message';
+import { getErrorMessage } from '../get-error-message';
 import { isPeerAccept } from './is-peer-accept';
 
 // what the ACCEPT check reads, and whether it was missing at the last one
@@ -25,7 +25,7 @@ export async function checkPeerAccept(check: PeerAcceptCheck): Promise<boolean> 
 
     return !present;
   } catch (error) {
-    check.log(`impd: egress: reading FORWARD: ${readErrorMessage(error)}`);
+    check.log(`impd: egress: reading FORWARD: ${getErrorMessage(error)}`);
 
     return check.wasMissing;
   }

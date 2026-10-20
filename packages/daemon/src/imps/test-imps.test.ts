@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { listImps } from '../db/imps';
-import { hasSnapshot, readSnapshotMeta } from '../sleep/snapshot-meta';
+import { probeSnapshot, readSnapshotMeta } from '../sleep/snapshot-meta';
 import { buildImpPaths } from '../storage/data-layout';
 import { createImpTest, writeTestSnapshot } from './test-imps';
 
@@ -298,7 +298,7 @@ test('#writeTestSnapshot writes the files and the meta a wake loads', async () =
     systemDrive: 'd1',
   });
 
-  expect(hasSnapshot(paths)).toBeTrue();
+  expect(probeSnapshot(paths)).toBeTrue();
 
   expect(readSnapshotMeta(paths)).toStrictEqual({
     firecrackerVersion: 'v1.17.0',

@@ -6,7 +6,7 @@ import { createTestDatabase } from '../test-utils/create-test-database';
 import { createUnmigratedDatabase } from '../test-utils/create-unmigrated-database';
 import { createImage } from './images';
 import type { ImpWrite } from './imp-write-feed';
-import { createImp, findImpById, removeImp } from './imps';
+import { createImp, readImpById, removeImp } from './imps';
 import { isBlockingLease, listLeases, removeLeases, writeLease, writeMovedLeases } from './leases';
 import { runMigrations, runMigrationsTo } from './run-migrations';
 
@@ -282,7 +282,7 @@ test('#removeLeases sets the hold back to the latest remaining end', async () =>
     reason: 'held',
   });
 
-  const stored = await findImpById(ctx.db, imp.id);
+  const stored = await readImpById(ctx.db, imp.id);
 
   expect(stored?.holdUntil).toStrictEqual(new Date(1_800_000_120_000));
 });
@@ -450,7 +450,7 @@ test('#writeMovedLeases writes a moved imp’s leases and its hold', async () =>
     },
   ]);
 
-  const stored = await findImpById(ctx.db, imp.id);
+  const stored = await readImpById(ctx.db, imp.id);
 
   expect(stored?.holdUntil).toStrictEqual(new Date(1_800_000_060_000));
 });

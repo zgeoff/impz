@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import { DNS_CLASS_IN, DNS_TYPE_CODES, writeDnsName, writeDnsUint16 } from './write-dns-wire';
+import { DNS_CLASS_IN, DNS_TYPE_CODES, encodeDnsName, encodeDnsUint16 } from './write-dns-wire';
 
 // A query as a guest's resolver sends it, byte by byte from RFC 1035, with
 // RFC 6891's EDNS OPT record unless left out.
@@ -25,15 +25,15 @@ export function buildMockDnsQuery(
   const additionals = edns ? 1 : 0;
 
   return Uint8Array.from([
-    ...writeDnsUint16(id),
-    ...writeDnsUint16(RD),
-    ...writeDnsUint16(1),
-    ...writeDnsUint16(0),
-    ...writeDnsUint16(0),
-    ...writeDnsUint16(additionals),
-    ...writeDnsName(query.name),
-    ...writeDnsUint16(DNS_TYPE_CODES[query.type]),
-    ...writeDnsUint16(DNS_CLASS_IN),
-    ...(edns ? [0, ...writeDnsUint16(TYPE_OPT), ...writeDnsUint16(1232), 0, 0, 0, 0, 0, 0] : []),
+    ...encodeDnsUint16(id),
+    ...encodeDnsUint16(RD),
+    ...encodeDnsUint16(1),
+    ...encodeDnsUint16(0),
+    ...encodeDnsUint16(0),
+    ...encodeDnsUint16(additionals),
+    ...encodeDnsName(query.name),
+    ...encodeDnsUint16(DNS_TYPE_CODES[query.type]),
+    ...encodeDnsUint16(DNS_CLASS_IN),
+    ...(edns ? [0, ...encodeDnsUint16(TYPE_OPT), ...encodeDnsUint16(1232), 0, 0, 0, 0, 0, 0] : []),
   ]);
 }

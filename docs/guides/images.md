@@ -59,8 +59,8 @@ impd logs a warning at start and at every such add.
 
 ## Build an image
 
-`impz image build <dir> --name <name>` packs the directory on the machine that runs the CLI and
-uploads it to impd, which builds it with BuildKit in a throwaway builder imp
+`impz image build <directory> --name <name>` packs the directory on the machine that runs the CLI
+and uploads it to impd, which builds it with BuildKit in a throwaway builder imp
 ([isolated builds](#isolated-builds)) and adds the result as the image `<name>`. `--file <path>`
 names a Dockerfile inside the context. A later image can start FROM an image you built this way on
 Docker's containerd image store, where impd pins it by its content digest (Docker 29.8 builds from

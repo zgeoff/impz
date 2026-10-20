@@ -7,11 +7,11 @@ import { utils } from 'ssh2';
 import { buildMockEd25519Key } from './build-mock-ed25519-key';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'mock-ed25519-key-'));
+  const directory = await mkdtemp(join(tmpdir(), 'mock-ed25519-key-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it builds a default ed25519 key', () => {
@@ -37,7 +37,7 @@ test('it writes a key file that ssh-keygen reads, with the public key node made'
   const ctx = await setupTest();
 
   const key = buildMockEd25519Key({ comment: 'imp-e2e-key' });
-  const path = join(ctx.dir, 'id');
+  const path = join(ctx.directoryPath, 'id');
 
   await writeFile(path, key.privateKey, { mode: 0o600 });
 

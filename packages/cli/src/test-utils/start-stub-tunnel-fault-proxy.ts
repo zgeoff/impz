@@ -1,25 +1,15 @@
-interface FaultSocketData {
-  readonly url: string;
-  readonly headers: Readonly<Record<string, string>>;
-  readonly pending: (string | ArrayBuffer)[];
-  readonly tunnel: FaultTunnel;
-  upstream: WebSocket | null;
-}
-
 interface FaultTunnel {
   // impd's text messages to the client, in order, such as `{"type":"opened"}`
   readonly toClient: string[];
   isClosed: boolean;
 }
 
-// close codes a peer may send in a close frame; 1005 and 1006 only report
-// that none came, so the client's connection drops without one
-function isSendableCloseCode(code: number): boolean {
-  return (
-    (code >= 1000 && code <= 1003) ||
-    (code >= 1007 && code <= 1014) ||
-    (code >= 3000 && code <= 4999)
-  );
+interface FaultSocketData {
+  readonly url: string;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly pending: (string | ArrayBuffer)[];
+  readonly tunnel: FaultTunnel;
+  upstream: WebSocket | null;
 }
 
 // A loopback proxy that relays HTTP and WebSockets to real impd, and can put
@@ -131,4 +121,14 @@ export function startStubTunnelFaultProxy(stack: Readonly<AsyncDisposableStack>,
       client.send(text);
     },
   };
+}
+
+// close codes a peer may send in a close frame; 1005 and 1006 only report
+// that none came, so the client's connection drops without one
+function isSendableCloseCode(code: number): boolean {
+  return (
+    (code >= 1000 && code <= 1003) ||
+    (code >= 1007 && code <= 1014) ||
+    (code >= 3000 && code <= 4999)
+  );
 }

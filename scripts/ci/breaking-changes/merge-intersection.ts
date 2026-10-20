@@ -1,12 +1,12 @@
 import type { MessageDirection } from '../../../packages/api/src/protocols/build-protocol-schema';
 import { ANNOTATIONS } from './annotations';
 import { buildWithout } from './build-without';
+import { findSchema } from './find-schema';
+import { findSchemaList } from './find-schema-list';
+import { findSchemaMap } from './find-schema-map';
+import { findTypes } from './find-types';
 import { isSchemaObject } from './is-schema-object';
 import { JSON_TYPES } from './json-types';
-import { readSchema } from './read-schema';
-import { readSchemaList } from './read-schema-list';
-import { readSchemaMap } from './read-schema-map';
-import { readTypes } from './read-types';
 import { resolveRef } from './resolve-ref';
 import type { Schema, SchemaObject } from './schema';
 
@@ -16,7 +16,7 @@ export function mergeIntersection(
   root: Schema,
   direction: MessageDirection,
 ): readonly Schema[] {
-  const parts = [buildWithout(schema, ['allOf']), ...(readSchemaList(schema, 'allOf') ?? [])].map(
+  const parts = [buildWithout(schema, ['allOf']), ...(findSchemaList(schema, 'allOf') ?? [])].map(
     (part) => resolveRef(part, root),
   );
 
@@ -60,26 +60,26 @@ const OBJECT_KEYWORDS = ['properties', 'additionalProperties'];
 // one schema that takes exactly the values both take, or none when a keyword
 // conflicts in a way no one schema can state
 function mergeIntersectionPair(
-  a: SchemaObject,
-  b: SchemaObject,
+  left: SchemaObject,
+  right: SchemaObject,
   direction: MessageDirection,
 ): SchemaObject | undefined {
   const merged: Record<string, unknown> = {
-    ...buildWithout(a, OBJECT_KEYWORDS),
-    ...mergeObjectKeywords(a, b, direction),
+    ...buildWithout(left, OBJECT_KEYWORDS),
+    ...mergeObjectKeywords(left, right, direction),
   };
 
-  for (const [keyword, value] of Object.entries(b)) {
+  for (const [keyword, value] of Object.entries(right)) {
     if (OBJECT_KEYWORDS.includes(keyword)) {
       continue;
     }
 
-    if (!(keyword in a)) {
+    if (!(keyword in left)) {
       merged[keyword] = value;
       continue;
     }
 
-    const combined = mergeKeyword(keyword, a[keyword], value);
+    const combined = mergeKeyword(keyword, left[keyword], value);
 
     if (combined === undefined) {
       return undefined;
@@ -95,13 +95,13 @@ function mergeIntersectionPair(
 // zod closes each object of an output on its own keys, though the value it
 // sends carries the keys of every part, so a closed part binds only an input.
 function mergeObjectKeywords(
-  a: SchemaObject,
-  b: SchemaObject,
+  left: SchemaObject,
+  right: SchemaObject,
   direction: MessageDirection,
 ): Record<string, unknown> {
-  const parts = [a, b].map((part) => ({
-    properties: readSchemaMap(part, 'properties'),
-    extra: readSchema(part, 'additionalProperties'),
+  const parts = [left, right].map((part) => ({
+    properties: findSchemaMap(part, 'properties'),
+    extra: findSchema(part, 'additionalProperties'),
   }));
 
   const keys = [...new Set(parts.flatMap((part) => Object.keys(part.properties)))];
@@ -122,7 +122,7 @@ function mergeObjectKeywords(
   const extra = mergeSchemaList(parts.map((part) => part.extra));
   const merged: Record<string, unknown> = {};
 
-  if ('properties' in a || 'properties' in b) {
+  if ('properties' in left || 'properties' in right) {
     merged['properties'] = properties;
   }
 
@@ -158,25 +158,25 @@ const UPPER_KEYWORDS = new Set(['maximum', 'exclusiveMaximum', 'maxLength', 'max
 
 function mergeKeyword(
   keyword: string,
-  a: unknown,
-  b: unknown,
+  left: unknown,
+  right: unknown,
 ): { readonly value: unknown } | undefined {
-  if (Bun.deepEquals(a, b, true) || ANNOTATIONS.has(keyword)) {
-    return { value: a };
+  if (Bun.deepEquals(left, right, true) || ANNOTATIONS.has(keyword)) {
+    return { value: left };
   }
 
-  if (typeof a === 'number' && typeof b === 'number') {
+  if (typeof left === 'number' && typeof right === 'number') {
     if (LOWER_KEYWORDS.has(keyword)) {
-      return { value: Math.max(a, b) };
+      return { value: Math.max(left, right) };
     }
 
     if (UPPER_KEYWORDS.has(keyword)) {
-      return { value: Math.min(a, b) };
+      return { value: Math.min(left, right) };
     }
   }
 
-  if (Array.isArray(a) && Array.isArray(b)) {
-    const both: readonly unknown[] = [a, b].flat();
+  if (Array.isArray(left) && Array.isArray(right)) {
+    const both: readonly unknown[] = [left, right].flat();
 
     if (keyword === 'required') {
       return { value: [...new Set(both)] };
@@ -188,20 +188,25 @@ function mergeKeyword(
 
     // the values both list
     if (keyword === 'enum') {
-      return { value: a.filter((value) => b.some((other) => Bun.deepEquals(value, other, true))) };
+      return {
+        value: left.filter((value) => right.some((other) => Bun.deepEquals(value, other, true))),
+      };
     }
   }
 
   if (keyword === 'type') {
-    return mergeTypes({ type: a }, { type: b });
+    return mergeTypes({ type: left }, { type: right });
   }
 
   return undefined;
 }
 
 // the types both sides take, where an integer is also a number
-function mergeTypes(a: SchemaObject, b: SchemaObject): { readonly value: unknown } | undefined {
-  const sides = [readTypes(a) ?? JSON_TYPES, readTypes(b) ?? JSON_TYPES];
+function mergeTypes(
+  left: SchemaObject,
+  right: SchemaObject,
+): { readonly value: unknown } | undefined {
+  const sides = [findTypes(left) ?? JSON_TYPES, findTypes(right) ?? JSON_TYPES];
 
   const common = JSON_TYPES.filter((type) =>
     sides.every((side) => side.includes(type) || (type === 'integer' && side.includes('number'))),

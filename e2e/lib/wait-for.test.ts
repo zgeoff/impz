@@ -42,8 +42,8 @@ test('it waits the interval between retries', async () => {
     },
     {
       intervalMs: 25,
-      wait: (ms) => {
-        waits.push(ms);
+      wait: (durationMs) => {
+        waits.push(durationMs);
 
         return Promise.resolve();
       },
@@ -69,8 +69,8 @@ test('it names what it waited for and the last failure once the deadline passes'
       intervalMs: 20,
       timeoutMs: 60,
       now: () => clock.nowMs,
-      wait: (ms) => {
-        clock.nowMs += ms;
+      wait: (durationMs) => {
+        clock.nowMs += durationMs;
 
         return Promise.resolve();
       },

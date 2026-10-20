@@ -103,7 +103,7 @@ export async function startFirecracker(
 // True when `pid` is a live Firecracker serving `apiSocket`; a recycled pid
 // fails the cmdline check.
 // `procRoot` is where /proc is mounted, /proc by default
-export function isFirecrackerAlive(pid: number, apiSocket: string, procRoot = '/proc'): boolean {
+export function probeFirecrackerAlive(pid: number, apiSocket: string, procRoot = '/proc'): boolean {
   const state = readStatFields(pid, procRoot)?.[0];
 
   if (state === undefined || state === 'Z' || state === 'X') {
@@ -127,7 +127,7 @@ export async function waitForExit(
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
 
-  while (isFirecrackerAlive(pid, apiSocket)) {
+  while (probeFirecrackerAlive(pid, apiSocket)) {
     if (Date.now() > deadline) {
       return false;
     }
@@ -173,7 +173,7 @@ export function listFirecrackers(): FoundVm[] {
       basename(argv[0] ?? '') === 'firecracker' &&
       flag !== -1 &&
       apiSocket !== undefined &&
-      isFirecrackerAlive(pid, apiSocket)
+      probeFirecrackerAlive(pid, apiSocket)
     ) {
       found.push({ pid, apiSocket, owner: readVmOwner(pid) });
     }
@@ -201,7 +201,7 @@ export function buildFirecrackerCommand(bin: string, apiSocket: string): readonl
 }
 
 // a jailed Firecracker runs as `/firecracker --id <id> ...` (jail.ts)
-export function isJailedFirecracker(pid: number): boolean {
+export function probeJailedFirecracker(pid: number): boolean {
   try {
     return readFileSync(`/proc/${String(pid)}/cmdline`, 'utf8')
       .split('\0')

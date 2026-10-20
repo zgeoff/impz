@@ -33,7 +33,7 @@ import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { startStubAgent } from '@impz/daemon/src/test-utils/start-stub-agent';
 import { startStubDialAgent } from '@impz/daemon/src/test-utils/start-stub-dial-agent';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -63,7 +63,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with
@@ -359,7 +359,7 @@ test('#startProxy sends the rest of an upload once the guest takes it again', as
 });
 
 test('#startProxy fails at once naming a local port in use, before any call to impd', async () => {
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
   const busy = createServer();
 
   onTestFinished(() => {
@@ -390,7 +390,7 @@ test('#startProxy fails at once naming a local port in use, before any call to i
 });
 
 test('#startProxy fails naming the local port when only its IPv6 loopback is in use', async () => {
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
   const busy = createServer();
 
   onTestFinished(() => {
@@ -436,7 +436,7 @@ test.skipIf(
 test('#startProxy rejects an imp that impd does not have, and frees its local port', async () => {
   const ctx = await setupTest();
 
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
 
   const started = startProxy(
     { url: ctx.url, token: ctx.rootToken, host: null },

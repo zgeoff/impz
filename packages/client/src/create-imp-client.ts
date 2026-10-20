@@ -2,8 +2,6 @@ import type { Image, Imp, ImpContract } from '@impz/api';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
-import { buildImage } from './build-image';
-import type { BuildContext, BuildImageOptions } from './build-image';
 import { checkServer } from './check-server';
 import type { CheckServerOptions, ServerCheck } from './check-server';
 import { openAttach, openConsole, openExec, runCommand } from './exec/open-exec';
@@ -20,6 +18,8 @@ import type { ExecSocket } from './exec/open-exec-session';
 import { requireAwake } from './require-awake';
 import type { RequireAwakeOptions } from './require-awake';
 import { resolveImpdUrl } from './resolve-impd-url';
+import { runImageBuild } from './run-image-build';
+import type { BuildContext, BuildImageOptions } from './run-image-build';
 import { LONG_CALL_DEADLINES_MS, sendLongCall } from './send-long-call';
 import type { CallInit, StartTimer } from './send-long-call';
 import { UnknownProcedureError } from './unknown-procedure-error';
@@ -162,12 +162,14 @@ export function createImpClient(options: Readonly<ImpClientOptions>): ImpClient 
       openAttach(execDeps, name, session, attachOptions),
     requireAwake: (name, awakeOptions) => requireAwake(rpc, name, awakeOptions),
     checkServer: (checkOptions) => checkServer(rpc, checkOptions),
-    buildImage: (name, context, buildOptions) => buildImage(execDeps, name, context, buildOptions),
+    // oxlint-disable-next-line zgeoff/verb-contract -- a method of the published client
+    buildImage: (name, context, buildOptions) =>
+      runImageBuild(execDeps, name, context, buildOptions),
   };
 }
 
-function startRealTimer(fire: () => void, ms: number): () => void {
-  const timer = setTimeout(fire, ms);
+function startRealTimer(fire: () => void, durationMs: number): () => void {
+  const timer = setTimeout(fire, durationMs);
 
   return () => {
     clearTimeout(timer);

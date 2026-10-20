@@ -1,11 +1,11 @@
 import type { OAuthConfig } from '@impz/api';
 import type { ImpDatabase } from '../db/open-database';
-import { findSecret, listSecrets } from '../db/secrets';
+import { listSecrets, readSecret } from '../db/secrets';
 import type { SecretRecord } from '../db/secrets';
+import { getErrorMessage } from '../get-error-message';
 import { buildBackoffMs } from '../process/build-backoff-ms';
-import { createKeyedMutex } from '../process/keyed-mutex';
+import { buildKeyedMutex } from '../process/keyed-mutex';
 import { createSingleFlight } from '../process/single-flight';
-import { readErrorMessage } from '../read-error-message';
 import type { Upstream } from './forward-request';
 import { isDue } from './is-due';
 import { formatOAuthState, parseOAuthState, readJwtExpiry } from './oauth-state';
@@ -89,7 +89,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
   const send = deps.fetch ?? sendToken;
   const timeoutMs = deps.timeoutMs ?? 30_000;
   const log = deps.log;
-  const locks = createKeyedMutex();
+  const locks = buildKeyedMutex();
   const inflight = createSingleFlight<RefreshOutcome>();
 
   const backoff = new Map<string, { failures: number; nextAt: number }>();
@@ -123,7 +123,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
       unsaved.set(name, { valueFile, state });
 
       log(
-        `impd: broker: oauth secret ${name}: could not write its value file: ${readErrorMessage(error)}`,
+        `impd: broker: oauth secret ${name}: could not write its value file: ${getErrorMessage(error)}`,
       );
 
       return false;
@@ -198,7 +198,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
   };
 
   const runRefresh = async (name: string, force: boolean): Promise<RefreshOutcome> => {
-    const secret = await findSecret(deps.db, name);
+    const secret = await readSecret(deps.db, name);
 
     if (secret?.kind !== 'oauth' || secret.oauth === null) {
       unsaved.delete(name);
@@ -227,7 +227,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     const classified = await sendTokenRequest(secret.oauth, state.refreshToken);
 
     // a replace or a delete outside the lock changed what this result is for
-    const current = await findSecret(deps.db, name);
+    const current = await readSecret(deps.db, name);
 
     if (current?.valueFile !== secret.valueFile || current.generation !== secret.generation) {
       log(
@@ -372,7 +372,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     name: string,
     refreshedAt: number | null,
   ): Promise<RefreshOutcome> => {
-    const secret = await findSecret(deps.db, name);
+    const secret = await readSecret(deps.db, name);
 
     if (secret?.kind !== 'oauth' || secret.oauth === null) {
       return { kind: 'gone' };
@@ -422,7 +422,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
 
       return outcome.kind === 'refreshed' || outcome.kind === 'superseded';
     } catch (error) {
-      log(`impd: broker: oauth secret ${name}: ${readErrorMessage(error)}`);
+      log(`impd: broker: oauth secret ${name}: ${getErrorMessage(error)}`);
 
       return false;
     }
@@ -444,7 +444,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
           return;
         }
 
-        const current = await findSecret(deps.db, name);
+        const current = await readSecret(deps.db, name);
 
         if (current?.kind !== 'oauth' || current.valueFile !== kept.valueFile) {
           unsaved.delete(name);
@@ -455,7 +455,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
         writeState(name, kept.valueFile, kept.state);
       });
     } catch (error) {
-      log(`impd: broker: oauth secret ${name}: ${readErrorMessage(error)}`);
+      log(`impd: broker: oauth secret ${name}: ${getErrorMessage(error)}`);
     }
   };
 
@@ -495,11 +495,11 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
         try {
           await startRefresh(secret.name, false);
         } catch (error) {
-          log(`impd: broker: oauth secret ${secret.name}: ${readErrorMessage(error)}`);
+          log(`impd: broker: oauth secret ${secret.name}: ${getErrorMessage(error)}`);
         }
       }
     } catch (error) {
-      log(`impd: broker: oauth refresh check failed: ${readErrorMessage(error)}`);
+      log(`impd: broker: oauth refresh check failed: ${getErrorMessage(error)}`);
     }
   };
 
@@ -549,13 +549,13 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
   };
 }
 
-// a time in ms that a Date can hold
-function isValidTime(ms: number): boolean {
-  return Number.isFinite(ms) && !Number.isNaN(new Date(ms).getTime());
-}
-
 function sendToken(url: string, init: OAuthRequest): Promise<Response> {
   const tls = init.tls === undefined ? {} : { tls: { ca: [...init.tls.ca] } };
 
   return fetch(url, { ...init, ...tls });
+}
+
+// a time in ms that a Date can hold
+function isValidTime(durationMs: number): boolean {
+  return Number.isFinite(durationMs) && !Number.isNaN(new Date(durationMs).getTime());
 }

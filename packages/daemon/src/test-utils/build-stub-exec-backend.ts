@@ -50,7 +50,7 @@ export function buildStubExecBackend(options: StubExecBackendOptions = {}) {
 }
 
 function openOutcome(outcome: ExecStream | Error | undefined): Promise<ExecStream> {
-  // imp-runtime's buildNotAwakeError, with no cold boots on record; the real
+  // imp-runtime's readNotAwakeError, with no cold boots on record; the real
   // service boots a stopped imp for an exec, so there it is any typed refusal
   if (outcome === undefined) {
     const refused = buildInvalidStateError('stopped', ['running'], 'attach without a wake to');

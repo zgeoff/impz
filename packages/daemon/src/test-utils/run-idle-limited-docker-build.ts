@@ -7,19 +7,19 @@ import { createDockerProxy } from '../docker-proxy/proxy';
 import { runDockerBuild } from '../images/docker-build';
 
 const ArgsSchema = z.object({
-  dir: z.string(),
+  directory: z.string(),
   buildEngine: z.string(),
   cancelEngine: z.string(),
   controlEngine: z.string(),
 });
 
 const args = ArgsSchema.parse(JSON.parse(process.argv[2] ?? ''));
-const tarPath = join(args.dir, 'context.tar');
+const tarPath = join(args.directory, 'context.tar');
 
 await Bun.write(tarPath, 'the context');
 
 function startProxy(name: string, upstreamSocket: string): string {
-  const socket = join(args.dir, `${name}.sock`);
+  const socket = join(args.directory, `${name}.sock`);
 
   // as imp-docker-proxy's main serves it; Bun's types leave idleTimeout off
   // unix servers, but it applies there too

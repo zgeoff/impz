@@ -3,7 +3,7 @@ import type { SessionInfo } from '../agent-client/agent-protocol';
 import { sendActivity } from '../agent-client/agent-requests';
 import { openExecStream } from '../agent-client/exec-stream';
 import type { AgentExecRequest, ExecStream } from '../agent-client/exec-stream';
-import { findImpById } from '../db/imps';
+import { readImpById } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import { checkBrokerAttach, checkOpenedSession } from '../exec/broker-sessions';
 import { buildBrokerNotReadyError, checkBrokerReady, isBrokerRequired } from '../exec/exec-require';
@@ -155,7 +155,7 @@ export function openImpExec(
 // The guest the bundle step ran in is the one the command starts in: the
 // caller holds the lock, and this catches any write that got past it.
 async function requireSameBoot(context: ImpHost, imp: ImpRecord): Promise<void> {
-  const fresh = await findImpById(context.db, imp.id);
+  const fresh = await readImpById(context.db, imp.id);
 
   if (fresh?.state !== 'running' || fresh.pid !== imp.pid) {
     throw buildBrokerNotReadyError('the imp booted again after the broker CA step');

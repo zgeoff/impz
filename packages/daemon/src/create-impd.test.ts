@@ -23,7 +23,7 @@ import { buildMockNewImage } from './test-utils/build-mock-new-image';
 import { buildMockNewImp } from './test-utils/build-mock-new-imp';
 import { buildStubCpuCgroups } from './test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from './test-utils/build-stub-vmm';
-import { findFreePorts } from './test-utils/find-free-ports';
+import { claimFreePorts } from './test-utils/claim-free-ports';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -44,7 +44,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with, as setupSystemFiles installs it
@@ -159,8 +159,8 @@ async function setupTest() {
     logs,
     impd,
     client,
-    advance: (ms: number) => {
-      clock.nowMs += ms;
+    advance: (durationMs: number) => {
+      clock.nowMs += durationMs;
     },
     stack,
   };
@@ -199,7 +199,7 @@ test('it adopts a running VM through the new runner when it boots again', async 
 
   // the first impd still holds its resolver's port in this process
   const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     { ...ctx.deps, vms: ctx.vmm.startGeneration() },
   );
 
@@ -225,7 +225,7 @@ test('it says CPU limits are kept on a host without a cpu controller', async () 
   const ctx = await setupTest();
 
   const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     {
       ...ctx.deps,
       cgroups: buildStubCpuCgroups({ isEnforced: false }).cgroups,
@@ -252,7 +252,7 @@ test('it says no jailed VM can start on a jailed host without a cpu controller',
   const ctx = await setupTest();
 
   const restarted = await createImpd(
-    { ...ctx.config, jailerBin: 'jailer', egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, jailerBin: 'jailer', egressDnsPort: claimFreePorts(1).take() },
     {
       ...ctx.deps,
       cgroups: buildStubCpuCgroups({ isEnforced: false }).cgroups,
@@ -283,7 +283,7 @@ test('it removes a system drive that no imp uses when it boots', async () => {
   await writeFile(stale, 'stale');
 
   const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     { ...ctx.deps, vms: ctx.vmm.startGeneration() },
   );
 
@@ -314,7 +314,7 @@ test('it removes a builder that a stopped impd left when it boots', async () => 
   );
 
   const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     { ...ctx.deps, vms: ctx.vmm.startGeneration() },
   );
 
@@ -354,7 +354,7 @@ test('it drops a move ticket whose stream never came when it boots', async () =>
     .execute();
 
   const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     { ...ctx.deps, vms: ctx.vmm.startGeneration() },
   );
 
@@ -411,7 +411,7 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
   await ctx.client.imps.create({ name: 'dev' });
 
   const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     { ...wallClockDeps, vms: ctx.vmm.startGeneration() },
   );
 
@@ -443,7 +443,7 @@ test('it sends a streamed build its progress at the keepalive gap it is given', 
   const repeat = buildStubRepeat();
 
   const quick = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     {
       ...ctx.deps,
       vms: ctx.vmm.startGeneration(),

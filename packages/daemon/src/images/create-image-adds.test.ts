@@ -8,7 +8,7 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import type { ImpdDeps } from '../create-impd';
-import { createImage, findImageByName, listImages } from '../db/images';
+import { createImage, listImages, readImageByName } from '../db/images';
 import { listImps } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import { runChecked } from '../process/run-command';
@@ -18,17 +18,17 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildFilesTar } from '../test-utils/build-files-tar';
 import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildQueryGate } from '../test-utils/build-query-gate';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import type { StubAnswer } from '../test-utils/build-stub-guest';
 import { buildStubImageBuilder } from '../test-utils/build-stub-image-builder';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import { createBuilderImage } from '../test-utils/create-builder-image';
+import { createFilesTar } from '../test-utils/create-files-tar';
 import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
 import { createStubImageMkfs } from '../test-utils/create-stub-image-mkfs';
-import { findFreePorts } from '../test-utils/find-free-ports';
 import { BUILDER_IMAGE, createBuilders } from './builder-imps';
 import { HOST_ADD_WARNING } from './create-image-adds';
 import { createImageService } from './image-service';
@@ -48,7 +48,7 @@ async function setupTest() {
 
   // a host docker that logs every call and models none: an isolated add
   // makes no call; a test that needs the host engine writes its own
-  const docker = createStubDockerCli({ dir: dataDir });
+  const docker = createStubDockerCli({ directory: dataDir });
 
   updateEnv('PATH', docker.path);
 
@@ -58,7 +58,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with, as setupSystemFiles installs it
@@ -181,7 +181,7 @@ test('it adds an image through a builder for one platform, with no host engine c
   await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -399,7 +399,7 @@ test('it leaves no builder, row or work directory after a failed pull', async ()
   });
 
   const imps = await listImps(ctx.db);
-  const box = await findImageByName(ctx.db, 'box');
+  const box = await readImageByName(ctx.db, 'box');
 
   const workDirs = readdirSync(join(ctx.dataDir, 'images')).filter((entry) =>
     entry.startsWith('.build-'),
@@ -424,7 +424,7 @@ test('it refuses an export over IMP_BUILD_IMAGE_MAX_MIB', async () => {
   await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dataDir, { big: 'x'.repeat(2 * 1024 ** 2) })],
+    exported: [createFilesTar(ctx.dataDir, { big: 'x'.repeat(2 * 1024 ** 2) })],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -469,7 +469,7 @@ test('it leaves no builder, row or work directory after an export over the limit
   await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dataDir, { big: 'x'.repeat(2 * 1024 ** 2) })],
+    exported: [createFilesTar(ctx.dataDir, { big: 'x'.repeat(2 * 1024 ** 2) })],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -505,7 +505,7 @@ test('it leaves no builder, row or work directory after an export over the limit
   });
 
   const imps = await listImps(ctx.db);
-  const box = await findImageByName(ctx.db, 'box');
+  const box = await readImageByName(ctx.db, 'box');
 
   const workDirs = readdirSync(join(ctx.dataDir, 'images')).filter((entry) =>
     entry.startsWith('.build-'),
@@ -626,7 +626,7 @@ test('it ends the pull in the builder, and the builder, when the client goes', a
   expect(adding).rejects.toThrowWithMessage(Error, 'the client went');
 
   const imps = await listImps(ctx.db);
-  const box = await findImageByName(ctx.db, 'box');
+  const box = await readImageByName(ctx.db, 'box');
 
   // the exec ends, and the builder's removal ends the pull with it
   expect(builder.guest.runs.find((run) => run.argv[1] === 'pull')?.closed).toBe(true);
@@ -730,7 +730,7 @@ test('it fails the add of a builder the governor refuses, with no host engine ca
     /is larger than the whole RAM budget \(16384 MiB\)/v,
   );
 
-  const box = await findImageByName(ctx.db, 'box');
+  const box = await readImageByName(ctx.db, 'box');
 
   expect(builder.guest.runs).toStrictEqual([]);
   expect(box).toBe(undefined);
@@ -847,7 +847,7 @@ test('it adds a bumped IMP_BUILD_IMAGE once, by its digest, and moves the row', 
   // the host engine as the proxy's lock leaves it: the builder image pulls
   // by its digest, and create and export serve a small tree
   createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: [config.build.image],
@@ -856,7 +856,7 @@ test('it adds a bumped IMP_BUILD_IMAGE once, by its digest, and moves the row', 
       },
     ],
     create: { id: 'e'.repeat(64) },
-    exportTar: buildFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
   });
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
@@ -887,7 +887,7 @@ test('it adds a bumped IMP_BUILD_IMAGE once, by its digest, and moves the row', 
   await images.ensureBuilderImage();
   await images.ensureBuilderImage();
 
-  const row = await findImageByName(ctx.db, BUILDER_IMAGE);
+  const row = await readImageByName(ctx.db, BUILDER_IMAGE);
 
   const pulls = ctx.docker.readCalls().filter((call) => call.startsWith('pull '));
 
@@ -906,7 +906,7 @@ test('it seeds the default image at first start through a builder', async () => 
   });
 
   createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: [config.build.image],
@@ -915,11 +915,11 @@ test('it seeds the default image at first start through a builder', async () => 
       },
     ],
     create: { id: 'e'.repeat(64) },
-    exportTar: buildFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
   });
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -947,7 +947,7 @@ test('it seeds the default image at first start through a builder', async () => 
 
   await images.seedDefaultImage();
 
-  const seeded = await findImageByName(ctx.db, 'ubuntu');
+  const seeded = await readImageByName(ctx.db, 'ubuntu');
 
   const image = config.build.image;
 
@@ -976,7 +976,7 @@ test('it seeds the default image at the next start once the builder image has la
   await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -1004,7 +1004,7 @@ test('it seeds the default image at the next start once the builder image has la
 
   await images.seedDefaultImage();
 
-  const seeded = await findImageByName(ctx.db, 'ubuntu');
+  const seeded = await readImageByName(ctx.db, 'ubuntu');
 
   expect(seeded?.ref).toBe('ubuntu:24.04');
   expect(ctx.docker.readCalls()).toStrictEqual([]);
@@ -1022,7 +1022,7 @@ test('it sends an add to the host engine, with a warning and no builder, under I
 
   // a host engine whose registry knows no such tag
   createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['busybox:1.37'],
@@ -1082,7 +1082,7 @@ test('it fails a builder image pull that hangs at its limit, naming IMP_BUILD_IM
   });
 
   createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: [config.build.image],
@@ -1155,7 +1155,7 @@ test('it makes no host engine call beyond the inspect and the pull when the pull
   });
 
   createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: [config.build.image],
@@ -1236,7 +1236,7 @@ test('it pulls the builder image again on the add after a pull that failed', asy
     isOnHost: false,
   };
 
-  createStubDockerCli({ dir: ctx.dataDir, images: [{ ...host, pull: 'hang' }] });
+  createStubDockerCli({ directory: ctx.dataDir, images: [{ ...host, pull: 'hang' }] });
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
 
@@ -1288,15 +1288,15 @@ test('it pulls the builder image again on the add after a pull that failed', asy
 
   // the registry answers now
   createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [{ ...host, pull: 'ok' }],
     create: { id: 'e'.repeat(64) },
-    exportTar: buildFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
   });
 
   await images.ensureBuilderImage();
 
-  const row = await findImageByName(ctx.db, BUILDER_IMAGE);
+  const row = await readImageByName(ctx.db, BUILDER_IMAGE);
 
   const pulls = ctx.docker.readCalls().filter((call) => call.startsWith('pull '));
 
@@ -1319,7 +1319,7 @@ test('it stops the wait of a caller that goes, and the pull it shared goes on fo
   });
 
   createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: [config.build.image],
@@ -1328,7 +1328,7 @@ test('it stops the wait of a caller that goes, and the pull it shared goes on fo
       },
     ],
     create: { id: 'e'.repeat(64) },
-    exportTar: buildFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
   });
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
@@ -1366,7 +1366,7 @@ test('it stops the wait of a caller that goes, and the pull it shared goes on fo
 
   await staying;
 
-  const row = await findImageByName(ctx.db, BUILDER_IMAGE);
+  const row = await readImageByName(ctx.db, BUILDER_IMAGE);
 
   const pulls = ctx.docker.readCalls().filter((call) => call.startsWith('pull '));
 
@@ -1385,7 +1385,7 @@ test('it does not pull a builder image the host engine has already', async () =>
 
   // the operator's own `docker pull` of IMP_BUILD_IMAGE; a pull would hang
   createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: [config.build.image],
@@ -1394,7 +1394,7 @@ test('it does not pull a builder image the host engine has already', async () =>
       },
     ],
     create: { id: 'e'.repeat(64) },
-    exportTar: buildFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
   });
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
@@ -1424,7 +1424,7 @@ test('it does not pull a builder image the host engine has already', async () =>
 
   await images.ensureBuilderImage();
 
-  const row = await findImageByName(ctx.db, BUILDER_IMAGE);
+  const row = await readImageByName(ctx.db, BUILDER_IMAGE);
 
   const pulls = ctx.docker.readCalls().filter((call) => call.startsWith('pull '));
 
@@ -1442,7 +1442,7 @@ test('it names the error of a step after the pull that fails past the limit, not
   });
 
   createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: [config.build.image],
@@ -1450,7 +1450,7 @@ test('it names the error of a step after the pull that fails past the limit, not
       },
     ],
     create: { id: 'e'.repeat(64) },
-    exportTar: buildFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
   });
 
   const mkfs = createStubImageMkfs(ctx.dataDir);
@@ -1522,7 +1522,7 @@ test('it leaves no row, rootfs, hold or builder when the client leaves an add wh
   const mkfs = createStubImageMkfs(ctx.dataDir);
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -1559,7 +1559,7 @@ test('it leaves no row, rootfs, hold or builder when the client leaves an add wh
 
   expect(adding).rejects.toThrowWithMessage(Error, 'the client went');
 
-  const box = await findImageByName(ctx.db, 'box');
+  const box = await readImageByName(ctx.db, 'box');
   const status = await ctx.impd.diskBudget.readStatus();
   const imps = await listImps(ctx.db);
 
@@ -1588,7 +1588,7 @@ test('it leaves no new row and no rootfs when a template takes the name during a
   const templated = Promise.withResolvers<null>();
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
     repoDigest: `sha256:${'b'.repeat(64)}`,
     onExport: async () => {
       exporting.resolve(null);
@@ -1631,7 +1631,7 @@ test('it leaves no new row and no rootfs when a template takes the name during a
     'image box is a template; make it again from an imp, or pick another name',
   );
 
-  const box = await findImageByName(ctx.db, 'box');
+  const box = await readImageByName(ctx.db, 'box');
   const status = await ctx.impd.diskBudget.readStatus();
 
   const built = readdirSync(join(ctx.dataDir, 'images')).filter((entry) =>
@@ -1657,7 +1657,7 @@ test("it keeps the other's row and rootfs when an add and a build of one digest 
   const mkfs = createStubImageMkfs(ctx.dataDir);
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
@@ -1750,7 +1750,7 @@ test('it keeps the rootfs when an image rm runs while an add of its digest is be
 
   // the second add's export arms the gate, after its name check
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
     repoDigest: `sha256:${'b'.repeat(64)}`,
     onExport: () => {
       exports.count += 1;
@@ -1828,7 +1828,7 @@ test("it removes that rootfs after all when the add's row then fails", async () 
 
   // the second add's export arms the gate, after its name check
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
     repoDigest: `sha256:${'b'.repeat(64)}`,
     onExport: () => {
       exports.count += 1;
@@ -1904,7 +1904,7 @@ test('it logs a cleanup removal that fails, and returns the add its own error', 
   const templated = Promise.withResolvers<null>();
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
     repoDigest: `sha256:${'b'.repeat(64)}`,
     onExport: async () => {
       exporting.resolve(null);

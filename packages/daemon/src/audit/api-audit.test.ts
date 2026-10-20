@@ -3,7 +3,7 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/server';
 import { listApiCalls } from '../db/api-audit';
 import { createTestDatabase } from '../test-utils/create-test-database';
-import { createApiAudit, readImpName, withAuditedOpen } from './api-audit';
+import { createApiAudit, findImpName, withAuditedOpen } from './api-audit';
 
 async function setupTest() {
   const database = await createTestDatabase();
@@ -35,9 +35,9 @@ test.each([
   ['imps.stop', { name: 42 }, {}, null],
   ['imps.list', null, [], null],
 ])(
-  '#readImpName reads the imp of %s from %j and %j as %p',
+  '#findImpName reads the imp of %s from %j and %j as %p',
   (procedure, input, output, expected) => {
-    expect(readImpName(procedure, input, output)).toBe(expected);
+    expect(findImpName(procedure, input, output)).toBe(expected);
   },
 );
 

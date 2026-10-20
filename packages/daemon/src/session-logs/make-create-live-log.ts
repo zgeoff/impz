@@ -2,7 +2,7 @@ import { isAgentLogIdentity } from '../agent-client/agent-ids';
 import { buildLogKey } from './build-log-key';
 import type { SessionLogState } from './create-session-log-state';
 import type { GenerationLog, createGenerationLog } from './generation-log';
-import { hasTombstone, removeEmptyDirs, removeGenerationDir } from './session-log-files';
+import { probeTombstone, removeEmptyDirs, removeGenerationDir } from './session-log-files';
 import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp, SessionLogLimits } from './session-log-service';
 
@@ -38,7 +38,7 @@ export function makeCreateLiveLog(
       return null;
     }
 
-    if (ctx.isForgotten(imp.id, life) || hasTombstone(imp.sessionLogsDir, generation)) {
+    if (ctx.isForgotten(imp.id, life) || probeTombstone(imp.sessionLogsDir, generation)) {
       return null;
     }
 

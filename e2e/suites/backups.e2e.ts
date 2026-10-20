@@ -35,7 +35,7 @@ import {
   removeSecretIfPresent,
   removeTokenIfPresent,
 } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -53,7 +53,7 @@ async function setupTest() {
 
   stack.defer(() => removeBackupSecrets(secrets));
 
-  return { prefix: readSuitePrefix('backups'), stack, client, secrets };
+  return { prefix: getSuitePrefix('backups'), stack, client, secrets };
 }
 
 test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds next to nothing on the next run, and restores one imp or every imp of a point', async () => {

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { createEd25519Key } from '../ssh/host-key';
+import { generateEd25519Key } from '../ssh/host-key';
 import { buildStubTailscale } from '../test-utils/build-stub-tailscale';
 import { createTestDatabase } from '../test-utils/create-test-database';
 import { createKnownHosts } from './ambient-request';
@@ -88,7 +88,7 @@ test('#resolveCaller makes a token, its dashboard session and its bound key one 
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
 
   const made = await tokens.create({ name: 'ci', scope: 'exec', imps: null, sshKeys: [line] });
 

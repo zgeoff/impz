@@ -6,7 +6,7 @@ import { startRealTimer } from './start-real-timer';
 // through. `startTimer` is setTimeout's by default.
 export async function requireWithin<T>(
   promise: Promise<T>,
-  ms: number,
+  durationMs: number,
   buildError: () => Error,
   startTimer: StartTimer = startRealTimer,
 ): Promise<T> {
@@ -14,7 +14,7 @@ export async function requireWithin<T>(
 
   const cancel = startTimer(() => {
     timer.reject(buildError());
-  }, ms);
+  }, durationMs);
 
   try {
     return await Promise.race([promise, timer.promise]);

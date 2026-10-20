@@ -5,7 +5,7 @@ import type { RunZfsCommand, ZfsOwner } from './zfs-owner';
 
 // a data dir the reset may wipe, and the ZFS root it must empty with it
 export interface WipeTarget {
-  readonly dir: string;
+  readonly directory: string;
   readonly zfs: ZfsOwner | null;
 }
 
@@ -35,7 +35,7 @@ export async function resolveWipeTarget(
     const zfs = await readZfsOwner({ dataDir: data, zfsRoot: options.zfsRoot, run: options.run });
 
     if (zfs !== null) {
-      return { dir: data, zfs };
+      return { directory: data, zfs };
     }
   }
 
@@ -44,7 +44,7 @@ export async function resolveWipeTarget(
   const underDataRoot = dataRoot !== null && data.startsWith(`${dataRoot}/`);
 
   if (underDataRoot || existsSync(join(data, 'imp.xfs'))) {
-    return { dir: data, zfs: null };
+    return { directory: data, zfs: null };
   }
 
   throw new Error(

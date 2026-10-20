@@ -186,5 +186,5 @@ export function createLegacySessions(options: Readonly<LegacySessionsOptions>) {
 function findEvictable(candidates: readonly Readonly<SessionState>[]): LegacySession | null {
   const idle = candidates.filter((state) => state.busy === 0);
 
-  return idle.toSorted((a, b) => a.lastUsedAt - b.lastUsedAt)[0] ?? null;
+  return idle.toSorted((left, right) => left.lastUsedAt - right.lastUsedAt)[0] ?? null;
 }

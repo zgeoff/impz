@@ -15,7 +15,7 @@ import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { listApiCalls } from '../db/api-audit';
 import { createImage } from '../db/images';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import { PEER_HEADER } from '../proxy/forwarded-peers';
 import { startWakeProxy } from '../proxy/wake-proxy';
@@ -31,7 +31,7 @@ import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubExecGuest } from '../test-utils/build-stub-exec-guest';
 import { buildStubTailscale } from '../test-utils/build-stub-tailscale';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import { startStubExecAgent } from '../test-utils/start-stub-exec-agent';
 
 interface SetupOptions {
@@ -63,7 +63,7 @@ async function setupTest(options: SetupOptions) {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     ...readImpEnv(),
   });
 
@@ -300,7 +300,7 @@ test('it runs a command in an imp its token may touch', async () => {
 
   await ctx.client.imps.create({ name: 'agent-a' });
 
-  const record = await findImpByName(ctx.db, 'agent-a');
+  const record = await readImpByName(ctx.db, 'agent-a');
 
   invariant(record);
 
@@ -540,7 +540,7 @@ test.each([
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const record = await findImpByName(ctx.db, 'box');
+  const record = await readImpByName(ctx.db, 'box');
 
   invariant(record);
 
@@ -784,7 +784,7 @@ test('it ends the streamed call and running command of a token that is removed',
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const record = await findImpByName(ctx.db, 'box');
+  const record = await readImpByName(ctx.db, 'box');
 
   invariant(record);
 
@@ -1043,7 +1043,7 @@ test('it answers a tool call through the wake proxy’s API route', async () => 
     config: {
       ...ctx.config,
       apiPort: Number(new URL(ctx.url).port),
-      proxyPort: findFreePorts(1).take(),
+      proxyPort: claimFreePorts(1).take(),
     },
     db: ctx.db,
     imps: ctx.impd.imps,
@@ -1124,7 +1124,7 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const record = await findImpByName(ctx.db, 'box');
+  const record = await readImpByName(ctx.db, 'box');
 
   invariant(record);
 
@@ -1139,7 +1139,7 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
     config: {
       ...ctx.config,
       apiPort: Number(new URL(ctx.url).port),
-      proxyPort: findFreePorts(1).take(),
+      proxyPort: claimFreePorts(1).take(),
     },
     db: ctx.db,
     imps: ctx.impd.imps,
@@ -1218,7 +1218,7 @@ test('it keeps a call answered as server-sent events open through the wake proxy
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const record = await findImpByName(ctx.db, 'box');
+  const record = await readImpByName(ctx.db, 'box');
 
   invariant(record);
 
@@ -1233,7 +1233,7 @@ test('it keeps a call answered as server-sent events open through the wake proxy
     config: {
       ...ctx.config,
       apiPort: Number(new URL(ctx.url).port),
-      proxyPort: findFreePorts(1).take(),
+      proxyPort: claimFreePorts(1).take(),
     },
     db: ctx.db,
     imps: ctx.impd.imps,

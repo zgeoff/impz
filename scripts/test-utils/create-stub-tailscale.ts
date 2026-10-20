@@ -43,12 +43,12 @@ export interface StubTailscale {
 // A `tailscale` CLI in <dir>/bin, after the --socket=… it always gets first:
 // `status` fails before any node is written, as with no tailscaled; `up`
 // saves a Running node with its --hostname and --advertise-tags.
-export function createStubTailscale(dir: string): StubTailscale {
-  const status = join(dir, 'tailscale-status.json');
-  const starting = join(dir, 'tailscale-starting');
+export function createStubTailscale(directory: string): StubTailscale {
+  const status = join(directory, 'tailscale-status.json');
+  const starting = join(directory, 'tailscale-starting');
 
   const stub = createStubBin(
-    dir,
+    directory,
     'tailscale',
     String.raw`status=${JSON.stringify(status)}
 starting=${JSON.stringify(starting)}

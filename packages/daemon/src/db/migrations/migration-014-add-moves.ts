@@ -13,15 +13,15 @@ export const MIGRATION_014_ADD_MOVES: Migration = {
     // commit_until, set at the receipt.
     await db.schema
       .createTable('move_tickets')
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('secret_sha256', 'text', (c) => c.notNull().unique())
-      .addColumn('name', 'text', (c) => c.notNull())
-      .addColumn('bytes', 'integer', (c) => c.notNull())
+      .addColumn('id', 'text', (column) => column.primaryKey())
+      .addColumn('secret_sha256', 'text', (column) => column.notNull().unique())
+      .addColumn('name', 'text', (column) => column.notNull())
+      .addColumn('bytes', 'integer', (column) => column.notNull())
 
       // the imp the stream staged, once it started
       .addColumn('imp_id', 'text')
-      .addColumn('issued_at', 'integer', (c) => c.notNull())
-      .addColumn('stream_by', 'integer', (c) => c.notNull())
+      .addColumn('issued_at', 'integer', (column) => column.notNull())
+      .addColumn('stream_by', 'integer', (column) => column.notNull())
       .addColumn('stream_used_at', 'integer')
 
       // the receipt as sent, JSON
@@ -34,16 +34,16 @@ export const MIGRATION_014_ADD_MOVES: Migration = {
     // restart can finish the commit, and the receipt once it came
     await db.schema
       .createTable('move_sends')
-      .addColumn('imp_id', 'text', (c) => c.primaryKey())
+      .addColumn('imp_id', 'text', (column) => column.primaryKey())
       .addColumn('peer_url', 'text')
       .addColumn('ticket', 'text')
-      .addColumn('total_bytes', 'integer', (c) => c.notNull())
+      .addColumn('total_bytes', 'integer', (column) => column.notNull())
 
       // how the disk goes: `files`, or `zfs` streams to a ZFS target
-      .addColumn('mode', 'text', (c) => c.notNull().defaultTo('files'))
+      .addColumn('mode', 'text', (column) => column.notNull().defaultTo('files'))
       .addColumn('receipt', 'text')
       .addColumn('error', 'text')
-      .addColumn('created_at', 'integer', (c) => c.notNull())
+      .addColumn('created_at', 'integer', (column) => column.notNull())
       .execute();
   },
 };

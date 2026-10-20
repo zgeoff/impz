@@ -7,9 +7,9 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
-import { findPublicImp } from '../db/exposure';
+import { readPublicImp } from '../db/exposure';
 import { createImage } from '../db/images';
-import { findImpByName, updateImpExposure } from '../db/imps';
+import { readImpByName, updateImpExposure } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import { createForwardedPeers } from '../proxy/forwarded-peers';
 import { startWakeProxy } from '../proxy/wake-proxy';
@@ -19,11 +19,11 @@ import {
   buildSystemDrivesDir,
 } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockCertificate } from '../test-utils/build-mock-certificate';
 import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
+import { createMockCertificate } from '../test-utils/create-mock-certificate';
 import { startStubHeaderEcho } from '../test-utils/start-stub-header-echo';
 import { createHttpsListeners } from './https-listeners';
 import { buildCredentialHash, createPublicScope } from './public-auth';
@@ -48,7 +48,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with, as setupSystemFiles installs it
@@ -198,7 +198,7 @@ test('it sends the bare domain to the API over https', async () => {
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -237,7 +237,7 @@ test('it takes one label in front of the domain as an imp, even one named like t
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -269,7 +269,7 @@ test('it answers two labels in front of the domain with a 404 that says how', as
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -300,7 +300,7 @@ test('it answers another domain with a 404', async () => {
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -327,7 +327,7 @@ test('it hands the dashboard session to the API on the bare domain', async () =>
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -375,7 +375,7 @@ test('it never hands the dashboard session to an imp', async () => {
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -417,7 +417,7 @@ test('it redirects plain http on the domain to https on its port', async () => {
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -450,7 +450,7 @@ test('it answers plain http for another domain with a 404', async () => {
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -481,7 +481,7 @@ test('it wakes no imp for plain http on the domain', async () => {
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -492,7 +492,7 @@ test('it wakes no imp for plain http on the domain', async () => {
 
   await response.text();
 
-  const web = await findImpByName(ctx.db, 'web');
+  const web = await readImpByName(ctx.db, 'web');
 
   expect(web?.state).toBe('sleeping');
 });
@@ -512,7 +512,7 @@ test('it serves the first certificate to a new connection', async () => {
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const first = await buildMockCertificate({ names: ['first.test', 'imp.test', '*.imp.test'] });
+  const first = await createMockCertificate({ names: ['first.test', 'imp.test', '*.imp.test'] });
 
   listeners.setCertificate(first);
 
@@ -552,11 +552,11 @@ test('it serves a new certificate to every new connection once it is set', async
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const first = await buildMockCertificate({ names: ['first.test', 'imp.test', '*.imp.test'] });
+  const first = await createMockCertificate({ names: ['first.test', 'imp.test', '*.imp.test'] });
 
   listeners.setCertificate(first);
 
-  const second = await buildMockCertificate({ names: ['second.test', 'imp.test', '*.imp.test'] });
+  const second = await createMockCertificate({ names: ['second.test', 'imp.test', '*.imp.test'] });
 
   listeners.setCertificate(second);
 
@@ -604,7 +604,7 @@ test('it keeps an open WebSocket up across a new certificate', async () => {
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const first = await buildMockCertificate({ names: ['first.test', 'imp.test', '*.imp.test'] });
+  const first = await createMockCertificate({ names: ['first.test', 'imp.test', '*.imp.test'] });
 
   listeners.setCertificate(first);
 
@@ -628,7 +628,7 @@ test('it keeps an open WebSocket up across a new certificate', async () => {
     socket.addEventListener('error', reject);
   });
 
-  const second = await buildMockCertificate({ names: ['second.test', 'imp.test', '*.imp.test'] });
+  const second = await createMockCertificate({ names: ['second.test', 'imp.test', '*.imp.test'] });
 
   listeners.setCertificate(second);
   socket.send('still here');
@@ -653,7 +653,7 @@ test('it stops serving an address that goes away', async () => {
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -696,7 +696,7 @@ test('it logs an address it cannot bind once', async () => {
 
   ctx.stack.defer(() => listeners.stop());
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
   listeners.setAddresses(['127.0.0.1']);
@@ -731,7 +731,7 @@ test('it binds an address it could not bind once the port is free, and says so',
 
   ctx.stack.defer(() => listeners.stop());
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
   listeners.setAddresses(['127.0.0.1']);
@@ -754,7 +754,7 @@ test.each([['web.imp.test'], ['WEB.imp.test.'], ['web.imp.test:443']])(
       httpsPort: 0,
       httpPort: 0,
       log: () => {},
-      scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+      scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
     });
 
     ctx.stack.defer(() => listeners.stop());
@@ -763,7 +763,7 @@ test.each([['web.imp.test'], ['WEB.imp.test.'], ['web.imp.test:443']])(
 
     listeners.setAddresses(['127.0.0.1']);
 
-    const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+    const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
     listeners.setCertificate(certificate);
 
@@ -789,13 +789,13 @@ test('it answers an imp that does not exist on the public listener with the same
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -820,13 +820,13 @@ test('it answers the bare domain on the public listener with the 404 for no imp'
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -851,7 +851,7 @@ test('it answers plain http for a tailnet-only imp on the public listener with a
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -860,7 +860,7 @@ test('it answers plain http for a tailnet-only imp on the public listener with a
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -881,7 +881,7 @@ test('it wakes no tailnet-only imp for a request on the public listener', async 
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -891,7 +891,7 @@ test('it wakes no tailnet-only imp for a request on the public listener', async 
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -902,7 +902,7 @@ test('it wakes no tailnet-only imp for a request on the public listener', async 
 
   await response.text();
 
-  const web = await findImpByName(ctx.db, 'web');
+  const web = await readImpByName(ctx.db, 'web');
 
   expect(web?.state).toBe('sleeping');
 });
@@ -916,7 +916,7 @@ test('it serves a public imp without auth on the public listener', async () => {
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -930,7 +930,7 @@ test('it serves a public imp without auth on the public listener', async () => {
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -963,7 +963,7 @@ test('it redirects plain http for a public imp to port 443', async () => {
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -974,7 +974,7 @@ test('it redirects plain http for a public imp to port 443', async () => {
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -1006,7 +1006,7 @@ test.each([
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -1021,7 +1021,7 @@ test.each([
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -1043,7 +1043,7 @@ test('it wakes no token imp for a request without its token', async () => {
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -1060,7 +1060,7 @@ test('it wakes no token imp for a request without its token', async () => {
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -1071,7 +1071,7 @@ test('it wakes no token imp for a request without its token', async () => {
 
   await response.text();
 
-  const web = await findImpByName(ctx.db, 'web');
+  const web = await readImpByName(ctx.db, 'web');
 
   expect(web?.state).toBe('sleeping');
 });
@@ -1085,7 +1085,7 @@ test('it serves a token imp given its token, without passing the token on', asyn
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -1105,7 +1105,7 @@ test('it serves a token imp given its token, without passing the token on', asyn
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -1141,7 +1141,7 @@ test.each([
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -1156,7 +1156,7 @@ test.each([
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -1181,7 +1181,7 @@ test('it serves a basic auth imp given its user and password, without passing th
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -1199,7 +1199,7 @@ test('it serves a basic auth imp given its user and password, without passing th
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -1237,7 +1237,7 @@ test('it takes no open slot and no wake for plain http on the public listener', 
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), limits),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), limits),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -1250,7 +1250,7 @@ test('it takes no open slot and no wake for plain http on the public listener', 
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -1283,7 +1283,7 @@ test('it answers a WebSocket upgrade without the token with a 401', async () => 
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -1300,7 +1300,7 @@ test('it answers a WebSocket upgrade without the token with a 401', async () => 
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -1319,7 +1319,7 @@ test('it answers a WebSocket upgrade without the token with a 401', async () => 
 
   await response.text();
 
-  const web = await findImpByName(ctx.db, 'web');
+  const web = await readImpByName(ctx.db, 'web');
 
   expect(response.status).toBe(401);
   expect(web?.state).toBe('sleeping');
@@ -1334,7 +1334,7 @@ test('it replaces a public client’s forwarding headers with its own', async ()
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -1348,7 +1348,7 @@ test('it replaces a public client’s forwarding headers with its own', async ()
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 
@@ -1388,7 +1388,7 @@ test('it names neither the imp’s port nor the error on the public listener whe
     httpsPort: 0,
     httpPort: 0,
     log: () => {},
-    scope: createPublicScope((name) => findPublicImp(ctx.db, name), createPublicLimits()),
+    scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
   ctx.stack.defer(() => listeners.stop());
@@ -1402,7 +1402,7 @@ test('it names neither the imp’s port nor the error on the public listener whe
 
   listeners.setAddresses(['127.0.0.1']);
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   listeners.setCertificate(certificate);
 

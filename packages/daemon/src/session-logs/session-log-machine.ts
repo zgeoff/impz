@@ -432,12 +432,12 @@ function buildSetWith<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {
   return new Set([...set, value]);
 }
 
-function buildSetWithout<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {
-  return new Set([...set].filter((each) => each !== value));
-}
-
 function buildMapWith<K, V>(map: ReadonlyMap<K, V>, key: K, value: V): ReadonlyMap<K, V> {
   return new Map([...map, [key, value]]);
+}
+
+function buildSetWithout<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {
+  return new Set([...set].filter((each) => each !== value));
 }
 
 function buildMapWithout<K, V>(map: ReadonlyMap<K, V>, key: K): ReadonlyMap<K, V> {

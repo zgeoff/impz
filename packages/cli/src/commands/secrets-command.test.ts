@@ -15,10 +15,10 @@ import {
 } from '@impz/daemon/src/storage/data-layout';
 import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
-import { buildStubBrokerTokenEndpoint } from '@impz/daemon/src/test-utils/build-stub-broker-token-endpoint';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
+import { createStubBrokerTokenEndpoint } from '@impz/daemon/src/test-utils/create-stub-broker-token-endpoint';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
@@ -47,7 +47,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots with
@@ -454,7 +454,7 @@ test('it says until when an added oauth secret’s access token is valid', async
 
   // an access token whose JWT expiry is 2030-01-01T00:00:00Z
   const accessToken = `e30.${Buffer.from(JSON.stringify({ exp: 1_893_456_000 })).toString('base64url')}.sig`;
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh', { access_token: accessToken, refresh_token: 'fake-refresh-1' });
@@ -494,7 +494,7 @@ test('it says why an added oauth secret failed its sign-in', async () => {
   const ctx = await setupTest();
 
   // the endpoint has issued nothing for this refresh token, so it refuses it
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -535,7 +535,7 @@ test('it prints a refreshed oauth secret that is ready', async () => {
   // an access token whose JWT expiry is 2030-01-01T00:00:00Z, for the add's
   // sign-in and then the refresh
   const accessToken = `e30.${Buffer.from(JSON.stringify({ exp: 1_893_456_000 })).toString('base64url')}.sig`;
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh', { access_token: accessToken, refresh_token: 'fake-refresh-1' });

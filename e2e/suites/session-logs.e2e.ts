@@ -15,7 +15,7 @@ import { waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { listSessionLogs, requireSessionLog } from '../lib/session-logs';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -32,7 +32,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('session-logs'), stack, client };
+  return { prefix: getSuitePrefix('session-logs'), stack, client };
 }
 
 test('it says impd keeps session logs', async () => {

@@ -5,17 +5,17 @@ import { join } from 'node:path';
 import { spawnSparseFilesTar } from './spawn-sparse-files-tar';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'sparse-files-tar-'));
+  const directory = await mkdtemp(join(tmpdir(), 'sparse-files-tar-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it streams a tar of each file at its size', async () => {
   const ctx = await setupTest();
 
-  const tar = spawnSparseFilesTar(ctx.dir, { big: 3 * 1024 ** 2, small: 10 });
+  const tar = spawnSparseFilesTar(ctx.directoryPath, { big: 3 * 1024 ** 2, small: 10 });
 
   const chunks = await Array.fromAsync(tar.stdout);
 
@@ -29,7 +29,7 @@ test('it streams a tar of each file at its size', async () => {
 test('it sends the archive in 1 MiB chunks, then the rest', async () => {
   const ctx = await setupTest();
 
-  const tar = spawnSparseFilesTar(ctx.dir, { big: 3 * 1024 ** 2 });
+  const tar = spawnSparseFilesTar(ctx.directoryPath, { big: 3 * 1024 ** 2 });
 
   const chunks = await Array.fromAsync(tar.stdout);
 
@@ -45,11 +45,11 @@ test('it sends the archive in 1 MiB chunks, then the rest', async () => {
 test('it writes each file as a hole that takes no disk', async () => {
   const ctx = await setupTest();
 
-  const tar = spawnSparseFilesTar(ctx.dir, { big: 64 * 1024 ** 2 });
+  const tar = spawnSparseFilesTar(ctx.directoryPath, { big: 64 * 1024 ** 2 });
 
   await Array.fromAsync(tar.stdout);
 
-  const du = Bun.spawnSync(['du', '-s', '--block-size=1', ctx.dir]).stdout.toString();
+  const du = Bun.spawnSync(['du', '-s', '--block-size=1', ctx.directoryPath]).stdout.toString();
 
   expect(Number(du.split('\t')[0])).toBeLessThan(1024 ** 2);
 });
@@ -57,7 +57,7 @@ test('it writes each file as a hole that takes no disk', async () => {
 test('it ends a tar that nothing reads when the test ends', async () => {
   const ctx = await setupTest();
 
-  const tar = spawnSparseFilesTar(ctx.dir, { big: 64 * 1024 ** 2 });
+  const tar = spawnSparseFilesTar(ctx.directoryPath, { big: 64 * 1024 ** 2 });
 
   onTestFinished(async () => {
     const code = await tar.exited;

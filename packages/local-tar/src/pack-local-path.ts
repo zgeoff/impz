@@ -33,7 +33,7 @@ const ENTRY_KINDS = [
 export async function listLocalEntries(path: string): Promise<readonly LocalEntry[]> {
   const entries: LocalEntry[] = [];
 
-  const collectEntries = async (current: string, name: string): Promise<void> => {
+  const readEntries = async (current: string, name: string): Promise<void> => {
     const stats = await lstat(current);
 
     entries.push({
@@ -49,12 +49,12 @@ export async function listLocalEntries(path: string): Promise<readonly LocalEntr
       const children = await readdir(current);
 
       for (const child of children.toSorted()) {
-        await collectEntries(join(current, child), `${name}/${child}`);
+        await readEntries(join(current, child), `${name}/${child}`);
       }
     }
   };
 
-  await collectEntries(path, basename(path));
+  await readEntries(path, basename(path));
 
   return entries;
 }

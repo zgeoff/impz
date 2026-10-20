@@ -11,11 +11,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'stub-image-builder-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-image-builder-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it answers the pin inspect of any image on linux/amd64 with its registry digest', async () => {
@@ -52,14 +52,21 @@ test('it records the Dockerfile of each context a build gets on stdin', async ()
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
 
-  await writeFile(join(ctx.dir, 'Dockerfile'), 'FROM scratch\n');
+  await writeFile(join(ctx.directoryPath, 'Dockerfile'), 'FROM scratch\n');
 
-  Bun.spawnSync(['tar', '-C', ctx.dir, '-cf', join(ctx.dir, 'context.tar'), 'Dockerfile']);
+  Bun.spawnSync([
+    'tar',
+    '-C',
+    ctx.directoryPath,
+    '-cf',
+    join(ctx.directoryPath, 'context.tar'),
+    'Dockerfile',
+  ]);
 
   const answered = await builder.builders.withBuilder(new AbortController().signal, (exec) =>
     exec(['docker', 'build', '-'], {
       signal: new AbortController().signal,
-      stdinPath: join(ctx.dir, 'context.tar'),
+      stdinPath: join(ctx.directoryPath, 'context.tar'),
     }),
   );
 
@@ -76,14 +83,21 @@ test('it writes the plain progress a test gives to the stderr of a build', async
     buildLog: '#4 [2/2] RUN make all\n#4 DONE 0.5s\n',
   });
 
-  await writeFile(join(ctx.dir, 'Dockerfile'), 'FROM scratch\n');
+  await writeFile(join(ctx.directoryPath, 'Dockerfile'), 'FROM scratch\n');
 
-  Bun.spawnSync(['tar', '-C', ctx.dir, '-cf', join(ctx.dir, 'context.tar'), 'Dockerfile']);
+  Bun.spawnSync([
+    'tar',
+    '-C',
+    ctx.directoryPath,
+    '-cf',
+    join(ctx.directoryPath, 'context.tar'),
+    'Dockerfile',
+  ]);
 
   const answered = await builder.builders.withBuilder(new AbortController().signal, (exec) =>
     exec(['docker', 'build', '-'], {
       signal: new AbortController().signal,
-      stdinPath: join(ctx.dir, 'context.tar'),
+      stdinPath: join(ctx.directoryPath, 'context.tar'),
     }),
   );
 

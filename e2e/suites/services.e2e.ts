@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
-import { getThroughProxy, sendProxyRequest } from '../lib/http';
+import { readThroughProxy, sendProxyRequest } from '../lib/http';
 import {
   createInstanceClient,
   readState,
@@ -13,12 +13,12 @@ import {
   startImp,
   tryImp,
 } from '../lib/imp-cli';
-import { collectText } from '../lib/imp-proxy';
+import { readText } from '../lib/imp-proxy';
 import { waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { listServices, waitForServicePid } from '../lib/services';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // The services API (docs/guides/services.md) on e2e-bare, busybox with no
@@ -33,7 +33,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('services'), stack, client };
+  return { prefix: getSuitePrefix('services'), stack, client };
 }
 
 test('it runs an added service through logs, a restart, a sleep, a reboot and a remove', async () => {
@@ -68,7 +68,7 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
   );
 
   const firstPid = await waitForServicePid(name, 'web', null);
-  const body = await waitFor('the service to answer', () => getThroughProxy(name));
+  const body = await waitFor('the service to answer', () => readThroughProxy(name));
   const file = await runInImp(name, 'cat', '/etc/imp/services.d/web.json');
   const added = await listServices(name);
 
@@ -102,7 +102,7 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
     await follow.exited;
   });
 
-  const followed = collectText(follow.stdout);
+  const followed = readText(follow.stdout);
   const marker = `/followed-${String(Date.now())}`;
 
   // the follow starts in the background; a request before it may land in the
@@ -128,7 +128,7 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
   await runImp('service', 'restart', name, 'web');
 
   const restartedPid = await waitForServicePid(name, 'web', firstPid);
-  const restarted = await getThroughProxy(name);
+  const restarted = await readThroughProxy(name);
 
   expect(restarted).toBe('hello from a service');
 
@@ -138,7 +138,7 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
 
   const asleep = await listServices(name);
   const asleepState = await readState(name);
-  const woken = await getThroughProxy(name);
+  const woken = await readThroughProxy(name);
   const awake = await listServices(name);
 
   expect(asleep.map((service) => [service.name, service.pid])).toStrictEqual([
@@ -154,7 +154,7 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
   await runImp('start', name);
   await waitForServicePid(name, 'web', null);
 
-  const rebooted = await waitFor('the service after a reboot', () => getThroughProxy(name));
+  const rebooted = await waitFor('the service after a reboot', () => readThroughProxy(name));
 
   expect(rebooted).toBe('hello from a service');
 
@@ -217,8 +217,8 @@ test('it waits out a sleep in a log follow without waking the imp, and prints ea
     await follow.exited;
   });
 
-  const stdout = collectText(follow.stdout);
-  const stderr = collectText(follow.stderr);
+  const stdout = readText(follow.stdout);
+  const stderr = readText(follow.stderr);
   const opened = `/opened-${String(Date.now())}`;
 
   // a request the follow prints shows its stream is open, so the sleep
@@ -320,7 +320,7 @@ test('it points the imp URL at a service added with --http-port, and back once i
   );
 
   await runImp('service', 'add', name, 'web', '--cmd', 'busybox httpd -f -p 8080 -h /srv/www');
-  await waitFor('the service on 8080 to answer', () => getThroughProxy(name));
+  await waitFor('the service on 8080 to answer', () => readThroughProxy(name));
 
   await runImp(
     'service',
@@ -334,7 +334,7 @@ test('it points the imp URL at a service added with --http-port, and back once i
   );
 
   const body = await waitFor('the proxy to reach port 8081', async () => {
-    const text = await getThroughProxy(name);
+    const text = await readThroughProxy(name);
 
     if (text !== 'hello from alt') {
       throw new Error(`the imp URL answered ${text}`);
@@ -346,7 +346,7 @@ test('it points the imp URL at a service added with --http-port, and back once i
   await runImp('set', name, '--http-port', '8080');
   await runImp('service', 'rm', name, 'alt');
 
-  const back = await getThroughProxy(name);
+  const back = await readThroughProxy(name);
 
   expect(body).toBe('hello from alt');
   expect(back).toBe('hello from a service');

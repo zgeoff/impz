@@ -64,14 +64,14 @@ const PROCESS_IO: ProxyIo = {
   },
 };
 
-function readErrorCode(error: unknown): string | null {
+function findErrorCode(error: unknown): string | null {
   return error instanceof Error && 'code' in error && typeof error.code === 'string'
     ? error.code
     : null;
 }
 
 function buildBindError(error: unknown, name: string, forward: Forward): Error {
-  const code = readErrorCode(error);
+  const code = findErrorCode(error);
   const remote = String(forward.remote);
   const local = String(forward.local);
 
@@ -160,7 +160,7 @@ async function startForward(
 
       return { port, servers: [ipv4, ipv6] };
     } catch (error) {
-      const code = readErrorCode(error) ?? '';
+      const code = findErrorCode(error) ?? '';
 
       if (NO_IPV6_CODES.has(code)) {
         return { port, servers: [ipv4] };

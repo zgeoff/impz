@@ -569,8 +569,8 @@ docker exec imp-host impz info     # the CLI is in the image and finds the token
 
 ### Images on a server
 
-`impz image build <dir>` uploads the directory from the machine that runs the CLI, so a checkout on
-your laptop is enough ([images](./images.md#build-an-image)):
+`impz image build <directory>` uploads the directory from the machine that runs the CLI, so a
+checkout on your laptop is enough ([images](./images.md#build-an-image)):
 
 ```sh
 impz image build images/base --name base

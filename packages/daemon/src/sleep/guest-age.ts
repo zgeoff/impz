@@ -11,7 +11,7 @@ interface GuestAgeWait {
   // the clock and the pause between checks; performance.now and Bun.sleep
   // by default
   readonly now?: () => number;
-  readonly sleep?: (ms: number) => Promise<void>;
+  readonly sleep?: (durationMs: number) => Promise<void>;
 }
 
 // Before Linux 6.7, KVM restores a TSC under one second old as about 0 and the guest clock

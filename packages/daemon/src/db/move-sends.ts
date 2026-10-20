@@ -6,7 +6,7 @@ import type { DB } from './schema';
 // can finish the commit, and the receipt once it came
 type MoveSendRow = Selectable<DB['move_sends']>;
 
-export function findMoveSend(db: ImpQueries, impId: string): Promise<MoveSendRow | undefined> {
+export function readMoveSend(db: ImpQueries, impId: string): Promise<MoveSendRow | undefined> {
   return db.selectFrom('move_sends').selectAll().where('imp_id', '=', impId).executeTakeFirst();
 }
 

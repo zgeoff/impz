@@ -7,13 +7,13 @@ import { join } from 'node:path';
 // each test loads it in a child process with only the variables it gives
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'e2e-limit-'));
+  const directory = mkdtempSync(join(tmpdir(), 'e2e-limit-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it passes a time within the limit in an acceptance run', () => {
@@ -25,7 +25,7 @@ test('it passes a time within the limit in an acceptance run', () => {
       '-e',
       `import { checkLimit } from ${JSON.stringify(join(import.meta.dir, 'check-limit.ts'))}; checkLimit('impz new', 500, 500);`,
     ],
-    { cwd: ctx.dir, env: { PATH: process.env['PATH'] ?? '', E2E_ACCEPTANCE: '1' } },
+    { cwd: ctx.directoryPath, env: { PATH: process.env['PATH'] ?? '', E2E_ACCEPTANCE: '1' } },
   );
 
   expect({
@@ -44,7 +44,7 @@ test('it fails a time over the limit in an acceptance run', () => {
       '-e',
       `import { checkLimit } from ${JSON.stringify(join(import.meta.dir, 'check-limit.ts'))}; checkLimit('impz new', 501, 500);`,
     ],
-    { cwd: ctx.dir, env: { PATH: process.env['PATH'] ?? '', E2E_ACCEPTANCE: '1' } },
+    { cwd: ctx.directoryPath, env: { PATH: process.env['PATH'] ?? '', E2E_ACCEPTANCE: '1' } },
   );
 
   expect(result.exitCode).toBe(1);
@@ -60,7 +60,7 @@ test('it warns of a time over the limit outside an acceptance run', () => {
       '-e',
       `import { checkLimit } from ${JSON.stringify(join(import.meta.dir, 'check-limit.ts'))}; checkLimit('impz new', 501, 500);`,
     ],
-    { cwd: ctx.dir, env: { PATH: process.env['PATH'] ?? '' } },
+    { cwd: ctx.directoryPath, env: { PATH: process.env['PATH'] ?? '' } },
   );
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({

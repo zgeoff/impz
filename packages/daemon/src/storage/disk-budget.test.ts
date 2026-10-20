@@ -1,8 +1,8 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import invariant from 'tiny-invariant';
-import { findImpByName } from '../db/imps';
-import { buildTestApp } from '../imps/build-test-app';
+import { readImpByName } from '../db/imps';
+import { createTestApp } from '../imps/create-test-app';
 import { createImpTest } from '../imps/test-imps';
 import type { ImpTestOptions } from '../imps/test-imps';
 import { buildImpPaths } from './data-layout';
@@ -20,7 +20,7 @@ async function setupTest(options: ImpTestOptions = {}) {
   // the image every imp boots from
   await harness.createTestImage('ubuntu');
 
-  return { ...harness, client: buildTestApp(harness, harness).client };
+  return { ...harness, client: createTestApp(harness, harness).client };
 }
 
 test('it allows a write that leaves the reserve free', async () => {
@@ -440,7 +440,7 @@ test('it refuses a write with an estimate of 0 once the reserve is reached', () 
 });
 
 test('it keeps a hold for the release delay after its write ends', async () => {
-  const startTimer = mock<(fire: () => void, ms: number) => () => void>(() => () => {});
+  const startTimer = mock<(fire: () => void, durationMs: number) => () => void>(() => () => {});
 
   const budget = createDiskBudget({
     storage: {
@@ -462,7 +462,7 @@ test('it keeps a hold for the release delay after its write ends', async () => {
 });
 
 test('it frees a hold once its release delay is up', async () => {
-  const startTimer = mock<(fire: () => void, ms: number) => () => void>(() => () => {});
+  const startTimer = mock<(fire: () => void, durationMs: number) => () => void>(() => () => {});
 
   const budget = createDiskBudget({
     storage: {
@@ -488,7 +488,7 @@ test('it frees a hold once its release delay is up', async () => {
 });
 
 test('it starts no release timer for a zero-byte hold', async () => {
-  const startTimer = mock<(fire: () => void, ms: number) => () => void>(() => () => {});
+  const startTimer = mock<(fire: () => void, durationMs: number) => () => void>(() => () => {});
 
   const budget = createDiskBudget({
     storage: {
@@ -591,7 +591,7 @@ test('it refuses a sleep the disk cannot take with DISK_FULL and leaves the imp 
 
   expect(sleeping).rejects.toMatchObject({ code: 'DISK_FULL' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(imp?.state).toBe('running');
   expect(existsSync(buildImpPaths(ctx.dataDir, created.id).vmstate)).toBeFalse();

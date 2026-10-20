@@ -12,14 +12,14 @@ import { buildStubTimeouts } from '../test-utils/build-stub-timeouts';
 import { listSavedTargets, runOnHosts } from './fan-out';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-fan-out-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-fan-out-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   // where config.json keeps the saved hosts
-  return { env: { XDG_CONFIG_HOME: dir } };
+  return { env: { XDG_CONFIG_HOME: directory } };
 }
 
 test('#runOnHosts gives each host its own answer or error, and a silent one the timeout', async () => {
@@ -87,7 +87,7 @@ test('#runOnHosts gives each host a timer of the timeout, cancelled once it answ
     timeouts.startTimer,
   );
 
-  expect(timeouts.timers).toStrictEqual([{ ms: 50, state: 'cancelled' }]);
+  expect(timeouts.timers).toStrictEqual([{ durationMs: 50, state: 'cancelled' }]);
 });
 
 test('#runOnHosts aborts each host’s requests once its answer is in, the silent one’s by the timeout', async () => {

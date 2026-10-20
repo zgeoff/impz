@@ -34,12 +34,24 @@ export interface CpOptions {
   readonly owner?: string;
 }
 
-function writeWarning(text: string): void {
-  console.error(`impz: ${text}`);
-}
+// `impz cp`: one side on this machine, the other in an imp
+export async function runCp(options: CpOptions): Promise<void> {
+  const config = loadCliConfig(options.env, options.host, options.warn);
+  const plan = parseCpArgs(options.source, options.target);
 
-function writeGuestStderr(data: Uint8Array): void {
-  process.stderr.write(data);
+  if (options.owner !== undefined && plan.direction === 'download') {
+    throw new UsageError('--owner sets the owner in the imp: it goes with a copy into the imp');
+  }
+
+  const progress = createCopyProgress(options.output);
+
+  try {
+    await (plan.direction === 'upload'
+      ? runUpload(config, plan, options.owner, progress)
+      : runDownload(config, plan, progress));
+  } catch (error) {
+    throw toCallError(error, config);
+  }
 }
 
 async function runUpload(
@@ -81,6 +93,14 @@ async function runUpload(
   }
 }
 
+function writeGuestStderr(data: Uint8Array): void {
+  process.stderr.write(data);
+}
+
+function writeWarning(text: string): void {
+  console.error(`impz: ${text}`);
+}
+
 async function runDownload(config: CliConfig, plan: CpPlan, progress: CopyProgress): Promise<void> {
   const extractor = createLocalExtractor(plan.localPath, progress, writeWarning, TAR_TOTAL_RECORD);
 
@@ -118,25 +138,5 @@ async function runDownload(config: CliConfig, plan: CpPlan, progress: CopyProgre
     }
   } finally {
     exec.close();
-  }
-}
-
-// `impz cp`: one side on this machine, the other in an imp
-export async function runCp(options: CpOptions): Promise<void> {
-  const config = loadCliConfig(options.env, options.host, options.warn);
-  const plan = parseCpArgs(options.source, options.target);
-
-  if (options.owner !== undefined && plan.direction === 'download') {
-    throw new UsageError('--owner sets the owner in the imp: it goes with a copy into the imp');
-  }
-
-  const progress = createCopyProgress(options.output);
-
-  try {
-    await (plan.direction === 'upload'
-      ? runUpload(config, plan, options.owner, progress)
-      : runDownload(config, plan, progress));
-  } catch (error) {
-    throw toCallError(error, config);
   }
 }

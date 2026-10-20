@@ -9,21 +9,20 @@ import type { Broker } from '../broker/broker-service';
 import { buildCheckpointId } from '../checkpoints/checkpoint-service';
 import { createCheckpoint } from '../db/checkpoints';
 import { writeMovedBoots } from '../db/cold-boots';
-import { createImage, findImageByDigest, findImageByName } from '../db/images';
-import { findImpById } from '../db/imps';
+import { createImage, readImageByDigest, readImageByName } from '../db/images';
+import { readImpById } from '../db/imps';
 import { updateMoveTicket } from '../db/move-tickets';
 import type { MoveTicketRow } from '../db/move-tickets';
 import type { ImpDatabase } from '../db/open-database';
 import type { EgressService } from '../egress/egress-service';
+import { getErrorMessage } from '../get-error-message';
 import type { Imps } from '../imps/imp-service';
-import { readErrorMessage } from '../read-error-message';
 import type { HostIdentity } from '../sleep/vm-identity';
 import { toDigestHex } from '../storage/data-layout';
 import type { DiskBudget } from '../storage/disk-budget';
 import { CheckpointIdTakenError } from '../storage/storage-backend';
 import type { StorageBackend } from '../storage/storage-backend';
 import type { StorageGate } from '../storage/storage-gate';
-import { writeReceivedLeases } from './build-moved-leases';
 import { requireOwnDrivePath, requireWarmMove, writeWarmFiles } from './check-warm-move';
 import { COMMIT_WINDOW_MS } from './commit-window-ms';
 import { createByteCounter } from './create-byte-counter';
@@ -43,11 +42,10 @@ import type { MoveHeader } from './move-header';
 import { MoveRequestError } from './move-request-error';
 import { buildReceipt, isSameHash } from './move-tickets';
 import type { ReceiptBody } from './move-tickets';
+import { writeReceivedLeases } from './read-moved-leases';
 import { removeStagedImp } from './remove-staged-imp';
 import { requireTicketedName } from './require-ticketed-name';
 import { writeMoveStreams } from './write-move-streams';
-
-const ID_ATTEMPTS = 5;
 
 interface ReceiveStreamDeps {
   readonly db: ImpDatabase;
@@ -105,7 +103,7 @@ export async function readMoveStream(
 
   requireTicketedName(row.name, header.imp.name);
 
-  if ((await findImpById(deps.db, header.imp.id)) !== undefined) {
+  if ((await readImpById(deps.db, header.imp.id)) !== undefined) {
     throw new MoveRequestError(409, `this host has an imp with id ${header.imp.id}`);
   }
 
@@ -325,6 +323,8 @@ function readDataInFile(payload: Uint8Array, size: number): ReturnType<typeof re
   return data;
 }
 
+const ID_ATTEMPTS = 5;
+
 async function createCheckpointDisk(deps: ReceiveStreamDeps, impId: string) {
   for (let attempt = 1; ; attempt += 1) {
     const id = buildCheckpointId();
@@ -348,7 +348,7 @@ async function requireImage(
   count: ByteCounter,
   tempBase: string,
 ): Promise<{ readonly name: string; readonly files: readonly ReceivedFile[] }> {
-  const existing = await findImageByDigest(deps.db, header.image.digest);
+  const existing = await readImageByDigest(deps.db, header.image.digest);
 
   if (existing !== undefined) {
     return { name: existing.name, files: [] };
@@ -371,23 +371,23 @@ async function requireImage(
 
     const digest = buildReceivedDigest(rootfs.sha256, config.sha256);
 
-    const known = await findImageByDigest(deps.db, digest);
+    const known = await readImageByDigest(deps.db, digest);
 
     if (known !== undefined) {
       return { name: known.name, files };
     }
 
     await deps.storageGate.join(() =>
-      deps.storage.createImage(digest, async (dir) => {
-        await copyFile(temps.config, join(dir, 'config.json'));
+      deps.storage.createImage(digest, async (directory) => {
+        await copyFile(temps.config, join(directory, 'config.json'));
 
-        writeFileSync(join(dir, 'rootfs.ext4'), '');
+        writeFileSync(join(directory, 'rootfs.ext4'), '');
 
-        await writeChangedBlocks(temps.rootfs, join(dir, 'rootfs.ext4'));
+        await writeChangedBlocks(temps.rootfs, join(directory, 'rootfs.ext4'));
       }),
     );
 
-    const taken = await findImageByName(deps.db, header.image.name);
+    const taken = await readImageByName(deps.db, header.image.name);
 
     const hex = toDigestHex(digest).slice(0, 8);
 
@@ -455,7 +455,7 @@ async function createGrants(deps: ReceiveStreamDeps, header: MoveHeader): Promis
       await deps.grants.addGrant(header.imp.name, secretName, null, grant.filter);
     } catch (error) {
       deps.log(
-        `impd: move: ${header.imp.name}: grant ${secretName} not kept: ${readErrorMessage(error)}`,
+        `impd: move: ${header.imp.name}: grant ${secretName} not kept: ${getErrorMessage(error)}`,
       );
     }
   }

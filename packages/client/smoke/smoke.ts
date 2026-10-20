@@ -49,7 +49,7 @@ function parseImpd(json: string): Record<'url' | 'prefixedUrl' | 'closedUrl' | '
 
   assert.ok(typeof parsed === 'object' && parsed !== null);
 
-  const read = (key: string): string => {
+  const getValue = (key: string): string => {
     const value: unknown = Reflect.get(parsed, key);
 
     assert.equal(typeof value, 'string', `run-stub-impd's ${key}`);
@@ -58,10 +58,10 @@ function parseImpd(json: string): Record<'url' | 'prefixedUrl' | 'closedUrl' | '
   };
 
   return {
-    url: read('url'),
-    prefixedUrl: read('prefixedUrl'),
-    closedUrl: read('closedUrl'),
-    token: read('token'),
+    url: getValue('url'),
+    prefixedUrl: getValue('prefixedUrl'),
+    closedUrl: getValue('closedUrl'),
+    token: getValue('token'),
   };
 }
 
@@ -91,7 +91,7 @@ async function checkExecClose(): Promise<void> {
 
   handle.close();
 
-  await assert.rejects(handle.exit, isExecErrorWithCode('CLOSED'));
+  await assert.rejects(handle.exit, makeExecErrorCheck('CLOSED'));
 }
 
 async function checkConsole(): Promise<void> {
@@ -132,7 +132,7 @@ async function checkPrefix(): Promise<void> {
 async function checkBadToken(): Promise<void> {
   const wrong = createImpClient({ url: impd.url, token: 'not-the-token' });
 
-  await assert.rejects(wrong.openExec('smoke', ['cat']), hasCode('UNAUTHORIZED'));
+  await assert.rejects(wrong.openExec('smoke', ['cat']), makeCodeCheck('UNAUTHORIZED'));
 
   // a refused upgrade, which Bun reports with no HTTP status
   const outcome = await openRawSession(impd.url, 'not-the-token');
@@ -255,7 +255,7 @@ async function readUntil(
   return text;
 }
 
-function hasCode(code: string): (error: unknown) => boolean {
+function makeCodeCheck(code: string): (error: unknown) => boolean {
   return (error) => {
     const actual: unknown =
       typeof error === 'object' && error !== null ? Reflect.get(error, 'code') : undefined;
@@ -266,10 +266,10 @@ function hasCode(code: string): (error: unknown) => boolean {
   };
 }
 
-function isExecErrorWithCode(code: string): (error: unknown) => boolean {
+function makeExecErrorCheck(code: string): (error: unknown) => boolean {
   return (error) => {
     assert.ok(error instanceof ExecError, String(error));
 
-    return hasCode(code)(error);
+    return makeCodeCheck(code)(error);
   };
 }

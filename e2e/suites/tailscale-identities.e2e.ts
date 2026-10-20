@@ -5,7 +5,7 @@ import { createInstanceClient, runImp } from '../lib/imp-cli';
 import { waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import {
   isTailnetReady,
   readLocalTailscaleStatus,
@@ -13,7 +13,7 @@ import {
   sendTailnetRpc,
   waitForTailnetIp,
 } from '../lib/tailnet';
-import { hasTailscaleE2EKey } from '../lib/tailscale-key';
+import { probeTailscaleE2EKey } from '../lib/tailscale-key';
 
 // Tailnet identity rules (docs/guides/tailscale.md): a member that a rule
 // names reaches impd's API with no token, at the rule's scope. The suite's
@@ -27,7 +27,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('tailscale'), stack, client };
+  return { prefix: getSuitePrefix('tailscale'), stack, client };
 }
 
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
@@ -35,7 +35,8 @@ const tailscaleStatus = await readLocalTailscaleStatus();
 
 // the definition of done needs the tailnet; any other run skips without it
 // (requireTailnetReady says what it needs)
-const tailnetMissing = !isTailnetReady(tailscaleStatus, hasTailscaleE2EKey()) && !config.acceptance;
+const tailnetMissing =
+  !isTailnetReady(tailscaleStatus, probeTailscaleE2EKey()) && !config.acceptance;
 
 test.skipIf(tailnetMissing)(
   'it lets a tailnet member a rule names reach the API without a token, with that scope only',
@@ -43,7 +44,7 @@ test.skipIf(tailnetMissing)(
     const ctx = await setupTest();
     const status = await readLocalTailscaleStatus();
 
-    requireTailnetReady(status, hasTailscaleE2EKey());
+    requireTailnetReady(status, probeTailscaleE2EKey());
 
     const name = `${ctx.prefix}rule`;
 

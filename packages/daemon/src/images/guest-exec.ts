@@ -42,47 +42,6 @@ export class GuestOutputError extends Error {
   override readonly name = 'GuestOutputError';
 }
 
-// the last maxBytes of what is written
-function createTail(maxBytes: number) {
-  const chunks: Uint8Array[] = [];
-  const held = { bytes: 0 };
-
-  return {
-    writeChunk: (chunk: Uint8Array): void => {
-      chunks.push(chunk);
-
-      held.bytes += chunk.byteLength;
-
-      while (held.bytes - (chunks[0]?.byteLength ?? 0) >= maxBytes) {
-        held.bytes -= chunks.shift()?.byteLength ?? 0;
-      }
-    },
-    readText: (): string => Buffer.concat(chunks).toString('utf8').slice(-maxBytes),
-  };
-}
-
-// the file into the step's stdin; the error that stopped it, else null
-async function sendStdin(
-  stream: Readonly<ExecStream>,
-  path: string,
-  signal: AbortSignal,
-): Promise<Error | null> {
-  try {
-    for await (const chunk of Bun.file(path).stream() as AsyncIterable<Uint8Array>) {
-      signal.throwIfAborted();
-      stream.writeStdin(chunk);
-
-      await stream.stdinDrained();
-    }
-
-    stream.closeStdin();
-
-    return null;
-  } catch (error) {
-    return error instanceof Error ? error : new Error(String(error));
-  }
-}
-
 // Runs each step through `open`, which reaches the builder's agent: stdin
 // from a file, stdout kept or streamed, stderr's tail kept. A step's
 // timeout runs on `startTimer`, setTimeout by default.
@@ -183,5 +142,46 @@ export function createGuestExec(
       options.signal.removeEventListener('abort', stopStep);
       stream.close();
     }
+  };
+}
+
+// the file into the step's stdin; the error that stopped it, else null
+async function sendStdin(
+  stream: Readonly<ExecStream>,
+  path: string,
+  signal: AbortSignal,
+): Promise<Error | null> {
+  try {
+    for await (const chunk of Bun.file(path).stream() as AsyncIterable<Uint8Array>) {
+      signal.throwIfAborted();
+      stream.writeStdin(chunk);
+
+      await stream.stdinDrained();
+    }
+
+    stream.closeStdin();
+
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+}
+
+// the last maxBytes of what is written
+function createTail(maxBytes: number) {
+  const chunks: Uint8Array[] = [];
+  const held = { bytes: 0 };
+
+  return {
+    writeChunk: (chunk: Uint8Array): void => {
+      chunks.push(chunk);
+
+      held.bytes += chunk.byteLength;
+
+      while (held.bytes - (chunks[0]?.byteLength ?? 0) >= maxBytes) {
+        held.bytes -= chunks.shift()?.byteLength ?? 0;
+      }
+    },
+    readText: (): string => Buffer.concat(chunks).toString('utf8').slice(-maxBytes),
   };
 }

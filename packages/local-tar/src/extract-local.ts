@@ -58,84 +58,8 @@ class RefusedError extends Error {
   override name = 'RefusedError';
 }
 
-function readErrorCode(error: unknown): string | null {
-  return error instanceof Error && 'code' in error && typeof error.code === 'string'
-    ? error.code
-    : null;
-}
-
-function readMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-// name's top component and the rest, or a refusal for a name that could
-// leave the copy
-function splitEntryName(name: string): readonly [string, string] {
-  if (name.startsWith('/')) {
-    throw new RefusedError('an absolute name');
-  }
-
-  const parts = name.split('/').filter((part) => part !== '' && part !== '.');
-
-  if (parts.includes('..')) {
-    throw new RefusedError('a name with ".."');
-  }
-
-  const [top, ...rest] = parts;
-
-  if (top === undefined) {
-    throw new RefusedError('an empty name');
-  }
-
-  return [top, rest.join('/')];
-}
-
-// keeps the permission and sticky bits, not setuid or setgid
-function toSafeMode(mode: number): number {
-  return mode & 0o1777;
-}
-
-// as cp -r: into dest/<top> when dest is a directory, else as dest
-async function resolveCopyRoot(dest: string, top: string): Promise<CopyRoot> {
-  const destStats = await stat(dest).catch(() => null);
-
-  const path = destStats?.isDirectory() === true ? join(dest, top) : dest;
-
-  const rootStats = await lstat(path).catch(() => null);
-
-  if (rootStats?.isSymbolicLink() === true) {
-    throw new Error(`${path} is a symlink; the copy will not go through it`);
-  }
-
-  return { path, top };
-}
-
-// every directory from root down to path's parent must be a real one
-async function checkParents(root: string, path: string): Promise<void> {
-  const below = path
-    .slice(root.length)
-    .split('/')
-    .filter((part) => part !== '');
-
-  let current = root;
-
-  for (const part of below.slice(0, -1)) {
-    current = join(current, part);
-
-    const stats = await lstat(current).catch(() => null);
-
-    if (stats === null) {
-      throw new RefusedError(`${current} is missing`);
-    }
-
-    if (!stats.isDirectory()) {
-      throw new RefusedError(`under ${current}, which is not a directory`);
-    }
-  }
-}
-
 export function createLocalExtractor(
-  dest: string,
+  destination: string,
   progress: ExtractProgress,
   warn: (text: string) => void,
 
@@ -176,7 +100,7 @@ export function createLocalExtractor(
 
   const requireRoot = async (top: string): Promise<CopyRoot> => {
     if (state.root === null) {
-      state.root = await resolveCopyRoot(dest, top);
+      state.root = await resolveCopyRoot(destination, top);
     } else if (top !== state.root.top) {
       throw new RefusedError(`outside the copy's top ${state.root.top}`);
     }
@@ -295,11 +219,13 @@ export function createLocalExtractor(
 
   // deepest first, so a child's change does not move its parent's time
   const applyDirModes = async (): Promise<void> => {
-    const sorted = dirs.toSorted((a, b) => b.path.split('/').length - a.path.split('/').length);
+    const sorted = dirs.toSorted(
+      (left, right) => right.path.split('/').length - left.path.split('/').length,
+    );
 
-    for (const dir of sorted) {
-      await chmod(dir.path, toSafeMode(dir.mode));
-      await utimes(dir.path, dir.mtime, dir.mtime);
+    for (const directory of sorted) {
+      await chmod(directory.path, toSafeMode(directory.mode));
+      await utimes(directory.path, directory.mtime, directory.mtime);
     }
   };
 
@@ -396,4 +322,80 @@ export function createLocalExtractor(
       return done.refused;
     },
   };
+}
+
+// as cp -r: into dest/<top> when dest is a directory, else as dest
+async function resolveCopyRoot(destination: string, top: string): Promise<CopyRoot> {
+  const destStats = await stat(destination).catch(() => null);
+
+  const path = destStats?.isDirectory() === true ? join(destination, top) : destination;
+
+  const rootStats = await lstat(path).catch(() => null);
+
+  if (rootStats?.isSymbolicLink() === true) {
+    throw new Error(`${path} is a symlink; the copy will not go through it`);
+  }
+
+  return { path, top };
+}
+
+function readErrorCode(error: unknown): string | null {
+  return error instanceof Error && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : null;
+}
+
+// keeps the permission and sticky bits, not setuid or setgid
+function toSafeMode(mode: number): number {
+  return mode & 0o1777;
+}
+
+// name's top component and the rest, or a refusal for a name that could
+// leave the copy
+function splitEntryName(name: string): readonly [string, string] {
+  if (name.startsWith('/')) {
+    throw new RefusedError('an absolute name');
+  }
+
+  const parts = name.split('/').filter((part) => part !== '' && part !== '.');
+
+  if (parts.includes('..')) {
+    throw new RefusedError('a name with ".."');
+  }
+
+  const [top, ...rest] = parts;
+
+  if (top === undefined) {
+    throw new RefusedError('an empty name');
+  }
+
+  return [top, rest.join('/')];
+}
+
+// every directory from root down to path's parent must be a real one
+async function checkParents(root: string, path: string): Promise<void> {
+  const below = path
+    .slice(root.length)
+    .split('/')
+    .filter((part) => part !== '');
+
+  let current = root;
+
+  for (const part of below.slice(0, -1)) {
+    current = join(current, part);
+
+    const stats = await lstat(current).catch(() => null);
+
+    if (stats === null) {
+      throw new RefusedError(`${current} is missing`);
+    }
+
+    if (!stats.isDirectory()) {
+      throw new RefusedError(`under ${current}, which is not a directory`);
+    }
+  }
+}
+
+function readMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

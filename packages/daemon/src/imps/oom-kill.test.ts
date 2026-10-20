@@ -70,7 +70,7 @@ test('#sleepImp says a sleep the memory limit cut short failed for that reason',
 
   expect(sleeping).rejects.toThrowWithMessage(Error, `sleep failed: ${OOM_KILL_TRIGGER}`);
 
-  const found = await ctx.imps.getImp('dev');
+  const found = await ctx.imps.readImp('dev');
 
   expect(found.state).toBe('stopped');
   expect(found.error).toBe(OOM_KILL_TRIGGER);
@@ -139,7 +139,7 @@ test('#sleepImp does not blame a lost sleep on an OOM kill from before it', asyn
 
   expect(sleeping).rejects.toThrowWithMessage(Error, 'snapshot files lost after the kill');
 
-  const found = await ctx.imps.getImp('dev');
+  const found = await ctx.imps.readImp('dev');
 
   expect(found.error).toBeUndefined();
   expect(ctx.logs).toSatisfyAll((line: string) => !line.includes(OOM_KILL_TRIGGER));

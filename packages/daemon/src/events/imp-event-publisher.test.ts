@@ -16,7 +16,7 @@ import type { ImpdDeps } from '../create-impd';
 import { listApiCalls } from '../db/api-audit';
 import { createImage } from '../db/images';
 import type { ImpWrite } from '../db/imp-write-feed';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import { buildSystemDrivePath, buildSystemDrivesDir } from '../storage/data-layout';
 import { createXfsBackend } from '../storage/xfs-backend';
@@ -25,7 +25,7 @@ import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildStubClock } from '../test-utils/build-stub-clock';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import { readInBackground } from '../test-utils/read-in-background';
 import { readQueuedText } from '../test-utils/read-queued-text';
 
@@ -48,7 +48,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with, as setupSystemFiles installs it
@@ -321,7 +321,7 @@ test('it sends a repaired event when a check finds an imp’s VM gone', async ()
 
   await ctx.client.imps.create({ name: 'dead', image: 'ubuntu' });
 
-  const dead = await findImpByName(ctx.db, 'dead');
+  const dead = await readImpByName(ctx.db, 'dead');
 
   invariant(typeof dead?.pid === 'number');
 
@@ -378,7 +378,7 @@ test('it reports an adopted change when a restarted impd adopts a running VM', a
 
   // the first impd still holds its resolver's port in this process
   const restarted = await createImpd(
-    { ...ctx.config, egressDnsPort: findFreePorts(1).take() },
+    { ...ctx.config, egressDnsPort: claimFreePorts(1).take() },
     { ...ctx.deps, vms: ctx.vmm.startGeneration() },
   );
 

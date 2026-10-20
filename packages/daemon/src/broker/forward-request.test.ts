@@ -18,11 +18,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'forward-request-'));
+  const directory = await mkdtemp(join(tmpdir(), 'forward-request-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { stack, dir };
+  return { stack, directoryPath: directory };
 }
 
 test('it sends the path and query to the bound host with the method and body', async () => {
@@ -922,7 +922,7 @@ test('it forwards over TLS to a test upstream that the test CA signed', async ()
   const ctx = await setupTest();
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     fetch: (request) => new Response(`saw ${request.headers.get('authorization') ?? 'none'}`),
   });
 
@@ -953,7 +953,7 @@ test('it answers 502 for a test upstream whose certificate the test CA did not s
   const reached = mock<(url: string) => void>();
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     fetch: (request) => {
       reached(request.url);
 
@@ -961,7 +961,7 @@ test('it answers 502 for a test upstream whose certificate the test CA did not s
     },
   });
 
-  const other = await loadOrCreateBrokerCa(join(ctx.dir, 'other-ca'));
+  const other = await loadOrCreateBrokerCa(join(ctx.directoryPath, 'other-ca'));
 
   const forward = createForwarder({
     impId: 'imp-1',
@@ -991,7 +991,7 @@ test('it sends the upstream its own authority as Host, not the guest’s', async
   const received = mock<(host: string | null) => void>();
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     fetch: (request) => {
       received(request.headers.get('host'));
 
@@ -1026,7 +1026,7 @@ test('it passes gzip bytes through unchanged, without decompressing them', async
   const gzipped = Bun.gzipSync(Buffer.from('upstream body'));
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     fetch: () => new Response(gzipped, { headers: { 'content-encoding': 'gzip' } }),
   });
 

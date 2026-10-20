@@ -3,12 +3,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { findImpByName, updateImpActivity } from '../db/imps';
-import { hasSnapshot } from '../sleep/snapshot-meta';
+import { readImpByName, updateImpActivity } from '../db/imps';
+import { probeSnapshot } from '../sleep/snapshot-meta';
 import { buildImpPaths } from '../storage/data-layout';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { createCpuCgroups } from '../vmm/cpu-cgroups';
-import { buildTestApp } from './build-test-app';
+import { createTestApp } from './create-test-app';
 import { createImpTest } from './test-imps';
 import type { ImpTestOptions } from './test-imps';
 
@@ -26,7 +26,7 @@ async function setupTest(
   // every create boots an image row; the default image is ubuntu
   await harness.createTestImage('ubuntu');
 
-  const app = buildTestApp(harness, harness);
+  const app = createTestApp(harness, harness);
 
   return { ...harness, client: app.client };
 }
@@ -175,7 +175,7 @@ test('it counts a wake and opens an awake span', async () => {
   await ctx.client.imps.sleep({ name: 'dev' });
   await ctx.client.imps.wake({ name: 'dev' });
 
-  const awake = await findImpByName(ctx.db, 'dev');
+  const awake = await readImpByName(ctx.db, 'dev');
 
   expect(awake?.wakeCount).toBe(1);
   expect(awake?.awakeSince).toBeValidDate();
@@ -190,7 +190,7 @@ test('it ends the awake span of a VM found dead at its last activity', async () 
   await ctx.client.imps.sleep({ name: 'dev' });
   await ctx.client.imps.wake({ name: 'dev' });
 
-  const awake = await findImpByName(ctx.db, 'dev');
+  const awake = await readImpByName(ctx.db, 'dev');
 
   invariant(awake?.awakeSince);
   invariant(awake.pid !== null);
@@ -201,7 +201,7 @@ test('it ends the awake span of a VM found dead at its last activity', async () 
   ctx.fake.alive.delete(awake.pid);
 
   const api = await ctx.client.imps.get({ name: 'dev' });
-  const repaired = await findImpByName(ctx.db, 'dev');
+  const repaired = await readImpByName(ctx.db, 'dev');
 
   expect(api.state).toBe('stopped');
   expect(stub.calls.at(-1)).toBe(`remove ${created.id}`);
@@ -275,7 +275,7 @@ test('it refuses to start a jailed VM without its cgroup, and says why', async (
     ),
   );
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(imp?.state).toBe('error');
   expect(imp?.error).toContain('set IMP_JAILER=false');
@@ -314,10 +314,10 @@ test('it leaves a jailed imp asleep, with its memory, when its cgroup cannot be 
     ),
   );
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(imp?.state).toBe('sleeping');
-  expect(hasSnapshot(buildImpPaths(ctx.dataDir, created.id))).toBeTrue();
+  expect(probeSnapshot(buildImpPaths(ctx.dataDir, created.id))).toBeTrue();
   expect(ctx.fake.wakes).toBeEmpty();
 });
 

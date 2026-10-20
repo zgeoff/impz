@@ -10,7 +10,7 @@ import { buildSystemDrivePath, buildSystemDrivesDir } from '@impz/daemon/src/sto
 import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import invariant from 'tiny-invariant';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startStubInfoFaultImpd } from '../test-utils/start-stub-info-fault-impd';
@@ -37,7 +37,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots with
@@ -172,11 +172,11 @@ test('it refuses an imp pattern that is not an imp name', async () => {
 });
 
 test('it refuses a private key where a .pub file belongs', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const privateKey = join(dir, 'id_ed25519');
+  const privateKey = join(directory, 'id_ed25519');
 
   await writeFile(privateKey, '-----BEGIN OPENSSH PRIVATE KEY-----\n');
 
@@ -193,11 +193,11 @@ test('it refuses a private key where a .pub file belongs', async () => {
 });
 
 test('it refuses a .pub file that holds no key', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const empty = join(dir, 'empty.pub');
+  const empty = join(directory, 'empty.pub');
 
   await writeFile(empty, '# nothing\n');
 
@@ -210,11 +210,11 @@ test('it refuses a .pub file that holds no key', async () => {
 });
 
 test('it refuses an --ssh-key file that is missing', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-cli-key-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const missing = join(dir, 'missing.pub');
+  const missing = join(directory, 'missing.pub');
 
   const result = await runCLIInProcess({
     args: ['token', 'new', 'ci', '--scope', 'exec', '--ssh-key', missing],

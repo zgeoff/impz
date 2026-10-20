@@ -19,7 +19,7 @@ export type LockFreeSleep = (
   policy: SleepPolicy,
 ) => Promise<SleepOutcome>;
 
-export function createLockFreeSleep<T>(
+export function makeLockFreeSleep<T>(
   tryLock: (
     id: string,
     action: (held: T) => Promise<SleepOutcome>,

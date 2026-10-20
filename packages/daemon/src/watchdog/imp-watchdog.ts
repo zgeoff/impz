@@ -1,7 +1,7 @@
+import { getErrorMessage } from '../get-error-message';
 import type { ImpClock, ImpDisk, ImpHost, ImpVms } from '../imps/imp-context';
 import type { ImpLock } from '../imps/imp-lock';
 import type { ImpVmOps } from '../imps/imp-vm-ops';
-import { readErrorMessage } from '../read-error-message';
 import { createAgentWatchdog } from './agent-watchdog';
 import type { AgentWatchdog } from './agent-watchdog';
 import { writeWatchdogSnapshot } from './write-watchdog-snapshot';
@@ -26,7 +26,7 @@ export function createImpWatchdog(
     now: context.now,
     log: context.log,
     confirmSilent: async (imp) =>
-      !(await context.vms.isAgentReady(context.findPaths(imp.id), CONFIRM_MS)),
+      !(await context.vms.probeAgentReady(context.findPaths(imp.id), CONFIRM_MS)),
     recover: async (imp, action) => {
       const result = await lock.tryWithImpId(imp.id, async (fresh) => {
         // a sleep and a wake during the confirming ping left another VM
@@ -37,7 +37,7 @@ export function createImpWatchdog(
         const paths = context.findPaths(fresh.id);
 
         // the last look, under the lock: the agent may have come back
-        const answered = await context.vms.isAgentReady(paths, RECHECK_MS);
+        const answered = await context.vms.probeAgentReady(paths, RECHECK_MS);
 
         if (answered) {
           context.log(`impd: ${fresh.name}: its agent answers again; the watchdog stands down`);
@@ -58,7 +58,7 @@ export function createImpWatchdog(
           context.log(`impd: ${fresh.name}: the watchdog booted it cold`);
         } catch (error) {
           context.log(
-            `impd: ${fresh.name}: the watchdog restart failed: ${readErrorMessage(error)}`,
+            `impd: ${fresh.name}: the watchdog restart failed: ${getErrorMessage(error)}`,
           );
         }
 

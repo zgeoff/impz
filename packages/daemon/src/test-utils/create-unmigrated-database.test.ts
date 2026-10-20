@@ -22,31 +22,31 @@ test('it enforces foreign keys, as openDatabase does', async () => {
 });
 
 test('it opens the file at the path it is given', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-unmigrated-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-unmigrated-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  createUnmigratedDatabase(join(dir, 'older.sqlite'));
+  createUnmigratedDatabase(join(directory, 'older.sqlite'));
 
-  expect(existsSync(join(dir, 'older.sqlite'))).toBeTrue();
+  expect(existsSync(join(directory, 'older.sqlite'))).toBeTrue();
 });
 
 test('it closes the database file when the test finishes, even one no query opened', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-unmigrated-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-unmigrated-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  createUnmigratedDatabase(join(dir, 'older.sqlite'));
+  createUnmigratedDatabase(join(directory, 'older.sqlite'));
 
   // runs after the helper's own close, and after the dir's removal, which
   // leaves an open file listed as deleted: no descriptor names the file
   onTestFinished(() => {
     const descriptors = Bun.spawnSync(['ls', '-l', `/proc/${String(process.pid)}/fd`]);
 
-    expect(descriptors.stdout.toString()).not.toInclude(join(dir, 'older.sqlite'));
+    expect(descriptors.stdout.toString()).not.toInclude(join(directory, 'older.sqlite'));
   });
 });

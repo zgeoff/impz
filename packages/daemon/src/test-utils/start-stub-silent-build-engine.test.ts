@@ -7,11 +7,11 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { startStubSilentBuildEngine } from './start-stub-silent-build-engine';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-engine-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-engine-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir, socketPath: join(dir, 'engine.sock') };
+  return { directoryPath: directory, socketPath: join(directory, 'engine.sock') };
 }
 
 test('it answers a build with a trace, then sends the image id once the hold settles', async () => {

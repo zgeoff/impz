@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createServer } from 'node:net';
-import { findFreePorts } from './find-free-ports';
+import { claimFreePorts } from './claim-free-ports';
 import { startStubBrokerTunnel } from './start-stub-broker-tunnel';
 
 function setupTest() {
@@ -49,7 +49,7 @@ test('it sends nothing until the head is sent', async () => {
     socket.end();
   });
 
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
   const listening = Promise.withResolvers<void>();
 
   front.listen(port, '127.0.0.1', listening.resolve);

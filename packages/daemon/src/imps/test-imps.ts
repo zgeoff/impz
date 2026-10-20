@@ -5,11 +5,11 @@ import type { InstallBundle } from '../broker/guest-trust';
 import type { OAuthFetch } from '../broker/oauth-refresher';
 import { createSecretFiles } from '../broker/secret-files';
 import { TunnelRefusedError } from '../broker/tunnel-target';
-import { buildImpdStorage } from '../build-impd-storage';
 import { loadConfig } from '../config';
 import type { Config } from '../config';
-import { buildImpdEgress, createImpdBroker, startImpdBuilders } from '../create-impd';
+import { createImpdBroker, createImpdEgress, startImpdBuilders } from '../create-impd';
 import type { ImpdDeps } from '../create-impd';
+import { createImpdStorage } from '../create-impd-storage';
 import { createImage } from '../db/images';
 import type { ImageRecord } from '../db/images';
 import { openDatabase } from '../db/open-database';
@@ -342,8 +342,8 @@ export async function createImpTest(
       ...(frozenAt !== undefined && {
         sleepTiming: {
           now: readClock,
-          sleep: (ms: number) => {
-            clock.offsetMs += ms;
+          sleep: (durationMs: number) => {
+            clock.offsetMs += durationMs;
 
             return Promise.resolve();
           },
@@ -369,7 +369,7 @@ export async function createImpTest(
     },
   };
 
-  const stored = buildImpdStorage(config, deps);
+  const stored = createImpdStorage(config, deps);
 
   stack.defer(() => {
     stored.diskUsage.stop();
@@ -382,7 +382,7 @@ export async function createImpTest(
 
   stack.defer(() => broker.stop());
 
-  const egress = buildImpdEgress(config, deps, {
+  const egress = createImpdEgress(config, deps, {
     ipv6: options.ipv6 ?? null,
     broker: {
       isGranted: broker.isGranted,
@@ -481,8 +481,8 @@ export async function createImpTest(
     revocations: access.revocations,
     oauth: access.oauth,
     now: readClock,
-    advance: (ms: number) => {
-      clock.offsetMs += ms;
+    advance: (durationMs: number) => {
+      clock.offsetMs += durationMs;
     },
     readKsmHostStats: options.readKsmHostStats ?? null,
     restartImpd: startImpd,

@@ -7,7 +7,7 @@ import { waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { SSH_HOST, SSH_HOST_OTHER_KEY, runSsh, setupSshClient, startSsh } from '../lib/ssh';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -25,7 +25,7 @@ async function setupTest() {
 
   stack.defer(() => ssh.cleanup());
 
-  return { prefix: readSuitePrefix('ssh-wake'), stack, client, ssh };
+  return { prefix: getSuitePrefix('ssh-wake'), stack, client, ssh };
 }
 
 test('it wakes a sleeping imp on ssh but not on a refused login, and keeps it awake while a connection is open', async () => {

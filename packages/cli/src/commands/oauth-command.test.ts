@@ -12,8 +12,8 @@ import { buildSystemDrivePath, buildSystemDrivesDir } from '@impz/daemon/src/sto
 import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { createPendingSignIn } from '@impz/daemon/src/test-utils/create-pending-sign-in';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
 import * as z from 'zod';
 import { UsageError } from '../cli/errors';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
@@ -38,7 +38,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
 
     // the public MCP route a sign-in is for; nothing listens on it
     IMP_MCP_PUBLIC_URL: 'http://127.0.0.1:7171',
@@ -201,7 +201,7 @@ test('it shows the sign-in and approves nothing when the answer at a terminal is
   ctx.clock.nowMs = Date.UTC(2026, 0, 1);
 
   const started = await createPendingSignIn({
-    handle: ctx.handleRoute,
+    respond: ctx.handleRoute,
     origin: 'http://127.0.0.1:7171',
     clientID: added.clientId,
     redirectURI: 'https://client.example/callback',
@@ -250,7 +250,7 @@ test('it approves what it showed when the answer at a terminal is yes', async ()
   const made = await root.tokens.create({ name: 'approver', scope: 'manage' });
 
   const started = await createPendingSignIn({
-    handle: ctx.handleRoute,
+    respond: ctx.handleRoute,
     origin: 'http://127.0.0.1:7171',
     clientID: added.clientId,
     redirectURI: 'https://client.example/callback',
@@ -296,7 +296,7 @@ test.each([
   const made = await root.tokens.create({ name: 'approver', scope: 'manage' });
 
   const started = await createPendingSignIn({
-    handle: ctx.handleRoute,
+    respond: ctx.handleRoute,
     origin: 'http://127.0.0.1:7171',
     clientID: added.clientId,
     redirectURI: 'https://client.example/callback',
@@ -333,7 +333,7 @@ test('it refuses an approval of more than a read token holds', async () => {
   const made = await root.tokens.create({ name: 'reader', scope: 'read' });
 
   const started = await createPendingSignIn({
-    handle: ctx.handleRoute,
+    respond: ctx.handleRoute,
     origin: 'http://127.0.0.1:7171',
     clientID: added.clientId,
     redirectURI: 'https://client.example/callback',

@@ -4,21 +4,21 @@ import { join } from 'node:path';
 import type { MoveState } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { findImageByName } from '../db/images';
+import { readImageByName } from '../db/images';
 import type { ImpWrite } from '../db/imp-write-feed';
-import { findImpByName, listImps, updateImpExposure, updateImpMove } from '../db/imps';
-import { buildTestApp } from '../imps/build-test-app';
+import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../db/imps';
+import { createTestApp } from '../imps/create-test-app';
 import { TEST_TOKEN } from '../imps/test-token';
 import { buildMockMoveTicketRow } from '../test-utils/build-mock-move-ticket-row';
 import { buildStubClock } from '../test-utils/build-stub-clock';
-import { buildStubDroppedCommit } from '../test-utils/build-stub-dropped-commit';
+import { buildStubZfsStorage } from '../test-utils/build-stub-zfs-storage';
+import { makeStubDroppedCommit } from '../test-utils/make-stub-dropped-commit';
 import {
   buildJsonMoveFrame,
-  buildStubMoveStreamRewrite,
-} from '../test-utils/build-stub-move-stream-rewrite';
-import { buildStubOlderMoveTarget } from '../test-utils/build-stub-older-move-target';
-import { buildStubSwitchedStorageTarget } from '../test-utils/build-stub-switched-storage-target';
-import { buildStubZfsStorage } from '../test-utils/build-stub-zfs-storage';
+  makeStubMoveStreamRewrite,
+} from '../test-utils/make-stub-move-stream-rewrite';
+import { makeStubOlderMoveTarget } from '../test-utils/make-stub-older-move-target';
+import { makeStubSwitchedStorageTarget } from '../test-utils/make-stub-switched-storage-target';
 import { FileEndSchema, MOVE_FRAMES, MoveFileSchema, readJsonPayload } from './move-frames';
 import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MOVE_PATHS, MoveHeaderSchema } from './move-header';
 import {
@@ -62,7 +62,7 @@ test('it moves a stopped imp with its id, its checkpoint and its disk', async ()
   const status = await ctx.runMove('dev');
   const moved = await ctx.targetApp.client.imps.get({ name: 'dev' });
   const checkpoints = await ctx.targetApp.client.checkpoints.list({ name: 'dev' });
-  const left = await findImpByName(ctx.source.db, 'dev');
+  const left = await readImpByName(ctx.source.db, 'dev');
 
   invariant(checkpoints[0]);
 
@@ -297,8 +297,8 @@ test('it leaves the source unmarked and the target empty when the receipt is not
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const source = await findImpByName(ctx.source.db, 'dev');
-  const target = await findImpByName(ctx.target.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
+  const target = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toContain('the receipt is not signed with this ticket');
   expect(source?.moveState).toBeNull();
@@ -335,7 +335,7 @@ test('it leaves the source unmarked when a signed receipt does not match what wa
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const source = await findImpByName(ctx.source.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
 
   expect(status.error).toContain('the receipt does not match what was sent');
   expect(source?.moveState).toBeNull();
@@ -359,7 +359,7 @@ test('it ends a send to a target that is gone with the mark on, and says the abo
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const source = await findImpByName(ctx.source.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
 
   expect(status.state).toBe('sending');
   expect(status.error).toContain('the target did not confirm the abort');
@@ -496,7 +496,7 @@ test('it keeps both copies when the target sends no answer to the commit within 
   clock.firePending();
 
   const status = await moved;
-  const source = await findImpByName(ctx.source.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
 
   expect(pendingMs).toStrictEqual([600_000]);
   expect(status.error).toContain('/move/commit: the target sent no answer in 10 minutes');
@@ -593,7 +593,7 @@ test('it keeps the mark when the target sends no answer to the abort within ten 
   clock.firePending();
 
   const status = await moved;
-  const source = await findImpByName(ctx.source.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
 
   expect(pendingMs).toStrictEqual([600_000]);
   expect(status.error).toContain('the target did not confirm the abort');
@@ -651,7 +651,7 @@ test('it reports no error for a failed send while its abort still goes', async (
 });
 
 test('it keeps both copies marked when the commit is lost after the receipt', async () => {
-  const ctx = await setupTest({ hook: buildStubDroppedCommit() });
+  const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -660,8 +660,8 @@ test('it keeps both copies marked when the commit is lost after the receipt', as
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const source = await findImpByName(ctx.source.db, 'dev');
-  const target = await findImpByName(ctx.target.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
+  const target = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toContain('dropped the commit');
   expect(source?.moveState).toBe('moved');
@@ -669,7 +669,7 @@ test('it keeps both copies marked when the commit is lost after the receipt', as
 });
 
 test('it refuses a start on the target of a copy whose commit was lost', async () => {
-  const ctx = await setupTest({ hook: buildStubDroppedCommit() });
+  const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -684,7 +684,7 @@ test('it refuses a start on the target of a copy whose commit was lost', async (
 });
 
 test('it commits on resume after a lost commit, and the source copy goes', async () => {
-  const ctx = await setupTest({ hook: buildStubDroppedCommit() });
+  const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -694,8 +694,8 @@ test('it commits on resume after a lost commit, and the source copy goes', async
 
   const failed = await ctx.runMove('dev');
   const resumed = await ctx.sourceApp.client.moves.resume({ name: 'dev' });
-  const source = await findImpByName(ctx.source.db, 'dev');
-  const target = await findImpByName(ctx.target.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
+  const target = await readImpByName(ctx.target.db, 'dev');
 
   expect(failed.error).toContain('dropped the commit');
   expect(resumed.isDone).toBe(true);
@@ -706,7 +706,7 @@ test('it commits on resume after a lost commit, and the source copy goes', async
 // #167: main counts the received disk on this hook, so a repeat must not
 // fire it again
 test('it reports the commit on the target once when a commit whose answer was lost resumes', async () => {
-  const ctx = await setupTest({ hook: buildStubDroppedCommit({ drops: 'answer' }) });
+  const ctx = await setupTest({ hook: makeStubDroppedCommit({ drops: 'answer' }) });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -724,7 +724,7 @@ test('it reports the commit on the target once when a commit whose answer was lo
 
 test('it destroys the source copy on an abort after the target committed', async () => {
   // the commit lands, but its answer never reaches the source
-  const ctx = await setupTest({ hook: buildStubDroppedCommit({ drops: 'answer' }) });
+  const ctx = await setupTest({ hook: makeStubDroppedCommit({ drops: 'answer' }) });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -734,7 +734,7 @@ test('it destroys the source copy on an abort after the target committed', async
 
   const failed = await ctx.runMove('dev');
   const aborted = await ctx.sourceApp.client.moves.abort({ name: 'dev' });
-  const source = await findImpByName(ctx.source.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
   const target = await ctx.targetApp.client.imps.get({ name: 'dev' });
 
   expect(failed.error).toContain('dropped the answer');
@@ -750,7 +750,7 @@ test('it refuses a ticket in the URL in place of the header', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.handle(
+  const response = await ctx.targetApp.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}?ticket=${ticket.ticket}`, {
       method: 'POST',
       body: new Uint8Array([9, 0, 0, 0, 0]),
@@ -773,7 +773,7 @@ test('it refuses a ticket the target never issued', async () => {
 
   const forged = `${ticket.ticket.slice(0, ticket.ticket.indexOf('.'))}.not-the-secret`;
 
-  const response = await ctx.targetApp.moves.handle(
+  const response = await ctx.targetApp.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(forged),
@@ -792,7 +792,7 @@ test('it refuses a stream from off the tailnet', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.handle(
+  const response = await ctx.targetApp.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -808,7 +808,7 @@ test('it takes the first part of a stream from the tailnet', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.handle(
+  const response = await ctx.targetApp.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -824,7 +824,7 @@ test('it refuses a second stream on a ticket', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  await ctx.targetApp.moves.handle(
+  await ctx.targetApp.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -833,7 +833,7 @@ test('it refuses a second stream on a ticket', async () => {
     SOURCE_PEER,
   );
 
-  const second = await ctx.targetApp.moves.handle(
+  const second = await ctx.targetApp.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -855,7 +855,7 @@ test('it refuses a part that comes before the first', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.handle(
+  const response = await ctx.targetApp.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: { ...buildTicketHeader(ticket.ticket), [MOVE_PART_HEADER]: '1' },
@@ -874,7 +874,7 @@ test('it refuses a finish for a ticket with no stream', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.handle(
+  const response = await ctx.targetApp.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: { ...buildTicketHeader(ticket.ticket), [MOVE_FINISH_HEADER]: '1' },
@@ -892,7 +892,7 @@ test('it refuses a commit for a ticket with no receipt', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.handle(
+  const response = await ctx.targetApp.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.commit}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -927,7 +927,7 @@ test('it refuses a stream that starts past its ticket window', async () => {
 
   ctx.target.advance(11 * 60 * 1000);
 
-  const late = await ctx.targetApp.moves.handle(
+  const late = await ctx.targetApp.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -960,8 +960,8 @@ test('it cuts off a stream longer than its ticket and leaves nothing on the targ
   await ctx.sourceApp.client.moves.send({ name: 'dev', to: ticket.peerUrl, ticket: ticket.ticket });
 
   const status = await ctx.waitForMove('dev');
-  const target = await findImpByName(ctx.target.db, 'dev');
-  const source = await findImpByName(ctx.source.db, 'dev');
+  const target = await readImpByName(ctx.target.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
 
   expect(status.error).toContain('the stream is longer than its ticket allows');
   expect(target).toBeUndefined();
@@ -1005,7 +1005,7 @@ test('it files the image a target lacks under the digest of what arrived', async
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const image = await findImageByName(ctx.target.db, 'ubuntu');
+  const image = await readImageByName(ctx.target.db, 'ubuntu');
 
   invariant(image);
 
@@ -1090,8 +1090,8 @@ test('it keeps the owed identity reset of a template copy, and its template stay
     .execute();
 
   const status = await ctx.runMove('dev');
-  const image = await findImageByName(ctx.target.db, 'ubuntu');
-  const moved = await findImpByName(ctx.target.db, 'dev');
+  const image = await readImageByName(ctx.target.db, 'ubuntu');
+  const moved = await readImpByName(ctx.target.db, 'dev');
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(image).toMatchObject({ source: 'imp', sourceImp: 'golden' });
@@ -1108,14 +1108,14 @@ test('it keeps an imp created with backup off out of the target’s backups', as
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const moved = await findImpByName(ctx.target.db, 'dev');
+  const moved = await readImpByName(ctx.target.db, 'dev');
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(moved?.isBackedUp).toBe(false);
 });
 
 test('it refuses an imp created with backup off a target that predates the setting, before any byte goes', async () => {
-  const ctx = await setupTest({ hook: buildStubOlderMoveTarget('keepsBackupOff') });
+  const ctx = await setupTest({ hook: makeStubOlderMoveTarget('keepsBackupOff') });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1124,7 +1124,7 @@ test('it refuses an imp created with backup off a target that predates the setti
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const landed = await findImpByName(ctx.target.db, 'dev');
+  const landed = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toContain('predates imps left out of backups');
   expect(status.sentBytes).toBe(0);
@@ -1132,7 +1132,7 @@ test('it refuses an imp created with backup off a target that predates the setti
 });
 
 test('it refuses a public imp a target that predates the policy, before any byte goes', async () => {
-  const ctx = await setupTest({ hook: buildStubOlderMoveTarget('keepsPublicEgress') });
+  const ctx = await setupTest({ hook: makeStubOlderMoveTarget('keepsPublicEgress') });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1145,8 +1145,8 @@ test('it refuses a public imp a target that predates the policy, before any byte
   });
 
   const status = await ctx.runMove('dev', true);
-  const imp = await findImpByName(ctx.source.db, 'dev');
-  const landed = await findImpByName(ctx.target.db, 'dev');
+  const imp = await readImpByName(ctx.source.db, 'dev');
+  const landed = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toContain('predates the public egress policy');
   expect(status.sentBytes).toBe(0);
@@ -1191,14 +1191,14 @@ test('it keeps the max memory of an elastic imp', async () => {
     .execute();
 
   const status = await ctx.runMove('dev');
-  const moved = await findImpByName(ctx.target.db, 'dev');
+  const moved = await readImpByName(ctx.target.db, 'dev');
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(moved).toMatchObject({ memoryMib: 256, maxMemoryMib: 1024 });
 });
 
 test('it refuses to move an elastic imp to a target that would drop its max memory', async () => {
-  const ctx = await setupTest({ hook: buildStubOlderMoveTarget('keepsMaxMemory') });
+  const ctx = await setupTest({ hook: makeStubOlderMoveTarget('keepsMaxMemory') });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1214,8 +1214,8 @@ test('it refuses to move an elastic imp to a target that would drop its max memo
     .execute();
 
   const status = await ctx.runMove('dev');
-  const landed = await findImpByName(ctx.target.db, 'dev');
-  const source = await findImpByName(ctx.source.db, 'dev');
+  const landed = await readImpByName(ctx.target.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
 
   // nothing went: the source keeps the imp, unmarked, and the target has none
   expect(status.error).toContain('predates elastic memory');
@@ -1225,7 +1225,7 @@ test('it refuses to move an elastic imp to a target that would drop its max memo
 });
 
 test('it starts a running elastic imp again that --stop halted when the target refuses its max memory', async () => {
-  const ctx = await setupTest({ hook: buildStubOlderMoveTarget('keepsMaxMemory') });
+  const ctx = await setupTest({ hook: makeStubOlderMoveTarget('keepsMaxMemory') });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1239,8 +1239,8 @@ test('it starts a running elastic imp again that --stop halted when the target r
     .execute();
 
   const status = await ctx.runMove('dev', true);
-  const source = await findImpByName(ctx.source.db, 'dev');
-  const landed = await findImpByName(ctx.target.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
+  const landed = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toContain('predates elastic memory');
   expect(source).toMatchObject({ state: 'running', moveState: null });
@@ -1317,7 +1317,7 @@ test('it undoes on restart a send cut short', async () => {
 
   // recovery runs in the background
   const undone = await waitFor(async () => {
-    const imp = await findImpByName(ctx.source.db, 'dev');
+    const imp = await readImpByName(ctx.source.db, 'dev');
 
     if (imp?.moveState !== null) {
       throw new Error('the mark is still on');
@@ -1331,7 +1331,7 @@ test('it undoes on restart a send cut short', async () => {
 
 test('it finishes on restart a send the target has verified', async () => {
   // the commit a restart cut short
-  const ctx = await setupTest({ hook: buildStubDroppedCommit() });
+  const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1345,7 +1345,7 @@ test('it finishes on restart a send the target has verified', async () => {
 
   // recovery runs in the background
   await waitFor(async () => {
-    const imp = await findImpByName(ctx.source.db, 'dev');
+    const imp = await readImpByName(ctx.source.db, 'dev');
 
     if (imp !== undefined) {
       throw new Error('the source copy is still here');
@@ -1391,14 +1391,14 @@ test('it removes on a target restart a stream cut short and tickets never used',
   await ctx.targetApp.moves.recover();
 
   const rows = await ctx.target.db.selectFrom('move_tickets').select('id').execute();
-  const gone = await findImpByName(ctx.target.db, 'half');
+  const gone = await readImpByName(ctx.target.db, 'half');
 
   expect(gone).toBeUndefined();
   expect(rows).toStrictEqual([]);
 });
 
 test('it counts a target that holds the imp unmarked as committed', async () => {
-  const ctx = await setupTest({ hook: buildStubDroppedCommit() });
+  const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1412,14 +1412,14 @@ test('it counts a target that holds the imp unmarked as committed', async () => 
   await updateImpMove(ctx.target.db, created.id, null);
 
   const aborted = await ctx.sourceApp.client.moves.abort({ name: 'dev' });
-  const gone = await findImpByName(ctx.source.db, 'dev');
+  const gone = await readImpByName(ctx.source.db, 'dev');
 
   expect(aborted.isDone).toBe(true);
   expect(gone).toBeUndefined();
 });
 
 test('it refuses a resume whose received copy is gone, and the source keeps its copy', async () => {
-  const ctx = await setupTest({ hook: buildStubDroppedCommit() });
+  const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1434,13 +1434,13 @@ test('it refuses a resume whose received copy is gone, and the source keeps its 
     message: 'commit: the target answered 409 nothing to commit: the received copy is gone',
   });
 
-  const kept = await findImpByName(ctx.source.db, 'dev');
+  const kept = await readImpByName(ctx.source.db, 'dev');
 
   expect(kept?.moveState).toBe('moved');
 });
 
 test('it refuses a resume past the commit window, and the source keeps its copy', async () => {
-  const ctx = await setupTest({ hook: buildStubDroppedCommit() });
+  const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1456,7 +1456,7 @@ test('it refuses a resume past the commit window, and the source keeps its copy'
     message: 'commit: the target answered 410 the commit window ended; reissue the ticket',
   });
 
-  const kept = await findImpByName(ctx.source.db, 'dev');
+  const kept = await readImpByName(ctx.source.db, 'dev');
 
   expect(kept?.moveState).toBe('moved');
 });
@@ -1476,14 +1476,14 @@ test('it fails a send whose target answers the commit as not committed', async (
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const source = await findImpByName(ctx.source.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
 
   expect(status.error).toContain('commit: the target did not commit');
   expect(source?.moveState).toBe('moved');
 });
 
 test('it moves the imp to the target when its commit lands before a racing abort', async () => {
-  const dropped = buildStubDroppedCommit();
+  const dropped = makeStubDroppedCommit();
   const committed = Promise.withResolvers<undefined>();
 
   const ctx = await setupTest({
@@ -1515,8 +1515,8 @@ test('it moves the imp to the target when its commit lands before a racing abort
     ctx.sourceApp.client.moves.resume({ name: 'dev' }),
   ]);
 
-  const source = await findImpByName(ctx.source.db, 'dev');
-  const target = await findImpByName(ctx.target.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
+  const target = await readImpByName(ctx.target.db, 'dev');
 
   expect(settled.map((result) => result.status)).toStrictEqual(['fulfilled', 'fulfilled']);
   expect(source).toBeUndefined();
@@ -1524,7 +1524,7 @@ test('it moves the imp to the target when its commit lands before a racing abort
 });
 
 test('it keeps the imp on the source when a racing abort reaches the target before the commit', async () => {
-  const dropped = buildStubDroppedCommit();
+  const dropped = makeStubDroppedCommit();
   const aborted = Promise.withResolvers<undefined>();
   const commits = { sent: 0 };
 
@@ -1562,8 +1562,8 @@ test('it keeps the imp on the source when a racing abort reaches the target befo
     ctx.sourceApp.client.moves.abort({ name: 'dev' }),
   ]);
 
-  const source = await findImpByName(ctx.source.db, 'dev');
-  const target = await findImpByName(ctx.target.db, 'dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
+  const target = await readImpByName(ctx.target.db, 'dev');
 
   expect(settled.map((result) => result.status)).toStrictEqual(['rejected', 'fulfilled']);
   expect(source?.moveState).toBeNull();
@@ -1574,7 +1574,7 @@ test('it takes a receive with a token that manages the whole host', async () => 
   const ctx = await setupTest();
   const made = await ctx.targetApp.client.tokens.create({ name: 'mover', scope: 'manage' });
 
-  const app = buildTestApp(ctx.target, ctx.target, made.secret);
+  const app = createTestApp(ctx.target, ctx.target, made.secret);
 
   const ticket = await app.client.moves.receive({ name: 'dev', bytes: 1 });
 
@@ -1590,7 +1590,7 @@ test('it refuses a receive with a token scoped to imps', async () => {
     imps: ['dev'],
   });
 
-  const app = buildTestApp(ctx.target, ctx.target, made.secret);
+  const app = createTestApp(ctx.target, ctx.target, made.secret);
 
   expect(app.client.moves.receive({ name: 'dev', bytes: 1 })).rejects.toMatchObject({
     code: 'FORBIDDEN',
@@ -1606,7 +1606,7 @@ test('it refuses a reissue with a token scoped to imps', async () => {
     imps: ['dev'],
   });
 
-  const app = buildTestApp(ctx.target, ctx.target, made.secret);
+  const app = createTestApp(ctx.target, ctx.target, made.secret);
 
   expect(app.client.moves.reissue({ name: 'dev' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
 });
@@ -1693,14 +1693,14 @@ test('it ends the stream when a part comes more than 60 s after the last', async
   writeFileSync(ctx.source.storage.resolveImpPaths(created.id).disk, 'x'.repeat(64 * 1024));
 
   const status = await ctx.runMove('dev');
-  const staged = await findImpByName(ctx.target.db, 'dev');
+  const staged = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toContain('the next part of the move stream came too late');
   expect(staged).toBeUndefined();
 });
 
 test('it refuses a stream that does not start with its header', async () => {
-  const ctx = await setupTest({ hook: buildStubMoveStreamRewrite((frames) => frames.slice(1)) });
+  const ctx = await setupTest({ hook: makeStubMoveStreamRewrite((frames) => frames.slice(1)) });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1709,14 +1709,14 @@ test('it refuses a stream that does not start with its header', async () => {
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const staged = await findImpByName(ctx.target.db, 'dev');
+  const staged = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toContain('the stream does not start with its header');
   expect(staged).toBeUndefined();
 });
 
 test("it takes a stream whose header names its ticket's imp", async () => {
-  const ctx = await setupTest({ hook: buildStubMoveStreamRewrite((frames) => frames) });
+  const ctx = await setupTest({ hook: makeStubMoveStreamRewrite((frames) => frames) });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1740,7 +1740,7 @@ test.each([
   "it refuses a stream whose header names %s for its ticket's imp",
   async (_kind, name, refusal) => {
     const ctx = await setupTest({
-      hook: buildStubMoveStreamRewrite((frames) =>
+      hook: makeStubMoveStreamRewrite((frames) =>
         frames.map((frame) => {
           if (frame.type !== MOVE_FRAMES.header) {
             return frame;
@@ -1771,7 +1771,7 @@ test('it refuses a stream for an imp id the target has', async () => {
   const taken = { id: '' };
 
   const ctx = await setupTest({
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
           return frame;
@@ -1801,7 +1801,7 @@ test('it refuses a stream for an imp id the target has', async () => {
 
 test('it refuses a stream that leaves out an image the target lacks', async () => {
   const ctx = await setupTest({
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
           return frame;
@@ -1828,7 +1828,7 @@ test('it refuses a stream that leaves out an image the target lacks', async () =
 });
 
 test('it refuses a stream that ends after its header', async () => {
-  const ctx = await setupTest({ hook: buildStubMoveStreamRewrite((frames) => frames.slice(0, 1)) });
+  const ctx = await setupTest({ hook: makeStubMoveStreamRewrite((frames) => frames.slice(0, 1)) });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1844,7 +1844,7 @@ test('it refuses a stream that ends after its header', async () => {
 
 test('it refuses a stream that sends one file where another goes', async () => {
   const ctx = await setupTest({
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) =>
         frame.type === MOVE_FRAMES.file
           ? buildJsonMoveFrame(frame.type, {
@@ -1869,7 +1869,7 @@ test('it refuses a stream that sends one file where another goes', async () => {
 });
 
 test('it refuses a stream that ends inside a file', async () => {
-  const ctx = await setupTest({ hook: buildStubMoveStreamRewrite((frames) => frames.slice(0, 2)) });
+  const ctx = await setupTest({ hook: makeStubMoveStreamRewrite((frames) => frames.slice(0, 2)) });
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -1885,7 +1885,7 @@ test('it refuses a stream that ends inside a file', async () => {
 
 test('it refuses a file whose sha256 does not match its data', async () => {
   const ctx = await setupTest({
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) =>
         frame.type === MOVE_FRAMES.fileEnd
           ? buildJsonMoveFrame(frame.type, {
@@ -1911,7 +1911,7 @@ test('it refuses a file whose sha256 does not match its data', async () => {
 
 test('it refuses a frame inside a file that is neither data nor its end', async () => {
   const ctx = await setupTest({
-    hook: buildStubMoveStreamRewrite((frames) => [
+    hook: makeStubMoveStreamRewrite((frames) => [
       ...frames.slice(0, 2),
       buildJsonMoveFrame(MOVE_FRAMES.end, {}),
     ]),
@@ -1931,7 +1931,7 @@ test('it refuses a frame inside a file that is neither data nor its end', async 
 
 test('it refuses a data frame past the end of its file', async () => {
   const ctx = await setupTest({
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) =>
         frame.type === MOVE_FRAMES.file
           ? buildJsonMoveFrame(frame.type, {
@@ -1956,7 +1956,7 @@ test('it refuses a data frame past the end of its file', async () => {
 
 test('it refuses a stream that does not end with END', async () => {
   const ctx = await setupTest({
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.filter((frame) => frame.type !== MOVE_FRAMES.end),
     ),
   });
@@ -1968,7 +1968,7 @@ test('it refuses a stream that does not end with END', async () => {
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   const status = await ctx.runMove('dev');
-  const staged = await findImpByName(ctx.target.db, 'dev');
+  const staged = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toContain('the stream does not end with END');
   expect(staged).toBeUndefined();
@@ -1976,7 +1976,7 @@ test('it refuses a stream that does not end with END', async () => {
 
 test('it refuses ZFS streams that do not name each checkpoint once', async () => {
   const ctx = await setupTest({
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
           return frame;
@@ -2003,7 +2003,7 @@ test('it refuses ZFS streams that do not name each checkpoint once', async () =>
 
 test('it refuses ZFS streams on a target that is not on ZFS', async () => {
   const ctx = await setupTest({
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
           return frame;
@@ -2052,7 +2052,7 @@ test('it sends the disk and its checkpoints between two ZFS hosts as ZFS streams
   const status = await ctx.runMove('dev', true);
   const checkpoints = await ctx.targetApp.client.checkpoints.list({ name: 'dev' });
   const moved = await ctx.targetApp.client.imps.get({ name: 'dev' });
-  const left = await findImpByName(ctx.source.db, 'dev');
+  const left = await readImpByName(ctx.source.db, 'dev');
 
   const received = targetZfs
     .readPool()
@@ -2133,7 +2133,7 @@ test('it never commits a ZFS stream whose sum does not match', async () => {
   const ctx = await setupTest({
     source: { createStorage: sourceZfs.createStorage },
     target: { createStorage: targetZfs.createStorage },
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) =>
         frame.type === MOVE_FRAMES.fileEnd
           ? buildJsonMoveFrame(frame.type, {
@@ -2161,7 +2161,7 @@ test('it never commits a ZFS stream whose sum does not match', async () => {
     (command) => command.includes('/staging/mvin-') && !command.startsWith('zfs recv'),
   );
 
-  const absent = await findImpByName(ctx.target.db, 'dev');
+  const absent = await readImpByName(ctx.target.db, 'dev');
 
   expect(status.error).toContain('ZFS stream 0: the sha256 does not match');
   expect(received).toHaveLength(1);
@@ -2178,7 +2178,7 @@ test('it moves an imp between ZFS hosts again after a stream whose sum did not m
   const ctx = await setupTest({
     source: { createStorage: sourceZfs.createStorage },
     target: { createStorage: targetZfs.createStorage },
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.fileEnd || corrupt.remaining === 0) {
           return frame;
@@ -2214,7 +2214,7 @@ test('it refuses a ZFS move whose stream leaves out a ZFS stream', async () => {
   const ctx = await setupTest({
     source: { createStorage: sourceZfs.createStorage },
     target: { createStorage: targetZfs.createStorage },
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.filter((frame) => frame.type !== MOVE_FRAMES.file),
     ),
   });
@@ -2236,7 +2236,7 @@ test('it refuses a ZFS stream that ends before its sum', async () => {
   const ctx = await setupTest({
     source: { createStorage: sourceZfs.createStorage },
     target: { createStorage: targetZfs.createStorage },
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) =>
         frame.type === MOVE_FRAMES.fileEnd ? buildJsonMoveFrame(MOVE_FRAMES.end, {}) : frame,
       ),
@@ -2260,7 +2260,7 @@ test('it refuses a ZFS stream whose data frames come out of order', async () => 
   const ctx = await setupTest({
     source: { createStorage: sourceZfs.createStorage },
     target: { createStorage: targetZfs.createStorage },
-    hook: buildStubMoveStreamRewrite((frames) =>
+    hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.data) {
           return frame;
@@ -2293,7 +2293,7 @@ test('it fails a ZFS move to a target that left ZFS since the prepare', async ()
   const ctx = await setupTest({
     source: { createStorage: sourceZfs.createStorage },
     target: { createStorage: targetZfs.createStorage },
-    hook: buildStubSwitchedStorageTarget('xfs'),
+    hook: makeStubSwitchedStorageTarget('xfs'),
   });
 
   await createZfsUbuntuImage(ctx.source);
@@ -2339,7 +2339,7 @@ test('it moves an imp from an XFS host to a ZFS host as files, its checkpoints a
 });
 
 test('it writes each move mark MOVE_TRANSITIONS holds, and no other, on both hosts', async () => {
-  const ctx = await setupTest({ hook: buildStubDroppedCommit() });
+  const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
   // each imp's last mark on each host, and every change a write made to it
   const marks = new Map<string, MoveState | null>();

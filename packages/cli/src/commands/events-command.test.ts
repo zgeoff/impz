@@ -17,7 +17,7 @@ import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import invariant from 'tiny-invariant';
 import { buildStubBackoffClock } from '../test-utils/build-stub-backoff-clock';
 import { buildStubOlderImpdFetch } from '../test-utils/build-stub-older-impd-fetch';
@@ -44,7 +44,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots with
@@ -134,7 +134,7 @@ async function setupTest() {
     impd.diskUsage.stop();
   });
 
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
 
   // each listen registers the stop of its own server; a Bun server that a
   // test stopped already stops again as a no-op
@@ -373,7 +373,7 @@ test('it rethrows impd’s refusal of a token it does not know, without retrying
     fetch: ctx.sendRequest,
   });
 
-  const wait = mock<(ms: number) => Promise<void>>(() => Promise.resolve());
+  const wait = mock<(durationMs: number) => Promise<void>>(() => Promise.resolve());
 
   const printing = printEvents(
     {
@@ -404,7 +404,7 @@ test('it says to upgrade an impd that has no stream procedure, without retrying'
 
   const info = await ctx.client.system.info();
 
-  const wait = mock<(ms: number) => Promise<void>>(() => Promise.resolve());
+  const wait = mock<(durationMs: number) => Promise<void>>(() => Promise.resolve());
   const warn = mock<(line: string) => void>();
 
   const printing = printEvents(

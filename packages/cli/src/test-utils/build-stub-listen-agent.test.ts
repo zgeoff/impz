@@ -10,11 +10,11 @@ import { buildStubListenAgent } from './build-stub-listen-agent';
 
 // a socket path in a temp dir, as impd's agent client reaches the stub there
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-listen-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-listen-agent-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { vsockPath: join(dir, 'v.sock') };
+  return { vsockPath: join(directory, 'v.sock') };
 }
 
 test('it answers a listen with the port it was given', async () => {

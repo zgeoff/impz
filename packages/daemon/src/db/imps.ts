@@ -1,8 +1,8 @@
 import type { EgressPolicy, ImpKind, ImpState, MoveState, PublicAuth } from '@impz/api';
 import { sql } from 'kysely';
+import { getErrorMessage } from '../get-error-message';
 import { requireTransition } from '../imps/imp-transitions';
 import { MOVE_TRANSITIONS } from '../moves/move-transitions';
-import { readErrorMessage } from '../read-error-message';
 import { allocateSlot } from './allocate-slot';
 import { ImpClashError } from './imp-clash-error';
 import type { ImpDatabase, ImpQueries } from './open-database';
@@ -213,7 +213,7 @@ function toImpClash(error: unknown): ImpClashError | null {
     'code' in error &&
     error.code === 'SQLITE_CONSTRAINT_UNIQUE';
 
-  const match = isUnique ? /\bimps\.(?<column>\w+)/v.exec(readErrorMessage(error)) : null;
+  const match = isUnique ? /\bimps\.(?<column>\w+)/v.exec(getErrorMessage(error)) : null;
   const column = match?.groups?.['column'];
 
   return column === undefined ? null : new ImpClashError(column);
@@ -263,13 +263,13 @@ export async function createImpInFreeSlot(
   return created;
 }
 
-export async function findImpByName(db: ImpDatabase, name: string): Promise<ImpRecord | undefined> {
+export async function readImpByName(db: ImpDatabase, name: string): Promise<ImpRecord | undefined> {
   const row = await db.selectFrom('imps').selectAll().where('name', '=', name).executeTakeFirst();
 
   return row === undefined ? undefined : toImpRecord(row);
 }
 
-export async function findImpById(db: ImpDatabase, id: string): Promise<ImpRecord | undefined> {
+export async function readImpById(db: ImpDatabase, id: string): Promise<ImpRecord | undefined> {
   const row = await db.selectFrom('imps').selectAll().where('id', '=', id).executeTakeFirst();
 
   return row === undefined ? undefined : toImpRecord(row);
@@ -436,7 +436,7 @@ export async function updateImpDisk(
   id: string,
   disk: Readonly<{ diskBytes: number; isGrowPending: boolean }>,
 ): Promise<ImpRecord> {
-  const before = await findImpById(db, id);
+  const before = await readImpById(db, id);
 
   const row = await db
     .updateTable('imps')

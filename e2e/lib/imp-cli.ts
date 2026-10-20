@@ -229,7 +229,7 @@ export async function listImps(target: DevInstance = instance): Promise<readonly
   return z.array(ImpRowSchema).parse(JSON.parse(stdout));
 }
 
-export async function findImp(
+export async function readImp(
   name: string,
   target: DevInstance = instance,
 ): Promise<ImpRow | undefined> {
@@ -239,7 +239,7 @@ export async function findImp(
 }
 
 export async function requireImp(name: string, target: DevInstance = instance): Promise<ImpRow> {
-  const row = await findImp(name, target);
+  const row = await readImp(name, target);
 
   if (row === undefined) {
     throw new Error(`${name} is not in impz ls on ${target.container}`);

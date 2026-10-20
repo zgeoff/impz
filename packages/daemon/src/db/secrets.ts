@@ -137,7 +137,7 @@ export function upsertSecret(
   rebind: boolean,
 ): Promise<ReplaceOutcome> {
   return db.transaction().execute(async (trx) => {
-    const existing = await findSecret(trx, secret.name);
+    const existing = await readSecret(trx, secret.name);
 
     if (existing === undefined) {
       const made = await createSecret(trx, secret);
@@ -184,7 +184,7 @@ export function upsertSecret(
   });
 }
 
-export async function findSecret(db: ImpQueries, name: string): Promise<SecretRecord | undefined> {
+export async function readSecret(db: ImpQueries, name: string): Promise<SecretRecord | undefined> {
   const row = await db
     .selectFrom('secrets')
     .selectAll()
@@ -262,7 +262,7 @@ export function createCheckedGrant(
   filter?: GrantFilter,
 ): Promise<GrantOutcome> {
   return db.transaction().execute(async (trx) => {
-    const secret = await findSecret(trx, secretName);
+    const secret = await readSecret(trx, secretName);
     const refusal = await checkAuthority(trx, authority, secret);
 
     if (refusal !== null) {
@@ -273,7 +273,7 @@ export function createCheckedGrant(
       return { kind: 'no-secret' };
     }
 
-    const clash = await findClash(trx, impId, secret.name, secret.rules);
+    const clash = await readClash(trx, impId, secret.name, secret.rules);
 
     if (clash !== null) {
       return { kind: 'clash', clash };
@@ -293,7 +293,7 @@ export function removeCheckedGrant(
   authority: Readonly<GrantAuthority> | null,
 ): Promise<RevokeOutcome> {
   return db.transaction().execute(async (trx) => {
-    const secret = await findSecret(trx, secretName);
+    const secret = await readSecret(trx, secretName);
     const refusal = await checkAuthority(trx, authority, secret);
 
     if (refusal !== null) {
@@ -375,7 +375,7 @@ export async function listAllGrantedRules(
 
 // A host has one credential per imp: two would leave the header
 // ambiguous. The imp's other grant that covers one of the hosts, or null.
-export async function findClash(
+export async function readClash(
   db: ImpQueries,
   impId: string,
   secretName: string,
@@ -464,13 +464,13 @@ function createGeneration(): string {
 // What a request depends on besides the value: the kind and the rules, with
 // the rules in host order, so a reorder is the same binding
 function isSameBinding(
-  a: Readonly<Pick<NewSecret, 'kind' | 'rules' | 'oauth'>>,
-  b: Readonly<Pick<NewSecret, 'kind' | 'rules' | 'oauth'>>,
+  left: Readonly<Pick<NewSecret, 'kind' | 'rules' | 'oauth'>>,
+  right: Readonly<Pick<NewSecret, 'kind' | 'rules' | 'oauth'>>,
 ): boolean {
   return (
-    a.kind === b.kind &&
-    toBindingKey(a.rules) === toBindingKey(b.rules) &&
-    formatOAuthConfig(a.oauth) === formatOAuthConfig(b.oauth)
+    left.kind === right.kind &&
+    toBindingKey(left.rules) === toBindingKey(right.rules) &&
+    formatOAuthConfig(left.oauth) === formatOAuthConfig(right.oauth)
   );
 }
 

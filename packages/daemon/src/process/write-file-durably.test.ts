@@ -15,18 +15,18 @@ import { join } from 'node:path';
 import { writeCopyDurably, writeFileDurably, writeFileDurablyAsync } from './write-file-durably';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'durable-'));
+  const directory = mkdtempSync(join(tmpdir(), 'durable-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it replaces a file with the new text', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'state.json');
+  const path = join(ctx.directoryPath, 'state.json');
 
   writeFileSync(path, 'old');
   writeFileDurably(path, 'new');
@@ -36,7 +36,7 @@ test('it replaces a file with the new text', () => {
 
 test('it writes bytes as they are', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'blob');
+  const path = join(ctx.directoryPath, 'blob');
 
   writeFileDurably(path, new Uint8Array([0, 255, 7]));
 
@@ -45,7 +45,7 @@ test('it writes bytes as they are', () => {
 
 test('it gives a new file mode 0644 by default', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'state.json');
+  const path = join(ctx.directoryPath, 'state.json');
 
   writeFileDurably(path, 'x');
 
@@ -54,7 +54,7 @@ test('it gives a new file mode 0644 by default', () => {
 
 test('it gives a new file the mode it is passed', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'secret');
+  const path = join(ctx.directoryPath, 'secret');
 
   writeFileDurably(path, 'x', { mode: 0o600 });
 
@@ -63,7 +63,7 @@ test('it gives a new file the mode it is passed', () => {
 
 test('it flushes the new file and then its directory', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'state.json');
+  const path = join(ctx.directoryPath, 'state.json');
   const synced: string[] = [];
 
   writeFileDurably(path, 'x', {
@@ -74,12 +74,12 @@ test('it flushes the new file and then its directory', () => {
     },
   });
 
-  expect(synced).toStrictEqual([`${path}.new`, ctx.dir]);
+  expect(synced).toStrictEqual([`${path}.new`, ctx.directoryPath]);
 });
 
 test('it leaves no temp file behind', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'state.json');
+  const path = join(ctx.directoryPath, 'state.json');
 
   writeFileDurably(path, 'x');
 
@@ -88,8 +88,8 @@ test('it leaves no temp file behind', () => {
 
 test('it never writes through a symlink a crash left at the temp path', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'state.json');
-  const target = join(ctx.dir, 'elsewhere');
+  const path = join(ctx.directoryPath, 'state.json');
+  const target = join(ctx.directoryPath, 'elsewhere');
 
   writeFileSync(target, 'untouched');
   symlinkSync(target, `${path}.new`);
@@ -100,7 +100,7 @@ test('it never writes through a symlink a crash left at the temp path', () => {
 
 test('it replaces a file asynchronously with the mode it is passed', async () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'meta.json');
+  const path = join(ctx.directoryPath, 'meta.json');
 
   writeFileSync(path, 'old');
 
@@ -112,7 +112,7 @@ test('it replaces a file asynchronously with the mode it is passed', async () =>
 
 test('it leaves no temp file behind an asynchronous write', async () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'meta.json');
+  const path = join(ctx.directoryPath, 'meta.json');
 
   await writeFileDurablyAsync(path, 'x');
 
@@ -121,8 +121,8 @@ test('it leaves no temp file behind an asynchronous write', async () => {
 
 test('it copies a file over another', () => {
   const ctx = setupTest();
-  const from = join(ctx.dir, 'from');
-  const to = join(ctx.dir, 'to');
+  const from = join(ctx.directoryPath, 'from');
+  const to = join(ctx.directoryPath, 'to');
 
   writeFileSync(from, 'copied');
   writeFileSync(to, 'old');

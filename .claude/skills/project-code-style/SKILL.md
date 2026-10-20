@@ -1,45 +1,37 @@
 ---
 name: project-code-style
 description:
-  imp's additions to the shared code-style skill — its own function verbs and exempt names. Load it
-  beside code-style before writing, reviewing, or renaming any TypeScript in this repo.
+  imp's additions to the shared code-style skill — the meaning of imp's own domain verbs, and where
+  the names a library fixes are exempt. Load it beside code-style before writing, reviewing, or
+  renaming any TypeScript in this repo.
 ---
 
 # imp code style
 
-The `code-style` skill holds the rules. imp adds the verbs and exempt names below to its
-function-verb taxonomy. Each one also sits in the `verbs` or `exemptNames` option of
-`zgeoff/function-verb` in [`.oxlintrc.json`](../../../.oxlintrc.json); add a new one to both in the
-same PR, because `check-project-verbs.sh` fails when the lists differ.
+The `code-style` skill holds the rules, and its role table decides the verb for every job it lists.
+imp names its other jobs with the domain verbs below. Each is a free verb under the shared skill,
+and imp keeps it to one meaning, so a name that starts with one tells the reader the job without a
+trip to the function.
 
-## Project verbs
+## Domain verbs
 
 imp's verbs name the lifecycle an imp moves through, its disk, which only grows, and its elastic
-memory, which also shrinks. `watch` follows impd's event stream and calls back on each change until
-a signal ends it, opening the stream again when it drops. `dispatch` runs the handler that the first
-word of a command line names, for a command whose verbs share its arguments.
+memory, which also shrinks.
 
-- `allocate`
-- `list`
-- `open`
-- `sleep`
-- `wake`
-- `hold`
-- `grow`
-- `shrink`
-- `watch`
-- `dispatch`
+- `allocate` reserves a slot, an address, or another numbered resource from a pool.
+- `list` returns every record of a kind that the caller may see.
+- `sleep`, `wake` and `hold` move an imp through its lifecycle: `hold` keeps it awake while work
+  runs.
+- `grow` enlarges a disk or an elastic imp's memory, and `shrink` returns memory to the host.
+- `watch` follows impd's event stream and calls back on each change until a signal ends it, opening
+  the stream again when it drops.
+- `dispatch` runs the handler that the first word of a command line names, for a command whose verbs
+  share its arguments.
+- `wire` builds a service from its real dependencies, where the matching `create` function takes
+  them as arguments, so a test calls `create` with stand-ins.
 
-## Exempt names
+## Names a library fixes
 
-- `main`, a script entrypoint
-- `invariant`, the narrowing helper the testing skill names
-- `init`, the first of the methods kysely's `Driver` interface fixes, which `BunSqliteDriver`
-  implements under the names the library requires
-- `acquireConnection`
-- `beginTransaction`
-- `commitTransaction`
-- `rollbackTransaction`
-- `releaseConnection`
-- `destroy`
-- `up`, the method kysely's `Migration` interface fixes
+A method whose name a library interface fixes, such as Bun.serve's `fetch`, keeps that name. Each
+such name sits in the `exemptNames` option of `zgeoff/function-verb` in
+[`.oxlintrc.json`](../../../.oxlintrc.json), with a comment that names the interface.

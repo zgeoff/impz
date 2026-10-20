@@ -83,11 +83,11 @@ function readHostVariable(env: CliEnv): string | null {
 }
 
 function readTokenFile(env: CliEnv, warn: (line: string) => void): string | null {
-  const dir = resolveConfigDir(env);
+  const directory = resolveConfigDir(env);
 
-  updateLegacyConfig(dir, warn);
+  updateLegacyConfig(directory, warn);
 
-  const path = join(dir, 'token');
+  const path = join(directory, 'token');
 
   return existsSync(path) ? readFileSync(path, 'utf8').trim() : null;
 }

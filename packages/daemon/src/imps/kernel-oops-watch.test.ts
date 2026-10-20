@@ -5,20 +5,20 @@ import { join } from 'node:path';
 import { createKernelOopsWatch } from './kernel-oops-watch';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-taint-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-taint-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   // where the test writes the kernel's taint mask, as /proc/sys/kernel/tainted,
   // its boot id, as /proc/sys/kernel/random/boot_id, its log, as /dev/kmsg,
   // and impd's PID namespace, as /proc/self/ns/pid
   return {
-    taintPath: join(dir, 'tainted'),
-    bootIdPath: join(dir, 'boot_id'),
-    kmsgPath: join(dir, 'kmsg'),
-    pidNamespacePath: join(dir, 'pid'),
+    taintPath: join(directory, 'tainted'),
+    bootIdPath: join(directory, 'boot_id'),
+    kmsgPath: join(directory, 'kmsg'),
+    pidNamespacePath: join(directory, 'pid'),
   };
 }
 
@@ -146,7 +146,7 @@ test('it finds when it first read the flag set after it read the flag clear', ()
 
   clock.nowMs = 3000;
 
-  expect(watch.findOopsSeenAt()).toBe(2000);
+  expect(watch.readOopsSeenAt()).toBe(2000);
 });
 
 test('it finds no oops since clear when the flag was set at the first read', () => {
@@ -158,7 +158,7 @@ test('it finds no oops since clear when the flag was set at the first read', () 
 
   watch.isOopsed();
 
-  expect(watch.findOopsSeenAt()).toBeNull();
+  expect(watch.readOopsSeenAt()).toBeNull();
 });
 
 test('it finds no oops since clear while the flag stays clear', () => {
@@ -170,7 +170,7 @@ test('it finds no oops since clear while the flag stays clear', () => {
 
   watch.isOopsed();
 
-  expect(watch.findOopsSeenAt()).toBeNull();
+  expect(watch.readOopsSeenAt()).toBeNull();
 });
 
 test('it keeps an oops it saw once the file reads clear again', () => {
@@ -195,14 +195,14 @@ test('it reads the boot id the kernel gives this boot', () => {
 
   const watch = createKernelOopsWatch(ctx.taintPath, Date.now, ctx.bootIdPath);
 
-  expect(watch.findBootId()).toBe('6b1f0c3e-92d4-4a7b-8e5f-0d2c4a6b8e1f');
+  expect(watch.readCurrentBootId()).toBe('6b1f0c3e-92d4-4a7b-8e5f-0d2c4a6b8e1f');
 });
 
 test('it finds no boot id without the boot id file', () => {
   const ctx = setupTest();
   const watch = createKernelOopsWatch(ctx.taintPath, Date.now, ctx.bootIdPath);
 
-  expect(watch.findBootId()).toBeNull();
+  expect(watch.readCurrentBootId()).toBeNull();
 });
 
 test('it finds no boot id in a file that holds no UUID', () => {
@@ -212,7 +212,7 @@ test('it finds no boot id in a file that holds no UUID', () => {
 
   const watch = createKernelOopsWatch(ctx.taintPath, Date.now, ctx.bootIdPath);
 
-  expect(watch.findBootId()).toBeNull();
+  expect(watch.readCurrentBootId()).toBeNull();
 });
 
 test('it keeps the first boot id it read', () => {
@@ -222,12 +222,12 @@ test('it keeps the first boot id it read', () => {
 
   const watch = createKernelOopsWatch(ctx.taintPath, Date.now, ctx.bootIdPath);
 
-  watch.findBootId();
+  watch.readCurrentBootId();
 
   // a boot keeps its id; a read that says otherwise is not a reboot
   writeFileSync(ctx.bootIdPath, 'c47a9e20-1b3d-4f68-a5c2-7e9d0b1f3a54\n');
 
-  expect(watch.findBootId()).toBe('6b1f0c3e-92d4-4a7b-8e5f-0d2c4a6b8e1f');
+  expect(watch.readCurrentBootId()).toBe('6b1f0c3e-92d4-4a7b-8e5f-0d2c4a6b8e1f');
 });
 
 test('it finds the imp whose Firecracker owned the thread an oops killed', () => {
@@ -252,7 +252,7 @@ test('it finds the imp whose Firecracker owned the thread an oops killed', () =>
     pidNamespacePath: ctx.pidNamespacePath,
   });
 
-  expect(watch.findOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toStrictEqual(
+  expect(watch.readOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toStrictEqual(
     new Set(['a']),
   );
 });
@@ -276,7 +276,7 @@ test('it reads the task line of a kernel that puts the UID before the PID', () =
     pidNamespacePath: ctx.pidNamespacePath,
   });
 
-  expect(watch.findOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toStrictEqual(
+  expect(watch.readOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toStrictEqual(
     new Set(['a']),
   );
 });
@@ -304,7 +304,7 @@ test('it finds the owners of each oops since boot', () => {
   });
 
   expect(
-    watch.findOopsOwners(
+    watch.readOopsOwners(
       (thread) =>
         new Map([
           [4242, ['a']],
@@ -339,7 +339,7 @@ test('it reads past the dictionary lines under a record and a warning before the
   });
 
   expect(
-    watch.findOopsOwners(
+    watch.readOopsOwners(
       (thread) =>
         new Map([
           [4242, ['a']],
@@ -368,7 +368,7 @@ test('it finds no owners for an oops that killed a thread no VM owned', () => {
     pidNamespacePath: ctx.pidNamespacePath,
   });
 
-  expect(watch.findOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toBeNull();
+  expect(watch.readOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toBeNull();
 });
 
 test('it finds no owners when it cannot read the kernel log', () => {
@@ -381,7 +381,7 @@ test('it finds no owners when it cannot read the kernel log', () => {
     pidNamespacePath: ctx.pidNamespacePath,
   });
 
-  expect(watch.findOopsOwners(() => ['a'])).toBeNull();
+  expect(watch.readOopsOwners(() => ['a'])).toBeNull();
 });
 
 test('it finds no owners when the kernel log has dropped the first oops', () => {
@@ -404,7 +404,7 @@ test('it finds no owners when the kernel log has dropped the first oops', () => 
     pidNamespacePath: ctx.pidNamespacePath,
   });
 
-  expect(watch.findOopsOwners((thread) => (thread === 5151 ? ['b'] : []))).toBeNull();
+  expect(watch.readOopsOwners((thread) => (thread === 5151 ? ['b'] : []))).toBeNull();
 });
 
 test('it finds no owners for an oops whose task line the log has lost', () => {
@@ -418,7 +418,7 @@ test('it finds no owners for an oops whose task line the log has lost', () => {
     pidNamespacePath: ctx.pidNamespacePath,
   });
 
-  expect(watch.findOopsOwners(() => ['a'])).toBeNull();
+  expect(watch.readOopsOwners(() => ['a'])).toBeNull();
 });
 
 test('it keeps the owners it first found for an oops after their VM leaves the sampler', () => {
@@ -440,9 +440,9 @@ test('it keeps the owners it first found for an oops after their VM leaves the s
     pidNamespacePath: ctx.pidNamespacePath,
   });
 
-  watch.findOopsOwners((thread) => (thread === 4242 ? ['a'] : []));
+  watch.readOopsOwners((thread) => (thread === 4242 ? ['a'] : []));
 
-  expect(watch.findOopsOwners(() => [])).toStrictEqual(new Set(['a']));
+  expect(watch.readOopsOwners(() => [])).toStrictEqual(new Set(['a']));
 });
 
 test('it finds no owners when impd runs outside the host PID namespace', () => {
@@ -465,7 +465,7 @@ test('it finds no owners when impd runs outside the host PID namespace', () => {
     pidNamespacePath: ctx.pidNamespacePath,
   });
 
-  expect(watch.findOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toBeNull();
+  expect(watch.readOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toBeNull();
 });
 
 test('it finds no owners when the kernel overwrote records while impd read the log', () => {
@@ -497,7 +497,7 @@ test('it finds no owners when the kernel overwrote records while impd read the l
     },
   });
 
-  expect(watch.findOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toBeNull();
+  expect(watch.readOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toBeNull();
 });
 
 test('it reads the task line arm64 prints after the loaded modules', () => {
@@ -520,7 +520,7 @@ test('it reads the task line arm64 prints after the loaded modules', () => {
     pidNamespacePath: ctx.pidNamespacePath,
   });
 
-  expect(watch.findOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toStrictEqual(
+  expect(watch.readOopsOwners((thread) => (thread === 4242 ? ['a'] : []))).toStrictEqual(
     new Set(['a']),
   );
 });
@@ -551,7 +551,7 @@ test("it finds no owners when another VM's warning prints inside the oops", () =
   });
 
   expect(
-    watch.findOopsOwners(
+    watch.readOopsOwners(
       (thread) =>
         new Map([
           [4242, ['a']],
@@ -581,7 +581,7 @@ test('it finds no owners when a warning that began before the oops prints its ta
     pidNamespacePath: ctx.pidNamespacePath,
   });
 
-  expect(watch.findOopsOwners((thread) => (thread === 5151 ? ['b'] : []))).toBeNull();
+  expect(watch.readOopsOwners((thread) => (thread === 5151 ? ['b'] : []))).toBeNull();
 });
 
 test('it finds no owners when a stack dump without markers prints a second task line in the oops', () => {
@@ -606,7 +606,7 @@ test('it finds no owners when a stack dump without markers prints a second task 
   });
 
   expect(
-    watch.findOopsOwners(
+    watch.readOopsOwners(
       (thread) =>
         new Map([
           [4242, ['a']],
@@ -644,7 +644,7 @@ test('it finds no owners when an oops begins while one of two overlapping warnin
   });
 
   expect(
-    watch.findOopsOwners(
+    watch.readOopsOwners(
       (thread) =>
         new Map([
           [111, ['b']],

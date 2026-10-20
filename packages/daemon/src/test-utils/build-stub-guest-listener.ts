@@ -30,7 +30,7 @@ export function buildStubGuestListener(id: string, spec: ListenSpec) {
   };
 
   const listener: GuestListener = {
-    path: spec.network === 'tcp' ? null : readUnixPath(id, spec),
+    path: spec.network === 'tcp' ? null : buildUnixPath(id, spec),
     port: spec.network === 'tcp' ? spec.port || 41_000 : null,
     id,
     connections: () => readConnections(readNext),
@@ -57,7 +57,7 @@ export function buildStubGuestListener(id: string, spec: ListenSpec) {
   };
 }
 
-function readUnixPath(id: string, spec: ListenSpec): string {
+function buildUnixPath(id: string, spec: ListenSpec): string {
   return spec.network === 'unix' && spec.path !== null ? spec.path : `/run/imp/forward/${id}/sock`;
 }
 

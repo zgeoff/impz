@@ -12,7 +12,7 @@ import { createSecret, removeSecret } from '../db/secrets';
 import { buildMockOAuthStateFile } from '../test-utils/build-mock-oauth-state-file';
 import { buildQueryGate } from '../test-utils/build-query-gate';
 import { buildStubBrokerJwt } from '../test-utils/build-stub-broker-jwt';
-import { buildStubBrokerTokenEndpoint } from '../test-utils/build-stub-broker-token-endpoint';
+import { createStubBrokerTokenEndpoint } from '../test-utils/create-stub-broker-token-endpoint';
 import { createTestDatabase } from '../test-utils/create-test-database';
 import { startStubBrokerTlsUpstream } from '../test-utils/start-stub-broker-tls-upstream';
 import { loadOrCreateBrokerCa } from './broker-ca';
@@ -40,7 +40,7 @@ async function setupTest() {
 test('it sends the refresh token and the client id as a form', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
@@ -83,7 +83,7 @@ test('it sends the refresh token and the client id as a form', async () => {
 test('it sends a JSON body for the json format', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 60 });
@@ -126,7 +126,7 @@ test('it sends a JSON body for the json format', async () => {
 test('it sends the token request to the test upstream that stands in for the token host', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://upstream.test:9443/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://upstream.test:9443/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
@@ -160,7 +160,7 @@ test('it refreshes over TLS from a test upstream that the test CA signed', async
   const ctx = await setupTest();
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     fetch: () => Response.json({ access_token: 'fake-access-1', expires_in: 3600 }),
   });
 
@@ -192,7 +192,7 @@ test('it treats a test upstream whose certificate the test CA did not sign as a 
   const ctx = await setupTest();
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     fetch: () => Response.json({ access_token: 'fake-access-1', expires_in: 3600 }),
   });
 
@@ -226,7 +226,7 @@ test('it stores the rotated tokens with the expiry expires_in gives', async () =
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -276,7 +276,7 @@ test('it stores the rotated tokens with the expiry expires_in gives', async () =
 test('it logs a refresh with whether the token rotated and its expiry, and no token', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const logs: string[] = [];
 
   server.use(endpoint.handler);
@@ -321,7 +321,7 @@ test('it keeps the old value of a field the answer leaves out', async () => {
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
@@ -376,7 +376,7 @@ test('it keeps the old value of a field the answer leaves out', async () => {
 test('it logs a refresh whose refresh token did not rotate as such', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const logs: string[] = [];
 
   server.use(endpoint.handler);
@@ -418,7 +418,7 @@ test('it takes the expiry from expires_in over the access token exp', async () =
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -456,7 +456,7 @@ test('it takes the expiry from the access token exp without expires_in', async (
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -494,7 +494,7 @@ test('it takes the expiry from the access token exp without expires_in', async (
 test('it stores no expiry for an opaque access token without expires_in', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-opaque' });
@@ -532,7 +532,7 @@ test('it stores no expiry for an expires_in no date can hold, and keeps the rota
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -582,7 +582,7 @@ test.each([[0], [-60]])(
     const ctx = await setupTest();
 
     const startedAt = Date.parse('2030-01-01T00:00:00Z');
-    const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+    const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
     server.use(endpoint.handler);
     endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: expiresIn });
@@ -617,7 +617,7 @@ test('it keeps the access token and its expiry when the answer has only a rotate
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { refresh_token: 'fake-refresh-1', expires_in: 3600 });
@@ -670,7 +670,7 @@ test('it keeps the access token and its expiry when the answer has only a rotate
 test('it keeps a rotated refresh token alone on a pending secret and stays pending', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { refresh_token: 'fake-refresh-1' });
@@ -751,7 +751,7 @@ test('it leaves the old expiry when expires_in comes with no new access token', 
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { refresh_token: 'fake-refresh-1', expires_in: 3600 });
@@ -875,7 +875,7 @@ test('it refreshes a secret that is due on a tick and leaves one that is not', a
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-due', { access_token: 'fake-access-1', expires_in: 3600 });
@@ -940,7 +940,7 @@ test('it sends nothing on the next tick after a refresh', async () => {
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
@@ -1278,7 +1278,7 @@ test('it clears the error once a refresh after a transient error succeeds', asyn
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const clock = { nowMs: startedAt + 230 * 3_600_000 };
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -1587,7 +1587,7 @@ test('it never sends a secret that needs a new sign-in on a tick', async () => {
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -1629,7 +1629,7 @@ test('it never sends a secret that needs a new sign-in on a tick', async () => {
 test('it answers an unforced refresh of a secret that needs a new sign-in without a call', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -1664,7 +1664,7 @@ test('it answers an unforced refresh of a secret that needs a new sign-in withou
 test('it signs a secret that needs a new sign-in in again on a forced refresh with a good answer', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
@@ -1705,7 +1705,7 @@ test('it signs a secret that needs a new sign-in in again on a forced refresh wi
 test('it logs nothing when a secret that already needs a new sign-in is refused again', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const logs: string[] = [];
 
   server.use(endpoint.handler);
@@ -1749,7 +1749,7 @@ test('it logs nothing when a secret that already needs a new sign-in is refused 
 test('it answers a forced refresh while one runs with that one, sending one request', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<void>();
 
@@ -1805,7 +1805,7 @@ test('it answers a forced refresh while one runs with that one, sending one requ
 test('it drops a result when the secret was deleted during the call', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<void>();
   const logs: string[] = [];
@@ -1869,7 +1869,7 @@ test('it drops a result when the secret was deleted during the call', async () =
 test('it keeps a result it could not write and sends its rotated token on the next call', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const valueFile = buildValueFile('codex');
   const valuePath = join(ctx.dataDir, 'secrets', valueFile);
 
@@ -1932,7 +1932,7 @@ test('it keeps a result it could not write and sends its rotated token on the ne
 test('it answers a refresh whose earlier result still cannot be written without a call', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const valueFile = buildValueFile('codex');
   const valuePath = join(ctx.dataDir, 'secrets', valueFile);
 
@@ -1984,7 +1984,7 @@ test('it answers a refresh whose earlier result still cannot be written without 
 test('it writes on a tick a result an earlier write failed on, though the secret is not due', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const valueFile = buildValueFile('codex');
   const valuePath = join(ctx.dataDir, 'secrets', valueFile);
 
@@ -2038,7 +2038,7 @@ test('it writes on a tick a result an earlier write failed on, though the secret
 test('it writes on stop a result an earlier write failed on', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const valueFile = buildValueFile('codex');
   const valuePath = join(ctx.dataDir, 'secrets', valueFile);
 
@@ -2092,7 +2092,7 @@ test('it writes on stop a result an earlier write failed on', async () => {
 test('it never writes an unsaved result for a secret deleted after the tick listed it', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const valueFile = buildValueFile('codex');
   const valuePath = join(ctx.dataDir, 'secrets', valueFile);
   const gate = buildQueryGate('secrets');
@@ -2157,7 +2157,7 @@ test('it never writes an unsaved result for a secret deleted after the tick list
 test('it answers stop only after the refresh under way has ended', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<void>();
   const settled: string[] = [];
@@ -2220,7 +2220,7 @@ test('it answers stop only after the refresh under way has ended', async () => {
 test('it answers a refresh after stop as transient without a call', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -2254,7 +2254,7 @@ test('it answers a refresh after stop as transient without a call', async () => 
 test('it reports a secret whose value file is missing as unreadable without a call', async () => {
   const ctx = await setupTest();
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -2324,7 +2324,7 @@ test('it refreshes a rejected token older than five minutes and answers that a n
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-2', expires_in: 3600 });
@@ -2369,7 +2369,7 @@ test('it logs a refresh after a rejection without the token', async () => {
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const lines: string[] = [];
 
   server.use(endpoint.handler);
@@ -2424,7 +2424,7 @@ test('it sends nothing for a rejected token younger than five minutes', async ()
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-2', expires_in: 3600 });
@@ -2468,7 +2468,7 @@ test('it answers that a new token is in place without a call when a refresh alre
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -2510,7 +2510,7 @@ test('it sends nothing after a rejection for a secret that needs a new sign-in',
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -2601,7 +2601,7 @@ test('it sends one request for rejections of one token at once', async () => {
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-2', expires_in: 3600 });
@@ -2649,7 +2649,7 @@ test('it answers a forced refresh during a refresh after a rejection with that o
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<void>();
 
@@ -2714,7 +2714,7 @@ test('it sends its own request for a forced refresh that joined a rejection the 
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-2', expires_in: 3600 });

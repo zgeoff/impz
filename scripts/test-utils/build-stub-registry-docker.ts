@@ -5,10 +5,6 @@ type StubRegistryAnswer =
   | { readonly kind: 'found'; readonly stdout: string }
   | { readonly kind: 'failed'; readonly error: string };
 
-function buildShellWord(value: string): string {
-  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
-}
-
 // A stub docker's script, for createStubBin, that answers `docker buildx imagetools inspect
 // <ref> ...` as the registry would for the release workflow's Plan step. A missing tag fails
 // with buildx's `ERROR: <ref>: not found`; any other call fails as unexpected.
@@ -24,4 +20,8 @@ export function buildStubRegistryDocker(answer: StubRegistryAnswer): string {
   "buildx imagetools inspect") ${answers[answer.kind]} ;;
   *) exit 1 ;;
 esac`;
+}
+
+function buildShellWord(value: string): string {
+  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
 }

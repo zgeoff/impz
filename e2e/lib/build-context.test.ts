@@ -17,7 +17,7 @@ import {
 import { createXfsBackend } from '../../packages/daemon/src/storage/xfs-backend';
 import { buildStubCpuCgroups } from '../../packages/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../../packages/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '../../packages/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '../../packages/daemon/src/test-utils/claim-free-ports';
 import { sendRawBuild, writeBuildContext } from './build-context';
 
 // impd's real app on the stub VMM and a loopback port, building on the host
@@ -46,7 +46,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     IMP_BUILD_ISOLATION: 'host',
     DOCKER_HOST: `unix://${dockerSocket}`,
   });
@@ -156,10 +156,10 @@ test('#writeBuildContext makes a named directory that holds the Dockerfile', asy
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
-  const dir = await writeBuildContext(root, 'syntax', 'FROM busybox:1.37\n');
+  const directory = await writeBuildContext(root, 'syntax', 'FROM busybox:1.37\n');
   const dockerfile = await readFile(join(root, 'syntax', 'Dockerfile'), 'utf8');
 
-  expect(dir).toBe(join(root, 'syntax'));
+  expect(directory).toBe(join(root, 'syntax'));
   expect(dockerfile).toBe('FROM busybox:1.37\n');
 });
 
@@ -176,15 +176,15 @@ test('#sendRawBuild builds a tar of exactly the named files on impd under the to
 
   const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
 
-  const dir = await writeBuildContext(ctx.root, 'ctx', 'FROM scratch\nCOPY kept.txt /\n');
+  const directory = await writeBuildContext(ctx.root, 'ctx', 'FROM scratch\nCOPY kept.txt /\n');
 
-  await writeFile(join(dir, 'kept.txt'), 'kept');
-  await writeFile(join(dir, 'left-out.txt'), 'left out');
+  await writeFile(join(directory, 'kept.txt'), 'kept');
+  await writeFile(join(directory, 'left-out.txt'), 'left out');
 
   const response = await sendRawBuild({
     apiUrl: ctx.apiUrl,
     token: ctx.rootToken,
-    dir,
+    directoryPath: directory,
     files: ['Dockerfile', 'kept.txt'],
     name: 'e2e-img-raw',
   });
@@ -202,12 +202,12 @@ test('#sendRawBuild builds a tar of exactly the named files on impd under the to
 
 test('#sendRawBuild answers impd’s refusal of another token', async () => {
   const ctx = await setupTest();
-  const dir = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
+  const directory = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
 
   const response = await sendRawBuild({
     apiUrl: ctx.apiUrl,
     token: 'imp_wrong',
-    dir,
+    directoryPath: directory,
     files: ['Dockerfile'],
     name: 'e2e-img-raw',
   });
@@ -217,13 +217,13 @@ test('#sendRawBuild answers impd’s refusal of another token', async () => {
 
 test('#sendRawBuild throws with tar’s reason when a named file is missing', async () => {
   const ctx = await setupTest();
-  const dir = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
+  const directory = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
 
   expect(
     sendRawBuild({
       apiUrl: ctx.apiUrl,
       token: ctx.rootToken,
-      dir,
+      directoryPath: directory,
       files: ['missing.txt'],
       name: 'e2e-img-raw',
     }),

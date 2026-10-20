@@ -24,7 +24,7 @@ import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildQueryGate } from '../test-utils/build-query-gate';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 
 // impd's real app on stub VMs, on a clock the test steps, with every event
 // it emits and a root client that reaches the app in process
@@ -47,7 +47,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     ...readImpEnv(),
   });
 
@@ -181,9 +181,13 @@ test('it answers an acquire with the lease’s owner and end', async () => {
 
   const made = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
 
-  const a = createImpClient({ url: 'http://impd.test', token: made.secret, fetch: ctx.sendToImpd });
+  const firstClient = createImpClient({
+    url: 'http://impd.test',
+    token: made.secret,
+    fetch: ctx.sendToImpd,
+  });
 
-  const leased = await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  const leased = await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
 
   const principal = ctx.impd.tokens.authenticate(made.secret)?.principal;
 
@@ -208,22 +212,22 @@ test('it lists a token only its own leases', async () => {
   const madeA = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
   const madeB = await ctx.client.tokens.create({ name: 'b', scope: 'exec' });
 
-  const a = createImpClient({
+  const firstClient = createImpClient({
     url: 'http://impd.test',
     token: madeA.secret,
     fetch: ctx.sendToImpd,
   });
 
-  const b = createImpClient({
+  const secondClient = createImpClient({
     url: 'http://impd.test',
     token: madeB.secret,
     fetch: ctx.sendToImpd,
   });
 
-  await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
-  await b.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 120 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await secondClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 120 });
 
-  const seen = await a.leases.list({});
+  const seen = await firstClient.leases.list({});
 
   expect(seen.map((lease) => lease.owner.display)).toStrictEqual(['a']);
 });
@@ -236,20 +240,20 @@ test('it lists root every owner’s lease', async () => {
   const madeA = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
   const madeB = await ctx.client.tokens.create({ name: 'b', scope: 'exec' });
 
-  const a = createImpClient({
+  const firstClient = createImpClient({
     url: 'http://impd.test',
     token: madeA.secret,
     fetch: ctx.sendToImpd,
   });
 
-  const b = createImpClient({
+  const secondClient = createImpClient({
     url: 'http://impd.test',
     token: madeB.secret,
     fetch: ctx.sendToImpd,
   });
 
-  await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
-  await b.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 120 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await secondClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 120 });
 
   const seen = await ctx.client.leases.list({ name: 'dev' });
 
@@ -264,22 +268,22 @@ test('it names a token’s own leases on the imp and counts the others', async (
   const madeA = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
   const madeB = await ctx.client.tokens.create({ name: 'b', scope: 'exec' });
 
-  const a = createImpClient({
+  const firstClient = createImpClient({
     url: 'http://impd.test',
     token: madeA.secret,
     fetch: ctx.sendToImpd,
   });
 
-  const b = createImpClient({
+  const secondClient = createImpClient({
     url: 'http://impd.test',
     token: madeB.secret,
     fetch: ctx.sendToImpd,
   });
 
-  await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
-  await b.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 120 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await secondClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 120 });
 
-  const imp = await a.imps.get({ name: 'dev' });
+  const imp = await firstClient.imps.get({ name: 'dev' });
 
   expect(imp.leases?.leases.map((lease) => lease.owner.display)).toStrictEqual(['a']);
   expect(imp.leases?.otherCount).toBe(1);
@@ -293,20 +297,20 @@ test('it names every lease on the imp to root and holds it until the longest end
   const madeA = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
   const madeB = await ctx.client.tokens.create({ name: 'b', scope: 'exec' });
 
-  const a = createImpClient({
+  const firstClient = createImpClient({
     url: 'http://impd.test',
     token: madeA.secret,
     fetch: ctx.sendToImpd,
   });
 
-  const b = createImpClient({
+  const secondClient = createImpClient({
     url: 'http://impd.test',
     token: madeB.secret,
     fetch: ctx.sendToImpd,
   });
 
-  await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
-  await b.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 120 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await secondClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 120 });
 
   const imp = await ctx.client.imps.get({ name: 'dev' });
 
@@ -322,22 +326,22 @@ test('it releases only the caller’s own lease', async () => {
   const madeA = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
   const madeB = await ctx.client.tokens.create({ name: 'b', scope: 'exec' });
 
-  const a = createImpClient({
+  const firstClient = createImpClient({
     url: 'http://impd.test',
     token: madeA.secret,
     fetch: ctx.sendToImpd,
   });
 
-  const b = createImpClient({
+  const secondClient = createImpClient({
     url: 'http://impd.test',
     token: madeB.secret,
     fetch: ctx.sendToImpd,
   });
 
-  await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
-  await b.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 120 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await secondClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 120 });
 
-  const released = await a.leases.release({ name: 'dev', label: 'job' });
+  const released = await firstClient.leases.release({ name: 'dev', label: 'job' });
   const left = await ctx.client.leases.list({});
 
   expect(released).toStrictEqual({ released: true });
@@ -449,21 +453,21 @@ test('it refuses another token’s sleep of a leased imp with LEASED and hides t
   const madeA = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
   const madeB = await ctx.client.tokens.create({ name: 'b', scope: 'exec' });
 
-  const a = createImpClient({
+  const firstClient = createImpClient({
     url: 'http://impd.test',
     token: madeA.secret,
     fetch: ctx.sendToImpd,
   });
 
-  const b = createImpClient({
+  const secondClient = createImpClient({
     url: 'http://impd.test',
     token: madeB.secret,
     fetch: ctx.sendToImpd,
   });
 
-  await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
 
-  expect(b.imps.sleep({ name: 'dev' })).rejects.toMatchObject({
+  expect(secondClient.imps.sleep({ name: 'dev' })).rejects.toMatchObject({
     code: 'LEASED',
     data: { leases: [], otherCount: 1 },
   });
@@ -476,15 +480,19 @@ test('it refuses the owner’s stop of a leased imp with LEASED naming its lease
 
   const made = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
 
-  const a = createImpClient({ url: 'http://impd.test', token: made.secret, fetch: ctx.sendToImpd });
+  const firstClient = createImpClient({
+    url: 'http://impd.test',
+    token: made.secret,
+    fetch: ctx.sendToImpd,
+  });
 
-  await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
 
   const caller = ctx.impd.tokens.authenticate(made.secret);
 
   invariant(caller);
 
-  expect(a.imps.stop({ name: 'dev' })).rejects.toMatchObject({
+  expect(firstClient.imps.stop({ name: 'dev' })).rejects.toMatchObject({
     code: 'LEASED',
     data: {
       leases: [
@@ -504,9 +512,13 @@ test('it refuses root’s sleep of a leased imp with LEASED and keeps it running
 
   const made = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
 
-  const a = createImpClient({ url: 'http://impd.test', token: made.secret, fetch: ctx.sendToImpd });
+  const firstClient = createImpClient({
+    url: 'http://impd.test',
+    token: made.secret,
+    fetch: ctx.sendToImpd,
+  });
 
-  await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
 
   expect(ctx.client.imps.sleep({ name: 'dev' })).rejects.toMatchObject({
     code: 'LEASED',
@@ -525,10 +537,14 @@ test('it ends every lease on a forced sleep and keeps the holds', async () => {
 
   const made = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
 
-  const a = createImpClient({ url: 'http://impd.test', token: made.secret, fetch: ctx.sendToImpd });
+  const firstClient = createImpClient({
+    url: 'http://impd.test',
+    token: made.secret,
+    fetch: ctx.sendToImpd,
+  });
 
-  await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
-  await a.leases.acquire({ name: 'dev', label: 'other', ttlSeconds: 60 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'other', ttlSeconds: 60 });
   await ctx.client.imps.hold({ name: 'dev', seconds: 600 });
 
   const asleep = await ctx.client.imps.sleep({ name: 'dev', force: true });
@@ -546,10 +562,14 @@ test('it emits released with the count of leases a forced sleep ended', async ()
 
   const made = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
 
-  const a = createImpClient({ url: 'http://impd.test', token: made.secret, fetch: ctx.sendToImpd });
+  const firstClient = createImpClient({
+    url: 'http://impd.test',
+    token: made.secret,
+    fetch: ctx.sendToImpd,
+  });
 
-  await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
-  await a.leases.acquire({ name: 'dev', label: 'other', ttlSeconds: 60 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'other', ttlSeconds: 60 });
   await ctx.client.imps.hold({ name: 'dev', seconds: 600 });
   await ctx.client.imps.sleep({ name: 'dev', force: true });
 
@@ -573,12 +593,18 @@ test('it refuses a renew of a lease a forced sleep ended', async () => {
 
   const made = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
 
-  const a = createImpClient({ url: 'http://impd.test', token: made.secret, fetch: ctx.sendToImpd });
+  const firstClient = createImpClient({
+    url: 'http://impd.test',
+    token: made.secret,
+    fetch: ctx.sendToImpd,
+  });
 
-  await a.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
   await ctx.client.imps.sleep({ name: 'dev', force: true });
 
-  expect(a.leases.renew({ name: 'dev', label: 'job', ttlSeconds: 60 })).rejects.toMatchObject({
+  expect(
+    firstClient.leases.renew({ name: 'dev', label: 'job', ttlSeconds: 60 }),
+  ).rejects.toMatchObject({
     code: 'LEASE_NOT_HELD',
   });
 });
@@ -612,21 +638,21 @@ test('it releases the caller’s hold and a legacy one on hold 0, and keeps the 
   const madeA = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
   const madeB = await ctx.client.tokens.create({ name: 'b', scope: 'exec' });
 
-  const a = createImpClient({
+  const firstClient = createImpClient({
     url: 'http://impd.test',
     token: madeA.secret,
     fetch: ctx.sendToImpd,
   });
 
-  const b = createImpClient({
+  const secondClient = createImpClient({
     url: 'http://impd.test',
     token: madeB.secret,
     fetch: ctx.sendToImpd,
   });
 
-  await a.imps.hold({ name: 'dev', seconds: 600 });
-  await b.imps.hold({ name: 'dev', seconds: 900 });
-  await b.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
+  await firstClient.imps.hold({ name: 'dev', seconds: 600 });
+  await secondClient.imps.hold({ name: 'dev', seconds: 900 });
+  await secondClient.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
 
   // a hold from before holds had owners
   await writeLease(
@@ -640,7 +666,7 @@ test('it releases the caller’s hold and a legacy one on hold 0, and keeps the 
     { at: ctx.clock.nowMs, reason: null },
   );
 
-  await a.imps.hold({ name: 'dev', seconds: 0 });
+  await firstClient.imps.hold({ name: 'dev', seconds: 0 });
 
   const left = await listLeases(ctx.db, ctx.clock.nowMs);
 
@@ -914,9 +940,13 @@ test('it holds the imp by root’s hold alone after a forced sleep ends its leas
 
   const made = await ctx.client.tokens.create({ name: 'a', scope: 'exec' });
 
-  const a = createImpClient({ url: 'http://impd.test', token: made.secret, fetch: ctx.sendToImpd });
+  const firstClient = createImpClient({
+    url: 'http://impd.test',
+    token: made.secret,
+    fetch: ctx.sendToImpd,
+  });
 
-  await a.leases.acquire({ name: 'dev', label: 'long', ttlSeconds: 600 });
+  await firstClient.leases.acquire({ name: 'dev', label: 'long', ttlSeconds: 600 });
   await ctx.client.imps.hold({ name: 'dev', seconds: 30 });
   await ctx.client.imps.sleep({ name: 'dev', force: true });
 

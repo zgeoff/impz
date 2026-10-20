@@ -6,7 +6,7 @@ import { runShellcheck } from '@impz/test-utils/run-shellcheck';
 import { define, lazy } from 'gunshi';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { mainCommand } from './command-tree';
-import { buildCompletionTree, renderCompletion } from './completion';
+import { readCompletionTree, renderCompletion } from './completion';
 import type { CompletionNode } from './completion';
 
 test('#renderCompletion renders the bash script of a tree', () => {
@@ -198,7 +198,7 @@ test('#renderCompletion renders the fish script of a tree', () => {
 test.each(['bash', 'zsh', 'fish'] as const)(
   '#renderCompletion renders the same %p script for the same tree',
   async (shell) => {
-    const tree = await buildCompletionTree(mainCommand);
+    const tree = await readCompletionTree(mainCommand);
 
     expect(renderCompletion(shell, tree)).toBe(renderCompletion(shell, tree));
   },
@@ -208,7 +208,7 @@ test.each(['bash', 'zsh', 'fish'] as const)(
 test.skipIf(Bun.which('shellcheck') === null)(
   '#renderCompletion renders a bash script for the whole CLI that passes shellcheck',
   async () => {
-    const tree = await buildCompletionTree(mainCommand);
+    const tree = await readCompletionTree(mainCommand);
 
     expect(runShellcheck(renderCompletion('bash', tree), 'bash')).toStrictEqual({
       exitCode: 0,
@@ -217,7 +217,7 @@ test.skipIf(Bun.which('shellcheck') === null)(
   },
 );
 
-test('#buildCompletionTree lists the subcommands, flags, short names and negations of a command', async () => {
+test('#readCompletionTree lists the subcommands, flags, short names and negations of a command', async () => {
   const command = define({
     name: 'impz',
     args: {
@@ -232,7 +232,7 @@ test('#buildCompletionTree lists the subcommands, flags, short names and negatio
     },
   });
 
-  const tree = await buildCompletionTree(command);
+  const tree = await readCompletionTree(command);
 
   expect(tree).toStrictEqual({
     path: 'impz',
@@ -253,7 +253,7 @@ test('#buildCompletionTree lists the subcommands, flags, short names and negatio
 });
 
 test('#completionCommand prints the bash script for the whole CLI', async () => {
-  const tree = await buildCompletionTree(mainCommand);
+  const tree = await readCompletionTree(mainCommand);
   const result = await runCLIInProcess({ args: ['completion', 'bash'] });
 
   expect(result).toStrictEqual({ stdout: renderCompletion('bash', tree), stderr: '', code: 0 });
@@ -269,8 +269,8 @@ test('#completionCommand refuses a shell it has no script for', async () => {
   });
 });
 
-test('#buildCompletionTree gives impz login its own flags', async () => {
-  const tree = await buildCompletionTree(mainCommand);
+test('#readCompletionTree gives impz login its own flags', async () => {
+  const tree = await readCompletionTree(mainCommand);
 
   expect(tree.children).toPartiallyContain({
     path: 'impz login',
@@ -278,22 +278,22 @@ test('#buildCompletionTree gives impz login its own flags', async () => {
   });
 });
 
-test('#buildCompletionTree holds impz completion itself, with no subcommands', async () => {
-  const tree = await buildCompletionTree(mainCommand);
+test('#readCompletionTree holds impz completion itself, with no subcommands', async () => {
+  const tree = await readCompletionTree(mainCommand);
 
   expect(tree.children).toPartiallyContain({ path: 'impz completion', subcommands: [] });
 });
 
-test('#buildCompletionTree reaches the nested commands of the CLI', async () => {
-  const tree = await buildCompletionTree(mainCommand);
+test('#readCompletionTree reaches the nested commands of the CLI', async () => {
+  const tree = await readCompletionTree(mainCommand);
 
   expect(
     tree.children.flatMap((node) => node.children.map((child) => child.path)),
   ).toIncludeAllMembers(['impz image build', 'impz host use']);
 });
 
-test('#buildCompletionTree gives the CLI the flags main handles itself', async () => {
-  const tree = await buildCompletionTree(mainCommand);
+test('#readCompletionTree gives the CLI the flags main handles itself', async () => {
+  const tree = await readCompletionTree(mainCommand);
 
   expect(tree.flags).toIncludeAllMembers(['--host', '--version', '--help']);
 });
@@ -301,7 +301,7 @@ test('#buildCompletionTree gives the CLI the flags main handles itself', async (
 test.each(['bash', 'zsh', 'fish'] as const)(
   '#renderCompletion names every command path of the CLI in the %p script',
   async (shell) => {
-    const tree = await buildCompletionTree(mainCommand);
+    const tree = await readCompletionTree(mainCommand);
 
     // every level of the tree, however deep: the walk visits what it appends
     const nodes: CompletionNode[] = [tree];
@@ -322,7 +322,7 @@ test.each([
   ['impz --host work image ', ['add', 'build', 'builds', 'ls', 'rm']],
   ['impz login https://x --no', ['--no-verify']],
 ])('#renderCompletion completes %p in bash to %p', async (line, words) => {
-  const tree = await buildCompletionTree(mainCommand);
+  const tree = await readCompletionTree(mainCommand);
 
   const typed = line.split(' ');
 
@@ -350,7 +350,7 @@ printf '%s\\n' "\${COMPREPLY[@]}"`;
 test.skipIf(Bun.which('zsh') === null)(
   '#renderCompletion writes a zsh script zsh parses',
   async () => {
-    const tree = await buildCompletionTree(mainCommand);
+    const tree = await readCompletionTree(mainCommand);
 
     const child = Bun.spawn(['zsh', '-n'], {
       stdin: new TextEncoder().encode(renderCompletion('zsh', tree)),
@@ -370,16 +370,16 @@ test.skipIf(Bun.which('fish') === null).each([
   ['impz login https://x --no', ['--no-verify']],
 ])('#renderCompletion completes %p in fish to %p', async (line, words) => {
   // fish offers file names beside the commands, so it runs in an empty dir
-  const dir = await mkdtemp(join(tmpdir(), 'imp-fish-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-fish-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const tree = await buildCompletionTree(mainCommand);
+  const tree = await readCompletionTree(mainCommand);
 
   const script = `${renderCompletion('fish', tree)}\ncomplete -C '${line}'\n`;
 
   const child = Bun.spawn(['fish', '--no-config', '-c', script], {
-    cwd: dir,
+    cwd: directory,
     stdout: 'pipe',
     stderr: 'pipe',
   });

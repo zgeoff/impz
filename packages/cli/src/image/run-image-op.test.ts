@@ -17,7 +17,7 @@ import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { buildStubOlderImpdFetch } from '../test-utils/build-stub-older-impd-fetch';
 import { checkDockerBuildx } from '../test-utils/run-docker-build';
 import { runImageAdd, runOnHostBuild } from './run-image-op';
@@ -46,7 +46,7 @@ async function setupTest() {
 
     // a host build runs this machine's docker, as the stub VMM boots no builder
     IMP_BUILD_ISOLATION: 'host',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with

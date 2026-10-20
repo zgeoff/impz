@@ -16,7 +16,7 @@ interface StreamSession {
 // a test passes a stub's
 interface StreamClock {
   readonly now?: () => number;
-  readonly startTimer?: (fire: () => void, ms: number) => () => void;
+  readonly startTimer?: (fire: () => void, durationMs: number) => () => void;
 }
 
 // The subscribers of the mock impd's event bus, one per open stream; the

@@ -5,8 +5,9 @@ import { buildApiListenOptions } from './api-listen-options';
 import { loadConfig } from './config';
 import { createImpd } from './create-impd';
 import { openDatabase } from './db/open-database';
+import { getErrorMessage } from './get-error-message';
 import { ENFORCE_INTERVAL_MS } from './governor/ram-governor';
-import { buildHttpsService } from './https/build-https-service';
+import { wireHttpsService } from './https/wire-https-service';
 import { createIdleLoop } from './idle/idle-loop';
 import { readSetfcapWarning } from './images/unpack-export';
 import { createKernelOopsWatch } from './imps/kernel-oops-watch';
@@ -17,7 +18,6 @@ import { setupLogging } from './process/setup-logging';
 import { startTicker } from './process/ticker';
 import { waitWithin } from './process/wait-within';
 import { startWakeProxy } from './proxy/wake-proxy';
-import { readErrorMessage } from './read-error-message';
 import { renderNetworkEnv } from './render-network-env';
 import { startSsh } from './ssh/start-ssh';
 import { createStorageBackend } from './storage/create-storage-backend';
@@ -41,19 +41,19 @@ const STOP_BROKER_MAX_MS = 40_000;
 // the step finished in time. A ticker stop waits for a pass under way.
 async function runStopStep(
   step: string,
-  ms: number,
+  durationMs: number,
   task: () => Promise<unknown>,
 ): Promise<boolean> {
   try {
-    const finished = await waitWithin(task(), ms);
+    const finished = await waitWithin(task(), durationMs);
 
     if (!finished) {
-      printLog(`impd: stop: ${step} still running after ${String(ms)}ms; going on`);
+      printLog(`impd: stop: ${step} still running after ${String(durationMs)}ms; going on`);
     }
 
     return finished;
   } catch (error) {
-    printLog(`impd: stop: ${step} failed: ${readErrorMessage(error)}`);
+    printLog(`impd: stop: ${step} failed: ${getErrorMessage(error)}`);
 
     return true;
   }
@@ -143,7 +143,7 @@ async function main(): Promise<void> {
   const https =
     config.https === null
       ? null
-      : buildHttpsService({
+      : wireHttpsService({
           config: config.https,
           dataDir: config.dataDir,
           db,

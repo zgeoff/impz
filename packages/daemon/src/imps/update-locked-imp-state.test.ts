@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { createImp, findImpById } from '../db/imps';
+import { createImp, readImpById } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
 import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
 import { createImpContext } from './imp-context';
@@ -87,7 +87,7 @@ test("it refuses a record read without the imp's lock", async () => {
 
   expect(refusal).rejects.toThrow(/a state write needs the imp's lock/u);
 
-  const unchanged = await findImpById(ctx.db, imp.id);
+  const unchanged = await readImpById(ctx.db, imp.id);
 
   expect(unchanged?.state).toBe('creating');
 });

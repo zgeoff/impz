@@ -11,12 +11,12 @@ export function createConsoleSource(
     open: async (size, signal) => {
       const handle = await client.openConsole(name, { cols: size.cols, rows: size.rows, signal });
 
-      return toTerminalConnection(handle);
+      return readTerminalConnection(handle);
     },
   };
 }
 
-export function toTerminalConnection(handle: ExecHandle): TerminalConnection {
+export function readTerminalConnection(handle: ExecHandle): TerminalConnection {
   return {
     // a tty sends everything on stdout; stderr is read too, so it never fills
     output: mergeStreams(handle.stdout, handle.stderr),

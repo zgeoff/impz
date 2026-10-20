@@ -1,15 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import {
+  collectStrayVms,
   createParkMiller,
-  findContainerProcesses,
   findLostImps,
-  findStrayVms,
   listContainerVms,
   listExpectedImpVmCounts,
   listImpVmCounts,
   planChaosRound,
   readContainerId,
+  readContainerProcesses,
   readLoopDevices,
   readSettledImps,
   runChaosFault,
@@ -24,7 +24,7 @@ import type { MemoryProof } from '../lib/memory-proof';
 import { checkMemoryKept, startMemoryProof } from '../lib/memory-proof';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // Kills of impd, a Firecracker or the container; every imp must stay valid,
 // keep its disk, and keep its memory unless the kill could take it. Guests
@@ -37,7 +37,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('chaos'), stack, client };
+  return { prefix: getSuitePrefix('chaos'), stack, client };
 }
 
 test('it keeps every imp valid, with its disk and the memory no kill could take, through seeded rounds of kills, and leaves no stray VM or loop device', async () => {
@@ -128,7 +128,7 @@ test('it keeps every imp valid, with its disk and the memory no kill could take,
 
     // each awake imp has exactly the one VM its record says
     expect(listImpVmCounts(settled, vms)).toStrictEqual(listExpectedImpVmCounts(settled, vms));
-    expect(findStrayVms(settled, vms)).toStrictEqual([]);
+    expect(collectStrayVms(settled, vms)).toStrictEqual([]);
 
     const errored = settled.filter((row) => row.state === 'error' && names.includes(row.name));
 
@@ -170,7 +170,7 @@ test('it keeps every imp valid, with its disk and the memory no kill could take,
   const after = await listImps();
 
   const awake = after.filter((row) => row.state === 'running').length;
-  const processes = findContainerProcesses(containerId);
+  const processes = readContainerProcesses(containerId);
 
   // the instance's own mount, and one VM per running imp
   expect(devices.length).toBeLessThanOrEqual(1);

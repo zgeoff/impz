@@ -16,9 +16,9 @@ import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import * as z from 'zod';
-import { createImpGuard } from '../imp-guard';
+import { buildImpGuard } from '../imp-guard';
 import { createMcpServer } from '../test-utils/create-mcp-server';
 
 // impd's real app on stub VMs, a root client for the scenario, `sendToImpd`,
@@ -44,7 +44,7 @@ async function setupTest() {
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     }),
 
     // a new disk stays the size of its image, since the plain-copy clone of
@@ -192,7 +192,7 @@ test.each([
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -246,7 +246,7 @@ test.each([
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'read',
     },
   );
@@ -300,7 +300,7 @@ test.each([
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -360,7 +360,7 @@ test.each([
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -401,7 +401,7 @@ test('it answers a restore to a checkpoint that does not exist with an isError r
         token: 'root-token',
         fetch: ctx.sendToImpd,
       }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );

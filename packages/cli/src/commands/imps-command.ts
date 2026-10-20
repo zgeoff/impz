@@ -9,7 +9,7 @@ import { CommandExitError, UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
 import type { CliEnv } from '../config/host-store';
 import { DEFAULT_SESSION, parseDetachKey } from '../exec/detach-key';
-import { buildExecIO, runExec } from '../exec/exec-client';
+import { createExecIO, runExec } from '../exec/exec-client';
 import { listSavedTargets, runOnHosts } from '../hosts/fan-out';
 import type { StartTimer } from '../hosts/fan-out';
 import { formatHostImps } from '../output/format-host-imps';
@@ -336,7 +336,7 @@ export const execCommand = defineCommand({
         ...(ctx.values.agent === true && { outer: true }),
         ...(ctx.values.require !== undefined && { require: ctx.values.require }),
       },
-      buildExecIO(ctx.extensions.impz.io),
+      createExecIO(ctx.extensions.impz.io),
     );
 
     throw new CommandExitError(code, true);
@@ -408,7 +408,7 @@ export const consoleCommand = defineCommand({
           session: { name: session, attachOnly: false, detachKey, log },
         }),
       },
-      buildExecIO(impz.io),
+      createExecIO(impz.io),
     );
 
     throw new CommandExitError(code, true);

@@ -6,7 +6,7 @@ import { createInstanceClient, readImpEnv } from '../lib/imp-cli';
 import { REPO_ROOT, runChecked } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
 // packages/dashboard/e2e drives the dashboard in a browser, on an imp this
@@ -19,7 +19,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('dashboard'), stack, client };
+  return { prefix: getSuitePrefix('dashboard'), stack, client };
 }
 
 test('it logs in, creates, opens a console, sleeps and destroys an imp, and logs out in a browser against impd', async () => {
@@ -42,7 +42,7 @@ test('it logs in, creates, opens a console, sleeps and destroys an imp, and logs
 
   const startedAt = performance.now();
 
-  const proc = Bun.spawn(['bun', 'run', 'e2e'], {
+  const subprocess = Bun.spawn(['bun', 'run', 'e2e'], {
     cwd: dashboardDir,
     stdout: 'inherit',
     stderr: 'inherit',
@@ -56,10 +56,10 @@ test('it logs in, creates, opens a console, sleeps and destroys an imp, and logs
   });
 
   ctx.stack.defer(() => {
-    proc.kill();
+    subprocess.kill();
   });
 
-  const exitCode = await proc.exited;
+  const exitCode = await subprocess.exited;
 
   writeMetric('dashboardBrowserMs', Math.round(performance.now() - startedAt));
 

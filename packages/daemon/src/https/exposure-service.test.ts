@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import { loadConfig } from '../config';
-import { findPublicImp } from '../db/exposure';
+import { readPublicImp } from '../db/exposure';
 import { createImage } from '../db/images';
 import { createImp, updateImpExposure, updateImpMove } from '../db/imps';
 import { buildMockNewImage } from '../test-utils/build-mock-new-image';
@@ -173,7 +173,7 @@ test('#expose stores only the hash of the credential it shows', async () => {
   await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
 
   const result = await exposure.expose({ name: 'web', auth: 'token' });
-  const found = await findPublicImp(ctx.db, 'web');
+  const found = await readPublicImp(ctx.db, 'web');
 
   expect(found?.stored).toStrictEqual({
     auth: 'token',
@@ -314,7 +314,7 @@ test('#expose still makes the imp public when the record write fails', async () 
 
   await exposure.expose({ name: 'web', auth: 'none' });
 
-  const found = await findPublicImp(ctx.db, 'web');
+  const found = await readPublicImp(ctx.db, 'web');
 
   expect(found?.stored).toStrictEqual({ auth: 'none', user: null, hash: null });
 });

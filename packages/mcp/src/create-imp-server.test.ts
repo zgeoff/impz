@@ -7,7 +7,7 @@ import { buildApiListenOptions } from '@impz/daemon/src/api-listen-options';
 import { loadConfig } from '@impz/daemon/src/config';
 import { createImpd } from '@impz/daemon/src/create-impd';
 import { createImage } from '@impz/daemon/src/db/images';
-import { findImpByName } from '@impz/daemon/src/db/imps';
+import { readImpByName } from '@impz/daemon/src/db/imps';
 import { openDatabase } from '@impz/daemon/src/db/open-database';
 import {
   buildImagePaths,
@@ -21,14 +21,14 @@ import { buildQueryGate } from '@impz/daemon/src/test-utils/build-query-gate';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubExecGuest } from '@impz/daemon/src/test-utils/build-stub-exec-guest';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { startStubExecAgent } from '@impz/daemon/src/test-utils/start-stub-exec-agent';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { INVALID_PARAMS, METHOD_NOT_FOUND } from '@modelcontextprotocol/server';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { PROTOCOL_VERSIONS } from './create-imp-server';
-import { createImpGuard } from './imp-guard';
+import { buildImpGuard } from './imp-guard';
 import { buildStubAfter } from './test-utils/build-stub-after';
 import { buildStubRepeat } from './test-utils/build-stub-repeat';
 import { createMcpServer } from './test-utils/create-mcp-server';
@@ -59,7 +59,7 @@ async function setupTest() {
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     }),
 
     // a new disk stays the size of its image, since the plain-copy clone of
@@ -229,7 +229,7 @@ test.each([['2025-11-25'], ['2025-06-18'], ['2025-03-26']])(
       {
         reply: ctx.reply,
         client: ctx.client,
-        guard: createImpGuard({ all: true }),
+        guard: buildImpGuard({ all: true }),
         scope: 'manage',
       },
     );
@@ -265,7 +265,7 @@ test('it offers the newest protocol version for one it does not support', async 
         clientInfo: { name: 'test', version: '1.0.0' },
       },
     }),
-    { reply: ctx.reply, client: ctx.client, guard: createImpGuard({ all: true }), scope: 'manage' },
+    { reply: ctx.reply, client: ctx.client, guard: buildImpGuard({ all: true }), scope: 'manage' },
   );
 
   expect(ctx.sent).toStrictEqual([
@@ -301,7 +301,7 @@ test('it names the guard in the instructions it gives at initialize', async () =
     {
       reply: ctx.reply,
       client: ctx.client,
-      guard: createImpGuard({ prefix: 'agent-' }),
+      guard: buildImpGuard({ prefix: 'agent-' }),
       scope: 'manage',
     },
   );
@@ -330,7 +330,7 @@ test('it lists every tool to a manage caller', async () => {
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }), {
     reply: ctx.reply,
     client: ctx.client,
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   });
 
@@ -365,7 +365,7 @@ test('it marks the destructive tools with a destructive hint', async () => {
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }), {
     reply: ctx.reply,
     client: ctx.client,
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   });
 
@@ -394,7 +394,7 @@ test('it gives every tool an object input schema', async () => {
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }), {
     reply: ctx.reply,
     client: ctx.client,
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   });
 
@@ -414,7 +414,7 @@ test('it describes every input field of every tool', async () => {
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }), {
     reply: ctx.reply,
     client: ctx.client,
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   });
 
@@ -442,7 +442,7 @@ test('it answers ping with an empty result', async () => {
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }), {
     reply: ctx.reply,
     client: ctx.client,
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   });
 
@@ -457,7 +457,7 @@ test('it answers an unknown method with a method-not-found error', async () => {
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'resources/list' }), {
     reply: ctx.reply,
     client: ctx.client,
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   });
 
@@ -482,7 +482,7 @@ test('it answers a call of an unknown tool with an invalid-params error', async 
       method: 'tools/call',
       params: { name: 'imp_teleport', arguments: {} },
     }),
-    { reply: ctx.reply, client: ctx.client, guard: createImpGuard({ all: true }), scope: 'manage' },
+    { reply: ctx.reply, client: ctx.client, guard: buildImpGuard({ all: true }), scope: 'manage' },
   );
 
   expect(ctx.sent).toStrictEqual([
@@ -502,7 +502,7 @@ test('it refuses a call whose id a running call holds with an invalid-params err
   const context = {
     reply: ctx.reply,
     client: ctx.client,
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   } as const;
 
@@ -553,7 +553,7 @@ test('it still answers a create whose cancel arrives before the create starts', 
   const context = {
     reply: ctx.reply,
     client: ctx.client,
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   } as const;
 
@@ -602,7 +602,7 @@ test('it cancels the first call after refusing a second with its id', async () =
   const context = {
     reply: ctx.reply,
     client: ctx.client,
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   } as const;
 
@@ -664,7 +664,7 @@ test.each([
   await server.receive(line, {
     reply: ctx.reply,
     client: ctx.client,
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage',
   });
 
@@ -677,7 +677,7 @@ test('it still answers a cancelled create, so the agent learns the name of what 
   const context = {
     reply: ctx.reply,
     client: createImpClient({ url: ctx.url, token: 'root-token' }),
-    guard: createImpGuard({ prefix: 'agent-' }),
+    guard: buildImpGuard({ prefix: 'agent-' }),
     scope: 'manage' as const,
   };
 
@@ -747,7 +747,7 @@ test('it still answers a cancelled fork, so the agent learns the name of what it
   const context = {
     reply: ctx.reply,
     client: createImpClient({ url: ctx.url, token: 'root-token' }),
-    guard: createImpGuard({ prefix: 'agent-' }),
+    guard: buildImpGuard({ prefix: 'agent-' }),
     scope: 'manage' as const,
   };
 
@@ -821,7 +821,7 @@ test('it still answers a cancelled restore, so the agent learns the state of the
   const context = {
     reply: ctx.reply,
     client: createImpClient({ url: ctx.url, token: 'root-token' }),
-    guard: createImpGuard({ prefix: 'agent-' }),
+    guard: buildImpGuard({ prefix: 'agent-' }),
     scope: 'manage' as const,
   };
 
@@ -887,7 +887,7 @@ test('it stops reporting progress for a cancelled call', async () => {
 
   await ctx.client.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -900,7 +900,7 @@ test('it stops reporting progress for a cancelled call', async () => {
   const context = {
     reply: ctx.reply,
     client: createImpClient({ url: ctx.url, token: 'root-token' }),
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage' as const,
   };
 

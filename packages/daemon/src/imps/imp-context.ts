@@ -46,7 +46,7 @@ import {
   readUnsharedRamMib,
   readVmMemory,
 } from '../vmm/vm-stats';
-import { createActivityTracker } from './activity-tracker';
+import { buildActivityTracker } from './activity-tracker';
 import type { ActivityTracker } from './activity-tracker';
 import { createMergeFlags } from './check-merge-flag';
 import type { MergeFlags } from './check-merge-flag';
@@ -76,7 +76,7 @@ const NO_EGRESS: ImpEgress = {
 
 interface SleepTiming {
   readonly now: () => number;
-  readonly sleep: (ms: number) => Promise<void>;
+  readonly sleep: (durationMs: number) => Promise<void>;
 }
 
 export interface ImpServiceDeps {
@@ -121,7 +121,7 @@ export interface ImpServiceDeps {
 
   // the pause between an elastic guest's looks while a sleep shrinks it;
   // Bun.sleep by default
-  readonly sleep?: (ms: number) => Promise<void>;
+  readonly sleep?: (durationMs: number) => Promise<void>;
 
   // the clock a sleep's timings read and the pause of its young-guest wait;
   // performance.now and Bun.sleep by default
@@ -186,7 +186,7 @@ export interface ImpHost {
 
 export interface ImpClock {
   readonly now: () => number;
-  readonly sleep: (ms: number) => Promise<void>;
+  readonly sleep: (durationMs: number) => Promise<void>;
   readonly sleepTiming: SleepTiming;
 }
 
@@ -344,7 +344,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
 
   const guest: ImpGuest = {
     readExecEnv: deps.readExecEnv ?? (() => Promise.resolve({ kind: 'ungranted' })),
-    tracker: createActivityTracker(),
+    tracker: buildActivityTracker(),
     sessions: createSessionCache(),
     inners: createInnerCache(),
     sessionLogs: createSessionLogs({
@@ -387,7 +387,7 @@ function createDefaultTemplates(
     kernelPath: deps.config.kernelPath,
     minGuestUptimeMs: deps.config.sleepMinGuestUptimeMs,
     bootReservePercent: deps.config.bootReservePercent,
-    buildVm: deps.vms.buildTemplateVm,
+    buildVm: deps.vms.createTemplateVm,
     taps: deps.taps,
     jail:
       deps.config.jailerBin === null ? null : { uid: TEMPLATE_BUILD_UID, gid: TEMPLATE_BUILD_UID },

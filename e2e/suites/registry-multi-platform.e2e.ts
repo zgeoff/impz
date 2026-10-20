@@ -9,8 +9,8 @@ import { REPO_ROOT, runChecked, runCommand } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { writeRegistryIndex } from '../lib/registry-index';
 import {
-  buildPushedImage,
   checkRegistryReady,
+  createPushedImage,
   listManifestRequests,
   readBusyboxDigest,
   readFileInImage,
@@ -20,7 +20,7 @@ import {
   writeContext,
 } from '../lib/registry-steps';
 import { removeImageIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // A multi-platform index in a registry the journey owns
 // (lib/registry-steps.ts), on the suite's IMP_BUILD_ISOLATION=host: impd
@@ -37,18 +37,18 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const prefix = readSuitePrefix('registry');
+  const prefix = getSuitePrefix('registry');
 
   // under the repo: scripts/dev/dev.sh mounts it at the same path in the container
-  const dir = await mkdtemp(join(REPO_ROOT, '.cache', 'e2e', 'registry-'));
+  const directory = await mkdtemp(join(REPO_ROOT, '.cache', 'e2e', 'registry-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   await removeStaleRegistries(prefix);
 
   const container = `${prefix}registry-${String(process.pid)}`;
 
-  const registry = await startRegistry(stack, config.registryName, container, dir);
+  const registry = await startRegistry(stack, config.registryName, container, directory);
 
   // the engine reads certs.d on each request: no restart
   const trust = await createRegistryTrust({
@@ -58,7 +58,13 @@ async function setupTest() {
 
   stack.defer(() => trust.remove());
 
-  return { prefix, stack, dir, registry, client: await createInstanceClient() };
+  return {
+    prefix,
+    stack,
+    directoryPath: directory,
+    registry,
+    client: await createInstanceClient(),
+  };
 }
 
 test.skipIf(registryMissing)(
@@ -84,8 +90,8 @@ test.skipIf(registryMissing)(
       await runCommand(['docker', 'rmi', host]);
     });
 
-    await buildPushedImage(
-      writeContext(ctx.dir, 'host', `FROM ${busybox}\nCOPY v /v\n`, hostArch),
+    await createPushedImage(
+      writeContext(ctx.directoryPath, 'host', `FROM ${busybox}\nCOPY v /v\n`, hostArch),
       host,
       `linux/${hostArch}`,
     );
@@ -95,8 +101,13 @@ test.skipIf(registryMissing)(
     });
 
     // a trigger impd would refuse, and that fails the build if it ran
-    await buildPushedImage(
-      writeContext(ctx.dir, 'other', `FROM ${busybox}\nCOPY v /v\nONBUILD RUN false\n`, otherArch),
+    await createPushedImage(
+      writeContext(
+        ctx.directoryPath,
+        'other',
+        `FROM ${busybox}\nCOPY v /v\nONBUILD RUN false\n`,
+        otherArch,
+      ),
       other,
       `linux/${otherArch}`,
     );
@@ -123,7 +134,7 @@ test.skipIf(registryMissing)(
     await runImp(
       'image',
       'build',
-      writeContext(ctx.dir, 'build-multi', `FROM ${index}\nRUN cat /v\n`, ''),
+      writeContext(ctx.directoryPath, 'build-multi', `FROM ${index}\nRUN cat /v\n`, ''),
       '--name',
       multi,
     );

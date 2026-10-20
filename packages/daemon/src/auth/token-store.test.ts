@@ -4,14 +4,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { createSecret, findSecret } from '../db/secrets';
+import { createSecret, readSecret } from '../db/secrets';
 import { removeTokenRecord, writeTokenRecord } from '../db/tokens';
 import { createAuthorizedKeys, formatKeyFingerprint } from '../ssh/authorized-keys';
-import { createEd25519Key } from '../ssh/host-key';
+import { generateEd25519Key } from '../ssh/host-key';
 import { buildMockTokenRecord } from '../test-utils/build-mock-token-record';
 import { buildMockTokenSshKeyRecord } from '../test-utils/build-mock-token-ssh-key-record';
 import { createTestDatabase } from '../test-utils/create-test-database';
-import { ROOT_TOKEN_ID, loadTokenStore, readBearer } from './token-store';
+import { ROOT_TOKEN_ID, findBearer, loadTokenStore } from './token-store';
 
 async function setupTest() {
   const database = await createTestDatabase();
@@ -307,15 +307,15 @@ test.each([
   ['Basic abc', null],
   ['bearer abc', null],
   [null, null],
-])('#readBearer reads %p as %p', (header, secret) => {
-  expect(readBearer(header)).toBe(secret);
+])('#findBearer reads %p as %p', (header, secret) => {
+  expect(findBearer(header)).toBe(secret);
 });
 
 test('#addKey binds a key to a token and gives the key as the API shows it', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@desk`;
+  const line = `${generateEd25519Key().public} me@desk`;
 
   await tokens.create({ name: 'dev', scope: 'exec', imps: ['dev-*'] });
 
@@ -334,8 +334,8 @@ test('#list lists a token’s keys after a restart, made with it or added after'
   const ctx = await setupTest();
   const before = await ctx.load('root-secret');
 
-  const laptop = `${createEd25519Key().public} me@laptop`;
-  const desk = `${createEd25519Key().public} me@desk`;
+  const laptop = `${generateEd25519Key().public} me@laptop`;
+  const desk = `${generateEd25519Key().public} me@desk`;
 
   await before.create({ name: 'dev', scope: 'exec', imps: ['dev-*'], sshKeys: [laptop] });
   await before.addKey('dev', desk);
@@ -363,7 +363,7 @@ test('#findSshKey logs a bound key in as its token, after a restart', async () =
   const ctx = await setupTest();
   const before = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
 
   const made = await before.create({
     name: 'dev',
@@ -404,10 +404,10 @@ test('#findSshKey finds nothing for a key no token holds', async () => {
     name: 'dev',
     scope: 'exec',
     imps: null,
-    sshKeys: [`${createEd25519Key().public} me@laptop`],
+    sshKeys: [`${generateEd25519Key().public} me@laptop`],
   });
 
-  const [, other = ''] = createEd25519Key().public.split(' ');
+  const [, other = ''] = generateEd25519Key().public.split(' ');
 
   expect(tokens.findSshKey(Buffer.from(other, 'base64'))).toBeNull();
 });
@@ -440,7 +440,7 @@ test('#addKey refuses a key bound to another token', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
   const blob = Buffer.from(line.split(' ')[1] ?? '', 'base64');
   const fingerprint = formatKeyFingerprint(blob);
 
@@ -457,7 +457,7 @@ test('#create refuses the same key given twice', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
 
   expect(
     tokens.create({ name: 'c', scope: 'read', imps: null, sshKeys: [line, line] }),
@@ -468,7 +468,7 @@ test('#create makes no token when one of its keys is refused', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
 
   expect(
     tokens.create({ name: 'c', scope: 'read', imps: null, sshKeys: [line, line] }),
@@ -481,7 +481,7 @@ test('#addKey refuses a key authorized_keys lists', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} in the file`;
+  const line = `${generateEd25519Key().public} in the file`;
   const blob = Buffer.from(line.split(' ')[1] ?? '', 'base64');
 
   ctx.fileKeys.add(blob.toString('base64'));
@@ -496,12 +496,12 @@ test('#addKey refuses a key authorized_keys lists', async () => {
 
 test('#addKey refuses a key that a group-writable authorized_keys lists', async () => {
   const ctx = await setupTest();
-  const dir = await mkdtemp(join(tmpdir(), 'imp-tokens-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-tokens-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const keysPath = join(dir, 'authorized_keys');
-  const key = createEd25519Key();
+  const keysPath = join(directory, 'authorized_keys');
+  const key = generateEd25519Key();
   const blob = Buffer.from(key.public.split(' ')[1] ?? '', 'base64');
 
   writeFileSync(keysPath, `${key.public}\n`);
@@ -513,7 +513,7 @@ test('#addKey refuses a key that a group-writable authorized_keys lists', async 
     rootToken: 'root-secret',
     now: Date.now,
     onRemove: () => {},
-    isFileKey: createAuthorizedKeys(keysPath, () => {}).isListed,
+    isFileKey: createAuthorizedKeys(keysPath, () => {}).probeListed,
   });
 
   await tokens.create({ name: 'ci', scope: 'exec', imps: null });
@@ -528,10 +528,12 @@ test('#addKey refuses a name no token has', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  expect(tokens.addKey('nobody', `${createEd25519Key().public} me@laptop`)).rejects.toMatchObject({
-    code: 'NOT_FOUND',
-    message: 'token nobody not found',
-  });
+  expect(tokens.addKey('nobody', `${generateEd25519Key().public} me@laptop`)).rejects.toMatchObject(
+    {
+      code: 'NOT_FOUND',
+      message: 'token nobody not found',
+    },
+  );
 });
 
 test.each([
@@ -570,10 +572,10 @@ test('#addKey refuses a 17th key', async () => {
     name: 'ci',
     scope: 'read',
     imps: null,
-    sshKeys: Array.from({ length: 16 }, () => createEd25519Key().public),
+    sshKeys: Array.from({ length: 16 }, () => generateEd25519Key().public),
   });
 
-  expect(tokens.addKey('ci', createEd25519Key().public)).rejects.toMatchObject({
+  expect(tokens.addKey('ci', generateEd25519Key().public)).rejects.toMatchObject({
     code: 'BAD_REQUEST',
     message: 'token ci holds 16 keys, the most it may',
   });
@@ -583,7 +585,7 @@ test('#removeKey refuses to unbind a key authorized_keys lists since it was boun
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
   const blob = Buffer.from(line.split(' ')[1] ?? '', 'base64');
   const fingerprint = formatKeyFingerprint(blob);
 
@@ -601,7 +603,7 @@ test('#removeKey leaves a key authorized_keys lists bound to its token after the
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
   const blob = Buffer.from(line.split(' ')[1] ?? '', 'base64');
 
   await tokens.create({ name: 'a', scope: 'exec', imps: ['dev-*'], sshKeys: [line] });
@@ -618,7 +620,7 @@ test('#remove refuses a token while authorized_keys lists one of its keys, which
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
   const blob = Buffer.from(line.split(' ')[1] ?? '', 'base64');
 
   await tokens.create({ name: 'a', scope: 'exec', imps: ['dev-*'], sshKeys: [line] });
@@ -638,7 +640,7 @@ test('#remove takes a token whose key authorized_keys no longer lists', async ()
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
   const blob = Buffer.from(line.split(' ')[1] ?? '', 'base64');
 
   await tokens.create({ name: 'a', scope: 'exec', imps: ['dev-*'], sshKeys: [line] });
@@ -659,7 +661,7 @@ test('#removeKey unbinds a key and reports its id', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
   const blob = Buffer.from(line.split(' ')[1] ?? '', 'base64');
 
   await tokens.create({ name: 'a', scope: 'exec', imps: null, sshKeys: [line] });
@@ -678,7 +680,7 @@ test('#addKey binds a key again under a new id', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
   const blob = Buffer.from(line.split(' ')[1] ?? '', 'base64');
 
   await tokens.create({ name: 'a', scope: 'exec', imps: null, sshKeys: [line] });
@@ -701,7 +703,7 @@ test('#remove ends a token’s keys and reports the token’s id', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
   const blob = Buffer.from(line.split(' ')[1] ?? '', 'base64');
 
   const made = await tokens.create({ name: 'a', scope: 'exec', imps: null, sshKeys: [line] });
@@ -718,7 +720,7 @@ test('#create binds a key a removed token held', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
   const blob = Buffer.from(line.split(' ')[1] ?? '', 'base64');
 
   await tokens.create({ name: 'a', scope: 'exec', imps: null, sshKeys: [line] });
@@ -744,7 +746,7 @@ test('#removeKey refuses a key bound to another token', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
   const blob = Buffer.from(line.split(' ')[1] ?? '', 'base64');
   const fingerprint = formatKeyFingerprint(blob);
 
@@ -794,8 +796,8 @@ test('#create binds a grantable list to each secret’s generation now', async (
   await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
   await createSecret(ctx.db, { name: 'npm', kind: 'github', rules: [], valueFile: 'npm' });
 
-  const gh = await findSecret(ctx.db, 'gh');
-  const npm = await findSecret(ctx.db, 'npm');
+  const gh = await readSecret(ctx.db, 'gh');
+  const npm = await readSecret(ctx.db, 'npm');
 
   const made = await tokens.create({
     name: 'agent',
@@ -819,7 +821,7 @@ test('#authenticate gives a made token’s grantable list, after a restart', asy
 
   await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
 
-  const gh = await findSecret(ctx.db, 'gh');
+  const gh = await readSecret(ctx.db, 'gh');
 
   const made = await before.create({
     name: 'agent',
@@ -859,7 +861,7 @@ test('#update takes a token’s image ref prefix away and keeps its grantable li
 
   await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
 
-  const gh = await findSecret(ctx.db, 'gh');
+  const gh = await readSecret(ctx.db, 'gh');
 
   const made = await tokens.create({
     name: 'nixie',
@@ -912,11 +914,11 @@ test('#findSshKey gives a key’s login its token’s grantable list, after a re
   const ctx = await setupTest();
   const before = await ctx.load('root-secret');
 
-  const line = `${createEd25519Key().public} me@laptop`;
+  const line = `${generateEd25519Key().public} me@laptop`;
 
   await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
 
-  const gh = await findSecret(ctx.db, 'gh');
+  const gh = await readSecret(ctx.db, 'gh');
 
   await before.create({
     name: 'agent',
@@ -1005,7 +1007,7 @@ test('#update gives the token’s next caller the new list', async () => {
 
   await createSecret(ctx.db, { name: 'npm', kind: 'github', rules: [], valueFile: 'npm' });
 
-  const npm = await findSecret(ctx.db, 'npm');
+  const npm = await readSecret(ctx.db, 'npm');
   const made = await tokens.create({ name: 'agent', scope: 'manage', imps: ['dev-*'] });
 
   await tokens.update('agent', { grantable: ['npm'] });
@@ -1072,7 +1074,7 @@ test('#createRestored brings a token back with its key, which logs in as the tok
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const [type = '', base64 = ''] = createEd25519Key().public.split(' ');
+  const [type = '', base64 = ''] = generateEd25519Key().public.split(' ');
   const blob = Buffer.from(base64, 'base64');
   const record = buildMockTokenRecord({ name: 'dev', scope: 'exec', imps: ['dev-*'] });
 
@@ -1132,7 +1134,7 @@ test('#createRestored binds a key once when the backup lists it twice for one to
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const [type = '', base64 = ''] = createEd25519Key().public.split(' ');
+  const [type = '', base64 = ''] = generateEd25519Key().public.split(' ');
   const blob = Buffer.from(base64, 'base64');
   const record = buildMockTokenRecord({ name: 'dev' });
 
@@ -1167,7 +1169,7 @@ test('#createRestored restores a token without a key that authorized_keys lists'
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  const [type = '', base64 = ''] = createEd25519Key().public.split(' ');
+  const [type = '', base64 = ''] = generateEd25519Key().public.split(' ');
   const blob = Buffer.from(base64, 'base64');
   const record = buildMockTokenRecord({ name: 'dev' });
 

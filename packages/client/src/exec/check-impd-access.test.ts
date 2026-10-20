@@ -10,7 +10,7 @@ import { buildSystemDrivePath, buildSystemDrivesDir } from '@impz/daemon/src/sto
 import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import { createRpcClient } from '../create-rpc-client';
@@ -108,7 +108,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   const impd = await createImpd(config, deps);
@@ -159,7 +159,7 @@ test('it reports an older impd that has no system.features as reachable', async 
 
 test('it reports an impd it cannot reach as unreachable', async () => {
   // nothing listens on a free port
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
 
   const access = await checkImpdAccess(
     createRpcClient({ url: `http://127.0.0.1:${String(port)}`, token: 'root-token' }),

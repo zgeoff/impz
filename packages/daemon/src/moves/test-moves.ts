@@ -4,7 +4,7 @@ import type { MoveStatus } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for'; // oxlint-disable-line zgeoff/import-zones -- a test harness outside test-utils/; GEO-363 moves it to @impz/daemon/testing
 import invariant from 'tiny-invariant';
 import { createImage } from '../db/images';
-import { buildTestApp } from '../imps/build-test-app';
+import { createTestApp } from '../imps/create-test-app';
 import { createImpTest } from '../imps/test-imps';
 import type { ImpTest, ImpTestOptions } from '../imps/test-imps';
 import { deriveSlotAddress } from '../net/addressing';
@@ -35,7 +35,7 @@ export type FetchHook = (
 
 type HostTest = Awaited<ReturnType<typeof createImpTest>>;
 
-type TestApp = ReturnType<typeof buildTestApp>;
+type TestApp = ReturnType<typeof createTestApp>;
 
 export interface MoveHostsOptions {
   // sees each request the source sends to the target's move routes
@@ -98,14 +98,14 @@ export async function createMoveHosts(
   // the names the target's commits handed to onCommitted, in order
   const commits: string[] = [];
 
-  const targetApp = buildTestApp(target, target, undefined, {}, null, {
+  const targetApp = createTestApp(target, target, undefined, {}, null, {
     ...shared,
     onCommitted: (name) => {
       commits.push(name);
     },
   });
 
-  const sendToTarget = (request: Request) => targetApp.moves.handle(request, SOURCE_PEER);
+  const sendToTarget = (request: Request) => targetApp.moves.respond(request, SOURCE_PEER);
   const hook = options.hook;
 
   // the source's app, once built, for the hook to see; no request goes before
@@ -117,7 +117,7 @@ export async function createMoveHosts(
     return call(request, (replacement) => sendToTarget(replacement ?? request), built.hosts);
   };
 
-  const sourceApp = buildTestApp(source, sourceImpd, undefined, {}, null, {
+  const sourceApp = createTestApp(source, sourceImpd, undefined, {}, null, {
     ...shared,
     readTapMac:
       options.readTapMac ??

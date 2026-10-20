@@ -13,12 +13,12 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'stub-forward-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-forward-agent-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   const agent = buildStubForwardAgent();
-  const vsockPath = join(dir, 'v.sock');
+  const vsockPath = join(directory, 'v.sock');
 
   const server = await startStubAgent(vsockPath, agent.readFrame);
 

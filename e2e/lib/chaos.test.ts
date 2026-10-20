@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
 import {
   CHAOS_EXEC_S,
+  collectStrayVms,
+  collectUnsettledImps,
   createParkMiller,
   findLostImps,
-  findStrayVms,
-  findUnsettledImps,
   listExpectedImpVmCounts,
   listImpVmCounts,
   parseFirecrackerVms,
@@ -158,9 +158,9 @@ test('#listExpectedImpVmCounts expects one VM while running or in error with a V
   ]);
 });
 
-test('#findStrayVms finds the VMs no imp owns', () => {
+test('#collectStrayVms finds the VMs no imp owns', () => {
   expect(
-    findStrayVms(
+    collectStrayVms(
       [{ id: 'id-a', name: 'e2e-chaos-a', state: 'running' }],
       new Map([
         ['id-a', [101]],
@@ -170,9 +170,9 @@ test('#findStrayVms finds the VMs no imp owns', () => {
   ).toStrictEqual(['id-x']);
 });
 
-test('#findUnsettledImps finds the imps mid-transition or missing', () => {
+test('#collectUnsettledImps finds the imps mid-transition or missing', () => {
   expect(
-    findUnsettledImps(
+    collectUnsettledImps(
       [
         { id: 'id-a', name: 'e2e-chaos-a', state: 'running' },
         { id: 'id-b', name: 'e2e-chaos-b', state: 'waking' },

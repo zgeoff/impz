@@ -2,7 +2,7 @@ import { expect, mock, test } from 'bun:test';
 import { buildMockSystemInfo } from '@impz/api/test-utils/build-mock-system-info';
 import { ORPCError } from '@impz/client';
 import { buildMockHostProbe } from '../test-utils/build-mock-host-probe';
-import { buildRanking, createPlaced, readFreeMib } from './place-imp';
+import { buildRanking, createPlaced, getFreeMib } from './place-imp';
 
 test('#buildRanking ranks the host with the most free RAM first, a tie in name order', () => {
   const ram = { ramUsedMib: 0, ramReservedMib: 0, ramSleepingMib: 0 };
@@ -52,7 +52,7 @@ test('#buildRanking ranks the host with the most free RAM first, a tie in name o
   });
 });
 
-test("#readFreeMib counts every sleeper's memory as taken", () => {
+test("#getFreeMib counts every sleeper's memory as taken", () => {
   const info = buildMockSystemInfo({
     ramBudgetMib: 8192,
     ramUsedMib: 1000,
@@ -60,17 +60,17 @@ test("#readFreeMib counts every sleeper's memory as taken", () => {
     ramSleepingMib: 4096,
   });
 
-  expect(readFreeMib(info)).toBe(8192 - 1000 - 500 - 4096);
+  expect(getFreeMib(info)).toBe(8192 - 1000 - 500 - 4096);
 });
 
-test('#readFreeMib counts no sleepers for an impd from before ramSleepingMib', () => {
+test('#getFreeMib counts no sleepers for an impd from before ramSleepingMib', () => {
   const { ramSleepingMib, ...info } = buildMockSystemInfo({
     ramBudgetMib: 8192,
     ramUsedMib: 1000,
     ramReservedMib: 500,
   });
 
-  expect(readFreeMib(info)).toBe(8192 - 1000 - 500);
+  expect(getFreeMib(info)).toBe(8192 - 1000 - 500);
 });
 
 test('#buildRanking ranks a host below another when its sleepers take more RAM', () => {
@@ -644,15 +644,15 @@ test('#buildRanking leaves a generated name to impd though a host has an imp of 
 test('#createPlaced moves on to the next host after a RAM refusal, with one create per host', async () => {
   // each host's answer to a create
   const answers: Record<string, () => Promise<string>> = {
-    a: () =>
+    alpha: () =>
       Promise.reject(
         new ORPCError('RAM_BUDGET_EXCEEDED', {
           status: 503,
           message: 'Not enough RAM budget, even after sleeping idle imps',
         }),
       ),
-    b: () => Promise.resolve('imp on b'),
-    c: () => Promise.resolve('imp on c'),
+    beta: () => Promise.resolve('imp on beta'),
+    gamma: () => Promise.resolve('imp on gamma'),
   };
 
   const create = mock(
@@ -661,16 +661,16 @@ test('#createPlaced moves on to the next host after a RAM refusal, with one crea
 
   const placed = await createPlaced(
     [
-      { host: 'a', freeMib: 3 },
-      { host: 'b', freeMib: 2 },
-      { host: 'c', freeMib: 1 },
+      { host: 'alpha', freeMib: 3 },
+      { host: 'beta', freeMib: 2 },
+      { host: 'gamma', freeMib: 1 },
     ],
     create,
     () => {},
   );
 
-  expect(placed).toStrictEqual({ host: 'b', value: 'imp on b' });
-  expect(create.mock.calls).toStrictEqual([['a'], ['b']]);
+  expect(placed).toStrictEqual({ host: 'beta', value: 'imp on beta' });
+  expect(create.mock.calls).toStrictEqual([['alpha'], ['beta']]);
 });
 
 test('#createPlaced reports each RAM refusal with its host', async () => {

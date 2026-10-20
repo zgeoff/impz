@@ -10,7 +10,7 @@ export interface SshBackend extends Pick<
   ImpRuntime,
   'requireRunning' | 'tracker' | 'openDial' | 'openListener' | 'openAccept' | 'recordActivity'
 > {
-  readonly findImp: (name: string) => Promise<ImpRecord | undefined>;
+  readonly readImp: (name: string) => Promise<ImpRecord | undefined>;
 
   // the runtime's, with who logged in, for the audit
   readonly openExec: (

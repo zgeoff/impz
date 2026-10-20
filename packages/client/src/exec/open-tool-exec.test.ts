@@ -26,7 +26,7 @@ import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-im
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubExecReplies } from '@impz/daemon/src/test-utils/build-stub-exec-replies';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { startStubAgent } from '@impz/daemon/src/test-utils/start-stub-agent';
 import { listLocalEntries, writeLocalEntries } from '@impz/local-tar';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -57,7 +57,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with
@@ -201,19 +201,19 @@ test('it sends an archive whole through impd to the imp’s tool and returns its
     }),
   );
 
-  const dir = await mkdtemp(join(tmpdir(), 'open-tool-exec-'));
+  const directory = await mkdtemp(join(tmpdir(), 'open-tool-exec-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  await mkdir(join(dir, 'proj'), { mode: 0o750 });
+  await mkdir(join(directory, 'proj'), { mode: 0o750 });
 
-  await writeFile(join(dir, 'proj', 'big.bin'), new Uint8Array(4 * EXEC_STDIN_WINDOW_BYTES), {
+  await writeFile(join(directory, 'proj', 'big.bin'), new Uint8Array(4 * EXEC_STDIN_WINDOW_BYTES), {
     mode: 0o600,
   });
 
-  await symlink('big.bin', join(dir, 'proj', 'link'));
+  await symlink('big.bin', join(directory, 'proj', 'link'));
 
-  const entries = await listLocalEntries(join(dir, 'proj'));
+  const entries = await listLocalEntries(join(directory, 'proj'));
 
   const exec = await openToolExec({
     baseUrl: ctx.baseUrl,

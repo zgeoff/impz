@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { FRAME_TYPES, decodeJsonPayload, encodeJsonFrame } from '../agent-client/frame-codec';
-import { findImpByName, updateImpActivity } from '../db/imps';
+import { readImpByName, updateImpActivity } from '../db/imps';
 import { writeLease } from '../db/leases';
 import { readVmIdentity, writeVmIdentity } from '../sleep/vm-identity';
 import { buildImpPaths } from '../storage/data-layout';
@@ -173,7 +173,7 @@ test('it waits for a young guest to reach the minimum uptime before it sleeps it
 
   const waitedMs = ctx.logs
     .map((line) => /waited (?<ms>\d+)ms for a young guest/u.exec(line)?.groups?.['ms'])
-    .find((ms) => ms !== undefined);
+    .find((durationMs) => durationMs !== undefined);
 
   expect(asleep.state).toBe('sleeping');
   expect(waitedMs).toBe('200');
@@ -244,7 +244,7 @@ test('it gives way to a hold while an idle sleep waits for a young guest', async
 
   const settled = await waitForOutcome(sleeping, 2000);
   const outcome = await sleeping;
-  const after = await findImpByName(ctx.db, 'dev');
+  const after = await readImpByName(ctx.db, 'dev');
 
   expect(settled).toBe('done');
   expect(outcome).toBe('skipped');
@@ -303,7 +303,7 @@ test('it sleeps held and connected imps when impd stops', async () => {
 
   await ctx.imps.sleepAllImps();
 
-  const after = await findImpByName(ctx.db, 'dev');
+  const after = await readImpByName(ctx.db, 'dev');
 
   expect(after?.state).toBe('sleeping');
 });
@@ -377,7 +377,7 @@ test('it waits for a boot under way and sleeps that imp when impd stops', async 
 
   await Promise.all([starting, stopping]);
 
-  const after = await findImpByName(ctx.db, 'dev');
+  const after = await readImpByName(ctx.db, 'dev');
 
   expect(after?.state).toBe('sleeping');
 });
@@ -433,7 +433,7 @@ test('it refuses a create that impd stopping cuts short, and records it as an er
     code: 'SERVICE_UNAVAILABLE',
   });
 
-  const late = await findImpByName(ctx.db, 'late');
+  const late = await readImpByName(ctx.db, 'late');
 
   expect(late).toMatchObject({ state: 'error', error: 'impd is stopping' });
 });
@@ -446,7 +446,7 @@ test('it removes the imp once a create under way when its destroy was issued has
 
   await gate.reached;
 
-  const found = await findImpByName(ctx.db, 'dev');
+  const found = await readImpByName(ctx.db, 'dev');
 
   invariant(found);
 
@@ -462,7 +462,7 @@ test('it removes the imp once a create under way when its destroy was issued has
 
   await destroying;
 
-  const left = await findImpByName(ctx.db, 'dev');
+  const left = await readImpByName(ctx.db, 'dev');
 
   expect(created.state).toBe('running');
   expect(left).toBeUndefined();
@@ -482,7 +482,7 @@ test('it removes a running imp whose VM takes long to exit on the first call', a
 
   await ctx.imps.destroyImp('dev');
 
-  const left = await findImpByName(ctx.db, 'dev');
+  const left = await readImpByName(ctx.db, 'dev');
 
   expect(left).toBeUndefined();
 });
@@ -784,7 +784,7 @@ test('it refuses to find the agent of an image builder', async () => {
 
   await ctx.imps.createImp({ name: 'imp-build-x', kind: 'builder' });
 
-  expect(ctx.imps.findAgent('imp-build-x')).rejects.toMatchObject({
+  expect(ctx.imps.readAgent('imp-build-x')).rejects.toMatchObject({
     code: 'PRECONDITION_FAILED',
     message: 'imp-build-x is an image builder that impd made for one build; only rm reaches it',
   });
@@ -962,7 +962,7 @@ test('it shows the inner container of an awake imp as its agent last reported it
     stack: ctx.stack,
   });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -986,7 +986,7 @@ test('it shows no inner container once the agent stops answering', async () => {
     stack: ctx.stack,
   });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -1010,7 +1010,7 @@ test('it shows no inner container from before a sleep once the imp wakes', async
     stack: ctx.stack,
   });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -1045,7 +1045,7 @@ test('it shows no inner container for an agent from before 0.14.0', async () => 
     { stack: ctx.stack },
   );
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -1284,7 +1284,7 @@ test('it clears the pending CA install in the wake that does it', async () => {
   await ctx.db.updateTable('imps').set({ trust_pending: 1 }).where('id', '=', imp.id).execute();
   await ctx.imps.wakeImp('dev');
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.isTrustPending).toBeFalse();
 });

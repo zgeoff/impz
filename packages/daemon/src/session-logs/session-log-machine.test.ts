@@ -52,7 +52,7 @@ test('it never opens a tap again for a log deleted while live', async () => {
 
   const log = await createGenerationLog(
     {
-      dir: join(ctx.root, 'b'.repeat(32)),
+      directory: join(ctx.root, 'b'.repeat(32)),
       segmentBytes: 10,
       maxBytes: 20,
       requireRoom: () => Promise.resolve(),
@@ -85,7 +85,7 @@ test('it leaves the log and tap of a later life alone when an earlier life ends 
   const ctx = await setupTest();
 
   const options = {
-    dir: join(ctx.root, 'c'.repeat(32)),
+    directory: join(ctx.root, 'c'.repeat(32)),
     segmentBytes: 10,
     maxBytes: 20,
     requireRoom: () => Promise.resolve(),

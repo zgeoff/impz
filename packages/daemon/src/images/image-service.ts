@@ -1,6 +1,6 @@
 import { buildConflictError, buildNotFoundError } from '../api-errors';
 import type { Config } from '../config';
-import { findImageByName, listImages, removeImage } from '../db/images';
+import { listImages, readImageByName, removeImage } from '../db/images';
 import type { ImageRecord } from '../db/images';
 import { countImpsUsingImage } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
@@ -59,9 +59,9 @@ export interface ImageServiceDeps {
 export function createImageService(deps: ImageServiceDeps): ImageService {
   const writer = createImageWriter(deps);
 
-  const findDefaultImage = async (): Promise<ImageRecord | undefined> => {
+  const readDefaultImage = async (): Promise<ImageRecord | undefined> => {
     for (const name of [deps.config.defaultImage, FALLBACK_DEFAULT_IMAGE]) {
-      const image = await findImageByName(deps.db, name);
+      const image = await readImageByName(deps.db, name);
 
       if (image !== undefined) {
         return image;
@@ -73,7 +73,7 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
 
   const resolveImage = async (name?: string): Promise<ImageRecord> => {
     const image =
-      name === undefined ? await findDefaultImage() : await findImageByName(deps.db, name);
+      name === undefined ? await readDefaultImage() : await readImageByName(deps.db, name);
 
     if (image === undefined) {
       throw buildNotFoundError('image', name ?? deps.config.defaultImage);
@@ -87,7 +87,7 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
     ...createImageBuilds(deps, writer),
     listImages: () => listImages(deps.db),
     removeImage: async (name) => {
-      const image = await findImageByName(deps.db, name);
+      const image = await readImageByName(deps.db, name);
 
       if (image === undefined) {
         throw buildNotFoundError('image', name);
@@ -106,6 +106,6 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
       });
     },
     resolveImage,
-    findDefaultImage,
+    findDefaultImage: readDefaultImage,
   };
 }

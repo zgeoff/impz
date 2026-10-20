@@ -12,29 +12,29 @@ export const MIGRATION_022_ADD_MCP_OAUTH: Migration = {
       .createTable('oauth_clients')
 
       // the client_id a connector holds
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('name', 'text', (c) => c.notNull().unique())
+      .addColumn('id', 'text', (column) => column.primaryKey())
+      .addColumn('name', 'text', (column) => column.notNull().unique())
 
       // a JSON array, each matched exactly
-      .addColumn('redirect_uris', 'text', (c) => c.notNull())
-      .addColumn('created_at', 'integer', (c) => c.notNull())
+      .addColumn('redirect_uris', 'text', (column) => column.notNull())
+      .addColumn('created_at', 'integer', (column) => column.notNull())
       .execute();
 
     // what one approval gave one client: never wider than token_id, whose
     // removal removes it
     await db.schema
       .createTable('oauth_grants')
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('client_id', 'text', (c) => c.notNull().references('oauth_clients.id'))
-      .addColumn('token_id', 'text', (c) => c.notNull().references('tokens.id'))
-      .addColumn('scope', 'text', (c) => c.notNull())
+      .addColumn('id', 'text', (column) => column.primaryKey())
+      .addColumn('client_id', 'text', (column) => column.notNull().references('oauth_clients.id'))
+      .addColumn('token_id', 'text', (column) => column.notNull().references('tokens.id'))
+      .addColumn('scope', 'text', (column) => column.notNull())
 
       // a JSON array of grant patterns; null for every imp and the host
       .addColumn('imps', 'text')
 
       // the resource its tokens are bound to, `<origin>/mcp`
-      .addColumn('resource', 'text', (c) => c.notNull())
-      .addColumn('created_at', 'integer', (c) => c.notNull())
+      .addColumn('resource', 'text', (column) => column.notNull())
+      .addColumn('created_at', 'integer', (column) => column.notNull())
       .addColumn('last_used_at', 'integer')
       .execute();
 
@@ -42,14 +42,14 @@ export const MIGRATION_022_ADD_MCP_OAUTH: Migration = {
     // so a second use of it is known for a replay
     await db.schema
       .createTable('oauth_tokens')
-      .addColumn('id', 'text', (c) => c.primaryKey())
-      .addColumn('grant_id', 'text', (c) => c.notNull().references('oauth_grants.id'))
-      .addColumn('kind', 'text', (c) => c.notNull())
+      .addColumn('id', 'text', (column) => column.primaryKey())
+      .addColumn('grant_id', 'text', (column) => column.notNull().references('oauth_grants.id'))
+      .addColumn('kind', 'text', (column) => column.notNull())
 
       // SHA-256 of the secret, in hex
-      .addColumn('secret_hash', 'text', (c) => c.notNull())
-      .addColumn('created_at', 'integer', (c) => c.notNull())
-      .addColumn('expires_at', 'integer', (c) => c.notNull())
+      .addColumn('secret_hash', 'text', (column) => column.notNull())
+      .addColumn('created_at', 'integer', (column) => column.notNull())
+      .addColumn('expires_at', 'integer', (column) => column.notNull())
       .addColumn('spent_at', 'integer')
       .execute();
 

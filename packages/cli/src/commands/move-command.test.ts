@@ -16,7 +16,7 @@ import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import { UsageError } from '../cli/errors';
@@ -52,7 +52,7 @@ async function setupTest() {
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
 
       // the URL the target hands the source, a tailnet address as a move needs
       IMP_PEER_URL: 'http://100.100.0.2:7070',
@@ -163,7 +163,7 @@ async function setupTest() {
       client,
       clock,
       moves: impd.moves,
-      handle: (request: Request) => impd.api.app.handle(request),
+      respond: (request: Request) => impd.api.app.handle(request),
     };
   };
 
@@ -176,14 +176,14 @@ async function setupTest() {
     to: target.client,
 
     // the target's API, as a client in front of it reaches it
-    handleOnTarget: target.handle,
+    handleOnTarget: target.respond,
 
     // the target's clock, which a test may move on
     targetClock: target.clock,
 
     // the target's move routes, as the source reaches them over the
     // tailnet from 100.100.0.1
-    receiveFromSource: (request: Request) => target.moves.handle(request, '100.100.0.1'),
+    receiveFromSource: (request: Request) => target.moves.respond(request, '100.100.0.1'),
   };
 }
 
@@ -266,7 +266,7 @@ test('it draws the send’s progress on a terminal and ends the line', async () 
     .slice(0, -1)
     .map((line) => Number(/(?<percent>\d+)%/u.exec(line)?.groups?.['percent']));
 
-  expect(percents).toStrictEqual(percents.toSorted((a, b) => a - b));
+  expect(percents).toStrictEqual(percents.toSorted((left, right) => left - right));
   expect(percents.at(-1)).toBeGreaterThan(0);
 
   expect(lines.slice(0, -1)).toSatisfyAll(

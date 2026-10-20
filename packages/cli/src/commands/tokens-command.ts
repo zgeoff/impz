@@ -11,109 +11,6 @@ import { formatIdentity, formatOutput, formatSshKey, formatTokens } from '../out
 
 const tokenArg = { type: 'positional', description: 'token name', required: true } as const;
 
-// --imps 'dev-*,ci-*': the imps a token may touch; unset for every imp
-function parseImpPatterns(text: string | undefined): string[] | undefined {
-  if (text === undefined) {
-    return undefined;
-  }
-
-  const patterns = text
-    .split(',')
-    .map((pattern) => pattern.trim())
-    .filter((pattern) => pattern !== '');
-
-  const bad = patterns.find((pattern) => !ImpPatternSchema.safeParse(pattern).success);
-
-  if (patterns.length === 0 || bad !== undefined) {
-    throw new UsageError(
-      `--imps takes imp names with * for any run of characters, such as dev-*; not ${bad ?? text}`,
-    );
-  }
-
-  return patterns;
-}
-
-// --grantable 'gh,npm': existing secrets the token may grant to its imps
-function parseGrantable(text: string | undefined): string[] | undefined {
-  if (text === undefined) {
-    return undefined;
-  }
-
-  const names = text
-    .split(',')
-    .map((name) => name.trim())
-    .filter((name) => name !== '');
-
-  const bad = names.find((name) => !SecretNameSchema.safeParse(name).success);
-
-  if (names.length === 0 || bad !== undefined) {
-    throw new UsageError(`--grantable takes secret names, such as gh,npm; not ${bad ?? text}`);
-  }
-
-  return names;
-}
-
-// `token set --grantable`: the whole new list, as parseGrantable; '' clears it
-function parseGrantableUpdate(text: string): string[] {
-  return text.trim() === '' ? [] : (parseGrantable(text) ?? []);
-}
-
-// a list makes sense only on a manage token for some imps; an impd refuses
-// it otherwise, but an older one would not see the list at all
-function requireGrantScope(scope: Scope, imps: readonly string[] | undefined): void {
-  if (scope !== 'manage' || imps === undefined) {
-    throw new UsageError('--grantable needs --scope manage and --imps');
-  }
-}
-
-// --image-ref-prefix ghcr.io/org/app-: the start of the image refs the
-// token may add under its imps (docs/guides/tokens.md#adding-images)
-function parseImageRefPrefix(text: string): string {
-  const parsed = ImageRefPrefixSchema.safeParse(text);
-
-  if (!parsed.success) {
-    throw new UsageError(
-      `--image-ref-prefix takes a registry host and the start of a path, such as ghcr.io/org/app-; not ${text}`,
-    );
-  }
-
-  return parsed.data;
-}
-
-// `token set --image-ref-prefix`: as parseImageRefPrefix; '' takes it away
-function parseImageRefPrefixUpdate(text: string): string | null {
-  return text.trim() === '' ? null : parseImageRefPrefix(text);
-}
-
-// The key lines of a public key file, such as ~/.ssh/id_ed25519.pub. A
-// private key is refused before it leaves this machine.
-function readKeyFile(path: string): string[] {
-  let text: string;
-
-  try {
-    text = readFileSync(path, 'utf8');
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-
-    throw new UsageError(`cannot read ${path}: ${reason}`);
-  }
-
-  if (text.includes('PRIVATE KEY')) {
-    throw new UsageError(`${path} is a private key; give its .pub file`);
-  }
-
-  const lines = text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line !== '' && !line.startsWith('#'));
-
-  if (lines.length === 0) {
-    throw new UsageError(`${path} holds no key`);
-  }
-
-  return lines;
-}
-
 const newCommand = defineCommand({
   name: 'new',
   description: 'Make a token; its secret prints once, on stdout, and impd keeps only a hash',
@@ -367,3 +264,106 @@ export const tokenCommand = defineGroup({
     whoami: whoamiCommand,
   },
 });
+
+// --imps 'dev-*,ci-*': the imps a token may touch; unset for every imp
+function parseImpPatterns(text: string | undefined): string[] | undefined {
+  if (text === undefined) {
+    return undefined;
+  }
+
+  const patterns = text
+    .split(',')
+    .map((pattern) => pattern.trim())
+    .filter((pattern) => pattern !== '');
+
+  const bad = patterns.find((pattern) => !ImpPatternSchema.safeParse(pattern).success);
+
+  if (patterns.length === 0 || bad !== undefined) {
+    throw new UsageError(
+      `--imps takes imp names with * for any run of characters, such as dev-*; not ${bad ?? text}`,
+    );
+  }
+
+  return patterns;
+}
+
+// --grantable 'gh,npm': existing secrets the token may grant to its imps
+function parseGrantable(text: string | undefined): string[] | undefined {
+  if (text === undefined) {
+    return undefined;
+  }
+
+  const names = text
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name) => name !== '');
+
+  const bad = names.find((name) => !SecretNameSchema.safeParse(name).success);
+
+  if (names.length === 0 || bad !== undefined) {
+    throw new UsageError(`--grantable takes secret names, such as gh,npm; not ${bad ?? text}`);
+  }
+
+  return names;
+}
+
+// --image-ref-prefix ghcr.io/org/app-: the start of the image refs the
+// token may add under its imps (docs/guides/tokens.md#adding-images)
+function parseImageRefPrefix(text: string): string {
+  const parsed = ImageRefPrefixSchema.safeParse(text);
+
+  if (!parsed.success) {
+    throw new UsageError(
+      `--image-ref-prefix takes a registry host and the start of a path, such as ghcr.io/org/app-; not ${text}`,
+    );
+  }
+
+  return parsed.data;
+}
+
+// a list makes sense only on a manage token for some imps; an impd refuses
+// it otherwise, but an older one would not see the list at all
+function requireGrantScope(scope: Scope, imps: readonly string[] | undefined): void {
+  if (scope !== 'manage' || imps === undefined) {
+    throw new UsageError('--grantable needs --scope manage and --imps');
+  }
+}
+
+// The key lines of a public key file, such as ~/.ssh/id_ed25519.pub. A
+// private key is refused before it leaves this machine.
+function readKeyFile(path: string): string[] {
+  let text: string;
+
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+
+    throw new UsageError(`cannot read ${path}: ${reason}`);
+  }
+
+  if (text.includes('PRIVATE KEY')) {
+    throw new UsageError(`${path} is a private key; give its .pub file`);
+  }
+
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.startsWith('#'));
+
+  if (lines.length === 0) {
+    throw new UsageError(`${path} holds no key`);
+  }
+
+  return lines;
+}
+
+// `token set --grantable`: the whole new list, as parseGrantable; '' clears it
+function parseGrantableUpdate(text: string): string[] {
+  return text.trim() === '' ? [] : (parseGrantable(text) ?? []);
+}
+
+// `token set --image-ref-prefix`: as parseImageRefPrefix; '' takes it away
+function parseImageRefPrefixUpdate(text: string): string | null {
+  return text.trim() === '' ? null : parseImageRefPrefix(text);
+}

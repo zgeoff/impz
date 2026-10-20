@@ -6,17 +6,17 @@ import { createStubDockerBin } from './create-stub-docker-bin';
 
 // a directory for the stub
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-docker-bin-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-docker-bin-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it answers the version as an amd64 engine on linux', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerBin(ctx.dir, {});
+  const docker = createStubDockerBin(ctx.directoryPath, {});
 
   const run = Bun.spawnSync([
     join(docker.binDir, 'docker'),
@@ -31,7 +31,7 @@ test('it answers the version as an amd64 engine on linux', async () => {
 test('it has the Dockerfile frontend', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerBin(ctx.dir, {});
+  const docker = createStubDockerBin(ctx.directoryPath, {});
 
   const run = Bun.spawnSync([
     join(docker.binDir, 'docker'),
@@ -49,7 +49,7 @@ test('it has the Dockerfile frontend', async () => {
 test('it inspects an image it has by reference', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerBin(ctx.dir, {
+  const docker = createStubDockerBin(ctx.directoryPath, {
     'imp/web:latest': {
       id: `sha256:${'b'.repeat(64)}`,
       repoDigests: ['imp/web@sha256:abc'],
@@ -68,7 +68,7 @@ test('it inspects an image it has by reference', async () => {
 test('it exports the files of a container made from an image', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerBin(ctx.dir, {
+  const docker = createStubDockerBin(ctx.directoryPath, {
     'imp/web:latest': { id: `sha256:${'b'.repeat(64)}`, repoDigests: [], files: { hello: 'hi\n' } },
   });
 
@@ -89,7 +89,7 @@ test('it exports the files of a container made from an image', async () => {
 test('it removes a container', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerBin(ctx.dir, {});
+  const docker = createStubDockerBin(ctx.directoryPath, {});
   const run = Bun.spawnSync([join(docker.binDir, 'docker'), 'rm', '-f', 'abc']);
 
   expect(run.exitCode).toBe(0);
@@ -98,7 +98,7 @@ test('it removes a container', async () => {
 test('it fails a call it lacks and names it', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerBin(ctx.dir, {});
+  const docker = createStubDockerBin(ctx.directoryPath, {});
   const run = Bun.spawnSync([join(docker.binDir, 'docker'), 'pull', '--quiet', 'busybox:1.37']);
 
   expect(run.exitCode).toBe(1);
@@ -108,7 +108,7 @@ test('it fails a call it lacks and names it', async () => {
 test('it fails an inspect of an image it lacks', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerBin(ctx.dir, {});
+  const docker = createStubDockerBin(ctx.directoryPath, {});
   const run = Bun.spawnSync([join(docker.binDir, 'docker'), 'image', 'inspect', 'busybox:1.37']);
 
   expect(run.exitCode).toBe(1);
@@ -117,7 +117,7 @@ test('it fails an inspect of an image it lacks', async () => {
 test('it logs each call, oldest first', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerBin(ctx.dir, {});
+  const docker = createStubDockerBin(ctx.directoryPath, {});
 
   Bun.spawnSync([join(docker.binDir, 'docker'), 'rm', '-f', 'one']);
   Bun.spawnSync([join(docker.binDir, 'docker'), 'rm', '-f', 'two']);

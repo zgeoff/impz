@@ -10,7 +10,7 @@ import invariant from 'tiny-invariant';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { createImage } from '../db/images';
-import { findImpByName, listImps, updateImpMove } from '../db/imps';
+import { listImps, readImpByName, updateImpMove } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import {
   buildImagePaths,
@@ -22,7 +22,7 @@ import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubNft } from '../test-utils/build-stub-nft';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -44,7 +44,7 @@ async function setupTest() {
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     }),
 
     // a new disk stays its image's size: a clone off XFS copies every byte,
@@ -703,7 +703,7 @@ test('it refuses a join of an imp a move marked with MOVING', async () => {
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web' });
 
-  const imp = await findImpByName(ctx.db, 'web');
+  const imp = await readImpByName(ctx.db, 'web');
 
   invariant(imp);
 

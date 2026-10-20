@@ -12,7 +12,7 @@ import {
   removeTokenIfPresent,
 } from '../lib/reset-baseline';
 import { runSsh, setupKeyClient } from '../lib/ssh';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // Scoped tokens (docs/guides/tokens.md): what a read token and an exec
 // token limited to some imps may do, through the CLI as a user runs it.
@@ -25,7 +25,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('tokens'), stack, client };
+  return { prefix: getSuitePrefix('tokens'), stack, client };
 }
 
 test('it prints a made read token once, lists it without its secret, and lets it list imps but not exec, stop or make tokens', async () => {

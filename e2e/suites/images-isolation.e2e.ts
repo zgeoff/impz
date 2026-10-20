@@ -16,7 +16,7 @@ import {
 } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImageIfPresent, removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // #156, #169, #180: a build's RUN steps and an add's pull run in a builder imp
@@ -43,7 +43,7 @@ async function setupTest() {
 
   stack.defer(() => rm(buildRoot, { recursive: true, force: true }));
 
-  return { prefix: readSuitePrefix('images'), stack, client, buildRoot };
+  return { prefix: getSuitePrefix('images'), stack, client, buildRoot };
 }
 
 // #156: the listener is the test's, on every address of this machine, so the
@@ -71,7 +71,7 @@ test('it lets an isolated build reach the internet but not the host, impd or a p
 
   const targets = [`${gateway}:${String(listener.port)}`, '10.66.0.1:7070', '169.254.169.254:80'];
 
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'isolation',
     [
@@ -84,7 +84,7 @@ test('it lets an isolated build reach the internet but not the host, impd or a p
     ].join('\n'),
   );
 
-  await runImp('image', 'build', dir, '--name', name);
+  await runImp('image', 'build', directory, '--name', name);
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
@@ -150,7 +150,7 @@ test("it lets an isolated build's broker tunnel reach the internet, but not the 
     ...own6,
   ];
 
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'broker',
     [
@@ -167,7 +167,7 @@ test("it lets an isolated build's broker tunnel reach the internet, but not the 
     ].join('\n'),
   );
 
-  await runImp('image', 'build', dir, '--name', name);
+  await runImp('image', 'build', directory, '--name', name);
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
@@ -196,7 +196,7 @@ test.skipIf(ipv6RouteMissing)(
 
     const name = `${ctx.prefix}broker6`;
 
-    const dir = await writeBuildContext(
+    const directory = await writeBuildContext(
       ctx.buildRoot,
       'broker6',
       [
@@ -209,7 +209,7 @@ test.skipIf(ipv6RouteMissing)(
       ].join('\n'),
     );
 
-    await runImp('image', 'build', dir, '--name', name);
+    await runImp('image', 'build', directory, '--name', name);
 
     registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 

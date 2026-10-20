@@ -130,7 +130,7 @@ type CallerData =
 
 const callerData = new WeakMap<object, CallerData>();
 
-export function readCallerData(error: unknown): CallerData | undefined {
+export function findCallerData(error: unknown): CallerData | undefined {
   return typeof error === 'object' && error !== null ? callerData.get(error) : undefined;
 }
 
@@ -161,7 +161,7 @@ export function buildRamBudgetError(shortfall: Readonly<RamShortfall>) {
 }
 
 // what a boot or wake lacks past the budget; GovernorDecision says it too
-export function readNeededMib(usedMib: number, requestedMib: number, budgetMib: number): number {
+export function buildNeededMib(usedMib: number, requestedMib: number, budgetMib: number): number {
   return Math.max(0, usedMib + requestedMib - budgetMib);
 }
 
@@ -173,7 +173,7 @@ function buildRamError(message: string, shortfall: Readonly<RamShortfall>) {
       budgetMib: shortfall.budgetMib,
       usedMib: shortfall.usedMib,
       requestedMib: shortfall.requestedMib,
-      neededMib: readNeededMib(shortfall.usedMib, shortfall.requestedMib, shortfall.budgetMib),
+      neededMib: buildNeededMib(shortfall.usedMib, shortfall.requestedMib, shortfall.budgetMib),
       protected: [],
       protectedHidden: shortfall.protected.length,
     },

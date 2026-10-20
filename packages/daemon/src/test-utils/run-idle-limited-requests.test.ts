@@ -22,11 +22,11 @@ function setupTest() {
 }
 
 test('it prints the outcome of imp-docker-proxy’s pull and export as JSON lines', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'idle-limited-engine-'));
+  const directory = await mkdtemp(join(tmpdir(), 'idle-limited-engine-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const socket = join(dir, 'engine.sock');
+  const socket = join(directory, 'engine.sock');
 
   // an engine that answers each call at once: the export's ownership
   // inspect with a container of this proxy's, the rest with their path

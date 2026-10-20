@@ -28,8 +28,8 @@ import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubRepeat } from '../test-utils/build-stub-repeat';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
-import { findFreePorts } from '../test-utils/find-free-ports';
 import { startStubDockerEngine } from '../test-utils/start-stub-docker-engine';
 import { runImageOp } from './image-op-stream';
 
@@ -47,7 +47,7 @@ async function setupTest() {
   stack.defer(() => db.destroy());
 
   // the engine a host build sends its context to
-  const engine = startStubDockerEngine({ dir: dataDir });
+  const engine = startStubDockerEngine({ directoryPath: dataDir });
 
   stack.defer(() => engine.stop());
 
@@ -60,7 +60,7 @@ async function setupTest() {
     DOCKER_HOST: engine.dockerHost,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with, as setupSystemFiles installs it
@@ -578,7 +578,7 @@ test('it streams the phases of an add, then the image', async () => {
 
   // the image is not on the host: the add pulls it, then unpacks its export
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['busybox:1.37'],
@@ -617,7 +617,7 @@ test('it audits a streamed add as ok once it ends', async () => {
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['busybox:1.37'],
@@ -658,7 +658,7 @@ test("it keeps the reference a streamed add's pull resolved in its audit row", a
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['busybox'],
@@ -727,7 +727,7 @@ test('it throws a failed add through the stream with a code that keeps its messa
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['busybox:1.37'],
@@ -755,7 +755,7 @@ test('it audits a failed streamed add with its code', async () => {
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['busybox:1.37'],
@@ -859,7 +859,7 @@ test('it streams the pack, then the build, of a build from a directory', async (
 
   // the Dockerfile frontend is on the host already
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
   });
 
@@ -914,7 +914,7 @@ test('it stops the engine build of a streamed build whose client goes, and audit
   await writeFile(join(contextDir, 'Dockerfile'), 'FROM scratch\n');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
   });
 
@@ -973,7 +973,7 @@ test('it kills the host pull of a streamed add whose client goes, and audits it'
 
   // the image is not on the host, and its pull hangs until it is killed
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['registry.test/big:1'],
@@ -1025,7 +1025,7 @@ test('it stops the engine build of a plain build whose client goes', async () =>
   await writeFile(join(contextDir, 'Dockerfile'), 'FROM scratch\n');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
   });
 
@@ -1075,7 +1075,7 @@ test('it kills the host pull of a plain add whose client goes, and audits it', a
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: ['busybox:1.37'],

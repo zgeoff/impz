@@ -44,7 +44,7 @@ const buildCommand = defineCommand({
   name: 'build',
   description: 'Build a directory with its Dockerfile into an imp image',
   args: {
-    dir: { type: 'positional', description: 'build context directory', required: true },
+    directory: { type: 'positional', description: 'build context directory', required: true },
     name: { type: 'string', description: 'imp image name', required: true },
     file: { type: 'string', description: 'Dockerfile path inside the context' },
     'on-host': {
@@ -60,8 +60,8 @@ const buildCommand = defineCommand({
   },
   run: (ctx) =>
     runAction(ctx.extensions.impz, async (client) => {
-      const image = await buildImage(client, {
-        dir: ctx.values.dir,
+      const image = await runBuild(client, {
+        directory: ctx.values.directory,
         name: ctx.values.name,
         dockerfile: ctx.values.file,
         onHost: ctx.values['on-host'] === true,
@@ -74,38 +74,6 @@ const buildCommand = defineCommand({
       );
     }),
 });
-
-interface BuildArgs {
-  readonly dir: string;
-  readonly name: string;
-  readonly dockerfile: string | undefined;
-  readonly onHost: boolean;
-  readonly quiet: boolean;
-  readonly output: ProgressOutput;
-}
-
-function buildImage(client: ImpClient, args: Readonly<BuildArgs>): Promise<Image> {
-  if (!args.onHost) {
-    return runImageBuild(client, args);
-  }
-
-  // impd runs docker build there: a relative path would name a directory
-  // this shell sees
-  if (!isAbsolute(args.dir)) {
-    throw new UsageError(`--on-host takes an absolute path on the impd host, not ${args.dir}`);
-  }
-
-  return runOnHostBuild(
-    client,
-    {
-      contextDir: args.dir,
-      name: args.name,
-      ...(args.dockerfile !== undefined && { dockerfile: args.dockerfile }),
-    },
-    args.output,
-    args.quiet,
-  );
-}
 
 // the builds impd runs now, from any client or shell
 const buildsCommand = defineCommand({
@@ -157,6 +125,40 @@ export const imageCommand = defineGroup({
     rm: rmCommand,
   },
 });
+
+interface BuildArgs {
+  readonly directory: string;
+  readonly name: string;
+  readonly dockerfile: string | undefined;
+  readonly onHost: boolean;
+  readonly quiet: boolean;
+  readonly output: ProgressOutput;
+}
+
+function runBuild(client: ImpClient, args: Readonly<BuildArgs>): Promise<Image> {
+  if (!args.onHost) {
+    return runImageBuild(client, args);
+  }
+
+  // impd runs docker build there: a relative path would name a directory
+  // this shell sees
+  if (!isAbsolute(args.directory)) {
+    throw new UsageError(
+      `--on-host takes an absolute path on the impd host, not ${args.directory}`,
+    );
+  }
+
+  return runOnHostBuild(
+    client,
+    {
+      contextDir: args.directory,
+      name: args.name,
+      ...(args.dockerfile !== undefined && { dockerfile: args.dockerfile }),
+    },
+    args.output,
+    args.quiet,
+  );
+}
 
 // `impz template`: the images API with an imp as the source
 // (docs/guides/templates.md)

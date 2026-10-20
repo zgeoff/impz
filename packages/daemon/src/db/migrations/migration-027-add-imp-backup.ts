@@ -10,7 +10,7 @@ export const MIGRATION_027_ADD_IMP_BACKUP: Migration = {
       .alterTable('imps')
 
       // 0 for an imp left out of every backup run (docs/architecture/storage/backups.md)
-      .addColumn('backup', 'integer', (c) => c.notNull().defaultTo(1))
+      .addColumn('backup', 'integer', (column) => column.notNull().defaultTo(1))
       .execute();
   },
 };

@@ -1,7 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { readErrorMessage } from '../../read-error-message';
-
-const TOKEN_PATTERN = /^[\w.~+/-]+$/u;
+import { getErrorMessage } from '../../get-error-message';
 
 // Where the DNS provider's API token comes from: IMP_DNS_API_TOKEN, fixed at
 // start, or IMP_DNS_API_TOKEN_FILE, read again at each use so a rotated
@@ -51,11 +49,13 @@ export function createDnsToken(
 
         return { isOk: true, error: null, at: now() };
       } catch (error) {
-        return { isOk: false, error: readErrorMessage(error), at: now() };
+        return { isOk: false, error: getErrorMessage(error), at: now() };
       }
     },
   };
 }
+
+const TOKEN_PATTERN = /^[\w.~+/-]+$/u;
 
 // Every message names the file, never what it holds: a token with a stray
 // character inside is still most of a secret.

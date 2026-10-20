@@ -26,13 +26,13 @@ test('it keeps no span that has not ended', () => {
 });
 
 test('it refuses to register over a tracer provider registered before it', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'register-tracing-'));
+  const directory = await mkdtemp(join(tmpdir(), 'register-tracing-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   // a child run, since this run's preload holds the one global provider
   const run = runChildTests(
-    dir,
+    directory,
     [
       "import { expect, test } from 'bun:test';",
       `import { trace } from ${JSON.stringify(Bun.resolveSync('@opentelemetry/api', import.meta.dir))};`,

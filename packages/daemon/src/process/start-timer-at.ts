@@ -11,9 +11,6 @@ interface TimerAtOptions {
   readonly startTimer?: StartTimer;
 }
 
-// the cancel before the first step starts
-function stopNothing(): void {}
-
 // Calls `fire` once at `at`, however far off: a delay past setTimeout's limit
 // waits the limit, then checks the clock again. An `at` that is not a finite
 // time fires at once. Returns the cancel.
@@ -43,3 +40,6 @@ export function startTimerAt(
     stopStep();
   };
 }
+
+// the cancel before the first step starts
+function stopNothing(): void {}

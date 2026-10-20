@@ -27,7 +27,7 @@ test('it dials the port on the guest loopback for an open', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial,
       openListener: mock(),
       openAccept: mock(),
@@ -56,7 +56,7 @@ test('it writes the client bytes to the guest and acks them', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -89,7 +89,7 @@ test("it half-closes the guest connection on the client's eof", async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -118,7 +118,7 @@ test('it relays the guest bytes and its eof to the client', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -152,7 +152,7 @@ test('it closes as done once both sides sent their eof and the relay ends', asyn
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -184,7 +184,7 @@ test('it closes as lost when the relay ends without both eofs', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -215,7 +215,7 @@ test('it closes as lost when the agent connection breaks mid-relay', async () =>
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -248,7 +248,7 @@ test.each(['DIAL_FAILED', 'AGENT_OUTDATED'])(
     const session = createTunnelSession(
       tunnel.peer,
       {
-        findImpId: () => Promise.resolve('imp-1'),
+        readImpId: () => Promise.resolve('imp-1'),
         openDial: () => Promise.reject(new AgentError(code, 'the detail')),
         openListener: mock(),
         openAccept: mock(),
@@ -274,7 +274,7 @@ test('it closes the socket normally after a failed open', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.reject(new AgentError('DIAL_FAILED', 'the detail')),
       openListener: mock(),
       openAccept: mock(),
@@ -297,7 +297,7 @@ test('it sends the client an uncoded error for a failure that carries no code', 
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.reject(new Error('socket gone')),
       openListener: mock(),
       openAccept: mock(),
@@ -323,7 +323,7 @@ test('it sends the client NOT_FOUND for an imp that does not exist', async () =>
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.reject(new ORPCError('NOT_FOUND', { message: 'no imp named box' })),
+      readImpId: () => Promise.reject(new ORPCError('NOT_FOUND', { message: 'no imp named box' })),
       openDial,
       openListener: mock(),
       openAccept: mock(),
@@ -353,7 +353,7 @@ test('it holds the guest output past the window while the client has not acked',
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -388,7 +388,7 @@ test('it sends the held guest output once the client acks', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -428,7 +428,7 @@ test('it holds the ack of the client bytes until the guest has taken them', asyn
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -488,7 +488,7 @@ test('it keeps a client that sends up to one frame past the window unacked', asy
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -523,7 +523,7 @@ test('it closes a client that ignores the window past one frame over it', async 
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -560,7 +560,7 @@ test('it closes a client that sends a binary message larger than a frame', async
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -589,7 +589,7 @@ test('it names the imp limit it was given in the TUNNEL_LIMIT message', async ()
   const firstSession = createTunnelSession(
     first.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(buildStubDialStream().stream),
       openListener: mock(),
       openAccept: mock(),
@@ -604,7 +604,7 @@ test('it names the imp limit it was given in the TUNNEL_LIMIT message', async ()
   const secondSession = createTunnelSession(
     second.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(buildStubDialStream().stream),
       openListener: mock(),
       openAccept: mock(),
@@ -619,7 +619,7 @@ test('it names the imp limit it was given in the TUNNEL_LIMIT message', async ()
   const thirdSession = createTunnelSession(
     third.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(buildStubDialStream().stream),
       openListener: mock(),
       openAccept: mock(),
@@ -657,7 +657,7 @@ test('it refuses the 257th tunnel to an imp under the default limit', async () =
     const session = createTunnelSession(
       tunnel.peer,
       {
-        findImpId: () => Promise.resolve('imp-1'),
+        readImpId: () => Promise.resolve('imp-1'),
         openDial: () => Promise.resolve(buildStubDialStream().stream),
         openListener: mock(),
         openAccept: mock(),
@@ -675,7 +675,7 @@ test('it refuses the 257th tunnel to an imp under the default limit', async () =
   const lastSession = createTunnelSession(
     last.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(buildStubDialStream().stream),
       openListener: mock(),
       openAccept: mock(),
@@ -718,7 +718,7 @@ test('it refuses a tunnel past the limit of its imp with TUNNEL_LIMIT', async ()
   const firstSession = createTunnelSession(
     first.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(buildStubDialStream().stream),
       openListener: mock(),
       openAccept: mock(),
@@ -733,7 +733,7 @@ test('it refuses a tunnel past the limit of its imp with TUNNEL_LIMIT', async ()
   const secondSession = createTunnelSession(
     second.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(buildStubDialStream().stream),
       openListener: mock(),
       openAccept: mock(),
@@ -767,7 +767,7 @@ test('it frees the place of a tunnel once its socket closes', async () => {
   const firstSession = createTunnelSession(
     first.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(buildStubDialStream().stream),
       openListener: mock(),
       openAccept: mock(),
@@ -782,7 +782,7 @@ test('it frees the place of a tunnel once its socket closes', async () => {
   const secondSession = createTunnelSession(
     second.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(buildStubDialStream().stream),
       openListener: mock(),
       openAccept: mock(),
@@ -813,7 +813,7 @@ test('it counts the limit by imp id, so an imp recreated under the same name sta
   const oldSession = createTunnelSession(
     old.peer,
     {
-      findImpId: () => Promise.resolve('old-id'),
+      readImpId: () => Promise.resolve('old-id'),
       openDial: () => Promise.resolve(buildStubDialStream().stream),
       openListener: mock(),
       openAccept: mock(),
@@ -828,7 +828,7 @@ test('it counts the limit by imp id, so an imp recreated under the same name sta
   const recreatedSession = createTunnelSession(
     recreated.peer,
     {
-      findImpId: () => Promise.resolve('new-id'),
+      readImpId: () => Promise.resolve('new-id'),
       openDial: () => Promise.resolve(buildStubDialStream().stream),
       openListener: mock(),
       openAccept: mock(),
@@ -860,7 +860,7 @@ test('it closes the dial of a client that goes while the imp wakes', async () =>
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial,
       openListener: mock(),
       openAccept: mock(),
@@ -892,7 +892,7 @@ test('it closes a client that sends data before the tunnel opened', () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: mock(),
       openAccept: mock(),
@@ -919,7 +919,7 @@ test.each([
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: mock(),
       openAccept: mock(),
@@ -943,7 +943,7 @@ test('it closes a client that sends a second open', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(buildStubDialStream().stream),
       openListener: mock(),
       openAccept: mock(),
@@ -974,7 +974,7 @@ test('it closes a client that sends data after its own eof', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: () => Promise.resolve(dial.stream),
       openListener: mock(),
       openAccept: mock(),
@@ -1007,7 +1007,7 @@ test('it closes a client that sends a control message the protocol rejects', () 
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: mock(),
       openAccept: mock(),
@@ -1030,7 +1030,7 @@ test('it answers a listen with where the guest listens', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener,
       openAccept: mock(),
@@ -1067,7 +1067,7 @@ test('it asks the guest for a socket of its choosing for a unix listen with no p
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener,
       openAccept: mock(),
@@ -1101,7 +1101,7 @@ test('it listens on the guest port a tcp listen names', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener,
       openAccept: mock(),
@@ -1134,7 +1134,7 @@ test('it names each guest client of a forward to the client', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: () => Promise.resolve(guest.listener),
       openAccept: mock(),
@@ -1172,7 +1172,7 @@ test('it reports a listener the agent cannot open', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: () => Promise.reject(new AgentError('LISTEN_FAILED', 'address in use')),
       openAccept: mock(),
@@ -1202,7 +1202,7 @@ test('it closes a listener that opens after the client went', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener,
       openAccept: mock(),
@@ -1234,7 +1234,7 @@ test('it opens a relay for an accept from the caller that listened', async () =>
   const openAccept = mock(() => Promise.resolve(accepted.stream));
 
   const backend: TunnelBackend = {
-    findImpId: () => Promise.resolve('imp-1'),
+    readImpId: () => Promise.resolve('imp-1'),
     openDial: mock(),
     openListener: () => Promise.resolve(guest.listener),
     openAccept,
@@ -1273,7 +1273,7 @@ test('it relays both ways through an accepted client, as through an open', async
   const accepted = buildStubDialStream();
 
   const backend: TunnelBackend = {
-    findImpId: () => Promise.resolve('imp-1'),
+    readImpId: () => Promise.resolve('imp-1'),
     openDial: mock(),
     openListener: () => Promise.resolve(guest.listener),
     openAccept: () => Promise.resolve(accepted.stream),
@@ -1322,7 +1322,7 @@ test('it refuses an accept from another caller with NOT_FOUND', async () => {
   const controlSession = createTunnelSession(
     control.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: () => Promise.resolve(guest.listener),
       openAccept,
@@ -1337,7 +1337,7 @@ test('it refuses an accept from another caller with NOT_FOUND', async () => {
   const otherSession = createTunnelSession(
     other.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: mock(),
       openAccept,
@@ -1380,7 +1380,7 @@ test('it refuses an accept for another imp with NOT_FOUND', async () => {
   const controlSession = createTunnelSession(
     control.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: () => Promise.resolve(guest.listener),
       openAccept,
@@ -1395,7 +1395,7 @@ test('it refuses an accept for another imp with NOT_FOUND', async () => {
   const otherImpSession = createTunnelSession(
     otherImp.peer,
     {
-      findImpId: () => Promise.resolve('imp-2'),
+      readImpId: () => Promise.resolve('imp-2'),
       openDial: mock(),
       openListener: mock(),
       openAccept,
@@ -1438,7 +1438,7 @@ test('it refuses an accept past the most relays of a forward with TUNNEL_LIMIT',
   const guest = buildStubGuestListener('fwd1', { network: 'unix', path: '/tmp/app.sock' });
 
   const backend: TunnelBackend = {
-    findImpId: () => Promise.resolve('imp-1'),
+    readImpId: () => Promise.resolve('imp-1'),
     openDial: mock(),
     openListener: () => Promise.resolve(guest.listener),
     openAccept: () => Promise.resolve(buildStubDialStream().stream),
@@ -1495,7 +1495,7 @@ test('it closes a guest client at once while the forward has its most relays ope
     .mockResolvedValueOnce(refused.stream);
 
   const backend: TunnelBackend = {
-    findImpId: () => Promise.resolve('imp-1'),
+    readImpId: () => Promise.resolve('imp-1'),
     openDial: mock(),
     openListener: () => Promise.resolve(guest.listener),
     openAccept,
@@ -1543,7 +1543,7 @@ test('it keeps the forward listening when a refused guest client is gone already
     .mockRejectedValue(new AgentError('ACCEPT_FAILED', 'the client left'));
 
   const backend: TunnelBackend = {
-    findImpId: () => Promise.resolve('imp-1'),
+    readImpId: () => Promise.resolve('imp-1'),
     openDial: mock(),
     openListener: () => Promise.resolve(guest.listener),
     openAccept,
@@ -1587,7 +1587,7 @@ test('it counts every relay against the tunnel limit of its imp', async () => {
   const guest = buildStubGuestListener('fwd1', { network: 'unix', path: '/tmp/app.sock' });
 
   const backend: TunnelBackend = {
-    findImpId: () => Promise.resolve('imp-1'),
+    readImpId: () => Promise.resolve('imp-1'),
     openDial: mock(),
     openListener: () => Promise.resolve(guest.listener),
     openAccept: () => Promise.resolve(buildStubDialStream().stream),
@@ -1638,7 +1638,7 @@ test('it refuses a listen past the tunnel limit of its imp, since a listener hol
   const firstSession = createTunnelSession(
     first.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: () =>
         Promise.resolve(buildStubGuestListener('fwd1', { network: 'unix', path: null }).listener),
@@ -1654,7 +1654,7 @@ test('it refuses a listen past the tunnel limit of its imp, since a listener hol
   const secondSession = createTunnelSession(
     second.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: () =>
         Promise.resolve(buildStubGuestListener('fwd2', { network: 'unix', path: null }).listener),
@@ -1689,7 +1689,7 @@ test('it frees the tunnel of a listener once its socket closes', async () => {
   const firstSession = createTunnelSession(
     first.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: () =>
         Promise.resolve(buildStubGuestListener('fwd1', { network: 'unix', path: null }).listener),
@@ -1705,7 +1705,7 @@ test('it frees the tunnel of a listener once its socket closes', async () => {
   const secondSession = createTunnelSession(
     second.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: () =>
         Promise.resolve(buildStubGuestListener('fwd2', { network: 'unix', path: null }).listener),
@@ -1739,7 +1739,7 @@ test('it ends the forward as lost when its guest listener ends', async () => {
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: () => Promise.resolve(guest.listener),
       openAccept: mock(),
@@ -1774,7 +1774,7 @@ test('it closes the guest listener when the client closes the socket', async () 
   const session = createTunnelSession(
     tunnel.peer,
     {
-      findImpId: () => Promise.resolve('imp-1'),
+      readImpId: () => Promise.resolve('imp-1'),
       openDial: mock(),
       openListener: () => Promise.resolve(guest.listener),
       openAccept: mock(),

@@ -20,7 +20,7 @@ import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import invariant from 'tiny-invariant';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startStubOlderImpd } from '../test-utils/start-stub-older-impd';
@@ -45,7 +45,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with
@@ -169,7 +169,7 @@ test('it writes the newest log to stdout and the bytes the log lost to stderr', 
 
   const log = await createGenerationLog(
     {
-      dir: join(buildImpPaths(ctx.dataDir, imp.id).sessionLogsDir, generation),
+      directory: join(buildImpPaths(ctx.dataDir, imp.id).sessionLogsDir, generation),
       segmentBytes: 64,
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
@@ -212,7 +212,7 @@ test('it reads a named generation from the --from offset', async () => {
 
   const log = await createGenerationLog(
     {
-      dir: join(buildImpPaths(ctx.dataDir, imp.id).sessionLogsDir, generation),
+      directory: join(buildImpPaths(ctx.dataDir, imp.id).sessionLogsDir, generation),
       segmentBytes: 64,
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
@@ -320,7 +320,7 @@ test('it lists the logs of an imp as JSON', async () => {
 
   const log = await createGenerationLog(
     {
-      dir: join(buildImpPaths(ctx.dataDir, imp.id).sessionLogsDir, generation),
+      directory: join(buildImpPaths(ctx.dataDir, imp.id).sessionLogsDir, generation),
       segmentBytes: 64,
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
@@ -376,11 +376,11 @@ test('it deletes the logs of the session it names', async () => {
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const generation = 'c'.repeat(32);
-  const dir = join(buildImpPaths(ctx.dataDir, imp.id).sessionLogsDir, generation);
+  const directory = join(buildImpPaths(ctx.dataDir, imp.id).sessionLogsDir, generation);
 
   const log = await createGenerationLog(
     {
-      dir,
+      directory,
       segmentBytes: 64,
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
@@ -408,7 +408,7 @@ test('it deletes the logs of the session it names', async () => {
     code: 0,
   });
 
-  expect(existsSync(dir)).toBe(false);
+  expect(existsSync(directory)).toBe(false);
 });
 
 test('it never deletes the logs of another session or another imp', async () => {
@@ -427,7 +427,7 @@ test('it never deletes the logs of another session or another imp', async () => 
 
   const namedLog = await createGenerationLog(
     {
-      dir: named,
+      directory: named,
       segmentBytes: 64,
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
@@ -448,7 +448,7 @@ test('it never deletes the logs of another session or another imp', async () => 
 
   const otherSessionLog = await createGenerationLog(
     {
-      dir: otherSession,
+      directory: otherSession,
       segmentBytes: 64,
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
@@ -469,7 +469,7 @@ test('it never deletes the logs of another session or another imp', async () => 
 
   const otherImpLog = await createGenerationLog(
     {
-      dir: otherImp,
+      directory: otherImp,
       segmentBytes: 64,
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),

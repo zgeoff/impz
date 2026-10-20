@@ -5,10 +5,11 @@ import type { EgressMode } from '@impz/api';
 import type { Config } from '../config';
 import { writeAuditEntry } from '../db/broker-audit';
 import type { NewAuditEntry } from '../db/broker-audit';
-import { findBrokerPeer } from '../db/find-broker-peer';
 import type { ImpDatabase } from '../db/open-database';
+import { readBrokerPeer } from '../db/read-broker-peer';
 import { listGrantedRules } from '../db/secrets';
 import type { GrantedRule } from '../db/secrets';
+import { getErrorMessage } from '../get-error-message';
 import { readConnectedPrefixes4, readRouteDevice, readUplinks } from '../net/host-routes';
 import type { Uplinks } from '../net/host-routes';
 import { readConnectedPrefixes6 } from '../net/ipv6-plan';
@@ -21,7 +22,6 @@ import {
   createRangeChecker6,
 } from '../net/ranges6';
 import { createTtlCache } from '../process/ttl-cache';
-import { readErrorMessage } from '../read-error-message';
 import type { BrokerCa } from './broker-ca';
 import { startBrokerFront } from './broker-front';
 import type { BrokerFront } from './broker-front';
@@ -174,7 +174,7 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     return address;
   };
 
-  const findRule = async (impId: string, host: string): Promise<GrantedRule | undefined> => {
+  const readRule = async (impId: string, host: string): Promise<GrantedRule | undefined> => {
     const rules = await listGrantedRules(db, impId);
 
     return rules.find((granted) => granted.rule.host === host);
@@ -183,8 +183,8 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
   // The value comes from the file the rule's row names: a replace writes a
   // new file and switches the row, so the old host never gets the new value.
   // A request that read the row just before finds the old file gone.
-  const findCredential = async (impId: string, host: string): Promise<Credential | null> => {
-    const granted = await findRule(impId, host);
+  const readCredential = async (impId: string, host: string): Promise<Credential | null> => {
+    const granted = await readRule(impId, host);
 
     await deps.afterRuleRead?.();
 
@@ -213,7 +213,7 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     try {
       await writeAuditEntry(db, entry);
     } catch (error) {
-      log(`impd: broker: audit write failed: ${readErrorMessage(error)}`);
+      log(`impd: broker: audit write failed: ${getErrorMessage(error)}`);
     }
   };
 
@@ -236,7 +236,7 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
         impId: key.impId,
         impName: key.impName,
         host: key.host,
-        findCredential,
+        findCredential: readCredential,
         resolveUpstream: deps.resolveUpstream,
         recordAudit: writeBudgetedAudit,
         ...(deps.fetch !== undefined && { fetch: deps.fetch }),
@@ -251,11 +251,11 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     port: config.brokerPort,
   };
 
-  const isGranted = async (impId: string, host: string): Promise<boolean> =>
-    (await findRule(impId, host)) !== undefined;
+  const probeGranted = async (impId: string, host: string): Promise<boolean> =>
+    (await readRule(impId, host)) !== undefined;
 
   return {
-    isGranted,
+    isGranted: probeGranted,
 
     prune: (keep) => terminators.prune(keep),
 
@@ -266,8 +266,8 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     listen: async (port) => {
       const front = await startBrokerFront(port, {
         subnet: config.subnet,
-        findPeer: (slot) => findBrokerPeer(db, slot),
-        isGranted,
+        readPeer: (slot) => readBrokerPeer(db, slot),
+        isGranted: probeGranted,
         openTerminator: terminators.open,
         resolveTunnelTarget: deps.resolveTunnelTarget ?? resolveTarget,
         ...(deps.dialTunnel !== undefined && { dialTunnel: deps.dialTunnel }),

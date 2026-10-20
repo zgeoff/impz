@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
-import { findImageByName } from '../db/images';
+import { readImageByName } from '../db/images';
 import { buildImagePaths } from '../storage/data-layout';
 import { buildStubZfsStorage } from '../test-utils/build-stub-zfs-storage';
 import { MOVE_PATHS } from './move-header';
@@ -157,7 +157,7 @@ test('#createUbuntuImage makes the ubuntu image with the config a create reads',
 
   await createUbuntuImage(hosts.source);
 
-  const image = await findImageByName(hosts.source.db, 'ubuntu');
+  const image = await readImageByName(hosts.source.db, 'ubuntu');
 
   expect(image?.digest).toBe('sha256:ubuntu');
 
@@ -173,7 +173,7 @@ test('#createZfsUbuntuImage makes the ubuntu image as a dataset on the pool', as
 
   await createZfsUbuntuImage(hosts.source);
 
-  const image = await findImageByName(hosts.source.db, 'ubuntu');
+  const image = await readImageByName(hosts.source.db, 'ubuntu');
 
   expect(image?.digest).toBe('sha256:ubuntu');
   expect(zfs.readPool().listDatasets()).toContain('tank/imp/images/ubuntu');

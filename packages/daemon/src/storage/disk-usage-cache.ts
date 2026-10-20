@@ -2,9 +2,9 @@ import type { ImpChangeReason } from '@impz/api';
 import { listCheckpoints } from '../db/checkpoints';
 import { listImps } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
+import { getErrorMessage } from '../get-error-message';
 import type { StartTimer } from '../process/clock';
 import { startRealTimer } from '../process/start-real-timer';
-import { readErrorMessage } from '../read-error-message';
 import type { ImpDiskUsage, StorageBackend } from './storage-backend';
 
 // a write that changes what an imp takes asks for a pass; this many ms later
@@ -97,7 +97,7 @@ export function createDiskUsageCache(deps: DiskUsageCacheDeps): DiskUsageCache {
 
       state.usage = new Map(kept);
     } catch (error) {
-      deps.log(`impd: disk usage: ${readErrorMessage(error)}`);
+      deps.log(`impd: disk usage: ${getErrorMessage(error)}`);
     }
   };
 

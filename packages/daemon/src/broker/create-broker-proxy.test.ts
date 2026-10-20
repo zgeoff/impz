@@ -17,9 +17,9 @@ import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { listAuditEntries } from '../db/broker-audit';
 import { createImage } from '../db/images';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import { openDatabase } from '../db/open-database';
-import { findSecret, listGrantNames, removeCheckedGrant } from '../db/secrets';
+import { listGrantNames, readSecret, removeCheckedGrant } from '../db/secrets';
 import {
   buildImagePaths,
   buildSystemDrivePath,
@@ -28,11 +28,11 @@ import {
 import { createXfsBackend } from '../storage/xfs-backend';
 import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildStubBrokerGuest } from '../test-utils/build-stub-broker-guest';
-import { buildStubBrokerTokenEndpoint } from '../test-utils/build-stub-broker-token-endpoint';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubHeldAnswer } from '../test-utils/build-stub-held-answer';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
+import { createStubBrokerTokenEndpoint } from '../test-utils/create-stub-broker-token-endpoint';
 import { startStubBrokerGuestSocket } from '../test-utils/start-stub-broker-guest-socket';
 import { startStubBrokerHoldTarget } from '../test-utils/start-stub-broker-hold-target';
 import { startStubBrokerPlainUpstream } from '../test-utils/start-stub-broker-plain-upstream';
@@ -69,7 +69,7 @@ async function setupTest() {
   const tunnelAnswers = new Map<string, () => Response>();
 
   const realHost = await startStubBrokerTlsUpstream(stack, {
-    dir: join(dataDir, 'real-host'),
+    directory: join(dataDir, 'real-host'),
     host: 'api.github.com',
     fetch: (request) => {
       const path = new URL(request.url).pathname;
@@ -96,7 +96,7 @@ async function setupTest() {
   const answers = new Map<string, () => Response | Promise<Response>>();
 
   const upstream = await startStubBrokerTlsUpstream(stack, {
-    dir: join(dataDir, 'upstream'),
+    directory: join(dataDir, 'upstream'),
     fetch: async (request) => {
       const body = await request.arrayBuffer();
 
@@ -129,7 +129,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     IMP_SUBNET: '127.0.0.0/16',
     IMP_BROKER_TEST_UPSTREAMS: upstreamsFile,
   });
@@ -356,7 +356,7 @@ test('it records the audit row of a request that ends after its imp is destroyed
   const destroy = ctx.client.imps.destroy({ name: 'dev' });
 
   await waitFor(async () => {
-    const imp = await findImpByName(ctx.db, 'dev');
+    const imp = await readImpByName(ctx.db, 'dev');
 
     expect(imp).toBeUndefined();
   });
@@ -974,7 +974,7 @@ test('it never sends a rebound value to the host the secret had before', async (
   // the row has switched and the old file is gone; the replace itself then
   // waits for the held request, as a revoke's prune does
   await waitFor(async () => {
-    const secret = await findSecret(ctx.db, 'api');
+    const secret = await readSecret(ctx.db, 'api');
     const files = await readdir(join(ctx.dataDir, 'secrets'));
 
     expect(secret?.rules[0]?.host).toBe('other.example.com');
@@ -1372,7 +1372,7 @@ test('it sends the current access token to the granted host', async () => {
 
   ctx.answers.set('/v1', () => new Response('from the api'));
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -1416,7 +1416,7 @@ test('it sends the new access token after a refresh that used the rotated refres
 
   ctx.answers.set('/v2', () => new Response('from the api'));
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -1468,7 +1468,7 @@ test('it refreshes an access token the granted host revoked and sends the reques
 
   ctx.answers.set('/v1', () => new Response('from the api', { status: statuses.next() }));
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -1517,7 +1517,7 @@ test('it gives no credential for a secret with no access token', async () => {
   );
 
   // no answer is issued, so the first sign-in gets invalid_grant
-  server.use(buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token').handler);
+  server.use(createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token').handler);
 
   await ctx.client.imps.create({ name: 'dev' });
 
@@ -1552,7 +1552,7 @@ test('it keeps sending the valid access token of a secret that needs a new sign-
 
   ctx.answers.set('/v2', () => new Response('from the api'));
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
 
@@ -1594,7 +1594,7 @@ test('it answers a websocket upgrade 426 and never reaches the upstream', async 
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.example.com': ctx.upstreamOrigin } }),
   );
 
-  const endpoint = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
@@ -1636,7 +1636,7 @@ test('it refreshes through a token host that the test-upstreams file routes', as
 
   // the token host over TLS the broker verifies with the file's CA
   const tokenHost = await startStubBrokerTlsUpstream(ctx.stack, {
-    dir: join(ctx.dataDir, 'token-host'),
+    directory: join(ctx.dataDir, 'token-host'),
     fetch: async (request) => {
       const text = await request.text();
 

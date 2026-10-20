@@ -5,7 +5,7 @@ import { dispatchVerb, listOperands } from '../cli/dispatch-verb';
 import { CommandExitError, UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
 import { DEFAULT_SESSION, parseDetachKey } from '../exec/detach-key';
-import { buildExecIO, runExec } from '../exec/exec-client';
+import { createExecIO, runExec } from '../exec/exec-client';
 import { formatOutput, formatSessions } from '../output/format-output';
 import { readTermEnv } from '../sessions/read-term-env';
 import { listSessionLogs, removeSessionLogs, writeSessionLog } from '../sessions/session-logs';
@@ -77,7 +77,7 @@ export const attachCommand = defineCommand({
         env: readTermEnv(ctx.extensions.impz.io.env),
         session: { name: session, attachOnly: true, detachKey },
       },
-      buildExecIO(ctx.extensions.impz.io),
+      createExecIO(ctx.extensions.impz.io),
     );
 
     throw new CommandExitError(code, true);

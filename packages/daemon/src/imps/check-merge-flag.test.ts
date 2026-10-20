@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readSnapshotMeta } from '../sleep/snapshot-meta';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildTestApp } from './build-test-app';
+import { createTestApp } from './create-test-app';
 import { createImpTest } from './test-imps';
 import type { ImpTestOptions } from './test-imps';
 
@@ -22,7 +22,7 @@ async function setupTest(
   // every create boots an image row; the default image is base
   await harness.createTestImage('base');
 
-  const app = buildTestApp(harness, harness);
+  const app = createTestApp(harness, harness);
 
   return { ...harness, client: app.client };
 }

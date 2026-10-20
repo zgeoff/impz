@@ -3,7 +3,7 @@ import { loadOrCreateBrokerCa } from '../broker/broker-ca';
 
 interface StubTlsUpstreamOptions {
   // a directory the test owns, for the stand-in's own CA
-  readonly dir: string;
+  readonly directory: string;
 
   // the name its certificate is issued for; localhost by default
   readonly host?: string;
@@ -19,7 +19,7 @@ export async function startStubBrokerTlsUpstream(
   stack: Readonly<AsyncDisposableStack>,
   options: Readonly<StubTlsUpstreamOptions>,
 ) {
-  const ca = await loadOrCreateBrokerCa(join(options.dir, 'stub-upstream-ca'));
+  const ca = await loadOrCreateBrokerCa(join(options.directory, 'stub-upstream-ca'));
   const leaf = await ca.issueLeaf(options.host ?? 'localhost');
 
   const server = Bun.serve({

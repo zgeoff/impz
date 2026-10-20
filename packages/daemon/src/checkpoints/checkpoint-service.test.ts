@@ -9,7 +9,7 @@ import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { createCheckpoint, listCheckpoints } from '../db/checkpoints';
 import { createImage } from '../db/images';
-import { createImp, findImpByName } from '../db/imps';
+import { createImp, readImpByName } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import {
@@ -28,7 +28,7 @@ import { buildQueryGate } from '../test-utils/build-query-gate';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
 import { buildStubZfs } from '../test-utils/build-stub-zfs';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import {
   buildCheckpointId,
   createCheckpointService,
@@ -68,7 +68,7 @@ async function setupTest(options: SetupOptions) {
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     }),
     defaultDiskBytes: 0,
   };
@@ -353,7 +353,7 @@ test('it restores a running imp: kill, swap the disk, drop the snapshot, boot', 
   writeFileSync(join(paths.snapshotDir, 'memory'), 'old');
 
   const restored = await ctx.impd.checkpoints.restoreCheckpoint('dev', 'v1');
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(restored.state).toBe('running');
 
@@ -462,7 +462,7 @@ test('it keeps a fork of an imp created with backup off out of backups too', asy
   await ctx.impd.imps.createImp({ name: 'chat', image: 'base', isBackedUp: false });
 
   const forked = await ctx.impd.checkpoints.forkImp({ source: 'chat', name: 'copy' });
-  const fork = await findImpByName(ctx.db, 'copy');
+  const fork = await readImpByName(ctx.db, 'copy');
 
   expect(forked.imp.backup).toBe(false);
   expect(fork?.isBackedUp).toBe(false);
@@ -481,7 +481,7 @@ test('it creates no imp when the fork’s checkpoint is unknown', async () => {
     ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'copy', checkpoint: 'nope' }),
   ).rejects.toMatchObject({ code: 'NOT_FOUND', data: { kind: 'checkpoint', name: 'nope' } });
 
-  const copy = await findImpByName(ctx.db, 'copy');
+  const copy = await readImpByName(ctx.db, 'copy');
 
   expect(copy).toBeUndefined();
 });
@@ -494,7 +494,7 @@ test('it creates no imp when the fork’s source is unknown', async () => {
     data: { kind: 'imp', name: 'gone' },
   });
 
-  const copy = await findImpByName(ctx.db, 'copy');
+  const copy = await readImpByName(ctx.db, 'copy');
 
   expect(copy).toBeUndefined();
 });
@@ -510,7 +510,7 @@ test('it deletes a checkpoint by its label and keeps the others', async () => {
   const first = await ctx.impd.checkpoints.createCheckpoint('dev', 'one');
   const second = await ctx.impd.checkpoints.createCheckpoint('dev', 'two');
 
-  await ctx.impd.checkpoints.deleteCheckpoint('dev', 'one');
+  await ctx.impd.checkpoints.removeCheckpoint('dev', 'one');
 
   const checkpointsDir = buildImpPaths(ctx.dataDir, imp.id).checkpointsDir;
 
@@ -534,7 +534,7 @@ test('it removes an imp’s checkpoints with the imp', async () => {
 
   const rows = await listCheckpoints(ctx.db, imp.id);
 
-  expect(existsSync(buildImpPaths(ctx.dataDir, imp.id).dir)).toBe(false);
+  expect(existsSync(buildImpPaths(ctx.dataDir, imp.id).directory)).toBe(false);
   expect(rows).toStrictEqual([]);
 });
 
@@ -572,7 +572,7 @@ test('it rejects a fork of the live disk of an imp still being created', async (
     code: 'INVALID_STATE',
   });
 
-  const copy = await findImpByName(ctx.db, 'copy');
+  const copy = await readImpByName(ctx.db, 'copy');
 
   expect(copy).toBeUndefined();
 });
@@ -599,7 +599,7 @@ test('it leaves a sleeping imp asleep with its memory when a restore’s clone f
 
   expect(restore).rejects.toMatchObject({ code: 'ENOENT' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.state).toBe('sleeping');
   expect(existsSync(paths.memFile)).toBe(true);
@@ -628,7 +628,7 @@ test('it leaves a running imp running on its own disk when a restore’s clone f
     code: 'ENOENT',
   });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(record).toMatchObject({ state: 'running', pid: 1001 });
   expect(ctx.vmm.stops).toStrictEqual([]);
@@ -664,7 +664,7 @@ test('it leaves the imp stopped on its old disk when a restore’s swap fails af
 
   expect(restore).rejects.toMatchObject({ code: 'ENOENT' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   expect(ctx.vmm.stops).toStrictEqual([{ pid: 1001, graceful: false }]);
   expect(record).toMatchObject({ state: 'stopped', pid: null });
@@ -792,7 +792,7 @@ test('it leaves an imp that took a refused fork’s name before the fork’s cle
   await queued.removed;
 
   const taker = await queued.taker;
-  const copy = await findImpByName(ctx.db, 'copy');
+  const copy = await readImpByName(ctx.db, 'copy');
   const imps = await ctx.impd.imps.listImps();
 
   expect(queued.row.name).toBe('copy');
@@ -920,7 +920,7 @@ test('it draws a new id when a deleted checkpoint’s snapshot stays for a fork'
   onTestFinished(unwatch);
 
   await checkpoints.forkImp({ source: 'dev', name: 'copy', checkpoint: 'v1' });
-  await checkpoints.deleteCheckpoint('dev', 'v1');
+  await checkpoints.removeCheckpoint('dev', 'v1');
 
   const created = await checkpoints.createCheckpoint('dev', 'v2');
 

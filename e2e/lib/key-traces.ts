@@ -29,7 +29,7 @@ export function readKeyPatterns(keyPath: string): KeyPatterns {
     .join('')
     .split('|');
 
-  const seedHex = runs.toSorted((a, b) => b.length - a.length)[0] ?? '';
+  const seedHex = runs.toSorted((left, right) => right.length - left.length)[0] ?? '';
 
   return { text: file.split('\n')[3] ?? '', seedHex };
 }

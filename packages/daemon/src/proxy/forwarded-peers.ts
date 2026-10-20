@@ -62,7 +62,7 @@ export function isCallerPath(pathname: string): boolean {
 
 // The client's address: the socket's own, or, when the socket is the wake
 // proxy on loopback, the one it handed over
-export function readPeerAddress(
+export function findPeerAddress(
   request: Request,
   socketAddress: string | null,
   peers: ForwardedPeers,

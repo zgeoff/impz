@@ -33,7 +33,9 @@ export function sendToPeer(
   init: PeerRequest = {},
 ): Promise<Response> {
   const { extraHeaders, ...rest } = init;
-  const ms = path === MOVE_PATHS.receive ? PEER_DEADLINES_MS.stream : PEER_DEADLINES_MS.control;
+
+  const durationMs =
+    path === MOVE_PATHS.receive ? PEER_DEADLINES_MS.stream : PEER_DEADLINES_MS.control;
 
   // a redirect could send the ticket somewhere else: it fails instead
   return sendLongRequest(
@@ -46,9 +48,9 @@ export function sendToPeer(
     },
     {
       deadline: {
-        ms,
+        delayMs: durationMs,
         buildError: () =>
-          new Error(`${path}: the target sent no answer in ${String(ms / 60_000)} minutes`),
+          new Error(`${path}: the target sent no answer in ${String(durationMs / 60_000)} minutes`),
       },
       ...(deps.startPeerDeadline !== undefined && { startTimer: deps.startPeerDeadline }),
       ...(deps.fetch !== undefined && { send: deps.fetch }),

@@ -25,7 +25,7 @@ import { startStubSilentTcpProxy } from '../test-utils/start-stub-silent-tcp-pro
 import { startStubSshAgent } from '../test-utils/start-stub-ssh-agent';
 import { MAX_AGENT_CHANNELS } from './agent-forwarding';
 import { createAuthorizedKeys } from './authorized-keys';
-import { createEd25519Key } from './host-key';
+import { generateEd25519Key } from './host-key';
 import { createLoginKeys } from './login-keys';
 import { DEFAULT_LIMITS, startSshGateway } from './ssh-gateway';
 import type { SshGatewayDeps } from './ssh-gateway';
@@ -34,12 +34,12 @@ import type { SshGatewayDeps } from './ssh-gateway';
 // authorized_keys in an owner-only temp dir. A test that sets its own limits
 // or login keys starts another gateway from `deps`.
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-ssh-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-ssh-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
-  chmodSync(dir, 0o700);
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  chmodSync(directory, 0o700);
 
-  const keysPath = join(dir, 'authorized_keys');
+  const keysPath = join(directory, 'authorized_keys');
   const logs: string[] = [];
 
   const writeLog = (message: string): void => {
@@ -60,12 +60,12 @@ async function setupTest() {
     rootToken: 'root-secret',
     now: Date.now,
     onRemove: revocations.revoke,
-    isFileKey: authorizedKeys.isListed,
+    isFileKey: authorizedKeys.probeListed,
   });
 
   const deps: SshGatewayDeps = {
     // the gateway cannot start without a host key
-    hostKey: createEd25519Key().private,
+    hostKey: generateEd25519Key().private,
     keys: createLoginKeys({
       findBound: tokens.findSshKey,
       file: authorizedKeys,
@@ -86,7 +86,7 @@ test('it returns an exec command’s output and exit status', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -123,7 +123,7 @@ test('it runs an exec command with sh -c and no tty', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -156,7 +156,7 @@ test('it sets SSH_CONNECTION and SSH_CLIENT to the client’s and the gateway’
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -193,7 +193,7 @@ test('it counts a login as ssh activity on the imp until the client leaves', asy
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -221,7 +221,7 @@ test('it passes stdin to the program and closes it at the client’s EOF', async
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -248,7 +248,7 @@ test('it passes stdin to the program and closes it at the client’s EOF', async
 test('it refuses a login to an imp that does not exist', async () => {
   const ctx = await setupTest();
 
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   writeFileSync(ctx.keysPath, `${key.public}\n`, { mode: 0o600 });
 
@@ -269,13 +269,13 @@ test('it refuses a key that authorized_keys does not list', async () => {
 
   ctx.ssh.putImp(imp);
 
-  writeFileSync(ctx.keysPath, `${createEd25519Key().public}\n`, { mode: 0o600 });
+  writeFileSync(ctx.keysPath, `${generateEd25519Key().public}\n`, { mode: 0o600 });
 
   const login = openSshClient({
     host: '127.0.0.1',
     port: ctx.gateway.port,
     username: imp.name,
-    privateKey: createEd25519Key().private,
+    privateKey: generateEd25519Key().private,
   });
 
   expect(login).rejects.toThrowWithMessage(Error, 'All configured authentication methods failed');
@@ -288,13 +288,13 @@ test('it never wakes the imp for a refused login', async () => {
 
   ctx.ssh.putImp(imp);
 
-  writeFileSync(ctx.keysPath, `${createEd25519Key().public}\n`, { mode: 0o600 });
+  writeFileSync(ctx.keysPath, `${generateEd25519Key().public}\n`, { mode: 0o600 });
 
   const login = openSshClient({
     host: '127.0.0.1',
     port: ctx.gateway.port,
     username: imp.name,
-    privateKey: createEd25519Key().private,
+    privateKey: generateEd25519Key().private,
   });
 
   expect(login).rejects.toThrowWithMessage(Error, 'All configured authentication methods failed');
@@ -308,13 +308,13 @@ test('it never counts a refused login as activity on the imp', async () => {
 
   ctx.ssh.putImp(imp);
 
-  writeFileSync(ctx.keysPath, `${createEd25519Key().public}\n`, { mode: 0o600 });
+  writeFileSync(ctx.keysPath, `${generateEd25519Key().public}\n`, { mode: 0o600 });
 
   const login = openSshClient({
     host: '127.0.0.1',
     port: ctx.gateway.port,
     username: imp.name,
-    privateKey: createEd25519Key().private,
+    privateKey: generateEd25519Key().private,
   });
 
   expect(login).rejects.toThrowWithMessage(Error, 'All configured authentication methods failed');
@@ -343,14 +343,14 @@ test('it refuses a listed key whose signature does not verify', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const listed = createEd25519Key();
+  const listed = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
   writeFileSync(ctx.keysPath, `${listed.public}\n`, { mode: 0o600 });
 
   const listedKey = utils.parseKey(listed.public);
-  const signer = utils.parseKey(createEd25519Key().private);
+  const signer = utils.parseKey(generateEd25519Key().private);
 
   if (listedKey instanceof Error || signer instanceof Error) {
     throw new TypeError('a generated key did not parse');
@@ -381,7 +381,7 @@ test('it logs and refuses a login whose imp lookup fails', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -532,7 +532,7 @@ test('it frees the pending slot of a client that logs in, and keeps it past the 
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -652,7 +652,7 @@ test('it drops a connection after the cap of rejected logins', async () => {
 
   onTestFinished(() => gateway.stop());
 
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
   const closed = Promise.withResolvers<void>();
 
   // each attempt the client would make, sent only when the test says so
@@ -711,7 +711,7 @@ test('it drops a logged-in client that stops answering keepalives', async () => 
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -756,7 +756,7 @@ test('it keeps a logged-in client that answers keepalives', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -803,7 +803,7 @@ test('it wakes the imp once for a login that opens no channel', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -830,7 +830,7 @@ test('it logs how long the wake of a login took', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord({ name: 'box' });
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -860,7 +860,7 @@ test('it records activity on the imp once a login woke it', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord({ name: 'box' });
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -885,7 +885,7 @@ test('it records activity on the imp again when the client leaves', async () => 
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord({ name: 'box' });
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -916,7 +916,7 @@ test('it answers a channel with the failed wake’s error and exit status 255', 
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord({ name: 'box' });
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -951,7 +951,7 @@ test('it runs no program when the wake fails', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -979,7 +979,7 @@ test('it answers a channel to a moving imp with MOVING and exit status 255', asy
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord({ name: 'box' });
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1014,7 +1014,7 @@ test('it gives a shell a pty with the size and TERM of the request', async () =>
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1053,7 +1053,7 @@ test('it passes a shell’s window change to the program', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1087,7 +1087,7 @@ test('it holds a shell’s input until the program drained what came before', as
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
   const gate = Promise.withResolvers<void>();
 
   ctx.ssh.putImp(imp);
@@ -1140,7 +1140,7 @@ test('it passes a shell’s signal to the program and its signal exit back', asy
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1185,7 +1185,7 @@ test('it leaves the size of a pty with no size to the agent', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1221,7 +1221,7 @@ test('it passes LANG and LC_* to the program’s env', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1251,7 +1251,7 @@ test('it runs sftp as the agent on the system drive', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1284,7 +1284,7 @@ test('it tells an sftp client of an outdated agent to restart the imp', async ()
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1318,7 +1318,7 @@ test('it carries several channels on one connection at once', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1362,7 +1362,7 @@ test.each([
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1392,7 +1392,7 @@ test('it relays a forward both ways, with a half-close from each side', async ()
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1421,7 +1421,7 @@ test('it prohibits a forward to a host other than the guest’s loopback', async
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1447,7 +1447,7 @@ test('it fails the open of a forward whose dial is refused as connect failed', a
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1474,7 +1474,7 @@ test('it dials a streamlocal forward at the unix socket in the guest', async () 
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1503,7 +1503,7 @@ test('it prohibits a streamlocal forward to impd’s sockets under /run/imp', as
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1528,7 +1528,7 @@ test('it ends every connection when it stops', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1558,7 +1558,7 @@ test('it logs in a key added to authorized_keys on the next login, without a res
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1600,7 +1600,7 @@ test('it refuses a key from an authorized_keys file that others can write', asyn
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1625,7 +1625,7 @@ test('it names the guest agent socket of ssh -A in a command’s SSH_AUTH_SOCK',
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   const agent = await startStubSshAgent({ mode: 'answer' });
 
@@ -1661,7 +1661,7 @@ test('it closes the guest agent socket and runs without it when the client leave
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
   const gate = Promise.withResolvers<void>();
 
   const agent = await startStubSshAgent({ mode: 'answer' });
@@ -1715,7 +1715,7 @@ test('it relays a guest client of the agent socket to the client’s agent and b
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   const agent = await startStubSshAgent({ mode: 'answer' });
 
@@ -1765,7 +1765,7 @@ test('it closes the guest agent socket when the client leaves', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   const agent = await startStubSshAgent({ mode: 'answer' });
 
@@ -1803,7 +1803,7 @@ test('it gives a connection without -A no agent socket', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -1837,7 +1837,7 @@ test('it gives sftp no agent socket, even with -A', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   const agent = await startStubSshAgent({ mode: 'answer' });
 
@@ -1876,7 +1876,7 @@ test('it shares one guest agent socket between sessions that start together', as
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   const agent = await startStubSshAgent({ mode: 'answer' });
 
@@ -1919,7 +1919,7 @@ test('it makes the guest agent socket again after it ended, as after a forced sl
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   const agent = await startStubSshAgent({ mode: 'answer' });
 
@@ -1967,7 +1967,7 @@ test('it gives a session in a new VM, after a wake, a new agent socket at once',
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   const agent = await startStubSshAgent({ mode: 'answer' });
 
@@ -2015,11 +2015,11 @@ test('it closes a guest agent client at once when the client refuses the agent c
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-no-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-no-agent-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   ctx.ssh.putImp(imp);
 
@@ -2034,7 +2034,7 @@ test('it closes a guest agent client at once when the client refuses the agent c
     port: ctx.gateway.port,
     username: imp.name,
     privateKey: key.private,
-    agent: join(dir, 'agent.sock'),
+    agent: join(directory, 'agent.sock'),
     agentForward: true,
   });
 
@@ -2058,7 +2058,7 @@ test('it closes the guest agent clients past the cap of agent channels', async (
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   const agent = await startStubSshAgent({ mode: 'hold' });
 
@@ -2113,7 +2113,7 @@ test('it runs a command without the agent socket when the agent is outdated', as
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   const agent = await startStubSshAgent({ mode: 'answer' });
 
@@ -2155,7 +2155,7 @@ test('it gives a command no agent socket when the agent is outdated', async () =
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   const agent = await startStubSshAgent({ mode: 'answer' });
 
@@ -2195,7 +2195,7 @@ test('it tries the agent socket again for the next session after any failure', a
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   const agent = await startStubSshAgent({ mode: 'answer' });
 
@@ -2241,7 +2241,7 @@ test('it logs a key bound to a token in to its imps, as the token', async () => 
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord({ name: 'box' });
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2273,7 +2273,7 @@ test('it refuses a key bound to dev-* on another imp before any imp lookup', asy
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord({ name: 'box' });
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2297,7 +2297,7 @@ test('it refuses a key on a read-only token as it refuses an unknown key', async
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2321,7 +2321,7 @@ test('it logs a bound key that authorized_keys lists later in only as its token'
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord({ name: 'box' });
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2348,7 +2348,7 @@ test('it refuses a key once its binding is removed after its file line was', asy
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord({ name: 'dev-box' });
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2389,7 +2389,7 @@ test('it refuses a key whose binding was removed', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2432,7 +2432,7 @@ test('it refuses a key from authorized_keys when the file is off', async () => {
   onTestFinished(() => gateway.stop());
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2461,7 +2461,7 @@ test('it logs a bound key in while authorized_keys is off', async () => {
   onTestFinished(() => gateway.stop());
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2485,7 +2485,7 @@ test('it audits a key from authorized_keys as key and its comment', async () => 
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2515,7 +2515,7 @@ test('it ends a live ssh connection when its token is removed', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2543,7 +2543,7 @@ test('it ends a live ssh connection when its bound key is removed', async () => 
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2575,7 +2575,7 @@ test('it ends at once a login whose key was removed as it logged in', async () =
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2613,7 +2613,7 @@ test('it listens for ssh -R 0 on the guest loopback at the port the agent picks'
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2643,7 +2643,7 @@ test('it relays each guest client of ssh -R back to the client', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2696,7 +2696,7 @@ test('it relays a guest client’s answer of ssh -R after the client half-closes
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2753,7 +2753,7 @@ test('it closes the guest listener of ssh -R when the client leaves', async () =
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2781,7 +2781,7 @@ test('it listens for ssh -R to a unix socket at that path, and relays its client
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2838,7 +2838,7 @@ test('it refuses ssh -R on a bind address other than the loopback', async () => 
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2866,7 +2866,7 @@ test.each([
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2893,7 +2893,7 @@ test.each(['0.0.0.0', '*', 'localhost', '::'])(
     const ctx = await setupTest();
 
     const imp = buildMockImpRecord();
-    const key = createEd25519Key();
+    const key = generateEd25519Key();
 
     ctx.ssh.putImp(imp);
 
@@ -2920,7 +2920,7 @@ test('it listens once for two requests for the same remote forward at once', asy
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2949,7 +2949,7 @@ test('it closes the guest listener of a cancelled remote forward', async () => {
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 
@@ -2979,7 +2979,7 @@ test('it closes a guest client of ssh -R at once when the ssh client refuses it'
   const ctx = await setupTest();
 
   const imp = buildMockImpRecord();
-  const key = createEd25519Key();
+  const key = generateEd25519Key();
 
   ctx.ssh.putImp(imp);
 

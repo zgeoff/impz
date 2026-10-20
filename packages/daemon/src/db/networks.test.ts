@@ -7,10 +7,10 @@ import { createTestDatabase } from '../test-utils/create-test-database';
 import { createImage } from './images';
 import { createImp, removeImp } from './imps';
 import {
-  findNetworkByName,
   listNetworkMembers,
   listNetworkNames,
   listNetworks,
+  readNetworkByName,
   removeMember,
   removeNetwork,
   writeMember,
@@ -110,7 +110,7 @@ test('#listNetworks lists each network with its members by name', async () => {
   ]);
 });
 
-test('#findNetworkByName finds the network of that name', async () => {
+test('#readNetworkByName finds the network of that name', async () => {
   const ctx = await createTestDatabase();
 
   await writeNetwork(ctx.db, 'other');
@@ -119,17 +119,17 @@ test('#findNetworkByName finds the network of that name', async () => {
 
   invariant(lab);
 
-  const found = await findNetworkByName(ctx.db, 'lab');
+  const found = await readNetworkByName(ctx.db, 'lab');
 
   expect(found).toStrictEqual(lab);
 });
 
-test('#findNetworkByName finds nothing for a name no network has', async () => {
+test('#readNetworkByName finds nothing for a name no network has', async () => {
   const ctx = await createTestDatabase();
 
   await writeNetwork(ctx.db, 'lab');
 
-  const found = await findNetworkByName(ctx.db, 'other');
+  const found = await readNetworkByName(ctx.db, 'other');
 
   expect(found).toBeUndefined();
 });

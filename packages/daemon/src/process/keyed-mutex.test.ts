@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createKeyedMutex } from './keyed-mutex';
+import { buildKeyedMutex } from './keyed-mutex';
 
 test('#runExclusive runs the tasks of one key one at a time, in the order they were queued', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const gate = Promise.withResolvers<void>();
   const log: string[] = [];
 
@@ -33,7 +33,7 @@ test('#runExclusive runs the tasks of one key one at a time, in the order they w
 });
 
 test('#runExclusive runs a task for another key while a key is held', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const gate = Promise.withResolvers<void>();
 
   onTestFinished(() => {
@@ -48,7 +48,7 @@ test('#runExclusive runs a task for another key while a key is held', async () =
 });
 
 test('#runExclusive resolves to the value of its task', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
 
   const result = await mutex.runExclusive('a', () => Promise.resolve('ok'));
 
@@ -56,7 +56,7 @@ test('#runExclusive resolves to the value of its task', async () => {
 });
 
 test('#runExclusive rejects with the error of its task', () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
 
   expect(mutex.runExclusive('a', () => Promise.reject(new Error('boom')))).rejects.toThrow(
     new Error('boom'),
@@ -64,7 +64,7 @@ test('#runExclusive rejects with the error of its task', () => {
 });
 
 test('#runExclusive runs the next task of a key after a task fails', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const failed = mutex.runExclusive('a', () => Promise.reject(new Error('boom')));
   const next = mutex.runExclusive('a', () => Promise.resolve('ok'));
 
@@ -75,7 +75,7 @@ test('#runExclusive runs the next task of a key after a task fails', async () =>
 });
 
 test('#isLocked reports a key locked while its task runs', () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const gate = Promise.withResolvers<void>();
 
   onTestFinished(() => {
@@ -87,7 +87,7 @@ test('#isLocked reports a key locked while its task runs', () => {
 });
 
 test('#isLocked reports a key unlocked while another key is held', () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const gate = Promise.withResolvers<void>();
 
   onTestFinished(() => {
@@ -99,7 +99,7 @@ test('#isLocked reports a key unlocked while another key is held', () => {
 });
 
 test('#isLocked reports a key unlocked once its task is done', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
 
   await mutex.runExclusive('a', () => Promise.resolve());
 
@@ -107,7 +107,7 @@ test('#isLocked reports a key unlocked once its task is done', async () => {
 });
 
 test('#tryRunExclusive skips a held key without waiting for it', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const gate = Promise.withResolvers<void>();
 
   onTestFinished(() => {
@@ -122,7 +122,7 @@ test('#tryRunExclusive skips a held key without waiting for it', async () => {
 });
 
 test('#tryRunExclusive skips a key whose queued task runs after the holder let go', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const holder = Promise.withResolvers<void>();
   const waiter = Promise.withResolvers<void>();
   const log: string[] = [];
@@ -151,7 +151,7 @@ test('#tryRunExclusive skips a key whose queued task runs after the holder let g
 });
 
 test('#tryRunExclusive runs a task on a free key', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const gate = Promise.withResolvers<void>();
 
   onTestFinished(() => {
@@ -166,7 +166,7 @@ test('#tryRunExclusive runs a task on a free key', async () => {
 });
 
 test('#tryRunExclusive runs a task on a key once its holder is done', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
 
   await mutex.runExclusive('a', () => Promise.resolve());
 
@@ -176,7 +176,7 @@ test('#tryRunExclusive runs a task on a key once its holder is done', async () =
 });
 
 test('#tryRunExclusive holds the key, so a task queued behind it waits for it', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const gate = Promise.withResolvers<void>();
   const log: string[] = [];
 
@@ -206,7 +206,7 @@ test('#tryRunExclusive holds the key, so a task queued behind it waits for it', 
 });
 
 test('#countQueued counts the running task of a key and each task behind it', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const gate = Promise.withResolvers<void>();
   const first = mutex.runExclusive('a', () => gate.promise);
   const second = mutex.runExclusive('a', () => Promise.resolve());
@@ -224,7 +224,7 @@ test('#countQueued counts the running task of a key and each task behind it', as
 });
 
 test('#countQueued does not count a try that a held key turned away', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const gate = Promise.withResolvers<void>();
   const held = mutex.runExclusive('a', () => gate.promise);
 
@@ -240,7 +240,7 @@ test('#countQueued does not count a try that a held key turned away', async () =
 });
 
 test('#waitForAll resolves once every task of every key is done', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
   const gateA = Promise.withResolvers<void>();
   const gateB = Promise.withResolvers<void>();
   const log: string[] = [];
@@ -272,7 +272,7 @@ test('#waitForAll resolves once every task of every key is done', async () => {
 });
 
 test('#waitForAll resolves at once when no task runs', async () => {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
 
   await expect(mutex.waitForAll()).toResolve();
 });

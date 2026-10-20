@@ -17,7 +17,7 @@ import { createXfsBackend } from '../../packages/daemon/src/storage/xfs-backend'
 import { buildMockNewImage } from '../../packages/daemon/src/test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '../../packages/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../../packages/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '../../packages/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '../../packages/daemon/src/test-utils/claim-free-ports';
 import {
   removeImageIfPresent,
   removeImpIfPresent,
@@ -50,7 +50,7 @@ async function setupTest() {
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     }),
 
     // a new disk stays the size of its image: the plain-copy clone copies

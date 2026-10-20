@@ -6,14 +6,14 @@ import { join } from 'node:path';
 // the data dir, so it outlives the tailnet node, which a re-registered
 // ephemeral key replaces.
 export function loadOrCreateHostId(dataDir: string): string {
-  const dir = join(dataDir, 'tailnet-names');
-  const path = join(dir, 'host-id');
+  const directory = join(dataDir, 'tailnet-names');
+  const path = join(directory, 'host-id');
 
   if (existsSync(path)) {
     return readFileSync(path, 'utf8').trim();
   }
 
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(directory, { recursive: true });
 
   const id = randomBytes(16).toString('hex');
 

@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { createDnsToken } from './dns-token';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-dns-token-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-dns-token-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { path: join(dir, 'token') };
+  return { path: join(directory, 'token') };
 }
 
 test('it reads a token from the env as its value', async () => {

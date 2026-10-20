@@ -4,16 +4,16 @@ import type { MoveTicket, WarmHost, WarmMove } from '@impz/api';
 import { ORPCError } from '@orpc/server';
 import type { ApiAudit } from '../audit/api-audit';
 import type { Broker } from '../broker/broker-service';
-import { findImageByDigest } from '../db/images';
-import { findImpByName, listImps, updateImpCommitted } from '../db/imps';
+import { readImageByDigest } from '../db/images';
+import { listImps, readImpByName, updateImpCommitted } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import { listLeases } from '../db/leases';
 import {
   claimMoveTicketStream,
   createMoveTicketInFreeSlot,
-  findMoveTicket,
-  findStagedMoveTicket,
   listMoveTickets,
+  readMoveTicket,
+  readStagedMoveTicket,
   removeMoveTickets,
   updateMoveTicket,
   writeMoveTicket,
@@ -22,8 +22,8 @@ import type { MoveTicketRow, NewMoveTicketRow } from '../db/move-tickets';
 import type { ImpDatabase } from '../db/open-database';
 import { SlotTakenError } from '../db/slot-taken-error';
 import type { EgressService } from '../egress/egress-service';
+import { getErrorMessage } from '../get-error-message';
 import type { Imps } from '../imps/imp-service';
-import { readErrorMessage } from '../read-error-message';
 import { readSnapshotMeta } from '../sleep/snapshot-meta';
 import type { HostIdentity } from '../sleep/vm-identity';
 import { buildSystemDrivePath } from '../storage/data-layout';
@@ -41,7 +41,7 @@ import type { PeerRanges } from './peer-address';
 import { readMoveStream } from './read-move-stream';
 import type { Reply } from './read-move-stream';
 import { removeStagedImp } from './remove-staged-imp';
-import { findWarmMismatches } from './warm-facts';
+import { collectWarmMismatches } from './warm-facts';
 
 // a stream must start this soon after its ticket
 // (docs/architecture/storage/moves.md#one-live-copy)
@@ -55,7 +55,7 @@ export interface MoveReceiver {
   readonly reissueTicket: (name: string) => Promise<MoveTicket>;
 
   // `/move/*`, from `peer`, the connected socket's address
-  readonly handle: (request: Request, peer: string | null) => Promise<Response>;
+  readonly respond: (request: Request, peer: string | null) => Promise<Response>;
 
   // at start: a stream a crash cut short leaves its staged imp; it goes
   readonly recover: () => Promise<void>;
@@ -94,21 +94,6 @@ export interface MoveReceiverDeps {
   readonly log: (message: string) => void;
 }
 
-// an HTTP status as the audit log names a refusal
-const STATUS_CODES: Readonly<Record<number, string>> = {
-  400: 'BAD_REQUEST',
-  401: 'UNAUTHORIZED',
-  403: 'FORBIDDEN',
-  404: 'NOT_FOUND',
-  409: 'CONFLICT',
-  410: 'GONE',
-  413: 'PAYLOAD_TOO_LARGE',
-};
-
-function readStatusCode(status: number): string {
-  return STATUS_CODES[status] ?? 'INTERNAL_SERVER_ERROR';
-}
-
 interface CheckedTicket {
   readonly row: MoveTicketRow;
   readonly ticket: ParsedTicket;
@@ -138,7 +123,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       throw new MoveRequestError(401, 'no move ticket in the Authorization header');
     }
 
-    const row = await findMoveTicket(deps.db, ticket.id);
+    const row = await readMoveTicket(deps.db, ticket.id);
 
     if (row === undefined || !isSameHash(row.secret_sha256, buildSecretHash(ticket.secret))) {
       throw new MoveRequestError(401, 'unknown move ticket');
@@ -187,7 +172,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
 
     const offer = MoveOfferSchema.parse(body);
 
-    const existing = await findImageByDigest(deps.db, offer.imageDigest);
+    const existing = await readImageByDigest(deps.db, offer.imageDigest);
 
     const needsSystemDrive =
       offer.systemDrive !== undefined &&
@@ -350,7 +335,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     }
 
     return deps.imps.lockImpId(impId, async (imp) => {
-      const row = await findMoveTicket(deps.db, checked.row.id);
+      const row = await readMoveTicket(deps.db, checked.row.id);
 
       const settled = row === undefined ? 'none' : readSettled(row, imp);
 
@@ -390,7 +375,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     }
 
     const settled = await deps.imps.lockImpId(impId, async (imp) => {
-      const row = await findMoveTicket(deps.db, checked.row.id);
+      const row = await readMoveTicket(deps.db, checked.row.id);
 
       const found = row === undefined ? 'none' : readSettled(row, imp);
 
@@ -441,7 +426,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
 
   return {
     issueTicket: async (name, bytes, warm) => {
-      const taken = await findImpByName(deps.db, name);
+      const taken = await readImpByName(deps.db, name);
 
       if (taken !== undefined) {
         throw new ORPCError('CONFLICT', {
@@ -456,7 +441,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
         return writeTicketRow(name, bytes, {});
       }
 
-      const mismatches = findWarmMismatches(warm, deps.readWarmHost());
+      const mismatches = collectWarmMismatches(warm, deps.readWarmHost());
 
       if (mismatches.length > 0) {
         throw new ORPCError('PRECONDITION_FAILED', {
@@ -480,10 +465,10 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     },
 
     reissueTicket: async (name) => {
-      const imp = await findImpByName(deps.db, name);
+      const imp = await readImpByName(deps.db, name);
 
       const staged =
-        imp?.moveState === 'receiving' ? await findStagedMoveTicket(deps.db, imp.id) : undefined;
+        imp?.moveState === 'receiving' ? await readStagedMoveTicket(deps.db, imp.id) : undefined;
 
       if (imp === undefined || staged === undefined) {
         throw new ORPCError('NOT_FOUND', {
@@ -502,7 +487,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       });
     },
 
-    handle: async (request, peer) => {
+    respond: async (request, peer) => {
       const startedAt = deps.now();
 
       const path = new URL(request.url).pathname;
@@ -510,7 +495,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       const ticket = readTicketHeader(request);
 
       // before the route: an abort removes the ticket
-      const row = ticket === null ? undefined : await findMoveTicket(deps.db, ticket.id);
+      const row = ticket === null ? undefined : await readMoveTicket(deps.db, ticket.id);
 
       const response = await handleRoute(request, peer);
 
@@ -570,10 +555,10 @@ function readErrorReply(error: unknown, log: (message: string) => void): Reply {
   const status = readErrorStatus(error);
 
   if (status === 500) {
-    log(`impd: move: ${readErrorMessage(error)}`);
+    log(`impd: move: ${getErrorMessage(error)}`);
   }
 
-  return { status, body: { error: readErrorMessage(error) } };
+  return { status, body: { error: getErrorMessage(error) } };
 }
 
 // a slot another imp took since the ticket is a conflict, not a fault
@@ -596,4 +581,19 @@ function readSettled(
   }
 
   return imp?.moveState === 'receiving' ? 'staged' : 'none';
+}
+
+// an HTTP status as the audit log names a refusal
+const STATUS_CODES: Readonly<Record<number, string>> = {
+  400: 'BAD_REQUEST',
+  401: 'UNAUTHORIZED',
+  403: 'FORBIDDEN',
+  404: 'NOT_FOUND',
+  409: 'CONFLICT',
+  410: 'GONE',
+  413: 'PAYLOAD_TOO_LARGE',
+};
+
+function readStatusCode(status: number): string {
+  return STATUS_CODES[status] ?? 'INTERNAL_SERVER_ERROR';
 }

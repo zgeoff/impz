@@ -7,13 +7,13 @@ import { FRAME_TYPES } from '../agent-client/frame-codec';
 import { startStubEchoExecAgent } from './start-stub-echo-exec-agent';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'stub-echo-exec-agent-'));
+  const directory = mkdtempSync(join(tmpdir(), 'stub-echo-exec-agent-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { vsockPath: join(dir, 'vsock.sock') };
+  return { vsockPath: join(directory, 'vsock.sock') };
 }
 
 test('it answers the request with STARTED carrying the pid', async () => {

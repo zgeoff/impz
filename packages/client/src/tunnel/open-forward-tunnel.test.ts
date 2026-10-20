@@ -20,7 +20,7 @@ import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { startStubAgent } from '@impz/daemon/src/test-utils/start-stub-agent';
 import { startStubDialAgent } from '@impz/daemon/src/test-utils/start-stub-dial-agent';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -50,7 +50,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with
@@ -323,7 +323,7 @@ test('it ends as unreachable when nothing answers at impd’s address', async ()
 
   // nothing listens on a free port
   const tunnel = openForwardTunnel({
-    baseUrl: `http://127.0.0.1:${String(findFreePorts(1).take())}`,
+    baseUrl: `http://127.0.0.1:${String(claimFreePorts(1).take())}`,
     token: 'root-token',
     name: 'box',
     port: 80,

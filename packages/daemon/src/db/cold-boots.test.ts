@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { rmSync } from 'node:fs';
 import invariant from 'tiny-invariant';
 import { FRAME_TYPES, encodeJsonFrame } from '../agent-client/frame-codec';
-import { buildTestApp } from '../imps/build-test-app';
+import { createTestApp } from '../imps/create-test-app';
 import { createImpTest } from '../imps/test-imps';
 import { buildImpPaths } from '../storage/data-layout';
 import { buildMockNewImage } from '../test-utils/build-mock-new-image';
@@ -11,7 +11,7 @@ import { buildStubBootId } from '../test-utils/build-stub-vmm';
 import { startStubAttachAgent } from '../test-utils/start-stub-attach-agent';
 import { listColdBoots, writeColdBoot } from './cold-boots';
 import { createImage } from './images';
-import { createImp, findImpByName } from './imps';
+import { createImp, readImpByName } from './imps';
 
 // Each cold boot records its cause, and an attach to a session names them
 // (docs/architecture/guest/sessions.md#generations-boots-and-offsets).
@@ -29,7 +29,7 @@ async function setupTest() {
   // every create boots an image row; the default image is ubuntu
   await harness.createTestImage('ubuntu');
 
-  const app = buildTestApp(harness, harness);
+  const app = createTestApp(harness, harness);
 
   return { ...harness, client: app.client, stack };
 }
@@ -84,7 +84,7 @@ test('it records a wake that falls back to a cold boot as wake_fallback, with a 
   await ctx.client.imps.wake({ name: 'dev' });
 
   const boots = await listColdBoots(ctx.db, created.id);
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof imp?.pid === 'number');
 
@@ -147,7 +147,7 @@ test('it records the next boot of a stopped imp a restore reset as restore', asy
 test('it records the boot after impd found the VM gone as recovery, and only that boot', async () => {
   const ctx = await setupTest();
   const created = await ctx.client.imps.create({ name: 'dev' });
-  const running = await findImpByName(ctx.db, 'dev');
+  const running = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof running?.pid === 'number');
 
@@ -171,7 +171,7 @@ test('it records the boot after impd found the VM gone as recovery, and only tha
 test('it answers an attach that boots a crashed imp with NO_SESSION and its cold boots', async () => {
   const ctx = await setupTest();
   const created = await ctx.client.imps.create({ name: 'dev' });
-  const running = await findImpByName(ctx.db, 'dev');
+  const running = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof running?.pid === 'number');
 
@@ -293,7 +293,7 @@ test('it names the cold boots in a session’s started output', async () => {
     stream.close();
   });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof imp?.pid === 'number');
 
@@ -413,7 +413,7 @@ test('it records the next boot of a sleeping imp whose snapshot is gone as wake_
 test('it spends the pending cause on a boot without a boot_id, so a later boot does not inherit it', async () => {
   const ctx = await setupTest();
   const created = await ctx.client.imps.create({ name: 'dev' });
-  const running = await findImpByName(ctx.db, 'dev');
+  const running = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof running?.pid === 'number');
 

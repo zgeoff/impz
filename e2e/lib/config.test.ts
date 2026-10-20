@@ -7,13 +7,13 @@ import { join } from 'node:path';
 // process with only the variables the test gives
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'e2e-config-'));
+  const directory = mkdtempSync(join(tmpdir(), 'e2e-config-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it takes the acceptance sizes when no variable is set', () => {
@@ -25,7 +25,7 @@ test('it takes the acceptance sizes when no variable is set', () => {
       '-e',
       `import { config } from ${JSON.stringify(join(import.meta.dir, 'config.ts'))}; console.log(JSON.stringify(config));`,
     ],
-    { cwd: ctx.dir, env: { PATH: process.env['PATH'] ?? '' } },
+    { cwd: ctx.directoryPath, env: { PATH: process.env['PATH'] ?? '' } },
   );
 
   expect(JSON.parse(result.stdout.toString())).toStrictEqual({
@@ -56,7 +56,7 @@ test('it reads every knob from its variable', () => {
       `import { config } from ${JSON.stringify(join(import.meta.dir, 'config.ts'))}; console.log(JSON.stringify(config));`,
     ],
     {
-      cwd: ctx.dir,
+      cwd: ctx.directoryPath,
       env: {
         PATH: process.env['PATH'] ?? '',
         E2E_RAM_BUDGET_MIB: '4096',
@@ -104,7 +104,7 @@ test('it takes the default for a variable set empty', () => {
       '-e',
       `import { config } from ${JSON.stringify(join(import.meta.dir, 'config.ts'))}; console.log(config.ramBudgetMib);`,
     ],
-    { cwd: ctx.dir, env: { PATH: process.env['PATH'] ?? '', E2E_RAM_BUDGET_MIB: '' } },
+    { cwd: ctx.directoryPath, env: { PATH: process.env['PATH'] ?? '', E2E_RAM_BUDGET_MIB: '' } },
   );
 
   expect(result.stdout.toString()).toBe('6144\n');
@@ -119,7 +119,7 @@ test.each(['abc', '0', '-5', '1.5'])('it refuses %p as a size', (raw) => {
       '-e',
       `import { config } from ${JSON.stringify(join(import.meta.dir, 'config.ts'))}; console.log(config.ramBudgetMib);`,
     ],
-    { cwd: ctx.dir, env: { PATH: process.env['PATH'] ?? '', E2E_RAM_BUDGET_MIB: raw } },
+    { cwd: ctx.directoryPath, env: { PATH: process.env['PATH'] ?? '', E2E_RAM_BUDGET_MIB: raw } },
   );
 
   expect(result.exitCode).toBe(1);

@@ -18,7 +18,7 @@ import {
 } from '../lib/ipv6-topology';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // IPv6 for imps (docs/architecture/network/networking.md#ipv6) behind NAT66: the
 // instance reboots onto the topology's near network with a ULA /64, and
@@ -32,7 +32,7 @@ async function setupTest() {
   const client = await createInstanceClient();
 
   return {
-    prefix: readSuitePrefix('ipv6'),
+    prefix: getSuitePrefix('ipv6'),
     stack,
     client,
     plan: buildV6Plan(instance.portOffset),

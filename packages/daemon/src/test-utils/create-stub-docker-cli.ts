@@ -32,7 +32,7 @@ export interface StubDockerImage {
 
 export interface StubDockerCliOptions {
   // a directory of the test's own; the script goes in its `bin`
-  readonly dir: string;
+  readonly directory: string;
 
   // what `docker version` prints, `"<os>" "<arch>"`; linux x86_64 by default.
   // `stdout` prints that line as it is, such as `null null` from an engine
@@ -65,60 +65,12 @@ const FORMATS: ReadonlyMap<string, (inspect: StubDockerInspect) => string> = new
   ],
 ]);
 
-function formatShellWord(value: string): string {
-  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
-}
-
-function buildPullArm(index: number, ref: string, pull: StubDockerPull, state: string): string {
-  if (pull === 'hang') {
-    // until its kill, or until the test's state directory is gone
-    return `  ${formatShellWord(`pull --quiet ${ref}`)}) while [ -d ${formatShellWord(state)} ]; do sleep 0.05; done; exit 1 ;;`;
-  }
-
-  if (pull === 'lost') {
-    return `  ${formatShellWord(`pull --quiet ${ref}`)}) echo ${formatShellWord(ref)} ;;`;
-  }
-
-  if (pull === 'ok') {
-    return `  ${formatShellWord(`pull --quiet ${ref}`)}) touch ${formatShellWord(join(state, `pulled-${String(index)}`))}; echo ${formatShellWord(ref)} ;;`;
-  }
-
-  return `  ${formatShellWord(`pull --quiet ${ref}`)}) printf '%s\\n' ${formatShellWord(pull.stderr)} >&2; exit 1 ;;`;
-}
-
-// One image's inspect arm for one format: the next inspect of its
-// sequence, once the image is on the host. Each call appends a line to the
-// count: a count rewritten in place reads empty to a parallel call.
-function buildInspectArm(
-  index: number,
-  image: StubDockerImage,
-  argv: string,
-  format: string,
-  state: string,
-): string {
-  const tag = String(index);
-  const count = formatShellWord(join(state, `inspected-${tag}`));
-  const last = String(image.inspects.length - 1);
-  const output = formatShellWord(join(state, `inspect-${tag}-`));
-  const formatKey = String([...FORMATS.keys()].indexOf(format));
-
-  const present =
-    image.isOnHost === false
-      ? `[ -e ${formatShellWord(join(state, `pulled-${tag}`))} ] || { echo "Error: No such image: $last" >&2; exit 1; }; `
-      : '';
-
-  return [
-    `  ${formatShellWord(argv)}) ${present}echo >>${count}; n=$(($(wc -l <${count}) - 1))`,
-    `    [ "$n" -gt ${last} ] && n=${last}; cat ${output}"$n"-${formatKey} ;;`,
-  ].join('\n');
-}
-
 // A `docker` CLI in `<dir>/bin` for the host engine: version, inspect in
 // each format impd passes, pull, create, export and rm. It logs each argv,
 // joined by spaces, and fails any call it does not model.
 export function createStubDockerCli(options: Readonly<StubDockerCliOptions>) {
-  const bin = join(options.dir, 'bin');
-  const state = join(options.dir, 'stub-docker');
+  const bin = join(options.directory, 'bin');
+  const state = join(options.directory, 'stub-docker');
   const log = join(state, 'calls.log');
   const version = options.version ?? { os: 'linux', arch: 'x86_64' };
   const versionLine = 'stdout' in version ? version.stdout : `"${version.os}" "${version.arch}"`;
@@ -193,4 +145,52 @@ export function createStubDockerCli(options: Readonly<StubDockerCliOptions>) {
     readCalls: (): string[] =>
       existsSync(log) ? readFileSync(log, 'utf8').trimEnd().split('\n') : [],
   };
+}
+
+// One image's inspect arm for one format: the next inspect of its
+// sequence, once the image is on the host. Each call appends a line to the
+// count: a count rewritten in place reads empty to a parallel call.
+function buildInspectArm(
+  index: number,
+  image: StubDockerImage,
+  argv: string,
+  format: string,
+  state: string,
+): string {
+  const tag = String(index);
+  const count = formatShellWord(join(state, `inspected-${tag}`));
+  const last = String(image.inspects.length - 1);
+  const output = formatShellWord(join(state, `inspect-${tag}-`));
+  const formatKey = String([...FORMATS.keys()].indexOf(format));
+
+  const present =
+    image.isOnHost === false
+      ? `[ -e ${formatShellWord(join(state, `pulled-${tag}`))} ] || { echo "Error: No such image: $last" >&2; exit 1; }; `
+      : '';
+
+  return [
+    `  ${formatShellWord(argv)}) ${present}echo >>${count}; n=$(($(wc -l <${count}) - 1))`,
+    `    [ "$n" -gt ${last} ] && n=${last}; cat ${output}"$n"-${formatKey} ;;`,
+  ].join('\n');
+}
+
+function formatShellWord(value: string): string {
+  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
+}
+
+function buildPullArm(index: number, ref: string, pull: StubDockerPull, state: string): string {
+  if (pull === 'hang') {
+    // until its kill, or until the test's state directory is gone
+    return `  ${formatShellWord(`pull --quiet ${ref}`)}) while [ -d ${formatShellWord(state)} ]; do sleep 0.05; done; exit 1 ;;`;
+  }
+
+  if (pull === 'lost') {
+    return `  ${formatShellWord(`pull --quiet ${ref}`)}) echo ${formatShellWord(ref)} ;;`;
+  }
+
+  if (pull === 'ok') {
+    return `  ${formatShellWord(`pull --quiet ${ref}`)}) touch ${formatShellWord(join(state, `pulled-${String(index)}`))}; echo ${formatShellWord(ref)} ;;`;
+  }
+
+  return `  ${formatShellWord(`pull --quiet ${ref}`)}) printf '%s\\n' ${formatShellWord(pull.stderr)} >&2; exit 1 ;;`;
 }

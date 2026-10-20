@@ -1,8 +1,8 @@
-import { buildStubNewerImpdFetch } from './build-stub-newer-impd-fetch';
-import type { StubNewerImpdOptions } from './build-stub-newer-impd-fetch';
+import { makeStubNewerImpdFetch } from './make-stub-newer-impd-fetch';
+import type { StubNewerImpdOptions } from './make-stub-newer-impd-fetch';
 
 // A newer impd on a loopback port for a CLI child: the real app behind
-// `fetch`, answered as buildStubNewerImpdFetch answers it. Its stop goes
+// `fetch`, answered as makeStubNewerImpdFetch answers it. Its stop goes
 // into `stack`, so it closes before the impd behind it.
 export function startStubNewerImpd(
   stack: Readonly<AsyncDisposableStack>,
@@ -12,7 +12,7 @@ export function startStubNewerImpd(
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: buildStubNewerImpdFetch(fetch, options),
+    fetch: makeStubNewerImpdFetch(fetch, options),
   });
 
   stack.defer(async () => {

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { parseSubnet } from '../net/addressing';
 import { buildMockWarmHost } from '../test-utils/build-mock-warm-host';
 import { buildMockWarmMove } from '../test-utils/build-mock-warm-move';
-import { buildWarmMove, findWarmMismatches, readWarmHost } from './warm-facts';
+import { buildWarmMove, collectWarmMismatches, readWarmHost } from './warm-facts';
 
 test('#readWarmHost reports the identity, the config and the storage a warm move needs', () => {
   const host = readWarmHost(
@@ -123,7 +123,7 @@ test('#buildWarmMove records a snapshot from an older impd without its CPU or IP
   });
 });
 
-test('#findWarmMismatches finds nothing when the target shares every fact of an open imp', () => {
+test('#collectWarmMismatches finds nothing when the target shares every fact of an open imp', () => {
   const target = buildMockWarmHost();
 
   const move = buildMockWarmMove({
@@ -145,7 +145,7 @@ test('#findWarmMismatches finds nothing when the target shares every fact of an 
     },
   });
 
-  expect(findWarmMismatches(move, target)).toStrictEqual([]);
+  expect(collectWarmMismatches(move, target)).toStrictEqual([]);
 });
 
 test.each([
@@ -243,7 +243,7 @@ test.each([
     ['IMP_DNS differs (1.1.1.1,8.8.8.8 here, 9.9.9.9 there)'],
   ],
 ])(
-  '#findWarmMismatches refuses an open imp whose target differs in %s',
+  '#collectWarmMismatches refuses an open imp whose target differs in %s',
   (_fact, snapshot, moveHost, targetOverrides, expected) => {
     const base = buildMockWarmHost();
     const target = { ...base, ...targetOverrides };
@@ -269,11 +269,11 @@ test.each([
       },
     });
 
-    expect(findWarmMismatches(move, target)).toStrictEqual(expected);
+    expect(collectWarmMismatches(move, target)).toStrictEqual(expected);
   },
 );
 
-test('#findWarmMismatches ignores IMP_DNS for a box imp, which asks the host resolver', () => {
+test('#collectWarmMismatches ignores IMP_DNS for a box imp, which asks the host resolver', () => {
   const target = buildMockWarmHost({ dns: ['9.9.9.9'] });
 
   const move = buildMockWarmMove({
@@ -295,10 +295,10 @@ test('#findWarmMismatches ignores IMP_DNS for a box imp, which asks the host res
     },
   });
 
-  expect(findWarmMismatches(move, target)).toStrictEqual([]);
+  expect(collectWarmMismatches(move, target)).toStrictEqual([]);
 });
 
-test('#findWarmMismatches refuses a slot past the target slot count', () => {
+test('#collectWarmMismatches refuses a slot past the target slot count', () => {
   const target = buildMockWarmHost({ slotCount: 16 });
 
   const move = buildMockWarmMove({
@@ -319,10 +319,12 @@ test('#findWarmMismatches refuses a slot past the target slot count', () => {
     },
   });
 
-  expect(findWarmMismatches(move, target)).toStrictEqual(["slot 16 is past the target's 16 slots"]);
+  expect(collectWarmMismatches(move, target)).toStrictEqual([
+    "slot 16 is past the target's 16 slots",
+  ]);
 });
 
-test('#findWarmMismatches reports every fact that differs, in order', () => {
+test('#collectWarmMismatches reports every fact that differs, in order', () => {
   const target = buildMockWarmHost({ slotCount: 16 });
 
   const move = buildMockWarmMove({
@@ -344,7 +346,7 @@ test('#findWarmMismatches reports every fact that differs, in order', () => {
     },
   });
 
-  expect(findWarmMismatches(move, target)).toStrictEqual([
+  expect(collectWarmMismatches(move, target)).toStrictEqual([
     'the snapshot does not record its CPU (it is from an older impd)',
     "the imp has an IPv6 address in fd00::/64, this host's prefix",
     "slot 20 is past the target's 16 slots",

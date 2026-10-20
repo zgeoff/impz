@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { canUpdateReadOnly } from './can-update-read-only';
+import { probeUpdateReadOnly } from './probe-update-read-only';
 import { updateReadOnly } from './update-read-only';
 
 function setupTest() {
@@ -20,68 +20,68 @@ function setupTest() {
     stack.dispose();
   });
 
-  const dir = mkdtempSync(join(tmpdir(), 'update-read-only-'));
+  const directory = mkdtempSync(join(tmpdir(), 'update-read-only-'));
 
   stack.defer(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { stack, dir };
+  return { stack, directoryPath: directory };
 }
 
-test.skipIf(!canUpdateReadOnly())('it refuses a new file anywhere in the tree', () => {
+test.skipIf(!probeUpdateReadOnly())('it refuses a new file anywhere in the tree', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree', 'inner'), { recursive: true });
-  updateReadOnly(ctx.stack, join(ctx.dir, 'tree'));
+  mkdirSync(join(ctx.directoryPath, 'tree', 'inner'), { recursive: true });
+  updateReadOnly(ctx.stack, join(ctx.directoryPath, 'tree'));
 
   expect(() => {
-    writeFileSync(join(ctx.dir, 'tree', 'inner', 'new'), 'x');
+    writeFileSync(join(ctx.directoryPath, 'tree', 'inner', 'new'), 'x');
   }).toThrow(expect.objectContaining({ code: expect.toBeOneOf(['EACCES', 'EPERM']) }));
 });
 
-test.skipIf(!canUpdateReadOnly())('it keeps a symlink in the tree from going', () => {
+test.skipIf(!probeUpdateReadOnly())('it keeps a symlink in the tree from going', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
-  writeFileSync(join(ctx.dir, 'target'), 'x');
-  symlinkSync(join(ctx.dir, 'target'), join(ctx.dir, 'tree', 'link'));
-  updateReadOnly(ctx.stack, join(ctx.dir, 'tree'));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'target'), 'x');
+  symlinkSync(join(ctx.directoryPath, 'target'), join(ctx.directoryPath, 'tree', 'link'));
+  updateReadOnly(ctx.stack, join(ctx.directoryPath, 'tree'));
 
   expect(() => {
-    unlinkSync(join(ctx.dir, 'tree', 'link'));
+    unlinkSync(join(ctx.directoryPath, 'tree', 'link'));
   }).toThrow(expect.objectContaining({ code: expect.toBeOneOf(['EACCES', 'EPERM']) }));
 });
 
-test.skipIf(!canUpdateReadOnly())('it keeps the files in the tree readable', () => {
+test.skipIf(!probeUpdateReadOnly())('it keeps the files in the tree readable', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
-  writeFileSync(join(ctx.dir, 'tree', 'kept'), 'kept\n');
-  updateReadOnly(ctx.stack, join(ctx.dir, 'tree'));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'kept'), 'kept\n');
+  updateReadOnly(ctx.stack, join(ctx.directoryPath, 'tree'));
 
-  expect(readFileSync(join(ctx.dir, 'tree', 'kept'), 'utf8')).toBe('kept\n');
+  expect(readFileSync(join(ctx.directoryPath, 'tree', 'kept'), 'utf8')).toBe('kept\n');
 });
 
-test.skipIf(!canUpdateReadOnly())('it makes the tree writable again on restore', () => {
+test.skipIf(!probeUpdateReadOnly())('it makes the tree writable again on restore', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'tree'));
+  mkdirSync(join(ctx.directoryPath, 'tree'));
 
-  const restore = updateReadOnly(ctx.stack, join(ctx.dir, 'tree'));
+  const restore = updateReadOnly(ctx.stack, join(ctx.directoryPath, 'tree'));
 
   restore();
-  writeFileSync(join(ctx.dir, 'tree', 'new'), 'x');
+  writeFileSync(join(ctx.directoryPath, 'tree', 'new'), 'x');
 
-  expect(readFileSync(join(ctx.dir, 'tree', 'new'), 'utf8')).toBe('x');
+  expect(readFileSync(join(ctx.directoryPath, 'tree', 'new'), 'utf8')).toBe('x');
 });
 
-test.skipIf(!canUpdateReadOnly())(
+test.skipIf(!probeUpdateReadOnly())(
   'it makes the tree writable again when the stack is released',
   () => {
     const ctx = setupTest();
 
-    mkdirSync(join(ctx.dir, 'tree'));
+    mkdirSync(join(ctx.directoryPath, 'tree'));
 
     const stack = new DisposableStack();
 
@@ -91,29 +91,29 @@ test.skipIf(!canUpdateReadOnly())(
       stack.dispose();
     });
 
-    updateReadOnly(stack, join(ctx.dir, 'tree'));
+    updateReadOnly(stack, join(ctx.directoryPath, 'tree'));
 
     stack.dispose();
 
-    writeFileSync(join(ctx.dir, 'tree', 'new'), 'x');
+    writeFileSync(join(ctx.directoryPath, 'tree', 'new'), 'x');
 
-    expect(readFileSync(join(ctx.dir, 'tree', 'new'), 'utf8')).toBe('x');
+    expect(readFileSync(join(ctx.directoryPath, 'tree', 'new'), 'utf8')).toBe('x');
   },
 );
 
-test.skipIf(!canUpdateReadOnly())(
+test.skipIf(!probeUpdateReadOnly())(
   'it passes over a tree removed before the stack is released',
   () => {
     const ctx = setupTest();
 
-    mkdirSync(join(ctx.dir, 'tree'));
+    mkdirSync(join(ctx.directoryPath, 'tree'));
 
     const stack = new DisposableStack();
 
-    const restore = updateReadOnly(stack, join(ctx.dir, 'tree'));
+    const restore = updateReadOnly(stack, join(ctx.directoryPath, 'tree'));
 
     restore();
-    rmSync(join(ctx.dir, 'tree'), { recursive: true });
+    rmSync(join(ctx.directoryPath, 'tree'), { recursive: true });
 
     expect(() => {
       stack.dispose();

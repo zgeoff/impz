@@ -29,7 +29,7 @@ async function setupTest() {
 
   return {
     auth,
-    handle: async (request: Request) => {
+    respond: async (request: Request) => {
       const answered = await auth.handle(request);
 
       return answered ?? new Response('not found', { status: 404 });
@@ -42,7 +42,7 @@ test('it starts a sign-in and reads its approval code from the login page', asyn
   const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
 
   const pending = await createPendingSignIn({
-    handle: ctx.handle,
+    respond: ctx.respond,
     origin: 'http://127.0.0.1:7171',
     clientID: client.clientId,
     redirectURI: 'https://client.example/callback',
@@ -60,7 +60,7 @@ test('it throws, naming authorize, for a client the route does not know', async 
 
   expect(
     createPendingSignIn({
-      handle: ctx.handle,
+      respond: ctx.respond,
       origin: 'http://127.0.0.1:7171',
       clientID: 'impc_unknown',
       redirectURI: 'https://client.example/callback',

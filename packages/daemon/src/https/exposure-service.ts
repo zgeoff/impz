@@ -1,7 +1,7 @@
 import type { ExposeResult, PublicAuth } from '@impz/api';
 import { ORPCError } from '@orpc/server';
 import { buildMovingError, buildNotFoundError } from '../api-errors';
-import { findImpByName, updateImpExposure } from '../db/imps';
+import { readImpByName, updateImpExposure } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
 import type { HttpsConfig } from './https-config';
@@ -36,7 +36,7 @@ interface ExposureDeps {
 
 export function createExposureService(deps: ExposureDeps): ExposureService {
   const requireImp = async (name: string): Promise<ImpRecord> => {
-    const imp = await findImpByName(deps.db, name);
+    const imp = await readImpByName(deps.db, name);
 
     if (imp === undefined) {
       throw buildNotFoundError('imp', name);

@@ -4,7 +4,7 @@ import type { Broker } from '../broker/broker-service';
 import type { Config } from '../config';
 import { listCheckpoints } from '../db/checkpoints';
 import { listColdBoots } from '../db/cold-boots';
-import { findImageById } from '../db/images';
+import { readImageById } from '../db/images';
 import { updateImpMove } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import { updateMoveSend } from '../db/move-sends';
@@ -13,8 +13,7 @@ import type { EgressService } from '../egress/egress-service';
 import type { StartTimer } from '../process/clock';
 import { encodeSnapshotMeta } from '../sleep/snapshot-meta';
 import type { MoveMode, StorageBackend } from '../storage/storage-backend';
-import { buildMovedLeases, requireLeasesKept } from './build-moved-leases';
-import { buildWarmHeader, requireSnapshotMeta } from './check-warm-move';
+import { readWarmHeader, requireSnapshotMeta } from './check-warm-move';
 import type { WarmParts } from './check-warm-move';
 import { MOVE_FRAMES, encodeCommand, encodeFile, encodeJsonFrame } from './move-frames';
 import {
@@ -30,6 +29,7 @@ import type { ReadonlyReceiptBody, ReceiptBody } from './move-tickets';
 import { OfferRefusalError } from './offer-refusal-error';
 import { openMoveParts } from './open-move-parts';
 import type { StreamPart } from './open-move-parts';
+import { readMovedLeases, requireLeasesKept } from './read-moved-leases';
 import { removeMoveParts } from './remove-move-parts';
 import { requireOk } from './require-ok';
 import { sendToPeer } from './send-to-peer';
@@ -80,7 +80,7 @@ export async function runMoveSend(
   const secret = parseTicket(ticket)?.secret ?? '';
   const signal = progress.signal;
 
-  const image = await findImageById(deps.db, imp.imageId);
+  const image = await readImageById(deps.db, imp.imageId);
 
   const meta = target.isWarm ? requireSnapshotMeta(deps, imp) : null;
 
@@ -133,7 +133,7 @@ export async function runMoveSend(
   const sent: SentFile[] = [];
 
   try {
-    const header = await buildHeader(deps, imp, reply.needsImage, opened.streams, warm);
+    const header = await readHeader(deps, imp, reply.needsImage, opened.streams, warm);
 
     const frames = encodeStream(header, opened.parts, progress.onData, (file) => {
       sent.push(file);
@@ -179,14 +179,14 @@ export async function runMoveSend(
   await updateImpMove(deps.db, imp.id, 'moved');
 }
 
-async function buildHeader(
+async function readHeader(
   deps: MoveSendDeps,
   imp: ImpRecord,
   isImageIncluded: boolean,
   streams: MoveHeader['streams'],
   warm: WarmParts | null,
 ): Promise<MoveHeader> {
-  const image = await findImageById(deps.db, imp.imageId);
+  const image = await readImageById(deps.db, imp.imageId);
 
   if (image === undefined) {
     throw new Error(`${imp.name} has no image row`);
@@ -198,7 +198,7 @@ async function buildHeader(
 
   const egress = await deps.egress.readPolicy(imp.name);
   const grants = await deps.grants.listGrantDetails(imp.name);
-  const leases = await buildMovedLeases(deps, imp);
+  const leases = await readMovedLeases(deps, imp);
 
   return {
     version: 1,
@@ -237,7 +237,7 @@ async function buildHeader(
       diskBytes: checkpoint.diskBytes,
     })),
     streams,
-    warm: warm === null ? null : await buildWarmHeader(deps, imp, warm),
+    warm: warm === null ? null : await readWarmHeader(deps, imp, warm),
   };
 }
 

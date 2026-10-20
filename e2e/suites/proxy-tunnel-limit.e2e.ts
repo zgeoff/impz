@@ -15,7 +15,7 @@ import type { HeldSocket } from '../lib/imp-proxy';
 import { waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // `impz proxy` against impd's cap on open tunnels per imp.
@@ -29,7 +29,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('proxy'), stack, client };
+  return { prefix: getSuitePrefix('proxy'), stack, client };
 }
 
 test('it refuses only the connection past the tunnel cap with TUNNEL_LIMIT, and opens a tunnel again once the held ones close', async () => {

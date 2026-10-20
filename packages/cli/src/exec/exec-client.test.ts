@@ -28,7 +28,7 @@ import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-im
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubExecReplies } from '@impz/daemon/src/test-utils/build-stub-exec-replies';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { startStubAgent } from '@impz/daemon/src/test-utils/start-stub-agent';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
@@ -62,7 +62,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with
@@ -664,7 +664,7 @@ test('it exits 255 with the token hint when impd rejects the token', async () =>
 
 test('it exits 255 and names the address when nothing listens there', async () => {
   // a port that a probe held a moment ago and nothing holds now
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
   const url = `http://127.0.0.1:${String(port)}`;
   const errors: string[] = [];
 
@@ -1632,10 +1632,10 @@ test('it doubles the pause before each try, up to 8 s, while impd stays down und
       isAttachedElsewhere: () => Promise.resolve(false),
       reattachWindowMs: 20_000,
       now: () => clock.nowMs,
-      wait: (ms) => {
-        pauses.push(ms);
+      wait: (durationMs) => {
+        pauses.push(durationMs);
 
-        clock.nowMs += ms;
+        clock.nowMs += durationMs;
 
         return Promise.resolve();
       },
@@ -1699,8 +1699,8 @@ test('it fails with the last reason once the window to attach again is over, whi
       isAttachedElsewhere: () => Promise.resolve(false),
       reattachWindowMs: 1500,
       now: () => clock.nowMs,
-      wait: (ms) => {
-        clock.nowMs += ms;
+      wait: (durationMs) => {
+        clock.nowMs += durationMs;
 
         return Promise.resolve();
       },

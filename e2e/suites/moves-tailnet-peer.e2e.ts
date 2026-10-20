@@ -2,15 +2,15 @@ import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, findImp, runImp, runImpWith } from '../lib/imp-cli';
+import { createInstanceClient, readImp, runImp, runImpWith } from '../lib/imp-cli';
 import { waitForExec, writeGuestFile } from '../lib/imps';
 import { runInContainer } from '../lib/instance';
 import { HOST_B, readMoveHosts, readMoveOptions } from '../lib/move-hosts';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { parseSelfTags, waitForTailnetIp } from '../lib/tailnet';
-import { hasTailscaleE2EKey } from '../lib/tailscale-key';
+import { probeTailscaleE2EKey } from '../lib/tailscale-key';
 import { waitFor } from '../lib/wait-for';
 
 // A move between two tag:imp-e2e nodes on this machine, with neither
@@ -25,18 +25,18 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('moves-tailnet'), stack, client };
+  return { prefix: getSuitePrefix('moves-tailnet'), stack, client };
 }
 
 // the definition of done needs the tailnet; any other run skips without the
 // tag:imp-e2e OAuth client (op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth)
-test.skipIf(!hasTailscaleE2EKey() && !config.acceptance)(
+test.skipIf(!probeTailscaleE2EKey() && !config.acceptance)(
   'it moves an imp between two tailnet nodes, past the peer check on their tailnet addresses',
   async () => {
     const ctx = await setupTest();
 
     invariant(
-      hasTailscaleE2EKey(),
+      probeTailscaleE2EKey(),
       'moves-tailnet needs the tag:imp-e2e OAuth client (op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth)',
     );
 
@@ -45,16 +45,16 @@ test.skipIf(!hasTailscaleE2EKey() && !config.acceptance)(
     // B joins the tailnet under its own name, kept up by the harness
     const hosts = readMoveHosts(readMoveOptions('host-b-tailnet'));
 
-    const clientB = await createInstanceClient(hosts.b);
+    const clientB = await createInstanceClient(hosts.hostB);
     const ipA = await waitForTailnetIp();
-    const ipB = await waitForTailnetIp({ target: hosts.b });
+    const ipB = await waitForTailnetIp({ target: hosts.hostB });
 
     expect(ipA).toStartWith('100.');
     expect(ipB).toStartWith('100.');
     expect(ipB).not.toBe(ipA);
 
     const statusA = await runInContainer(['tailscale', 'status', '--json']);
-    const statusB = await runInContainer(['tailscale', 'status', '--json'], hosts.b);
+    const statusB = await runInContainer(['tailscale', 'status', '--json'], hosts.hostB);
 
     // both join as the e2e tag, which the tailnet policy keeps away from
     // tag:imp's live impd
@@ -66,7 +66,7 @@ test.skipIf(!hasTailscaleE2EKey() && !config.acceptance)(
     await waitFor(
       "A among B's tailnet peers",
       async () => {
-        const status = await runInContainer(['tailscale', 'status', '--json'], hosts.b);
+        const status = await runInContainer(['tailscale', 'status', '--json'], hosts.hostB);
 
         if (!status.stdout.includes(`"${ipA}"`)) {
           throw new Error(
@@ -89,15 +89,15 @@ test.skipIf(!hasTailscaleE2EKey() && !config.acceptance)(
 
     registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(clientB, plain));
 
-    const left = await findImp(plain);
+    const left = await readImp(plain);
 
     expect(out).toContain(`${plain}: moved to ${HOST_B}`);
     expect(left).toBeUndefined();
 
-    await runImpWith({ target: hosts.b }, 'start', plain);
+    await runImpWith({ target: hosts.hostB }, 'start', plain);
 
     const content = await waitFor(`${plain} to boot on B`, () =>
-      runImpWith({ target: hosts.b }, 'exec', plain, '--', 'cat', '/root/moved'),
+      runImpWith({ target: hosts.hostB }, 'exec', plain, '--', 'cat', '/root/moved'),
     );
 
     expect(content).toBe('tailnet-ok\n');

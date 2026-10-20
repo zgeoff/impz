@@ -3,7 +3,7 @@ import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
-import { getThroughProxy, readOkBody } from '../lib/http';
+import { readOkBody, readThroughProxy } from '../lib/http';
 import {
   createInstanceClient,
   runImp,
@@ -18,7 +18,7 @@ import { parseWholeNumber } from '../lib/parse-whole-number';
 import { findSocketListenAgain, parseProxyForwards } from '../lib/proxy-forward-lines';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { startTextCapture } from '../lib/text-capture';
 import { waitFor } from '../lib/wait-for';
 
@@ -33,7 +33,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('inner'), stack, client };
+  return { prefix: getSuitePrefix('inner'), stack, client };
 }
 
 test('it starts the container again on a reboot inside, not the guest, and its service once', async () => {
@@ -188,7 +188,7 @@ test('it keeps forwards, reverse forwards and the service port working through a
   });
 
   const exists = await runShellInImp(name, `test -S '${again}' && echo socket`);
-  const throughProxy = await getThroughProxy(name);
+  const throughProxy = await readThroughProxy(name);
 
   expect(after).toBe('e2e-tiny-ok');
   expect(reversedAfter).toBe('e2e-inner-reverse');

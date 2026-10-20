@@ -5,15 +5,15 @@ import { createBroker } from './broker/broker-service';
 import type { Broker, BrokerDeps } from './broker/broker-service';
 import { createSecretFiles } from './broker/secret-files';
 import type { SecretFiles } from './broker/secret-files';
-import type { AppDeps } from './build-app';
-import { buildImpdApp } from './build-impd-app';
-import { buildImpdServices } from './build-impd-services';
-import { buildImpdStorage } from './build-impd-storage';
-import type { ImpdStorage } from './build-impd-storage';
-import { buildTailnetAccess } from './build-tailnet-access';
 import type { DiskFreezer } from './checkpoints/consistent-disk';
 import type { Config } from './config';
+import type { AppDeps } from './create-app';
+import { createImpdApp } from './create-impd-app';
 import { createImpdMoves } from './create-impd-moves';
+import { createImpdServices } from './create-impd-services';
+import { createImpdStorage } from './create-impd-storage';
+import type { ImpdStorage } from './create-impd-storage';
+import { createTailnetAccess } from './create-tailnet-access';
 import { countImpsByState } from './db/imps';
 import { isImpSetWrite } from './db/is-imp-set-write';
 import type { ImpDatabase } from './db/open-database';
@@ -55,8 +55,8 @@ import { CHANGES_USAGE } from './storage/disk-usage-cache';
 import { readLiveStorage } from './storage/read-live-storage';
 import type { SystemFiles } from './storage/setup-system-files';
 import type { StorageBackend } from './storage/storage-backend';
-import { buildTailnetNames } from './tailnet-names/build-tailnet-names';
 import type { TailnetNames } from './tailnet-names/tailnet-names';
+import { wireTailnetNames } from './tailnet-names/wire-tailnet-names';
 import { startImpTelemetry } from './telemetry/imp-telemetry';
 import { createCpuCgroups } from './vmm/cpu-cgroups';
 import type { CpuCgroups } from './vmm/cpu-cgroups';
@@ -204,7 +204,7 @@ export function createImpdBroker(
 }
 
 // The firewall and its resolver, not started
-export function buildImpdEgress(
+export function createImpdEgress(
   config: Config,
   deps: Readonly<ImpdDeps>,
   parts: Readonly<{
@@ -259,7 +259,7 @@ export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
 
   await storage.start(live);
 
-  const stored = buildImpdStorage(config, deps);
+  const stored = createImpdStorage(config, deps);
   const diskUsage = stored.diskUsage;
 
   if (config.build.isolation === 'host') {
@@ -285,7 +285,7 @@ export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
   const broker = await createImpdBroker(config, deps, { ipv6, secretFiles });
 
   // the firewall and its resolver, before any VM is adopted, booted or woken
-  const egress = buildImpdEgress(config, deps, { ipv6, broker });
+  const egress = createImpdEgress(config, deps, { ipv6, broker });
 
   await egress.start();
 
@@ -398,7 +398,7 @@ export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
     log(`impd: removed system drive ${name}: no imp uses it`);
   }
 
-  const services = buildImpdServices(config, deps, {
+  const services = createImpdServices(config, deps, {
     storage: stored,
     imps,
     egress,
@@ -414,7 +414,7 @@ export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
     log,
   );
 
-  const access = await loadImpdAccess(config, deps, authorizedKeys.isListed);
+  const access = await loadImpdAccess(config, deps, authorizedKeys.probeListed);
 
   const backups =
     config.backup === null
@@ -437,7 +437,7 @@ export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
   const tailnetNames =
     config.tailnetNames === null
       ? null
-      : buildTailnetNames({
+      : wireTailnetNames({
           names: config.tailnetNames,
           config,
           db,
@@ -480,7 +480,7 @@ export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
 
   await moves.recover();
 
-  const api = buildImpdApp(config, deps, {
+  const api = createImpdApp(config, deps, {
     storage: stored,
     access,
     services,
@@ -490,7 +490,7 @@ export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
     egress,
     identity,
     peers,
-    tailnet: buildTailnetAccess(config, deps, readTailscale),
+    tailnet: createTailnetAccess(config, deps, readTailscale),
     backups,
     moves,
     publicRecords,

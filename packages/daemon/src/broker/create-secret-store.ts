@@ -4,17 +4,17 @@ import { buildConflictError, buildNotFoundError } from '../api-errors';
 import type { ImpDatabase } from '../db/open-database';
 import {
   createSecret,
-  findSecret,
   listSecrets,
+  readSecret,
   removeFileRemoval,
   removeSecret,
   upsertSecret,
 } from '../db/secrets';
 import type { NewSecret, SecretRecord } from '../db/secrets';
-import { readErrorMessage } from '../read-error-message';
+import { getErrorMessage } from '../get-error-message';
 import { SecretRulesError, resolveRules } from './connector-kinds';
 import type { OAuthRefresher } from './oauth-refresher';
-import { buildPendingState, formatOAuthState, parseOAuthState, readIdClaims } from './oauth-state';
+import { buildPendingState, findIdClaims, formatOAuthState, parseOAuthState } from './oauth-state';
 import { buildValueFile } from './secret-files';
 import type { SecretFiles } from './secret-files';
 
@@ -40,7 +40,7 @@ interface SecretStore {
 
   // forces one refresh of an oauth secret and answers after it ends
   readonly refreshSecret: (name: string) => Promise<Secret>;
-  readonly deleteSecret: (name: string) => Promise<void>;
+  readonly removeSecret: (name: string) => Promise<void>;
 }
 
 interface SecretStoreDeps {
@@ -59,7 +59,7 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
   const log = deps.log;
   const refresher = deps.refresher;
 
-  const toApiSecret = async (secret: SecretRecord): Promise<Secret> => {
+  const readApiSecret = async (secret: SecretRecord): Promise<Secret> => {
     const listed = await listSecrets(db);
 
     const imps = listed.find((entry) => entry.secret.name === secret.name)?.imps ?? [];
@@ -93,7 +93,7 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
         expiresAt: toDate(stored?.expiresAt),
         refreshedAt: toDate(stored?.refreshedAt),
         error: stored === null ? 'value file missing or unreadable' : stored.error,
-        idClaims: readIdClaims(stored?.idToken ?? null),
+        idClaims: findIdClaims(stored?.idToken ?? null),
       },
     };
   };
@@ -140,7 +140,7 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
 
       await removeFileRemoval(db, file);
     } catch (error) {
-      log(`impd: broker: could not remove an old secret value file: ${readErrorMessage(error)}`);
+      log(`impd: broker: could not remove an old secret value file: ${getErrorMessage(error)}`);
     }
   };
 
@@ -204,8 +204,8 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
         await refresher.refresh(input.name, true);
       }
 
-      const latest = await findSecret(db, input.name);
-      const shown = await toApiSecret(latest ?? saved.secret);
+      const latest = await readSecret(db, input.name);
+      const shown = await readApiSecret(latest ?? saved.secret);
 
       return { ...shown, droppedGrants: saved.droppedGrants };
     },
@@ -217,7 +217,7 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
     },
 
     refreshSecret: async (name) => {
-      const secret = await findSecret(db, name);
+      const secret = await readSecret(db, name);
 
       if (secret === undefined) {
         throw buildNotFoundError('secret', name);
@@ -229,16 +229,16 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
 
       await refresher.refresh(name, true);
 
-      const current = await findSecret(db, name);
+      const current = await readSecret(db, name);
 
       if (current === undefined) {
         throw buildNotFoundError('secret', name);
       }
 
-      return toApiSecret(current);
+      return readApiSecret(current);
     },
 
-    deleteSecret: async (name) => {
+    removeSecret: async (name) => {
       await refresher.withLock(name, async () => {
         const valueFile = await removeSecret(db, name);
 
@@ -254,8 +254,8 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
   };
 }
 
-function toDate(ms: number | null | undefined): Date | null {
-  return ms === null || ms === undefined ? null : new Date(ms);
+function toDate(durationMs: number | null | undefined): Date | null {
+  return durationMs === null || durationMs === undefined ? null : new Date(durationMs);
 }
 
 // a replace with another kind or rules, without rebind

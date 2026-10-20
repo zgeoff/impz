@@ -265,7 +265,7 @@ export const impdRouter = {
           throw new ORPCError('BAD_REQUEST', { message: 'a label must not start with cp-' });
         }
 
-        if (readCheckpoint(imp.name, label) !== undefined) {
+        if (findCheckpointRow(imp.name, label) !== undefined) {
           throw buildConflictError('checkpoint', label);
         }
       }
@@ -297,7 +297,9 @@ export const impdRouter = {
       return checkpointCollection
         .findMany((query) => query.where({ imp: imp.name }))
         .toSorted(
-          (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || readTextOrder(b.id, a.id),
+          (left, right) =>
+            right.createdAt.getTime() - left.createdAt.getTime() ||
+            readTextOrder(right.id, left.id),
         )
         .map((row) => toCheckpoint(row));
     }),
@@ -383,7 +385,7 @@ export const impdRouter = {
     list: os.tokens.list.handler(() =>
       tokenCollection
         .findMany()
-        .toSorted((a, b) => a.name.localeCompare(b.name))
+        .toSorted((left, right) => left.name.localeCompare(right.name))
         .map((row) => toToken(row)),
     ),
 
@@ -459,6 +461,24 @@ export const impdRouter = {
   },
 };
 
+// the caller impd builds for a dashboard session (packages/daemon
+// auth/authenticate.ts), named after its token
+function toCaller(session: Readonly<ImpdSession>): Caller {
+  return {
+    kind: session.kind,
+    name: session.name,
+    scope: session.scope,
+    imps: session.imps,
+    grantable: session.grantable.map((name) => ({ name, generation: '1' })),
+    imageRefPrefix: session.imageRefPrefix,
+    tokenId: session.name,
+    grantId: null,
+    expiresAt: session.expiresAt.getTime(),
+    principal: session.name,
+    display: session.name,
+  };
+}
+
 // the host's row, kept from the first read when none is seeded
 async function readHost() {
   const host = hostCollection.findFirst();
@@ -470,6 +490,200 @@ async function readHost() {
   const created = await hostCollection.create({});
 
   return created;
+}
+
+function requireDefaultImage(configured: string): Image {
+  const image = findDefaultImage(configured);
+
+  if (image === undefined) {
+    throw buildNotFoundError('image', configured);
+  }
+
+  return image;
+}
+
+// impd's findDefaultImage (packages/daemon images/image-service.ts): the
+// configured default, or `ubuntu` when that is gone
+function findDefaultImage(configured: string): Image | undefined {
+  return [configured, FALLBACK_DEFAULT_IMAGE]
+    .map((name) => imageCollection.findFirst((query) => query.where({ name })))
+    .find((image) => image !== undefined);
+}
+
+function findImage(name: string): Image {
+  const image = imageCollection.findFirst((query) => query.where({ name }));
+
+  if (image === undefined) {
+    throw buildNotFoundError('image', name);
+  }
+
+  return image;
+}
+
+// impd's FALLBACK_DEFAULT_IMAGE (packages/daemon images/create-image-adds.ts), copied:
+// that module pulls Bun-only types into the dashboard's DOM typecheck
+const FALLBACK_DEFAULT_IMAGE = 'ubuntu';
+
+// impd's CONFLICT for a name another imp has (packages/daemon
+// imps/create-imp-record.ts)
+function requireFreeImpName(name: string): void {
+  if (impCollection.findFirst((query) => query.where({ name })) !== undefined) {
+    throw buildConflictError('imp', name);
+  }
+}
+
+// a new imp in the stream, then its boot
+function emitImpCreation(imp: Imp): Promise<Imp> {
+  emitImpdEvent({ v: EVENT_VERSION, at: new Date(), ev: 'ImpAdded', reason: 'created', imp });
+
+  return updateImp(imp.name, 'booted', { state: 'running' });
+}
+
+// the imp's record changes, and every open stream hears why
+async function updateImp(name: string, reason: ImpChangeReason, change: Partial<Imp>) {
+  const imp = await impCollection.update((query) => query.where({ name }), {
+    data(record) {
+      Object.assign(record, change);
+    },
+  });
+
+  if (imp === undefined) {
+    throw buildNotFoundError('imp', name);
+  }
+
+  emitImpdEvent({ v: EVENT_VERSION, at: new Date(), ev: 'ImpChanged', reason, imp });
+
+  return imp;
+}
+
+function toCallerImp(session: Readonly<ImpdSession>, imp: Imp): Imp {
+  return { ...imp, leases: toLeaseSummary(toCaller(session), imp.name, []) };
+}
+
+// by name, as impd's listImps
+function listImps(): Imp[] {
+  return impCollection.findMany().toSorted((left, right) => readTextOrder(left.name, right.name));
+}
+
+function readTextOrder(left: string, right: string): number {
+  if (left === right) {
+    return 0;
+  }
+
+  return left < right ? -1 : 1;
+}
+
+function findImp(name: string): Imp {
+  const imp = impCollection.findFirst((query) => query.where({ name }));
+
+  if (imp === undefined) {
+    throw buildNotFoundError('imp', name);
+  }
+
+  return imp;
+}
+
+// A start or a wake (impd's requireRunningImp): a running imp as it is, a
+// sleeping one woken, any other booted where its state allows
+function requireRunningImp(name: string) {
+  const imp = findImp(name);
+
+  if (imp.state === 'running') {
+    return Promise.resolve(imp);
+  }
+
+  if (imp.state === 'sleeping') {
+    return updateImp(name, 'woke', { state: 'running' });
+  }
+
+  requireTransition(imp.state, 'running', 'start');
+
+  return updateImp(name, 'booted', { state: 'running' });
+}
+
+// A stop or a sleep: an imp already there answers as it is, any other goes
+// through impd's lifecycle (packages/daemon imps/imp-transitions.ts), which
+// answers INVALID_STATE for a move it does not allow
+function writeImpState(name: string, to: ImpState, action: string, reason: ImpChangeReason) {
+  const imp = findImp(name);
+
+  if (imp.state === to) {
+    return Promise.resolve(imp);
+  }
+
+  requireTransition(imp.state, to, action);
+
+  return updateImp(name, reason, { state: to });
+}
+
+function findCheckpoint(imp: string, ref: string): Checkpoint {
+  const row = findCheckpointRow(imp, ref);
+
+  if (row === undefined) {
+    throw buildNotFoundError('checkpoint', ref);
+  }
+
+  return toCheckpoint(row);
+}
+
+// as impd: the checkpoint by its id or its label
+function findCheckpointRow(imp: string, ref: string) {
+  return (
+    checkpointCollection.findFirst((query) => query.where({ imp, id: ref })) ??
+    checkpointCollection.findFirst((query) => query.where({ imp, label: ref }))
+  );
+}
+
+function toCheckpoint(row: Readonly<Checkpoint & { readonly imp: string }>): Checkpoint {
+  const { imp: _imp, ...checkpoint } = row;
+
+  return checkpoint;
+}
+
+// impd's templates (packages/daemon images/template-service.ts): the name
+// of a docker image is refused, a template's is made again
+function writeTemplate(name: string, imp: Imp): Promise<Image> {
+  const existing = imageCollection.findFirst((query) => query.where({ name }));
+
+  if (existing?.source === 'oci') {
+    throw buildConflictError(
+      'image',
+      name,
+      `image ${name} is a docker image; give the template a name of its own`,
+    );
+  }
+
+  return writeImageRow(name, { ref: `imp:${imp.name}`, source: 'imp' });
+}
+
+// the image row by its name: made, or moved to what was made again
+async function writeImageRow(
+  name: string,
+  made: Pick<Image, 'ref'> & Partial<Pick<Image, 'source'>>,
+): Promise<Image> {
+  const updated = await imageCollection.update((query) => query.where({ name }), {
+    data(row) {
+      Object.assign(row, made);
+    },
+  });
+
+  return updated ?? imageCollection.create({ name, ...made });
+}
+
+// impd's pull (packages/daemon images/create-image-adds.ts): the name of a
+// template is refused, a docker image's is pulled again
+function writeDockerImage(name: string, ref: string): Promise<Image> {
+  const existing = imageCollection.findFirst((query) => query.where({ name }));
+
+  if (existing?.source === 'imp') {
+    throw buildConflictError(
+      'image',
+      name,
+      `image ${name} is a template; make it again from an imp, or pick another name`,
+    );
+  }
+
+  return writeImageRow(name, { ref });
 }
 
 // impd's readSystemInfo (packages/daemon build-router.ts): the host's
@@ -549,221 +763,14 @@ function countBootStatuses(imps: readonly Imp[]): SystemInfo['bootStatus'] {
   return { coldBoots, outdated: noIpv6 === 0 ? outdated : { ...outdated, ipv6: noIpv6 } };
 }
 
-// by name, as impd's listImps
-function listImps(): Imp[] {
-  return impCollection.findMany().toSorted((a, b) => readTextOrder(a.name, b.name));
-}
+function toToken(row: Readonly<Token & { readonly secret: string }>): Token {
+  const { secret: _secret, ...token } = row;
 
-function findImp(name: string): Imp {
-  const imp = impCollection.findFirst((query) => query.where({ name }));
-
-  if (imp === undefined) {
-    throw buildNotFoundError('imp', name);
-  }
-
-  return imp;
-}
-
-function findImage(name: string): Image {
-  const image = imageCollection.findFirst((query) => query.where({ name }));
-
-  if (image === undefined) {
-    throw buildNotFoundError('image', name);
-  }
-
-  return image;
-}
-
-// impd's FALLBACK_DEFAULT_IMAGE (packages/daemon images/create-image-adds.ts), copied:
-// that module pulls Bun-only types into the dashboard's DOM typecheck
-const FALLBACK_DEFAULT_IMAGE = 'ubuntu';
-
-// impd's findDefaultImage (packages/daemon images/image-service.ts): the
-// configured default, or `ubuntu` when that is gone
-function findDefaultImage(configured: string): Image | undefined {
-  return [configured, FALLBACK_DEFAULT_IMAGE]
-    .map((name) => imageCollection.findFirst((query) => query.where({ name })))
-    .find((image) => image !== undefined);
-}
-
-function requireDefaultImage(configured: string): Image {
-  const image = findDefaultImage(configured);
-
-  if (image === undefined) {
-    throw buildNotFoundError('image', configured);
-  }
-
-  return image;
+  return token;
 }
 
 function readToken(name: string) {
   return tokenCollection.findFirst((query) => query.where({ name }));
-}
-
-// impd's CONFLICT for a name another imp has (packages/daemon
-// imps/create-imp-record.ts)
-function requireFreeImpName(name: string): void {
-  if (impCollection.findFirst((query) => query.where({ name })) !== undefined) {
-    throw buildConflictError('imp', name);
-  }
-}
-
-// as impd: the checkpoint by its id or its label
-function readCheckpoint(imp: string, ref: string) {
-  return (
-    checkpointCollection.findFirst((query) => query.where({ imp, id: ref })) ??
-    checkpointCollection.findFirst((query) => query.where({ imp, label: ref }))
-  );
-}
-
-function findCheckpoint(imp: string, ref: string): Checkpoint {
-  const row = readCheckpoint(imp, ref);
-
-  if (row === undefined) {
-    throw buildNotFoundError('checkpoint', ref);
-  }
-
-  return toCheckpoint(row);
-}
-
-// a new imp in the stream, then its boot
-function emitImpCreation(imp: Imp): Promise<Imp> {
-  emitImpdEvent({ v: EVENT_VERSION, at: new Date(), ev: 'ImpAdded', reason: 'created', imp });
-
-  return updateImp(imp.name, 'booted', { state: 'running' });
-}
-
-// the imp's record changes, and every open stream hears why
-async function updateImp(name: string, reason: ImpChangeReason, change: Partial<Imp>) {
-  const imp = await impCollection.update((query) => query.where({ name }), {
-    data(record) {
-      Object.assign(record, change);
-    },
-  });
-
-  if (imp === undefined) {
-    throw buildNotFoundError('imp', name);
-  }
-
-  emitImpdEvent({ v: EVENT_VERSION, at: new Date(), ev: 'ImpChanged', reason, imp });
-
-  return imp;
-}
-
-// A stop or a sleep: an imp already there answers as it is, any other goes
-// through impd's lifecycle (packages/daemon imps/imp-transitions.ts), which
-// answers INVALID_STATE for a move it does not allow
-function writeImpState(name: string, to: ImpState, action: string, reason: ImpChangeReason) {
-  const imp = findImp(name);
-
-  if (imp.state === to) {
-    return Promise.resolve(imp);
-  }
-
-  requireTransition(imp.state, to, action);
-
-  return updateImp(name, reason, { state: to });
-}
-
-// A start or a wake (impd's requireRunningImp): a running imp as it is, a
-// sleeping one woken, any other booted where its state allows
-function requireRunningImp(name: string) {
-  const imp = findImp(name);
-
-  if (imp.state === 'running') {
-    return Promise.resolve(imp);
-  }
-
-  if (imp.state === 'sleeping') {
-    return updateImp(name, 'woke', { state: 'running' });
-  }
-
-  requireTransition(imp.state, 'running', 'start');
-
-  return updateImp(name, 'booted', { state: 'running' });
-}
-
-// impd's templates (packages/daemon images/template-service.ts): the name
-// of a docker image is refused, a template's is made again
-function writeTemplate(name: string, imp: Imp): Promise<Image> {
-  const existing = imageCollection.findFirst((query) => query.where({ name }));
-
-  if (existing?.source === 'oci') {
-    throw buildConflictError(
-      'image',
-      name,
-      `image ${name} is a docker image; give the template a name of its own`,
-    );
-  }
-
-  return writeImageRow(name, { ref: `imp:${imp.name}`, source: 'imp' });
-}
-
-// impd's pull (packages/daemon images/create-image-adds.ts): the name of a
-// template is refused, a docker image's is pulled again
-function writeDockerImage(name: string, ref: string): Promise<Image> {
-  const existing = imageCollection.findFirst((query) => query.where({ name }));
-
-  if (existing?.source === 'imp') {
-    throw buildConflictError(
-      'image',
-      name,
-      `image ${name} is a template; make it again from an imp, or pick another name`,
-    );
-  }
-
-  return writeImageRow(name, { ref });
-}
-
-// the image row by its name: made, or moved to what was made again
-async function writeImageRow(
-  name: string,
-  made: Pick<Image, 'ref'> & Partial<Pick<Image, 'source'>>,
-): Promise<Image> {
-  const updated = await imageCollection.update((query) => query.where({ name }), {
-    data(row) {
-      Object.assign(row, made);
-    },
-  });
-
-  return updated ?? imageCollection.create({ name, ...made });
-}
-
-// impd's readGrantable: only a manage token for some imps takes a list, of
-// secrets that exist
-function readGrantable(
-  names: readonly string[],
-  token: Readonly<Pick<Token, 'scope' | 'imps'>>,
-): string[] {
-  if (names.length === 0) {
-    return [];
-  }
-
-  if (token.imps === null || token.scope !== 'manage') {
-    throw new ORPCError('BAD_REQUEST', {
-      message: 'a token that may grant secrets needs scope manage and imp patterns',
-    });
-  }
-
-  return names.map((name) => {
-    if (secretCollection.findFirst((query) => query.where({ name })) === undefined) {
-      throw buildNotFoundError('secret', name);
-    }
-
-    return name;
-  });
-}
-
-// impd's requireImageScope (packages/daemon auth/token-store.ts)
-function requireImageScope(
-  imageRefPrefix: string | null,
-  token: Readonly<Pick<Token, 'scope' | 'imps'>>,
-): void {
-  if (imageRefPrefix !== null && (token.imps === null || token.scope !== 'manage')) {
-    throw new ORPCError('BAD_REQUEST', {
-      message: 'a token that may add images needs scope manage and imp patterns',
-    });
-  }
 }
 
 // impd's key entry: a parsed key that no token holds yet
@@ -803,50 +810,45 @@ function readSshKey(line: string): SshKey {
   return { fingerprint, type: key.type, comment: key.comment };
 }
 
-function readTextOrder(a: string, b: string): number {
-  if (a === b) {
-    return 0;
+// impd's readGrantable: only a manage token for some imps takes a list, of
+// secrets that exist
+function readGrantable(
+  names: readonly string[],
+  token: Readonly<Pick<Token, 'scope' | 'imps'>>,
+): string[] {
+  if (names.length === 0) {
+    return [];
   }
 
-  return a < b ? -1 : 1;
+  if (token.imps === null || token.scope !== 'manage') {
+    throw new ORPCError('BAD_REQUEST', {
+      message: 'a token that may grant secrets needs scope manage and imp patterns',
+    });
+  }
+
+  return names.map((name) => {
+    if (secretCollection.findFirst((query) => query.where({ name })) === undefined) {
+      throw buildNotFoundError('secret', name);
+    }
+
+    return name;
+  });
 }
 
-function toCallerImp(session: Readonly<ImpdSession>, imp: Imp): Imp {
-  return { ...imp, leases: toLeaseSummary(toCaller(session), imp.name, []) };
-}
-
-function toCheckpoint(row: Readonly<Checkpoint & { readonly imp: string }>): Checkpoint {
-  const { imp: _imp, ...checkpoint } = row;
-
-  return checkpoint;
-}
-
-function toToken(row: Readonly<Token & { readonly secret: string }>): Token {
-  const { secret: _secret, ...token } = row;
-
-  return token;
+// impd's requireImageScope (packages/daemon auth/token-store.ts)
+function requireImageScope(
+  imageRefPrefix: string | null,
+  token: Readonly<Pick<Token, 'scope' | 'imps'>>,
+): void {
+  if (imageRefPrefix !== null && (token.imps === null || token.scope !== 'manage')) {
+    throw new ORPCError('BAD_REQUEST', {
+      message: 'a token that may add images needs scope manage and imp patterns',
+    });
+  }
 }
 
 function toIdentity(session: Readonly<ImpdSession>): Identity {
   const { expiresAt: _expiresAt, ...identity } = session;
 
   return identity;
-}
-
-// the caller impd builds for a dashboard session (packages/daemon
-// auth/authenticate.ts), named after its token
-function toCaller(session: Readonly<ImpdSession>): Caller {
-  return {
-    kind: session.kind,
-    name: session.name,
-    scope: session.scope,
-    imps: session.imps,
-    grantable: session.grantable.map((name) => ({ name, generation: '1' })),
-    imageRefPrefix: session.imageRefPrefix,
-    tokenId: session.name,
-    grantId: null,
-    expiresAt: session.expiresAt.getTime(),
-    principal: session.name,
-    display: session.name,
-  };
 }

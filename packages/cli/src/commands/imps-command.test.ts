@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImage } from '@impz/daemon/src/db/images';
-import { createImp, findImpByName, updateImpMove } from '@impz/daemon/src/db/imps';
+import { createImp, readImpByName, updateImpMove } from '@impz/daemon/src/db/imps';
 import { buildImagePaths, buildImpPaths } from '@impz/daemon/src/storage/data-layout';
 import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
 import { buildMockNewImp } from '@impz/daemon/src/test-utils/build-mock-new-imp';
@@ -12,7 +12,7 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { writeHostConfig } from '../config/host-store';
 import { buildStubTimeouts } from '../test-utils/build-stub-timeouts';
-import { parseJsonOutput } from '../test-utils/parse-json-output';
+import { readJsonOutput } from '../test-utils/read-json-output';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';
 import { startStubNewerImpd } from '../test-utils/start-stub-newer-impd';
@@ -27,11 +27,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-cli-imps-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-cli-imps-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { home: { HOME: dir, XDG_CONFIG_HOME: dir }, stack };
+  return { home: { HOME: directory, XDG_CONFIG_HOME: directory }, stack };
 }
 
 test('#listForkWarnings names each grant the fork did not get', () => {
@@ -163,7 +163,7 @@ test('#ls lists every saved host and exits 3 when one of them fails', async () =
   await box.client.imps.create({ name: 'db' });
 
   // db is on its way to another host
-  const db = await findImpByName(box.db, 'db');
+  const db = await readImpByName(box.db, 'db');
 
   invariant(db);
 
@@ -264,7 +264,7 @@ test('#listAllImps gives up on a host that never answers once its timer runs out
     ['box', 'web', 'running'],
   ]);
 
-  expect(timeouts.timers.map((timer) => timer.ms)).toStrictEqual([5000, 5000]);
+  expect(timeouts.timers.map((timer) => timer.durationMs)).toStrictEqual([5000, 5000]);
   expect(silent.requests).toStrictEqual(['/rpc/imps/list']);
   expect(printError).toHaveBeenCalledExactlyOnceWith('impz: silent: no answer in 5 s');
   expect(code).toBe(3);
@@ -544,7 +544,7 @@ test('#ls prints --json output in the shape of the committed schema', async () =
   const listed = await runCLIInProcess({ args: ['ls', '--json'], env: ctx.home });
 
   expect(listed.code).toBe(0);
-  expect(parseJsonOutput('ls', listed.stdout).data).toStrictEqual(JSON.parse(listed.stdout));
+  expect(readJsonOutput('ls', listed.stdout).data).toStrictEqual(JSON.parse(listed.stdout));
 });
 
 test('#ls marks an awake imp whose inner container is down', async () => {

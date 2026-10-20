@@ -17,7 +17,7 @@ const MAX_BACKOFF_MS = 15_000;
 export interface EventSource extends ClientEventSource {
   readonly checkServer: () => Promise<Pick<ServerCheck, 'clientVersion' | 'serverVersion'>>;
   readonly now: () => number;
-  readonly wait: (ms: number) => Promise<void>;
+  readonly wait: (durationMs: number) => Promise<void>;
 
   // one line on stderr for each reconnect
   readonly warn: (line: string) => void;
@@ -56,6 +56,7 @@ export async function printEvents(
   await pRetry(readUntilEnd, {
     retries: Number.POSITIVE_INFINITY,
     minTimeout: 0,
+    // oxlint-disable-next-line zgeoff/verb-contract -- p-retry's option name
     shouldRetry: async (context) => {
       if (!(context.error instanceof StreamEndedError)) {
         return false;
@@ -78,6 +79,32 @@ export async function printEvents(
 class StreamEndedError extends Error {
   override name = 'StreamEndedError';
 }
+
+export const eventsCommand = defineCommand({
+  name: 'events',
+  description: 'Follow impd: every imp, then each change, as one JSON object a line',
+  args: {
+    name: { type: 'positional', description: 'imp name (default: every imp)', required: false },
+  },
+  run: (ctx) =>
+    runAction(ctx.extensions.impz, (client) =>
+      printEvents(
+        {
+          events: client.events,
+          checkServer: () => client.checkServer(),
+          now: Date.now,
+          wait: (durationMs) => Bun.sleep(durationMs),
+          warn: (line) => {
+            ctx.extensions.impz.io.printError(line);
+          },
+        },
+        ctx.values.name ?? null,
+        (line) => {
+          ctx.extensions.impz.io.print(line);
+        },
+      ),
+    ),
+});
 
 // Prints the stream until it ends, and says why it ended. An impd that
 // refuses the call (no stream, no access) is an error, not an end.
@@ -122,29 +149,3 @@ function isMissingStream(error: unknown): boolean {
     error instanceof UnknownProcedureError || (error instanceof ORPCError && error.status === 404)
   );
 }
-
-export const eventsCommand = defineCommand({
-  name: 'events',
-  description: 'Follow impd: every imp, then each change, as one JSON object a line',
-  args: {
-    name: { type: 'positional', description: 'imp name (default: every imp)', required: false },
-  },
-  run: (ctx) =>
-    runAction(ctx.extensions.impz, (client) =>
-      printEvents(
-        {
-          events: client.events,
-          checkServer: () => client.checkServer(),
-          now: Date.now,
-          wait: (ms) => Bun.sleep(ms),
-          warn: (line) => {
-            ctx.extensions.impz.io.printError(line);
-          },
-        },
-        ctx.values.name ?? null,
-        (line) => {
-          ctx.extensions.impz.io.print(line);
-        },
-      ),
-    ),
-});

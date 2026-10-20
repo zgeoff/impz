@@ -3,9 +3,9 @@ import { writeUnknownBoot } from '../db/cold-boots';
 import { listImps } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
-import { readErrorMessage } from '../read-error-message';
+import { getErrorMessage } from '../get-error-message';
 import type { ImpPaths } from '../storage/data-layout';
-import { isJailedFirecracker } from '../vmm/firecracker-process';
+import { probeJailedFirecracker } from '../vmm/firecracker-process';
 import { checkAdoptedMergeFlag } from './check-merge-flag';
 import type { ImpClock, ImpGuest, ImpHost, ImpMemory, ImpVms } from './imp-context';
 import type { ImpLock, LockedImp } from './imp-lock';
@@ -60,7 +60,7 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
 
     // a reboot freed the disk of a hold impd finds with the flag clear, which
     // only a reboot clears, or with another boot's id, whatever the flag reads
-    const bootId = context.kernelOops.findBootId();
+    const bootId = context.kernelOops.readCurrentBootId();
 
     await removeStaleOopsHolds(
       context,
@@ -100,10 +100,10 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
 
             // a loaded guest may answer late; killing it would lose its memory
             if (imp.state === 'running') {
-              const ready = await context.vms.isAgentReady(paths);
+              const ready = await context.vms.probeAgentReady(paths);
 
               const note = ready ? '' : ' (the agent does not answer yet)';
-              const jailed = imp.pid !== null && isJailedFirecracker(imp.pid) ? 'jailed ' : '';
+              const jailed = imp.pid !== null && probeJailedFirecracker(imp.pid) ? 'jailed ' : '';
 
               context.log(
                 `impd: ${imp.name}: re-adopted ${jailed}firecracker pid ${String(imp.pid)}${note}`,
@@ -136,13 +136,13 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
             const error = 'impd stopped while the imp was being created';
 
             try {
-              if (imp.pid !== null && context.vms.isVmAlive(imp.pid, paths)) {
+              if (imp.pid !== null && context.vms.probeVmAlive(imp.pid, paths)) {
                 await context.vms.stopVm(imp.pid, paths, false);
               }
             } catch (stopError) {
               // one stuck VM must not keep impd from starting; the record
               // keeps its pid, so a start or destroy kills it again
-              context.log(`impd: ${imp.name}: could not stop: ${readErrorMessage(stopError)}`);
+              context.log(`impd: ${imp.name}: could not stop: ${getErrorMessage(stopError)}`);
 
               await ops.updateState(imp, { reason: 'failed', state: 'error', error });
 
@@ -186,6 +186,6 @@ async function writeAdoptedBoot(context: ImpHost & ImpVms, imp: ImpRecord): Prom
       await writeUnknownBoot(context.db, imp.id, ping.bootId, new Date());
     }
   } catch (error) {
-    context.log(`impd: ${imp.name}: could not read its boot id: ${readErrorMessage(error)}`);
+    context.log(`impd: ${imp.name}: could not read its boot id: ${getErrorMessage(error)}`);
   }
 }

@@ -6,13 +6,13 @@ import { ORPCError } from '@orpc/server';
 import * as z from 'zod';
 import { buildConflictError } from '../api-errors';
 import type { Config } from '../config';
-import { countImageDigestUses, createImage, findImageByName, updateImage } from '../db/images';
+import { countImageDigestUses, createImage, readImageByName, updateImage } from '../db/images';
 import type { ImageRecord } from '../db/images';
 import type { ImpDatabase } from '../db/open-database';
-import { createKeyedMutex } from '../process/keyed-mutex';
+import { getErrorMessage } from '../get-error-message';
+import { buildKeyedMutex } from '../process/keyed-mutex';
 import { runChecked, runCommand } from '../process/run-command';
 import { createSingleFlight } from '../process/single-flight';
-import { readErrorMessage } from '../read-error-message';
 import { buildImagePaths, buildImagesDir } from '../storage/data-layout';
 import type { DiskBudget } from '../storage/disk-budget';
 import type { StorageBackend } from '../storage/storage-backend';
@@ -86,6 +86,16 @@ interface ImageWriterDeps {
   readonly dockerEnv?: Readonly<Record<string, string>>;
 }
 
+// a builder's export, unpacked at root, on its way to a rootfs and a row
+interface GuestRootfs {
+  readonly root: string;
+  readonly digest: string;
+  readonly config: unknown;
+  readonly imageName: string;
+  readonly ref: string;
+  readonly signal: AbortSignal;
+}
+
 // Images land here, whether an add or a build made them: each digest's
 // rootfs once, then the image row by its name.
 export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
@@ -100,7 +110,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   const guestWriters = new Map<string, number>();
   const freshRootfs = new Set<string>();
 
-  const guestRootfsLock = createKeyedMutex();
+  const guestRootfsLock = buildKeyedMutex();
   const docker = { env: deps.dockerEnv };
 
   const readInspect = async (ref: string, signal: AbortSignal | undefined) => {
@@ -147,8 +157,8 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     const plan = planRootfs(usage);
 
     // the backend gives the directory: on ZFS it is a dataset of its own
-    await deps.storage.createImage(digest, async (dir) => {
-      const image = join(dir, 'rootfs.ext4');
+    await deps.storage.createImage(digest, async (directory) => {
+      const image = join(directory, 'rootfs.ext4');
 
       await runChecked(['truncate', '-s', String(plan.bytes), image]);
 
@@ -165,14 +175,14 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
         image,
       ]);
 
-      writeFileSync(join(dir, 'config.json'), JSON.stringify(ociConfig ?? {}, null, 2));
+      writeFileSync(join(directory, 'config.json'), JSON.stringify(ociConfig ?? {}, null, 2));
     });
 
     return readDiskUsage(buildImagePaths(deps.config.dataDir, digest).rootfs);
   };
 
   // an image of the host's engine → its rootfs, unless it has one
-  const buildRootfs = async (ref: string, digest: string, ociConfig: unknown): Promise<number> => {
+  const createRootfs = async (ref: string, digest: string, ociConfig: unknown): Promise<number> => {
     const paths = buildImagePaths(deps.config.dataDir, digest);
 
     if (existsSync(paths.rootfs)) {
@@ -212,7 +222,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     digest: string,
     sizeBytes: number,
   ): Promise<ImageRecord> => {
-    const existing = await findImageByName(deps.db, imageName);
+    const existing = await readImageByName(deps.db, imageName);
 
     requireDockerImage(existing);
 
@@ -282,7 +292,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     return withRoom(buildBytes, () =>
       storageGate.join(async () => {
         const sizeBytes = await createRootfsOnce(inspect.Id, () =>
-          buildRootfs(ref, inspect.Id, inspect.Config),
+          createRootfs(ref, inspect.Id, inspect.Config),
         );
 
         return writeImageRow(imageName, ref, inspect.Id, sizeBytes);
@@ -341,7 +351,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
           await removeUnusedRootfs(digest);
         } catch (error) {
           deps.log(
-            `impd: image ${guest.imageName}: could not remove the unused rootfs of ${digest}: ${readErrorMessage(error)}`,
+            `impd: image ${guest.imageName}: could not remove the unused rootfs of ${digest}: ${getErrorMessage(error)}`,
           );
         }
       });
@@ -414,16 +424,6 @@ export function requireDockerImage(existing: ImageRecord | undefined): void {
       `image ${existing.name} is a template; make it again from an imp, or pick another name`,
     );
   }
-}
-
-// a builder's export, unpacked at root, on its way to a rootfs and a row
-interface GuestRootfs {
-  readonly root: string;
-  readonly digest: string;
-  readonly config: unknown;
-  readonly imageName: string;
-  readonly ref: string;
-  readonly signal: AbortSignal;
 }
 
 // bytes on disk and files in the unpacked image

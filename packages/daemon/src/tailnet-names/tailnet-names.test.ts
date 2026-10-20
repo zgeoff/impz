@@ -13,7 +13,7 @@ import invariant from 'tiny-invariant';
 import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import { createImage } from '../db/images';
-import { findImpByName, updateImpMove } from '../db/imps';
+import { readImpByName, updateImpMove } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import { deriveSlotAddress } from '../net/addressing';
 import {
@@ -24,15 +24,15 @@ import {
 import { createXfsBackend } from '../storage/xfs-backend';
 import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubTailscaleApi } from '../test-utils/build-stub-tailscale-api';
 import { buildStubTailscaleServe } from '../test-utils/build-stub-tailscale-serve';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { createPresenceCheck } from './build-tailnet-names';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
+import { createStubTailscaleApi } from '../test-utils/create-stub-tailscale-api';
 import { createServiceServe } from './service-serve';
 import { createServicesApi } from './services-api';
 import { SERVICE_TAG, createTailnetNames } from './tailnet-names';
 import type { TailnetNamesDeps } from './tailnet-names';
+import { createPresenceCheck } from './wire-tailnet-names';
 
 interface SetupOptions {
   // '1' wires impd's own per-imp names (IMP_TAILNET_NAMES) on a tailnet node
@@ -60,7 +60,7 @@ async function setupTest(options: SetupOptions = {}) {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     IMP_TAILNET_NAMES: options.tailnetNames,
     IMP_TAILSCALE_NODE: options.tailnetNames,
   });
@@ -181,7 +181,7 @@ async function setupTest(options: SetupOptions = {}) {
   );
 
   // the OAuth client the stub tailnet knows, which every API call needs a token from
-  const tailscaleApi = buildStubTailscaleApi({
+  const tailscaleApi = createStubTailscaleApi({
     client: { clientId: 'kExample', clientSecret: 'secret' },
   });
 
@@ -256,7 +256,7 @@ test('it serves each imp’s service to the imp’s own port', async () => {
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const imp = await findImpByName(ctx.db, 'box');
+  const imp = await readImpByName(ctx.db, 'box');
 
   invariant(imp);
 
@@ -541,7 +541,7 @@ test('it keeps a moving imp’s service while the move sends', async () => {
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const imp = await findImpByName(ctx.db, 'box');
+  const imp = await readImpByName(ctx.db, 'box');
 
   invariant(imp);
 
@@ -561,7 +561,7 @@ test('it neither writes nor clears a moving imp’s service while the move sends
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const imp = await findImpByName(ctx.db, 'box');
+  const imp = await readImpByName(ctx.db, 'box');
 
   invariant(imp);
 
@@ -592,7 +592,7 @@ test('it removes a moved imp’s service once the target holds a verified copy',
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const imp = await findImpByName(ctx.db, 'box');
+  const imp = await readImpByName(ctx.db, 'box');
 
   invariant(imp);
 
@@ -709,7 +709,7 @@ test('it fails only the imp whose name a device holds, and keeps that imp runnin
 
   await names.runSync();
 
-  const laptop = await findImpByName(ctx.db, 'laptop');
+  const laptop = await readImpByName(ctx.db, 'laptop');
 
   expect(names.readStatus()).toStrictEqual({
     live: 1,

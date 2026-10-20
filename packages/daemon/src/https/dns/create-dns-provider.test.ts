@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
-import { buildStubCloudflareApi } from '../../test-utils/build-stub-cloudflare-api';
+import { createStubCloudflareApi } from '../../test-utils/create-stub-cloudflare-api';
 import { createDnsProvider } from './create-dns-provider';
 
 test('it sends a challtestsrv provider’s records to its API', async () => {
@@ -27,7 +27,7 @@ test('it sends a challtestsrv provider’s records to its API', async () => {
 });
 
 test('it sends a Cloudflare provider’s calls to Cloudflare with the token', async () => {
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 

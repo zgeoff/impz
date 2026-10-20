@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { findStrayVms, listContainerVms, readLoopDevices, waitForImpd } from '../lib/chaos';
+import { collectStrayVms, listContainerVms, readLoopDevices, waitForImpd } from '../lib/chaos';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { createInstanceClient, listImps, requireImp, runImp, tryImp } from '../lib/imp-cli';
@@ -7,7 +7,7 @@ import { waitForExec } from '../lib/imps';
 import { instance, runDevScript } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // A disk that cannot take a sleep's memory file (IMP_DISK_RESERVE_GIB):
 // impd refuses the sleep with DISK_FULL and the imp stays awake.
@@ -19,7 +19,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('chaos'), stack, client };
+  return { prefix: getSuitePrefix('chaos'), stack, client };
 }
 
 test('it keeps an imp awake with DISK_FULL when the disk cannot take its sleep', async () => {
@@ -53,7 +53,7 @@ test('it keeps an imp awake with DISK_FULL when the disk cannot take its sleep',
   const after = await requireImp(name);
 
   expect(devices.length).toBeLessThanOrEqual(1);
-  expect(findStrayVms(rows, vms)).toStrictEqual([]);
+  expect(collectStrayVms(rows, vms)).toStrictEqual([]);
 
   expect(result).toStrictEqual({
     exitCode: 1,

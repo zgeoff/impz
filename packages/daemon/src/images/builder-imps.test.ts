@@ -8,7 +8,7 @@ import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import type { ImpdDeps } from '../create-impd';
 import { createImage } from '../db/images';
-import { findImpByName, listImps } from '../db/imps';
+import { listImps, readImpByName } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import {
   buildImagePaths,
@@ -25,8 +25,8 @@ import {
   buildStubImageBuilder,
 } from '../test-utils/build-stub-image-builder';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import { createBuilderImage } from '../test-utils/create-builder-image';
-import { findFreePorts } from '../test-utils/find-free-ports';
 import { createBuilders } from './builder-imps';
 import { writeGuestTree } from './guest-build';
 
@@ -49,7 +49,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with, as setupSystemFiles installs it
@@ -596,7 +596,7 @@ test('it never removes a user imp that took the id of a removed builder on a ret
     kind: 'builder',
   });
 
-  const record = await findImpByName(ctx.db, builder.name);
+  const record = await readImpByName(ctx.db, builder.name);
 
   invariant(record);
 
@@ -628,7 +628,7 @@ test('it ends an export over its file limit and removes its builder, with no cli
 
   onTestFinished(() => rm(tree, { recursive: true, force: true }));
 
-  const parents = Array.from({ length: 20 }, (_, n) => `d${String(n)}`).join('/');
+  const parents = Array.from({ length: 20 }, (_, index) => `d${String(index)}`).join('/');
 
   await mkdir(join(tree, 'tree', parents), { recursive: true });
   await writeFile(join(tree, 'tree', parents, 'f'), 'x');

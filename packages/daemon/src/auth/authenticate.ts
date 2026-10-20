@@ -3,7 +3,7 @@ import type { KnownHosts } from './ambient-request';
 import type { Caller } from './caller';
 import { readSession, readSessionCookies } from './session-cookie';
 import type { TailnetIdentities } from './tailnet-identity';
-import { readBearer } from './token-store';
+import { findBearer } from './token-store';
 import type { TokenStore } from './token-store';
 
 export interface CallerSources {
@@ -36,7 +36,7 @@ export async function resolveCaller(
   sources: Readonly<CallerSources>,
   options: Readonly<CallerOptions>,
 ): Promise<Caller | null> {
-  const bearer = readBearer(request.headers.get('authorization'));
+  const bearer = findBearer(request.headers.get('authorization'));
 
   if (bearer !== null) {
     return sources.tokens.authenticate(bearer);

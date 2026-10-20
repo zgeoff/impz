@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { sendRawBuild, writeBuildContext } from '../lib/build-context';
 import { config } from '../lib/config';
 import { runConsole } from '../lib/console';
-import { getThroughProxy } from '../lib/http';
+import { readThroughProxy } from '../lib/http';
 import {
   createInstanceClient,
   listImageNames,
@@ -19,7 +19,7 @@ import { waitForExec } from '../lib/imps';
 import { REPO_ROOT, instance, readImpdLogSince, readToken, runChecked } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImageIfPresent, removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -43,7 +43,7 @@ async function setupTest() {
 
   stack.defer(() => rm(buildRoot, { recursive: true, force: true }));
 
-  return { prefix: readSuitePrefix('images'), stack, client, buildRoot };
+  return { prefix: getSuitePrefix('images'), stack, client, buildRoot };
 }
 
 test('it builds images/examples/hello from its pinned base in a builder, and the imp serves its page through the proxy', async () => {
@@ -88,7 +88,7 @@ test('it builds images/examples/hello from its pinned base in a builder, and the
 
   // until its own page comes through, not just any answer
   const body = await waitFor(`${name} to serve its page`, async () => {
-    const served = await getThroughProxy(name);
+    const served = await readThroughProxy(name);
 
     if (served !== page.trim()) {
       throw new Error(`not its page yet: ${served.slice(0, 80)}`);
@@ -106,16 +106,16 @@ test('it brings an uploaded context’s files, ENV and WORKDIR into the imp less
 
   const name = `${ctx.prefix}built`;
 
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'upload',
     'FROM alpine:3.20\nRUN echo built > /etc/e2e-marker\nENV E2E=yes\nWORKDIR /srv\nCOPY . /srv/ctx/\n',
   );
 
-  await writeFile(join(dir, '.dockerignore'), '*.secret\n');
-  await writeFile(join(dir, 'kept.txt'), 'kept');
-  await writeFile(join(dir, 'dropped.secret'), 'dropped');
-  await runImp('image', 'build', dir, '--name', name);
+  await writeFile(join(directory, '.dockerignore'), '*.secret\n');
+  await writeFile(join(directory, 'kept.txt'), 'kept');
+  await writeFile(join(directory, 'dropped.secret'), 'dropped');
+  await runImp('image', 'build', directory, '--name', name);
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
@@ -151,7 +151,7 @@ test('it brings an uploaded context’s files, ENV and WORKDIR into the imp less
   expect(kept).toContain(name);
 
   // the same Dockerfile from the host's path: the same image, kept as it is
-  await runImp('image', 'build', dir, '--name', name, '--on-host');
+  await runImp('image', 'build', directory, '--name', name, '--on-host');
   await runImp('rm', name);
   await runImp('image', 'rm', name);
 
@@ -166,13 +166,13 @@ test('it keeps a file capability through the build: nobody binds port 80 with it
   const name = `${ctx.prefix}caps`;
 
   // a copy named busybox-* still takes the applet as its first argument
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'caps',
     'FROM alpine:3.20\nRUN apk add --no-cache libcap && cp /bin/busybox /usr/local/bin/busybox-lowbind && setcap cap_net_bind_service+ep /usr/local/bin/busybox-lowbind\n',
   );
 
-  await runImp('image', 'build', dir, '--name', name);
+  await runImp('image', 'build', directory, '--name', name);
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
@@ -206,18 +206,18 @@ test('it leaves out what .dockerignore drops from a build from a host path, as a
 
   const name = `${ctx.prefix}onhost`;
 
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'on-host',
     'FROM busybox:1.37\nCOPY . /ctx/\n',
   );
 
-  await writeFile(join(dir, '.dockerignore'), '*.secret\n');
-  await writeFile(join(dir, 'kept.txt'), 'kept');
-  await writeFile(join(dir, 'dropped.secret'), 'dropped');
+  await writeFile(join(directory, '.dockerignore'), '*.secret\n');
+  await writeFile(join(directory, 'kept.txt'), 'kept');
+  await writeFile(join(directory, 'dropped.secret'), 'dropped');
 
   // ./ and the default name: impd sends the proxy one spelling
-  await runImp('image', 'build', dir, '--name', name, '--on-host', '--file', './Dockerfile');
+  await runImp('image', 'build', directory, '--name', name, '--on-host', '--file', './Dockerfile');
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
@@ -237,14 +237,14 @@ test('it builds with the pinned frontend whatever a # syntax= line names', async
 
   const name = `${ctx.prefix}syntax`;
 
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'syntax',
     '# syntax=example.invalid/not-a-frontend:1\nFROM busybox:1.37\nRUN --mount=type=cache,target=/c true\n',
   );
 
   // a frontend from the line would fail to resolve example.invalid
-  const built = await tryImp(['image', 'build', dir, '--name', name]);
+  const built = await tryImp(['image', 'build', directory, '--name', name]);
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
@@ -275,7 +275,7 @@ test('it still extracts a local ADD of a tar, and builds COPY --from a stage and
     'busybox:1.37',
   ]);
 
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'local-add',
     [
@@ -289,9 +289,9 @@ test('it still extracts a local ADD of a tar, and builds COPY --from a stage and
     ].join('\n'),
   );
 
-  await writeFile(join(dir, 'inner.txt'), 'inside the tar\n');
-  await runChecked(['tar', '-C', dir, '-cf', join(dir, 'files.tar'), 'inner.txt']);
-  await runImp('image', 'build', dir, '--name', name);
+  await writeFile(join(directory, 'inner.txt'), 'inside the tar\n');
+  await runChecked(['tar', '-C', directory, '-cf', join(directory, 'files.tar'), 'inner.txt']);
+  await runImp('image', 'build', directory, '--name', name);
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
@@ -313,17 +313,17 @@ test('it builds a raw upload whose only Dockerfile is a lowercase dockerfile, as
   const ctx = await setupTest();
 
   const name = `${ctx.prefix}lower`;
-  const dir = join(ctx.buildRoot, 'lowercase');
+  const directory = join(ctx.buildRoot, 'lowercase');
 
-  await mkdir(dir);
-  await writeFile(join(dir, 'dockerfile'), 'FROM busybox:1.37\nRUN echo lower > /which\n');
+  await mkdir(directory);
+  await writeFile(join(directory, 'dockerfile'), 'FROM busybox:1.37\nRUN echo lower > /which\n');
 
   const token = await readToken();
 
   const response = await sendRawBuild({
     apiUrl: instance.apiUrl,
     token,
-    dir,
+    directoryPath: directory,
     files: ['dockerfile'],
     name,
   });
@@ -350,23 +350,23 @@ test('it applies no ignore file to a raw upload, Dockerfile.dockerignore include
 
   const name = `${ctx.prefix}ignores`;
 
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'ignore-names',
     'FROM busybox:1.37\nCOPY . /ctx/\n',
   );
 
-  await writeFile(join(dir, 'Dockerfile.dockerignore'), 'by-dockerfile.txt\n');
-  await writeFile(join(dir, '.dockerignore'), 'by-default.txt\n');
-  await writeFile(join(dir, 'by-dockerfile.txt'), 'x');
-  await writeFile(join(dir, 'by-default.txt'), 'y');
+  await writeFile(join(directory, 'Dockerfile.dockerignore'), 'by-dockerfile.txt\n');
+  await writeFile(join(directory, '.dockerignore'), 'by-default.txt\n');
+  await writeFile(join(directory, 'by-dockerfile.txt'), 'x');
+  await writeFile(join(directory, 'by-default.txt'), 'y');
 
   const token = await readToken();
 
   const response = await sendRawBuild({
     apiUrl: instance.apiUrl,
     token,
-    dir,
+    directoryPath: directory,
     files: [
       'Dockerfile',
       'Dockerfile.dockerignore',

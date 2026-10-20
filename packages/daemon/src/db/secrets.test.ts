@@ -19,9 +19,9 @@ import { createXfsBackend } from '../storage/xfs-backend';
 import { buildMockNewImage } from '../test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import { createImage } from './images';
-import { findImpByName } from './imps';
+import { readImpByName } from './imps';
 import { openDatabase } from './open-database';
 import { listGrantNames, listGrantedRules } from './secrets';
 
@@ -49,7 +49,7 @@ async function setupTest() {
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     }),
     defaultDiskBytes: 0,
   };
@@ -167,7 +167,7 @@ test('it makes exactly one of two clashing grants made at once, and refuses the 
     ctx.client.grants.add({ name: 'dev', secret: 'gh-api' }),
   ]);
 
-  const dev = await findImpByName(ctx.db, 'dev');
+  const dev = await readImpByName(ctx.db, 'dev');
 
   invariant(dev);
 

@@ -1,5 +1,5 @@
 export interface AsleepLine {
-  readonly ms: number;
+  readonly durationMs: number;
 
   // what stayed plugged through the sleep; null for an imp without elastic memory
   readonly pluggedMib: number | null;
@@ -19,10 +19,10 @@ export function findAsleepLine(log: string, name: string): AsleepLine | null {
     return null;
   }
 
-  const ms = /: asleep in (?<ms>\d+)ms /v.exec(line)?.groups?.['ms'];
+  const durationMs = /: asleep in (?<ms>\d+)ms /v.exec(line)?.groups?.['ms'];
   const plugged = /, (?<plugged>\d+) MiB plugged,/v.exec(line)?.groups?.['plugged'];
 
-  if (ms === undefined) {
+  if (durationMs === undefined) {
     throw new Error(`no duration in ${JSON.stringify(line)}`);
   }
 
@@ -33,5 +33,9 @@ export function findAsleepLine(log: string, name: string): AsleepLine | null {
     ]),
   );
 
-  return { ms: Number(ms), pluggedMib: plugged === undefined ? null : Number(plugged), steps };
+  return {
+    durationMs: Number(durationMs),
+    pluggedMib: plugged === undefined ? null : Number(plugged),
+    steps,
+  };
 }

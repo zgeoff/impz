@@ -2,7 +2,7 @@ import type { TickerTimer } from '../process/ticker';
 
 interface PendingRun {
   readonly run: () => Promise<void>;
-  readonly ms: number;
+  readonly durationMs: number;
 }
 
 // The timers a ticker waits on, stepped by hand: a scheduled run starts only
@@ -11,8 +11,8 @@ interface PendingRun {
 export function buildStubTickerTimer() {
   const pending = new Map<string, PendingRun>();
 
-  const holdRun: TickerTimer = (label, run, ms) => {
-    const entry: PendingRun = { run, ms };
+  const holdRun: TickerTimer = (label, run, durationMs) => {
+    const entry: PendingRun = { run, durationMs };
 
     pending.set(label, entry);
 
@@ -42,6 +42,6 @@ export function buildStubTickerTimer() {
 
     // the delay of each pending run, by label
     readDelays: (): Record<string, number> =>
-      Object.fromEntries([...pending].map(([label, entry]) => [label, entry.ms])),
+      Object.fromEntries([...pending].map(([label, entry]) => [label, entry.durationMs])),
   };
 }

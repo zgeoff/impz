@@ -1,4 +1,4 @@
-import { readErrorMessage } from '../read-error-message';
+import { getErrorMessage } from '../get-error-message';
 import type { OpenedParts } from './open-move-parts';
 
 interface MovePartsLog {
@@ -11,6 +11,6 @@ export async function removeMoveParts(deps: MovePartsLog, opened: OpenedParts): 
   try {
     await opened.close();
   } catch (error) {
-    deps.log(`impd: move: closing the source's parts failed: ${readErrorMessage(error)}`);
+    deps.log(`impd: move: closing the source's parts failed: ${getErrorMessage(error)}`);
   }
 }

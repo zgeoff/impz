@@ -69,13 +69,13 @@ export function parseContainerCurl(stdout: string, stderr: string): ContainerRes
 
 // the wake time impd adds to a response that woke the imp
 export function readWakeMs(headers: string): number {
-  const ms = /^x-imp-wake-ms: (?<ms>\d+)/imv.exec(headers)?.groups?.['ms'];
+  const durationMs = /^x-imp-wake-ms: (?<ms>\d+)/imv.exec(headers)?.groups?.['ms'];
 
-  if (ms === undefined) {
+  if (durationMs === undefined) {
     throw new Error('the response reports no x-imp-wake-ms');
   }
 
-  return Number(ms);
+  return Number(durationMs);
 }
 
 // Thin glue over the host container: throws when curl fails, as on a

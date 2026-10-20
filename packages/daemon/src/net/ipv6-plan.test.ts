@@ -16,11 +16,11 @@ import {
 } from './ipv6-plan';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-ipv6-plan-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-ipv6-plan-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test.each(['auto', 'off'] as const)(
@@ -277,13 +277,13 @@ test("#checkHostRules6 finds every one of setup-net's IPv6 rules and settings in
     },
   });
 
-  await mkdir(join(ctx.dir, 'default'));
-  await mkdir(join(ctx.dir, 'all'));
-  await writeFile(join(ctx.dir, 'default', 'accept_ra'), '0\n');
-  await writeFile(join(ctx.dir, 'default', 'accept_redirects'), '0\n');
-  await writeFile(join(ctx.dir, 'all', 'forwarding'), '1\n');
+  await mkdir(join(ctx.directoryPath, 'default'));
+  await mkdir(join(ctx.directoryPath, 'all'));
+  await writeFile(join(ctx.directoryPath, 'default', 'accept_ra'), '0\n');
+  await writeFile(join(ctx.directoryPath, 'default', 'accept_redirects'), '0\n');
+  await writeFile(join(ctx.directoryPath, 'all', 'forwarding'), '1\n');
 
-  const missing = await checkHostRules6(ctx.dir, ip.run);
+  const missing = await checkHostRules6(ctx.directoryPath, ip.run);
 
   expect(missing).toBeNull();
 });
@@ -297,7 +297,7 @@ test('#checkHostRules6 names the first missing filter rule', async () => {
     },
   });
 
-  const missing = await checkHostRules6(ctx.dir, ip.run);
+  const missing = await checkHostRules6(ctx.directoryPath, ip.run);
 
   expect(missing).toBe('no ip6tables -t filter -A FORWARD -i imp+ -o imp+ -j DROP');
 });
@@ -319,7 +319,7 @@ test('#checkHostRules6 names the missing raw rule once the filter rules are in p
     },
   });
 
-  const missing = await checkHostRules6(ctx.dir, ip.run);
+  const missing = await checkHostRules6(ctx.directoryPath, ip.run);
 
   expect(missing).toBe('no ip6tables -t raw -A PREROUTING -i imp+ -m rpfilter --invert -j DROP');
 });
@@ -343,7 +343,7 @@ test.each(['filter', 'raw'])(
       },
     });
 
-    const missing = await checkHostRules6(ctx.dir, ip.run);
+    const missing = await checkHostRules6(ctx.directoryPath, ip.run);
 
     expect(missing).toBe(
       `ip6tables -t ${table}: ip6tables v1.8.10 (nf_tables): table '${table}' does not exist`,
@@ -366,12 +366,12 @@ test('#checkHostRules6 names an IPv6 sysctl the kernel does not have', async () 
     },
   });
 
-  await mkdir(join(ctx.dir, 'default'));
-  await mkdir(join(ctx.dir, 'all'));
-  await writeFile(join(ctx.dir, 'default', 'accept_redirects'), '0\n');
-  await writeFile(join(ctx.dir, 'all', 'forwarding'), '1\n');
+  await mkdir(join(ctx.directoryPath, 'default'));
+  await mkdir(join(ctx.directoryPath, 'all'));
+  await writeFile(join(ctx.directoryPath, 'default', 'accept_redirects'), '0\n');
+  await writeFile(join(ctx.directoryPath, 'all', 'forwarding'), '1\n');
 
-  const missing = await checkHostRules6(ctx.dir, ip.run);
+  const missing = await checkHostRules6(ctx.directoryPath, ip.run);
 
   expect(missing).toBe('net.ipv6.conf.default.accept_ra is missing, not 0');
 });
@@ -391,13 +391,13 @@ test('#checkHostRules6 names an IPv6 sysctl that holds the wrong value', async (
     },
   });
 
-  await mkdir(join(ctx.dir, 'default'));
-  await mkdir(join(ctx.dir, 'all'));
-  await writeFile(join(ctx.dir, 'default', 'accept_redirects'), '0\n');
-  await writeFile(join(ctx.dir, 'default', 'accept_ra'), '0\n');
-  await writeFile(join(ctx.dir, 'all', 'forwarding'), '0\n');
+  await mkdir(join(ctx.directoryPath, 'default'));
+  await mkdir(join(ctx.directoryPath, 'all'));
+  await writeFile(join(ctx.directoryPath, 'default', 'accept_redirects'), '0\n');
+  await writeFile(join(ctx.directoryPath, 'default', 'accept_ra'), '0\n');
+  await writeFile(join(ctx.directoryPath, 'all', 'forwarding'), '0\n');
 
-  const missing = await checkHostRules6(ctx.dir, ip.run);
+  const missing = await checkHostRules6(ctx.directoryPath, ip.run);
 
   expect(missing).toBe('net.ipv6.conf.all.forwarding is 0, not 1');
 });
@@ -487,9 +487,9 @@ test('#readConnectedPrefixes6 fails when ip fails', () => {
 test('#readOrCreateUlaPrefix makes a unique local prefix on first need and writes it under the data dir', async () => {
   const ctx = await setupTest();
 
-  const prefix = readOrCreateUlaPrefix(join(ctx.dir, 'net', 'ipv6-ula'));
+  const prefix = readOrCreateUlaPrefix(join(ctx.directoryPath, 'net', 'ipv6-ula'));
 
-  const written = await readFile(join(ctx.dir, 'net', 'ipv6-ula'), 'utf8');
+  const written = await readFile(join(ctx.directoryPath, 'net', 'ipv6-ula'), 'utf8');
 
   expect(parsePrefix64(prefix.text)).toStrictEqual(prefix);
   expect(prefix.text).toStartWith('fd');
@@ -499,10 +499,10 @@ test('#readOrCreateUlaPrefix makes a unique local prefix on first need and write
 test('#readOrCreateUlaPrefix keeps the unique local prefix it wrote before', async () => {
   const ctx = await setupTest();
 
-  await mkdir(join(ctx.dir, 'net'));
-  await writeFile(join(ctx.dir, 'net', 'ipv6-ula'), 'fd12:3456:789a::/64\n');
+  await mkdir(join(ctx.directoryPath, 'net'));
+  await writeFile(join(ctx.directoryPath, 'net', 'ipv6-ula'), 'fd12:3456:789a::/64\n');
 
-  expect(readOrCreateUlaPrefix(join(ctx.dir, 'net', 'ipv6-ula'))).toStrictEqual({
+  expect(readOrCreateUlaPrefix(join(ctx.directoryPath, 'net', 'ipv6-ula'))).toStrictEqual({
     network: 0xfd_12_34_56_78_9an << 80n,
     text: 'fd12:3456:789a::/64',
   });
@@ -511,12 +511,12 @@ test('#readOrCreateUlaPrefix keeps the unique local prefix it wrote before', asy
 test('#readOrCreateUlaPrefix replaces a prefix file it cannot read with a new unique local prefix', async () => {
   const ctx = await setupTest();
 
-  await mkdir(join(ctx.dir, 'net'));
-  await writeFile(join(ctx.dir, 'net', 'ipv6-ula'), 'junk\n');
+  await mkdir(join(ctx.directoryPath, 'net'));
+  await writeFile(join(ctx.directoryPath, 'net', 'ipv6-ula'), 'junk\n');
 
-  const prefix = readOrCreateUlaPrefix(join(ctx.dir, 'net', 'ipv6-ula'));
+  const prefix = readOrCreateUlaPrefix(join(ctx.directoryPath, 'net', 'ipv6-ula'));
 
-  const written = await readFile(join(ctx.dir, 'net', 'ipv6-ula'), 'utf8');
+  const written = await readFile(join(ctx.directoryPath, 'net', 'ipv6-ula'), 'utf8');
 
   expect(prefix.text).toStartWith('fd');
   expect(written).toBe(`${prefix.text}\n`);

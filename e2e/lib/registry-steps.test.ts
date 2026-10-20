@@ -8,9 +8,9 @@ import { updateEnv } from '@impz/test-utils/update-env';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
 import { instance } from './instance';
 import {
+  collectUnpinnedRequests,
   createMovedTag,
-  findRepoDigest,
-  findUnpinnedRequests,
+  getRepoDigest,
   parseManifestRequests,
   parsePublishedPort,
   removeStaleRegistries,
@@ -25,15 +25,15 @@ async function setupTest() {
 
   onTestFinished(() => cleanup.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'registry-steps-'));
+  const directory = await mkdtemp(join(tmpdir(), 'registry-steps-'));
 
-  cleanup.defer(() => rm(dir, { recursive: true, force: true }));
+  cleanup.defer(() => rm(directory, { recursive: true, force: true }));
 
   const stack = new AsyncDisposableStack();
 
   cleanup.defer(() => stack.disposeAsync());
 
-  return { stack, dir };
+  return { stack, directoryPath: directory };
 }
 
 test('#parsePublishedPort reads the first published host port', () => {
@@ -55,22 +55,26 @@ test('#parseManifestRequests reads the repository’s manifest references in ord
   expect(parseManifestRequests(logs, 'e2e/mutable')).toStrictEqual(['1', 'sha256:abc']);
 });
 
-test('#findRepoDigest picks the digest under the repository', () => {
+test('#getRepoDigest picks the digest under the repository', () => {
   const digests = JSON.stringify(['mirror.test/busybox@sha256:aaa', 'busybox@sha256:bbb']);
 
-  expect(findRepoDigest(digests, 'busybox')).toBe('busybox@sha256:bbb');
+  expect(getRepoDigest(digests, 'busybox')).toBe('busybox@sha256:bbb');
 });
 
-test('#findRepoDigest fails when no digest is under the repository', () => {
-  expect(() => findRepoDigest('["mirror.test/busybox@sha256:aaa"]', 'busybox')).toThrowWithMessage(
+test('#getRepoDigest fails when no digest is under the repository', () => {
+  expect(() => getRepoDigest('["mirror.test/busybox@sha256:aaa"]', 'busybox')).toThrowWithMessage(
     Error,
     'no RepoDigest under busybox in ["mirror.test/busybox@sha256:aaa"]',
   );
 });
 
-test('#findUnpinnedRequests keeps every reference but the pin’s digest', () => {
+test('#collectUnpinnedRequests keeps every reference but the pin’s digest', () => {
   expect(
-    findUnpinnedRequests('reg.test:5000/e2e/mutable@sha256:abc', ['sha256:abc', '1', 'sha256:abc']),
+    collectUnpinnedRequests('reg.test:5000/e2e/mutable@sha256:abc', [
+      'sha256:abc',
+      '1',
+      'sha256:abc',
+    ]),
   ).toStrictEqual(['1']);
 });
 
@@ -78,7 +82,7 @@ test('#startRegistry runs a registry labelled with the instance, on a certificat
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     ['case "$1" in', '  container) exit 1 ;;', '  port) echo 127.0.0.1:49153 ;;', 'esac'].join(
       '\n',
@@ -91,23 +95,23 @@ test('#startRegistry runs a registry labelled with the instance, on a certificat
     ctx.stack,
     'imp-e2e-registry.test',
     'e2e-reg-registry-1',
-    ctx.dir,
+    ctx.directoryPath,
   );
 
   const calls = await readFile(docker.calls, 'utf8');
-  const pem = await readFile(join(ctx.dir, 'certs', 'cert.pem'));
+  const pem = await readFile(join(ctx.directoryPath, 'certs', 'cert.pem'));
 
   const cert = new X509Certificate(pem);
 
   expect(registry).toStrictEqual({
     address: 'imp-e2e-registry.test:49153',
     container: 'e2e-reg-registry-1',
-    certPath: join(ctx.dir, 'certs', 'cert.pem'),
+    certPath: join(ctx.directoryPath, 'certs', 'cert.pem'),
   });
 
   expect(calls.split('\n')).toStrictEqual([
     'docker container inspect e2e-reg-registry-1',
-    `docker run --detach --name e2e-reg-registry-1 --label imp-e2e-instance=${instance.container} --publish 127.0.0.1::5000 --volume ${join(ctx.dir, 'certs')}:/certs:ro --env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/cert.pem --env REGISTRY_HTTP_TLS_KEY=/certs/key.pem registry:2`,
+    `docker run --detach --name e2e-reg-registry-1 --label imp-e2e-instance=${instance.container} --publish 127.0.0.1::5000 --volume ${join(ctx.directoryPath, 'certs')}:/certs:ro --env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/cert.pem --env REGISTRY_HTTP_TLS_KEY=/certs/key.pem registry:2`,
     'docker port e2e-reg-registry-1 5000/tcp',
     '',
   ]);
@@ -119,7 +123,7 @@ test('#startRegistry removes the registry it ran once the stack goes', async () 
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     ['case "$1" in', '  container) exit 1 ;;', '  port) echo 127.0.0.1:49153 ;;', 'esac'].join(
       '\n',
@@ -128,7 +132,7 @@ test('#startRegistry removes the registry it ran once the stack goes', async () 
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
-  await startRegistry(ctx.stack, 'imp-e2e-registry.test', 'e2e-reg-registry-1', ctx.dir);
+  await startRegistry(ctx.stack, 'imp-e2e-registry.test', 'e2e-reg-registry-1', ctx.directoryPath);
 
   await ctx.stack.disposeAsync();
 
@@ -140,7 +144,7 @@ test('#startRegistry removes the registry it ran once the stack goes', async () 
 test('#startRegistry refuses a container name that is taken, before it makes anything', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(ctx.dir, 'docker', 'exit 0');
+  const docker = createStubBin(ctx.directoryPath, 'docker', 'exit 0');
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
@@ -148,7 +152,7 @@ test('#startRegistry refuses a container name that is taken, before it makes any
     ctx.stack,
     'imp-e2e-registry.test',
     'e2e-reg-registry-1',
-    ctx.dir,
+    ctx.directoryPath,
   ).then(
     () => null,
     (error: unknown) => error,
@@ -163,14 +167,14 @@ test('#startRegistry refuses a container name that is taken, before it makes any
   });
 
   expect(calls).toBe('docker container inspect e2e-reg-registry-1\n');
-  expect(existsSync(join(ctx.dir, 'certs'))).toBeFalse();
+  expect(existsSync(join(ctx.directoryPath, 'certs'))).toBeFalse();
 });
 
 test('#startRegistry removes nothing when the registry does not start', async () => {
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     ['case "$1" in', '  container|run) exit 1 ;;', 'esac'].join('\n'),
   );
@@ -181,7 +185,7 @@ test('#startRegistry removes nothing when the registry does not start', async ()
     ctx.stack,
     'imp-e2e-registry.test',
     'e2e-reg-registry-1',
-    ctx.dir,
+    ctx.directoryPath,
   ).then(
     () => null,
     (error: unknown) => error,
@@ -199,7 +203,7 @@ test('#removeStaleRegistries never removes a registry container this instance di
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     [
       'case "$*" in',
@@ -228,7 +232,7 @@ test('#createMovedTag moves the tag to new content and pins the old, and removes
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     [
       'case "$*" in',
@@ -243,10 +247,10 @@ test('#createMovedTag moves the tag to new content and pins the old, and removes
   const registry = {
     address: 'imp-e2e-registry.test:49153',
     container: 'e2e-reg-registry-1',
-    certPath: join(ctx.dir, 'cert.pem'),
+    certPath: join(ctx.directoryPath, 'cert.pem'),
   };
 
-  const moved = await createMovedTag(ctx.stack, registry, ctx.dir, 'e2e/mutable');
+  const moved = await createMovedTag(ctx.stack, registry, ctx.directoryPath, 'e2e/mutable');
 
   await ctx.stack.disposeAsync();
 
@@ -264,11 +268,11 @@ test('#createMovedTag moves the tag to new content and pins the old, and removes
   expect(calls.split('\n')).toStrictEqual([
     'docker pull --quiet busybox:1.37',
     'docker image inspect --format {{json .RepoDigests}} busybox:1.37',
-    `docker build --quiet --provenance=false --sbom=false --tag ${tag} ${join(ctx.dir, 'e2e', 'mutable-old')}`,
+    `docker build --quiet --provenance=false --sbom=false --tag ${tag} ${join(ctx.directoryPath, 'e2e', 'mutable-old')}`,
     `docker push --quiet ${tag}`,
     `docker tag ${tag} ${kept}`,
     `docker image inspect --format {{json .RepoDigests}} ${tag}`,
-    `docker build --quiet --provenance=false --sbom=false --tag ${tag} ${join(ctx.dir, 'e2e', 'mutable-new')}`,
+    `docker build --quiet --provenance=false --sbom=false --tag ${tag} ${join(ctx.directoryPath, 'e2e', 'mutable-new')}`,
     `docker push --quiet ${tag}`,
     `docker tag ${kept} ${tag}`,
     `docker rmi ${kept}`,
@@ -281,7 +285,7 @@ test('#createMovedTag removes the tag it made when a later step fails', async ()
   const ctx = await setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     [
       'case "$*" in',
@@ -296,10 +300,10 @@ test('#createMovedTag removes the tag it made when a later step fails', async ()
   const registry = {
     address: 'imp-e2e-registry.test:49153',
     container: 'e2e-reg-registry-1',
-    certPath: join(ctx.dir, 'cert.pem'),
+    certPath: join(ctx.directoryPath, 'cert.pem'),
   };
 
-  const failure = await createMovedTag(ctx.stack, registry, ctx.dir, 'e2e/mutable').then(
+  const failure = await createMovedTag(ctx.stack, registry, ctx.directoryPath, 'e2e/mutable').then(
     () => null,
     (error: unknown) => error,
   );

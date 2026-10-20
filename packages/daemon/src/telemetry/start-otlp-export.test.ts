@@ -9,12 +9,12 @@ import { startOtlpExport } from './start-otlp-export';
 // run's preload holds, so each such case runs as its own child `bun test`
 // with no preload. Its source imports these by absolute path.
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'otlp-export-'));
+  const directory = await mkdtemp(join(tmpdir(), 'otlp-export-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   return {
-    dir,
+    directoryPath: directory,
     exportPath: JSON.stringify(join(import.meta.dir, 'start-otlp-export.ts')),
     apiPath: JSON.stringify(Bun.resolveSync('@opentelemetry/api', import.meta.dir)),
     updateEnvPath: JSON.stringify(Bun.resolveSync('@impz/test-utils/update-env', import.meta.dir)),
@@ -41,7 +41,7 @@ test('it sends metrics and spans to the collector at the endpoint', async () => 
   const ctx = await setupTest();
 
   const run = runChildTests(
-    ctx.dir,
+    ctx.directoryPath,
     `import { expect, onTestFinished, test } from 'bun:test';
 import { metrics, trace } from ${ctx.apiPath};
 import { startOtlpExport } from ${ctx.exportPath};
@@ -98,7 +98,7 @@ test('it names the service and its version in what it sends', async () => {
   const ctx = await setupTest();
 
   const run = runChildTests(
-    ctx.dir,
+    ctx.directoryPath,
     `import { expect, onTestFinished, test } from 'bun:test';
 import { trace } from ${ctx.apiPath};
 import { startOtlpExport } from ${ctx.exportPath};
@@ -145,7 +145,7 @@ test('it rejects its stop when the collector answers with an error', async () =>
   const ctx = await setupTest();
 
   const run = runChildTests(
-    ctx.dir,
+    ctx.directoryPath,
     `import { expect, onTestFinished, test } from 'bun:test';
 import { trace } from ${ctx.apiPath};
 import { startOtlpExport } from ${ctx.exportPath};
@@ -192,7 +192,7 @@ test('it rejects its stop when nothing listens at the endpoint', async () => {
   const ctx = await setupTest();
 
   const run = runChildTests(
-    ctx.dir,
+    ctx.directoryPath,
     `import { expect, onTestFinished, test } from 'bun:test';
 import { trace } from ${ctx.apiPath};
 import { startOtlpExport } from ${ctx.exportPath};

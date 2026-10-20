@@ -91,7 +91,7 @@ export function buildRanking(
     const reason = findRefusal(answer.value, request);
 
     if (reason === null) {
-      ranked.push({ host: answer.host, freeMib: readFreeMib(answer.value.info) });
+      ranked.push({ host: answer.host, freeMib: getFreeMib(answer.value.info) });
     } else {
       dropped.push({ host: answer.host, reason });
     }
@@ -104,7 +104,7 @@ export function buildRanking(
 // The budget less what awake VMs own, boots under way reserve, and every
 // sleeper takes back on a wake; idle imps the governor could sleep are not
 // counted, so it errs low (docs/guides/hosts.md#placement)
-export function readFreeMib(info: SystemInfo): number {
+export function getFreeMib(info: SystemInfo): number {
   return info.ramBudgetMib - info.ramUsedMib - info.ramReservedMib - (info.ramSleepingMib ?? 0);
 }
 

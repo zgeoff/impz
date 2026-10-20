@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import type { ImpState } from '@impz/api';
 import { ORPCError } from '@orpc/server';
-import { canTransition, findStatesLeadingTo, requireTransition } from './imp-transitions';
+import { canTransition, collectStatesLeadingTo, requireTransition } from './imp-transitions';
 
 test.each<[ImpState, ImpState]>([
   ['creating', 'running'],
@@ -61,16 +61,16 @@ test.each<[ImpState]>([['creating'], ['error']])(
   },
 );
 
-test('#findStatesLeadingTo names only running for a sleep', () => {
-  expect(findStatesLeadingTo('sleeping')).toStrictEqual(['running']);
+test('#collectStatesLeadingTo names only running for a sleep', () => {
+  expect(collectStatesLeadingTo('sleeping')).toStrictEqual(['running']);
 });
 
-test('#findStatesLeadingTo names running and stopped for a warm move to sleeping', () => {
-  expect(findStatesLeadingTo('sleeping', 'warm move')).toStrictEqual(['running', 'stopped']);
+test('#collectStatesLeadingTo names running and stopped for a warm move to sleeping', () => {
+  expect(collectStatesLeadingTo('sleeping', 'warm move')).toStrictEqual(['running', 'stopped']);
 });
 
-test('#findStatesLeadingTo names every state that can reach running', () => {
-  expect(findStatesLeadingTo('running')).toStrictEqual([
+test('#collectStatesLeadingTo names every state that can reach running', () => {
+  expect(collectStatesLeadingTo('running')).toStrictEqual([
     'creating',
     'sleeping',
     'stopped',
@@ -78,8 +78,8 @@ test('#findStatesLeadingTo names every state that can reach running', () => {
   ]);
 });
 
-test('#findStatesLeadingTo names every state that can reach stopped', () => {
-  expect(findStatesLeadingTo('stopped')).toStrictEqual([
+test('#collectStatesLeadingTo names every state that can reach stopped', () => {
+  expect(collectStatesLeadingTo('stopped')).toStrictEqual([
     'creating',
     'running',
     'sleeping',
@@ -87,8 +87,8 @@ test('#findStatesLeadingTo names every state that can reach stopped', () => {
   ]);
 });
 
-test('#findStatesLeadingTo names no state for creating', () => {
-  expect(findStatesLeadingTo('creating')).toBeEmpty();
+test('#collectStatesLeadingTo names no state for creating', () => {
+  expect(collectStatesLeadingTo('creating')).toBeEmpty();
 });
 
 test('#requireTransition passes an allowed transition', () => {

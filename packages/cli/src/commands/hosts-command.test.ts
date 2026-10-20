@@ -20,9 +20,9 @@ import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-im
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubExecGuest } from '@impz/daemon/src/test-utils/build-stub-exec-guest';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { startStubExecAgent } from '@impz/daemon/src/test-utils/start-stub-exec-agent';
-import { canUpdateReadOnly } from '@impz/test-utils/can-update-read-only';
+import { probeUpdateReadOnly } from '@impz/test-utils/probe-update-read-only';
 import { updateReadOnly } from '@impz/test-utils/update-read-only';
 import invariant from 'tiny-invariant';
 import { readHostConfig, resolveConfigPath, writeHostConfig } from '../config/host-store';
@@ -35,12 +35,12 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-login-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-login-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   // the CLI's home: config.json lives under XDG_CONFIG_HOME
-  const env = { HOME: dir, XDG_CONFIG_HOME: dir };
+  const env = { HOME: directory, XDG_CONFIG_HOME: directory };
 
   const dataDir = await mkdtemp(join(tmpdir(), 'imp-login-impd-'));
 
@@ -56,7 +56,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with
@@ -386,7 +386,7 @@ test('#--host sends the saved token over IMP_TOKEN, with a note', async () => {
   });
 });
 
-test.skipIf(!canUpdateReadOnly())(
+test.skipIf(!probeUpdateReadOnly())(
   '#--host reads its saved host when the old token file cannot move, and notes the file it left',
   async () => {
     const ctx = await setupTest();

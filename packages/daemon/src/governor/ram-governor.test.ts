@@ -3,9 +3,9 @@ import type { ImpEvent } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import fc from 'fast-check';
 import { createEventBus } from '../events/event-bus';
-import { buildStubGovernedHost } from '../test-utils/build-stub-governed-host';
-import type { RoomLeft } from '../test-utils/build-stub-governed-host';
 import { buildStubGovernedHostArbitraries } from '../test-utils/build-stub-governed-host-arbitraries';
+import { createStubGovernedHost } from '../test-utils/create-stub-governed-host';
+import type { RoomLeft } from '../test-utils/create-stub-governed-host';
 import { ENFORCE_INTERVAL_MS, createRamGovernor } from './ram-governor';
 
 // docs/architecture/lifecycle/ram-governor.md#enforcement says every 5 s, and the scale e2e suite
@@ -15,7 +15,7 @@ test('it enforces the budget every 5 s, as the docs say', () => {
 });
 
 test('it sleeps the least recently active imp that is not busy to make room', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['pinned', 'old', 'new'],
     awake: [
@@ -35,7 +35,7 @@ test('it sleeps the least recently active imp that is not busy to make room', as
 });
 
 test('it publishes the sleep it made room with and the admission', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['pinned', 'old', 'new'],
     awake: [
@@ -84,7 +84,7 @@ test('it publishes the sleep it made room with and the admission', async () => {
 });
 
 test('it refuses an admit that sleeping the other idle imps cannot make room for, and sleeps none', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['pinned', 'old', 'new'],
     awake: [
@@ -131,7 +131,7 @@ test('it refuses an admit that sleeping the other idle imps cannot make room for
 });
 
 test('it never admits an imp whose memory is larger than the whole budget', () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['idle', 'huge'],
     awake: [{ id: 'idle', rssMib: 300 }],
@@ -150,7 +150,7 @@ test('it never admits an imp whose memory is larger than the whole budget', () =
 });
 
 test('it picks the next victim when the one it picked is skipped', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['old', 'mid', 'new'],
     awake: [
@@ -170,7 +170,7 @@ test('it picks the next victim when the one it picked is skipped', async () => {
 });
 
 test('it refuses an admit once only victims that are skipped are left', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['old', 'mid', 'new'],
     awake: [
@@ -193,7 +193,7 @@ test('it refuses an admit once only victims that are skipped are left', async ()
 });
 
 test('it sleeps no more imps for a rejected admit once a victim is skipped', () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['old', 'mid', 'new'],
     awake: [
@@ -217,7 +217,7 @@ test('it sleeps no more imps for a rejected admit once a victim is skipped', () 
 });
 
 test('it refuses an admit with the disk error when a victim had no room for its snapshot', () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['old', 'new'],
     awake: [
@@ -241,16 +241,16 @@ test('it refuses an admit with the disk error when a victim had no room for its 
 });
 
 test('it counts a reservation until its 20 s run out, and not a moment longer', async () => {
-  const host = buildStubGovernedHost({ budgetMib: 1000, ids: ['x'], awake: [] });
+  const host = createStubGovernedHost({ budgetMib: 1000, ids: ['x'], awake: [] });
   const governor = createRamGovernor({ ...host.deps, log: () => {} });
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 400, memoryMib: 800 });
 
-  host.applyChange({ kind: 'tick', ms: 20_000 }, governor);
+  host.applyChange({ kind: 'tick', durationMs: 20_000 }, governor);
 
   const atDeadline = await governor.readUsage();
 
-  host.applyChange({ kind: 'tick', ms: 1 }, governor);
+  host.applyChange({ kind: 'tick', durationMs: 1 }, governor);
 
   const after = await governor.readUsage();
 
@@ -259,7 +259,7 @@ test('it counts a reservation until its 20 s run out, and not a moment longer', 
 });
 
 test('it sleeps every idle imp, oldest first, when together they cannot reach the budget', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['big', 'old', 'mid', 'new'],
     awake: [
@@ -293,7 +293,7 @@ test('it sleeps every idle imp, oldest first, when together they cannot reach th
 });
 
 test('it asks no imp and stays quiet on the passes after nothing is left to sleep', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['big', 'old', 'mid', 'new'],
     awake: [
@@ -325,7 +325,7 @@ test('it asks no imp and stays quiet on the passes after nothing is left to slee
 });
 
 test('it still sleeps the other idle imps when one is skipped', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['big', 'old', 'mid', 'new'],
     awake: [
@@ -352,7 +352,7 @@ test('it still sleeps the other idle imps when one is skipped', async () => {
 });
 
 test('it sleeps no imp for an admit when the idle imps together cannot make room', () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['big', 'old', 'mid', 'new'],
     awake: [
@@ -375,7 +375,7 @@ test('it sleeps no imp for an admit when the idle imps together cannot make room
 });
 
 test('it says once that nothing is left to sleep, until usage is under the budget again', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['big'],
     awake: [{ id: 'big', rssMib: 2000 }],
@@ -410,7 +410,7 @@ test('it says once that nothing is left to sleep, until usage is under the budge
 });
 
 test('it admits an admission that may not sleep imps into free room, and publishes nothing without a name', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['idle', 't1'],
     awake: [{ id: 'idle', rssMib: 600 }],
@@ -440,7 +440,7 @@ test('it admits an admission that may not sleep imps into free room, and publish
 });
 
 test('it refuses an admission that may not sleep imps once the free room is gone, and sleeps none', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['idle', 't1', 't2'],
     awake: [{ id: 'idle', rssMib: 600 }],
@@ -464,7 +464,7 @@ test('it refuses an admission that may not sleep imps once the free room is gone
 });
 
 test('it reports no headroom while KSM saves nothing', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['a', 'b'],
     awake: [
@@ -485,7 +485,7 @@ test('it reports no headroom while KSM saves nothing', async () => {
 });
 
 test('it measures every awake imp at once, each read started before any ends', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['a', 'b', 'c'],
     awake: [
@@ -528,7 +528,7 @@ test('it measures every awake imp at once, each read started before any ends', a
 });
 
 test('it reports the KSM headroom in the usage', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['a', 'b'],
     awake: [
@@ -549,7 +549,7 @@ test('it reports the KSM headroom in the usage', async () => {
 });
 
 test('it counts the KSM headroom against the budget, so a merged page that splits still fits', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['a', 'b', 'c'],
     awake: [
@@ -571,7 +571,7 @@ test('it counts the KSM headroom against the budget, so a merged page that split
 });
 
 test('it sleeps the least recently active idle imp for a grow, never the grower', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['grower', 'old', 'new'],
     awake: [
@@ -590,7 +590,7 @@ test('it sleeps the least recently active idle imp for a grow, never the grower'
 });
 
 test('it asks the idle guests other than the grower to give back memory before a grow sleeps one', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['grower', 'old', 'new'],
     awake: [
@@ -618,7 +618,7 @@ test('it asks the idle guests other than the grower to give back memory before a
 });
 
 test('it counts a grow as reserved until the grower measures it', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['grower', 'old', 'new'],
     awake: [
@@ -638,7 +638,7 @@ test('it counts a grow as reserved until the grower measures it', async () => {
 });
 
 test('it sleeps no imp when an unplug the reclaim did not count made room', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['old', 'x'],
     awake: [{ id: 'old', rssMib: 700 }],
@@ -661,7 +661,7 @@ test('it sleeps no imp when an unplug the reclaim did not count made room', asyn
 });
 
 test('it puts back the wake reservation that a released grow counted in', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 2000,
     ids: ['grower'],
     awake: [{ id: 'grower', rssMib: 300 }],
@@ -680,7 +680,7 @@ test('it puts back the wake reservation that a released grow counted in', async 
 });
 
 test('it reserves nothing once a grow with no reservation before it is released', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 2000,
     ids: ['grower'],
     awake: [{ id: 'grower', rssMib: 300 }],
@@ -698,7 +698,7 @@ test('it reserves nothing once a grow with no reservation before it is released'
 });
 
 test('it keeps a wake reservation made after a grow when the grow is released', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 2000,
     ids: ['grower'],
     awake: [{ id: 'grower', rssMib: 300 }],
@@ -717,7 +717,7 @@ test('it keeps a wake reservation made after a grow when the grow is released', 
 });
 
 test('it refuses a grow when only busy imps could make room, and publishes why', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['grower', 'old', 'new'],
     awake: [
@@ -763,7 +763,7 @@ test('it refuses a grow when only busy imps could make room, and publishes why',
 });
 
 test('it makes no room and reserves nothing for a grow of an imp that is no longer awake', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['grower', 'old', 'new'],
     awake: [
@@ -798,7 +798,7 @@ test('it makes no room and reserves nothing for a grow of an imp that is no long
 
 // with IMP_KSM a split of every merged page must still fit after the grow
 test('it counts the KSM headroom for a grow, as for a boot or a wake', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['old', 'grower'],
     awake: [
@@ -827,7 +827,7 @@ test('it counts the KSM headroom for a grow, as for a boot or a wake', async () 
 });
 
 test('it lets idle guests unplug instead of sleeping an imp for a boot', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['grower', 'old', 'new', 'x'],
     awake: [
@@ -858,7 +858,7 @@ test('it lets idle guests unplug instead of sleeping an imp for a boot', async (
 });
 
 test('it lets idle guests unplug before enforcement sleeps an imp', async () => {
-  const host = buildStubGovernedHost({
+  const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['grower', 'old', 'new', 'x'],
     awake: [
@@ -908,7 +908,7 @@ test('it keeps each admission within the budget and never asks a pinned imp to s
 
   await fc.assert(
     fc.asyncProperty(arbitraries.awake, fc.array(opArb, { maxLength: 40 }), async (awake, ops) => {
-      const host = buildStubGovernedHost({
+      const host = createStubGovernedHost({
         budgetMib: 1000,
         ids: ['a', 'b', 'c', 'd', 'e', 'f'],
         awake,
@@ -959,7 +959,7 @@ test('it keeps each admission within the budget and never asks a pinned imp to s
           await governor.enforce();
 
           // under the budget, or every imp it may sleep is asleep
-          expect(host.findRoomLeft()).toSatisfy(
+          expect(host.getRoomLeft()).toSatisfy(
             (room: RoomLeft) => room.overMib <= 0 || room.eligibleAwake === 0,
           );
         } else {
@@ -1000,7 +1000,7 @@ test('it gets a crowded host under the budget or sleeps every imp it may', async
 
   await fc.assert(
     fc.asyncProperty(crowdedArb, async (crowded) => {
-      const host = buildStubGovernedHost({
+      const host = createStubGovernedHost({
         budgetMib: 1000,
         ids: ['a', 'b', 'c', 'd', 'e', 'f'],
         awake: crowded,
@@ -1017,7 +1017,7 @@ test('it gets a crowded host under the budget or sleeps every imp it may', async
 
       expect(host.sleepCalls.filter((call) => !call.eligible)).toStrictEqual([]);
 
-      expect(host.findRoomLeft()).toSatisfy(
+      expect(host.getRoomLeft()).toSatisfy(
         (room: RoomLeft) => room.overMib <= 0 || room.eligibleAwake === 0,
       );
     }),
@@ -1041,7 +1041,7 @@ test('it settles concurrent admits with holds and RSS changes inside them, leavi
       admitsArb,
       fc.array(arbitraries.change, { maxLength: 20 }),
       async (scheduler, awake, admits, changes) => {
-        const host = buildStubGovernedHost({
+        const host = createStubGovernedHost({
           budgetMib: 1000,
           ids: ['a', 'b', 'c', 'd', 'e', 'f'],
           awake,
@@ -1105,7 +1105,7 @@ test('it settles concurrent admits with holds and RSS changes inside them, leavi
         await governor.enforce();
 
         // under the budget, or every imp it may sleep is asleep
-        expect(host.findRoomLeft()).toSatisfy(
+        expect(host.getRoomLeft()).toSatisfy(
           (room: RoomLeft) => room.overMib <= 0 || room.eligibleAwake === 0,
         );
       },
@@ -1129,7 +1129,7 @@ test('it keeps a grow within the budget, never sleeps its grower, and sleeps onl
 
   await fc.assert(
     fc.asyncProperty(arbitraries.awake, fc.array(opArb, { maxLength: 40 }), async (awake, ops) => {
-      const host = buildStubGovernedHost({
+      const host = createStubGovernedHost({
         budgetMib: 1000,
         ids: ['a', 'b', 'c', 'd', 'e', 'f'],
         awake,

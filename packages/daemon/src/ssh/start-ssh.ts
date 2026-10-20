@@ -3,10 +3,10 @@ import type { ApiAudit } from '../audit/api-audit';
 import type { Revocations } from '../auth/revocations';
 import type { TokenStore } from '../auth/token-store';
 import type { Config } from '../config';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
+import { getErrorMessage } from '../get-error-message';
 import type { ImpRuntime } from '../imps/imp-runtime';
-import { readErrorMessage } from '../read-error-message';
 import type { AuthorizedKeys } from './authorized-keys';
 import { loadOrCreateHostKey, readFingerprint, setupSshDir } from './host-key';
 import { createLoginKeys } from './login-keys';
@@ -85,7 +85,7 @@ export async function startSsh(deps: StartSshDeps): Promise<SshGateway | null> {
           openListener: imps.openListener,
           openAccept: imps.openAccept,
           recordActivity: imps.recordActivity,
-          findImp: (name) => findImpByName(deps.db, name),
+          readImp: (name) => readImpByName(deps.db, name),
         },
         log: deps.log,
       },
@@ -97,7 +97,7 @@ export async function startSsh(deps: StartSshDeps): Promise<SshGateway | null> {
 
     return gateway;
   } catch (error) {
-    deps.log(`impd: ssh: not started on :${String(port)}: ${readErrorMessage(error)}`);
+    deps.log(`impd: ssh: not started on :${String(port)}: ${getErrorMessage(error)}`);
 
     return null;
   }

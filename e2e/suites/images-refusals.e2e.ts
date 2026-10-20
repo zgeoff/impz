@@ -7,7 +7,7 @@ import { createInstanceClient, listImageNames, tryImp } from '../lib/imp-cli';
 import { REPO_ROOT, runChecked, runCommand } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImageIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // What `impz image build` and `impz image add` refuse (docs/guides/images.md),
 // before a build or in its builder; none of them leaves an image.
@@ -25,7 +25,7 @@ async function setupTest() {
 
   stack.defer(() => rm(buildRoot, { recursive: true, force: true }));
 
-  return { prefix: readSuitePrefix('images'), stack, client, buildRoot };
+  return { prefix: getSuitePrefix('images'), stack, client, buildRoot };
 }
 
 test('it refuses a RUN step that asks for the host network or insecure mode', async () => {
@@ -87,7 +87,7 @@ test('it fails the pull of a FROM image that only the host’s Docker has', asyn
     'FROM busybox:1.37\nRUN echo local > /m\n',
   );
 
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'local-base',
     `FROM ${local}\nRUN grep local /m\n`,
@@ -101,7 +101,7 @@ test('it fails the pull of a FROM image that only the host’s Docker has', asyn
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
-  const result = await tryImp(['image', 'build', dir, '--name', name]);
+  const result = await tryImp(['image', 'build', directory, '--name', name]);
 
   expect(result).toStrictEqual({
     exitCode: 1,
@@ -115,7 +115,7 @@ test('it refuses a FROM image from the host’s own registry under the proxy’s
 
   const name = `${ctx.prefix}hostreg`;
 
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'missing-base',
     'FROM localhost:5000/e2e-missing:1\n',
@@ -123,7 +123,7 @@ test('it refuses a FROM image from the host’s own registry under the proxy’s
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
-  const result = await tryImp(['image', 'build', dir, '--name', name]);
+  const result = await tryImp(['image', 'build', directory, '--name', name]);
 
   expect(result).toStrictEqual({
     exitCode: 1,
@@ -172,11 +172,15 @@ test.each([
   const url = `http://127.0.0.1:${port}/probe`;
   const step = line.replaceAll('{url}', url).replaceAll('{port}', port);
 
-  const dir = await writeBuildContext(ctx.buildRoot, 'add-url', `FROM busybox:1.37\n${step}\n`);
+  const directory = await writeBuildContext(
+    ctx.buildRoot,
+    'add-url',
+    `FROM busybox:1.37\n${step}\n`,
+  );
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
-  const result = await tryImp(['image', 'build', dir, '--name', name]);
+  const result = await tryImp(['image', 'build', directory, '--name', name]);
 
   expect(result).toStrictEqual({
     exitCode: 1,
@@ -192,7 +196,7 @@ test('it refuses ONBUILD, also in a local stage a later FROM runs', async () => 
 
   const name = `${ctx.prefix}onbuild`;
 
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'onbuild',
     'FROM busybox:1.37 AS base\nONBUILD RUN echo trigger > /t\nFROM base\nRUN true\n',
@@ -200,7 +204,7 @@ test('it refuses ONBUILD, also in a local stage a later FROM runs', async () => 
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
-  const result = await tryImp(['image', 'build', dir, '--name', name]);
+  const result = await tryImp(['image', 'build', directory, '--name', name]);
 
   expect(result).toStrictEqual({
     exitCode: 1,
@@ -214,7 +218,7 @@ test('it fails a build in its builder whose FROM registry name resolves to a pri
 
   const name = `${ctx.prefix}privfrom`;
 
-  const dir = await writeBuildContext(
+  const directory = await writeBuildContext(
     ctx.buildRoot,
     'private-registry',
     'FROM 10-0-0-1.nip.io:5000/e2e/x:1\n',
@@ -222,7 +226,7 @@ test('it fails a build in its builder whose FROM registry name resolves to a pri
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
-  const result = await tryImp(['image', 'build', dir, '--name', name]);
+  const result = await tryImp(['image', 'build', directory, '--name', name]);
 
   expect(result).toStrictEqual({
     exitCode: 1,

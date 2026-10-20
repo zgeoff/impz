@@ -40,7 +40,7 @@ function main(): void {
 
   const changes = [
     ...collectBreakingChanges(base, head),
-    ...collectOutputChanges(mergeBase, env.HEAD_SHA),
+    ...readOutputChanges(mergeBase, env.HEAD_SHA),
   ];
 
   if (changes.length === 0) {
@@ -87,7 +87,7 @@ function runGit(args: readonly string[]): string {
 
 // The `--json` outputs' breaks; none from a base before the file. A head
 // without it breaks every reader, so it counts as one change.
-function collectOutputChanges(mergeBase: string, head: string): string[] {
+function readOutputChanges(mergeBase: string, head: string): string[] {
   const base = loadJsonOutputSchema(mergeBase);
 
   if (base === undefined) {

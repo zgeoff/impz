@@ -2,12 +2,12 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync, statSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createImp, findImpByName } from '../db/imps';
+import { createImp, readImpByName } from '../db/imps';
 import { runChecked } from '../process/run-command';
 import { buildImpPaths } from '../storage/data-layout';
 import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
 import { buildStubDiskTools } from '../test-utils/build-stub-disk-tools';
-import { buildTestApp } from './build-test-app';
+import { createTestApp } from './create-test-app';
 import { growFilesystem } from './imp-disk';
 import { createImpTest } from './test-imps';
 
@@ -34,14 +34,14 @@ async function setupTest(
   // every create boots an image row; the default image is ubuntu
   await harness.createTestImage('ubuntu');
 
-  const app = buildTestApp(harness, harness);
-  const dir = mkdtempSync(join(tmpdir(), 'impd-grow-test-'));
+  const app = createTestApp(harness, harness);
+  const directory = mkdtempSync(join(tmpdir(), 'impd-grow-test-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  const disk = join(dir, 'disk.ext4');
+  const disk = join(directory, 'disk.ext4');
 
   writeFileSync(disk, '');
 
@@ -51,7 +51,7 @@ async function setupTest(
 test('it makes a new disk the size asked for', async () => {
   const ctx = await setupTest();
   const created = await ctx.client.imps.create({ name: 'sized', diskMib: 2048 });
-  const imp = await findImpByName(ctx.db, 'sized');
+  const imp = await readImpByName(ctx.db, 'sized');
 
   expect(created.diskMib).toBe(2048);
   expect(statSync(buildImpPaths(ctx.dataDir, created.id).disk).size).toBe(2 * 1024 ** 3);
@@ -121,7 +121,7 @@ test('it grows a stopped disk and its filesystem on the host at a resize', async
 
   const disk = buildImpPaths(ctx.dataDir, created.id).disk;
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(grown.diskMib).toBe(4096);
   expect(statSync(disk).size).toBe(4 * 1024 ** 3);
@@ -183,7 +183,7 @@ test('it marks the grow pending when a running guest fails to grow', async () =>
     'the disk grew, but the guest did not grow its filesystem (its next wake or boot does)',
   );
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(statSync(buildImpPaths(ctx.dataDir, created.id).disk).size).toBe(4 * 1024 ** 3);
   expect(imp?.isDiskGrowPending).toBeTrue();
@@ -203,7 +203,7 @@ test('it retries a failed guest grow at the next wake', async () => {
   await ctx.client.imps.sleep({ name: 'dev' });
   await ctx.client.imps.wake({ name: 'dev' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(failure).toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
 
@@ -236,7 +236,7 @@ test('it marks the grow of a sleeping guest pending, with no grow call', async (
   await ctx.client.imps.sleep({ name: 'dev' });
   await ctx.client.imps.resizeDisk({ name: 'dev', diskMib: 3072 });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(statSync(buildImpPaths(ctx.dataDir, created.id).disk).size).toBe(3 * 1024 ** 3);
   expect(imp?.isDiskGrowPending).toBeTrue();
@@ -251,7 +251,7 @@ test('it grows a sleeping guest when it wakes', async () => {
   await ctx.client.imps.resizeDisk({ name: 'dev', diskMib: 3072 });
   await ctx.client.imps.wake({ name: 'dev' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(ctx.fake.grows.map((grow) => grow.diskBytes)).toStrictEqual([3 * 1024 ** 3]);
   expect(imp?.isDiskGrowPending).toBeFalse();
@@ -268,7 +268,7 @@ test('it clears a pending grow at a cold boot, with no grow call', async () => {
   // the agent grows a cold boot's filesystem
   await ctx.client.imps.start({ name: 'dev' });
 
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(ctx.fake.grows).toBeEmpty();
   expect(imp?.isDiskGrowPending).toBeFalse();
@@ -316,7 +316,7 @@ test('it gives a restored imp the disk size of the checkpoint', async () => {
   await ctx.client.imps.resizeDisk({ name: 'dev', diskMib: 5120 });
 
   const restored = await ctx.client.checkpoints.restore({ name: 'dev', checkpoint: 'small' });
-  const imp = await findImpByName(ctx.db, 'dev');
+  const imp = await readImpByName(ctx.db, 'dev');
 
   expect(restored.diskMib).toBe(2048);
   expect(statSync(buildImpPaths(ctx.dataDir, created.id).disk).size).toBe(2 * 1024 ** 3);

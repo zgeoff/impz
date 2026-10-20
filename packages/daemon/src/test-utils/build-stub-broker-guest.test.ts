@@ -3,19 +3,19 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubBrokerGuest } from './build-stub-broker-guest';
-import { findFreePorts } from './find-free-ports';
+import { claimFreePorts } from './claim-free-ports';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'stub-guest-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-guest-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   // the CA bundle the guest trusts; no test gets as far as a TLS handshake
-  const caFile = join(dir, 'ca.pem');
+  const caFile = join(directory, 'ca.pem');
 
   await writeFile(caFile, '');
 
@@ -89,7 +89,7 @@ test('it reports the exit code and the error curl printed when no proxy listens'
   const ctx = await setupTest();
 
   const guest = buildStubBrokerGuest({
-    proxyPort: findFreePorts(1).take(),
+    proxyPort: claimFreePorts(1).take(),
     caFile: ctx.caFile,
     address: '127.0.0.2',
   });

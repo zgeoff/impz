@@ -1,8 +1,8 @@
 import { sendFreeze, sendThaw } from '../agent-client/agent-requests';
 import { buildInvalidStateError } from '../api-errors';
+import { getErrorMessage } from '../get-error-message';
 import type { LockedImp } from '../imps/imp-lock';
 import type { ImpCheckpointHooks } from '../imps/imp-service';
-import { readErrorMessage } from '../read-error-message';
 import type { StorageBackend } from '../storage/storage-backend';
 
 // How long the guest stays frozen at most if impd never sends thaw.
@@ -54,7 +54,7 @@ export function createConsistentDisk(deps: ConsistentDiskDeps): WithConsistentDi
       try {
         await freezer.thaw(paths.vsockSocket);
       } catch (error) {
-        const message = readErrorMessage(error);
+        const message = getErrorMessage(error);
 
         deps.log(`impd: ${imp.name}: thaw failed (the agent thaws on its own): ${message}`);
       }

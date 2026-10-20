@@ -22,7 +22,7 @@ import type { Config } from '../config';
 import { listAuditEntries, listRefusedRequests } from '../db/broker-audit';
 import { createForkGrants } from '../db/create-fork-grants';
 import type { ForkAuthority } from '../db/create-fork-grants';
-import { findImpByName, listImps } from '../db/imps';
+import { listImps, readImpByName } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
 import {
@@ -34,9 +34,9 @@ import {
   removeCheckedGrant,
 } from '../db/secrets';
 import type { GrantAuthority, GrantClash } from '../db/secrets';
+import { getErrorMessage } from '../get-error-message';
 import { deriveSlotAddress } from '../net/addressing';
 import type { Ipv6Plan } from '../net/ipv6-plan';
-import { readErrorMessage } from '../read-error-message';
 import { loadOrCreateBrokerCa } from './broker-ca';
 import { PLACEHOLDER, listPlaceholderEnv } from './connector-kinds';
 import { createBrokerProxy } from './create-broker-proxy';
@@ -174,6 +174,20 @@ export interface BrokerDeps {
   readonly secretFiles?: SecretFiles;
 }
 
+const FORK_SKIP_CAUSES: Readonly<Record<GrantNotCopied['reason'], string>> = {
+  'not-grantable': 'the caller may not grant it',
+  clash: 'it has another credential for that host',
+  'no-secret': 'the secret is gone',
+};
+
+// what a fork answers when its copy made no grant at all; the cause of a
+// failure stays in impd's log
+const FORK_TOKEN_GONE =
+  "the token behind this fork was removed, so it got none of the source's grants";
+
+const FORK_COPY_FAILED =
+  "the source's grants could not be copied, so the fork has none; impd's log has the cause";
+
 export async function createBroker(deps: BrokerDeps): Promise<Broker> {
   const config = deps.config;
   const db = deps.db;
@@ -227,7 +241,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
   });
 
   const requireImp = async (name: string): Promise<ImpRecord> => {
-    const imp = await findImpByName(db, name);
+    const imp = await readImpByName(db, name);
 
     if (imp === undefined) {
       throw buildNotFoundError('imp', name);
@@ -251,7 +265,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
 
       trust.forgetExcept(new Set(imps.map((imp) => imp.id)));
     } catch (error) {
-      log(`impd: broker: could not apply grants: ${readErrorMessage(error)}`);
+      log(`impd: broker: could not apply grants: ${getErrorMessage(error)}`);
     }
   };
 
@@ -261,7 +275,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     addSecret: secrets.addSecret,
     listSecrets: secrets.listSecrets,
     refreshSecret: secrets.refreshSecret,
-    deleteSecret: secrets.deleteSecret,
+    deleteSecret: secrets.removeSecret,
 
     addGrant: async (impName, secretName, authority, filter) => {
       const imp = await requireImp(impName);
@@ -367,7 +381,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
         return { notCopied: outcome.notCopied, error: null };
       } catch (error) {
         log(
-          `impd: ${fork.name}: forked without the grants of ${source.name}: ${readErrorMessage(error)}`,
+          `impd: ${fork.name}: forked without the grants of ${source.name}: ${getErrorMessage(error)}`,
         );
 
         return { notCopied: [], error: FORK_COPY_FAILED };
@@ -420,28 +434,6 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
   };
 }
 
-function buildClashError(impName: string, secretName: string, clash: Readonly<GrantClash>) {
-  return buildConflictError(
-    'grant',
-    `${impName}/${secretName}`,
-    `secret ${clash.secretName} already gives ${impName} a credential for ${clash.host}`,
-  );
-}
-
-const FORK_SKIP_CAUSES: Readonly<Record<GrantNotCopied['reason'], string>> = {
-  'not-grantable': 'the caller may not grant it',
-  clash: 'it has another credential for that host',
-  'no-secret': 'the secret is gone',
-};
-
-// what a fork answers when its copy made no grant at all; the cause of a
-// failure stays in impd's log
-const FORK_TOKEN_GONE =
-  "the token behind this fork was removed, so it got none of the source's grants";
-
-const FORK_COPY_FAILED =
-  "the source's grants could not be copied, so the fork has none; impd's log has the cause";
-
 // the token behind the call was removed after its access check
 function buildTokenGoneError() {
   return new ORPCError('UNAUTHORIZED', { message: 'the token behind this call was removed' });
@@ -453,5 +445,13 @@ function buildStaleError(secretName: string) {
   return buildForbiddenError(
     `secret ${secretName} is not one this caller may grant`,
     'not_grantable',
+  );
+}
+
+function buildClashError(impName: string, secretName: string, clash: Readonly<GrantClash>) {
+  return buildConflictError(
+    'grant',
+    `${impName}/${secretName}`,
+    `secret ${clash.secretName} already gives ${impName} a credential for ${clash.host}`,
   );
 }

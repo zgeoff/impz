@@ -6,12 +6,12 @@ import { runGitCommand } from './git-env';
 import { startStubUpstream } from './start-stub-upstream';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-upstream-test-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-upstream-test-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   // a commit to push, made the way a user's checkout would hold one
-  const work = join(dir, 'work');
+  const work = join(directory, 'work');
 
   const gitEnv = {
     GIT_AUTHOR_NAME: 'e2e',
@@ -30,7 +30,7 @@ async function setupTest() {
 
   const head = await runGitCommand(['git', '-C', work, 'rev-parse', 'main'], { env: gitEnv });
 
-  return { dir, work, gitEnv, head: head.stdout.trim() };
+  return { directoryPath: directory, work, gitEnv, head: head.stdout.trim() };
 }
 
 test('it serves https that verifies against its own CA', async () => {
@@ -109,7 +109,7 @@ test('it lands a git push over smart http with its Basic credential', async () =
 
   const repo = await upstream.createRepo('acme/repo.git');
 
-  const caFile = join(ctx.dir, 'ca.pem');
+  const caFile = join(ctx.directoryPath, 'ca.pem');
 
   await writeFile(caFile, upstream.caPem);
 
@@ -136,7 +136,7 @@ test('it refuses a git push with another Basic credential', async () => {
 
   const repo = await upstream.createRepo('acme/repo.git');
 
-  const caFile = join(ctx.dir, 'ca.pem');
+  const caFile = join(ctx.directoryPath, 'ca.pem');
 
   await writeFile(caFile, upstream.caPem);
 

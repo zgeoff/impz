@@ -18,8 +18,8 @@ import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-im
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubTracedBuild } from '@impz/daemon/src/test-utils/build-stub-traced-build';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { createStubDockerCli } from '@impz/daemon/src/test-utils/create-stub-docker-cli';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
 import { startStubDockerEngine } from '@impz/daemon/src/test-utils/start-stub-docker-engine';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -42,7 +42,7 @@ async function setupTest() {
   stack.defer(() => db.destroy());
 
   // the engine a host build sends its context to
-  const engine = startStubDockerEngine({ dir: dataDir });
+  const engine = startStubDockerEngine({ directoryPath: dataDir });
 
   stack.defer(() => engine.stop());
 
@@ -53,7 +53,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
     IMP_BUILD_ISOLATION: 'host',
     DOCKER_HOST: engine.dockerHost,
   });
@@ -171,7 +171,7 @@ test('#imageCommand prints progress lines and the step output of a build whose s
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -219,7 +219,7 @@ test('#imageCommand prints no progress and no step output for --quiet', async ()
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -254,7 +254,7 @@ test('#imageCommand prints the image as JSON alone on stdout with --json, and th
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {
@@ -291,7 +291,7 @@ test('#imageCommand lists a running build with its start and step from another s
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
       {

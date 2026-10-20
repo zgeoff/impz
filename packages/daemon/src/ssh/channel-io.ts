@@ -3,7 +3,7 @@ import { ORPCError } from '@orpc/server';
 import type { ServerChannel } from 'ssh2';
 import { AgentError } from '../agent-client/agent-connection';
 import type { DialStream } from '../agent-client/dial-stream';
-import { readErrorMessage } from '../read-error-message';
+import { getErrorMessage } from '../get-error-message';
 
 // Where a channel's input goes: an exec's stdin or a dialed connection.
 export interface ChannelSink {
@@ -88,5 +88,5 @@ export function formatFailure(error: unknown): string {
     return `${String(error.code)}: ${error.message}`;
   }
 
-  return readErrorMessage(error);
+  return getErrorMessage(error);
 }

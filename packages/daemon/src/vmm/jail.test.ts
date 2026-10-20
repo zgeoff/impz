@@ -73,7 +73,7 @@ function setupTest() {
   const createImpDir = (impId: string) => {
     const paths = buildImpPaths(dataDir, impId);
 
-    mkdirSync(paths.dir, { recursive: true });
+    mkdirSync(paths.directory, { recursive: true });
 
     return { paths, root: join(dataDir, 'jail', 'firecracker', impId, 'root') };
   };
@@ -164,7 +164,7 @@ test('#prepare binds the imp in at its own path, read-only files after, then mak
   expect(ctx.mounts.calls).toStrictEqual([
     `mount --bind ${imp.root} ${imp.root}`,
     `mount --make-private ${imp.root}`,
-    `mount --rbind -o nosuid=recursive,nodev=recursive ${imp.paths.dir} ${imp.root}${imp.paths.dir}`,
+    `mount --rbind -o nosuid=recursive,nodev=recursive ${imp.paths.directory} ${imp.root}${imp.paths.directory}`,
     `mount --bind ${kernel} ${imp.root}${kernel}`,
     `mount -o remount,bind,ro,nosuid,nodev ${imp.root}${kernel}`,
     `mount --make-rprivate ${imp.root}`,
@@ -228,11 +228,11 @@ test('#prepare unmounts the binds of the last jail deepest first before it binds
   await ctx.jails.prepare(plan);
 
   expect(ctx.mounts.calls).toStrictEqual([
-    `umount ${imp.root}${imp.paths.dir}`,
+    `umount ${imp.root}${imp.paths.directory}`,
     `umount ${imp.root}`,
     `mount --bind ${imp.root} ${imp.root}`,
     `mount --make-private ${imp.root}`,
-    `mount --rbind -o nosuid=recursive,nodev=recursive ${imp.paths.dir} ${imp.root}${imp.paths.dir}`,
+    `mount --rbind -o nosuid=recursive,nodev=recursive ${imp.paths.directory} ${imp.root}${imp.paths.directory}`,
     `mount --make-rprivate ${imp.root}`,
   ]);
 });
@@ -264,7 +264,7 @@ test('#prepare rebuilds the chroot so a symlink the last VM planted leads nowher
   const elsewhere = join(ctx.dataDir, 'elsewhere');
 
   // the first segment of the imp dir's absolute path, as it sits in the chroot
-  const top = join(imp.root, imp.paths.dir.split('/')[1] ?? '');
+  const top = join(imp.root, imp.paths.directory.split('/')[1] ?? '');
 
   writeFileSync(imp.paths.disk, '');
 
@@ -278,7 +278,7 @@ test('#prepare rebuilds the chroot so a symlink the last VM planted leads nowher
 
   await ctx.jails.prepare(plan);
 
-  expect(lstatSync(join(imp.root, imp.paths.dir)).isDirectory()).toBeTrue();
+  expect(lstatSync(join(imp.root, imp.paths.directory)).isDirectory()).toBeTrue();
   expect(readdirSync(elsewhere)).toStrictEqual([]);
 });
 
@@ -476,7 +476,7 @@ test('#remove refuses a jail whose killed VM never finishes its exit, and keeps 
 test('#prepare refuses a scratch file inside a bound dir, where it would land in the real one', () => {
   const ctx = setupTest();
   const imp = ctx.createImpDir('i1');
-  const scratch = join(imp.paths.dir, 'placeholder.ext4');
+  const scratch = join(imp.paths.directory, 'placeholder.ext4');
 
   writeFileSync(imp.paths.disk, '');
 
@@ -630,7 +630,7 @@ test('#release detaches a busy mount lazily', async () => {
   await ctx.jails.release('i1');
 
   expect(ctx.mounts.calls).toStrictEqual([
-    `umount ${imp.root}${imp.paths.dir}`,
+    `umount ${imp.root}${imp.paths.directory}`,
     `umount ${imp.root}`,
     `umount --lazy ${imp.root}`,
   ]);
@@ -715,7 +715,7 @@ test('#removeOrphans logs and keeps an orphan jail that will not unmount, and re
   const ctx = setupTest();
   const imp = ctx.createImpDir('i1');
   const plan = { impId: 'i1', user: ctx.user, paths: imp.paths, readOnlyFiles: [] };
-  const deepest = `${imp.root}${imp.paths.dir}`;
+  const deepest = `${imp.root}${imp.paths.directory}`;
 
   writeFileSync(imp.paths.disk, '');
 

@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import type { Socket } from 'bun';
-import { findFreePorts } from './find-free-ports';
+import { claimFreePorts } from './claim-free-ports';
 import { startStubBrokerGuestSocket } from './start-stub-broker-guest-socket';
 
 function setupTest() {
@@ -76,6 +76,6 @@ test('it rejects when nothing listens on the port', () => {
   const ctx = setupTest();
 
   expect(
-    startStubBrokerGuestSocket(ctx.stack, { port: findFreePorts(1).take(), address: '127.0.0.2' }),
+    startStubBrokerGuestSocket(ctx.stack, { port: claimFreePorts(1).take(), address: '127.0.0.2' }),
   ).rejects.toThrow();
 });

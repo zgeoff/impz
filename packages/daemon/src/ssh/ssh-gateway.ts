@@ -269,7 +269,7 @@ async function checkLogin(ctx: AuthContext, deps: SshGatewayDeps): Promise<Login
     return 'rejected';
   }
 
-  const found = deps.keys.findKey(ctx.key.data);
+  const found = deps.keys.readLoginKey(ctx.key.data);
 
   if (found === null) {
     return 'rejected';
@@ -290,7 +290,7 @@ async function checkLogin(ctx: AuthContext, deps: SshGatewayDeps): Promise<Login
     return 'rejected';
   }
 
-  const imp = await deps.backend.findImp(ctx.username);
+  const imp = await deps.backend.readImp(ctx.username);
 
   if (imp === undefined || !isCallerAllowed(found.caller, 'exec', imp.name)) {
     return 'rejected';

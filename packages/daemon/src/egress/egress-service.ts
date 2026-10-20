@@ -6,10 +6,11 @@ import { REFUSED_RANGES } from '../broker/tunnel-target';
 import type { Config } from '../config';
 import { listEgressSlots, readEgressPolicy } from '../db/egress';
 import type { EgressSlot } from '../db/egress';
-import { findImpByName } from '../db/imps';
+import { readImpByName } from '../db/imps';
 import { listNetworkMembers, listNetworkNames } from '../db/networks';
 import type { NetworkMember } from '../db/networks';
 import type { ImpDatabase } from '../db/open-database';
+import { getErrorMessage } from '../get-error-message';
 import { formatSubnet, parseIpv4 } from '../net/addressing';
 import { deriveGuestIp6 } from '../net/addressing6';
 import { readConnectedPrefixes4, readUplinks } from '../net/host-routes';
@@ -18,10 +19,8 @@ import { readConnectedPrefixes6 } from '../net/ipv6-plan';
 import type { Ipv6Plan } from '../net/ipv6-plan';
 import { createRangeChecker } from '../net/range-checker';
 import { BLOCKED_RANGES6, DOCUMENTATION_RANGES6, RESERVED_RANGES6 } from '../net/ranges6';
-import { createKeyedMutex } from '../process/keyed-mutex';
+import { buildKeyedMutex } from '../process/keyed-mutex';
 import { startInterval } from '../process/start-interval';
-import { readErrorMessage } from '../read-error-message';
-import { checkDenyList } from './check-deny-list';
 import { checkPeerAccept } from './check-peer-accept';
 import { createExactResolver } from './create-exact-resolver';
 import { createDnsForward } from './dns-upstream';
@@ -36,6 +35,7 @@ import type { AllowRules } from './egress-rules';
 import { buildElementChange, buildRuleset } from './egress-ruleset';
 import { createEgressSets } from './egress-sets';
 import type { AddressAnswer, HeldAnswer } from './egress-sets';
+import { isDenyListed } from './is-deny-listed';
 import { listPeerGroups } from './list-peer-groups';
 import { makeChangeNetworks } from './make-change-networks';
 import type { NetworkChange } from './make-change-networks';
@@ -85,7 +85,7 @@ export interface EgressDeps {
   readonly now?: () => number;
 
   // runs `run` every `ms` until the returned stop; setInterval by default
-  readonly repeat?: (run: () => void, ms: number) => () => void;
+  readonly repeat?: (run: () => void, durationMs: number) => () => void;
 }
 
 export interface EgressService {
@@ -148,7 +148,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
 
   const resolveExact = deps.resolveExact ?? createExactResolver(deps.config.dns, ipv6 !== null);
   const sets = createEgressSets({ minTtlS: MIN_TTL_S, maxTtlS: MAX_TTL_S, maxPerSlot: SET_SIZE });
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
 
   const privateRanges = [
     ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
@@ -285,7 +285,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
         state.isScreened = createRangeChecker(public4, public6);
         state.publicUnenforced = host.error;
 
-        state.denyListMissing = checkDenyList({
+        state.denyListMissing = isDenyListed({
           hasPublic,
           hostAddresses: deps.config.hostAddresses,
           wasMissing: state.denyListMissing,
@@ -318,7 +318,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
     try {
       await applyTable();
     } catch (error) {
-      deps.log(`impd: egress: rebuilding the table: ${readErrorMessage(error)}`);
+      deps.log(`impd: egress: rebuilding the table: ${getErrorMessage(error)}`);
     }
   };
 
@@ -387,7 +387,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
 
         await writeAnswers(slot, [name], answers);
       } catch (error) {
-        deps.log(`impd: egress: ${view.entry.name}: resolving ${name}: ${readErrorMessage(error)}`);
+        deps.log(`impd: egress: ${view.entry.name}: resolving ${name}: ${getErrorMessage(error)}`);
       }
     }
   };
@@ -408,7 +408,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
     try {
       await runSweep();
     } catch (error) {
-      deps.log(`impd: egress: sweep: ${readErrorMessage(error)}`);
+      deps.log(`impd: egress: sweep: ${getErrorMessage(error)}`);
     }
   };
 
@@ -555,7 +555,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
     changeNetworks,
 
     readPolicy: async (name) => {
-      const imp = await findImpByName(deps.db, name);
+      const imp = await readImpByName(deps.db, name);
 
       const policy = imp === undefined ? undefined : await readEgressPolicy(deps.db, imp.id);
 
@@ -575,6 +575,11 @@ export function createEgressService(deps: EgressDeps): EgressService {
   };
 }
 
+// a box imp: its allow-list's sets are the ones to keep
+function hasAllowList(view: SlotView | undefined): boolean {
+  return view !== undefined && EGRESS_MODE_TRAITS[view.entry.policy.mode].hasAllowList;
+}
+
 // an open or public imp: every name it asks is forwarded
 function isForwardedFreely(view: SlotView | undefined): boolean {
   if (view === undefined) {
@@ -584,9 +589,4 @@ function isForwardedFreely(view: SlotView | undefined): boolean {
   const traits = EGRESS_MODE_TRAITS[view.entry.policy.mode];
 
   return traits.isOpen || traits.isPublic;
-}
-
-// a box imp: its allow-list's sets are the ones to keep
-function hasAllowList(view: SlotView | undefined): boolean {
-  return view !== undefined && EGRESS_MODE_TRAITS[view.entry.policy.mode].hasAllowList;
 }

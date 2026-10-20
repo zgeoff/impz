@@ -5,7 +5,7 @@ import type { BudgetSample } from './scale-budget';
 import {
   buildFillScript,
   buildOvershootLimits,
-  findBudgetViolations,
+  collectBudgetViolations,
   readOvershootMs,
   startBudgetMonitor,
   waitForSampleAfter,
@@ -41,7 +41,7 @@ test('#buildOvershootLimits rounds the part the reserve leaves out up to a whole
   ).toBe(257);
 });
 
-test('#findBudgetViolations names a breach in what the VMs own that impd’s figure hides', () => {
+test('#collectBudgetViolations names a breach in what the VMs own that impd’s figure hides', () => {
   const samples = [
     { at: 0, ramUsedMib: 900, awake: 3, firecrackerPssMib: 1100, firecrackerOwnedMib: 900 },
     { at: 500, ramUsedMib: 950, awake: 3, firecrackerPssMib: 1500, firecrackerOwnedMib: 1400 },
@@ -49,7 +49,7 @@ test('#findBudgetViolations names a breach in what the VMs own that impd’s fig
   ];
 
   expect(
-    findBudgetViolations(
+    collectBudgetViolations(
       samples,
       [],
       { budgetMib: 1000, maxStartMs: 1500, maxOverMib: 256 },
@@ -60,14 +60,14 @@ test('#findBudgetViolations names a breach in what the VMs own that impd’s fig
   ]);
 });
 
-test('#findBudgetViolations names an overshoot still open at the final check in both figures', () => {
+test('#collectBudgetViolations names an overshoot still open at the final check in both figures', () => {
   const samples = [
     { at: 0, ramUsedMib: 900, awake: 3, firecrackerPssMib: 900, firecrackerOwnedMib: 900 },
     { at: 500, ramUsedMib: 1100, awake: 3, firecrackerPssMib: 1200, firecrackerOwnedMib: 1050 },
   ];
 
   expect(
-    findBudgetViolations(
+    collectBudgetViolations(
       samples,
       [],
       { budgetMib: 1000, maxStartMs: 1500, maxOverMib: 256 },
@@ -79,13 +79,13 @@ test('#findBudgetViolations names an overshoot still open at the final check in 
   ]);
 });
 
-test('#findBudgetViolations passes samples that stay inside the budget', () => {
+test('#collectBudgetViolations passes samples that stay inside the budget', () => {
   const samples = [
     { at: 0, ramUsedMib: 900, awake: 3, firecrackerPssMib: 1200, firecrackerOwnedMib: 950 },
   ];
 
   expect(
-    findBudgetViolations(
+    collectBudgetViolations(
       samples,
       [],
       { budgetMib: 1000, maxStartMs: 1500, maxOverMib: 256 },

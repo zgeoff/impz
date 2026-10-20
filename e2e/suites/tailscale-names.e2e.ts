@@ -6,14 +6,14 @@ import { waitForExec } from '../lib/imps';
 import { instance, runDevScript } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix, readSuiteSettings } from '../lib/suites';
+import { getSuitePrefix, readSuiteSettings } from '../lib/suites';
 import {
   isTailnetReady,
   readLocalTailscaleStatus,
   readTailnetBody,
   waitForTailnetIp,
 } from '../lib/tailnet';
-import { hasTailscaleE2EKey } from '../lib/tailscale-key';
+import { probeTailscaleE2EKey } from '../lib/tailscale-key';
 import { waitFor } from '../lib/wait-for';
 
 // Per-imp tailnet names need an OAuth client with the services scope and the
@@ -28,7 +28,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('tailscale'), stack, client };
+  return { prefix: getSuitePrefix('tailscale'), stack, client };
 }
 
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
@@ -37,7 +37,7 @@ const tailscaleStatus = await readLocalTailscaleStatus();
 // set IMP_E2E_TAILNET_NAMES=1 once the Services OAuth client and the tailnet
 // policy exist
 const tailnetNamesMissing =
-  !isTailnetReady(tailscaleStatus, hasTailscaleE2EKey()) ||
+  !isTailnetReady(tailscaleStatus, probeTailscaleE2EKey()) ||
   process.env['IMP_E2E_TAILNET_NAMES'] !== '1';
 
 test.skipIf(tailnetNamesMissing)(

@@ -6,13 +6,13 @@ import { startStubFirecrackerApi } from '../test-utils/start-stub-firecracker-ap
 import { createFirecrackerClient } from './firecracker-client';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-fc-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-fc-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { socket: join(dir, 'api.sock') };
+  return { socket: join(directory, 'api.sock') };
 }
 
 test('it gives up on a call to a Firecracker that never answers after the request timeout', () => {
@@ -432,7 +432,7 @@ test('it reads what the guest holds plugged and was asked for', async () => {
     },
   });
 
-  const hotplug = await createFirecrackerClient(ctx.socket).getHotplugMemory();
+  const hotplug = await createFirecrackerClient(ctx.socket).readHotplugMemory();
 
   expect(hotplug).toStrictEqual({ pluggedMib: 256, requestedMib: 0 });
 });
@@ -444,7 +444,7 @@ test('it rejects a hot-plug answer that is not an object', () => {
     answers: { 'GET /hotplug/memory': { status: 200, body: null } },
   });
 
-  expect(createFirecrackerClient(ctx.socket).getHotplugMemory()).rejects.toThrowWithMessage(
+  expect(createFirecrackerClient(ctx.socket).readHotplugMemory()).rejects.toThrowWithMessage(
     Error,
     'firecracker GET /hotplug/memory: unexpected body null',
   );
@@ -457,7 +457,7 @@ test('it rejects a hot-plug answer without the plugged size', () => {
     answers: { 'GET /hotplug/memory': { status: 200, body: { requested_size_mib: 0 } } },
   });
 
-  expect(createFirecrackerClient(ctx.socket).getHotplugMemory()).rejects.toThrowWithMessage(
+  expect(createFirecrackerClient(ctx.socket).readHotplugMemory()).rejects.toThrowWithMessage(
     TypeError,
     'firecracker: no number plugged_size_mib in {"requested_size_mib":0}',
   );
@@ -482,7 +482,7 @@ test('it reads the balloon statistics in whole MiB', async () => {
     },
   });
 
-  const stats = await createFirecrackerClient(ctx.socket).getBalloonStats();
+  const stats = await createFirecrackerClient(ctx.socket).readBalloonStats();
 
   expect(stats).toStrictEqual({ totalMib: 985, availableMib: 122 });
 });
@@ -494,7 +494,7 @@ test('it rejects balloon statistics without the available memory', () => {
     answers: { 'GET /balloon/statistics': { status: 200, body: { total_memory: 1_048_576 } } },
   });
 
-  expect(createFirecrackerClient(ctx.socket).getBalloonStats()).rejects.toThrowWithMessage(
+  expect(createFirecrackerClient(ctx.socket).readBalloonStats()).rejects.toThrowWithMessage(
     TypeError,
     'firecracker: no number available_memory in {"total_memory":1048576}',
   );
@@ -507,7 +507,7 @@ test('it reads the Firecracker version', async () => {
     answers: { 'GET /version': { status: 200, body: { firecracker_version: '1.17.0' } } },
   });
 
-  const version = await createFirecrackerClient(ctx.socket).getVersion();
+  const version = await createFirecrackerClient(ctx.socket).readVersion();
 
   expect(version).toBe('1.17.0');
 });
@@ -519,7 +519,7 @@ test('it rejects a version answer without the version', () => {
     answers: { 'GET /version': { status: 200, body: { version: 1 } } },
   });
 
-  expect(createFirecrackerClient(ctx.socket).getVersion()).rejects.toThrowWithMessage(
+  expect(createFirecrackerClient(ctx.socket).readVersion()).rejects.toThrowWithMessage(
     Error,
     'firecracker GET /version: unexpected body {"version":1}',
   );
@@ -532,7 +532,7 @@ test('it reads the state of the instance', async () => {
     answers: { 'GET /': { status: 200, body: { id: 'i1', state: 'Paused' } } },
   });
 
-  const state = await createFirecrackerClient(ctx.socket).getInstanceState();
+  const state = await createFirecrackerClient(ctx.socket).readInstanceState();
 
   expect(state).toBe('Paused');
 });
@@ -544,7 +544,7 @@ test('it rejects an instance state Firecracker does not have', () => {
     answers: { 'GET /': { status: 200, body: { id: 'i1', state: 'Sleeping' } } },
   });
 
-  expect(createFirecrackerClient(ctx.socket).getInstanceState()).rejects.toMatchObject({
+  expect(createFirecrackerClient(ctx.socket).readInstanceState()).rejects.toMatchObject({
     name: 'ZodError',
     issues: expect.toPartiallyContain({ path: ['state'], code: 'invalid_value' }),
   });

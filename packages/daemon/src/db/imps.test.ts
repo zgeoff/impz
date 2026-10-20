@@ -13,9 +13,9 @@ import {
   countImpsUsingImage,
   createImp,
   createImpInFreeSlot,
-  findImpById,
-  findImpByName,
   listImps,
+  readImpById,
+  readImpByName,
   removeIdentityReset,
   removeImp,
   updateImpActivity,
@@ -194,7 +194,7 @@ test('#createImp gives a destroyed imp’s jail uid to the next imp', async () =
     buildMockNewImp({ imageId: image.id, slot: 2, ip: '10.66.0.4' }),
   );
 
-  const stored = await findImpById(ctx.db, third.id);
+  const stored = await readImpById(ctx.db, third.id);
 
   expect(stored?.jailUid).toBe(JAIL_UIDS.first);
 });
@@ -215,31 +215,31 @@ test('#createImp throws when every jail uid is taken', async () => {
   ).rejects.toThrowWithMessage(Error, 'every one of the 65536 jail uids is taken');
 });
 
-test('#findImpByName finds the imp of that name', async () => {
+test('#readImpByName finds the imp of that name', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: image.id }));
-  const found = await findImpByName(ctx.db, 'dev');
+  const found = await readImpByName(ctx.db, 'dev');
 
   expect(found).toStrictEqual(imp);
 });
 
-test('#findImpByName finds nothing for a name no imp has', async () => {
+test('#readImpByName finds nothing for a name no imp has', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
 
   await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: image.id }));
 
-  const found = await findImpByName(ctx.db, 'nope');
+  const found = await readImpByName(ctx.db, 'nope');
 
   expect(found).toBeUndefined();
 });
 
-test('#findImpById finds the imp of that id', async () => {
+test('#readImpById finds the imp of that id', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
-  const found = await findImpById(ctx.db, imp.id);
+  const found = await readImpById(ctx.db, imp.id);
 
   expect(found).toStrictEqual(imp);
 });
@@ -404,7 +404,7 @@ test('#updateImpActivity records when the imp was last active', async () => {
 
   await updateImpActivity(ctx.db, imp.id, new Date('2026-10-02T01:00:00Z'));
 
-  const active = await findImpById(ctx.db, imp.id);
+  const active = await readImpById(ctx.db, imp.id);
 
   expect(active?.lastActiveAt).toStrictEqual(new Date('2026-10-02T01:00:00Z'));
 });
@@ -566,7 +566,7 @@ test('#updateImpCommitted leaves the move mark on a warm commit it refuses', asy
   await updateImpState(ctx.db, imp.id, { reason: 'failed', state: 'error' });
   await updateImpCommitted(ctx.db, imp.id, 1_800_000_000_000, true).catch(() => {});
 
-  const after = await findImpById(ctx.db, imp.id);
+  const after = await readImpById(ctx.db, imp.id);
 
   expect(after?.moveState).toBe('receiving');
 });
@@ -702,7 +702,7 @@ test.each([
     `imp ${imp.id}: the move mark cannot go from ${change}`,
   );
 
-  const kept = await findImpById(ctx.db, imp.id);
+  const kept = await readImpById(ctx.db, imp.id);
 
   expect(kept?.moveState).toBe(imp.moveState);
 });

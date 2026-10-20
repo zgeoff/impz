@@ -16,7 +16,7 @@ import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { server } from '@impz/test-utils/mock-server';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -24,8 +24,8 @@ import { ORPCError } from '@orpc/client';
 import { HttpResponse, http } from 'msw';
 import { CLIENT_VERSION } from './check-server';
 import { createImpClient } from './create-imp-client';
-import { buildStubImpdWithNewReason } from './test-utils/build-stub-impd-with-new-reason';
 import { createStubDockerBin } from './test-utils/create-stub-docker-bin';
+import { makeStubImpdWithNewReason } from './test-utils/make-stub-impd-with-new-reason';
 import { startStubDockerEngine } from './test-utils/start-stub-docker-engine';
 
 // impd's dependencies on stub VMs; `startImpd` boots one over the same
@@ -134,7 +134,7 @@ async function setupTest() {
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
       ...env,
     });
 
@@ -378,7 +378,7 @@ test('#requireAwake waits out a stopping impd for the one that replaces it when 
 test('#requireAwake rejects with the TypeError of an impd it cannot reach', () => {
   // nothing listens on a free port
   const client = createImpClient({
-    url: `http://127.0.0.1:${String(findFreePorts(1).take())}/`,
+    url: `http://127.0.0.1:${String(claimFreePorts(1).take())}/`,
     token: 'root-token',
   });
 
@@ -627,7 +627,7 @@ test('#events.stream passes on an event whose reason this client does not know',
   const ctx = await setupTest();
   const impd = await ctx.startImpd();
 
-  const newer = buildStubImpdWithNewReason(
+  const newer = makeStubImpdWithNewReason(
     (request) => impd.api.app.handle(request),
     'from-the-future',
   );

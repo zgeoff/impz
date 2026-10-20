@@ -222,14 +222,14 @@ export function readSnapshotMeta(paths: Readonly<ImpPaths>): SnapshotMeta | null
   }
 }
 
-export function hasSnapshot(paths: Readonly<ImpPaths>): boolean {
+export function probeSnapshot(paths: Readonly<ImpPaths>): boolean {
   return readSnapshotMeta(paths) !== null;
 }
 
 // Why the snapshot cannot be loaded on this host, or null when it can. The
 // guest kernel does not count: the VM holds it in memory. The drive counts
 // only as the file the snapshot reopens, which stays while a snapshot names it.
-export function findColdBootReason(
+export function readColdBootReason(
   meta: Readonly<SnapshotIdentity>,
   host: Readonly<HostIdentity>,
 ): string | null {

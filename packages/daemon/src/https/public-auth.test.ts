@@ -343,18 +343,18 @@ test('#createPublicRoute routes a running imp once the wake limit is hit', async
 test('#createPublicRoute wakes a sleeping imp again 6 seconds after the wake limit is hit', async () => {
   const stored = buildMockStoredPublicAuth({ auth: 'none', user: null, hash: null });
   const imp = buildMockPublicImp({ state: 'sleeping', stored });
-  const clock = { ms: 0 };
+  const clock = { durationMs: 0 };
 
   const route = createPublicRoute(
     () => Promise.resolve(imp),
-    createPublicLimits(() => clock.ms),
+    createPublicLimits(() => clock.durationMs),
   );
 
   await Promise.all(
     Array.from({ length: 11 }, () => route('web', new Request('https://web.imp.test/'))),
   );
 
-  clock.ms = 6000;
+  clock.durationMs = 6000;
 
   const answer = await route('web', new Request('https://web.imp.test/'));
 

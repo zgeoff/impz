@@ -18,18 +18,18 @@ import { createStubUname } from './packages/test-utils/src/create-stub-uname';
 import { startStubGithubReleases } from './packages/test-utils/src/start-stub-github-releases';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-install-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-install-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   // the stubs go here, ahead of the real commands on PATH
-  const bin = join(dir, 'bin');
+  const bin = join(directory, 'bin');
 
   mkdirSync(bin);
 
-  return { dir, bin };
+  return { directoryPath: directory, bin };
 }
 
 test('it installs the latest release after checking its checksum and provenance', async () => {
@@ -51,9 +51,9 @@ test('it installs the latest release after checking its checksum and provenance'
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -66,8 +66,8 @@ test('it installs the latest release after checking its checksum and provenance'
     stdout: [
       'impz: downloading impz-linux-x64 v1.2.3',
       'impz: provenance verified',
-      `impz: installed 1.2.3 to ${ctx.dir}/install/impz`,
-      `impz: add ${ctx.dir}/install to your PATH`,
+      `impz: installed 1.2.3 to ${ctx.directoryPath}/install/impz`,
+      `impz: add ${ctx.directoryPath}/install to your PATH`,
       '',
     ].join('\n'),
     stderr: '',
@@ -86,7 +86,7 @@ test('it installs the latest release after checking its checksum and provenance'
     expect.stringMatching(/^attestation verify \S+\/impz-linux-x64 -R zgeoff\/impz$/u),
   ]);
 
-  expect(readFileSync(join(ctx.dir, 'install', 'impz'), 'utf8')).toBe(binary);
+  expect(readFileSync(join(ctx.directoryPath, 'install', 'impz'), 'utf8')).toBe(binary);
 });
 
 test('it installs the release IMP_INSTALL_VERSION names without asking for the latest', async () => {
@@ -107,9 +107,9 @@ test('it installs the release IMP_INSTALL_VERSION names without asking for the l
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
       IMP_INSTALL_VERSION: '1.0.0',
     })
     .nothrow()
@@ -119,8 +119,8 @@ test('it installs the release IMP_INSTALL_VERSION names without asking for the l
     stdout: [
       'impz: downloading impz-linux-x64 v1.0.0',
       'impz: provenance verified',
-      `impz: installed 1.0.0 to ${ctx.dir}/install/impz`,
-      `impz: add ${ctx.dir}/install to your PATH`,
+      `impz: installed 1.0.0 to ${ctx.directoryPath}/install/impz`,
+      `impz: add ${ctx.directoryPath}/install to your PATH`,
       '',
     ].join('\n'),
     exitCode: 0,
@@ -150,9 +150,9 @@ test('it installs the release a v-prefixed IMP_INSTALL_VERSION names', async () 
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
       IMP_INSTALL_VERSION: 'v1.0.0',
     })
     .nothrow()
@@ -162,8 +162,8 @@ test('it installs the release a v-prefixed IMP_INSTALL_VERSION names', async () 
     stdout: [
       'impz: downloading impz-linux-x64 v1.0.0',
       'impz: provenance verified',
-      `impz: installed 1.0.0 to ${ctx.dir}/install/impz`,
-      `impz: add ${ctx.dir}/install to your PATH`,
+      `impz: installed 1.0.0 to ${ctx.directoryPath}/install/impz`,
+      `impz: add ${ctx.directoryPath}/install to your PATH`,
       '',
     ].join('\n'),
     exitCode: 0,
@@ -197,9 +197,9 @@ test('it installs without a provenance check when gh is not on PATH', async () =
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: ctx.bin,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -211,8 +211,8 @@ test('it installs without a provenance check when gh is not on PATH', async () =
   }).toStrictEqual({
     stdout: [
       'impz: downloading impz-linux-x64 v1.2.3',
-      `impz: installed 1.2.3 to ${ctx.dir}/install/impz`,
-      `impz: add ${ctx.dir}/install to your PATH`,
+      `impz: installed 1.2.3 to ${ctx.directoryPath}/install/impz`,
+      `impz: add ${ctx.directoryPath}/install to your PATH`,
       '',
     ].join('\n'),
     stderr: '',
@@ -245,9 +245,9 @@ test('it checks the binary with shasum when sha256sum is not on PATH', async () 
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: ctx.bin,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -258,7 +258,7 @@ test('it checks the binary with shasum when sha256sum is not on PATH', async () 
     expect.stringMatching(/^-a 256 \S+\/impz-linux-x64$/u),
   ]);
 
-  expect(readFileSync(join(ctx.dir, 'install', 'impz'), 'utf8')).toBe(binary);
+  expect(readFileSync(join(ctx.directoryPath, 'install', 'impz'), 'utf8')).toBe(binary);
 });
 
 test('it leaves out the PATH hint when the install dir is already on PATH', async () => {
@@ -278,10 +278,10 @@ test('it leaves out the PATH hint when the install dir is already on PATH', asyn
 
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
-      PATH: `${ctx.bin}:${join(ctx.dir, 'install')}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      PATH: `${ctx.bin}:${join(ctx.directoryPath, 'install')}:${process.env['PATH'] ?? ''}`,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -290,7 +290,7 @@ test('it leaves out the PATH hint when the install dir is already on PATH', asyn
     stdout: [
       'impz: downloading impz-linux-x64 v1.2.3',
       'impz: provenance verified',
-      `impz: installed 1.2.3 to ${ctx.dir}/install/impz`,
+      `impz: installed 1.2.3 to ${ctx.directoryPath}/install/impz`,
       '',
     ].join('\n'),
     exitCode: 0,
@@ -311,15 +311,15 @@ test('it names an imp binary from before the rename and leaves it in place', asy
 
   createStubUname({ bin: ctx.bin, system: 'Linux', machine: 'x86_64' });
   createStubGhAttestation({ bin: ctx.bin, loggedIn: true, verifies: true });
-  mkdirSync(join(ctx.dir, 'install'));
-  writeFileSync(join(ctx.dir, 'install', 'imp'), '#!/bin/sh\necho 1.6.0\n');
+  mkdirSync(join(ctx.directoryPath, 'install'));
+  writeFileSync(join(ctx.directoryPath, 'install', 'imp'), '#!/bin/sh\necho 1.6.0\n');
 
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
-      PATH: `${ctx.bin}:${join(ctx.dir, 'install')}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      PATH: `${ctx.bin}:${join(ctx.directoryPath, 'install')}:${process.env['PATH'] ?? ''}`,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -328,14 +328,16 @@ test('it names an imp binary from before the rename and leaves it in place', asy
     stdout: [
       'impz: downloading impz-linux-x64 v1.2.3',
       'impz: provenance verified',
-      `impz: installed 1.2.3 to ${ctx.dir}/install/impz`,
-      `impz: ${ctx.dir}/install/imp is the CLI from before its rename to impz; remove it once nothing calls it`,
+      `impz: installed 1.2.3 to ${ctx.directoryPath}/install/impz`,
+      `impz: ${ctx.directoryPath}/install/imp is the CLI from before its rename to impz; remove it once nothing calls it`,
       '',
     ].join('\n'),
     exitCode: 0,
   });
 
-  expect(readFileSync(join(ctx.dir, 'install', 'imp'), 'utf8')).toBe('#!/bin/sh\necho 1.6.0\n');
+  expect(readFileSync(join(ctx.directoryPath, 'install', 'imp'), 'utf8')).toBe(
+    '#!/bin/sh\necho 1.6.0\n',
+  );
 });
 
 test('it installs a release from before the rename as imp, with provenance from the old repository', async () => {
@@ -356,10 +358,10 @@ test('it installs a release from before the rename as imp, with provenance from 
 
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
-      PATH: `${ctx.bin}:${join(ctx.dir, 'install')}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      PATH: `${ctx.bin}:${join(ctx.directoryPath, 'install')}:${process.env['PATH'] ?? ''}`,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
       IMP_INSTALL_VERSION: '1.6.0',
     })
     .nothrow()
@@ -373,7 +375,7 @@ test('it installs a release from before the rename as imp, with provenance from 
     stdout: [
       'impz: downloading imp-linux-x64 v1.6.0',
       'impz: provenance verified',
-      `impz: installed 1.6.0 to ${ctx.dir}/install/imp`,
+      `impz: installed 1.6.0 to ${ctx.directoryPath}/install/imp`,
       '',
     ].join('\n'),
     stderr: '',
@@ -390,7 +392,7 @@ test('it installs a release from before the rename as imp, with provenance from 
     expect.stringMatching(/^attestation verify \S+\/imp-linux-x64 -R zgeoff\/imp$/u),
   ]);
 
-  expect(readdirSync(join(ctx.dir, 'install'))).toStrictEqual(['imp']);
+  expect(readdirSync(join(ctx.directoryPath, 'install'))).toStrictEqual(['imp']);
 });
 
 test('it installs the latest release when it is from before the rename', async () => {
@@ -410,10 +412,10 @@ test('it installs the latest release when it is from before the rename', async (
 
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
-      PATH: `${ctx.bin}:${join(ctx.dir, 'install')}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      PATH: `${ctx.bin}:${join(ctx.directoryPath, 'install')}:${process.env['PATH'] ?? ''}`,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -422,7 +424,7 @@ test('it installs the latest release when it is from before the rename', async (
     stdout: [
       'impz: downloading imp-linux-x64 v1.6.0',
       'impz: provenance verified',
-      `impz: installed 1.6.0 to ${ctx.dir}/install/imp`,
+      `impz: installed 1.6.0 to ${ctx.directoryPath}/install/imp`,
       '',
     ].join('\n'),
     exitCode: 0,
@@ -447,15 +449,15 @@ test('it installs the binary for the platform uname names', async () => {
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
-  expect(readFileSync(join(ctx.dir, 'install', 'impz'), 'utf8')).toBe(binary);
+  expect(readFileSync(join(ctx.directoryPath, 'install', 'impz'), 'utf8')).toBe(binary);
 });
 
 test('it installs nothing when the binary does not match SHA256SUMS', async () => {
@@ -476,9 +478,9 @@ test('it installs nothing when the binary does not match SHA256SUMS', async () =
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -493,7 +495,7 @@ test('it installs nothing when the binary does not match SHA256SUMS', async () =
     exitCode: 1,
   });
 
-  expect(existsSync(join(ctx.dir, 'install', 'impz'))).toBeFalse();
+  expect(existsSync(join(ctx.directoryPath, 'install', 'impz'))).toBeFalse();
 });
 
 test('it installs nothing when SHA256SUMS lists no binary for the platform', async () => {
@@ -514,9 +516,9 @@ test('it installs nothing when SHA256SUMS lists no binary for the platform', asy
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -531,7 +533,7 @@ test('it installs nothing when SHA256SUMS lists no binary for the platform', asy
     exitCode: 1,
   });
 
-  expect(existsSync(join(ctx.dir, 'install', 'impz'))).toBeFalse();
+  expect(existsSync(join(ctx.directoryPath, 'install', 'impz'))).toBeFalse();
 });
 
 test('it installs nothing when the provenance check fails', async () => {
@@ -552,9 +554,9 @@ test('it installs nothing when the provenance check fails', async () => {
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -570,7 +572,7 @@ test('it installs nothing when the provenance check fails', async () => {
     exitCode: 1,
   });
 
-  expect(existsSync(join(ctx.dir, 'install', 'impz'))).toBeFalse();
+  expect(existsSync(join(ctx.directoryPath, 'install', 'impz'))).toBeFalse();
 });
 
 test('it skips the provenance check when gh is not logged in', async () => {
@@ -592,9 +594,9 @@ test('it skips the provenance check when gh is not logged in', async () => {
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -607,8 +609,8 @@ test('it skips the provenance check when gh is not logged in', async () => {
     stdout: [
       'impz: downloading impz-linux-x64 v1.2.3',
       'impz: gh is not logged in; skipped the provenance check',
-      `impz: installed 1.2.3 to ${ctx.dir}/install/impz`,
-      `impz: add ${ctx.dir}/install to your PATH`,
+      `impz: installed 1.2.3 to ${ctx.directoryPath}/install/impz`,
+      `impz: add ${ctx.directoryPath}/install to your PATH`,
       '',
     ].join('\n'),
     stderr: '',
@@ -636,9 +638,9 @@ test('it fails the install when the binary does not run', async () => {
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -664,9 +666,9 @@ test('it fails when the repo has no release', async () => {
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -692,9 +694,9 @@ test('it fails when the releases page does not answer', async () => {
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: 'http://127.0.0.1:1',
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -724,9 +726,9 @@ test('it fails when the release has no binary to download', async () => {
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -757,9 +759,9 @@ test('it fails when the release has no SHA256SUMS to download', async () => {
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: releases.url,
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -784,9 +786,9 @@ test('it fails on a system it has no binary for', async () => {
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: 'http://127.0.0.1:1',
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();
@@ -807,9 +809,9 @@ test('it fails on a machine it has no binary for', async () => {
   const result = await $`sh ${join(import.meta.dir, 'install.sh')}`
     .env({
       PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       IMP_RELEASES_URL: 'http://127.0.0.1:1',
-      IMP_INSTALL_DIR: join(ctx.dir, 'install'),
+      IMP_INSTALL_DIR: join(ctx.directoryPath, 'install'),
     })
     .nothrow()
     .quiet();

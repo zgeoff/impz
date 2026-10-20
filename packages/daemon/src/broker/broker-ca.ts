@@ -13,7 +13,6 @@ import * as x509 from '@peculiar/x509';
 
 const ALGORITHM = { name: 'ECDSA', namedCurve: 'P-256', hash: 'SHA-256' } as const;
 const DAY_MS = 86_400_000;
-const CA_DAYS = 3650;
 const LEAF_DAYS = 365;
 
 // a leaf this close to its end is issued again
@@ -39,14 +38,14 @@ export interface BrokerCa {
 // The CA in <dir>: ca.pem (the certificate) and ca.key (0600), made on the
 // first start; `now` dates the CA and each leaf.
 export async function loadOrCreateBrokerCa(
-  dir: string,
+  directory: string,
   now: () => number = Date.now,
 ): Promise<BrokerCa> {
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  chmodSync(dir, 0o700);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  chmodSync(directory, 0o700);
 
-  const certPath = join(dir, 'ca.pem');
-  const keyPath = join(dir, 'ca.key');
+  const certPath = join(directory, 'ca.pem');
+  const keyPath = join(directory, 'ca.key');
 
   if (!existsSync(certPath) || !existsSync(keyPath)) {
     const created = await createCa(now());
@@ -102,6 +101,8 @@ export async function loadOrCreateBrokerCa(
     isDue: (leaf, at) => leaf.notAfter.getTime() - at < LEAF_RENEW_MS,
   };
 }
+
+const CA_DAYS = 3650;
 
 async function createCa(
   at: number,

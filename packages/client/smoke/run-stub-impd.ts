@@ -3,7 +3,7 @@ import type {
   ExecEvent,
   ExecStream,
 } from '@impz/daemon/src/agent-client/exec-stream';
-import { buildTestApp } from '@impz/daemon/src/imps/build-test-app';
+import { createTestApp } from '@impz/daemon/src/imps/create-test-app';
 import { createImpTest } from '@impz/daemon/src/imps/test-imps';
 import { TEST_TOKEN } from '@impz/daemon/src/imps/test-token';
 import type { Server } from 'bun';
@@ -50,8 +50,8 @@ async function startStubImpd() {
     },
   });
 
-  const built = buildTestApp(harness, harness, TEST_TOKEN, {
-    openExec: (_name, request) => Promise.resolve(buildFakeStream(request)),
+  const built = createTestApp(harness, harness, TEST_TOKEN, {
+    openExec: (_name, request) => Promise.resolve(createFakeStream(request)),
   });
 
   const app = built.app.listen({ hostname: '127.0.0.1', port: 0 });
@@ -65,7 +65,7 @@ async function startStubImpd() {
 
   stack.defer(() => proxy.stop(true));
 
-  const closedUrl = await findClosedUrl();
+  const closedUrl = await readClosedUrl();
 
   await harness.createTestImage('ubuntu');
   await built.client.imps.create({ name: 'smoke' });
@@ -76,7 +76,7 @@ async function startStubImpd() {
 // `cat` without a tty echoes stdin until EOF. With a tty, as a console has,
 // it reports its size and each resize, echoes what it reads, and ends by
 // SIGINT on ^C, as a shell's foreground job would.
-function buildFakeStream(request: Readonly<AgentExecRequest>): ExecStream {
+function createFakeStream(request: Readonly<AgentExecRequest>): ExecStream {
   const encoder = new TextEncoder();
 
   const queue: EventQueue = { events: [], wake: null };
@@ -243,7 +243,7 @@ function stopSocket(socket: Pick<WebSocket, 'close'> | null, code: number, reaso
   }
 }
 
-async function findClosedUrl(): Promise<string> {
+async function readClosedUrl(): Promise<string> {
   const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response() });
   const closed = `http://127.0.0.1:${String(server.port)}`;
 

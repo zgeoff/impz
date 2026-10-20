@@ -15,7 +15,7 @@ import { loadConfig } from '../config';
 import { createImpd } from '../create-impd';
 import type { ImpdDeps } from '../create-impd';
 import { createImage } from '../db/images';
-import { findImpByName, updateImpMove } from '../db/imps';
+import { readImpByName, updateImpMove } from '../db/imps';
 import { removeMember, removeNetwork, writeNetwork } from '../db/networks';
 import { openDatabase } from '../db/open-database';
 import { parsePrefix64 } from '../net/addressing6';
@@ -31,7 +31,7 @@ import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
 import { buildStubHostRoutes } from '../test-utils/build-stub-host-routes';
 import { buildStubNft } from '../test-utils/build-stub-nft';
 import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import { startStubEchoServer } from '../test-utils/start-stub-echo-server';
 import type { EgressDeps } from './egress-service';
 
@@ -177,7 +177,7 @@ async function setupTest(options: Readonly<SetupOptions> = {}) {
         IMP_DATA_DIR: dataDir,
         IMP_JAILER: 'false',
         IMP_BOOT_TEMPLATES: 'false',
-        IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+        IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
         ...readImpEnv(),
       }),
       defaultDiskBytes: 0,
@@ -223,8 +223,8 @@ async function setupTest(options: Readonly<SetupOptions> = {}) {
 
       return restarted.impd;
     },
-    advance: (ms: number) => {
-      clock.nowMs += ms;
+    advance: (durationMs: number) => {
+      clock.nowMs += durationMs;
     },
   };
 }
@@ -354,7 +354,7 @@ test('it takes a destroyed imp out of the table while its row still holds the sl
 
   await held.reached;
 
-  const row = await findImpByName(ctx.db, 'dev');
+  const row = await readImpByName(ctx.db, 'dev');
 
   held.release();
 
@@ -1005,7 +1005,7 @@ test('it builds the table again for a public imp once the routes are back', asyn
 
   routes.restoreUplinks();
 
-  const pub = await findImpByName(ctx.db, 'pub');
+  const pub = await readImpByName(ctx.db, 'pub');
 
   invariant(pub);
 
@@ -1105,7 +1105,7 @@ test('it leaves nft and the database agreeing when a create meets a failing poli
   const second = ctx.impd.imps.createImp({ name: 'second' });
 
   await waitFor(async () => {
-    const row = await findImpByName(ctx.db, 'second');
+    const row = await readImpByName(ctx.db, 'second');
 
     expect(row).toBeDefined();
   });
@@ -1396,7 +1396,7 @@ test('it rethrows the refusal of nft, and keeps the network, when the undo of a 
   await ctx.impd.imps.createImp({ name: 'web', networkIds: [network.id] });
   await ctx.impd.imps.createImp({ name: 'db', networkIds: [network.id] });
 
-  const dbImp = await findImpByName(ctx.db, 'db');
+  const dbImp = await readImpByName(ctx.db, 'db');
 
   invariant(dbImp);
 

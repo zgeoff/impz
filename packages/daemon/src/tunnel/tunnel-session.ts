@@ -11,8 +11,8 @@ import { ORPCError } from '@orpc/server';
 import { AgentError } from '../agent-client/agent-connection';
 import type { DialStream, DialTarget } from '../agent-client/dial-stream';
 import type { GuestListener, ListenSpec } from '../agent-client/listener-stream';
+import { getErrorMessage } from '../get-error-message';
 import { createCountedLimit } from '../process/counted-limit';
-import { readErrorMessage } from '../read-error-message';
 import type { ReverseForwards } from '../reverse/reverse-forwards';
 import { runGuestListener } from '../reverse/run-guest-listener';
 
@@ -34,7 +34,7 @@ export interface TunnelPeer {
 export interface TunnelBackend {
   // the imp's id, which the limit counts by, so a recreated imp starts at
   // zero; throws NOT_FOUND, and never wakes the imp
-  readonly findImpId: (name: string) => Promise<string>;
+  readonly readImpId: (name: string) => Promise<string>;
 
   // a connection inside the imp, counted as a tunnel while open
   readonly openDial: (name: string, target: DialTarget) => Promise<DialStream>;
@@ -81,7 +81,7 @@ function buildErrorMessage(error: unknown): TunnelServerMessage {
     return { type: 'error', code: error.code, message: error.detail };
   }
 
-  return { type: 'error', message: readErrorMessage(error) };
+  return { type: 'error', message: getErrorMessage(error) };
 }
 
 // One `impz proxy` connection: `open` dials 127.0.0.1:<port> in the imp through
@@ -215,11 +215,11 @@ export function createTunnelSession(
   };
 
   // the imp's id, or null once the session failed or the peer left
-  const findOpeningImp = async (name: string): Promise<string | null> => {
+  const readOpeningImp = async (name: string): Promise<string | null> => {
     state.phase = 'opening';
 
     try {
-      const impId = await backend.findImpId(name);
+      const impId = await backend.readImpId(name);
 
       return state.phase === 'opening' ? impId : null;
     } catch (error) {
@@ -240,7 +240,7 @@ export function createTunnelSession(
     reserve: (impId: string) => () => void,
     open: () => Promise<DialStream>,
   ): Promise<void> => {
-    const impId = await findOpeningImp(name);
+    const impId = await readOpeningImp(name);
 
     if (impId === null) {
       return;
@@ -342,7 +342,7 @@ export function createTunnelSession(
   };
 
   const openForward = async (control: TunnelListen): Promise<void> => {
-    const impId = await findOpeningImp(control.name);
+    const impId = await readOpeningImp(control.name);
 
     if (impId === null) {
       return;

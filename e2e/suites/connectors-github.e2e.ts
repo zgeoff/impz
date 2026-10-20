@@ -22,7 +22,7 @@ import { readContainerGateway, runChecked, runInContainer } from '../lib/instanc
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent, removeSecretIfPresent } from '../lib/reset-baseline';
 import { startStubUpstream } from '../lib/start-stub-upstream';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
 // The credential broker in a real guest (docs/guides/connectors.md): a stub
@@ -37,7 +37,7 @@ async function setupTest() {
   const client = await createInstanceClient();
   const gateway = await readContainerGateway();
 
-  return { prefix: readSuitePrefix('connectors'), stack, client, gateway };
+  return { prefix: getSuitePrefix('connectors'), stack, client, gateway };
 }
 
 test('it takes a secret on stdin, never shows it back, gives a granted guest the real token behind a placeholder, and stops it on a revoke', async () => {

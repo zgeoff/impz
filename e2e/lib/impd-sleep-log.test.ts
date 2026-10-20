@@ -10,7 +10,7 @@ test('it reads the duration, plugged size and steps of the newest sleep of the i
   ].join('\n');
 
   expect(findAsleepLine(log, 'e2e-mem-grow')).toStrictEqual({
-    ms: 640,
+    durationMs: 640,
     pluggedMib: 188,
     steps: { copyBase: 40, pause: 2, snapshot: 90 },
   });
@@ -21,7 +21,7 @@ test('it reads no plugged size from the sleep of an imp without elastic memory',
     'impd: e2e-mem-a: asleep in 500ms (api), ram 120 MiB, mem file 100 MiB on disk, pause=2ms\n';
 
   expect(findAsleepLine(log, 'e2e-mem-a')).toStrictEqual({
-    ms: 500,
+    durationMs: 500,
     pluggedMib: null,
     steps: { pause: 2 },
   });

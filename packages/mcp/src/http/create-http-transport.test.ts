@@ -11,7 +11,7 @@ import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
 import { buildQueryGate } from '@impz/daemon/src/test-utils/build-query-gate';
 import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
 import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { findFreePorts } from '@impz/daemon/src/test-utils/find-free-ports';
+import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
@@ -47,7 +47,7 @@ async function setupTest() {
     IMP_DATA_DIR: dataDir,
     IMP_JAILER: 'false',
     IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
+    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
   });
 
   // the system drive impd boots imps with, as setupSystemFiles installs it
@@ -175,7 +175,7 @@ test('it opens a session at initialize and answers with its id', async () => {
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const response = await transport.handle(
+  const response = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -219,7 +219,7 @@ test('it answers a request in the session that initialize opened', async () => {
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -244,7 +244,7 @@ test('it answers a request in the session that initialize opened', async () => {
 
   invariant(session !== null);
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -267,7 +267,7 @@ test('it refuses a request outside a session with 400', async () => {
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -295,7 +295,7 @@ test('it refuses a request in an unknown session with 404', async () => {
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -320,7 +320,7 @@ test("it refuses a request in another caller's session with 404", async () => {
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
   ctx.principals.set('Bearer bob', buildMockMcpPrincipal({ key: 'bob', client: ctx.client }));
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -345,7 +345,7 @@ test("it refuses a request in another caller's session with 404", async () => {
 
   invariant(session !== null);
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -366,7 +366,7 @@ test('it refuses a protocol version header it does not support with 400', async 
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -391,7 +391,7 @@ test('it refuses a protocol version header it does not support with 400', async 
 
   invariant(session !== null);
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -416,7 +416,7 @@ test('it answers a request that names a protocol version it supports', async () 
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -441,7 +441,7 @@ test('it answers a request that names a protocol version it supports', async () 
 
   invariant(session !== null);
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -463,7 +463,7 @@ test('it accepts a notification with 202 and no body', async () => {
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -488,7 +488,7 @@ test('it accepts a notification with 202 and no body', async () => {
 
   invariant(session !== null);
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -515,7 +515,7 @@ test('it lists only the read tools to a read caller', async () => {
     buildMockMcpPrincipal({ key: 'reader', scope: 'read', client: ctx.client }),
   );
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -540,7 +540,7 @@ test('it lists only the read tools to a read caller', async () => {
 
   invariant(session !== null);
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -582,7 +582,7 @@ test('it streams a tool call’s progress and response as server-sent events', a
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await transport.handle(
+  const opened = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -607,7 +607,7 @@ test('it streams a tool call’s progress and response as server-sent events', a
 
   invariant(session !== null);
 
-  const response = await transport.handle(
+  const response = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -679,7 +679,7 @@ test('it ends a call only once impd answers, after its stream drops', async () =
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -704,7 +704,7 @@ test('it ends a call only once impd answers, after its stream drops', async () =
 
   invariant(session !== null);
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -739,7 +739,7 @@ test('it ends a call only once impd answers, after its stream drops', async () =
 
   // a full round trip through the same session: any cancel the drop set off
   // has run by the time it answers
-  const ping = await ctx.transport.handle(
+  const ping = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -790,7 +790,7 @@ test('it sends keepalive comments on the stream of a call still running', async 
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await transport.handle(
+  const opened = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -815,7 +815,7 @@ test('it sends keepalive comments on the stream of a call still running', async 
 
   invariant(session !== null);
 
-  const call = transport.handle(
+  const call = transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -862,7 +862,7 @@ test('it refuses a POST from a client that takes no event stream with 406', asyn
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -887,7 +887,7 @@ test('it refuses a POST from a client that takes no event stream with 406', asyn
 
   invariant(session !== null);
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -909,7 +909,7 @@ test('it ends a cancelled call’s stream with no answer', async () => {
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -934,7 +934,7 @@ test('it ends a cancelled call’s stream with no answer', async () => {
 
   invariant(session !== null);
 
-  const call = ctx.transport.handle(
+  const call = ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -954,7 +954,7 @@ test('it ends a cancelled call’s stream with no answer', async () => {
 
   await ctx.gate.reached;
 
-  const cancel = await ctx.transport.handle(
+  const cancel = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -984,7 +984,7 @@ test('it ends a cancelled call’s stream with no answer', async () => {
 test('it refuses an unknown caller with 401 and a bearer challenge', async () => {
   const ctx = await setupTest();
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1014,7 +1014,7 @@ test('it refuses a batch of messages with 400', async () => {
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1045,7 +1045,7 @@ test('it refuses a body that is not JSON with 400 and a parse error', async () =
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: { authorization: 'Bearer alice', 'content-type': 'application/json' },
@@ -1069,7 +1069,7 @@ test('it refuses a POST that is not application/json with 415', async () => {
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: { authorization: 'Bearer alice', 'content-type': 'text/plain' },
@@ -1083,7 +1083,7 @@ test('it refuses a POST that is not application/json with 415', async () => {
 test('it refuses a GET with 405 and names the methods it allows', async () => {
   const ctx = await setupTest();
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'GET',
       headers: { authorization: 'Bearer alice' },
@@ -1097,7 +1097,7 @@ test('it refuses a GET with 405 and names the methods it allows', async () => {
 test('it refuses a page on another origin with 403 before it authenticates', async () => {
   const ctx = await setupTest();
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1127,7 +1127,7 @@ test('it ends a session on DELETE', async () => {
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1152,14 +1152,14 @@ test('it ends a session on DELETE', async () => {
 
   invariant(session !== null);
 
-  const ended = await ctx.transport.handle(
+  const ended = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'DELETE',
       headers: { authorization: 'Bearer alice', 'mcp-session-id': session },
     }),
   );
 
-  const after = await ctx.transport.handle(
+  const after = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1181,7 +1181,7 @@ test('it refuses a DELETE of an unknown session with 404', async () => {
 
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'DELETE',
       headers: {
@@ -1204,7 +1204,7 @@ test('it ends a caller’s sessions when what it authenticated with ends', async
     buildMockMcpPrincipal({ key: 'alice', client: ctx.client, ends: ends.signal }),
   );
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1237,7 +1237,7 @@ test('it ends a caller’s sessions when what it authenticated with ends', async
     buildMockMcpPrincipal({ key: 'alice', client: ctx.client, ends: new AbortController().signal }),
   );
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1268,7 +1268,7 @@ test('it keeps another caller’s session when one caller’s credential ends', 
     buildMockMcpPrincipal({ key: 'bob', client: ctx.client, ends: new AbortController().signal }),
   );
 
-  await ctx.transport.handle(
+  await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1289,7 +1289,7 @@ test('it keeps another caller’s session when one caller’s credential ends', 
     }),
   );
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1316,7 +1316,7 @@ test('it keeps another caller’s session when one caller’s credential ends', 
 
   ends.abort();
 
-  const response = await ctx.transport.handle(
+  const response = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1348,7 +1348,7 @@ test('it evicts the least recently used idle session of a caller at its limit', 
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const first = await transport.handle(
+  const first = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1371,7 +1371,7 @@ test('it evicts the least recently used idle session of a caller at its limit', 
 
   ctx.clock.now = 1;
 
-  const second = await transport.handle(
+  const second = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1400,7 +1400,7 @@ test('it evicts the least recently used idle session of a caller at its limit', 
   invariant(firstSession !== null);
   invariant(secondSession !== null);
 
-  await transport.handle(
+  await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1421,7 +1421,7 @@ test('it evicts the least recently used idle session of a caller at its limit', 
     }),
   );
 
-  const evicted = await transport.handle(
+  const evicted = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1434,7 +1434,7 @@ test('it evicts the least recently used idle session of a caller at its limit', 
     }),
   );
 
-  const kept = await transport.handle(
+  const kept = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1475,7 +1475,7 @@ test('it evicts an idle session, never a busy one, when the store is full', asyn
   );
 
   // bob's session is the older one, and busy with a call
-  const bobOpened = await transport.handle(
+  const bobOpened = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1500,7 +1500,7 @@ test('it evicts an idle session, never a busy one, when the store is full', asyn
 
   invariant(bobSession !== null);
 
-  const call = transport.handle(
+  const call = transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1522,7 +1522,7 @@ test('it evicts an idle session, never a busy one, when the store is full', asyn
 
   ctx.clock.now = 1;
 
-  const aliceOpened = await transport.handle(
+  const aliceOpened = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1549,7 +1549,7 @@ test('it evicts an idle session, never a busy one, when the store is full', asyn
 
   ctx.clock.now = 2;
 
-  const reader = await transport.handle(
+  const reader = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1574,7 +1574,7 @@ test('it evicts an idle session, never a busy one, when the store is full', asyn
 
   const answered = await call;
 
-  const alice = await transport.handle(
+  const alice = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1607,7 +1607,7 @@ test('it frees a session whose tool call the SDK refuses before the tool runs', 
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await transport.handle(
+  const opened = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1633,7 +1633,7 @@ test('it frees a session whose tool call the SDK refuses before the tool runs', 
   invariant(session !== null);
 
   // a call with no tool name, which the SDK's schema answers itself
-  const refused = await transport.handle(
+  const refused = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1650,7 +1650,7 @@ test('it frees a session whose tool call the SDK refuses before the tool runs', 
 
   ctx.clock.now = 1;
 
-  const next = await transport.handle(
+  const next = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1689,7 +1689,7 @@ test('it frees a session whose refused tool call’s stream the client drops unr
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await transport.handle(
+  const opened = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1715,7 +1715,7 @@ test('it frees a session whose refused tool call’s stream the client drops unr
   invariant(session !== null);
 
   // a call with no tool name, which the SDK's schema answers itself
-  const refused = await transport.handle(
+  const refused = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1732,7 +1732,7 @@ test('it frees a session whose refused tool call’s stream the client drops unr
 
   ctx.clock.now = 1;
 
-  const next = await transport.handle(
+  const next = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1762,7 +1762,7 @@ test('it refuses a call in a session whose id a running call holds, and still an
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1787,7 +1787,7 @@ test('it refuses a call in a session whose id a running call holds, and still an
 
   invariant(session !== null);
 
-  const first = await ctx.transport.handle(
+  const first = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1807,7 +1807,7 @@ test('it refuses a call in a session whose id a running call holds, and still an
 
   await ctx.gate.reached;
 
-  const duplicate = await ctx.transport.handle(
+  const duplicate = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1857,7 +1857,7 @@ test('it refuses a new session with 429 to a caller whose sessions are all busy'
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await transport.handle(
+  const opened = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1882,7 +1882,7 @@ test('it refuses a new session with 429 to a caller whose sessions are all busy'
 
   invariant(session !== null);
 
-  const call = transport.handle(
+  const call = transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1902,7 +1902,7 @@ test('it refuses a new session with 429 to a caller whose sessions are all busy'
 
   await ctx.gate.reached;
 
-  const refused = await transport.handle(
+  const refused = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1950,7 +1950,7 @@ test('it keeps a session used within the idle limit', async () => {
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await transport.handle(
+  const opened = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -1977,7 +1977,7 @@ test('it keeps a session used within the idle limit', async () => {
 
   ctx.clock.now = 1000;
 
-  const response = await transport.handle(
+  const response = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -2009,7 +2009,7 @@ test('it ends a session idle past the idle limit', async () => {
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await transport.handle(
+  const opened = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -2036,7 +2036,7 @@ test('it ends a session idle past the idle limit', async () => {
 
   ctx.clock.now = 1001;
 
-  const response = await transport.handle(
+  const response = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -2068,7 +2068,7 @@ test('it restarts the idle clock of a session each time it is used', async () =>
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await transport.handle(
+  const opened = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -2095,7 +2095,7 @@ test('it restarts the idle clock of a session each time it is used', async () =>
 
   ctx.clock.now = 1000;
 
-  await transport.handle(
+  await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -2110,7 +2110,7 @@ test('it restarts the idle clock of a session each time it is used', async () =>
 
   ctx.clock.now = 2000;
 
-  const response = await transport.handle(
+  const response = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -2132,7 +2132,7 @@ test('it still answers a cancelled create in a session, so the agent learns what
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
-  const opened = await ctx.transport.handle(
+  const opened = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -2157,7 +2157,7 @@ test('it still answers a cancelled create in a session, so the agent learns what
 
   invariant(session !== null);
 
-  const call = await ctx.transport.handle(
+  const call = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -2178,7 +2178,7 @@ test('it still answers a cancelled create in a session, so the agent learns what
   // the create waits inside impd while the cancel lands
   await ctx.gate.reached;
 
-  const cancel = await ctx.transport.handle(
+  const cancel = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
       headers: {
@@ -2227,7 +2227,7 @@ test('it lists only the read tools to a read caller over the 2026-07-28 protocol
     new StreamableHTTPClientTransport(new URL('http://impd.test/mcp'), {
       requestInit: { headers: { authorization: 'Bearer reader' } },
       fetch: async (url, init) => {
-        const response = await ctx.transport.handle(new Request(url.toString(), init));
+        const response = await ctx.transport.respond(new Request(url.toString(), init));
 
         sessions.push(response.headers.get('mcp-session-id'));
 
@@ -2263,7 +2263,7 @@ test('it lists every tool to a manage caller over the 2026-07-28 protocol', asyn
   await client.connect(
     new StreamableHTTPClientTransport(new URL('http://impd.test/mcp'), {
       requestInit: { headers: { authorization: 'Bearer alice' } },
-      fetch: (url, init) => ctx.transport.handle(new Request(url.toString(), init)),
+      fetch: (url, init) => ctx.transport.respond(new Request(url.toString(), init)),
     }),
   );
 
@@ -2294,7 +2294,7 @@ test('it ends a 2026-07-28 call unanswered when what its caller authenticated wi
   await client.connect(
     new StreamableHTTPClientTransport(new URL('http://impd.test/mcp'), {
       requestInit: { headers: { authorization: 'Bearer alice' } },
-      fetch: (url, init) => ctx.transport.handle(new Request(url.toString(), init)),
+      fetch: (url, init) => ctx.transport.respond(new Request(url.toString(), init)),
     }),
   );
 
@@ -2337,7 +2337,7 @@ test('it waits at close for a 2026-07-28 create whose request the client aborted
     new StreamableHTTPClientTransport(new URL('http://impd.test/mcp'), {
       requestInit: { headers: { authorization: 'Bearer alice' } },
       fetch: (url, init) =>
-        transport.handle(new Request(url.toString(), { ...init, signal: abort.signal })),
+        transport.respond(new Request(url.toString(), { ...init, signal: abort.signal })),
     }),
   );
 
@@ -2383,7 +2383,7 @@ test('it ends the call behind an aborted 2026-07-28 create’s response only whe
     new StreamableHTTPClientTransport(new URL('http://impd.test/mcp'), {
       requestInit: { headers: { authorization: 'Bearer alice' } },
       fetch: async (url, init) => {
-        const response = await ctx.transport.handle(
+        const response = await ctx.transport.respond(
           new Request(url.toString(), { ...init, signal: abort.signal }),
         );
 

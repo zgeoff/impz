@@ -20,7 +20,7 @@ export const MIGRATION_020_ADD_GRANTABLE_SECRETS: Migration = {
       // a JSON array of { name, generation }: the secrets it may grant to its
       // imps. Set at create, and changed only by tokens.update; a non-empty
       // list also marks a token able to grant.
-      .addColumn('grantable', 'text', (c) => c.notNull().defaultTo('[]'))
+      .addColumn('grantable', 'text', (column) => column.notNull().defaultTo('[]'))
       .execute();
 
     await db.schema
@@ -28,7 +28,7 @@ export const MIGRATION_020_ADD_GRANTABLE_SECRETS: Migration = {
 
       // random, set on create and kept by a rotation; a rebind or a delete and
       // create gives another (docs/guides/connectors.md#rotate-or-rebind)
-      .addColumn('generation', 'text', (c) => c.notNull().defaultTo(''))
+      .addColumn('generation', 'text', (column) => column.notNull().defaultTo(''))
       .execute();
 
     await db.schema
@@ -36,7 +36,7 @@ export const MIGRATION_020_ADD_GRANTABLE_SECRETS: Migration = {
 
       // the file in <dataDir>/secrets that holds the value; a replace writes a
       // new one and switches to it with the rules
-      .addColumn('value_file', 'text', (c) => c.notNull().defaultTo(''))
+      .addColumn('value_file', 'text', (column) => column.notNull().defaultTo(''))
       .execute();
 
     await db.schema
@@ -44,7 +44,7 @@ export const MIGRATION_020_ADD_GRANTABLE_SECRETS: Migration = {
 
       // the secret's generation at the grant: a rebind gives the secret another,
       // and a grant counts only while the two match
-      .addColumn('secret_generation', 'text', (c) => c.notNull().defaultTo(''))
+      .addColumn('secret_generation', 'text', (column) => column.notNull().defaultTo(''))
       .execute();
 
     // randomblob runs once per row

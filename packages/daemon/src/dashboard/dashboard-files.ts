@@ -7,12 +7,12 @@ export const DASHBOARD_PATH = '/ui/';
 // The dashboard's built files. A path with no file is an app route and gets
 // the shell; an /assets/ path never does, so a stale chunk 404s instead of
 // loading HTML as a script.
-export function createDashboardFiles(dir: string | null) {
-  const root = dir === null ? null : resolve(dir);
+export function createDashboardFiles(directory: string | null) {
+  const root = directory === null ? null : resolve(directory);
 
   return {
     serve: (request: Request): Response => {
-      if (root === null || !isFile(join(root, 'index.html'))) {
+      if (root === null || !probeFile(join(root, 'index.html'))) {
         return new Response('the dashboard is not built into this impd (IMP_DASHBOARD_DIR)\n', {
           status: 404,
         });
@@ -31,22 +31,22 @@ export function createDashboardFiles(dir: string | null) {
         return new Response('bad path\n', { status: 400 });
       }
 
-      if (isFile(file)) {
-        return buildFileResponse(file, path.startsWith('/assets/'));
+      if (probeFile(file)) {
+        return readFileResponse(file, path.startsWith('/assets/'));
       }
 
       if (path.startsWith('/assets/')) {
         return new Response('not found\n', { status: 404 });
       }
 
-      return buildFileResponse(join(root, 'index.html'), false);
+      return readFileResponse(join(root, 'index.html'), false);
     },
   };
 }
 
 // Vite names every asset by its content hash, so it never changes; the shell
 // and anything else must be checked each time, or a new build is not seen
-function buildFileResponse(file: string, immutable: boolean): Response {
+function readFileResponse(file: string, immutable: boolean): Response {
   const headers: Record<string, string> = {
     'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
     'x-content-type-options': 'nosniff',
@@ -90,7 +90,7 @@ function decodePath(pathname: string): string | null {
   }
 }
 
-function isFile(path: string): boolean {
+function probeFile(path: string): boolean {
   try {
     return statSync(path).isFile();
   } catch {

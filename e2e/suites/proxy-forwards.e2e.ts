@@ -7,7 +7,7 @@ import { GUEST_SERVERS, PAGE, readPage, sendRequest, startProxy } from '../lib/i
 import { waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // `impz proxy`: local ports to ports in an imp, over impd's /tunnel. Each
 // test boots its own imp; the cases that wait out the idle timeout are in
@@ -21,7 +21,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('proxy'), stack, client };
+  return { prefix: getSuitePrefix('proxy'), stack, client };
 }
 
 test('it forwards a local port on both loopbacks to the http service in the imp', async () => {

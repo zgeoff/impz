@@ -24,7 +24,7 @@ export function buildStubMcpTransport(
   const state = { closes: 0 };
 
   const transport: HttpTransport = {
-    handle: (request) => {
+    respond: (request) => {
       if (options.failure !== undefined) {
         return Promise.reject(options.failure);
       }

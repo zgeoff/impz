@@ -4,13 +4,13 @@ import * as dnsPacket from 'dns-packet';
 import invariant from 'tiny-invariant';
 import { buildMockDnsQuery } from '../test-utils/build-mock-dns-query';
 import { buildStubClock } from '../test-utils/build-stub-clock';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { claimFreePorts } from '../test-utils/claim-free-ports';
 import { startStubDnsUpstream } from '../test-utils/start-stub-dns-upstream';
 import { createDnsForward } from './dns-upstream';
 
 test('it returns the upstream answer under the id the guest chose', async () => {
   const upstream = await startStubDnsUpstream({
-    port: findFreePorts(1).take(),
+    port: claimFreePorts(1).take(),
     answers: [{ type: 'A', name: 'example.com', ttl: 60, data: '192.0.2.1' }],
   });
 
@@ -26,7 +26,7 @@ test('it returns the upstream answer under the id the guest chose', async () => 
 });
 
 test('it asks each upstream under a fresh random id, not the guest one', async () => {
-  const upstream = await startStubDnsUpstream({ port: findFreePorts(1).take() });
+  const upstream = await startStubDnsUpstream({ port: claimFreePorts(1).take() });
 
   const forward = createDnsForward(['127.0.0.1'], upstream.port);
 
@@ -44,7 +44,7 @@ test('it asks each upstream under a fresh random id, not the guest one', async (
 
 test('it asks again over TCP when the UDP reply is truncated', async () => {
   const upstream = await startStubDnsUpstream({
-    port: findFreePorts(1).take(),
+    port: claimFreePorts(1).take(),
     answers: [{ type: 'A', name: 'example.com', ttl: 60, data: '192.0.2.1' }],
     udp: 'truncate',
   });
@@ -64,7 +64,7 @@ test('it asks again over TCP when the UDP reply is truncated', async () => {
 
 test('it fails over to the next upstream when the first refuses with ICMP', async () => {
   const upstream = await startStubDnsUpstream({
-    port: findFreePorts(1).take(),
+    port: claimFreePorts(1).take(),
     answers: [{ type: 'A', name: 'example.com', ttl: 60, data: '192.0.2.1' }],
   });
 
@@ -80,7 +80,7 @@ test('it fails over to the next upstream when the first refuses with ICMP', asyn
 });
 
 test('it fails over to the next upstream when the first does not answer in time', async () => {
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
 
   const silent = await startStubDnsUpstream({ port, hostname: '127.0.0.2', udp: 'drop' });
 
@@ -103,7 +103,7 @@ test('it fails over to the next upstream when the first does not answer in time'
 });
 
 test('it rejects with every upstream failure when none answers', async () => {
-  const upstream = await startStubDnsUpstream({ port: findFreePorts(1).take(), udp: 'drop' });
+  const upstream = await startStubDnsUpstream({ port: claimFreePorts(1).take(), udp: 'drop' });
 
   const forward = createDnsForward(['127.0.0.2', '127.0.0.1'], upstream.port, 50);
 
@@ -115,7 +115,7 @@ test('it rejects with every upstream failure when none answers', async () => {
 });
 
 test('it gives an upstream 2 s to answer by default', async () => {
-  const upstream = await startStubDnsUpstream({ port: findFreePorts(1).take(), udp: 'drop' });
+  const upstream = await startStubDnsUpstream({ port: claimFreePorts(1).take(), udp: 'drop' });
 
   const clock = buildStubClock();
   const forward = createDnsForward(['127.0.0.1'], upstream.port, undefined, clock.startTimer);
@@ -139,7 +139,7 @@ test('it gives an upstream 2 s to answer by default', async () => {
 });
 
 test('it ignores a UDP reply for another id, and times out', async () => {
-  const upstream = await startStubDnsUpstream({ port: findFreePorts(1).take(), udp: 'wrong-id' });
+  const upstream = await startStubDnsUpstream({ port: claimFreePorts(1).take(), udp: 'wrong-id' });
 
   const forward = createDnsForward(['127.0.0.1'], upstream.port, 50);
 
@@ -150,7 +150,7 @@ test('it ignores a UDP reply for another id, and times out', async () => {
 
 test('it refuses a TCP reply for another query', async () => {
   const upstream = await startStubDnsUpstream({
-    port: findFreePorts(1).take(),
+    port: claimFreePorts(1).take(),
     udp: 'truncate',
     tcp: 'wrong-id',
   });
@@ -164,7 +164,7 @@ test('it refuses a TCP reply for another query', async () => {
 
 test('it times out a TCP upstream that does not answer', async () => {
   const upstream = await startStubDnsUpstream({
-    port: findFreePorts(1).take(),
+    port: claimFreePorts(1).take(),
     udp: 'truncate',
     tcp: 'drop',
   });
@@ -178,7 +178,7 @@ test('it times out a TCP upstream that does not answer', async () => {
 
 test('it fails a TCP upstream that closes before a reply', async () => {
   const upstream = await startStubDnsUpstream({
-    port: findFreePorts(1).take(),
+    port: claimFreePorts(1).take(),
     udp: 'truncate',
     tcp: 'hang-up',
   });

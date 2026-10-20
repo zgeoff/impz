@@ -43,7 +43,7 @@ export function makeApplyImpLimit(
 
     const ended = metas
       .filter((meta) => meta.state === 'ended')
-      .toSorted((a, b) => (a.endedAt ?? 0) - (b.endedAt ?? 0));
+      .toSorted((left, right) => (left.endedAt ?? 0) - (right.endedAt ?? 0));
 
     let total = countImpBytes();
 
@@ -60,7 +60,9 @@ export function makeApplyImpLimit(
     while (total > deps.limits.impMaxBytes) {
       const [largest] = ctx
         .listLive(imp.id)
-        .toSorted((a, b) => countLogBytes(b.log.readMeta()) - countLogBytes(a.log.readMeta()));
+        .toSorted(
+          (left, right) => countLogBytes(right.log.readMeta()) - countLogBytes(left.log.readMeta()),
+        );
 
       if (largest === undefined) {
         return;

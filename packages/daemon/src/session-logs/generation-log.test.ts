@@ -10,8 +10,8 @@ import { buildStubClock } from '../test-utils/build-stub-clock';
 import { buildStubRoomCheck } from '../test-utils/build-stub-room-check';
 import {
   createGenerationLog,
+  getGenerationBounds,
   loadGenerationLog,
-  readGenerationBounds,
   readGenerationMeta,
 } from './generation-log';
 
@@ -25,7 +25,7 @@ async function setupTest() {
   stack.defer(() => rm(root, { recursive: true, force: true }));
 
   // the log's own directory, which making the log creates
-  return { stack, dir: join(root, 'a'.repeat(32)) };
+  return { stack, directory: join(root, 'a'.repeat(32)) };
 }
 
 test('it keeps appended output in segments and drops the oldest past the bound', async () => {
@@ -33,7 +33,7 @@ test('it keeps appended output in segments and drops the oldest past the bound',
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 10,
       maxBytes: 20,
       requireRoom: () => Promise.resolve(),
@@ -55,14 +55,14 @@ test('it keeps appended output in segments and drops the oldest past the bound',
   await log.append(new TextEncoder().encode('0123456789abcdefghijKLMNO'));
   await log.commit();
 
-  expect(readGenerationMeta(ctx.dir)?.segments).toStrictEqual([
+  expect(readGenerationMeta(ctx.directory)?.segments).toStrictEqual([
     { start: 10, length: 10 },
     { start: 20, length: 5 },
   ]);
 
-  expect(readFileSync(join(ctx.dir, '10.seg'), 'utf8')).toBe('abcdefghij');
-  expect(readFileSync(join(ctx.dir, '20.seg'), 'utf8')).toBe('KLMNO');
-  expect(readdirSync(ctx.dir).toSorted()).toStrictEqual(['10.seg', '20.seg', 'meta.json']);
+  expect(readFileSync(join(ctx.directory, '10.seg'), 'utf8')).toBe('abcdefghij');
+  expect(readFileSync(join(ctx.directory, '20.seg'), 'utf8')).toBe('KLMNO');
+  expect(readdirSync(ctx.directory).toSorted()).toStrictEqual(['10.seg', '20.seg', 'meta.json']);
 });
 
 test('it starts each offset a skip names as a new segment', async () => {
@@ -70,7 +70,7 @@ test('it starts each offset a skip names as a new segment', async () => {
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
@@ -102,7 +102,7 @@ test('it starts each offset a skip names as a new segment', async () => {
     { start: 900, length: 3 },
   ]);
 
-  expect(readGenerationBounds(log.readMeta())).toStrictEqual({ logStart: 500, logEnd: 903 });
+  expect(getGenerationBounds(log.readMeta())).toStrictEqual({ logStart: 500, logEnd: 903 });
 });
 
 test('it cuts a torn tail back to what the meta counted when it loads a log', async () => {
@@ -110,7 +110,7 @@ test('it cuts a torn tail back to what the meta counted when it loads a log', as
 
   const written = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
@@ -133,18 +133,18 @@ test('it cuts a torn tail back to what the meta counted when it loads a log', as
 
   // after the commit: bytes the meta never counted, as a crash leaves them,
   // and a segment it never named
-  appendFileSync(join(ctx.dir, '0.seg'), '\0\0garbage');
-  appendFileSync(join(ctx.dir, '7.seg'), 'stray');
+  appendFileSync(join(ctx.directory, '0.seg'), '\0\0garbage');
+  appendFileSync(join(ctx.directory, '7.seg'), 'stray');
 
   written.abandon();
 
-  const meta = readGenerationMeta(ctx.dir);
+  const meta = readGenerationMeta(ctx.directory);
 
   invariant(meta);
 
   const reopened = await loadGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
@@ -159,8 +159,8 @@ test('it cuts a torn tail back to what the meta counted when it loads a log', as
   });
 
   expect(reopened.readMeta().segments).toStrictEqual([{ start: 0, length: 7 }]);
-  expect(readFileSync(join(ctx.dir, '0.seg'), 'utf8')).toBe('counted');
-  expect(readdirSync(ctx.dir).toSorted()).toStrictEqual(['0.seg', 'meta.json']);
+  expect(readFileSync(join(ctx.directory, '0.seg'), 'utf8')).toBe('counted');
+  expect(readdirSync(ctx.directory).toSorted()).toStrictEqual(['0.seg', 'meta.json']);
 });
 
 test('it goes on in a new segment at the end of a loaded log', async () => {
@@ -168,7 +168,7 @@ test('it goes on in a new segment at the end of a loaded log', async () => {
 
   const written = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
@@ -191,13 +191,13 @@ test('it goes on in a new segment at the end of a loaded log', async () => {
 
   written.abandon();
 
-  const meta = readGenerationMeta(ctx.dir);
+  const meta = readGenerationMeta(ctx.directory);
 
   invariant(meta);
 
   const reopened = await loadGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
@@ -214,8 +214,8 @@ test('it goes on in a new segment at the end of a loaded log', async () => {
   await reopened.append(new TextEncoder().encode('+more'));
   await reopened.commit();
 
-  expect(readFileSync(join(ctx.dir, '7.seg'), 'utf8')).toBe('+more');
-  expect(readGenerationBounds(reopened.readMeta())).toStrictEqual({ logStart: 0, logEnd: 12 });
+  expect(readFileSync(join(ctx.directory, '7.seg'), 'utf8')).toBe('+more');
+  expect(getGenerationBounds(reopened.readMeta())).toStrictEqual({ logStart: 0, logEnd: 12 });
 });
 
 test('it records the end, the exit code and the end time when the log finishes', async () => {
@@ -223,7 +223,7 @@ test('it records the end, the exit code and the end time when the log finishes',
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
@@ -244,7 +244,7 @@ test('it records the end, the exit code and the end time when the log finishes',
   await log.append(new TextEncoder().encode('bye'));
   await log.finish({ end: 3, exitCode: 0 });
 
-  expect(readGenerationMeta(ctx.dir)).toStrictEqual({
+  expect(readGenerationMeta(ctx.directory)).toStrictEqual({
     version: 1,
     session: 'main',
     executionGeneration: 'a'.repeat(32),
@@ -264,7 +264,7 @@ test('it keeps no output that comes after the log finished', async () => {
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
@@ -286,8 +286,8 @@ test('it keeps no output that comes after the log finished', async () => {
   await log.finish({ end: 3, exitCode: 0 });
   await log.append(new TextEncoder().encode('late'));
 
-  expect(readGenerationMeta(ctx.dir)?.segments).toStrictEqual([{ start: 0, length: 3 }]);
-  expect(readFileSync(join(ctx.dir, '0.seg'), 'utf8')).toBe('bye');
+  expect(readGenerationMeta(ctx.directory)?.segments).toStrictEqual([{ start: 0, length: 3 }]);
+  expect(readFileSync(join(ctx.directory, '0.seg'), 'utf8')).toBe('bye');
 });
 
 test('it rejects an append whose new segment would reach the disk reserve', async () => {
@@ -300,7 +300,7 @@ test('it rejects an append whose new segment would reach the disk reserve', asyn
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 10,
       maxBytes: 20,
       requireRoom: room.requireRoom,
@@ -328,7 +328,7 @@ test('it records the stop and keeps the written segments when the log stops for 
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 10,
       maxBytes: 20,
       requireRoom: () => Promise.resolve(),
@@ -349,7 +349,7 @@ test('it records the stop and keeps the written segments when the log stops for 
   await log.append(new TextEncoder().encode('0123456789'));
   await log.stop('disk_full');
 
-  expect(readGenerationMeta(ctx.dir)).toStrictEqual({
+  expect(readGenerationMeta(ctx.directory)).toStrictEqual({
     version: 1,
     session: 'main',
     executionGeneration: 'a'.repeat(32),
@@ -367,7 +367,7 @@ test('it removes the oldest segment and its file', async () => {
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 4,
       maxBytes: 100,
       requireRoom: () => Promise.resolve(),
@@ -390,8 +390,8 @@ test('it removes the oldest segment and its file', async () => {
   const isRemoved = await log.removeOldestSegment();
 
   expect(isRemoved).toBe(true);
-  expect(readGenerationMeta(ctx.dir)?.segments).toStrictEqual([{ start: 4, length: 4 }]);
-  expect(existsSync(join(ctx.dir, '0.seg'))).toBe(false);
+  expect(readGenerationMeta(ctx.directory)?.segments).toStrictEqual([{ start: 4, length: 4 }]);
+  expect(existsSync(join(ctx.directory, '0.seg'))).toBe(false);
 });
 
 test('it keeps the last segment when asked to remove the oldest', async () => {
@@ -399,7 +399,7 @@ test('it keeps the last segment when asked to remove the oldest', async () => {
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 4,
       maxBytes: 100,
       requireRoom: () => Promise.resolve(),
@@ -432,7 +432,7 @@ test('it starts a commit one second after an append', async () => {
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
@@ -454,7 +454,7 @@ test('it starts a commit one second after an append', async () => {
   await log.append(new TextEncoder().encode('abc'));
 
   expect(timers.readPendingMs()).toStrictEqual([1000]);
-  expect(readGenerationMeta(ctx.dir)?.segments).toStrictEqual([]);
+  expect(readGenerationMeta(ctx.directory)?.segments).toStrictEqual([]);
 });
 
 test('it writes the appended bytes into the meta when the commit timer fires', async () => {
@@ -464,7 +464,7 @@ test('it writes the appended bytes into the meta when the commit timer fires', a
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
@@ -488,7 +488,7 @@ test('it writes the appended bytes into the meta when the commit timer fires', a
   timers.firePending();
 
   await waitFor(() => {
-    expect(readGenerationMeta(ctx.dir)?.segments).toStrictEqual([{ start: 0, length: 3 }]);
+    expect(readGenerationMeta(ctx.directory)?.segments).toStrictEqual([{ start: 0, length: 3 }]);
   });
 });
 
@@ -499,7 +499,7 @@ test('it cancels the pending commit when the log is abandoned', async () => {
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
@@ -533,7 +533,7 @@ test('it rejects an append whose segment opened while the log was abandoned', as
 
   const log = await createGenerationLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom,

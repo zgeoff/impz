@@ -21,11 +21,11 @@ import {
 import { startStubServiceAgent } from './start-stub-service-agent';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-service-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-service-agent-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { vsockPath: join(dir, 'v.sock') };
+  return { vsockPath: join(directory, 'v.sock') };
 }
 
 test('it lists an added service with its definition, its pid and the image user', async () => {
