@@ -144,7 +144,7 @@ by digest as `images/examples/hello` names it, works on both.
   the tar on stdin; on the host, `POST /build?version=2` with the tar as the body and no session.
   The client gives only the name and the Dockerfile path, which must stay inside the context; it
   cannot pass build arguments, secrets, SSH agents, `--network` or `--allow`. `BUILDKIT_SYNTAX` pins
-  the Dockerfile frontend by digest (`docker/dockerfile:1.19`, as in `host/Dockerfile`), so a
+  the Dockerfile frontend by digest (`docker/dockerfile:1.28`, as in `host/Dockerfile`), so a
   `# syntax=` line is ignored. `RUN --mount=type=cache` works; `RUN --network=host` and
   `RUN --security=insecure` fail the build. A failed host build shows BuildKit's error, without the
   `RUN` step's output. The engine pulls the frontend from Docker Hub when it lacks it.
