@@ -274,7 +274,7 @@ test('#readCompletionTree gives impz login its own flags', async () => {
 
   expect(tree.children).toPartiallyContain({
     path: 'impz login',
-    flags: expect.arrayContaining(['--no-verify']) as unknown,
+    flags: expect.arrayContaining(['--no-verify']),
   });
 });
 
