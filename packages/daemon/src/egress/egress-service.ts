@@ -35,7 +35,7 @@ import type { AllowRules } from './egress-rules';
 import { buildElementChange, buildRuleset } from './egress-ruleset';
 import { createEgressSets } from './egress-sets';
 import type { AddressAnswer, HeldAnswer } from './egress-sets';
-import { isDenyListed } from './is-deny-listed';
+import { isMissingHostAddresses } from './is-missing-host-addresses';
 import { listPeerGroups } from './list-peer-groups';
 import { makeChangeNetworks } from './make-change-networks';
 import type { NetworkChange } from './make-change-networks';
@@ -285,7 +285,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
         state.isScreened = createRangeChecker(public4, public6);
         state.publicUnenforced = host.error;
 
-        state.denyListMissing = isDenyListed({
+        state.denyListMissing = isMissingHostAddresses({
           hasPublic,
           hostAddresses: deps.config.hostAddresses,
           wasMissing: state.denyListMissing,
