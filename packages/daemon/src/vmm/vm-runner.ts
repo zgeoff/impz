@@ -176,7 +176,7 @@ export function createVmRunner(
 
   // the jailer's command in a prepared chroot, or Firecracker's own beside
   // a swept run/
-  const readCommand = async (
+  const setupVmCommand = async (
     bin: string,
     paths: ImpPaths,
     jail: JailUser | null,
@@ -257,7 +257,7 @@ export function createVmRunner(
       const setMark = timer.setMark;
 
       const readArgv = () =>
-        readCommand(plan.firecrackerBin, plan.paths, plan.jail, [
+        setupVmCommand(plan.firecrackerBin, plan.paths, plan.jail, [
           plan.kernelPath,
           plan.systemDrivePath,
         ]);
@@ -428,7 +428,7 @@ export function createVmRunner(
 
       // startFirecracker removes the stale vsock socket, which would end the load
       const readArgv = () =>
-        readCommand(plan.firecrackerBin, plan.paths, plan.jail, plan.readOnlyFiles);
+        setupVmCommand(plan.firecrackerBin, plan.paths, plan.jail, plan.readOnlyFiles);
 
       const pid = await startVmProcess(readArgv, plan.paths, plan.cgroup).catch(
         (error: unknown) => {
