@@ -3,6 +3,7 @@
 // it again. Usage: bun scripts/codemod/nest-daemon-layers.ts [repo root, default the cwd]
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { parseArgs } from 'node:util';
 import { applyLayerMoves } from './apply-layer-moves';
 
 const OXFMT = join(import.meta.dir, '..', '..', 'node_modules', '.bin', 'oxfmt');
@@ -12,9 +13,26 @@ const SKIPPED_FILES = /(?:^|\/)CHANGELOG\.md$|^bun\.lock$|^scripts\/codemod\//u;
 
 // the files that the pre-commit hook formats with oxfmt
 const FORMATTED_FILE = /\.(?:[cm]?[jt]sx?|jsonc?|md|css|ya?ml|html)$/u;
+const USAGE = 'usage: bun scripts/codemod/nest-daemon-layers.ts [repo root, default the cwd]';
 
 function main(): void {
-  const root = resolve(process.argv[2] ?? process.cwd());
+  const args = tryParseCodemodArgs(process.argv.slice(2));
+
+  if (args.kind === 'help') {
+    console.log(USAGE);
+
+    return;
+  }
+
+  if (args.kind === 'error') {
+    console.error(`${args.message}\n${USAGE}`);
+
+    process.exitCode = 1;
+
+    return;
+  }
+
+  const root = resolve(args.root ?? process.cwd());
 
   const listed = Bun.spawnSync(
     ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'],
@@ -73,6 +91,37 @@ function main(): void {
 
   if (report.unplaced.length > 0) {
     process.exitCode = 1;
+  }
+}
+
+type CodemodArgs =
+  | { readonly kind: 'run'; readonly root: string | undefined }
+  | { readonly kind: 'help' }
+  | { readonly kind: 'error'; readonly message: string };
+
+// the command's arguments, with an unknown option or a second root as an error to print
+function tryParseCodemodArgs(argv: readonly string[]): CodemodArgs {
+  try {
+    const parsed = parseArgs({
+      args: [...argv],
+      allowPositionals: true,
+      options: { help: { type: 'boolean', short: 'h' } },
+    });
+
+    if (parsed.values.help === true) {
+      return { kind: 'help' };
+    }
+
+    if (parsed.positionals.length > 1) {
+      return {
+        kind: 'error',
+        message: `expected at most one repo root, got ${String(parsed.positionals.length)}`,
+      };
+    }
+
+    return { kind: 'run', root: parsed.positionals[0] };
+  } catch (error) {
+    return { kind: 'error', message: error instanceof Error ? error.message : String(error) };
   }
 }
 
