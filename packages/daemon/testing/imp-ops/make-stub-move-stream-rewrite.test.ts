@@ -1,7 +1,11 @@
 import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { MOVE_FRAMES, encodeJsonFrame, readJsonPayload } from '../../src/moves/move-frames';
-import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MOVE_PATHS } from '../../src/moves/move-header';
+import { MOVE_FRAMES, encodeJsonFrame, readJsonPayload } from '../../src/imp-ops/moves/move-frames';
+import {
+  MOVE_FINISH_HEADER,
+  MOVE_PART_HEADER,
+  MOVE_PATHS,
+} from '../../src/imp-ops/moves/move-header';
 import { TARGET_URL } from './create-move-hosts';
 import { buildJsonMoveFrame, makeStubMoveStreamRewrite } from './make-stub-move-stream-rewrite';
 import type { MoveFrame } from './make-stub-move-stream-rewrite';

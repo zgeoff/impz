@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { PublicImp } from '../../src/db/exposure';
+import type { PublicImp } from '../../src/platform/db/exposure';
 import { buildMockStoredPublicAuth } from './build-mock-stored-public-auth';
 
 // A public imp as findPublicImp reads it: a running imp with an arbitrary id

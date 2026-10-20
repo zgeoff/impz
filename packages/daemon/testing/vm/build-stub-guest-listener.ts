@@ -1,4 +1,4 @@
-import type { GuestListener, ListenSpec } from '../../src/agent-client/listener-stream';
+import type { GuestListener, ListenSpec } from '../../src/vm/agent-client/listener-stream';
 
 // each waiting client's connection id, or null where the listener ends
 interface StubListenerQueue {

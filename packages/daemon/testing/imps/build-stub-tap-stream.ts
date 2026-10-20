@@ -1,5 +1,5 @@
 import type { SessionOutput } from '@impz/api';
-import type { ExecEvent, ExecStream } from '../../src/agent-client/exec-stream';
+import type { ExecEvent, ExecStream } from '../../src/vm/agent-client/exec-stream';
 
 interface TapState {
   closed: boolean;

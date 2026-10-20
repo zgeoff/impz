@@ -1,9 +1,9 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
 import { TUNNEL_MAX_FRAME_BYTES, TUNNEL_WINDOW_BYTES } from '@impz/api';
-import { FRAME_TYPES, encodeJsonFrame } from '@impz/daemon/src/agent-client/frame-codec';
-import { createImage } from '@impz/daemon/src/db/images';
-import { readVmIdentity, writeVmIdentity } from '@impz/daemon/src/sleep/vm-identity';
+import { createImage } from '@impz/daemon/src/platform/db/images';
+import { FRAME_TYPES, encodeJsonFrame } from '@impz/daemon/src/vm/agent-client/frame-codec';
+import { readVmIdentity, writeVmIdentity } from '@impz/daemon/src/vm/sleep/vm-identity';
 import {
   buildImagePaths,
   buildImpPaths,

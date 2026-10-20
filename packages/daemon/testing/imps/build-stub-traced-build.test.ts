@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import * as z from 'zod';
-import { decodeBuildTrace } from '../../src/images/decode-build-trace';
+import { decodeBuildTrace } from '../../src/imps/images/decode-build-trace';
 import { buildStubTracedBuild } from './build-stub-traced-build';
 
 test('it streams the trace of a RUN step and then the image ID to a build', async () => {

@@ -1,4 +1,4 @@
-import type { CommandResult } from '../../src/process/run-command';
+import type { CommandResult } from '../../src/platform/process/run-command';
 
 // `mount` and `umount` as the jailer runs them, over a mount table in memory
 // that /proc/self/mounts reads; a bind mounts its last argument, and exit 32

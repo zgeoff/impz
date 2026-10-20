@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { openAgentConnection } from '../../src/agent-client/agent-connection';
-import { openExecStream } from '../../src/agent-client/exec-stream';
-import { FRAME_TYPES, decodeJsonPayload } from '../../src/agent-client/frame-codec';
+import { openAgentConnection } from '../../src/vm/agent-client/agent-connection';
+import { openExecStream } from '../../src/vm/agent-client/exec-stream';
+import { FRAME_TYPES, decodeJsonPayload } from '../../src/vm/agent-client/frame-codec';
 import { buildStubExecGuest } from './build-stub-exec-guest';
 import { startStubExecAgent } from './start-stub-exec-agent';
 

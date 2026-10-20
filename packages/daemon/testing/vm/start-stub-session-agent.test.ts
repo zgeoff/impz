@@ -5,17 +5,17 @@ import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { ErrorDataSchema, RequestSchema } from '../../src/agent-client/agent-protocol';
+import { ErrorDataSchema, RequestSchema } from '../../src/vm/agent-client/agent-protocol';
 import {
   sendActivity,
   sendAgentRequest,
   sendSessionKill,
-} from '../../src/agent-client/agent-requests';
+} from '../../src/vm/agent-client/agent-requests';
 import {
   openAttachStream,
   openExecStream,
   openTapStream,
-} from '../../src/agent-client/exec-stream';
+} from '../../src/vm/agent-client/exec-stream';
 import { startStubSessionAgent } from './start-stub-session-agent';
 
 // The stand-in's assumptions are agent/internal/session's: Manager.find,

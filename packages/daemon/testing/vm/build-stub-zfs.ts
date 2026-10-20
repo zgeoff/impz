@@ -1,4 +1,4 @@
-import type { CommandResult } from '../../src/process/run-command';
+import type { CommandResult } from '../../src/platform/process/run-command';
 import { buildStubZfsStreams } from './build-stub-zfs-streams';
 
 // the `creation` of txg 0: 2026-10-03T00:00:00Z

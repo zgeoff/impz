@@ -1,4 +1,4 @@
-import type { NftRunner } from '../../src/egress/egress-firewall';
+import type { NftRunner } from '../../src/network/egress/egress-firewall';
 
 interface NftRun {
   readonly script: string;

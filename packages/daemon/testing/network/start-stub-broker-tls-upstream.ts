@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { loadOrCreateBrokerCa } from '../../src/broker/broker-ca';
+import { loadOrCreateBrokerCa } from '../../src/network/broker/broker-ca';
 
 interface StubTlsUpstreamOptions {
   // a directory the test owns, for the stand-in's own CA

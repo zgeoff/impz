@@ -75,7 +75,7 @@ test('it creates the pool, runs the tests on it, then releases all it made', () 
     `zpool create -O mountpoint=none -O compression=lz4 -O atime=off -O xattr=sa imptestPID ${work}/pool.img`,
     'zfs create -o mountpoint=legacy imptestPID/imp',
     `mount -t zfs imptestPID/imp ${work}/mnt`,
-    'bun test packages/daemon/src/storage/zfs',
+    'bun test packages/daemon/src/vm/storage/zfs',
     `env imptestPID/imp ${work}/mnt`,
     `umount -R ${work}/mnt`,
     'zpool list -H -o name',

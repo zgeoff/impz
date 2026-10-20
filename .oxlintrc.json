@@ -46,7 +46,7 @@
           "test-utils": ["packages/test-utils/**"],
           "runtime-neutral": ["packages/{shared,api,client}/**"],
           // the daemon's own test helpers build queries against real databases
-          "db": ["packages/daemon/src/db/**", "packages/daemon/testing/**"],
+          "db": ["packages/daemon/src/platform/db/**", "packages/daemon/testing/**"],
           "tests": [
             "**/*.{test,e2e,pebble}.{ts,tsx}",
             "**/{test-utils,smoke,mocks}/**",
@@ -85,7 +85,7 @@
             "modules": ["kysely", "kysely-codegen"],
             "from": ["packages"],
             "allow": ["db"],
-            "reason": "query through a repository in packages/daemon/src/db instead"
+            "reason": "query through a repository in packages/daemon/src/platform/db instead"
           },
           {
             "name": "test-support",
@@ -192,6 +192,6 @@
     "kernel/**",
     "agent/**",
     // protoc-gen-es output (bun run gen:proto)
-    "packages/daemon/src/agent-client/gen/**"
+    "packages/daemon/src/vm/agent-client/gen/**"
   ]
 }

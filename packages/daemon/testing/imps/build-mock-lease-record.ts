@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { LeaseRecord } from '../../src/db/leases';
+import type { LeaseRecord } from '../../src/platform/db/leases';
 
 // A lease row as the lease store reads it: a token's lease that holds with no
 // end; its imp, owner, label and age arbitrary.

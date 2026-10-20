@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import type { DiskBudget } from '../../src/storage/disk-budget';
-import type { TemplateBuildPlan } from '../../src/vmm/template-vm';
+import type { DiskBudget } from '../../src/vm/storage/disk-budget';
+import type { TemplateBuildPlan } from '../../src/vm/vmm/template-vm';
 
 // The VMM's createTemplateVm: it records each plan and the disk room the
 // budget held while it ran, then writes the snapshot's two files where the

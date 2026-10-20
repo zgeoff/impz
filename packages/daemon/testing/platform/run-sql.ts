@@ -1,5 +1,5 @@
 import { CompiledQuery } from 'kysely';
-import type { ImpQueries } from '../../src/db/open-database';
+import type { ImpQueries } from '../../src/platform/db/open-database';
 
 // One SQL statement, with `?` placeholders for `parameters`, against a test's
 // database: a fault to inject, such as a trigger that refuses a write, or a

@@ -1,4 +1,4 @@
-import { MOVE_PATHS, MoveOfferReplySchema } from '../../src/moves/move-header';
+import { MOVE_PATHS, MoveOfferReplySchema } from '../../src/imp-ops/moves/move-header';
 import type { FetchHook } from './create-move-hosts';
 
 // the offer reply fields a target added over time; an older target leaves

@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import packageJson from '@impz/daemon/package.json' with { type: 'json' };
-import { MIGRATIONS } from '@impz/daemon/src/db/run-migrations';
+import { MIGRATIONS } from '@impz/daemon/src/platform/db/run-migrations';
 import { startStubImpdRelease, startTestImpd } from '@impz/daemon/testing';
 import * as z from 'zod';
 import { readJsonOutput } from '../test-utils/read-json-output';

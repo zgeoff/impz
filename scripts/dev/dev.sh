@@ -155,7 +155,7 @@ start_proxy() {
   mkdir -p "$data"
   docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
     -v "$IMP_ROOT:/src:ro" -v "$data:/out" -w /src "$IMP_HOST_IMAGE" \
-    bun build --compile packages/daemon/src/docker-proxy/main.ts \
+    bun build --compile packages/daemon/src/imps/docker-proxy/main.ts \
     --outfile /out/imp-docker-proxy.new >/dev/null
   mapfile -t privileges < <(read_proxy_privileges)
   # the settings the proxy reads too: under imp isolation it pulls only

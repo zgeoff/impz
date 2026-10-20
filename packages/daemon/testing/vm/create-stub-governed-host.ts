@@ -1,8 +1,8 @@
 import { match } from 'ts-pattern';
-import type { RamGovernor, RamGovernorDeps } from '../../src/governor/ram-governor';
-import { makeLockFreeSleep } from '../../src/imps/lock-free-sleep';
-import type { SleepOutcome } from '../../src/imps/lock-free-sleep';
-import { buildKeyedMutex } from '../../src/process/keyed-mutex';
+import { makeLockFreeSleep } from '../../src/imps/imps/lock-free-sleep';
+import type { SleepOutcome } from '../../src/imps/imps/lock-free-sleep';
+import { buildKeyedMutex } from '../../src/platform/process/keyed-mutex';
+import type { RamGovernor, RamGovernorDeps } from '../../src/vm/governor/ram-governor';
 
 interface HostImp {
   awake: boolean;

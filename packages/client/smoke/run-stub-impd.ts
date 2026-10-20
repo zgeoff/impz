@@ -2,7 +2,7 @@ import type {
   AgentExecRequest,
   ExecEvent,
   ExecStream,
-} from '@impz/daemon/src/agent-client/exec-stream';
+} from '@impz/daemon/src/vm/agent-client/exec-stream';
 import { TEST_TOKEN, startTestImpd } from '@impz/daemon/testing';
 import type { Server } from 'bun';
 

@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import type { StreamRunner } from '../../src/process/run-stream';
+import type { StreamRunner } from '../../src/platform/process/run-stream';
 import type { FakeDataset, FakeSnapshot } from './build-stub-zfs';
 
 // what buildStubZfs lends its streams: its pool, its txg counter and its

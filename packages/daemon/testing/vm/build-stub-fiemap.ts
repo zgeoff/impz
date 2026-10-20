@@ -1,5 +1,5 @@
 import { existsSync, rmSync } from 'node:fs';
-import type { Extent, readExtents } from '../../src/storage/fiemap';
+import type { Extent, readExtents } from '../../src/vm/storage/fiemap';
 
 // readExtents over real files: the extents a test sets (none by default), a
 // cut or failed read, and the real open's rejection of a missing file. It

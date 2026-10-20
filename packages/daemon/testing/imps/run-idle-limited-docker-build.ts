@@ -3,8 +3,8 @@
 // on a `control` line of stdin; a `cancel` line ends the second build.
 import { join } from 'node:path';
 import { z } from 'zod';
-import { createDockerProxy } from '../../src/docker-proxy/proxy';
-import { runDockerBuild } from '../../src/images/docker-build';
+import { createDockerProxy } from '../../src/imps/docker-proxy/proxy';
+import { runDockerBuild } from '../../src/imps/images/docker-build';
 
 const ArgsSchema = z.object({
   directory: z.string(),

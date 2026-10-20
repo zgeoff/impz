@@ -33,4 +33,4 @@ export { startStubServiceAgent } from './vm/start-stub-service-agent';
 
 // where impd keeps an image's and an imp's files in its data dir, for a test
 // that seeds or reads them
-export { buildImagePaths, buildImpPaths } from '../src/storage/data-layout';
+export { buildImagePaths, buildImpPaths } from '../src/vm/storage/data-layout';

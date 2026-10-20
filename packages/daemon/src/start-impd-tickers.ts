@@ -1,17 +1,17 @@
-import type { BackupService } from './backup/backup-service';
-import type { Broker } from './broker/broker-service';
 import type { Config } from './config';
-import { ENFORCE_INTERVAL_MS } from './governor/ram-governor';
-import type { RamGovernor } from './governor/ram-governor';
-import type { IdleLoop } from './idle/idle-loop';
-import type { Imps } from './imps/imp-service';
-import type { MemoryController } from './memory/memory-controller';
-import { startTicker } from './process/ticker';
-import type { Ticker, TickerTimer } from './process/ticker';
-import type { WakeProxy } from './proxy/wake-proxy';
-import type { DiskUsageCache } from './storage/disk-usage-cache';
-import type { StorageGcService } from './storage/storage-gc';
-import type { TailnetNames } from './tailnet-names/tailnet-names';
+import type { BackupService } from './imp-ops/backup/backup-service';
+import type { IdleLoop } from './imp-ops/idle/idle-loop';
+import type { Imps } from './imps/imps/imp-service';
+import type { Broker } from './network/broker/broker-service';
+import type { WakeProxy } from './network/proxy/wake-proxy';
+import type { TailnetNames } from './network/tailnet-names/tailnet-names';
+import { startTicker } from './platform/process/ticker';
+import type { Ticker, TickerTimer } from './platform/process/ticker';
+import { ENFORCE_INTERVAL_MS } from './vm/governor/ram-governor';
+import type { RamGovernor } from './vm/governor/ram-governor';
+import type { MemoryController } from './vm/memory/memory-controller';
+import type { DiskUsageCache } from './vm/storage/disk-usage-cache';
+import type { StorageGcService } from './vm/storage/storage-gc';
 
 // What impd runs on a timer, each part as createImpd started it; null for a
 // part the config leaves off

@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { Credential } from '../../src/broker/forward-request';
+import type { Credential } from '../../src/network/broker/forward-request';
 
 // A bearer credential of an arbitrary secret that is not oauth, sent to
 // https://<host> for any method and path

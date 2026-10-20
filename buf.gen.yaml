@@ -8,7 +8,7 @@ plugins:
     out: agent
     opt: module=github.com/zgeoff/impz/agent
   - local: protoc-gen-es
-    out: packages/daemon/src/agent-client/gen
+    out: packages/daemon/src/vm/agent-client/gen
     opt: [target=ts, json_types=true]
   - local: [bun, scripts/proto/protoc-gen-protocol-reference.ts]
     out: docs/reference

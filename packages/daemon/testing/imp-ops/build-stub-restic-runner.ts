@@ -1,4 +1,4 @@
-import type { CommandResult } from '../../src/process/run-command';
+import type { CommandResult } from '../../src/platform/process/run-command';
 
 // The process runner createRestic hands each restic command to: it answers
 // with the queued results in order, then with a clean exit and no output, and

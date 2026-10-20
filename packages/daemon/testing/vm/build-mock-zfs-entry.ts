@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { ZfsEntry } from '../../src/storage/zfs/zfs-commands';
+import type { ZfsEntry } from '../../src/vm/storage/zfs/zfs-commands';
 
 // One row of `zfs list` as impd reads it: a filesystem that is no clone,
 // under an arbitrary name.

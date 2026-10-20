@@ -1,20 +1,20 @@
 import { join } from 'node:path';
-import { createBroker } from './broker/broker-service';
-import type { Broker } from './broker/broker-service';
-import type { SecretFiles } from './broker/secret-files';
 import type { Config } from './config';
-import { runNft } from './egress/egress-firewall';
-import { createEgressService } from './egress/egress-service';
-import type { EgressService } from './egress/egress-service';
-import type { ImpdDeps } from './impd-deps';
 import {
   checkHostRules6,
   readIpv6DefaultRoute,
   readOrCreateUlaPrefix,
   resolveIpv6Plan,
-} from './net/ipv6-plan';
-import type { Ipv6Plan } from './net/ipv6-plan';
-import { printLog } from './process/print-log';
+} from './host-net/net/ipv6-plan';
+import type { Ipv6Plan } from './host-net/net/ipv6-plan';
+import type { ImpdDeps } from './impd-deps';
+import { createBroker } from './network/broker/broker-service';
+import type { Broker } from './network/broker/broker-service';
+import type { SecretFiles } from './network/broker/secret-files';
+import { runNft } from './network/egress/egress-firewall';
+import { createEgressService } from './network/egress/egress-service';
+import type { EgressService } from './network/egress/egress-service';
+import { printLog } from './platform/process/print-log';
 import type { ImpdStopParts } from './stop-impd';
 
 export interface ImpdFirewall {

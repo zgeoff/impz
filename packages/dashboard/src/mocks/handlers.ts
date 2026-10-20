@@ -1,4 +1,4 @@
-import { isSameOrigin } from '@impz/daemon/src/auth/authenticate';
+import { isSameOrigin } from '@impz/daemon/src/identity/auth/authenticate';
 import { RPCHandler } from '@orpc/server/fetch';
 import { HttpResponse, http } from 'msw';
 import * as z from 'zod';

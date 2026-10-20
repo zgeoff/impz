@@ -1,4 +1,4 @@
-import type { DialEvent, DialStream } from '../../src/agent-client/dial-stream';
+import type { DialEvent, DialStream } from '../../src/vm/agent-client/dial-stream';
 
 // what the guest side sends next: an event, the end of the stream, or a
 // broken agent connection

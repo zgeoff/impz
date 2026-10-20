@@ -1,4 +1,4 @@
-import { FRAME_TYPES } from '../../src/agent-client/frame-codec';
+import { FRAME_TYPES } from '../../src/vm/agent-client/frame-codec';
 import type { StubAgentHandler } from './start-stub-agent';
 
 interface StubExecReplies {

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { buildExitError, runCommand } from '../../src/process/run-command';
-import type { CommandRunner } from '../../src/process/run-command';
+import { buildExitError, runCommand } from '../../src/platform/process/run-command';
+import type { CommandRunner } from '../../src/platform/process/run-command';
 
 export interface ZfsTestDatasetOptions {
   // the run's pool dataset and its mount dir (readZfsTestPool)

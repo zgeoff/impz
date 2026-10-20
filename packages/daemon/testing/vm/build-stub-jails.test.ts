@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildImpPaths } from '../../src/storage/data-layout';
+import { buildImpPaths } from '../../src/vm/storage/data-layout';
 import { buildStubJails } from './build-stub-jails';
 
 function setupTest() {

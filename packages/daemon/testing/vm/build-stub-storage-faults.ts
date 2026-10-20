@@ -1,4 +1,4 @@
-import type { StorageBackend } from '../../src/storage/storage-backend';
+import type { StorageBackend } from '../../src/vm/storage/storage-backend';
 
 // A storage backend's faults, as a disk that cannot be read for a move: the
 // wrapped backend answers every call, except that the next openMoveSource

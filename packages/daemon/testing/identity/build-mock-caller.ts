@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { Caller } from '../../src/auth/caller';
+import type { Caller } from '../../src/identity/auth/caller';
 
 // A caller as impd's authentication builds one for an API token with every
 // scope: the kind and scope are fixed, the token and its name arbitrary.

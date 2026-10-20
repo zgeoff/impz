@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
-import { readImageByName } from '../../src/db/images';
-import { MOVE_PATHS } from '../../src/moves/move-header';
-import { buildImagePaths } from '../../src/storage/data-layout';
+import { MOVE_PATHS } from '../../src/imp-ops/moves/move-header';
+import { readImageByName } from '../../src/platform/db/images';
+import { buildImagePaths } from '../../src/vm/storage/data-layout';
 import { buildStubZfsStorage } from '../vm/build-stub-zfs-storage';
 import {
   TARGET_URL,

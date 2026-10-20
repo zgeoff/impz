@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run the ZFS storage backend's tests against a real pool: a sparse file
-# becomes a throwaway pool, the tests in packages/daemon/src/storage/zfs run
+# becomes a throwaway pool, the tests in packages/daemon/src/vm/storage/zfs run
 # on it, and the pool and file are destroyed. No disk is touched.
 #
 #   sudo env "PATH=$PATH" scripts/test-zfs.sh
@@ -158,7 +158,7 @@ mount -t zfs "$pool/imp" "$mnt"
 # in the background, so a TERM or INT reaches the trap at once and cleanup
 # stops the run before it releases the pool
 cd "$repo"
-IMP_TEST_ZFS_ROOT=$pool/imp IMP_TEST_ZFS_DIR=$mnt bun test packages/daemon/src/storage/zfs &
+IMP_TEST_ZFS_ROOT=$pool/imp IMP_TEST_ZFS_DIR=$mnt bun test packages/daemon/src/vm/storage/zfs &
 child=$!
 wait "$child"
 child=

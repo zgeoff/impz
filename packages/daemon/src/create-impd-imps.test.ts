@@ -3,7 +3,7 @@ import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { startTestImpd } from '../testing/start-test-impd';
-import { listImps } from './db/imps';
+import { listImps } from './platform/db/imps';
 
 // impd on stub VMs, each of which the governor counts at 300 MiB, with the
 // image every imp boots from

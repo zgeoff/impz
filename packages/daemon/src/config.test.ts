@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { loadConfig } from './config';
-import { createRangeChecker } from './net/range-checker';
+import { createRangeChecker } from './host-net/net/range-checker';
 
 test('it fills every setting from its default when the env is empty', () => {
   const config = loadConfig({});

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildImpPaths } from '../../src/storage/data-layout';
+import { buildImpPaths } from '../../src/vm/storage/data-layout';
 import { buildStubGuestMemory } from './build-stub-guest-memory';
 
 test('it reports a default guest with nothing plugged', async () => {

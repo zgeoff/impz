@@ -3,7 +3,7 @@ import {
   ActivitySchema,
   ErrorResponseSchema,
   ResumeFromSchema,
-} from '../../src/agent-client/agent-protocol';
+} from '../../src/vm/agent-client/agent-protocol';
 import { collectMessageKeyPaths } from './collect-message-key-paths';
 
 test('it lists the fields of a message under the schema’s names', () => {

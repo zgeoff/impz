@@ -1,4 +1,4 @@
-import type { Uplinks } from '../../src/net/host-routes';
+import type { Uplinks } from '../../src/host-net/net/host-routes';
 
 interface StubHostRoutesOptions {
   // the host container's own networks of each family; none by default

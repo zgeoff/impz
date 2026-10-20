@@ -81,18 +81,18 @@ How impz is built: the parts, what each one owns, and what holds whatever a call
 Five areas spread over more than one folder. Each row maps one folder or file to the part it holds
 and the doc that explains that part.
 
-| Area           | Code                           | Holds                                                             | Doc                                                                |
-| -------------- | ------------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Broker         | `packages/daemon/src/broker/`  | the front port, the CA, grants, OAuth refreshes and tunnels       | [the credential broker](./architecture/network/broker.md)          |
-| Egress         | `packages/daemon/src/egress/`  | the policies, the firewall table and the resolver                 | [egress](./architecture/network/egress.md)                         |
-| Tokens         | `packages/daemon/src/token.ts` | the root token                                                    | [auth](./architecture/control/auth.md)                             |
-| Tokens         | `packages/daemon/src/auth/`    | scoped tokens, callers, scopes and the dashboard session          | [auth](./architecture/control/auth.md)                             |
-| Tokens         | `packages/daemon/src/oauth/`   | the OAuth server and the public MCP route                         | [auth](./architecture/control/auth.md)                             |
-| Images         | `packages/daemon/src/images/`  | pulls, builds and template images                                 | [images](./architecture/storage/images.md)                         |
-| Images         | `images/`                      | the images that ship with impz                                    | [the images guide](./guides/images.md)                             |
-| Images         | `host/Dockerfile`              | the guest kernel and the system drive, as build stages            | [the agent](./architecture/guest/agent.md#two-drives-and-a-kernel) |
-| Host lifecycle | `host/`                        | the host image, its entrypoint and its setup scripts              | [the host](./architecture/host.md)                                 |
-| Host lifecycle | `deploy/`                      | the server bootstrap, the upgrade, the units and the NixOS module | [install](./guides/install.md)                                     |
+| Area           | Code                                    | Holds                                                             | Doc                                                                |
+| -------------- | --------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Broker         | `packages/daemon/src/network/broker/`   | the front port, the CA, grants, OAuth refreshes and tunnels       | [the credential broker](./architecture/network/broker.md)          |
+| Egress         | `packages/daemon/src/network/egress/`   | the policies, the firewall table and the resolver                 | [egress](./architecture/network/egress.md)                         |
+| Tokens         | `packages/daemon/src/identity/token.ts` | the root token                                                    | [auth](./architecture/control/auth.md)                             |
+| Tokens         | `packages/daemon/src/identity/auth/`    | scoped tokens, callers, scopes and the dashboard session          | [auth](./architecture/control/auth.md)                             |
+| Tokens         | `packages/daemon/src/identity/oauth/`   | the OAuth server and the public MCP route                         | [auth](./architecture/control/auth.md)                             |
+| Images         | `packages/daemon/src/imps/images/`      | pulls, builds and template images                                 | [images](./architecture/storage/images.md)                         |
+| Images         | `images/`                               | the images that ship with impz                                    | [the images guide](./guides/images.md)                             |
+| Images         | `host/Dockerfile`                       | the guest kernel and the system drive, as build stages            | [the agent](./architecture/guest/agent.md#two-drives-and-a-kernel) |
+| Host lifecycle | `host/`                                 | the host image, its entrypoint and its setup scripts              | [the host](./architecture/host.md)                                 |
+| Host lifecycle | `deploy/`                               | the server bootstrap, the upgrade, the units and the NixOS module | [install](./guides/install.md)                                     |
 
 ## Guides
 

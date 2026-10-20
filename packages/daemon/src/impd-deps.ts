@@ -1,24 +1,24 @@
-import type { TailnetPeer } from './auth/tailnet-identity';
-import type { BrokerDeps } from './broker/broker-service';
-import type { DiskFreezer } from './checkpoints/consistent-disk';
-import type { AppDeps } from './create-app';
 import type { ImpdMoveBoundaries } from './create-impd-moves';
-import type { ImpDatabase } from './db/open-database';
-import type { EgressDeps } from './egress/egress-service';
-import type { Repeat } from './images/build-event-stream';
-import type { ImageServiceDeps } from './images/image-service';
-import type { ImpService, ImpServiceDeps } from './imps/imp-service';
-import type { Ipv6Plan } from './net/ipv6-plan';
-import type { TailscaleStatus } from './net/tailscale-status';
-import type { TapDevices } from './net/tap-devices';
-import type { CommandRunner } from './process/run-command';
-import type { TickerTimer } from './process/ticker';
-import type { HostIdentity } from './sleep/vm-identity';
-import type { SystemFiles } from './storage/setup-system-files';
-import type { StorageBackend } from './storage/storage-backend';
-import type { CpuCgroups } from './vmm/cpu-cgroups';
-import type { KsmHostStats } from './vmm/ksm';
-import type { VmRunner } from './vmm/vm-runner';
+import type { Ipv6Plan } from './host-net/net/ipv6-plan';
+import type { TailscaleStatus } from './host-net/net/tailscale-status';
+import type { TapDevices } from './host-net/net/tap-devices';
+import type { TailnetPeer } from './identity/auth/tailnet-identity';
+import type { Repeat } from './imps/images/build-event-stream';
+import type { ImageServiceDeps } from './imps/images/image-service';
+import type { ImpService, ImpServiceDeps } from './imps/imps/imp-service';
+import type { BrokerDeps } from './network/broker/broker-service';
+import type { EgressDeps } from './network/egress/egress-service';
+import type { ImpDatabase } from './platform/db/open-database';
+import type { CommandRunner } from './platform/process/run-command';
+import type { TickerTimer } from './platform/process/ticker';
+import type { AppDeps } from './surface/create-app';
+import type { DiskFreezer } from './vm/checkpoints/consistent-disk';
+import type { HostIdentity } from './vm/sleep/vm-identity';
+import type { SystemFiles } from './vm/storage/setup-system-files';
+import type { StorageBackend } from './vm/storage/storage-backend';
+import type { CpuCgroups } from './vm/vmm/cpu-cgroups';
+import type { KsmHostStats } from './vm/vmm/ksm';
+import type { VmRunner } from './vm/vmm/vm-runner';
 
 // The broker's reach past impd: the guest's CA install, the token endpoint,
 // the upstreams and the tunnels' DNS and dials

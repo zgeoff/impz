@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { MOVE_PATHS } from '../../src/moves/move-header';
+import { MOVE_PATHS } from '../../src/imp-ops/moves/move-header';
 import { TARGET_URL, setupMoveHosts } from './create-move-hosts';
 import { makeStubDroppedCommit } from './make-stub-dropped-commit';
 

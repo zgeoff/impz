@@ -9,15 +9,15 @@ import {
   RequestSchema,
   ServiceStatusSchema,
   ServicesListSchema,
-} from '../../src/agent-client/agent-protocol';
-import { sendAgentRequest } from '../../src/agent-client/agent-requests';
+} from '../../src/vm/agent-client/agent-protocol';
+import { sendAgentRequest } from '../../src/vm/agent-client/agent-requests';
 import {
   openServiceLogStream,
   sendServicesAdd,
   sendServicesList,
   sendServicesRemove,
   sendServicesRestart,
-} from '../../src/agent-client/service-requests';
+} from '../../src/vm/agent-client/service-requests';
 import { startStubServiceAgent } from './start-stub-service-agent';
 
 async function setupTest() {

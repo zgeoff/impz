@@ -3,10 +3,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
-import { PingSchema } from '../../src/agent-client/agent-protocol';
-import { sendPing } from '../../src/agent-client/agent-requests';
-import { openAttachStream } from '../../src/agent-client/exec-stream';
-import { FRAME_TYPES, encodeJsonFrame } from '../../src/agent-client/frame-codec';
+import { PingSchema } from '../../src/vm/agent-client/agent-protocol';
+import { sendPing } from '../../src/vm/agent-client/agent-requests';
+import { openAttachStream } from '../../src/vm/agent-client/exec-stream';
+import { FRAME_TYPES, encodeJsonFrame } from '../../src/vm/agent-client/frame-codec';
 import { startStubAttachAgent } from './start-stub-attach-agent';
 
 // a temp dir for the agent's socket, and `stack`, whose releases (the

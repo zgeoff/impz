@@ -1,4 +1,4 @@
-import type { CommandResult } from '../../src/process/run-command';
+import type { CommandResult } from '../../src/platform/process/run-command';
 
 // restic's exclusive commands; unlock takes no lock, every other one shares it
 const EXCLUSIVE_COMMANDS = new Set(['forget', 'prune', 'check']);

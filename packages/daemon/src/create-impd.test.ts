@@ -21,16 +21,16 @@ import { buildStubCpuCgroups } from '../testing/vm/build-stub-cpu-cgroups';
 import { buildStubVmm } from '../testing/vm/build-stub-vmm';
 import { loadConfig } from './config';
 import { createImpd } from './create-impd';
-import { createImage } from './db/images';
-import { createImp, listImps } from './db/imps';
-import { openDatabase } from './db/open-database';
-import type { ImpDatabase } from './db/open-database';
-import { HOST_ADD_WARNING } from './images/create-image-adds';
-import { HOST_BUILD_WARNING } from './images/create-image-builds';
 import type { ImpdBoundaries } from './impd-deps';
-import { buildSystemDrivePath, buildSystemDrivesDir } from './storage/data-layout';
-import { createXfsBackend } from './storage/xfs-backend';
-import type { CpuCgroups } from './vmm/cpu-cgroups';
+import { HOST_ADD_WARNING } from './imps/images/create-image-adds';
+import { HOST_BUILD_WARNING } from './imps/images/create-image-builds';
+import { createImage } from './platform/db/images';
+import { createImp, listImps } from './platform/db/imps';
+import { openDatabase } from './platform/db/open-database';
+import type { ImpDatabase } from './platform/db/open-database';
+import { buildSystemDrivePath, buildSystemDrivesDir } from './vm/storage/data-layout';
+import { createXfsBackend } from './vm/storage/xfs-backend';
+import type { CpuCgroups } from './vm/vmm/cpu-cgroups';
 
 interface SetupOptions {
   // the host's cgroup tree; one that enforces CPU limits by default
@@ -771,8 +771,8 @@ test('it logs to stdout when no log is given', async () => {
   const script = `
     import { loadConfig } from './config';
     import { createImpd } from './create-impd';
-    import { openDatabase } from './db/open-database';
-    import { createXfsBackend } from './storage/xfs-backend';
+    import { openDatabase } from './platform/db/open-database';
+    import { createXfsBackend } from './vm/storage/xfs-backend';
 
     const dataDir = ${JSON.stringify(ctx.dataDir)};
 

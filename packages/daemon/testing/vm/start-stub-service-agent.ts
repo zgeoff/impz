@@ -1,15 +1,15 @@
 import type { Socket } from 'node:net';
 import { create, toJson } from '@bufbuild/protobuf';
 import type { JsonValue } from '@bufbuild/protobuf';
-import { RequestSchema, ServiceStatusSchema } from '../../src/agent-client/agent-protocol';
-import type { Request, ServiceDef, ServiceStatus } from '../../src/agent-client/agent-protocol';
-import { decodeAgentMessage } from '../../src/agent-client/decode-agent-message';
+import { RequestSchema, ServiceStatusSchema } from '../../src/vm/agent-client/agent-protocol';
+import type { Request, ServiceDef, ServiceStatus } from '../../src/vm/agent-client/agent-protocol';
+import { decodeAgentMessage } from '../../src/vm/agent-client/decode-agent-message';
 import {
   FRAME_TYPES,
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
-} from '../../src/agent-client/frame-codec';
+} from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
 // the user the image runs its services as, which a current agent reports

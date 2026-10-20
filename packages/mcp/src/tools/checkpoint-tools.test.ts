@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { createImage } from '@impz/daemon/src/db/images';
+import { createImage } from '@impz/daemon/src/platform/db/images';
 import { buildImagePaths, buildMockNewImage, startTestImpd } from '@impz/daemon/testing';
 import * as z from 'zod';
 import { buildImpGuard } from '../imp-guard';

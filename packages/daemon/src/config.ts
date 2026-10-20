@@ -1,30 +1,30 @@
 import { BlockList } from 'node:net';
 import { join } from 'node:path';
 import * as z from 'zod';
-import { parseTailnetRules } from './auth/parse-tailnet-rules';
-import type { TailnetRule } from './auth/tailnet-identity';
-import { loadBackupConfig } from './backup/backup-config';
-import type { BackupConfig } from './backup/backup-config';
-import { checkPublicPorts } from './https/check-public-ports';
-import { HttpsEnvSchema, listHttpsWarnings, readHttpsConfig } from './https/https-config';
-import type { HttpsConfig } from './https/https-config';
-import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from './images/build-image';
-import { createPeerRanges, readPeerUrlAddress } from './moves/peer-address';
-import { countSlots, formatCidr4, isTailnetOverlap, parseSubnet } from './net/addressing';
-import type { Subnet } from './net/addressing';
-import { formatCidr6 } from './net/addressing6';
-import { parseIpv6Setting } from './net/ipv6-plan';
-import type { Ipv6Setting } from './net/ipv6-plan';
-import { PublicMcpEnvSchema, parsePublicMcpConfig } from './oauth/public-mcp-config';
-import type { PublicMcpConfig } from './oauth/public-mcp-config';
-import type { SessionLogLimits } from './session-logs/session-log-service';
-import type { StorageBackendKind } from './storage/storage-backend';
+import { countSlots, formatCidr4, isTailnetOverlap, parseSubnet } from './host-net/net/addressing';
+import type { Subnet } from './host-net/net/addressing';
+import { formatCidr6 } from './host-net/net/addressing6';
+import { parseIpv6Setting } from './host-net/net/ipv6-plan';
+import type { Ipv6Setting } from './host-net/net/ipv6-plan';
+import { parseTailnetRules } from './identity/auth/parse-tailnet-rules';
+import type { TailnetRule } from './identity/auth/tailnet-identity';
+import { PublicMcpEnvSchema, parsePublicMcpConfig } from './identity/oauth/public-mcp-config';
+import type { PublicMcpConfig } from './identity/oauth/public-mcp-config';
+import { loadBackupConfig } from './imp-ops/backup/backup-config';
+import type { BackupConfig } from './imp-ops/backup/backup-config';
+import { createPeerRanges, readPeerUrlAddress } from './imp-ops/moves/peer-address';
+import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from './imps/images/build-image';
+import type { SessionLogLimits } from './imps/session-logs/session-log-service';
+import { checkPublicPorts } from './network/https/check-public-ports';
+import { HttpsEnvSchema, listHttpsWarnings, readHttpsConfig } from './network/https/https-config';
+import type { HttpsConfig } from './network/https/https-config';
 import {
   TailnetNamesEnvSchema,
   parseTailnetNamesConfig,
-} from './tailnet-names/tailnet-names-config';
-import type { TailnetNamesConfig } from './tailnet-names/tailnet-names-config';
-import type { WatchdogAction } from './watchdog/agent-watchdog';
+} from './network/tailnet-names/tailnet-names-config';
+import type { TailnetNamesConfig } from './network/tailnet-names/tailnet-names-config';
+import type { StorageBackendKind } from './vm/storage/storage-backend';
+import type { WatchdogAction } from './vm/watchdog/agent-watchdog';
 
 const PortSchema = z.coerce.number().pipe(z.int().min(1).max(65_535));
 const CountSchema = z.coerce.number().pipe(z.int().positive());

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildImpPaths } from '../../src/storage/data-layout';
+import { buildImpPaths } from '../../src/vm/storage/data-layout';
 import { buildMockElasticImp } from './build-mock-elastic-imp';
 
 test('it builds a default elastic imp', () => {

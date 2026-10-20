@@ -1,4 +1,4 @@
-import type { ReadAllocated, SeekFile } from '../../src/backup/read-data-blocks';
+import type { ReadAllocated, SeekFile } from '../../src/imp-ops/backup/read-data-blocks';
 
 // lseek(2) on Linux: whence values and the errno that means no more data
 const SEEK_DATA = 3;

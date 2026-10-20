@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test';
 import { ApprovalCodeSchema } from '@impz/api';
 import invariant from 'tiny-invariant';
-import { createRevocations } from '../../src/auth/revocations';
-import { loadTokenStore } from '../../src/auth/token-store';
-import { createMcpAuth } from '../../src/oauth/create-mcp-auth';
+import { createRevocations } from '../../src/identity/auth/revocations';
+import { loadTokenStore } from '../../src/identity/auth/token-store';
+import { createMcpAuth } from '../../src/identity/oauth/create-mcp-auth';
 import { createTestDatabase } from '../platform/create-test-database';
 import { runOAuthSignIn } from './run-oauth-sign-in';
 

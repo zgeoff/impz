@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PIN_INSPECT_FORMAT } from '../../src/images/image-pin';
+import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';
 
 // what `docker image inspect <ref>` prints one element of
 interface StubDockerInspect {

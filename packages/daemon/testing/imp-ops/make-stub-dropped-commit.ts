@@ -1,4 +1,4 @@
-import { MOVE_PATHS } from '../../src/moves/move-header';
+import { MOVE_PATHS } from '../../src/imp-ops/moves/move-header';
 import type { FetchHook } from './create-move-hosts';
 
 interface DroppedCommitOptions {

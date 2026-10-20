@@ -1,15 +1,15 @@
-import { createApiAudit } from './audit/api-audit';
-import type { SecretFiles } from './broker/secret-files';
-import { createCheckpointService } from './checkpoints/checkpoint-service';
 import type { Config } from './config';
 import type { ImpdStorage } from './create-impd-storage';
-import type { EgressService } from './egress/egress-service';
-import { createTemplateService } from './images/template-service';
+import { createCheckpointService } from './imp-ops/checkpoints/checkpoint-service';
 import type { ImpdDeps } from './impd-deps';
-import type { Imps } from './imps/imp-service';
-import { createNetworkService } from './networks/network-service';
-import { printLog } from './process/print-log';
-import { createStorageGc } from './storage/storage-gc';
+import { createTemplateService } from './imps/images/template-service';
+import type { Imps } from './imps/imps/imp-service';
+import type { SecretFiles } from './network/broker/secret-files';
+import type { EgressService } from './network/egress/egress-service';
+import { createNetworkService } from './network/networks/network-service';
+import { createApiAudit } from './platform/audit/api-audit';
+import { printLog } from './platform/process/print-log';
+import { createStorageGc } from './vm/storage/storage-gc';
 
 // The services over the imps that the API serves
 export function createImpdServices(

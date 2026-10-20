@@ -1,4 +1,4 @@
-import type { ProxyListenOptions } from '../../src/proxy/wake-proxy';
+import type { ProxyListenOptions } from '../../src/network/proxy/wake-proxy';
 
 // The wake proxy's listen as wake-proxy.ts binds it (reusePort only when
 // asked, no idle timeout); a request runs the route and answers

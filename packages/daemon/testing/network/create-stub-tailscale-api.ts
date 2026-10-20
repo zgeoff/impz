@@ -2,7 +2,7 @@ import { faker } from '@faker-js/faker';
 import { Collection } from '@msw/data';
 import { HttpResponse, http } from 'msw';
 import { z } from 'zod';
-import type { TailnetService } from '../../src/tailnet-names/services-api';
+import type { TailnetService } from '../../src/network/tailnet-names/services-api';
 
 // where the Tailscale API lives, as services-api calls it by default
 const TAILSCALE_API = 'https://api.tailscale.com/api/v2';

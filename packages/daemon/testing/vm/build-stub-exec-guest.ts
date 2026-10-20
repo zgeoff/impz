@@ -1,4 +1,8 @@
-import type { AgentExecRequest, ExecEvent, ExecStream } from '../../src/agent-client/exec-stream';
+import type {
+  AgentExecRequest,
+  ExecEvent,
+  ExecStream,
+} from '../../src/vm/agent-client/exec-stream';
 
 interface StubExecGuestOptions {
   // the agent predates the group kill (protocol 0.8.0)

@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { CpuSettings, ImpRecord } from '../../src/db/imps';
+import type { CpuSettings, ImpRecord } from '../../src/platform/db/imps';
 
 type ImpRecordOverrides = Partial<Omit<ImpRecord, 'cpu'>> & { readonly cpu?: Partial<CpuSettings> };
 

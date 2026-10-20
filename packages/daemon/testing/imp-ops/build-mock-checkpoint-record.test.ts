@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { CHECKPOINT_ID_ALPHABET } from '../../src/checkpoints/checkpoint-service';
+import { CHECKPOINT_ID_ALPHABET } from '../../src/imp-ops/checkpoints/checkpoint-service';
 import { buildMockCheckpointRecord } from './build-mock-checkpoint-record';
 
 test('it builds a default checkpoint record', () => {

@@ -1,4 +1,4 @@
-import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '../../src/agent-client/frame-codec';
+import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
 // An agent whose dial reaches a target that answers once the request is

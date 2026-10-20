@@ -2,7 +2,7 @@ import {
   FRAME_TYPES,
   decodeJsonPayload,
   encodeJsonFrame,
-} from '../../src/agent-client/frame-codec';
+} from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
 // The agent of a template's guest on `vsockSocket`: parked (stage template)

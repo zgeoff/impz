@@ -1,5 +1,5 @@
-import { runChecked } from '../../src/process/run-command';
-import type { CommandResult } from '../../src/process/run-command';
+import { runChecked } from '../../src/platform/process/run-command';
+import type { CommandResult } from '../../src/platform/process/run-command';
 
 // one Tailscale Service's serve config: the target behind each port
 type StubServiceConfig = Map<

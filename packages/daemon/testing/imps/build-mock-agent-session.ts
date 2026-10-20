@@ -1,8 +1,8 @@
 import { create } from '@bufbuild/protobuf';
 import type { MessageInitShape } from '@bufbuild/protobuf';
 import { faker } from '@faker-js/faker';
-import { SessionInfoSchema } from '../../src/agent-client/agent-protocol';
-import type { SessionInfo } from '../../src/agent-client/agent-protocol';
+import { SessionInfoSchema } from '../../src/vm/agent-client/agent-protocol';
+import type { SessionInfo } from '../../src/vm/agent-client/agent-protocol';
 
 type MockSessionOverrides = MessageInitShape<typeof SessionInfoSchema>;
 

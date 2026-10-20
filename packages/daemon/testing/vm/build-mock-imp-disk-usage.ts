@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { ImpDiskUsage } from '../../src/storage/storage-backend';
+import type { ImpDiskUsage } from '../../src/vm/storage/storage-backend';
 
 // One imp's count from a usage pass: an exact count, with arbitrary bytes.
 export function buildMockImpDiskUsage(overrides: Partial<ImpDiskUsage> = {}): ImpDiskUsage {

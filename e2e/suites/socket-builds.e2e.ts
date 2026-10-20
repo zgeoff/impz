@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DOCKERFILE_FRONTEND } from '../../packages/daemon/src/docker-proxy/dockerfile-frontend';
+import { DOCKERFILE_FRONTEND } from '../../packages/daemon/src/imps/docker-proxy/dockerfile-frontend';
 import { buildProxyBuildScript, parseProxyAnswer } from '../lib/docker-proxy-build';
 import { buildHostModeProxyArgv } from '../lib/host-mode-proxy';
 import {

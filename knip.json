@@ -19,6 +19,8 @@
         "e2e/main.ts",
         "e2e/suites/*.e2e.ts",
         "scripts/ci/run-related-tests.ts",
+        // a codemod that a contributor runs by hand
+        "scripts/codemod/nest-daemon-layers.ts",
         // a protoc plugin buf.gen.yaml runs
         "scripts/proto/protoc-gen-protocol-reference.ts"
       ],
@@ -38,13 +40,13 @@
       // imp-docker-proxy, which host/Dockerfile compiles beside impd, the
       // suites only their own scripts run (test:pebble), and the scripts a
       // test runs in a child Bun
-      "entry": ["src/docker-proxy/main.ts", "src/**/*.pebble.ts", "testing/*/run-*.ts"],
+      "entry": ["src/imps/docker-proxy/main.ts", "src/**/*.pebble.ts", "testing/*/run-*.ts"],
       "project": ["src/**/*.ts", "testing/**/*.ts"],
       // kysely-codegen and protoc-gen-es write every table and message,
       // used or not
       "ignoreIssues": {
-        "src/db/schema.ts": ["types"],
-        "src/agent-client/gen/**": ["exports", "types"]
+        "src/platform/db/schema.ts": ["types"],
+        "src/vm/agent-client/gen/**": ["exports", "types"]
       }
     },
     "packages/dashboard": {

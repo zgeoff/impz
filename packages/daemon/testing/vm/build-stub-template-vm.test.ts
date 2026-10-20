@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDiskBudget } from '../../src/storage/disk-budget';
+import { createDiskBudget } from '../../src/vm/storage/disk-budget';
 import { buildMockTemplateBuildPlan } from './build-mock-template-build-plan';
 import { buildStubTemplateVm } from './build-stub-template-vm';
 

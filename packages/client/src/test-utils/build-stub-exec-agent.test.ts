@@ -6,7 +6,7 @@ import {
   openAttachStream,
   openExecStream,
   openTapStream,
-} from '@impz/daemon/src/agent-client/exec-stream';
+} from '@impz/daemon/src/vm/agent-client/exec-stream';
 import { startStubAgent } from '@impz/daemon/testing';
 import { waitFor } from '@impz/test-utils/wait-for';
 import {

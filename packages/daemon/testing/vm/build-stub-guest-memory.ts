@@ -1,5 +1,5 @@
-import type { ImpPaths } from '../../src/storage/data-layout';
-import type { GuestMemory } from '../../src/vmm/vm-runner';
+import type { ImpPaths } from '../../src/vm/storage/data-layout';
+import type { GuestMemory } from '../../src/vm/vmm/vm-runner';
 
 interface StubGuest {
   baseMib: number;
