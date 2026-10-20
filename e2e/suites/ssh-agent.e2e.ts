@@ -86,7 +86,9 @@ test('it lists the laptop key over ssh -A, from a socket only the image user own
   });
 });
 
-// the git server runs on this machine; the imp reaches it through NAT
+// the git server runs on this machine; the imp reaches it through NAT. The
+// stub's ssh2 offers no post-quantum key exchange, so WarnWeakCrypto=no keeps
+// OpenSSH's warning about it off stderr
 test('it signs a git push from the imp with the laptop agent', async () => {
   const ctx = await setupTest();
 
@@ -118,7 +120,7 @@ test('it signs a git push from the imp with the laptop agent', async () => {
         'cd "$(mktemp -d)"',
         'git init -q -b main',
         'git -c user.email=e2e@imp -c user.name=e2e commit -q --allow-empty -m signed-by-agent',
-        `GIT_SSH_COMMAND='ssh -o BatchMode=yes' git push -q ${remote} main`,
+        `GIT_SSH_COMMAND='ssh -o BatchMode=yes -o WarnWeakCrypto=no' git push -q ${remote} main`,
         'ls -A ~/.ssh',
       ].join('\n'),
     ],
