@@ -1,6 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, statfsSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, statfsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import * as z from 'zod';
 import { collectBootFallbacks } from './lib/boot-fallbacks';
 import { config } from './lib/config';
 import { createMissingImages } from './lib/fixtures';
@@ -43,6 +42,8 @@ import {
   readSuiteSettings,
 } from './lib/suites';
 import { readTailscaleE2EAuthKey } from './lib/tailscale-key';
+import { writeResults } from './lib/write-results';
+import type { Section } from './lib/write-results';
 
 const USAGE = `imp end-to-end harness: every case drives impd through the CLI.
 
@@ -70,16 +71,6 @@ const PREFIX = 'e2e-';
 const RESULTS_DIR = join(REPO_ROOT, '.cache', 'e2e');
 const RESULTS_FILE = join(RESULTS_DIR, 'results.json');
 const METRICS_FILE = join(RESULTS_DIR, 'metrics.jsonl');
-
-interface Section {
-  readonly index: number;
-  readonly name: string;
-  readonly verdict: 'PASS' | 'FAIL';
-  readonly durationMs: number;
-}
-
-// one line of the metrics file a suite appends to: {"<key>": <value>}
-const MetricSchema = z.record(z.string(), z.unknown());
 let interrupted = false;
 
 // the pid of the suite process running now, which leads its group, so a
@@ -391,35 +382,6 @@ async function removeLeftovers(suites: readonly string[]): Promise<void> {
   }
 }
 
-function writeResults(sections: readonly Section[]): void {
-  const metrics = existsSync(METRICS_FILE)
-    ? readFileSync(METRICS_FILE, 'utf8')
-        .split('\n')
-        .filter((line) => line !== '')
-        .map((line) => MetricSchema.parse(JSON.parse(line)))
-    : [];
-
-  const results: Record<string, unknown> = {
-    runAt: new Date().toISOString(),
-    ramBudgetMib: config.ramBudgetMib,
-    idleTimeoutS: config.idleTimeoutS,
-  };
-
-  for (const section of sections) {
-    results[`section${String(section.index)}`] = {
-      name: section.name,
-      verdict: section.verdict,
-      durationMs: section.durationMs,
-    };
-  }
-
-  Object.assign(results, ...metrics);
-
-  writeFileSync(RESULTS_FILE, `${JSON.stringify(results, null, 2)}\n`);
-
-  console.log(`== results: ${RESULTS_FILE}`);
-}
-
 async function main(): Promise<number> {
   let args: HarnessArgs;
 
@@ -558,8 +520,15 @@ async function main(): Promise<number> {
     await stopPebble();
   }
 
-  writeResults(sections);
+  writeResults(sections, {
+    resultsFile: RESULTS_FILE,
+    metricsFile: METRICS_FILE,
+    ramBudgetMib: config.ramBudgetMib,
+    idleTimeoutS: config.idleTimeoutS,
+    now: () => new Date(),
+  });
 
+  console.log(`== results: ${RESULTS_FILE}`);
   console.log('== summary');
 
   for (const section of sections) {
