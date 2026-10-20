@@ -4,26 +4,26 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { buildMockLeaseRecord } from '../../testing/imps/build-mock-lease-record';
+import { waitForOutcome } from '../../testing/imps/wait-for-outcome';
+import { startTestImpd } from '../../testing/start-test-impd';
+import type { TestImpdOptions } from '../../testing/start-test-impd';
+import { buildStubMounts } from '../../testing/vm/build-stub-mounts';
+import { buildStubUidProcesses } from '../../testing/vm/build-stub-uid-processes';
+import { startStubAgent } from '../../testing/vm/start-stub-agent';
+import { startStubInnerAgent } from '../../testing/vm/start-stub-inner-agent';
+import { startStubSessionAgent } from '../../testing/vm/start-stub-session-agent';
 import { FRAME_TYPES, decodeJsonPayload, encodeJsonFrame } from '../agent-client/frame-codec';
 import { findImpByName, updateImpActivity } from '../db/imps';
 import { writeLease } from '../db/leases';
 import { readVmIdentity, writeVmIdentity } from '../sleep/vm-identity';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildMockLeaseRecord } from '../test-utils/build-mock-lease-record';
-import { buildStubMounts } from '../test-utils/build-stub-mounts';
-import { buildStubUidProcesses } from '../test-utils/build-stub-uid-processes';
-import { startStubAgent } from '../test-utils/start-stub-agent';
-import { startStubInnerAgent } from '../test-utils/start-stub-inner-agent';
-import { startStubSessionAgent } from '../test-utils/start-stub-session-agent';
 import { createJails } from '../vmm/jail';
-import { createImpTest } from './test-imps';
-import type { ImpTestOptions } from './test-imps';
-import { waitForOutcome } from './wait-for-outcome';
 
 // `installBundle`: the broker's CA install in the guest, which a test fails
 // or holds
 async function setupTest(
-  options: Pick<ImpTestOptions, 'env' | 'frozenClockMs' | 'installBundle'> = {},
+  options: Pick<TestImpdOptions, 'env' | 'frozenClockMs' | 'installBundle'> = {},
 ) {
   // one stack: an agent a test starts closes before the harness
   const stack = new AsyncDisposableStack();
@@ -51,12 +51,13 @@ async function setupTest(
     ...processes.deps,
   });
 
-  const harness = await createImpTest(stack, { ...options, jails });
+  const harness = await startTestImpd(stack, { ...options, jails });
 
   // every imp boots from an image row
   await harness.createTestImage('ubuntu');
 
-  return { ...harness, stack, chrootBase, processes };
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, { stack, chrootBase, processes });
 }
 
 test('it skips an idle sleep of an imp held after the idle loop looked', async () => {
@@ -1159,7 +1160,10 @@ test('it tries the CA bundle step again at the next exec after one failed', asyn
   });
 
   expect(agent.readExecs()).toHaveLength(1);
-  expect(agent.readExecs()[0]?.env).toContain('HTTPS_PROXY=http://10.66.0.1:7081');
+
+  expect(agent.readExecs()[0]?.env).toContain(
+    `HTTPS_PROXY=http://10.66.0.1:${String(ctx.config.brokerPort)}`,
+  );
 });
 
 test('it never sends the requirement to the agent', async () => {
@@ -1224,7 +1228,7 @@ test('it runs the CA bundle step before the first exec of a boot, with the broke
 
   expect(sentAtInstall).toStrictEqual([0]);
   expect(agent.readExecs()).toHaveLength(1);
-  expect(env).toContain('HTTPS_PROXY=http://10.66.0.1:7081');
+  expect(env).toContain(`HTTPS_PROXY=http://10.66.0.1:${String(ctx.config.brokerPort)}`);
   expect(env).toContain('SSL_CERT_FILE=/etc/imp/broker-ca.pem');
 });
 
@@ -1493,5 +1497,8 @@ test('it boots the imp again and checks again when a stop takes the lock before 
 
   expect(order).toStrictEqual(['stopped', 'bundle']);
   expect(ctx.fake.boots).toHaveLength(bootsBefore + 1);
-  expect(agent.readExecs()[0]?.env).toContain('HTTPS_PROXY=http://10.66.0.1:7081');
+
+  expect(agent.readExecs()[0]?.env).toContain(
+    `HTTPS_PROXY=http://10.66.0.1:${String(ctx.config.brokerPort)}`,
+  );
 });

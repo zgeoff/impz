@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/server';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { listApiCalls } from '../db/api-audit';
-import { createTestDatabase } from '../test-utils/create-test-database';
 import { createApiAudit, readImpName, withAuditedOpen } from './api-audit';
 
 async function setupTest() {

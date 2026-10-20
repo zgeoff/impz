@@ -3,15 +3,15 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
+import { buildMockNewCheckpoint } from '../../testing/imp-ops/build-mock-new-checkpoint';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { createCheckpoint } from '../db/checkpoints';
 import { createImage } from '../db/images';
 import { createImp } from '../db/imps';
 import { writeMember, writeNetwork } from '../db/networks';
 import { createCheckedGrant, createSecret } from '../db/secrets';
-import { buildMockNewCheckpoint } from '../test-utils/build-mock-new-checkpoint';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { createTestDatabase } from '../test-utils/create-test-database';
 import { readDatabaseCopy } from './read-database-copy';
 
 async function setupTest() {

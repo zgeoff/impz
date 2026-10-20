@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { sql } from 'kysely';
-import { buildMockNewAuditEntry } from '../test-utils/build-mock-new-audit-entry';
-import { createTestDatabase } from '../test-utils/create-test-database';
+import { buildMockNewAuditEntry } from '../../testing/platform/build-mock-new-audit-entry';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { AUDIT_ROWS, listAuditEntries, writeAuditEntry } from './broker-audit';
 
 test('#writeAuditEntry keeps every row while the table is under its cap, however far apart their ids', async () => {

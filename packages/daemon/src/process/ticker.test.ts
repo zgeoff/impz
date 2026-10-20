@@ -1,5 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { buildStubTickerTimer } from '../test-utils/build-stub-ticker-timer';
+import { buildStubTickerTimer } from '../../testing/platform/build-stub-ticker-timer';
 import { startTicker } from './ticker';
 
 test('it waits one interval before the first run', () => {

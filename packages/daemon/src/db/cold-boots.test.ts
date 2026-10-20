@@ -1,14 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rmSync } from 'node:fs';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { startTestImpd } from '../../testing/start-test-impd';
+import { buildStubBootId } from '../../testing/vm/build-stub-vmm';
+import { startStubAttachAgent } from '../../testing/vm/start-stub-attach-agent';
 import { FRAME_TYPES, encodeJsonFrame } from '../agent-client/frame-codec';
-import { buildTestApp } from '../imps/build-test-app';
-import { createImpTest } from '../imps/test-imps';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { buildStubBootId } from '../test-utils/build-stub-vmm';
-import { startStubAttachAgent } from '../test-utils/start-stub-attach-agent';
 import { listColdBoots, writeColdBoot } from './cold-boots';
 import { createImage } from './images';
 import { createImp, findImpByName } from './imps';
@@ -24,14 +23,13 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await createImpTest(stack);
+  const harness = await startTestImpd(stack);
 
   // every create boots an image row; the default image is ubuntu
   await harness.createTestImage('ubuntu');
 
-  const app = buildTestApp(harness, harness);
-
-  return { ...harness, client: app.client, stack };
+  // assigned, not spread: the harness's parts follow a restarted impd
+  return Object.assign(harness, { stack });
 }
 
 test('it lists two boots of the same millisecond in the order they were written, newest first', async () => {
@@ -364,7 +362,7 @@ test('it records a VM impd adopts with a boot it has no record of as unknown', a
     stack: ctx.stack,
   });
 
-  await ctx.restartImpd().imps.reconcileImps();
+  await ctx.restartImpd();
 
   const boots = await listColdBoots(ctx.db, created.id);
 

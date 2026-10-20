@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { sql } from 'kysely';
-import { buildMockNewApiCall } from '../test-utils/build-mock-new-api-call';
-import { createTestDatabase } from '../test-utils/create-test-database';
+import { buildMockNewApiCall } from '../../testing/platform/build-mock-new-api-call';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { API_AUDIT_ROWS, listApiCalls, writeApiCall } from './api-audit';
 
 test('#writeApiCall keeps the row count at its cap', async () => {

@@ -2,42 +2,38 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { Imp } from '@impz/api';
 import invariant from 'tiny-invariant';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { findBrokenInvariants } from '../../testing/imps/find-broken-invariants';
+import { waitForOutcome } from '../../testing/imps/wait-for-outcome';
+import { startTestImpd } from '../../testing/start-test-impd';
+import type { TestImpdOptions } from '../../testing/start-test-impd';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { STUB_AGENT_VERSION } from '../../testing/vm/build-stub-vmm';
 import { createImp, findImpByName } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
 import { readSnapshotMeta, writeSnapshotMeta } from '../sleep/snapshot-meta';
 import { readVmIdentity } from '../sleep/vm-identity';
 import { buildImpPaths, buildSystemDrivePath } from '../storage/data-layout';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { STUB_AGENT_VERSION } from '../test-utils/build-stub-vmm';
-import { buildTestApp } from './build-test-app';
-import { findBrokenInvariants } from './find-broken-invariants';
-import { removeUnusedDrives } from './remove-unused-drives';
-import { createImpTest } from './test-imps';
-import type { ImpTestOptions } from './test-imps';
-import { waitForOutcome } from './wait-for-outcome';
 
 // An upgrade as imp-host does it: SIGTERM sleeps every awake imp, and a new
-// impd starts on a new system drive (an agent change), over the same data,
-// reconciles, then runs main's drive sweep.
+// impd starts on a new system drive (an agent change), over the same data;
+// its start reconciles, then runs the drive sweep, removeUnusedDrives.
 
-async function setupTest(options: Pick<ImpTestOptions, 'env' | 'cgroups'> = {}) {
+async function setupTest(options: Pick<TestImpdOptions, 'env' | 'cgroups'> = {}) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await createImpTest(stack, options);
+  const harness = await startTestImpd(stack, options);
 
   // every create boots this image
   await harness.createTestImage('ubuntu');
 
-  return {
-    ...harness,
-
+  // assigned, not spread: the harness's parts follow a restarted impd
+  return Object.assign(harness, {
     // the drive the harness's impd started on, before any upgrade
     oldDrive: harness.readIdentity().systemDrive,
-    client: buildTestApp(harness, harness).client,
-  };
+  });
 }
 
 test('it keeps every imp through an agent upgrade, and asleep on the kept drive', async () => {
@@ -69,19 +65,12 @@ test('it keeps every imp through an agent upgrade, and asleep on the kept drive'
   const oldDrive = ctx.readIdentity().systemDrivePath;
 
   await ctx.imps.sleepAllImps();
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  // the drives each impd's start swept
+  const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
 
-  await impd.imps.reconcileImps();
-
-  const pruned = await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const imps = await buildTestApp(ctx, impd).client.imps.list();
+  const imps = await ctx.client.imps.list();
 
   const listed = new Map(imps.map((imp) => [imp.name, imp]));
 
@@ -115,21 +104,11 @@ test('it wakes a kept imp on the old agent after an agent upgrade', async () => 
 
   await ctx.client.imps.sleep({ name: 'asleep' });
   await ctx.imps.sleepAllImps();
-
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
-
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
   const wakesBefore = ctx.fake.wakes.length;
 
-  const woken = await buildTestApp(ctx, impd).client.imps.wake({ name: 'asleep' });
+  const woken = await ctx.client.imps.wake({ name: 'asleep' });
 
   const wokenDrive = readVmIdentity(buildImpPaths(ctx.dataDir, asleep.id))?.systemDrive;
 
@@ -152,19 +131,9 @@ test('it starts a stopped imp on the new agent after an agent upgrade', async ()
 
   await ctx.client.imps.stop({ name: 'off' });
   await ctx.imps.sleepAllImps();
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
-
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const started = await buildTestApp(ctx, impd).client.imps.start({ name: 'off' });
+  const started = await ctx.client.imps.start({ name: 'off' });
 
   const startedDrive = readVmIdentity(buildImpPaths(ctx.dataDir, off.id))?.systemDrive;
 
@@ -182,21 +151,11 @@ test('it says why a sleeping imp whose drive is gone boots cold', async () => {
 
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.imps.sleepAllImps();
-
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
-
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
   rmSync(buildSystemDrivePath(ctx.dataDir, ctx.oldDrive));
 
-  const asleep = await buildTestApp(ctx, impd).client.imps.get({ name: 'dev' });
+  const asleep = await ctx.client.imps.get({ name: 'dev' });
 
   expect(asleep).toMatchObject({
     state: 'sleeping',
@@ -214,23 +173,13 @@ test('it boots cold a sleeping imp whose drive is gone, and keeps its disk', asy
   writeFileSync(paths.disk, 'disk of dev');
 
   await ctx.imps.sleepAllImps();
-
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
-
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
   rmSync(buildSystemDrivePath(ctx.dataDir, ctx.oldDrive));
 
   const wakesBefore = ctx.fake.wakes.length;
 
-  const woken = await buildTestApp(ctx, impd).client.imps.wake({ name: 'dev' });
+  const woken = await ctx.client.imps.wake({ name: 'dev' });
 
   expect(ctx.fake.wakes).toHaveLength(wakesBefore);
   expect(woken.state).toBe('running');
@@ -249,19 +198,9 @@ test('it wakes a jailed imp with its memory on the old drive after an agent upgr
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.sleep({ name: 'dev' });
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
-
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const woken = await buildTestApp(ctx, impd).client.imps.wake({ name: 'dev' });
+  const woken = await ctx.client.imps.wake({ name: 'dev' });
 
   const wokenDrive = readVmIdentity(buildImpPaths(ctx.dataDir, created.id))?.systemDrive;
 
@@ -276,18 +215,12 @@ test('it marks a VM re-adopted after a drive change as on the old agent', async 
   await ctx.client.imps.create({ name: 'dev' });
 
   // SIGHUP: impd restarts on the new drive and the VM keeps running
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  await impd.imps.reconcileImps();
+  // the drives each impd's start swept
+  const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
 
-  const pruned = await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const awake = await buildTestApp(ctx, impd).client.imps.get({ name: 'dev' });
+  const awake = await ctx.client.imps.get({ name: 'dev' });
 
   expect(pruned).toBeEmpty();
   expect(awake.outdated).toStrictEqual(['agent']);
@@ -300,18 +233,8 @@ test('it records in the snapshot the drive a re-adopted VM booted from', async (
   const oldDrivePath = ctx.readIdentity().systemDrivePath;
 
   // SIGHUP: impd restarts on the new drive and the VM keeps running
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
-
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  await buildTestApp(ctx, impd).client.imps.sleep({ name: 'dev' });
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  await ctx.client.imps.sleep({ name: 'dev' });
 
   expect(readSnapshotMeta(buildImpPaths(ctx.dataDir, created.id))).toMatchObject({
     systemDrive: ctx.oldDrive,
@@ -325,18 +248,9 @@ test('it wakes a re-adopted VM from the old drive its snapshot names', async () 
   await ctx.client.imps.create({ name: 'dev' });
 
   // SIGHUP: impd restarts on the new drive and the VM keeps running
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const upgraded = buildTestApp(ctx, impd).client;
+  const upgraded = ctx.client;
 
   await upgraded.imps.sleep({ name: 'dev' });
 
@@ -351,34 +265,14 @@ test('it keeps the newer drive on a downgrade while a snapshot names it', async 
 
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.imps.sleepAllImps();
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  await ctx.client.imps.stop({ name: 'dev' });
+  await ctx.client.imps.start({ name: 'dev' });
+  await ctx.imps.sleepAllImps();
+  await ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
 
-  const upgraded = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
-
-  await upgraded.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const upgradedClient = buildTestApp(ctx, upgraded).client;
-
-  await upgradedClient.imps.stop({ name: 'dev' });
-  await upgradedClient.imps.start({ name: 'dev' });
-  await upgraded.imps.sleepAllImps();
-
-  const downgraded = ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
-
-  await downgraded.imps.reconcileImps();
-
-  const pruned = await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
+  // the drives each impd's start swept
+  const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
 
   expect(pruned).toBeEmpty();
 });
@@ -388,36 +282,13 @@ test('it wakes on a downgrade the snapshot the newer drive wrote', async () => {
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.imps.sleepAllImps();
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  await ctx.client.imps.stop({ name: 'dev' });
+  await ctx.client.imps.start({ name: 'dev' });
+  await ctx.imps.sleepAllImps();
+  await ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
 
-  const upgraded = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
-
-  await upgraded.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const upgradedClient = buildTestApp(ctx, upgraded).client;
-
-  await upgradedClient.imps.stop({ name: 'dev' });
-  await upgradedClient.imps.start({ name: 'dev' });
-  await upgraded.imps.sleepAllImps();
-
-  const downgraded = ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
-
-  await downgraded.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const woken = await buildTestApp(ctx, downgraded).client.imps.wake({ name: 'dev' });
+  const woken = await ctx.client.imps.wake({ name: 'dev' });
 
   const wokenDrive = readVmIdentity(buildImpPaths(ctx.dataDir, created.id))?.systemDrive;
 
@@ -430,52 +301,21 @@ test('it prunes the newer drive once nothing names it', async () => {
 
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.imps.sleepAllImps();
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  await ctx.client.imps.stop({ name: 'dev' });
+  await ctx.client.imps.start({ name: 'dev' });
+  await ctx.imps.sleepAllImps();
+  await ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
+  await ctx.client.imps.wake({ name: 'dev' });
+  await ctx.client.imps.stop({ name: 'dev' });
+  await ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
 
-  const upgraded = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  // the drives each impd's start swept
+  const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
 
-  await upgraded.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const upgradedClient = buildTestApp(ctx, upgraded).client;
-
-  await upgradedClient.imps.stop({ name: 'dev' });
-  await upgradedClient.imps.start({ name: 'dev' });
-  await upgraded.imps.sleepAllImps();
-
-  const downgraded = ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
-
-  await downgraded.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const downgradedClient = buildTestApp(ctx, downgraded).client;
-
-  await downgradedClient.imps.wake({ name: 'dev' });
-  await downgradedClient.imps.stop({ name: 'dev' });
-
-  const again = ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
-
-  await again.imps.reconcileImps();
-
-  const pruned = await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  expect(pruned).toStrictEqual([`${'d2'.repeat(32)}.squashfs`]);
+  expect(pruned).toStrictEqual([
+    `impd: removed system drive ${'d2'.repeat(32)}.squashfs: no imp uses it`,
+  ]);
 });
 
 test('it says a snapshot from an older impd boots cold', async () => {
@@ -494,18 +334,9 @@ test('it says a snapshot from an older impd boots cold', async () => {
 
   writeSnapshotMeta(paths, { ...legacy, systemDrive: '9f3c51a07e2b44d1' });
 
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const asleep = await buildTestApp(ctx, impd).client.imps.get({ name: 'dev' });
+  const asleep = await ctx.client.imps.get({ name: 'dev' });
 
   expect(asleep).toMatchObject({
     state: 'sleeping',
@@ -533,18 +364,9 @@ test('it boots cold once a snapshot from an older impd, and keeps the disk', asy
 
   writeSnapshotMeta(paths, { ...legacy, systemDrive: '9f3c51a07e2b44d1' });
 
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const woken = await buildTestApp(ctx, impd).client.imps.wake({ name: 'dev' });
+  const woken = await ctx.client.imps.wake({ name: 'dev' });
 
   expect(woken.state).toBe('running');
   expect(ctx.fake.wakes).toBeEmpty();
@@ -636,18 +458,9 @@ test('it marks a VM booted by an impd that kept no identity as from an older imp
 
   rmSync(buildImpPaths(ctx.dataDir, created.id).vmIdentity);
 
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const awake = await buildTestApp(ctx, impd).client.imps.get({ name: 'dev' });
+  const awake = await ctx.client.imps.get({ name: 'dev' });
 
   expect(awake.outdated).toStrictEqual(['impd']);
 });
@@ -658,18 +471,9 @@ test('it says the next wake of a VM booted by an impd that kept no identity boot
 
   rmSync(buildImpPaths(ctx.dataDir, created.id).vmIdentity);
 
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
-
-  const upgraded = buildTestApp(ctx, impd).client;
+  const upgraded = ctx.client;
 
   await upgraded.imps.sleep({ name: 'dev' });
 
@@ -683,21 +487,11 @@ test('it clears on a sleep the reason the last boot was cold', async () => {
 
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.imps.sleepAllImps();
-
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
-
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
   rmSync(buildSystemDrivePath(ctx.dataDir, ctx.oldDrive));
 
-  const upgraded = buildTestApp(ctx, impd).client;
+  const upgraded = ctx.client;
 
   // the cold boot that sets the reason
   await upgraded.imps.wake({ name: 'dev' });
@@ -726,16 +520,10 @@ test('it never removes a drive in use when the data dir moved, by its file name'
     systemDrivePath: `/old/imp/system/drives/${ctx.oldDrive}.squashfs`,
   });
 
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  await impd.imps.reconcileImps();
-
-  const pruned = await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
+  // the drives each impd's start swept
+  const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
 
   expect(pruned).toBeEmpty();
   expect(existsSync(buildSystemDrivePath(ctx.dataDir, ctx.oldDrive))).toBeTrue();
@@ -751,22 +539,12 @@ test('it counts in system.info the imps an agent upgrade left outdated or withou
   await ctx.client.imps.create({ name: 'off' });
   await ctx.client.imps.stop({ name: 'off' });
   await ctx.imps.sleepAllImps();
-
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
-
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
   // a sleeping imp whose snapshot is gone has nothing to load
   rmSync(buildImpPaths(ctx.dataDir, lost.id).snapshotDir, { recursive: true });
 
-  const info = await buildTestApp(ctx, impd).client.system.info();
+  const info = await ctx.client.system.info();
 
   expect(info.bootStatus).toStrictEqual({
     coldBoots: 1,
@@ -779,23 +557,13 @@ test('it boots cold a sleeping imp whose snapshot is gone after an agent upgrade
   const lost = await ctx.client.imps.create({ name: 'lost' });
 
   await ctx.imps.sleepAllImps();
-
-  const impd = ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
-
-  await impd.imps.reconcileImps();
-
-  await removeUnusedDrives(
-    ctx.db,
-    ctx.dataDir,
-    ctx.storage.resolveImpPaths,
-    ctx.readIdentity().systemDrivePath,
-  );
+  await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
   rmSync(buildImpPaths(ctx.dataDir, lost.id).snapshotDir, { recursive: true });
 
   const wakesBefore = ctx.fake.wakes.length;
 
-  const woken = await buildTestApp(ctx, impd).client.imps.wake({ name: 'lost' });
+  const woken = await ctx.client.imps.wake({ name: 'lost' });
 
   expect(woken.state).toBe('running');
   expect(ctx.fake.wakes).toHaveLength(wakesBefore);
@@ -807,11 +575,9 @@ test('it counts in system.info a running imp on an older firecracker as a cold b
   await ctx.client.imps.create({ name: 'dev' });
 
   // a new Firecracker re-adopts the VM the old one runs
-  const impd = ctx.restartImpd({ ...ctx.readIdentity(), firecrackerVersion: 'v1.18.0' });
+  await ctx.restartImpd({ ...ctx.readIdentity(), firecrackerVersion: 'v1.18.0' });
 
-  await impd.imps.reconcileImps();
-
-  const info = await buildTestApp(ctx, impd).client.system.info();
+  const info = await ctx.client.system.info();
 
   expect(info.bootStatus).toStrictEqual({
     coldBoots: 1,
@@ -825,11 +591,9 @@ test('it says a running imp on an older firecracker boots cold after its sleep',
   await ctx.client.imps.create({ name: 'dev' });
 
   // a new Firecracker re-adopts the VM the old one runs
-  const impd = ctx.restartImpd({ ...ctx.readIdentity(), firecrackerVersion: 'v1.18.0' });
+  await ctx.restartImpd({ ...ctx.readIdentity(), firecrackerVersion: 'v1.18.0' });
 
-  await impd.imps.reconcileImps();
-
-  const client = buildTestApp(ctx, impd).client;
+  const client = ctx.client;
 
   await client.imps.sleep({ name: 'dev' });
 

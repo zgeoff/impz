@@ -3,8 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
-import { buildStubNft } from '../test-utils/build-stub-nft';
-import { createStubNftBin } from '../test-utils/create-stub-nft-bin';
+import { buildStubNft } from '../../testing/network/build-stub-nft';
+import { createStubNftBin } from '../../testing/network/create-stub-nft-bin';
 import { createNftRunner, createNftWriter, formatNftError } from './egress-firewall';
 
 async function setupTest() {

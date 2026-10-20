@@ -17,6 +17,16 @@ test('it takes a build context larger than a move part, with a MiB of slack', ()
   expect(options.maxRequestBodySize).toBe(1025 * 1024 ** 2);
 });
 
+test('it listens on only the interface it is given', () => {
+  const options = buildApiListenOptions(
+    { apiPort: 7070, buildContextMaxBytes: 1024 },
+    30,
+    '127.0.0.1',
+  );
+
+  expect(options.hostname).toBe('127.0.0.1');
+});
+
 test('it listens with the idle timeout it is given', () => {
   const options = buildApiListenOptions({ apiPort: 7070, buildContextMaxBytes: 1024 }, 1);
 

@@ -2,10 +2,10 @@ import { expect, test } from 'bun:test';
 import type { ImpEvent } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import fc from 'fast-check';
+import { buildStubGovernedHost } from '../../testing/vm/build-stub-governed-host';
+import type { RoomLeft } from '../../testing/vm/build-stub-governed-host';
+import { buildStubGovernedHostArbitraries } from '../../testing/vm/build-stub-governed-host-arbitraries';
 import { createEventBus } from '../events/event-bus';
-import { buildStubGovernedHost } from '../test-utils/build-stub-governed-host';
-import type { RoomLeft } from '../test-utils/build-stub-governed-host';
-import { buildStubGovernedHostArbitraries } from '../test-utils/build-stub-governed-host-arbitraries';
 import { ENFORCE_INTERVAL_MS, createRamGovernor } from './ram-governor';
 
 // docs/architecture/lifecycle/ram-governor.md#enforcement says every 5 s, and the scale e2e suite

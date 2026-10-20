@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
-import { buildMockElasticImp } from '../test-utils/build-mock-elastic-imp';
-import { buildStubGuestMemory } from '../test-utils/build-stub-guest-memory';
+import { buildMockElasticImp } from '../../testing/vm/build-mock-elastic-imp';
+import { buildStubGuestMemory } from '../../testing/vm/build-stub-guest-memory';
 import { createMemoryController } from './memory-controller';
 import type { ElasticImp, MemoryControllerDeps } from './memory-controller';
 

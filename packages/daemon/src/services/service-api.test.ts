@@ -1,14 +1,14 @@
 import { expect, jest, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
-import type { ImpContract } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildStubClock } from '../../testing/platform/build-stub-clock';
+import { readInBackground } from '../../testing/platform/read-in-background';
+import { readQueuedText } from '../../testing/platform/read-queued-text';
+import { startTestImpd } from '../../testing/start-test-impd';
+import { TEST_TOKEN } from '../../testing/test-token';
+import { startStubServiceAgent } from '../../testing/vm/start-stub-service-agent';
 import {
   ExitSchema,
   LogCursorSchema,
@@ -16,27 +16,10 @@ import {
   ServiceDefSchema,
   ServiceStatusSchema,
 } from '../agent-client/agent-protocol';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
 import { createImage } from '../db/images';
 import { updateImpActivity } from '../db/imps';
-import { openDatabase } from '../db/open-database';
 import { readSnapshotMeta } from '../sleep/snapshot-meta';
-import {
-  buildImagePaths,
-  buildImpPaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubClock } from '../test-utils/build-stub-clock';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
-import { readInBackground } from '../test-utils/read-in-background';
-import { readQueuedText } from '../test-utils/read-queued-text';
-import { startStubServiceAgent } from '../test-utils/start-stub-service-agent';
+import { buildImagePaths, buildImpPaths } from '../storage/data-layout';
 import { createServiceApi } from './service-api';
 
 async function setupTest() {
@@ -44,130 +27,24 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'service-api-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
+  const harness = await startTestImpd(stack);
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
   // the default image, which every create without an image boots
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
+  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
-  await createImage(db, image);
+  await createImage(harness.db, image);
 
-  const vmm = buildStubVmm();
-
-  const impd = await createImpd(config, {
-    db,
-
-    // the bearer the test's client sends
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-
-    // Firecracker, the kernel and the CPU as this host reports them, which a
-    // snapshot must match to load
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  });
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-  });
-
-  stack.defer(() => {
-    impd.diskUsage.stop();
-  });
-
-  const client: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: 'Bearer root-token' },
-      fetch: (request) => impd.api.app.handle(request),
-    }),
-  );
-
-  return { config, db, dataDir, vmm, impd, client, stack };
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, { stack });
 }
 
 test('it sends the agent the service an add names, its env values included', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -198,7 +75,7 @@ test('it lists an added service with its command, its source, and only its env k
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -245,7 +122,7 @@ test('it refuses an add of a service that exists as CONFLICT', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -265,7 +142,7 @@ test('it replaces a service that exists when the add replaces', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -289,7 +166,7 @@ test('it returns the agent’s refusal of a command as BAD_REQUEST', async () =>
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -307,7 +184,7 @@ test('it refuses a remove of a service the agent lacks as NOT_FOUND', async () =
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -326,7 +203,7 @@ test('it refuses a restart of a service the agent lacks as NOT_FOUND', async () 
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -351,7 +228,7 @@ test.each([
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -370,7 +247,7 @@ test('it refuses a remove of a service name with a slash before the agent', asyn
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -389,7 +266,7 @@ test('it refuses an exec-scope add of a service that runs as root as FORBIDDEN',
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -400,13 +277,7 @@ test('it refuses an exec-scope add of a service that runs as root as FORBIDDEN',
 
   const token = await ctx.client.tokens.create({ name: 'runner', scope: 'exec' });
 
-  const exec: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${token.secret}` },
-      fetch: (request) => ctx.impd.api.app.handle(request),
-    }),
-  );
+  const exec = ctx.buildClient(token.secret);
 
   expect(
     exec.services.add({ name: 'dev', service: { name: 'web', argv: ['httpd'], user: 'root' } }),
@@ -419,7 +290,7 @@ test('it adds, restarts and removes an exec-scope service that runs as the image
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -430,13 +301,7 @@ test('it adds, restarts and removes an exec-scope service that runs as the image
 
   const token = await ctx.client.tokens.create({ name: 'runner', scope: 'exec' });
 
-  const exec: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${token.secret}` },
-      fetch: (request) => ctx.impd.api.app.handle(request),
-    }),
-  );
+  const exec = ctx.buildClient(token.secret);
 
   await exec.services.add({ name: 'dev', service: { name: 'web', argv: ['httpd'] } });
   await exec.services.add({ name: 'dev', service: { name: 'job', argv: ['job'], user: 'dev' } });
@@ -462,7 +327,7 @@ test('it refuses an exec-scope remove of a service that runs as root as FORBIDDE
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -478,13 +343,7 @@ test('it refuses an exec-scope remove of a service that runs as root as FORBIDDE
 
   const token = await ctx.client.tokens.create({ name: 'runner', scope: 'exec' });
 
-  const exec: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${token.secret}` },
-      fetch: (request) => ctx.impd.api.app.handle(request),
-    }),
-  );
+  const exec = ctx.buildClient(token.secret);
 
   expect(exec.services.remove({ name: 'dev', service: 'db' })).rejects.toMatchObject({
     code: 'FORBIDDEN',
@@ -497,7 +356,7 @@ test('it refuses an exec-scope restart of a service that runs as root as FORBIDD
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -513,13 +372,7 @@ test('it refuses an exec-scope restart of a service that runs as root as FORBIDD
 
   const token = await ctx.client.tokens.create({ name: 'runner', scope: 'exec' });
 
-  const exec: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${token.secret}` },
-      fetch: (request) => ctx.impd.api.app.handle(request),
-    }),
-  );
+  const exec = ctx.buildClient(token.secret);
 
   expect(exec.services.restart({ name: 'dev', service: 'db' })).rejects.toMatchObject({
     code: 'FORBIDDEN',
@@ -532,7 +385,7 @@ test('it refuses an exec-scope replace of a service that runs as root as FORBIDD
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -548,13 +401,7 @@ test('it refuses an exec-scope replace of a service that runs as root as FORBIDD
 
   const token = await ctx.client.tokens.create({ name: 'runner', scope: 'exec' });
 
-  const exec: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${token.secret}` },
-      fetch: (request) => ctx.impd.api.app.handle(request),
-    }),
-  );
+  const exec = ctx.buildClient(token.secret);
 
   expect(
     exec.services.add({ name: 'dev', service: { name: 'db', argv: ['postgres'] }, replace: true }),
@@ -567,7 +414,7 @@ test('it refuses an exec-scope restart of a service not started yet as FORBIDDEN
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -578,13 +425,7 @@ test('it refuses an exec-scope restart of a service not started yet as FORBIDDEN
 
   const token = await ctx.client.tokens.create({ name: 'runner', scope: 'exec' });
 
-  const exec: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${token.secret}` },
-      fetch: (request) => ctx.impd.api.app.handle(request),
-    }),
-  );
+  const exec = ctx.buildClient(token.secret);
 
   // not started yet, so its user is unknown
   expect(exec.services.restart({ name: 'dev', service: 'late' })).rejects.toMatchObject({
@@ -596,7 +437,7 @@ test('it refuses an add on an agent from before the services API as AGENT_OUTDAT
   const ctx = await setupTest();
 
   // each boot and wake reports it
-  ctx.vmm.agent.version = '0.9.0';
+  ctx.fake.agent.version = '0.9.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -614,7 +455,7 @@ test('it lists the image’s services as root on an agent from before the servic
   const ctx = await setupTest();
 
   // each boot and wake reports it
-  ctx.vmm.agent.version = '0.9.0';
+  ctx.fake.agent.version = '0.9.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -652,7 +493,7 @@ test('it sends one service’s log, 100 lines by default', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -681,7 +522,7 @@ test('it shares 10 000 lines among every service’s log', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -706,7 +547,7 @@ test('it merges a follow of every service, and closes each when the reader stops
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -744,7 +585,7 @@ test('it waits out a sleep in a follow without a wake, and goes on from its curs
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -794,7 +635,7 @@ test('it waits out a sleep in a follow without a wake, and goes on from its curs
   expect(three.value).toStrictEqual({ type: 'log', service: 'web', text: 'three\n' });
   expect(asleep.state).toBe('sleeping');
   expect(asleep.lastActiveAt).toStrictEqual(before.lastActiveAt);
-  expect(ctx.vmm.wakes).toHaveLength(1);
+  expect(ctx.fake.wakes).toHaveLength(1);
   expect(resumed?.cursor).toStrictEqual(create(LogCursorSchema, { inode: 7, offset: 4 }));
 });
 
@@ -804,7 +645,7 @@ test('it sends a keepalive comment every 5 s through a silent follow', async () 
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -825,7 +666,7 @@ test('it sends a keepalive comment every 5 s through a silent follow', async () 
   const response = await ctx.impd.api.app.handle(
     new Request('http://impd.test/rpc/services/logs', {
       method: 'POST',
-      headers: { authorization: 'Bearer root-token', 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${TEST_TOKEN}`, 'content-type': 'application/json' },
       body: JSON.stringify({ json: { name: 'dev', service: 'web', follow: true } }),
     }),
   );
@@ -862,7 +703,7 @@ test('it leaves a sleeping imp asleep through a follow', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -886,14 +727,14 @@ test('it leaves a sleeping imp asleep through a follow', async () => {
 
   expect(first.value).toStrictEqual({ type: 'sleeping', state: 'sleeping' });
   expect(after.state).toBe('sleeping');
-  expect(ctx.vmm.wakes).toStrictEqual([]);
+  expect(ctx.fake.wakes).toStrictEqual([]);
 });
 
 test('it lists a sleeping imp’s services as its sleep recorded them, and wakes nothing', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -914,14 +755,14 @@ test('it lists a sleeping imp’s services as its sleep recorded them, and wakes
 
   expect(asleep.recorded).toBe(true);
   expect(after.state).toBe('sleeping');
-  expect(ctx.vmm.wakes).toStrictEqual([]);
+  expect(ctx.fake.wakes).toStrictEqual([]);
 });
 
 test('it refuses a list of a stopped imp’s services as INVALID_STATE', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -941,7 +782,7 @@ test('it lists no services, and says it recorded none, for a sleep the agent gav
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -965,7 +806,7 @@ test('it keeps a character that a sleep splits whole in a follow', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -1009,7 +850,7 @@ test('it looks again after the short retry, not the long recheck, while a lifecy
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -1080,7 +921,7 @@ test('it says the imp sleeps when it goes to sleep after a step held it running'
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -1150,7 +991,7 @@ test('it says the imp stopped when it stops after a step held it running', async
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -1220,7 +1061,7 @@ test('it goes on with a follow when the wake’s event comes before the wake let
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -1291,7 +1132,7 @@ test('it ends a follow with the error once its log fails to open five times in a
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -1346,7 +1187,7 @@ test('it lets a list wait out a step that holds a running imp', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -1436,7 +1277,7 @@ test('it ends a follow when the imp is destroyed', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
@@ -1468,7 +1309,7 @@ test('it ends a follow with restarting when impd restarts', async () => {
   const ctx = await setupTest();
 
   // an agent with the services API, which each boot and wake reports
-  ctx.vmm.agent.version = '0.10.0';
+  ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
 

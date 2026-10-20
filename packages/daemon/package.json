@@ -1,9 +1,16 @@
 {
   "name": "@impz/daemon",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "private": true,
   "description": "impd: the imp host daemon",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./testing/index.ts",
+    "./testing/build-stub-clock": "./testing/platform/build-stub-clock.ts",
+    "./package.json": "./package.json",
+    "./src/*": "./src/*.ts"
+  },
   "scripts": {
     "start": "bun src/main.ts"
   },

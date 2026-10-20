@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { buildMockMoveSendRow } from '../test-utils/build-mock-move-send-row';
-import { createTestDatabase } from '../test-utils/create-test-database';
+import { buildMockMoveSendRow } from '../../testing/imp-ops/build-mock-move-send-row';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { findMoveSend, removeMoveSend, updateMoveSend, writeMoveSend } from './move-sends';
 
 async function setupTest() {

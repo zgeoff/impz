@@ -1,33 +1,18 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { ImpContract } from '@impz/api';
 import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildStubTailscaleApi } from '../../testing/network/build-stub-tailscale-api';
+import { buildStubTailscaleServe } from '../../testing/network/build-stub-tailscale-serve';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { createImage } from '../db/images';
 import { findImpByName, updateImpMove } from '../db/imps';
-import { openDatabase } from '../db/open-database';
 import { deriveSlotAddress } from '../net/addressing';
-import {
-  buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubTailscaleApi } from '../test-utils/build-stub-tailscale-api';
-import { buildStubTailscaleServe } from '../test-utils/build-stub-tailscale-serve';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { findFreePorts } from '../test-utils/find-free-ports';
+import { buildImagePaths } from '../storage/data-layout';
 import { createPresenceCheck } from './build-tailnet-names';
 import { createServiceServe } from './service-serve';
 import { createServicesApi } from './services-api';
@@ -46,139 +31,37 @@ async function setupTest(options: SetupOptions = {}) {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'tailnet-names-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-    IMP_TAILNET_NAMES: options.tailnetNames,
-    IMP_TAILSCALE_NODE: options.tailnetNames,
-  });
-
   const tailscale = buildStubTailscaleServe();
-  const impdLogs: string[] = [];
 
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
-  const impd = await createImpd(config, {
-    db,
-
-    // the bearer the test's client sends
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: (line) => {
-      impdLogs.push(line);
-    },
-
-    // Firecracker, the kernel and the CPU as this host reports them, which a
-    // snapshot must match to load
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-
-    // no IPv6; the node's MagicDNS name gives impd's own names their suffix
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({
-        state: 'Running',
-        hostname: 'imp-host',
-        dnsName: 'imp-host.tail1234.ts.net',
-        ip: null,
-        ips: [],
+  const harness = await startTestImpd(stack, {
+    env: {
+      ...(options.tailnetNames !== undefined && {
+        IMP_TAILNET_NAMES: options.tailnetNames,
+        IMP_TAILSCALE_NODE: options.tailnetNames,
       }),
-
-    // `tailscale serve` for impd's own names, never the host's
-    runCommand: tailscale.run,
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
     },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
+    boundaries: {
+      // the node's MagicDNS name gives impd's own names their suffix
+      readTailscale: () =>
+        Promise.resolve({
+          state: 'Running',
+          hostname: 'imp-host',
+          dnsName: 'imp-host.tail1234.ts.net',
+          ip: null,
+          ips: [],
+        }),
+
+      // `tailscale serve` for impd's own names, never the host's
+      runCommand: tailscale.run,
     },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  });
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-  });
-
-  stack.defer(() => {
-    impd.diskUsage.stop();
   });
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
   // the image every imp here boots
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
+  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
-  await createImage(db, image);
-
-  const client: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: 'Bearer root-token' },
-      fetch: (request) => impd.api.app.handle(request),
-    }),
-  );
+  await createImage(harness.db, image);
 
   // the OAuth client the stub tailnet knows, which every API call needs a token from
   const tailscaleApi = buildStubTailscaleApi({
@@ -192,14 +75,14 @@ async function setupTest(options: SetupOptions = {}) {
   // every dep but the host's ID, through the real Services API client and
   // `tailscale serve` against their stand-ins
   const namesDeps: Omit<TailnetNamesDeps, 'hostId'> = {
-    config: { prefix: '', oauthFile: join(dataDir, 'unused-oauth.json') },
-    db,
+    config: { prefix: '', oauthFile: join(harness.dataDir, 'unused-oauth.json') },
+    db: harness.db,
     api: createServicesApi({
       readCredential: () => ({ clientId: 'kExample', clientSecret: 'secret' }),
     }),
     serve: createServiceServe(tailscale.runChecked),
-    findPort: (slot) => deriveSlotAddress(slot, config).tailnetPort,
-    isImpPresent: createPresenceCheck(impd.imps, db),
+    findPort: (slot) => deriveSlotAddress(slot, harness.config).tailnetPort,
+    isImpPresent: createPresenceCheck(harness.imps, harness.db),
 
     // a sync runs without the suffix, which only a name's URL needs
     readSuffix: () => Promise.resolve(null),
@@ -208,7 +91,15 @@ async function setupTest(options: SetupOptions = {}) {
     },
   };
 
-  return { config, db, client, tailscaleApi, tailscale, logs, impdLogs, namesDeps };
+  // assigned, not spread: a spread reads the harness's parts once; `logs`
+  // are the names' own lines, and `impdLogs` impd's
+  return Object.assign(harness, {
+    tailscaleApi,
+    tailscale,
+    logs,
+    impdLogs: harness.logs,
+    namesDeps,
+  });
 }
 
 test('it claims a service of this host’s for each imp', async () => {

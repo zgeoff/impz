@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubIpCommand } from '../test-utils/build-stub-ip-command';
+import { buildStubIpCommand } from '../../testing/host-net/build-stub-ip-command';
 import { deriveSlotAddress, parseSubnet } from './addressing';
 import { parsePrefix64 } from './addressing6';
 import { createTapDevices } from './tap-devices';

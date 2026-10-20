@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
+import { buildMockCaller } from '../testing/identity/build-mock-caller';
 import { requireNamedImp } from './require-named-imp';
-import { buildMockCaller } from './test-utils/build-mock-caller';
 
 test.each([
   ['no imp named', ['dev-*'], 'read', undefined, 'read'],

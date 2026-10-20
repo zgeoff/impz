@@ -12,13 +12,13 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
+import { buildMockTemplateBuildPlan } from '../../testing/vm/build-mock-template-build-plan';
+import { buildMockTemplateRestorePlan } from '../../testing/vm/build-mock-template-restore-plan';
+import { buildStubJails } from '../../testing/vm/build-stub-jails';
+import { buildStubFirecrackerArgv } from '../../testing/vm/start-stub-firecracker';
+import { startStubParkedAgent } from '../../testing/vm/start-stub-parked-agent';
 import { stopPid } from '../process/proc';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildMockTemplateBuildPlan } from '../test-utils/build-mock-template-build-plan';
-import { buildMockTemplateRestorePlan } from '../test-utils/build-mock-template-restore-plan';
-import { buildStubJails } from '../test-utils/build-stub-jails';
-import { buildStubFirecrackerArgv } from '../test-utils/start-stub-firecracker';
-import { startStubParkedAgent } from '../test-utils/start-stub-parked-agent';
 import { isFirecrackerAlive } from './firecracker-process';
 import { TemplateRestoreError, buildTemplateVm, loadTemplateVm } from './template-vm';
 
