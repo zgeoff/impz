@@ -2,7 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildMockCertificate } from '../../test-utils/build-mock-certificate';
+import { buildMockCertificate } from '../../../testing/network/build-mock-certificate';
 import { createDnsToken } from '../dns/dns-token';
 import { createCertManager } from './cert-manager';
 import type { Certificate } from './cert-store';

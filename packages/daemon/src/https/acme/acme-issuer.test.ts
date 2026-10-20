@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startStubAcmeServer } from '../../test-utils/start-stub-acme-server';
+import { startStubAcmeServer } from '../../../testing/network/start-stub-acme-server';
 import { createChalltestsrvProvider } from '../dns/challtestsrv-provider';
 import { createAcmeIssuer } from './acme-issuer';
 import { createCertStore } from './cert-store';

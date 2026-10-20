@@ -38,8 +38,8 @@
       // imp-docker-proxy, which host/Dockerfile compiles beside impd, the
       // suites only their own scripts run (test:pebble), and the scripts a
       // test runs in a child Bun
-      "entry": ["src/docker-proxy/main.ts", "src/**/*.pebble.ts", "src/test-utils/run-*.ts"],
-      "project": ["src/**/*.ts"],
+      "entry": ["src/docker-proxy/main.ts", "src/**/*.pebble.ts", "testing/*/run-*.ts"],
+      "project": ["src/**/*.ts", "testing/**/*.ts"],
       // kysely-codegen and protoc-gen-es write every table and message,
       // used or not
       "ignoreIssues": {

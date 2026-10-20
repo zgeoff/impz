@@ -1,146 +1,30 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
-import type { ImpdDeps } from '../create-impd';
-import { createImage } from '../db/images';
-import { findImpByName, listImps } from '../db/imps';
-import { openDatabase } from '../db/open-database';
-import {
-  buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubClock } from '../test-utils/build-stub-clock';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubGuest } from '../test-utils/build-stub-guest';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
 import {
   STUB_BUILDER_CONTAINER,
   buildStubImageBuilder,
-} from '../test-utils/build-stub-image-builder';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { createBuilderImage } from '../test-utils/create-builder-image';
-import { findFreePorts } from '../test-utils/find-free-ports';
+} from '../../testing/imps/build-stub-image-builder';
+import { createBuilderImage } from '../../testing/imps/create-builder-image';
+import { buildStubClock } from '../../testing/platform/build-stub-clock';
+import { startTestImpd } from '../../testing/start-test-impd';
+import { buildStubGuest } from '../../testing/vm/build-stub-guest';
+import { createImage } from '../db/images';
+import { findImpByName, listImps } from '../db/imps';
+import { buildImagePaths } from '../storage/data-layout';
 import { createBuilders } from './builder-imps';
 import { writeGuestTree } from './guest-build';
 
-async function setupTest() {
+function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'builder-imps-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(findFreePorts(1).take()),
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
-  const deps: ImpdDeps = {
-    db,
-
-    // the bearer impd's API takes; no test here calls the API
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-
-    // Firecracker, the kernel and the CPU as this host reports them
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  };
-
-  const impd = await createImpd(config, deps);
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
-  });
-
-  return {
-    config,
-    db,
-    dataDir,
-    vmm,
-    impd,
-  };
+  return startTestImpd(stack);
 }
 
 test('it gives a build a public builder of the build size', async () => {
@@ -440,7 +324,7 @@ test('it keeps the build of a builder that survives its removal, and logs the su
   });
 
   // the builder's Firecracker survives SIGKILL, so its removal fails
-  ctx.vmm.queue('stop', 'fail');
+  ctx.fake.queue('stop', 'fail');
 
   const built = await builders.withBuilder(new AbortController().signal, () =>
     Promise.resolve('built'),
@@ -484,7 +368,7 @@ test('it removes a builder that survived its removal on a later retry', async ()
 
   // the first removal meets a Firecracker that survives SIGKILL; the
   // retry's stop goes through
-  ctx.vmm.queue('stop', 'fail');
+  ctx.fake.queue('stop', 'fail');
 
   await builders.withBuilder(new AbortController().signal, () => Promise.resolve());
 
@@ -537,7 +421,7 @@ test('it retries the removal of a leftover builder that survives it at start', a
 
   // the removal at start and the first retry meet a Firecracker that
   // survives SIGKILL; the second retry's stop goes through
-  ctx.vmm.queue('stop', 'fail', 'fail');
+  ctx.fake.queue('stop', 'fail', 'fail');
 
   await builders.removeLeftovers();
 
@@ -603,7 +487,7 @@ test('it never removes a user imp that took the id of a removed builder on a ret
   const id = record.id;
 
   // the removal at start meets a Firecracker that survives SIGKILL
-  ctx.vmm.queue('stop', 'fail');
+  ctx.fake.queue('stop', 'fail');
 
   await builders.removeLeftovers();
 

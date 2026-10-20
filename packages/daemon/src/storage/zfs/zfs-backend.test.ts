@@ -16,13 +16,13 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import invariant from 'tiny-invariant';
+import { buildStubMoveStream } from '../../../testing/imp-ops/build-stub-move-stream';
+import { writeSyncedFile } from '../../../testing/platform/write-synced-file';
+import { StubZfsCrashError, buildStubZfs } from '../../../testing/vm/build-stub-zfs';
+import { createZfsTestDataset } from '../../../testing/vm/create-zfs-test-dataset';
+import { readZfsTestPool } from '../../../testing/vm/read-zfs-test-pool';
 import { runChecked, runCommand } from '../../process/run-command';
 import type { CommandRunner } from '../../process/run-command';
-import { buildStubMoveStream } from '../../test-utils/build-stub-move-stream';
-import { StubZfsCrashError, buildStubZfs } from '../../test-utils/build-stub-zfs';
-import { createZfsTestDataset } from '../../test-utils/create-zfs-test-dataset';
-import { readZfsTestPool } from '../../test-utils/read-zfs-test-pool';
-import { writeSyncedFile } from '../../test-utils/write-synced-file';
 import { countTreeBytes } from '../count-tree-bytes';
 import { buildWatchdogSlot } from '../data-layout';
 import { CheckpointIdTakenError } from '../storage-backend';

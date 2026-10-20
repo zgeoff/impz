@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildMockHostIdentity } from '../test-utils/build-mock-host-identity';
+import { buildMockHostIdentity } from '../../testing/vm/build-mock-host-identity';
 import { findOutdatedParts } from './vm-identity';
 
 test('it finds nothing outdated in a VM booted as the host boots now', () => {

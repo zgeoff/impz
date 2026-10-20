@@ -13,6 +13,18 @@ import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { buildFilesTar } from '../../testing/imps/build-files-tar';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import {
+  STUB_BUILDER_CONTAINER,
+  buildStubImageBuilder,
+} from '../../testing/imps/build-stub-image-builder';
+import { buildTreeTar } from '../../testing/imps/build-tree-tar';
+import { createStubDockerCli } from '../../testing/imps/create-stub-docker-cli';
+import { createStubImageMkfs } from '../../testing/imps/create-stub-image-mkfs';
+import { spawnSparseFilesTar } from '../../testing/imps/spawn-sparse-files-tar';
+import { buildQueryGate } from '../../testing/platform/build-query-gate';
+import { startDiskSampler } from '../../testing/vm/start-disk-sampler';
 import { loadConfig } from '../config';
 import { createImage, findImageByName, listImages } from '../db/images';
 import { openDatabase } from '../db/open-database';
@@ -22,18 +34,6 @@ import { buildImagePaths } from '../storage/data-layout';
 import { createDiskBudget } from '../storage/disk-budget';
 import { createStorageGate } from '../storage/storage-gate';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildFilesTar } from '../test-utils/build-files-tar';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildQueryGate } from '../test-utils/build-query-gate';
-import {
-  STUB_BUILDER_CONTAINER,
-  buildStubImageBuilder,
-} from '../test-utils/build-stub-image-builder';
-import { buildTreeTar } from '../test-utils/build-tree-tar';
-import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
-import { createStubImageMkfs } from '../test-utils/create-stub-image-mkfs';
-import { spawnSparseFilesTar } from '../test-utils/spawn-sparse-files-tar';
-import { startDiskSampler } from '../test-utils/start-disk-sampler';
 import { normalizeDockerfilePath } from './create-image-builds';
 import { createImageService } from './image-service';
 
