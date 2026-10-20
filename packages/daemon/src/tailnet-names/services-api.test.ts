@@ -2,7 +2,7 @@ import { expect, mock, test } from 'bun:test';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { createStubTailscaleApi } from '../test-utils/create-stub-tailscale-api';
+import { createStubTailscaleApi } from '../../testing/network/create-stub-tailscale-api';
 import { createServicesApi } from './services-api';
 
 test('it asks for a token by client credentials, with the services scope only', async () => {

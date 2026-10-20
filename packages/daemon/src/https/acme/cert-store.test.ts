@@ -3,7 +3,7 @@ import { existsSync, statSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMockCertificate } from '../../test-utils/create-mock-certificate';
+import { createMockCertificate } from '../../../testing/network/create-mock-certificate';
 import { createCertStore } from './cert-store';
 
 async function setupTest() {

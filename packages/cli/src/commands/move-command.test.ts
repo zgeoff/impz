@@ -1,26 +1,18 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
-import { loadConfig } from '@impz/daemon/src/config';
-import { createImpd } from '@impz/daemon/src/create-impd';
 import { createImage } from '@impz/daemon/src/db/images';
-import { openDatabase } from '@impz/daemon/src/db/open-database';
 import {
   buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '@impz/daemon/src/storage/data-layout';
-import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
-import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
+  buildMockNewImage,
+  buildStubImpdReleaseFetch,
+  startTestImpd,
+} from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import { UsageError } from '../cli/errors';
-import { buildStubOlderImpdFetch } from '../test-utils/build-stub-older-impd-fetch';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startWarmMoveHosts } from '../test-utils/start-warm-move-hosts';
 import { runMove } from './move-command';
@@ -35,119 +27,32 @@ async function setupTest() {
   const calls: string[] = [];
 
   const startImpd = async (host: string) => {
-    // a test moves a host's clock on, such as past the target's commit window
-    const clock = { offsetMs: 0 };
-
+    // named for its host, as a refused warm move prints it
     const dataDir = await mkdtemp(join(tmpdir(), `cli-move-${host}-`));
 
     stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-    const db = await openDatabase(':memory:');
-
-    stack.defer(() => db.destroy());
-
-    // the stub VMM runs no jailer and builds no boot template; the resolver
-    // binds its port on every address, so each impd takes a free one
-    const config = loadConfig({
-      IMP_DATA_DIR: dataDir,
-      IMP_JAILER: 'false',
-      IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
+    // on the wall clock until a test moves it on
+    const harness = await startTestImpd(stack, {
+      dataDir,
+      rootToken: 'root-token',
 
       // the URL the target hands the source, a tailnet address as a move needs
-      IMP_PEER_URL: 'http://100.100.0.2:7070',
+      env: { IMP_PEER_URL: 'http://100.100.0.2:7070' },
     });
 
-    // the system drive impd boots imps with
-    const drive = 'd1'.repeat(32);
-    const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-    await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-    await writeFile(systemDrivePath, drive);
-
-    const vmm = buildStubVmm();
-
-    const impd = await createImpd(config, {
-      db,
-      rootToken: 'root-token',
-      storage: createXfsBackend({
-        dataDir,
-        cloneFile: (source, target) => copyFile(source, target),
-      }),
-      systemFiles: {
-        kernelPath: join(dataDir, 'system', 'vmlinux'),
-        systemDrivePath,
-        info: {
-          guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-          systemDrive: { sha256: drive },
-        },
-      },
-
-      // the host's free space, so a create never meets this machine's disk
-      readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-      log: () => {},
-
-      // the wall clock until a test moves it on
-      now: () => Date.now() + clock.offsetMs,
-      readIdentity: (files, ipv6Prefix) => ({
-        firecrackerVersion: 'v1.17.0',
-        snapshotVersion: 'v12.0.0',
-        hostKernel: 'test',
-        guestKernel: files.info.guestKernel.sha256,
-        systemDrive: files.info.systemDrive.sha256,
-        systemDrivePath: files.systemDrivePath,
-        cpuModel: 'Test CPU',
-        cpuFlags: 'test-flags',
-        ipv6Prefix,
-      }),
-      resolveIpv6: () => Promise.resolve(null),
-      readTailscale: () =>
-        Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-      cgroups: buildStubCpuCgroups().cgroups,
-      vms: vmm.startGeneration(),
-      taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-      broker: {
-        installBundle: () => Promise.resolve(),
-        resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-        runOAuthTimer: false,
-      },
-      egress: {
-        runNft: () => Promise.resolve(),
-        flushConnections: () => Promise.resolve(),
-        flushPair: () => Promise.resolve(),
-        readForwardRules: () => Promise.resolve(''),
-        forward: () => Promise.reject(new Error('no upstream in tests')),
-        resolveExact: () => Promise.resolve([]),
-        readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-        readConnected6: () => Promise.resolve([]),
-        readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-      },
-      imps: {
-        readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-        readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-        growFilesystem: () => Promise.resolve(false),
-        hostCpus: 8,
-      },
-      freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-    });
-
-    stack.defer(() => impd.broker.stop());
-
-    stack.defer(() => {
-      impd.egress.stop();
-      impd.diskUsage.stop();
-    });
+    const impd = harness.impd;
 
     // the image a test's imps boot from
-    await Bun.write(join(dataDir, 'images', 'ubuntu', 'rootfs.ext4'), 'rootfs');
+    await Bun.write(join(harness.dataDir, 'images', 'ubuntu', 'rootfs.ext4'), 'rootfs');
 
     await createImage(
-      db,
+      harness.db,
       buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
     );
 
     // the image's config, which a move sends with it
-    await Bun.write(buildImagePaths(dataDir, 'sha256:ubuntu').config, '{}');
+    await Bun.write(buildImagePaths(harness.dataDir, 'sha256:ubuntu').config, '{}');
 
     const client = createImpClient({
       url: `http://${host}.test`,
@@ -161,7 +66,9 @@ async function setupTest() {
 
     return {
       client,
-      clock,
+
+      // a test moves a host's clock on, such as past the target's commit window
+      advance: harness.advance,
       moves: impd.moves,
       respond: (request: Request) => impd.api.app.handle(request),
     };
@@ -178,8 +85,8 @@ async function setupTest() {
     // the target's API, as a client in front of it reaches it
     handleOnTarget: target.respond,
 
-    // the target's clock, which a test may move on
-    targetClock: target.clock,
+    // moves the target's clock on, as a test may
+    advanceTarget: target.advance,
 
     // the target's move routes, as the source reaches them over the
     // tailnet from 100.100.0.1
@@ -352,7 +259,7 @@ test('it prepares a sleeping imp without facts when the target is an older impd 
   await ctx.from.imps.sleep({ name: 'dev' });
 
   // an impd from before warm moves (0.38.0) has no moves.facts
-  const older = buildStubOlderImpdFetch(ctx.handleOnTarget, {
+  const older = buildStubImpdReleaseFetch(ctx.handleOnTarget, {
     withoutProcedures: ['moves/facts'],
   });
 
@@ -453,7 +360,7 @@ test('it points at --resume when the target’s commit window ended before the c
   // (docs/architecture/storage/moves.md#one-live-copy); the commit lands a second past it
   server.use(
     http.post('http://100.100.0.2:7070/move/commit', (info) => {
-      ctx.targetClock.offsetMs = 24 * 60 * 60 * 1000 + 1000;
+      ctx.advanceTarget(24 * 60 * 60 * 1000 + 1000);
 
       return ctx.receiveFromSource(info.request);
     }),
@@ -528,7 +435,7 @@ test('it commits a verified move with a fresh ticket from the target on --resume
     http.post(
       'http://100.100.0.2:7070/move/commit',
       (info) => {
-        ctx.targetClock.offsetMs = 24 * 60 * 60 * 1000 + 1000;
+        ctx.advanceTarget(24 * 60 * 60 * 1000 + 1000);
 
         return ctx.receiveFromSource(info.request);
       },

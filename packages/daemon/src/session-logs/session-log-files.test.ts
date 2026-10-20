@@ -3,7 +3,7 @@ import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildMockGenerationMeta } from '../test-utils/build-mock-generation-meta';
+import { buildMockGenerationMeta } from '../../testing/imps/build-mock-generation-meta';
 import {
   getGenerationDir,
   probeTombstone,

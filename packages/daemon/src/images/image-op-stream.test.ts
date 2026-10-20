@@ -2,35 +2,21 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Image, ImpContract } from '@impz/api';
+import type { Image } from '@impz/api';
 import { buildMockImage } from '@impz/api/test-utils/build-mock-image';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
-import type { ImpdDeps } from '../create-impd';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { createStubDockerCli } from '../../testing/imps/create-stub-docker-cli';
+import { startStubDockerEngine } from '../../testing/imps/start-stub-docker-engine';
+import { buildStubRepeat } from '../../testing/platform/build-stub-repeat';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { listApiCalls } from '../db/api-audit';
 import { createImage } from '../db/images';
-import { openDatabase } from '../db/open-database';
 import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
 import { runChecked } from '../process/run-command';
-import {
-  buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubRepeat } from '../test-utils/build-stub-repeat';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { claimFreePorts } from '../test-utils/claim-free-ports';
-import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
-import { startStubDockerEngine } from '../test-utils/start-stub-docker-engine';
+import { buildImagePaths } from '../storage/data-layout';
 import { runImageOp } from './image-op-stream';
 
 async function setupTest() {
@@ -42,133 +28,25 @@ async function setupTest() {
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the engine a host build sends its context to
+  // the engine a host build sends its context to; it stops after impd
   const engine = startStubDockerEngine({ directoryPath: dataDir });
 
   stack.defer(() => engine.stop());
 
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one; adds
-  // and builds run on the host's engine, the stubs
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_BUILD_ISOLATION: 'host',
-    DOCKER_HOST: engine.dockerHost,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
-  const deps: ImpdDeps = {
-    db,
-
-    // the bearer the test's client sends
-    rootToken: 'root-token',
+  // adds and builds run on the host's engine, the stub
+  const harness = await startTestImpd(stack, {
+    dataDir,
+    env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: engine.dockerHost },
 
     // a sparse copy for a reflink: the temp dir is not XFS, and an imp's
     // disk is sparse
-    storage: createXfsBackend({
-      dataDir,
-      cloneFile: async (source, target) => {
-        await runChecked(['cp', '--sparse=always', source, target]);
-      },
-    }),
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
+    cloneDisk: async (source, target) => {
+      await runChecked(['cp', '--sparse=always', source, target]);
     },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-
-    // Firecracker, the kernel and the CPU as this host reports them
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  };
-
-  const impd = await createImpd(config, deps);
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
   });
 
-  // the root bearer's client, against impd's own app
-  const client: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: 'Bearer root-token' },
-      fetch: (request) => impd.api.app.handle(request),
-    }),
-  );
-
-  return {
-    db,
-    dataDir,
-    engine,
-    impd,
-    client,
-  };
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, { engine });
 }
 
 test('it sends progress at once and at each phase, then the image', async () => {
@@ -793,14 +671,7 @@ test('it refuses a streamed add to a read token and audits the refusal', async (
   const ctx = await setupTest();
   const made = await ctx.client.tokens.create({ name: 'reader', scope: 'read' });
 
-  const reader: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${made.secret}` },
-      fetch: (request) => ctx.impd.api.app.handle(request),
-    }),
-  );
-
+  const reader = ctx.buildClient(made.secret);
   const adding = reader.images.addStream({ ref: 'busybox:1.37' });
 
   expect(adding).rejects.toMatchObject({ code: 'FORBIDDEN' });
@@ -823,14 +694,7 @@ test('it refuses a streamed build to a read token and audits the refusal', async
   const ctx = await setupTest();
   const made = await ctx.client.tokens.create({ name: 'reader', scope: 'read' });
 
-  const reader: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${made.secret}` },
-      fetch: (request) => ctx.impd.api.app.handle(request),
-    }),
-  );
-
+  const reader = ctx.buildClient(made.secret);
   const building = reader.images.buildStream({ contextDir: '/srv/ctx', name: 'web' });
 
   expect(building).rejects.toMatchObject({ code: 'FORBIDDEN' });

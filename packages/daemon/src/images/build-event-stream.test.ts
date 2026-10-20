@@ -3,7 +3,7 @@ import type { ImageBuildEvent } from '@impz/api';
 import { IMAGE_BUILD_STREAM_TYPE, ImageBuildEventSchema } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildStubRepeat } from '../test-utils/build-stub-repeat';
+import { buildStubRepeat } from '../../testing/platform/build-stub-repeat';
 import { createBuildEventStream, runOnInterval } from './build-event-stream';
 
 test('#createBuildEventStream answers with the build stream content type', () => {

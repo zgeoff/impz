@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildStubSmapsMapping } from '../test-utils/build-stub-smaps-mapping';
+import { buildStubSmapsMapping } from '../../testing/vm/build-stub-smaps-mapping';
 import {
   checkGuestMemoryMergeable,
   checkKsmHost,

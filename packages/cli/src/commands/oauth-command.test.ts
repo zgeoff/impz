@@ -1,19 +1,8 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { ApprovalCodeSchema } from '@impz/api';
 import { createImpClient } from '@impz/client';
-import { loadConfig } from '@impz/daemon/src/config';
-import { createImpd } from '@impz/daemon/src/create-impd';
-import { openDatabase } from '@impz/daemon/src/db/open-database';
-import { buildSystemDrivePath, buildSystemDrivesDir } from '@impz/daemon/src/storage/data-layout';
-import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
-import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
-import { createPendingSignIn } from '@impz/daemon/src/test-utils/create-pending-sign-in';
+import { claimFreePorts, createPendingSignIn, startTestImpd } from '@impz/daemon/testing';
 import * as z from 'zod';
 import { UsageError } from '../cli/errors';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
@@ -24,108 +13,26 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'cli-oauth-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
-
-    // the public MCP route a sign-in is for; nothing listens on it
-    IMP_MCP_PUBLIC_URL: 'http://127.0.0.1:7171',
-    IMP_MCP_PUBLIC_PORT: '7171',
-  });
-
-  // the system drive impd boots imps with
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
   // impd boots with a root bearer; each test reads it back for its client
   const rootToken = faker.string.alphanumeric(32);
 
-  // impd's clock, which stays where a test sets it
-  const clock = { nowMs: Date.now() };
+  // the port impd's own public listener takes, below the imps' ports
+  const publicPort = claimFreePorts(1, {
+    pick: () => 10_000 + Math.floor(Math.random() * 10_000),
+  }).take();
 
-  const impd = await createImpd(config, {
-    db,
+  // impd's clock stays where a test sets it
+  const harness = await startTestImpd(stack, {
     rootToken,
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
+    frozenClockMs: Date.now(),
+    env: {
+      // the public MCP route a sign-in is for, as tests name it
+      IMP_MCP_PUBLIC_URL: 'http://127.0.0.1:7171',
+      IMP_MCP_PUBLIC_PORT: String(publicPort),
     },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-
-    now: () => clock.nowMs,
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
-  });
+  const impd = harness.impd;
 
   // a call's body as oRPC sends it: the input under `json`
   const RpcBodySchema = z.looseObject({ json: z.unknown() });
@@ -135,7 +42,8 @@ async function setupTest() {
 
   return {
     rootToken,
-    clock,
+    now: harness.now,
+    advance: harness.advance,
     calls,
 
     // the public route's OAuth paths, with impd's 404 for any other
@@ -198,7 +106,7 @@ test('it shows the sign-in and approves nothing when the answer at a terminal is
   const made = await root.tokens.create({ name: 'approver', scope: 'manage' });
 
   // the sign-in starts at a known time
-  ctx.clock.nowMs = Date.UTC(2026, 0, 1);
+  ctx.advance(Date.UTC(2026, 0, 1) - ctx.now());
 
   const started = await createPendingSignIn({
     respond: ctx.handleRoute,

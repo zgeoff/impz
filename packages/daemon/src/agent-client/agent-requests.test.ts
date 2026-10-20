@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
 import invariant from 'tiny-invariant';
-import { startStubAgent } from '../test-utils/start-stub-agent';
+import { startStubAgent } from '../../testing/vm/start-stub-agent';
 import { openAgentConnection } from './agent-connection';
 import { ErrorDataSchema, PingSchema, SessionInfoSchema } from './agent-protocol';
 import {

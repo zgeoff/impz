@@ -3,8 +3,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildStubZfs } from '../../testing/vm/build-stub-zfs';
 import { loadConfig } from '../config';
-import { buildStubZfs } from '../test-utils/build-stub-zfs';
 import {
   checkStorageMarker,
   createStorageBackend,

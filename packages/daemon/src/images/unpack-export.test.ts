@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
-import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
+import { createStubDockerCli } from '../../testing/imps/create-stub-docker-cli';
 import { assertUnpacked, readSetfcapWarning, writeExportedTree } from './unpack-export';
 
 async function setupTest() {

@@ -12,13 +12,13 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
+import { buildMockTemplateBuildPlan } from '../../testing/vm/build-mock-template-build-plan';
+import { buildMockTemplateRestorePlan } from '../../testing/vm/build-mock-template-restore-plan';
+import { buildStubJails } from '../../testing/vm/build-stub-jails';
+import { buildStubFirecrackerArgv } from '../../testing/vm/start-stub-firecracker';
+import { startStubParkedAgent } from '../../testing/vm/start-stub-parked-agent';
 import { stopPid } from '../process/proc';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildMockTemplateBuildPlan } from '../test-utils/build-mock-template-build-plan';
-import { buildMockTemplateRestorePlan } from '../test-utils/build-mock-template-restore-plan';
-import { buildStubJails } from '../test-utils/build-stub-jails';
-import { buildStubFirecrackerArgv } from '../test-utils/start-stub-firecracker';
-import { startStubParkedAgent } from '../test-utils/start-stub-parked-agent';
 import { probeFirecrackerAlive } from './firecracker-process';
 import { TemplateRestoreError, createTemplateVm, loadTemplateVm } from './template-vm';
 
@@ -239,7 +239,7 @@ test('#loadTemplateVm releases the jail of a restore whose prepare fails, and pa
   expect(stub.notes).toStrictEqual(['prepare i1 late=true disk=false', 'release i1']);
 });
 
-test('#createTemplateVm releases the jail of a build before its files go to root, readable by all', async () => {
+test('#buildTemplateVm releases the jail of a build before its files go to root, readable by all', async () => {
   const ctx = setupTest();
 
   // a build chowns its snapshot files to its uid: the test's own, without root
@@ -303,7 +303,7 @@ test('#createTemplateVm releases the jail of a build before its files go to root
   expect(lstatSync(plan.vmstate).mode & 0o777).toBe(0o644);
 });
 
-test('#createTemplateVm binds the kernel and the system drive into a jailed build read-only', async () => {
+test('#buildTemplateVm binds the kernel and the system drive into a jailed build read-only', async () => {
   const ctx = setupTest();
   const user = { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 };
 
@@ -340,7 +340,7 @@ test('#createTemplateVm binds the kernel and the system drive into a jailed buil
   ]);
 });
 
-test('#createTemplateVm fails a build whose VM refuses its config', () => {
+test('#buildTemplateVm fails a build whose VM refuses its config', () => {
   const ctx = setupTest();
 
   const plan = buildMockTemplateBuildPlan({
@@ -362,7 +362,7 @@ test('#createTemplateVm fails a build whose VM refuses its config', () => {
   expect(createTemplateVm(plan, stub.jails)).rejects.toThrow(/^template build failed: /u);
 });
 
-test('#createTemplateVm releases the jail of a build that fails, and leaves no snapshot', () => {
+test('#buildTemplateVm releases the jail of a build that fails, and leaves no snapshot', () => {
   const ctx = setupTest();
 
   const plan = buildMockTemplateBuildPlan({

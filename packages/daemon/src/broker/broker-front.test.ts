@@ -1,12 +1,12 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { createConnection } from 'node:net';
 import type { EgressMode } from '@impz/api';
+import { startStubBrokerGuestSocket } from '../../testing/network/start-stub-broker-guest-socket';
+import { startStubBrokerReplyTarget } from '../../testing/network/start-stub-broker-reply-target';
+import { claimFreePorts } from '../../testing/platform/claim-free-ports';
 import type { NewAuditEntry } from '../db/broker-audit';
 import type { BrokerPeer } from '../db/read-broker-peer';
 import { parseSubnet } from '../net/addressing';
-import { claimFreePorts } from '../test-utils/claim-free-ports';
-import { startStubBrokerGuestSocket } from '../test-utils/start-stub-broker-guest-socket';
-import { startStubBrokerReplyTarget } from '../test-utils/start-stub-broker-reply-target';
 import { startBrokerFront } from './broker-front';
 import { TunnelRefusedError, resolveTunnelTarget } from './tunnel-target';
 
@@ -205,16 +205,16 @@ test('it closes a connection from a slot with no imp', async () => {
 
 test('it closes a connection whose slot changed imps while its head came', async () => {
   const ctx = setupTest();
-  const findPeer = mock<(slot: number) => Promise<BrokerPeer | undefined>>();
+  const readPeer = mock<(slot: number) => Promise<BrokerPeer | undefined>>();
 
-  findPeer
+  readPeer
     .mockResolvedValueOnce({ id: 'imp-1', name: 'dev', egress: { mode: 'open', allow: [] } })
     .mockResolvedValueOnce({ id: 'imp-2', name: 'other', egress: { mode: 'open', allow: [] } });
 
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
     recordAudit: () => {},
-    readPeer: findPeer,
+    readPeer,
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),

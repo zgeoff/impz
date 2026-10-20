@@ -26,6 +26,7 @@ import type { BrokerCa } from './broker-ca';
 import { startBrokerFront } from './broker-front';
 import type { BrokerFront } from './broker-front';
 import { renderCredential } from './connector-kinds';
+import type { ResolveUpstream } from './create-upstream-resolver';
 import { createForwarder } from './forward-request';
 import type { Credential, ForwardDeps, UpstreamFetch } from './forward-request';
 import { parseOAuthState } from './oauth-state';
@@ -33,7 +34,6 @@ import { createRefusalBudget } from './refusal-budget';
 import type { SecretFiles } from './secret-files';
 import { createTerminators } from './terminators';
 import type { TerminatorKey } from './terminators';
-import type { ResolveUpstream } from './test-upstreams';
 import { requireUplinkRoute, resolveTunnelTarget } from './tunnel-target';
 
 // The broker's request path (docs/guides/connectors.md): the front port

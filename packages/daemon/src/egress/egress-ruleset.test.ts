@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
+import { probeUnshare } from '../../testing/host-net/probe-unshare';
+import { runInNetns } from '../../testing/host-net/run-in-netns';
+import { buildMockFirewallSlot } from '../../testing/network/build-mock-firewall-slot';
+import { buildStubPublicNetwork } from '../../testing/network/build-stub-public-network';
 import { REFUSED_RANGES } from '../broker/tunnel-target';
 import { BLOCKED_RANGES6, DOCUMENTATION_RANGES6 } from '../net/ranges6';
-import { buildMockFirewallSlot } from '../test-utils/build-mock-firewall-slot';
-import { buildStubPublicNetwork } from '../test-utils/build-stub-public-network';
-import { probeUnshare } from '../test-utils/probe-unshare';
-import { runInNetns } from '../test-utils/run-in-netns';
 import {
   buildElementChange,
   buildNat66Removal,

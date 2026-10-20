@@ -1,13 +1,23 @@
 import type { ApiAudit } from './audit/api-audit';
 import type { Config } from './config';
-import type { ImpdDeps } from './create-impd';
 import type { ImpdStorage } from './create-impd-storage';
 import type { EgressService } from './egress/egress-service';
+import type { ImpdDeps } from './impd-deps';
 import type { Imps } from './imps/imp-service';
 import { createMoveService } from './moves/move-service';
 import type { MoveServiceDeps } from './moves/move-service';
 import { printLog } from './process/print-log';
 import type { HostIdentity } from './sleep/vm-identity';
+
+// A move's reach past impd: the other host, the deadline on each request to
+// it, the part size, the warm facts and the source's taps
+// onCommitted hears each commit after impd's own hook, never in its place
+export type ImpdMoveBoundaries = Partial<
+  Pick<
+    MoveServiceDeps,
+    'fetch' | 'startPeerDeadline' | 'partBytes' | 'readWarmHost' | 'readTapMac' | 'onCommitted'
+  >
+>;
 
 // The moves to and from other hosts
 export function createImpdMoves(
@@ -21,15 +31,7 @@ export function createImpdMoves(
     audit: ApiAudit;
     readIdentity: () => HostIdentity;
   }>,
-  hooks: Readonly<
-    Pick<MoveServiceDeps, 'readTailnetIp' | 'releaseName' | 'onCommitted'> &
-      Partial<
-        Pick<
-          MoveServiceDeps,
-          'fetch' | 'startPeerDeadline' | 'partBytes' | 'readWarmHost' | 'readTapMac'
-        >
-      >
-  >,
+  hooks: Readonly<Pick<MoveServiceDeps, 'readTailnetIp' | 'releaseName' | 'onCommitted'>>,
 ) {
   return createMoveService({
     audit: parts.audit,
@@ -44,6 +46,11 @@ export function createImpdMoves(
     egress: parts.egress,
     readIdentity: parts.readIdentity,
     ...hooks,
+    ...deps.moves,
+    onCommitted: (name) => {
+      hooks.onCommitted(name);
+      deps.moves?.onCommitted?.(name);
+    },
     now: deps.now ?? Date.now,
     log: deps.log ?? printLog,
   });

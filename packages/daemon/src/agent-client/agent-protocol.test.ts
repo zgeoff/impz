@@ -11,8 +11,8 @@ import {
 } from '@impz/api';
 import { listAgentFixtures } from '@impz/test-utils/list-agent-fixtures';
 import { readAgentFixture } from '@impz/test-utils/read-agent-fixture';
-import { collectJsonKeyPaths } from '../test-utils/collect-json-key-paths';
-import { collectMessageKeyPaths } from '../test-utils/collect-message-key-paths';
+import { collectJsonKeyPaths } from '../../testing/platform/collect-json-key-paths';
+import { collectMessageKeyPaths } from '../../testing/platform/collect-message-key-paths';
 import { AGENT_ERROR_CODES } from './agent-error-codes';
 import {
   ActivitySchema,

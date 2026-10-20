@@ -1,10 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { ApprovalCodeSchema } from '@impz/api';
-import type { ImpContract } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import {
   Client,
@@ -16,34 +12,21 @@ import type {
   OAuthDiscoveryState,
   OAuthTokens,
 } from '@modelcontextprotocol/client';
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { readMcpAnswer } from '../../../mcp/src/test-utils/read-mcp-answer';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
+import { createPendingSignIn } from '../../testing/identity/create-pending-sign-in';
+import { runOAuthSignIn } from '../../testing/identity/run-oauth-sign-in';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { claimFreePorts } from '../../testing/platform/claim-free-ports';
+import { startTestImpd } from '../../testing/start-test-impd';
+import { buildStubMcpTransport } from '../../testing/surface/build-stub-mcp-transport';
+import { buildStubExecGuest } from '../../testing/vm/build-stub-exec-guest';
+import { startStubExecAgent } from '../../testing/vm/start-stub-exec-agent';
 import { listApiCalls } from '../db/api-audit';
 import { createImage } from '../db/images';
 import { readImpByName } from '../db/imps';
-import { openDatabase } from '../db/open-database';
-import {
-  buildImagePaths,
-  buildImpPaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubExecGuest } from '../test-utils/build-stub-exec-guest';
-import { buildStubMcpTransport } from '../test-utils/build-stub-mcp-transport';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { claimFreePorts } from '../test-utils/claim-free-ports';
-import { createPendingSignIn } from '../test-utils/create-pending-sign-in';
-import { runOAuthSignIn } from '../test-utils/run-oauth-sign-in';
-import { startStubExecAgent } from '../test-utils/start-stub-exec-agent';
+import { buildImagePaths, buildImpPaths } from '../storage/data-layout';
 import { createPublicHandler, startPublicListener } from './public-listener';
 
 async function setupTest() {
@@ -51,136 +34,42 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'public-listener-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the public route on loopback, as tests name it; the stub VMM runs no
-  // jailer and builds no boot template; the resolver binds its port on
-  // every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
-    IMP_MCP_PUBLIC_URL: 'http://127.0.0.1:7171',
-    IMP_MCP_PUBLIC_PORT: '7171',
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
   // this impd's own root token, which its root client sends
   const rootToken = randomUUID();
 
-  const impd = await createImpd(config, {
-    db,
+  // the port impd's own public listener takes, below the imps' ports
+  const publicPort = claimFreePorts(1, {
+    pick: () => 10_000 + Math.floor(Math.random() * 10_000),
+  }).take();
+
+  // the public route on loopback, as tests name it; impd's clock is the
+  // wall clock: better-auth checks its sessions and tokens against it, and
+  // a sign-in bucket refills one start per 6 s, longer than a test
+  const harness = await startTestImpd(stack, {
     rootToken,
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
+    env: {
+      IMP_MCP_PUBLIC_URL: 'http://127.0.0.1:7171',
+      IMP_MCP_PUBLIC_PORT: String(publicPort),
     },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-
-    // the wall clock: better-auth checks its sessions and tokens against it,
-    // and a sign-in bucket refills one start per 6 s, longer than a test
-    now: Date.now,
-    log: () => {},
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-  });
-
-  stack.defer(() => {
-    impd.diskUsage.stop();
-  });
-
-  stack.defer(() => impd.api.publicMcp.close());
-
-  const publicMcp = config.publicMcp;
+  const publicMcp = harness.config.publicMcp;
 
   invariant(publicMcp);
 
-  const client: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${rootToken}` },
-      fetch: (request) => impd.api.app.handle(request),
-    }),
-  );
-
-  return {
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, {
     stack,
-    db,
-    dataDir,
-    impd,
     rootToken,
-    client,
     publicMcp,
 
     // the public route's handler over impd's own OAuth service and /mcp
-    handle: createPublicHandler({ config: publicMcp, oauth: impd.oauth, mcp: impd.api.publicMcp }),
-  };
+    handle: createPublicHandler({
+      config: publicMcp,
+      oauth: harness.impd.oauth,
+      mcp: harness.impd.api.publicMcp,
+    }),
+  });
 }
 
 test.each([

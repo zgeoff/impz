@@ -22,7 +22,7 @@ export interface Credential {
 }
 
 // where requests for a host go: the rule's upstream, else a test upstream
-// (test-upstreams.ts), else https://<host>; with the extra CA a test
+// (create-upstream-resolver.ts), else https://<host>; with the extra CA a test
 // upstream is signed by
 export interface Upstream {
   readonly origin: string;

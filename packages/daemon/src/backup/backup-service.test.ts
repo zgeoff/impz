@@ -12,18 +12,18 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import invariant from 'tiny-invariant';
+import { buildMockBackupConfig } from '../../testing/imp-ops/build-mock-backup-config';
+import { buildMockNewCheckpoint } from '../../testing/imp-ops/build-mock-new-checkpoint';
+import { buildStubRestic } from '../../testing/imp-ops/build-stub-restic';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { createCheckpoint, listCheckpoints } from '../db/checkpoints';
 import { readImageByName } from '../db/images';
 import { readImpByName } from '../db/imps';
 import { readSecret } from '../db/secrets';
 import { updateImpState } from '../db/update-imp-state';
 import { createTemplateService } from '../images/template-service';
-import { createImpTest } from '../imps/test-imps';
 import { createNetworkService } from '../networks/network-service';
 import { BACKUP_TREE, buildImpPaths } from '../storage/data-layout';
-import { buildMockBackupConfig } from '../test-utils/build-mock-backup-config';
-import { buildMockNewCheckpoint } from '../test-utils/build-mock-new-checkpoint';
-import { buildStubRestic } from '../test-utils/build-stub-restic';
 import { BackupManifestSchema } from './backup-manifest';
 import { buildBackupsOffError, createBackupService } from './backup-service';
 import type { BackupServiceDeps } from './backup-service';
@@ -44,7 +44,7 @@ async function setupTest() {
   });
 
   // a frozen clock, so a scheduled run is due only once the test advances it
-  const host = await createImpTest(stack, { frozenClockMs: Date.UTC(2026, 9, 2) });
+  const host = await startTestImpd(stack, { frozenClockMs: Date.UTC(2026, 9, 2) });
 
   const restic = buildStubRestic({ repoDir, now: () => new Date(host.now()) });
 
@@ -81,7 +81,8 @@ async function setupTest() {
     },
   };
 
-  return { ...host, stack, repoDir, restic, freezes, backupLogs, deps };
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(host, { stack, repoDir, restic, freezes, backupLogs, deps });
 }
 
 test('#runBackup freezes a running imp and copies stopped and sleeping imps as they are', async () => {
@@ -494,7 +495,7 @@ test('#restoreBackup restores every imp and its image on a fresh host, renaming 
   await ctx.imps.createImp({ name: 'web' });
   await backups.runBackup();
 
-  const fresh = await createImpTest(ctx.stack);
+  const fresh = await startTestImpd(ctx.stack);
 
   const freshBackups = createBackupService({
     dataDir: fresh.dataDir,
@@ -541,7 +542,7 @@ test('#restoreBackup rejects a restored image as CONFLICT when its name and its 
   await ctx.imps.createImp({ name: 'dev' });
   await backups.runBackup();
 
-  const fresh = await createImpTest(ctx.stack);
+  const fresh = await startTestImpd(ctx.stack);
 
   const freshBackups = createBackupService({
     dataDir: fresh.dataDir,
@@ -658,7 +659,7 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
 
   invariant(tools);
 
-  const fresh = await createImpTest(ctx.stack);
+  const fresh = await startTestImpd(ctx.stack);
 
   const freshBackups = createBackupService({
     dataDir: fresh.dataDir,
@@ -1599,7 +1600,7 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
   const usedBytes = recorded.usedBytes ?? -1;
   const checkpointUsedBytes = checkpoint.usedBytes ?? -1;
 
-  const fresh = await createImpTest(ctx.stack);
+  const fresh = await startTestImpd(ctx.stack);
 
   const freshRestic = buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() });
 
@@ -2080,7 +2081,7 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
 
   await backups.runBackup();
 
-  const fresh = await createImpTest(ctx.stack);
+  const fresh = await startTestImpd(ctx.stack);
 
   const freshBackups = createBackupService({
     dataDir: fresh.dataDir,
@@ -2128,7 +2129,7 @@ test('#restoreBackup holds the database copy’s size from the disk budget while
   await ctx.imps.createImp({ name: 'dev' });
 
   const run = await backups.runBackup();
-  const fresh = await createImpTest(ctx.stack);
+  const fresh = await startTestImpd(ctx.stack);
 
   const freshRestic = buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() });
 
@@ -2219,7 +2220,7 @@ test('#restoreBackup restores a token’s grantable list on a fresh host, so the
 
   await backups.runBackup();
 
-  const fresh = await createImpTest(ctx.stack);
+  const fresh = await startTestImpd(ctx.stack);
 
   const freshBackups = createBackupService({
     dataDir: fresh.dataDir,
@@ -2274,7 +2275,7 @@ test('#restoreBackup brings back no token or secret in a restore of one imp from
   await ctx.tokens.create({ name: 'agent', scope: 'exec', imps: ['dev'] });
   await backups.runBackup();
 
-  const fresh = await createImpTest(ctx.stack);
+  const fresh = await startTestImpd(ctx.stack);
 
   const freshBackups = createBackupService({
     dataDir: fresh.dataDir,

@@ -4,6 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { createStubDockerCli } from '../../testing/imps/create-stub-docker-cli';
 import { loadConfig } from '../config';
 import { createImage } from '../db/images';
 import { openDatabase } from '../db/open-database';
@@ -11,8 +13,6 @@ import { buildImagePaths } from '../storage/data-layout';
 import { createDiskBudget } from '../storage/disk-budget';
 import { createStorageGate } from '../storage/storage-gate';
 import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
 import { BUILDER_IMAGE } from './builder-imps';
 import { createImageService } from './image-service';
 

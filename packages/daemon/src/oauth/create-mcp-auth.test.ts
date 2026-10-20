@@ -1,11 +1,11 @@
 import { expect, mock, test } from 'bun:test';
 import { ApprovalCodeSchema } from '@impz/api';
 import invariant from 'tiny-invariant';
+import { createPendingSignIn } from '../../testing/identity/create-pending-sign-in';
+import { runOAuthSignIn } from '../../testing/identity/run-oauth-sign-in';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { createRevocations } from '../auth/revocations';
 import { loadTokenStore } from '../auth/token-store';
-import { createPendingSignIn } from '../test-utils/create-pending-sign-in';
-import { createTestDatabase } from '../test-utils/create-test-database';
-import { runOAuthSignIn } from '../test-utils/run-oauth-sign-in';
 import { createMcpAuth } from './create-mcp-auth';
 
 async function setupTest() {

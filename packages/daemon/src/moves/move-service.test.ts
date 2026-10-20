@@ -4,21 +4,28 @@ import { join } from 'node:path';
 import type { MoveState } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { readImageByName } from '../db/images';
-import type { ImpWrite } from '../db/imp-write-feed';
-import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../db/imps';
-import { createTestApp } from '../imps/create-test-app';
-import { TEST_TOKEN } from '../imps/test-token';
-import { buildMockMoveTicketRow } from '../test-utils/build-mock-move-ticket-row';
-import { buildStubClock } from '../test-utils/build-stub-clock';
-import { buildStubZfsStorage } from '../test-utils/build-stub-zfs-storage';
-import { makeStubDroppedCommit } from '../test-utils/make-stub-dropped-commit';
+import { buildMockMoveTicketRow } from '../../testing/imp-ops/build-mock-move-ticket-row';
+import {
+  SOURCE_PEER,
+  TARGET_URL,
+  createUbuntuImage,
+  createZfsUbuntuImage,
+  setupMoveHosts,
+} from '../../testing/imp-ops/create-move-hosts';
+import type { MoveHostsOptions } from '../../testing/imp-ops/create-move-hosts';
+import { makeStubDroppedCommit } from '../../testing/imp-ops/make-stub-dropped-commit';
 import {
   buildJsonMoveFrame,
   makeStubMoveStreamRewrite,
-} from '../test-utils/make-stub-move-stream-rewrite';
-import { makeStubOlderMoveTarget } from '../test-utils/make-stub-older-move-target';
-import { makeStubSwitchedStorageTarget } from '../test-utils/make-stub-switched-storage-target';
+} from '../../testing/imp-ops/make-stub-move-stream-rewrite';
+import { makeStubOlderMoveTarget } from '../../testing/imp-ops/make-stub-older-move-target';
+import { makeStubSwitchedStorageTarget } from '../../testing/imp-ops/make-stub-switched-storage-target';
+import { buildStubClock } from '../../testing/platform/build-stub-clock';
+import { TEST_TOKEN } from '../../testing/test-token';
+import { buildStubZfsStorage } from '../../testing/vm/build-stub-zfs-storage';
+import { readImageByName } from '../db/images';
+import type { ImpWrite } from '../db/imp-write-feed';
+import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../db/imps';
 import { FileEndSchema, MOVE_FRAMES, MoveFileSchema, readJsonPayload } from './move-frames';
 import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MOVE_PATHS, MoveHeaderSchema } from './move-header';
 import {
@@ -29,14 +36,6 @@ import {
   readTicketHeader,
 } from './move-tickets';
 import { MOVE_TRANSITIONS } from './move-transitions';
-import {
-  SOURCE_PEER,
-  TARGET_URL,
-  createUbuntuImage,
-  createZfsUbuntuImage,
-  setupMoveHosts,
-} from './test-moves';
-import type { MoveHostsOptions } from './test-moves';
 
 // two impds, the source's move routes reaching the target's in process
 function setupTest(config: Readonly<MoveHostsOptions> = {}) {
@@ -155,7 +154,7 @@ test('it answers a raw start of a marked imp with 409 and a Retry-After header',
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
   await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
 
-  const raw = await ctx.sourceApp.app.handle(
+  const raw = await ctx.source.impd.api.app.handle(
     new Request('http://impd.test/rpc/imps/start', {
       method: 'POST',
       headers: { authorization: `Bearer ${TEST_TOKEN}`, 'content-type': 'application/json' },
@@ -750,7 +749,7 @@ test('it refuses a ticket in the URL in place of the header', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.respond(
+  const response = await ctx.target.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}?ticket=${ticket.ticket}`, {
       method: 'POST',
       body: new Uint8Array([9, 0, 0, 0, 0]),
@@ -773,7 +772,7 @@ test('it refuses a ticket the target never issued', async () => {
 
   const forged = `${ticket.ticket.slice(0, ticket.ticket.indexOf('.'))}.not-the-secret`;
 
-  const response = await ctx.targetApp.moves.respond(
+  const response = await ctx.target.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(forged),
@@ -792,7 +791,7 @@ test('it refuses a stream from off the tailnet', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.respond(
+  const response = await ctx.target.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -808,7 +807,7 @@ test('it takes the first part of a stream from the tailnet', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.respond(
+  const response = await ctx.target.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -824,7 +823,7 @@ test('it refuses a second stream on a ticket', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  await ctx.targetApp.moves.respond(
+  await ctx.target.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -833,7 +832,7 @@ test('it refuses a second stream on a ticket', async () => {
     SOURCE_PEER,
   );
 
-  const second = await ctx.targetApp.moves.respond(
+  const second = await ctx.target.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -855,7 +854,7 @@ test('it refuses a part that comes before the first', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.respond(
+  const response = await ctx.target.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: { ...buildTicketHeader(ticket.ticket), [MOVE_PART_HEADER]: '1' },
@@ -874,7 +873,7 @@ test('it refuses a finish for a ticket with no stream', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.respond(
+  const response = await ctx.target.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: { ...buildTicketHeader(ticket.ticket), [MOVE_FINISH_HEADER]: '1' },
@@ -892,7 +891,7 @@ test('it refuses a commit for a ticket with no receipt', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const response = await ctx.targetApp.moves.respond(
+  const response = await ctx.target.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.commit}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -927,7 +926,7 @@ test('it refuses a stream that starts past its ticket window', async () => {
 
   ctx.target.advance(11 * 60 * 1000);
 
-  const late = await ctx.targetApp.moves.respond(
+  const late = await ctx.target.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
@@ -1313,7 +1312,7 @@ test('it undoes on restart a send cut short', async () => {
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
   await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
-  await ctx.sourceApp.moves.recover();
+  await ctx.source.moves.recover();
 
   // recovery runs in the background
   const undone = await waitFor(async () => {
@@ -1341,7 +1340,7 @@ test('it finishes on restart a send the target has verified', async () => {
 
   const failed = await ctx.runMove('dev');
 
-  await ctx.sourceApp.moves.recover();
+  await ctx.source.moves.recover();
 
   // recovery runs in the background
   await waitFor(async () => {
@@ -1388,7 +1387,7 @@ test('it removes on a target restart a stream cut short and tickets never used',
 
   ctx.target.advance(11 * 60 * 1000);
 
-  await ctx.targetApp.moves.recover();
+  await ctx.target.moves.recover();
 
   const rows = await ctx.target.db.selectFrom('move_tickets').select('id').execute();
   const gone = await readImpByName(ctx.target.db, 'half');
@@ -1574,9 +1573,9 @@ test('it takes a receive with a token that manages the whole host', async () => 
   const ctx = await setupTest();
   const made = await ctx.targetApp.client.tokens.create({ name: 'mover', scope: 'manage' });
 
-  const app = createTestApp(ctx.target, ctx.target, made.secret);
+  const client = ctx.target.buildClient(made.secret);
 
-  const ticket = await app.client.moves.receive({ name: 'dev', bytes: 1 });
+  const ticket = await client.moves.receive({ name: 'dev', bytes: 1 });
 
   expect(ticket.peerUrl).toBe(TARGET_URL);
 });
@@ -1590,9 +1589,9 @@ test('it refuses a receive with a token scoped to imps', async () => {
     imps: ['dev'],
   });
 
-  const app = createTestApp(ctx.target, ctx.target, made.secret);
+  const client = ctx.target.buildClient(made.secret);
 
-  expect(app.client.moves.receive({ name: 'dev', bytes: 1 })).rejects.toMatchObject({
+  expect(client.moves.receive({ name: 'dev', bytes: 1 })).rejects.toMatchObject({
     code: 'FORBIDDEN',
   });
 });
@@ -1606,9 +1605,9 @@ test('it refuses a reissue with a token scoped to imps', async () => {
     imps: ['dev'],
   });
 
-  const app = createTestApp(ctx.target, ctx.target, made.secret);
+  const client = ctx.target.buildClient(made.secret);
 
-  expect(app.client.moves.reissue({ name: 'dev' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  expect(client.moves.reissue({ name: 'dev' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
 });
 
 test('it refuses an exec in a marked imp', async () => {

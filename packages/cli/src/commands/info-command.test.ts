@@ -3,9 +3,12 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImage } from '@impz/daemon/src/db/images';
-import { buildImagePaths, buildImpPaths } from '@impz/daemon/src/storage/data-layout';
-import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
-import { startStubInnerAgent } from '@impz/daemon/src/test-utils/start-stub-inner-agent';
+import {
+  buildImagePaths,
+  buildImpPaths,
+  buildMockNewImage,
+  startStubInnerAgent,
+} from '@impz/daemon/testing';
 import { writeHostConfig } from '../config/host-store';
 import { readJsonOutput } from '../test-utils/read-json-output';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';

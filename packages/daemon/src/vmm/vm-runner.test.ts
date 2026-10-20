@@ -4,19 +4,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
 import { waitFor } from '@impz/test-utils/wait-for';
+import { buildStubJails } from '../../testing/vm/build-stub-jails';
+import { createStubKsmExec } from '../../testing/vm/create-stub-ksm-exec';
+import { startStubAgent } from '../../testing/vm/start-stub-agent';
+import {
+  buildStubFirecrackerArgv,
+  startStubFirecracker,
+} from '../../testing/vm/start-stub-firecracker';
 import { PingSchema } from '../agent-client/agent-protocol';
 import { sendPing } from '../agent-client/agent-requests';
 import { FRAME_TYPES, encodeJsonFrame } from '../agent-client/frame-codec';
 import { deriveSlotAddress, parseSubnet } from '../net/addressing';
 import { stopPid } from '../process/proc';
 import { buildImpPaths, buildSnapshotPaths } from '../storage/data-layout';
-import { buildStubJails } from '../test-utils/build-stub-jails';
-import { createStubKsmExec } from '../test-utils/create-stub-ksm-exec';
-import { startStubAgent } from '../test-utils/start-stub-agent';
-import {
-  buildStubFirecrackerArgv,
-  startStubFirecracker,
-} from '../test-utils/start-stub-firecracker';
 import { probeFirecrackerAlive } from './firecracker-process';
 import { buildJailerCommand } from './jail';
 import { createVmRunner } from './vm-runner';
@@ -438,7 +438,7 @@ test('#stopVm releases the jail on a hard stop, as a checkpoint restore asks', a
   expect(stub.notes).toStrictEqual(['release vm']);
 });
 
-test('#probeVmAlive reads the liveness of a VM from the given /proc', () => {
+test('#isVmAlive reads the liveness of a VM from the given /proc', () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
 

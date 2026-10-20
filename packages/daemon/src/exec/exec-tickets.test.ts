@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
+import { buildMockCaller } from '../../testing/identity/build-mock-caller';
 import { createRevocations } from '../auth/revocations';
-import { buildMockCaller } from '../test-utils/build-mock-caller';
 import { createExecTickets, isCallerLive } from './exec-tickets';
 
 test('#issue keeps the caller that asked for the ticket', () => {

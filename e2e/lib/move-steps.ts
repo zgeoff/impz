@@ -120,7 +120,7 @@ export async function listAllHosts(
   return parseHostListing(table, json, name);
 }
 
-// where broker/test-upstreams.ts reads a host's upstreams from
+// where broker/create-upstream-resolver.ts reads a host's upstreams from
 export function buildUpstreamsPath(target: DevInstance): string {
   return join(target.dataDir, 'broker-test-upstreams.json');
 }

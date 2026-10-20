@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { buildStubIpCommand } from '../test-utils/build-stub-ip-command';
+import { buildStubIpCommand } from '../../testing/host-net/build-stub-ip-command';
 import { parsePrefix64 } from './addressing6';
 import {
   checkHostRules6,

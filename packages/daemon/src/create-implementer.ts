@@ -15,7 +15,7 @@ import type { RouterDeps } from './create-router';
 import { readImpByName } from './db/imps';
 import { readSecret } from './db/secrets';
 
-// what each call gets from build-app: who made it, and a signal that aborts
+// what each call gets from create-app: who made it, and a signal that aborts
 // when what it authenticated with ends (a logout, a removed token); null
 // for nothing that can end
 export interface RpcContext {

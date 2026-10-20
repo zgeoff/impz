@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startStubFirecrackerApi } from '../test-utils/start-stub-firecracker-api';
+import { startStubFirecrackerApi } from '../../testing/vm/start-stub-firecracker-api';
 import { createFirecrackerClient } from './firecracker-client';
 
 function setupTest() {

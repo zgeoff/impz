@@ -1,26 +1,18 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
-import { loadConfig } from '@impz/daemon/src/config';
-import { createImpd } from '@impz/daemon/src/create-impd';
 import { createImage } from '@impz/daemon/src/db/images';
-import { openDatabase } from '@impz/daemon/src/db/open-database';
 import { DOCKERFILE_FRONTEND } from '@impz/daemon/src/docker-proxy/dockerfile-frontend';
 import {
   buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '@impz/daemon/src/storage/data-layout';
-import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
-import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
-import { buildStubTracedBuild } from '@impz/daemon/src/test-utils/build-stub-traced-build';
-import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
-import { createStubDockerCli } from '@impz/daemon/src/test-utils/create-stub-docker-cli';
-import { startStubDockerEngine } from '@impz/daemon/src/test-utils/start-stub-docker-engine';
+  buildMockNewImage,
+  buildStubTracedBuild,
+  createStubDockerCli,
+  startStubDockerEngine,
+  startTestImpd,
+} from '@impz/daemon/testing';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
@@ -37,128 +29,27 @@ async function setupTest() {
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
   // the engine a host build sends its context to
   const engine = startStubDockerEngine({ directoryPath: dataDir });
 
   stack.defer(() => engine.stop());
 
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one; builds
-  // run on the host's engine, the stub
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
-    IMP_BUILD_ISOLATION: 'host',
-    DOCKER_HOST: engine.dockerHost,
-  });
-
-  // the system drive impd boots with
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
   // impd boots with a root bearer; each test reads it back for the CLI
   const rootToken = faker.string.alphanumeric(32);
 
-  const impd = await createImpd(config, {
-    db,
+  // builds run on the host's engine, the stub
+  const harness = await startTestImpd(stack, {
+    dataDir,
     rootToken,
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so boot never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-
-    // Firecracker and the CPU, which the test host may not have
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-
-    // no IPv6 routes, tailnet, cgroups, taps or VMs on the test host
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-
-    // no broker bundle, tunnel or OAuth timer without a guest network
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-
-    // nft, conntrack and the uplinks belong to the host, not the test
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-
-    // the VMs' memory as /proc would show it
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
+    env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: engine.dockerHost },
   });
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
-  });
-
-  const app = impd.api.app.listen({ port: 0, hostname: '127.0.0.1' });
-
-  stack.defer(async () => {
-    await app.stop(true);
-  });
-
-  invariant(app.server?.port !== undefined);
 
   return {
     rootToken,
-    db,
+    db: harness.db,
     dataDir,
     engine,
-    url: `http://127.0.0.1:${String(app.server.port)}`,
+    url: harness.url,
   };
 }
 

@@ -67,6 +67,10 @@ interface ImageAddsDeps {
   // starts the limit on the builder image's pull; AbortSignal.timeout by
   // default, and a signal the test aborts in tests
   readonly startPullLimit?: (pullMs: number) => AbortSignal;
+
+  // the image impd's first start pulls as the default; ubuntu:24.04 by
+  // default, and null pulls none
+  readonly seedRef?: string | null;
 }
 
 // how long the builder image's pull onto the host engine may take; a hung
@@ -214,8 +218,10 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
     seedDefaultImage: async () => {
       const images = await listImages(deps.db);
 
-      if (images.every((image) => image.name === BUILDER_IMAGE)) {
-        await createImageFromRef(SEED_REF, FALLBACK_DEFAULT_IMAGE, true, {
+      const seedRef = deps.seedRef === undefined ? SEED_REF : deps.seedRef;
+
+      if (seedRef !== null && images.every((image) => image.name === BUILDER_IMAGE)) {
+        await createImageFromRef(seedRef, FALLBACK_DEFAULT_IMAGE, true, {
           signal: new AbortController().signal,
         });
       }

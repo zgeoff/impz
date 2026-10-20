@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
-import { createStubCloudflareApi } from '../../test-utils/create-stub-cloudflare-api';
+import { createStubCloudflareApi } from '../../../testing/network/create-stub-cloudflare-api';
 import { createDnsProvider } from './create-dns-provider';
 
 test('it sends a challtestsrv provider’s records to its API', async () => {

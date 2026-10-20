@@ -1,38 +1,21 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import type { ImpContract } from '@impz/api';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
-import type { ImpdDeps } from '../create-impd';
+import { buildStubHostRoutes } from '../../testing/host-net/build-stub-host-routes';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildStubNft } from '../../testing/network/build-stub-nft';
+import { startStubEchoServer } from '../../testing/network/start-stub-echo-server';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { createImage } from '../db/images';
 import { readImpByName, updateImpMove } from '../db/imps';
 import { removeMember, removeNetwork, writeNetwork } from '../db/networks';
-import { openDatabase } from '../db/open-database';
+import type { ImpdDeps } from '../impd-deps';
 import { parsePrefix64 } from '../net/addressing6';
 import { resolveIpv6Plan } from '../net/ipv6-plan';
-import {
-  buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubHostRoutes } from '../test-utils/build-stub-host-routes';
-import { buildStubNft } from '../test-utils/build-stub-nft';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { claimFreePorts } from '../test-utils/claim-free-ports';
-import { startStubEchoServer } from '../test-utils/start-stub-echo-server';
+import { buildImagePaths } from '../storage/data-layout';
 import type { EgressDeps } from './egress-service';
 
 // the stand-ins a test wires in place of the default host's
@@ -50,183 +33,48 @@ async function setupTest(options: Readonly<SetupOptions> = {}) {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'egress-service-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  // IMP_DEFAULT_IMAGE, which every create here boots from
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(db, image);
-
-  const vmm = buildStubVmm();
   const nft = options.nft ?? buildStubNft();
-  const logs: string[] = [];
-  const flushed: string[] = [];
-  const flushedPairs: string[] = [];
+
+  // the plan impd resolves for IPv6 at its start; none by default
+  const resolved = await options.resolveIpv6?.();
+
+  const ipv6 = resolved ?? undefined;
 
   // each tap as it came up, with the table nft held then
   const taps: { tap: string; table: string | null }[] = [];
 
   // a frozen clock that moves only with advance
-  const clock = { nowMs: Date.UTC(2026, 0, 1) };
+  const harness = await startTestImpd(stack, {
+    env: readImpEnv(),
+    frozenClockMs: Date.UTC(2026, 0, 1),
+    runNft: nft.runNft,
+    ...(ipv6 !== undefined && { ipv6 }),
+    boundaries: {
+      ...(options.broker !== undefined && { broker: options.broker }),
+      taps: {
+        setupTap: (address) => {
+          taps.push({ tap: address.tap, table: nft.readTable() });
 
-  const deps = {
-    db,
-
-    // the bearer the test's root client sends
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
+          return Promise.resolve();
+        },
+        removeTap: () => Promise.resolve(),
       },
+
+      // the host container has no links or default routes unless a test
+      // gives some
+      egress: { ...buildStubHostRoutes().deps, ...options.egress },
     },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: (message) => {
-      logs.push(message);
-    },
-    now: () => clock.nowMs,
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: options.resolveIpv6 ?? (() => Promise.resolve(null)),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    taps: {
-      setupTap: (address) => {
-        taps.push({ tap: address.tap, table: nft.readTable() });
-
-        return Promise.resolve();
-      },
-      removeTap: () => Promise.resolve(),
-    },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-      ...options.broker,
-    },
-
-    // the host container as setup-net.sh leaves it: its ACCEPT for imps on
-    // a network; it has no links or default routes unless a test gives some
-    egress: {
-      runNft: nft.runNft,
-      flushConnections: (guestIp) => {
-        flushed.push(guestIp);
-
-        return Promise.resolve();
-      },
-      flushPair: (first, second) => {
-        flushedPairs.push(`${first} ${second}`);
-
-        return Promise.resolve();
-      },
-      readForwardRules: () =>
-        Promise.resolve(
-          '-A FORWARD -i imp+ -o imp+ -m mark --mark 0x1000000/0x1000000 -m comment --comment imp-network -j ACCEPT\n',
-        ),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      ...buildStubHostRoutes().deps,
-      ...options.egress,
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  } satisfies ImpdDeps;
-
-  // impd on this data dir and database; each boot takes its own DNS port,
-  // as the resolver binds it on every address. Its stops run before the
-  // database closes, and before anything the test deferred earlier.
-  const startImpd = async () => {
-    // a new disk stays the size of its image: the clone copies every byte
-    const config = {
-      ...loadConfig({
-        IMP_DATA_DIR: dataDir,
-        IMP_JAILER: 'false',
-        IMP_BOOT_TEMPLATES: 'false',
-        IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
-        ...readImpEnv(),
-      }),
-      defaultDiskBytes: 0,
-    };
-
-    const impd = await createImpd(config, { ...deps, vms: vmm.startGeneration() });
-
-    stack.defer(() => impd.broker.stop());
-
-    stack.defer(() => {
-      impd.egress.stop();
-      impd.diskUsage.stop();
-    });
-
-    return { config, impd };
-  };
-
-  const started = await startImpd();
-
-  const link = new RPCLink({
-    url: 'http://impd.test/rpc',
-    headers: { authorization: 'Bearer root-token' },
-    fetch: (request) => started.impd.api.app.handle(request),
   });
 
-  const client: ContractRouterClient<ImpContract> = createORPCClient(link);
+  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
-  return {
-    stack,
-    db,
-    nft,
-    logs,
-    flushed,
-    flushedPairs,
-    taps,
-    config: started.config,
-    impd: started.impd,
-    client,
+  // IMP_DEFAULT_IMAGE, which every create here boots from
+  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
-    // a second impd on the same data dir and database, as after a restart
-    restartImpd: async () => {
-      const restarted = await startImpd();
+  await createImage(harness.db, image);
 
-      return restarted.impd;
-    },
-    advance: (durationMs: number) => {
-      clock.nowMs += durationMs;
-    },
-  };
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, { stack, nft, tapTables: taps });
 }
 
 test('it writes a new imp into the table, with its policy, before its tap comes up', async () => {
@@ -238,7 +86,7 @@ test('it writes a new imp into the table, with its policy, before its tap comes 
   });
 
   // the DNS port is a free one, picked per boot
-  const tables = ctx.taps.map((tap) =>
+  const tables = ctx.tapTables.map((tap) =>
     tap.table?.replaceAll(`:${String(ctx.config.egressDnsPort)}`, ':<dns port>'),
   );
 

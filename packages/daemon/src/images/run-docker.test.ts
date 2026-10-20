@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
+import { createStubDockerCli } from '../../testing/imps/create-stub-docker-cli';
 import { readRefusalError, runDocker, runDockerChecked } from './run-docker';
 
 async function setupTest() {

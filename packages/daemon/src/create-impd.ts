@@ -1,365 +1,228 @@
+import { release } from 'node:os';
 import { join } from 'node:path';
-import type { TailnetPeer } from './auth/tailnet-identity';
+import packageJson from '../package.json' with { type: 'json' };
 import { createBackupService } from './backup/backup-service';
-import { createBroker } from './broker/broker-service';
-import type { Broker, BrokerDeps } from './broker/broker-service';
 import { createSecretFiles } from './broker/secret-files';
-import type { SecretFiles } from './broker/secret-files';
-import type { DiskFreezer } from './checkpoints/consistent-disk';
 import type { Config } from './config';
-import type { AppDeps } from './create-app';
 import { createImpdApp } from './create-impd-app';
+import { createImpdFirewall } from './create-impd-firewall';
+import { createImpdImps } from './create-impd-imps';
 import { createImpdMoves } from './create-impd-moves';
 import { createImpdServices } from './create-impd-services';
 import { createImpdStorage } from './create-impd-storage';
 import type { ImpdStorage } from './create-impd-storage';
 import { createTailnetAccess } from './create-tailnet-access';
-import { countImpsByState } from './db/imps';
 import { isImpSetWrite } from './db/is-imp-set-write';
-import type { ImpDatabase } from './db/open-database';
-import { runNft } from './egress/egress-firewall';
-import { createEgressService } from './egress/egress-service';
-import type { EgressDeps, EgressService } from './egress/egress-service';
+import { openDatabase } from './db/open-database';
+import { getErrorMessage } from './get-error-message';
 import { createDnsToken } from './https/dns/dns-token';
 import { createPublicRecordsLink } from './https/public-records-link';
-import type { Repeat } from './images/build-event-stream';
+import { createIdleLoop } from './idle/idle-loop';
 import { createBuilders } from './images/builder-imps';
-import type { Builders } from './images/builder-imps';
 import { HOST_ADD_WARNING } from './images/create-image-adds';
 import { HOST_BUILD_WARNING } from './images/create-image-builds';
-import type { ImageServiceDeps } from './images/image-service';
-import type { ImpServiceDeps, Imps } from './imps/imp-service';
+import { readSetfcapWarning } from './images/unpack-export';
+import type { ImpdBoundaries, ImpdDeps } from './impd-deps';
+import type { ImpdStartupStep, RunImpdStartupStep } from './impd-startup-steps';
+import { createKernelOopsWatch } from './imps/kernel-oops-watch';
 import { removeUnusedDrives } from './imps/remove-unused-drives';
 import { loadImpdAccess } from './load-impd-access';
-import {
-  checkHostRules6,
-  readIpv6DefaultRoute,
-  readOrCreateUlaPrefix,
-  resolveIpv6Plan,
-} from './net/ipv6-plan';
-import type { Ipv6Plan } from './net/ipv6-plan';
 import { readTailscaleStatus } from './net/tailscale-status';
-import type { TailscaleStatus } from './net/tailscale-status';
-import type { TapDevices } from './net/tap-devices';
+import { getImpdLogger } from './process/get-impd-logger';
 import { printLog } from './process/print-log';
-import { runCommand } from './process/run-command';
-import type { CommandRunner } from './process/run-command';
 import { createForwardedPeers } from './proxy/forwarded-peers';
 import type { WakeProxy } from './proxy/wake-proxy';
-import { readHostIdentity } from './sleep/vm-identity';
-import type { HostIdentity } from './sleep/vm-identity';
 import { createAuthorizedKeys } from './ssh/authorized-keys';
 import { setupSshDir } from './ssh/host-key';
-import { startGovernedImps } from './start-governed-imps';
+import { startImpdListeners } from './start-impd-listeners';
+import { startImpdTickers } from './start-impd-tickers';
+import { stopImpd } from './stop-impd';
+import type { ImpdStopOptions, ImpdStopParts, ImpdStopStep } from './stop-impd';
+import { createStorageBackend } from './storage/create-storage-backend';
+import { createDataDirs } from './storage/data-layout';
 import { CHANGES_USAGE } from './storage/disk-usage-cache';
 import { readLiveStorage } from './storage/read-live-storage';
-import type { SystemFiles } from './storage/setup-system-files';
-import type { StorageBackend } from './storage/storage-backend';
+import { setupSystemFiles } from './storage/setup-system-files';
 import type { TailnetNames } from './tailnet-names/tailnet-names';
 import { wireTailnetNames } from './tailnet-names/wire-tailnet-names';
-import { startImpTelemetry } from './telemetry/imp-telemetry';
-import { createCpuCgroups } from './vmm/cpu-cgroups';
-import type { CpuCgroups } from './vmm/cpu-cgroups';
-import { createJails } from './vmm/jail';
-import { createVmRunner } from './vmm/vm-runner';
-import type { VmRunner } from './vmm/vm-runner';
+import { startOtlpExport } from './telemetry/start-otlp-export';
+import { loadOrCreateToken } from './token';
+import { checkKsmHost, readKsmHostStats } from './vmm/ksm';
 
-// The broker's reach past impd: the guest's CA install, the token endpoint,
-// the upstreams and the tunnels' DNS and dials
-type BrokerBoundaries = Pick<
-  BrokerDeps,
-  | 'installBundle'
-  | 'fetch'
-  | 'oauthFetch'
-  | 'now'
-  | 'runOAuthTimer'
-  | 'resolveTunnelTarget'
-  | 'dialTunnel'
-  | 'afterRuleRead'
-  | 'beforeGrantWrite'
->;
+// impd as a host runs it: each of IMPD_STARTUP_STEPS in order, recorded in
+// `startup`. A step that throws first stops what the steps before it
+// acquired. main.ts loads the config and wires the signals to `stop`.
+export async function createImpd(config: Config, boundaries: Readonly<ImpdBoundaries> = {}) {
+  // what the stop takes out of service, filled as each step acquires it
+  const plan: ImpdStopParts = { log: boundaries.log ?? printLog };
 
-// The firewall's reach past impd: nft, conntrack, iptables, the routes and
-// the upstream DNS
-type EgressBoundaries = Pick<
-  EgressDeps,
-  | 'runNft'
-  | 'readConnected6'
-  | 'readConnected4'
-  | 'readUplinks'
-  | 'flushConnections'
-  | 'flushPair'
-  | 'readForwardRules'
-  | 'forward'
-  | 'resolveExact'
-  | 'now'
-  | 'repeat'
->;
+  try {
+    return await startImpdParts(config, boundaries, plan);
+  } catch (error) {
+    // as a restart in place stops: the VMs keep running
+    await stopImpd(plan, { sleepImps: false });
 
-// The imp service's reach past impd: /proc, KSM, the host's filesystem
-// grow, the host's cores, the memory limit and the agent's session taps
-type ImpBoundaries = Pick<
-  ImpServiceDeps,
-  | 'readRamMib'
-  | 'readRssMib'
-  | 'readUnsharedRamMib'
-  | 'checkGuestMerge'
-  | 'readKsmProfitMib'
-  | 'growFilesystem'
-  | 'hostCpus'
-  | 'memoryLimit'
-  | 'now'
-  | 'sleep'
-  | 'sleepTiming'
-  | 'openTap'
-  | 'kernelOops'
-  | 'readThreadIds'
->;
-
-// What impd reaches outside its own code: every field but the four
-// required ones defaults to the host's real one, which main.ts uses. A test
-// passes stand-ins only for what it cannot host.
-export interface ImpdDeps {
-  readonly db: ImpDatabase;
-
-  // the token in <dataDir>/token
-  readonly rootToken: string;
-
-  // the backend over the data dir, not started (createStorageBackend)
-  readonly storage: StorageBackend;
-
-  // the kernel and system drive in the data dir (setupSystemFiles)
-  readonly systemFiles: SystemFiles;
-
-  readonly log?: (message: string) => void;
-
-  // the API's unexpected RPC failures; stderr by default
-  readonly logRpcFailure?: AppDeps['logRpcFailure'];
-
-  // leases', the RAM governor's, egress's, the broker's injected and the
-  // API services' clock; Date.now by default. project-testing names what
-  // still reads Date.now itself
-  readonly now?: () => number;
-
-  // the host's free space as the disk budget sees it; the storage's own
-  readonly readDiskSpace?: StorageBackend['readUsage'];
-
-  // the host's IPv6 routes and rules, read into a plan for imps
-  readonly resolveIpv6?: () => Promise<Ipv6Plan | null>;
-
-  // tailscaled's status, and `tailscale whois`
-  readonly readTailscale?: () => Promise<TailscaleStatus>;
-  readonly whois?: (address: string) => Promise<TailnetPeer | null>;
-
-  // the cgroup tree; /sys/fs/cgroup by default
-  readonly cgroups?: CpuCgroups;
-
-  // what this host boots imps with: Firecracker's versions, the CPU, the
-  // kernel and the system drive
-  readonly readIdentity?: (
-    systemFiles: Readonly<SystemFiles>,
-    ipv6Prefix: string | null,
-  ) => HostIdentity;
-
-  // Firecracker and the jailer; `runCommand` runs the jailer's mount and
-  // chown when `vms` is left out
-  readonly vms?: VmRunner;
-  readonly runCommand?: CommandRunner;
-
-  // `ip` for each imp's tap
-  readonly taps?: TapDevices;
-  readonly broker?: BrokerBoundaries;
-  readonly egress?: EgressBoundaries;
-  readonly imps?: ImpBoundaries;
-
-  // the docker engine a host build talks to
-  readonly images?: Pick<ImageServiceDeps, 'dockerEnv' | 'builderImagePullMs'>;
-
-  // fsfreeze inside the guest, around a checkpoint or a template's disk
-  readonly freezer?: DiskFreezer;
-
-  // the gap between the progress events of a streamed image call;
-  // BUILD_KEEPALIVE_MS by default
-  readonly keepaliveMs?: number;
-
-  // the timer of those progress events; runOnInterval by default
-  readonly keepaliveRepeat?: Repeat;
+    throw error;
+  }
 }
 
-// The credential broker, with the secret files it shares with the GC
-export function createImpdBroker(
-  config: Config,
-  deps: Readonly<ImpdDeps>,
-  parts: Readonly<{ ipv6: Ipv6Plan | null; secretFiles: SecretFiles }>,
-): Promise<Broker> {
-  return createBroker({
-    config,
-    db: deps.db,
-    log: deps.log ?? printLog,
-    ipv6: parts.ipv6,
-    secretFiles: parts.secretFiles,
-    ...(deps.now !== undefined && { now: deps.now }),
-    ...deps.broker,
-  });
-}
+export type Impd = Awaited<ReturnType<typeof createImpd>>;
 
-// The firewall and its resolver, not started
-export function createImpdEgress(
+// every startup step; each sets its part on `plan` once it has it
+async function startImpdParts(
   config: Config,
-  deps: Readonly<ImpdDeps>,
-  parts: Readonly<{
-    ipv6: Ipv6Plan | null;
-    broker: Pick<Broker, 'isGranted' | 'closeTunnels'>;
-  }>,
-): EgressService {
-  return createEgressService({
-    config,
-    db: deps.db,
-    ipv6: parts.ipv6,
-    log: deps.log ?? printLog,
-    isGranted: parts.broker.isGranted,
-    closeTunnels: parts.broker.closeTunnels,
-    ...(deps.now !== undefined && { now: deps.now }),
-    ...deps.egress,
-  });
-}
+  boundaries: Readonly<ImpdBoundaries>,
+  plan: ImpdStopParts,
+) {
+  const log = boundaries.log ?? printLog;
+  const now = boundaries.now ?? Date.now;
+  const startup: ImpdStartupStep[] = [];
 
-// The image builders, which run as imps
-export function startImpdBuilders(
-  config: Config,
-  deps: Readonly<ImpdDeps>,
-  storage: Readonly<ImpdStorage>,
-  imps: Readonly<Imps>,
-): Builders {
-  const builders = createBuilders({
-    config,
-    db: deps.db,
-    imps,
-    ensureImage: storage.images.ensureBuilderImage,
-    log: deps.log ?? printLog,
+  const runStep: RunImpdStartupStep = (step, task) => {
+    startup.push(step);
+
+    return task();
+  };
+
+  for (const warning of config.warnings) {
+    log(`impd: warning: ${warning}`);
+  }
+
+  const readKsmStats = boundaries.readKsmHostStats ?? readKsmHostStats;
+
+  runStep('ksm', () => {
+    if (config.ksm === null) {
+      return;
+    }
+
+    const ksm = readKsmStats();
+    const refusal = checkKsmHost(boundaries.hostKernelRelease ?? release(), ksm);
+
+    if (refusal !== null) {
+      throw new Error(refusal);
+    }
+
+    if (ksm?.running === false) {
+      log('impd: IMP_KSM is on, but ksmd does not run (/sys/kernel/mm/ksm/run is 0)');
+    }
   });
 
-  storage.setBuilders(builders);
+  // before any instrument is made: a meter taken earlier stays a no-op
+  const stopTelemetry = await runStep('telemetry', () =>
+    startOtlpExport(process.env, packageJson.version),
+  );
 
-  return builders;
-}
+  plan.stopTelemetry = stopTelemetry;
 
-// Every impd service, wired and started as a host runs them: storage
-// mounted, the firewall up, the VMs re-adopted and leftovers removed.
-// main.ts opens the ports, starts the tickers and owns the stop.
-export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
-  const db = deps.db;
-  const storage = deps.storage;
-  const systemFiles = deps.systemFiles;
-  const log = deps.log ?? printLog;
-  const now = deps.now ?? Date.now;
+  const systemFiles = await runStep('data-dir', async () => {
+    createDataDirs(config.dataDir);
+
+    const files = await (boundaries.systemFiles ?? setupSystemFiles(config));
+
+    // a start-time hint; an image with a file capability still fails its build
+    const setfcapWarning = readSetfcapWarning(boundaries.readProcStatus?.());
+
+    if (setfcapWarning !== null) {
+      log(setfcapWarning);
+    }
+
+    return files;
+  });
+
+  const db = await runStep(
+    'database',
+    () => boundaries.db ?? openDatabase(join(config.dataDir, 'db', 'imp.sqlite')),
+  );
+
+  plan.db = boundaries.db === undefined ? db : null;
+
+  // one watch of the taint flag: the imps' hold and storage's reclaim log
+  const kernelOops = boundaries.imps?.kernelOops ?? createKernelOopsWatch();
+
+  const storage =
+    boundaries.storage ??
+    createStorageBackend(config, { zfs: { isKernelOopsed: kernelOops.isOopsed } });
+
+  const deps: ImpdDeps = {
+    ...boundaries,
+    db,
+    rootToken: boundaries.rootToken ?? loadOrCreateToken(config.dataDir),
+    storage,
+    systemFiles,
+    imps: { ...boundaries.imps, kernelOops },
+  };
 
   // before any VM is re-adopted or woken: on ZFS the disks are mounted here
-  const live = await readLiveStorage(db);
+  await runStep('storage', async () => {
+    const live = await readLiveStorage(db);
 
-  await storage.start(live);
+    await storage.start(live);
+  });
+
+  plan.storage = storage;
 
   const stored = createImpdStorage(config, deps);
   const diskUsage = stored.diskUsage;
+
+  plan.diskUsage = diskUsage;
 
   if (config.build.isolation === 'host') {
     log(HOST_BUILD_WARNING);
     log(HOST_ADD_WARNING);
   }
 
-  const ipv6 = await (
-    deps.resolveIpv6 ??
-    (() =>
-      resolveIpv6Plan(config.ipv6, {
-        readDefaultRoute: readIpv6DefaultRoute,
-        readUlaPrefix: () => readOrCreateUlaPrefix(join(config.dataDir, 'net', 'ipv6-ula')),
-        checkHostRules: () => checkHostRules6(),
-        runNft: deps.egress?.runNft ?? runNft,
-        log,
-      }))
-  )();
-
   // the broker's and the GC's: the GC lists and removes what the broker kept aside
   const secretFiles = createSecretFiles(config.dataDir);
 
-  const broker = await createImpdBroker(config, deps, { ipv6, secretFiles });
+  const firewall = await runStep('firewall', () =>
+    createImpdFirewall(config, deps, secretFiles, plan),
+  );
 
-  // the firewall and its resolver, before any VM is adopted, booted or woken
-  const egress = createImpdEgress(config, deps, { ipv6, broker });
-
-  await egress.start();
-
+  const broker = firewall.broker;
+  const egress = firewall.egress;
   const proxyHolder: { proxy: WakeProxy | null } = { proxy: null };
   const publicRecords = createPublicRecordsLink();
   const dnsTokenSource = config.https?.dns.token ?? null;
   const dnsToken = dnsTokenSource === null ? null : createDnsToken(dnsTokenSource, now);
   const namesHolder: { names: TailnetNames | null } = { names: null };
   const readTailscale = deps.readTailscale ?? (() => readTailscaleStatus(config.tailscaleEnabled));
-  const cgroups = deps.cgroups ?? createCpuCgroups({ root: '/sys/fs/cgroup', log });
 
-  if (!cgroups.isEnforced) {
-    const effect =
-      config.jailerBin === null
-        ? 'CPU limits are kept, not applied'
-        : 'no jailed VM can start (IMP_JAILER=false runs them unjailed, with no limits)';
-
-    log(`impd: no cpu controller under /sys/fs/cgroup/imps; ${effect}`);
-  }
-
-  // spawns Firecracker once per version flag; system.info reuses it
-  const identity = (
-    deps.readIdentity ?? ((files, prefix) => readHostIdentity(config.firecrackerBin, files, prefix))
-  )(systemFiles, ipv6?.prefix.text ?? null);
-
-  // even with the jailer off, impd cleans up after jailed VMs it adopted
-  const vms =
-    deps.vms ??
-    createVmRunner(
-      createJails({
-        jailerBin: config.jailerBin ?? 'jailer',
-        firecrackerBin: Bun.which(config.firecrackerBin) ?? config.firecrackerBin,
-        chrootBase: config.jailDir,
-        run: deps.runCommand ?? runCommand,
-        log,
-        killCgroup: cgroups.kill,
-      }),
-      config.ksm?.execBin ?? null,
-    );
-
-  const governed = startGovernedImps(
-    config,
-    deps,
-    {
+  const governed = runStep('imps', () =>
+    createImpdImps(config, deps, {
       storage: stored,
       broker,
       egress,
-      ipv6,
-      cgroups,
+      ipv6: firewall.ipv6,
       readServiceUrl: (name) => namesHolder.names?.readUrl(name) ?? null,
       readTailscale,
-    },
-    identity,
-    vms,
+    }),
   );
 
   const imps = governed.imps;
   const governor = governed.governor;
+  const identity = governed.identity;
 
-  startImpTelemetry({
-    bus: imps.events,
-    subscribeResources: imps.subscribeResources,
-    readDiskUsedBytes: diskUsage.readExclusiveTotal,
-    readStateCounts: () => countImpsByState(db),
-    readRebootReason: imps.readRebootReason,
-    readRam: async () => {
-      const usage = await governor.readUsage();
+  plan.imps = imps;
 
-      return { usedMib: usage.usedMib, budgetMib: config.ramBudgetMib };
-    },
-  });
+  // the syncs a write started, which the stop waits for
+  const writeWork = new Set<Promise<unknown>>();
+
+  const runWriteWork = async (work: Promise<unknown> | undefined): Promise<void> => {
+    if (work === undefined) {
+      return;
+    }
+
+    writeWork.add(work);
+
+    try {
+      await work;
+    } finally {
+      writeWork.delete(work);
+    }
+  };
 
   // an imp that comes or goes opens or closes its proxy port and its grants
-  db.writes.subscribe((write) => {
+  const unsubscribeWrites = db.writes.subscribe((write) => {
     // storage comes or goes with an imp or a checkpoint, and changes when
     // its disk grows or a stop or sleep writes it out
     if (write.kind !== 'changed' || CHANGES_USAGE.has(write.reason)) {
@@ -367,36 +230,59 @@ export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
     }
 
     if (isImpSetWrite(write)) {
-      void proxyHolder.proxy?.syncListeners();
-      void broker.applyGrants();
-      void namesHolder.names?.runSync();
+      void runWriteWork(proxyHolder.proxy?.syncListeners());
+      void runWriteWork(broker.applyGrants());
+      void runWriteWork(namesHolder.names?.runSync());
     }
   });
 
-  await imps.reconcileImps();
+  const dbWrites = {
+    stop: async (): Promise<void> => {
+      unsubscribeWrites();
 
-  const builders = startImpdBuilders(config, deps, stored, imps);
+      await Promise.allSettled(writeWork);
+    },
+  };
+
+  plan.dbWrites = dbWrites;
+
+  await runStep('reconcile', () => imps.reconcileImps());
+
+  // the image builders, which run as imps
+  const builders = createBuilders({
+    config,
+    db,
+    imps,
+    ensureImage: stored.images.ensureBuilderImage,
+    log,
+  });
+
+  stored.setBuilders(builders);
 
   // a build that a stop cut short left its builder
-  await builders.removeLeftovers();
+  await runStep('builders', () => builders.removeLeftovers());
 
   // templates this host no longer boots go first, so their drives can too
-  for (const key of imps.bootTemplates?.removeStale() ?? []) {
-    log(`impd: removed boot template ${key.slice(0, 12)}: this host boots something else`);
-  }
+  runStep('boot-templates', () => {
+    for (const key of imps.bootTemplates?.removeStale() ?? []) {
+      log(`impd: removed boot template ${key.slice(0, 12)}: this host boots something else`);
+    }
+  });
 
   // before anything can boot or sleep an imp, so the set of drives in use holds
-  const removed = await removeUnusedDrives(
-    db,
-    config.dataDir,
-    storage.resolveImpPaths,
-    systemFiles.systemDrivePath,
-    imps.bootTemplates?.listDrivePaths() ?? [],
-  );
+  await runStep('system-drives', async () => {
+    const removed = await removeUnusedDrives(
+      db,
+      config.dataDir,
+      storage.resolveImpPaths,
+      systemFiles.systemDrivePath,
+      imps.bootTemplates?.listDrivePaths() ?? [],
+    );
 
-  for (const name of removed) {
-    log(`impd: removed system drive ${name}: no imp uses it`);
-  }
+    for (const name of removed) {
+      log(`impd: removed system drive ${name}: no imp uses it`);
+    }
+  });
 
   const services = createImpdServices(config, deps, {
     storage: stored,
@@ -414,7 +300,9 @@ export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
     log,
   );
 
-  const access = await loadImpdAccess(config, deps, authorizedKeys.probeListed);
+  const access = await runStep('access', () =>
+    loadImpdAccess(config, deps, authorizedKeys.probeListed),
+  );
 
   const backups =
     config.backup === null
@@ -478,13 +366,13 @@ export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
     },
   );
 
-  await moves.recover();
+  await runStep('moves', () => moves.recover());
 
   const api = createImpdApp(config, deps, {
     storage: stored,
     access,
     services,
-    imps,
+    imps: { ...imps, ...deps.agent },
     governor,
     broker,
     egress,
@@ -498,28 +386,132 @@ export async function createImpd(config: Config, deps: Readonly<ImpdDeps>) {
     readTailscale,
     readTailnetNames: tailnetNames === null ? null : tailnetNames.readStatus,
     isReady: () => state.ready,
+    readKsmHostStats: readKsmStats,
     ...(deps.keepaliveMs !== undefined && { keepaliveMs: deps.keepaliveMs }),
+  });
+
+  plan.closeExecSessions = api.closeExecSessions;
+
+  const listeners = await startImpdListeners(
+    config,
+    deps,
+    {
+      api,
+      access,
+      imps,
+      peers,
+      broker,
+      audit: services.audit,
+      authorizedKeys,
+      publicRecords,
+      dnsToken,
+      readTailscale,
+      tailnetNames,
+      proxyHolder,
+    },
+    { runStep, plan },
+  );
+
+  const idle = createIdleLoop({ config, db, imps, log });
+
+  const tickers = runStep('tickers', () =>
+    startImpdTickers(
+      config,
+      {
+        idle,
+        oauth: access.oauth,
+        governor,
+        imps,
+        memory: governed.memory,
+        proxy: listeners.proxy,
+        tailnetNames,
+        broker,
+        gc: services.gc,
+        diskUsage,
+        backups,
+      },
+      { log, ...(deps.tickerTimer !== undefined && { timer: deps.tickerTimer }) },
+    ),
+  );
+
+  plan.tickers = tickers;
+
+  // a caller's log takes a failed seed too; the image logger by default
+  const printSeedFailure = (error: unknown): void => {
+    if (boundaries.log === undefined) {
+      getImpdLogger('image').error('could not add the default image: {error}', { error });
+    } else {
+      log(`impd: could not add the default image: ${getErrorMessage(error)}`);
+    }
+  };
+
+  // ready either way: a failed seed leaves `impz image add` to the user
+  const ready = runStep('default-image', async () => {
+    await setupDefaultImage(config, stored.images, { log, printSeedFailure });
+
+    state.ready = true;
   });
 
   return {
     ...stored,
     ...access,
     ...services,
+    ...listeners,
+    db,
+    rootToken: deps.rootToken,
+    storage,
+    systemFiles,
     governed,
     imps,
     governor,
     broker,
     egress,
+    builders,
     backups,
     authorizedKeys,
     peers,
     tailnetNames,
     moves,
     api,
-    proxyHolder,
+    idle,
     publicRecords,
     dnsToken,
     readTailscale,
+    identity,
     state,
+    startup,
+
+    // the default image's seed, which impd does not wait for
+    ready,
+
+    // takes impd out of service; the process exits after it. A database
+    // the caller passed stays open.
+    stop: (options: Readonly<ImpdStopOptions>): Promise<readonly ImpdStopStep[]> =>
+      stopImpd(plan, options),
   };
+}
+
+// The default image on a first start, and a warning when the configured
+// one is missing; a failure is logged, never thrown
+async function setupDefaultImage(
+  config: Config,
+  images: Readonly<ImpdStorage['images']>,
+  output: Readonly<{
+    log: (message: string) => void;
+    printSeedFailure: (error: unknown) => void;
+  }>,
+): Promise<void> {
+  try {
+    await images.seedDefaultImage();
+
+    const existing = await images.listImages();
+
+    if (!existing.some((image) => image.name === config.defaultImage)) {
+      output.log(
+        `impd: warning: no image named ${config.defaultImage} (IMP_DEFAULT_IMAGE); impz new uses ubuntu until \`impz image add <ref> --name ${config.defaultImage}\` adds it`,
+      );
+    }
+  } catch (error) {
+    output.printSeedFailure(error);
+  }
 }

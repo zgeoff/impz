@@ -1,9 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ImpContract } from '@impz/api';
+import { server } from '@impz/test-utils/mock-server';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -12,24 +13,18 @@ import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
 import packageJson from '../package.json' with { type: 'json' };
-import { buildApiListenOptions } from './api-listen-options';
-import { loadConfig } from './config';
-import { createImpd } from './create-impd';
+import { buildMockNewImage } from '../testing/imps/build-mock-new-image';
+import { createStubDockerCli } from '../testing/imps/create-stub-docker-cli';
+import { createStubCloudflareApi } from '../testing/network/create-stub-cloudflare-api';
+import { startTestImpd } from '../testing/start-test-impd';
+import { tryExecSocket, tryTunnelSocket } from '../testing/surface/try-impd-sockets';
+import { buildStubCpuCgroups } from '../testing/vm/build-stub-cpu-cgroups';
+import { buildStubZfsStorage } from '../testing/vm/build-stub-zfs-storage';
 import { listApiCalls } from './db/api-audit';
 import { createImage } from './db/images';
 import { readImpByName } from './db/imps';
-import { openDatabase } from './db/open-database';
-import { createKernelOopsWatch } from './imps/kernel-oops-watch';
-import { buildImagePaths, buildSystemDrivePath, buildSystemDrivesDir } from './storage/data-layout';
+import { buildImagePaths } from './storage/data-layout';
 import type { StorageBackend } from './storage/storage-backend';
-import { createXfsBackend } from './storage/xfs-backend';
-import { buildMockNewImage } from './test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from './test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from './test-utils/build-stub-vmm';
-import { buildStubZfsStorage } from './test-utils/build-stub-zfs-storage';
-import { claimFreePorts } from './test-utils/claim-free-ports';
-import { createStubDockerCli } from './test-utils/create-stub-docker-cli';
-import { tryExecSocket, tryTunnelSocket } from './test-utils/try-impd-sockets';
 import type { CpuCgroups } from './vmm/cpu-cgroups';
 
 interface SetupOptions {
@@ -48,10 +43,6 @@ async function setupTest(options: SetupOptions) {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'build-app-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
   // the host's taint mask, as /proc/sys/kernel/tainted; a test writes it
   const taintDir = await mkdtemp(join(tmpdir(), 'build-app-taint-'));
 
@@ -59,154 +50,23 @@ async function setupTest(options: SetupOptions) {
 
   const taintPath = join(taintDir, 'tainted');
 
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  const config = {
-    // the stub VMM runs no jailer and builds no boot template; the resolver
-    // binds its port on every address, so each impd takes a free one
-    ...loadConfig({
-      IMP_DATA_DIR: dataDir,
-      IMP_JAILER: 'false',
-      IMP_BOOT_TEMPLATES: 'false',
-      IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
-      ...readImpEnv(),
-    }),
-
-    // a new disk stays the size of its image, since the clone copies every
-    // byte of a template's disk
-    defaultDiskBytes: 0,
-  };
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
-  // the clock of holds, budgets and tickets; a test moves it
-  const clock = { nowMs: Date.now() };
-
-  // each tap impd set up, by name
-  const taps: string[] = [];
-
-  const impd = await createImpd(config, {
-    db,
-
-    // the bearer the root client sends
+  // the clock of holds, budgets and tickets stands still; a test moves it
+  const harness = await startTestImpd(stack, {
+    env: readImpEnv(),
     rootToken: 'root-token',
-    storage:
-      options.createStorage?.(dataDir) ??
-      createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-    now: () => clock.nowMs,
-
-    // Firecracker, the kernel and the CPU as this host reports them
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
+    frozenClockMs: Date.now(),
     cgroups: options.cgroups,
-    vms: vmm.startGeneration(),
-    taps: {
-      setupTap: (address) => {
-        taps.push(address.tap);
-
-        return Promise.resolve();
-      },
-      removeTap: () => Promise.resolve(),
+    ...(options.createStorage !== undefined && { createStorage: options.createStorage }),
+    kernelFiles: {
+      taintPath,
+      bootIdPath: join(taintDir, 'boot_id'),
+      kmsgPath: join(taintDir, 'kmsg'),
+      pidNamespacePath: join(taintDir, 'pid'),
     },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-      kernelOops: createKernelOopsWatch(taintPath, Date.now, join(taintDir, 'boot_id')),
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
-  });
-
-  // as main.ts listens, on a free loopback port: exec and tunnels are sockets
-  const server = impd.api.app.listen({
-    ...buildApiListenOptions(config),
-    port: 0,
-    hostname: '127.0.0.1',
-  });
-
-  stack.defer(async () => {
-    await server.stop(true);
-  });
-
-  // the root bearer's client, against impd's own app
-  const client: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: 'Bearer root-token' },
-      fetch: (request) => impd.api.app.handle(request),
-    }),
-  );
-
-  return {
-    db,
-    dataDir,
-    impd,
-    vmm,
-    clock,
-    taps,
-    client,
-    taintPath,
-    port: String(server.server?.port),
-  };
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, { taintPath, port: new URL(harness.url).port });
 }
 
 test('it serves system.info from config and the database', async () => {
@@ -230,7 +90,7 @@ test('it serves system.info from config and the database', async () => {
     bootStatus: { coldBoots: 0, outdated: { firecracker: 0, kernel: 0, agent: 0 } },
     firecrackerVersion: 'v1.17.0',
     guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-    systemDrive: { sha256: 'd1'.repeat(32) },
+    systemDrive: { sha256: 'b'.repeat(64) },
     guest: { scratchDir: '/tmp', isClearedOnBoot: false },
     tailscale: { enabled: false, state: null, hostname: null, ip: null, names: null },
 
@@ -345,14 +205,6 @@ test('it answers a conflict that is not a move without Retry-After', async () =>
   expect(response.headers.get('retry-after')).toBeNull();
 });
 
-test('it answers /health without a token, not ready before the default image is seeded', async () => {
-  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
-  const response = await ctx.impd.api.app.handle(new Request('http://impd.test/health'));
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({ status: 'ok', ready: false, warnings: [] });
-});
-
 test('it answers /health with the reboot a kernel oops needs', async () => {
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
 
@@ -363,7 +215,7 @@ test('it answers /health with the reboot a kernel oops needs', async () => {
 
   expect(body).toStrictEqual({
     status: 'ok',
-    ready: false,
+    ready: true,
     warnings: ['host needs a reboot: a kernel oops'],
   });
 });
@@ -382,7 +234,7 @@ test("it answers /health with the zfs_uiomove bug of the host's kernel module", 
 
   expect(body).toStrictEqual({
     status: 'ok',
-    ready: false,
+    ready: true,
     warnings: [
       'the zfs kernel module 2.3.4-1ubuntu2 has the zfs_uiomove short-copy bug (openzfs/zfs#15918): a VM killed during a disk read can oops the kernel and hold its disk until a reboot; modules 2.3.7, 2.4.2 and later fix it',
     ],
@@ -400,11 +252,9 @@ test('it serves the reboot a kernel oops needs in system.info', async () => {
 });
 
 test('it answers /health as ready once impd marks itself ready', async () => {
+  // its startup marks it once the default image is seeded, which the
+  // harness waits for
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
-
-  // as main.ts marks it once the default image is seeded
-  ctx.impd.state.ready = true;
-
   const response = await ctx.impd.api.app.handle(new Request('http://impd.test/health'));
   const body: unknown = await response.json();
 
@@ -453,7 +303,7 @@ test('it stops an imp gracefully', async () => {
   const stopped = await ctx.client.imps.stop({ name: 'dev' });
 
   expect(stopped.state).toBe('stopped');
-  expect(ctx.vmm.stops).toStrictEqual([{ pid: 1001, graceful: true }]);
+  expect(ctx.fake.stops).toStrictEqual([{ pid: 1001, graceful: true }]);
 });
 
 test('it starts a stopped imp and counts it as awake', async () => {
@@ -498,7 +348,7 @@ test('it destroys an imp and its VM', async () => {
   const imps = await ctx.client.imps.list();
 
   expect(imps).toStrictEqual([]);
-  expect(ctx.vmm.alive.size).toBe(0);
+  expect(ctx.fake.alive.size).toBe(0);
 });
 
 test('it reports only the local URL when impd has no domain', async () => {
@@ -566,7 +416,7 @@ test('it names a missing DNS token file as an error in system.info, and still an
     dnsToken: {
       isOk: false,
       error: `cannot read the DNS API token from ${join(directory, 'dns-api-token')}: ENOENT`,
-      at: new Date(ctx.clock.nowMs),
+      at: new Date(ctx.now()),
     },
   });
 });
@@ -607,6 +457,13 @@ test('it exposes an imp with a basic credential shown once', async () => {
     ctx.db,
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
+
+  // Cloudflare, where the expose writes the imp's public record
+  const cloudflare = createStubCloudflareApi({ tokens: ['unused'] });
+
+  await cloudflare.zones.create({ name: 'imp.example.com' });
+
+  server.use(...cloudflare.handlers);
 
   await ctx.client.imps.create({ name: 'web' });
 
@@ -689,12 +546,24 @@ test('it counts exposed imps in system.info, with no token check for a token fro
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
+  // Cloudflare, where the expose writes the imp's public record
+  const cloudflare = createStubCloudflareApi({ tokens: ['unused'] });
+
+  await cloudflare.zones.create({ name: 'imp.example.com' });
+
+  server.use(...cloudflare.handlers);
+
   await ctx.client.imps.create({ name: 'web' });
   await ctx.client.imps.expose({ name: 'web', auth: 'basic' });
 
   const info = await ctx.client.system.info();
 
-  expect(info.public).toStrictEqual({ ip: '203.0.113.7', imps: 1, records: null });
+  expect(info.public).toStrictEqual({
+    ip: '203.0.113.7',
+    imps: 1,
+    records: { at: expect.toBeValidDate(), isOk: true, error: null },
+  });
+
   expect(info.https).toStrictEqual({ domain: 'imp.example.com', dnsToken: null });
 });
 
@@ -747,6 +616,13 @@ test('it gives a new credential to a second expose', async () => {
     ctx.db,
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
+
+  // Cloudflare, where each expose writes the imp's public record
+  const cloudflare = createStubCloudflareApi({ tokens: ['unused'] });
+
+  await cloudflare.zones.create({ name: 'imp.example.com' });
+
+  server.use(...cloudflare.handlers);
 
   await ctx.client.imps.create({ name: 'web' });
 
@@ -923,7 +799,7 @@ test('it marks a running imp stopped when its VM died', async () => {
 
   await ctx.client.imps.create({ name: 'dev' });
 
-  ctx.vmm.alive.clear();
+  ctx.fake.alive.clear();
 
   const imp = await ctx.client.imps.get({ name: 'dev' });
 
@@ -1019,7 +895,7 @@ test('it sleeps an imp and ends its VM', async () => {
 
   expect(asleep.state).toBe('sleeping');
   expect(asleep.sleptAt).toBeValidDate();
-  expect(ctx.vmm.alive.size).toBe(0);
+  expect(ctx.fake.alive.size).toBe(0);
 });
 
 test('it reports what the sleepers take back on a wake, and the default image, in system.info', async () => {
@@ -1060,7 +936,7 @@ test('it wakes a sleeping imp from its snapshot', async () => {
   const awake = await ctx.client.imps.wake({ name: 'dev' });
 
   expect(awake).toMatchObject({ state: 'running', ramMib: 300 });
-  expect(ctx.vmm.wakes).toStrictEqual([1002]);
+  expect(ctx.fake.wakes).toStrictEqual([1002]);
 });
 
 test('it wakes a sleeping imp it holds, until the hold ends', async () => {
@@ -1079,7 +955,7 @@ test('it wakes a sleeping imp it holds, until the hold ends', async () => {
   const held = await ctx.client.imps.hold({ name: 'dev', seconds: 60 });
 
   expect(held.state).toBe('running');
-  expect(held.holdUntil?.getTime()).toBe(ctx.clock.nowMs + 60_000);
+  expect(held.holdUntil?.getTime()).toBe(ctx.now() + 60_000);
 });
 
 test('it releases a hold with seconds 0', async () => {
@@ -1123,7 +999,7 @@ test('it boots cold when the snapshot belongs to another firecracker', async () 
   const awake = await ctx.client.imps.wake({ name: 'dev' });
 
   expect(awake.state).toBe('running');
-  expect(ctx.vmm.wakes).toStrictEqual([]);
+  expect(ctx.fake.wakes).toStrictEqual([]);
 });
 
 test('it sleeps the least recently active imp to fit a new one in the budget', async () => {
@@ -1144,11 +1020,11 @@ test('it sleeps the least recently active imp to fit a new one in the budget', a
 
   await ctx.client.imps.create({ name: 'a' });
 
-  ctx.clock.nowMs += 1000;
+  ctx.advance(1000);
 
   await ctx.client.imps.create({ name: 'b' });
 
-  ctx.clock.nowMs += 1000;
+  ctx.advance(1000);
 
   await ctx.client.imps.create({ name: 'c' });
 
@@ -1288,7 +1164,7 @@ test('it records a boot failure as the error state with its first line', async (
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
-  ctx.vmm.queue('boot', 'fail');
+  ctx.fake.queue('boot', 'fail');
 
   expect(ctx.client.imps.create({ name: 'dev' })).rejects.toThrow();
 
@@ -1310,7 +1186,7 @@ test('it starts an imp in error', async () => {
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
-  ctx.vmm.queue('boot', 'fail');
+  ctx.fake.queue('boot', 'fail');
 
   // the boot fails, as queued
   await Promise.allSettled([ctx.client.imps.create({ name: 'dev' })]);
@@ -1337,8 +1213,8 @@ test('it re-adopts live VMs on reconcile, even with a silent agent', async () =>
 
   const dead = await ctx.client.imps.get({ name: 'dead' });
 
-  ctx.vmm.alive.delete(1002);
-  ctx.vmm.queue('agentReady', 'fail');
+  ctx.fake.alive.delete(1002);
+  ctx.fake.queue('agentReady', 'fail');
 
   await ctx.impd.imps.reconcileImps();
 
@@ -1352,7 +1228,7 @@ test('it re-adopts live VMs on reconcile, even with a silent agent', async () =>
     ['dead', 'stopped'],
   ]);
 
-  expect(ctx.vmm.stops).toStrictEqual([]);
+  expect(ctx.fake.stops).toStrictEqual([]);
 });
 
 test('it keeps an imp running for a read during a lifecycle operation', async () => {
@@ -1367,13 +1243,13 @@ test('it keeps an imp running for a read during a lifecycle operation', async ()
 
   await ctx.client.imps.create({ name: 'dev' });
 
-  const gate = ctx.vmm.hold('sleep');
+  const gate = ctx.fake.hold('sleep');
   const sleeping = ctx.client.imps.sleep({ name: 'dev' });
 
   await gate.reached;
 
   // the VM looks dead to a reader while the sleep holds the lock
-  ctx.vmm.alive.clear();
+  ctx.fake.alive.clear();
 
   const during = await ctx.client.imps.get({ name: 'dev' });
 
@@ -1554,7 +1430,7 @@ test('it refuses an expired exec ticket', async () => {
 
   const issued = await ctx.client.exec.ticket({ name: 'dev' });
 
-  ctx.clock.nowMs += 30_000;
+  ctx.advance(30_000);
 
   const expired = await tryExecSocket(ctx.port, `ticket=${issued.ticket}`);
 
@@ -1685,7 +1561,7 @@ test('it refuses a wake of an imp in error when restartError is false', async ()
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
-  ctx.vmm.queue('boot', 'fail');
+  ctx.fake.queue('boot', 'fail');
 
   // the boot fails, as queued
   await Promise.allSettled([ctx.client.imps.create({ name: 'dev' })]);
@@ -1706,7 +1582,7 @@ test('it restarts an imp in error on a wake', async () => {
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
-  ctx.vmm.queue('boot', 'fail');
+  ctx.fake.queue('boot', 'fail');
 
   // the boot fails, as queued
   await Promise.allSettled([ctx.client.imps.create({ name: 'dev' })]);

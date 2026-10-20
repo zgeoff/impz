@@ -2,14 +2,13 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync, statSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { buildStubDiskTools } from '../../testing/imps/build-stub-disk-tools';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { createImp, readImpByName } from '../db/imps';
 import { runChecked } from '../process/run-command';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { buildStubDiskTools } from '../test-utils/build-stub-disk-tools';
-import { createTestApp } from './create-test-app';
 import { growFilesystem } from './imp-disk';
-import { createImpTest } from './test-imps';
 
 // impd over the stub VMM, a client of its API, and an empty disk file of
 // its own for the host's grow
@@ -23,7 +22,7 @@ async function setupTest(
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await createImpTest(stack, {
+  const harness = await startTestImpd(stack, {
     // a sparse copy, so the grown disks stay holes on the test's tmpfs
     cloneDisk: async (source, target) => {
       await runChecked(['cp', '--sparse=always', source, target]);
@@ -34,7 +33,6 @@ async function setupTest(
   // every create boots an image row; the default image is ubuntu
   await harness.createTestImage('ubuntu');
 
-  const app = createTestApp(harness, harness);
   const directory = mkdtempSync(join(tmpdir(), 'impd-grow-test-'));
 
   onTestFinished(() => {
@@ -45,7 +43,8 @@ async function setupTest(
 
   writeFileSync(disk, '');
 
-  return { ...harness, client: app.client, disk };
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, { disk });
 }
 
 test('it makes a new disk the size asked for', async () => {

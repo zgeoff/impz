@@ -4,10 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImage } from '@impz/daemon/src/db/images';
 import { createImp, readImpByName, updateImpMove } from '@impz/daemon/src/db/imps';
-import { buildImagePaths, buildImpPaths } from '@impz/daemon/src/storage/data-layout';
-import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
-import { buildMockNewImp } from '@impz/daemon/src/test-utils/build-mock-new-imp';
-import { startStubInnerAgent } from '@impz/daemon/src/test-utils/start-stub-inner-agent';
+import {
+  buildImagePaths,
+  buildImpPaths,
+  buildMockNewImage,
+  buildMockNewImp,
+  startStubImpdRelease,
+  startStubInnerAgent,
+} from '@impz/daemon/testing';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { writeHostConfig } from '../config/host-store';
@@ -15,8 +19,6 @@ import { buildStubTimeouts } from '../test-utils/build-stub-timeouts';
 import { readJsonOutput } from '../test-utils/read-json-output';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';
-import { startStubNewerImpd } from '../test-utils/start-stub-newer-impd';
-import { startStubOlderImpd } from '../test-utils/start-stub-older-impd';
 import { startStubSilentHost } from '../test-utils/start-stub-silent-host';
 import { listAllImps, listForkWarnings, pickConsoleSession } from './imps-command';
 
@@ -131,7 +133,9 @@ test('#console makes no call past the feature check for --log on an impd from be
   const ctx = await setupTest();
   const box = await startImpdHost(ctx.stack, { env: {} });
 
-  const older = startStubOlderImpd(ctx.stack, box.sendRequest, { withoutFeatures: ['sessionLog'] });
+  const older = startStubImpdRelease(ctx.stack, box.sendRequest, {
+    withoutFeatures: ['sessionLog'],
+  });
 
   const result = await runCLIInProcess({
     args: ['console', 'dev', '--session', 'main', '--log'],
@@ -593,7 +597,7 @@ test('#ls passes through as sent a host field that a newer impd adds to its imps
   await box.client.imps.create({ name: 'db' });
 
   // a release after this CLI's adds `host` to each imp
-  const newer = startStubNewerImpd(ctx.stack, box.sendRequest, {
+  const newer = startStubImpdRelease(ctx.stack, box.sendRequest, {
     withFields: { 'imps/list': { host: 'peer' } },
   });
 
@@ -631,7 +635,7 @@ test('#ls names the saved host under --all over a host field that a newer impd a
   await box.client.imps.create({ name: 'db' });
 
   // a release after this CLI's adds `host` to each imp
-  const newer = startStubNewerImpd(ctx.stack, box.sendRequest, {
+  const newer = startStubImpdRelease(ctx.stack, box.sendRequest, {
     withFields: { 'imps/list': { host: 'peer' } },
   });
 

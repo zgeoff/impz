@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubDockerCli } from '../../testing/imps/create-stub-docker-cli';
 import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
 import { runCommand } from '../process/run-command';
-import { createStubDockerCli } from '../test-utils/create-stub-docker-cli';
 import { createBuildEngine } from './build-engine';
 
 async function setupTest() {

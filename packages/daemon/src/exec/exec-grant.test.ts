@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
+import { buildMockCaller } from '../../testing/identity/build-mock-caller';
+import { buildStubExecBackend } from '../../testing/imps/build-stub-exec-backend';
+import { buildStubAgentExecStream } from '../../testing/vm/build-stub-agent-exec-stream';
 import { buildRamBudgetError } from '../api-errors';
-import { buildMockCaller } from '../test-utils/build-mock-caller';
-import { buildStubAgentExecStream } from '../test-utils/build-stub-agent-exec-stream';
-import { buildStubExecBackend } from '../test-utils/build-stub-exec-backend';
 import { buildGrantedBackend } from './exec-grant';
 
 test('it opens an exec in an imp the token may exec in', async () => {

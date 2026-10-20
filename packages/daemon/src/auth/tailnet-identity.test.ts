@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubTailscale } from '../test-utils/build-stub-tailscale';
+import { buildStubTailscale } from '../../testing/network/build-stub-tailscale';
 import {
   TailnetRulesSchema,
   createTailnetIdentities,

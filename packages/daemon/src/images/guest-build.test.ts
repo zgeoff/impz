@@ -4,13 +4,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
-import { buildStubClock } from '../test-utils/build-stub-clock';
-import { buildStubGuest } from '../test-utils/build-stub-guest';
 import {
   STUB_BUILDER_CONTAINER,
   buildStubImageBuilder,
-} from '../test-utils/build-stub-image-builder';
+} from '../../testing/imps/build-stub-image-builder';
+import { buildStubClock } from '../../testing/platform/build-stub-clock';
+import { buildStubGuest } from '../../testing/vm/build-stub-guest';
+import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
 import { DockerBuildError } from './docker-build';
 import { loadGuestImage, runGuestBuild, writeGuestTree } from './guest-build';
 import { createGuestExec } from './guest-exec';

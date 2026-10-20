@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { buildMockImpRecord } from '../test-utils/build-mock-imp-record';
+import { buildMockImpRecord } from '../../testing/imps/build-mock-imp-record';
 import { createAgentWatchdog } from './agent-watchdog';
 
 // A clock the test moves and the watchdog's log; the agent's answer to the

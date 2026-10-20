@@ -3,31 +3,16 @@ import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ImpContract } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
+import { startTestImpd } from '../../testing/start-test-impd';
+import { buildStubZfs } from '../../testing/vm/build-stub-zfs';
 import { createSecretFiles } from '../broker/secret-files';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
-import type { ImpdDeps } from '../create-impd';
 import { createImage } from '../db/images';
-import { openDatabase } from '../db/open-database';
 import { runChecked } from '../process/run-command';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { buildStubZfs } from '../test-utils/build-stub-zfs';
-import { claimFreePorts } from '../test-utils/claim-free-ports';
-import { createTestDatabase } from '../test-utils/create-test-database';
-import {
-  buildImagePaths,
-  buildImpPaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from './data-layout';
+import { buildImagePaths, buildImpPaths } from './data-layout';
 import { readLiveStorage } from './read-live-storage';
 import { createStorageGate } from './storage-gate';
 import { createStorageGc } from './storage-gc';
@@ -36,142 +21,29 @@ import { createZfsBackend } from './zfs/zfs-backend';
 
 // `cloneFile` copies a disk or checkpoint file; a test holds one to catch
 // storage made before its row
-async function setupTest(
+function setupTest(
   options: Readonly<{ cloneFile?: (source: string, target: string) => Promise<void> }> = {},
 ) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'storage-gc-'));
+  return startTestImpd(stack, {
+    createStorage: (dataDir) =>
+      createXfsBackend({
+        dataDir,
 
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
+        // sweep lines this suite reads from the GC's own log instead
+        log: () => {},
 
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-  const cgroups = buildStubCpuCgroups();
-
-  const storage = createXfsBackend({
-    dataDir,
-
-    // sweep lines this suite reads from the GC's own log instead
-    log: () => {},
-
-    // a disk is a sparse file of the imp's full size, so a copy keeps the holes
-    cloneFile:
-      options.cloneFile ??
-      (async (source, target) => {
-        await runChecked(['cp', '--sparse=always', source, target]);
+        // a copy keeps a sparse disk's holes
+        cloneFile:
+          options.cloneFile ??
+          (async (source, target) => {
+            await runChecked(['cp', '--sparse=always', source, target]);
+          }),
       }),
   });
-
-  const deps: ImpdDeps = {
-    db,
-
-    // the bearer the test's client sends
-    rootToken: 'root-token',
-    storage,
-
-    // what system.info reports; the drive's hash names the drive file above
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so a create never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-
-    // boot and API lines this suite does not read
-    log: () => {},
-
-    // Firecracker, the kernel and the CPU as this host reports them, which a
-    // snapshot must match to load
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: cgroups.cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  };
-
-  const impd = await createImpd(config, deps);
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-  });
-
-  stack.defer(() => {
-    impd.diskUsage.stop();
-  });
-
-  const link = new RPCLink({
-    url: 'http://impd.test/rpc',
-    headers: { authorization: 'Bearer root-token' },
-    fetch: (request) => impd.api.app.handle(request),
-  });
-
-  const client: ContractRouterClient<ImpContract> = createORPCClient(link);
-
-  return { db, dataDir, storage, vmm, impd, client };
 }
 
 test('it lists what a sweep would drop and keep in a dry run, and removes nothing', async () => {
@@ -304,8 +176,8 @@ test('it keeps every orphan of a lost database through start, the hourly pass an
     await Bun.write(paths.snapshotMeta, '{}');
   }
 
-  const firstPaths = ctx.storage.resolveImpPaths('a');
-  const secondPaths = ctx.storage.resolveImpPaths('b');
+  const first = ctx.storage.resolveImpPaths('a');
+  const second = ctx.storage.resolveImpPaths('b');
 
   const live = await readLiveStorage(ctx.db);
 
@@ -316,14 +188,14 @@ test('it keeps every orphan of a lost database through start, the hourly pass an
   const manual = await gc.runGc({ isDryRun: false, isOrphans: false });
 
   expect([
-    firstPaths.disk,
-    firstPaths.vmstate,
-    firstPaths.snapshotMeta,
-    join(firstPaths.checkpointsDir, 'cp-a'),
-    secondPaths.disk,
-    secondPaths.vmstate,
-    secondPaths.snapshotMeta,
-    join(secondPaths.checkpointsDir, 'cp-b'),
+    first.disk,
+    first.vmstate,
+    first.snapshotMeta,
+    join(first.checkpointsDir, 'cp-a'),
+    second.disk,
+    second.vmstate,
+    second.snapshotMeta,
+    join(second.checkpointsDir, 'cp-b'),
     join(ctx.dataDir, 'images', 'old', 'rootfs.ext4'),
   ]).toSatisfyAll((path: string) => existsSync(path));
 
@@ -511,7 +383,7 @@ test('it waits with orphans for a destroy that holds the gate', async () => {
 
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
-  const stop = ctx.vmm.hold('stop');
+  const stop = ctx.fake.hold('stop');
 
   onTestFinished(() => {
     stop.release();

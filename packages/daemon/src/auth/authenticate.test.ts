@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
+import { buildStubTailscale } from '../../testing/network/build-stub-tailscale';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { generateEd25519Key } from '../ssh/host-key';
-import { buildStubTailscale } from '../test-utils/build-stub-tailscale';
-import { createTestDatabase } from '../test-utils/create-test-database';
 import { createKnownHosts } from './ambient-request';
 import { isSameOrigin, resolveCaller } from './authenticate';
 import { buildSessionValue } from './session-cookie';

@@ -3,14 +3,15 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
+import { startTestImpd } from '../../testing/start-test-impd';
+import type { TestImpdOptions } from '../../testing/start-test-impd';
+import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
+import { writeTestSnapshot } from '../../testing/vm/write-test-snapshot';
 import { readImpByName } from '../db/imps';
 import { updateImpState } from '../db/update-imp-state';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { createImpTest, writeTestSnapshot } from './test-imps';
-import type { ImpTestOptions } from './test-imps';
 
-async function setupTest(options: ImpTestOptions = {}) {
+async function setupTest(options: TestImpdOptions = {}) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -33,7 +34,7 @@ async function setupTest(options: ImpTestOptions = {}) {
   // impd runs in the host's PID namespace, where the log's thread ids are the sampler's
   symlinkSync('pid:[4026531836]', pidNamespacePath);
 
-  const harness = await createImpTest(stack, {
+  const harness = await startTestImpd(stack, {
     kernelFiles: { taintPath, bootIdPath, kmsgPath, pidNamespacePath },
     procRoot,
     ...options,
@@ -42,7 +43,8 @@ async function setupTest(options: ImpTestOptions = {}) {
   // the image every imp boots from
   await harness.createTestImage('ubuntu');
 
-  return { ...harness, taintPath, bootIdPath, kmsgPath, procRoot };
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, { taintPath, bootIdPath, kmsgPath, procRoot });
 }
 
 test('it finds a VM that died after its sleep wrote the snapshot asleep, not stopped', async () => {

@@ -1,0 +1,341 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { createConnection } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { waitFor } from '@impz/test-utils/wait-for';
+import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '../../src/agent-client/frame-codec';
+import type { AgentFrame } from '../../src/agent-client/frame-codec';
+import { startStubAgent } from './start-stub-agent';
+
+async function setupTest() {
+  const directory = await mkdtemp(join(tmpdir(), 'stub-agent-'));
+
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+
+  return { directoryPath: directory };
+}
+
+test('it answers the CONNECT line with the handshake reply', async () => {
+  const ctx = await setupTest();
+
+  await startStubAgent(join(ctx.directoryPath, 'v.sock'), () => {});
+
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
+
+  onTestFinished(() => {
+    client.destroy();
+  });
+
+  let reply = '';
+
+  client.on('data', (chunk: Buffer) => {
+    reply += chunk.toString();
+  });
+
+  client.write('CONNECT 1024\n');
+
+  await waitFor(() => {
+    if (!reply.endsWith('\n')) {
+      throw new Error('no reply yet');
+    }
+  });
+
+  expect(reply).toBe('OK 1073741824\n');
+});
+
+test('it hands each frame to the handler with the request and the frames so far', async () => {
+  const ctx = await setupTest();
+
+  const calls: { request: AgentFrame; frames: AgentFrame[] }[] = [];
+
+  await startStubAgent(join(ctx.directoryPath, 'v.sock'), (_socket, request, frames) => {
+    calls.push({ request, frames: [...frames] });
+  });
+
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
+
+  onTestFinished(() => {
+    client.destroy();
+  });
+
+  client.write('CONNECT 1024\n');
+
+  await new Promise((resolve) => {
+    client.once('data', resolve);
+  });
+
+  client.write(encodeJsonFrame(FRAME_TYPES.request, { op: 'exec' }));
+  client.write(encodeFrame(FRAME_TYPES.stdin, new Uint8Array([7, 8])));
+
+  await waitFor(() => {
+    if (calls.length < 2) {
+      throw new Error('the frames have not all arrived');
+    }
+  });
+
+  expect(calls).toStrictEqual([
+    {
+      request: { type: 1, payload: Buffer.from('{"op":"exec"}') },
+      frames: [{ type: 1, payload: Buffer.from('{"op":"exec"}') }],
+    },
+    {
+      request: { type: 1, payload: Buffer.from('{"op":"exec"}') },
+      frames: [
+        { type: 1, payload: Buffer.from('{"op":"exec"}') },
+        { type: 3, payload: Buffer.from([7, 8]) },
+      ],
+    },
+  ]);
+});
+
+test('it decodes frames sent in the same chunk as the CONNECT line', async () => {
+  const ctx = await setupTest();
+  const agent = await startStubAgent(join(ctx.directoryPath, 'v.sock'), () => {});
+
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
+
+  onTestFinished(() => {
+    client.destroy();
+  });
+
+  client.write(
+    Buffer.concat([
+      Buffer.from('CONNECT 1024\n'),
+      encodeJsonFrame(FRAME_TYPES.request, { op: 'ping' }),
+    ]),
+  );
+
+  await waitFor(() => {
+    if (agent.received.length === 0) {
+      throw new Error('no frame yet');
+    }
+  });
+
+  expect(agent.received).toStrictEqual([{ type: 1, payload: Buffer.from('{"op":"ping"}') }]);
+});
+
+test('it waits for the rest of a CONNECT line split across chunks', async () => {
+  const ctx = await setupTest();
+  const agent = await startStubAgent(join(ctx.directoryPath, 'v.sock'), () => {});
+
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
+
+  onTestFinished(() => {
+    client.destroy();
+  });
+
+  let reply = '';
+
+  client.on('data', (chunk: Buffer) => {
+    reply += chunk.toString();
+  });
+
+  client.write('CONNECT 10');
+
+  await waitFor(() => {
+    if (agent.reads === 0) {
+      throw new Error('the first chunk has not been read');
+    }
+  });
+
+  client.write(
+    Buffer.concat([Buffer.from('24\n'), encodeJsonFrame(FRAME_TYPES.request, { op: 'ping' })]),
+  );
+
+  await waitFor(() => {
+    if (agent.received.length === 0) {
+      throw new Error('no frame yet');
+    }
+  });
+
+  expect(reply).toBe('OK 1073741824\n');
+  expect(agent.received).toStrictEqual([{ type: 1, payload: Buffer.from('{"op":"ping"}') }]);
+});
+
+test('it keeps the frames of every connection in received', async () => {
+  const ctx = await setupTest();
+
+  const requests: AgentFrame[] = [];
+
+  const agent = await startStubAgent(join(ctx.directoryPath, 'v.sock'), (_socket, request) => {
+    requests.push(request);
+  });
+
+  const first = createConnection(join(ctx.directoryPath, 'v.sock'));
+
+  onTestFinished(() => {
+    first.destroy();
+  });
+
+  const second = createConnection(join(ctx.directoryPath, 'v.sock'));
+
+  onTestFinished(() => {
+    second.destroy();
+  });
+
+  first.write(
+    Buffer.concat([
+      Buffer.from('CONNECT 1024\n'),
+      encodeJsonFrame(FRAME_TYPES.request, { sequence: 1 }),
+    ]),
+  );
+
+  second.write(
+    Buffer.concat([
+      Buffer.from('CONNECT 1024\n'),
+      encodeJsonFrame(FRAME_TYPES.request, { sequence: 2 }),
+    ]),
+  );
+
+  await waitFor(() => {
+    if (agent.received.length < 2) {
+      throw new Error('the frames have not all arrived');
+    }
+  });
+
+  expect(agent.received).toIncludeSameMembers([
+    { type: 1, payload: Buffer.from('{"sequence":1}') },
+    { type: 1, payload: Buffer.from('{"sequence":2}') },
+  ]);
+
+  expect(requests).toIncludeSameMembers([
+    { type: 1, payload: Buffer.from('{"sequence":1}') },
+    { type: 1, payload: Buffer.from('{"sequence":2}') },
+  ]);
+});
+
+test('it hands the handler the socket that replies to the client', async () => {
+  const ctx = await setupTest();
+
+  await startStubAgent(join(ctx.directoryPath, 'v.sock'), (socket) => {
+    socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+  });
+
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
+
+  onTestFinished(() => {
+    client.destroy();
+  });
+
+  let reply = Buffer.alloc(0);
+
+  client.on('data', (chunk: Buffer) => {
+    reply = Buffer.concat([reply, chunk]);
+  });
+
+  client.write(
+    Buffer.concat([Buffer.from('CONNECT 1024\n'), encodeJsonFrame(FRAME_TYPES.request, {})]),
+  );
+
+  await waitFor(() => {
+    if (reply.byteLength < 14 + 16) {
+      throw new Error('no response frame yet');
+    }
+  });
+
+  expect(reply).toStrictEqual(
+    Buffer.concat([
+      Buffer.from('OK 1073741824\n'),
+      encodeJsonFrame(FRAME_TYPES.response, { ok: true }),
+    ]),
+  );
+});
+
+test('it stops accepting connections once closed', async () => {
+  const ctx = await setupTest();
+  const agent = await startStubAgent(join(ctx.directoryPath, 'v.sock'), () => {});
+
+  agent.close();
+
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
+
+  onTestFinished(() => {
+    client.destroy();
+  });
+
+  const failed = new Promise((resolve) => {
+    client.once('error', resolve);
+  });
+
+  expect(failed).resolves.toMatchObject({ code: expect.toBeOneOf(['ENOENT', 'ECONNREFUSED']) });
+});
+
+test('it closes when the test finishes', async () => {
+  // an abstract socket has no file, so no temp dir's removal can hide the
+  // close; a name already bound refuses the listen
+  const path = `\0stub-agent-${crypto.randomUUID()}`;
+
+  await startStubAgent(path, () => {});
+
+  // runs after the stand-in's own close
+  onTestFinished(async () => {
+    const refused = await new Promise((resolve) => {
+      const client = createConnection(path);
+
+      client.once('connect', () => {
+        client.destroy();
+
+        resolve('connected');
+      });
+
+      client.once('error', resolve);
+    });
+
+    expect(refused).toMatchObject({ code: 'ECONNREFUSED' });
+  });
+});
+
+test('it closes when the stack it was given is released', async () => {
+  const ctx = await setupTest();
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  await startStubAgent(join(ctx.directoryPath, 'v.sock'), () => {}, { stack });
+
+  await stack.disposeAsync();
+
+  const client = createConnection(join(ctx.directoryPath, 'v.sock'));
+
+  onTestFinished(() => {
+    client.destroy();
+  });
+
+  const failed = new Promise((resolve) => {
+    client.once('error', resolve);
+  });
+
+  expect(failed).resolves.toMatchObject({ code: expect.toBeOneOf(['ENOENT', 'ECONNREFUSED']) });
+});
+
+test('it leaves its close to the stack it was given, not the test’s end', async () => {
+  // an abstract socket has no file, so no temp dir's removal can hide the
+  // close; a name already bound refuses the listen
+  const path = `\0stub-agent-${crypto.randomUUID()}`;
+
+  const stack = new AsyncDisposableStack();
+
+  await startStubAgent(path, () => {}, { stack });
+
+  // runs after any close the stand-in registered for the test's end, and
+  // releases the stack, which holds only the agent's close, before it asserts
+  onTestFinished(async () => {
+    const reached = await new Promise((resolve) => {
+      const client = createConnection(path);
+
+      client.once('connect', () => {
+        client.destroy();
+
+        resolve('connected');
+      });
+
+      client.once('error', resolve);
+    });
+
+    await stack.disposeAsync();
+
+    expect(reached).toBe('connected');
+  });
+});

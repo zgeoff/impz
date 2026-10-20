@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/server';
 import invariant from 'tiny-invariant';
-import { buildStubClock } from '../test-utils/build-stub-clock';
-import { buildStubRoomCheck } from '../test-utils/build-stub-room-check';
+import { buildStubClock } from '../../testing/platform/build-stub-clock';
+import { buildStubRoomCheck } from '../../testing/vm/build-stub-room-check';
 import {
   createGenerationLog,
   getGenerationBounds,

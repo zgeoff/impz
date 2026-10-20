@@ -42,6 +42,7 @@ import { PLACEHOLDER, listPlaceholderEnv } from './connector-kinds';
 import { createBrokerProxy } from './create-broker-proxy';
 import { createSecretStore } from './create-secret-store';
 import type { AddSecretInput } from './create-secret-store';
+import { createUpstreamResolver } from './create-upstream-resolver';
 import type { UpstreamFetch } from './forward-request';
 import {
   buildBrokerEnv,
@@ -55,7 +56,6 @@ import type { OAuthFetch } from './oauth-refresher';
 import { removeStaleSecretFiles } from './remove-stale-secret-files';
 import { createSecretFiles } from './secret-files';
 import type { SecretFiles } from './secret-files';
-import { createUpstreamResolver } from './test-upstreams';
 
 // The credential broker (docs/guides/connectors.md): grants for the API, the
 // exec variables that point a guest's tools at it, and the secret store and

@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { server } from '@impz/test-utils/mock-server';
 import invariant from 'tiny-invariant';
 import { startPebbleStack } from '../../../../../e2e/lib/pebble';
-import { createStubCloudflareApi } from '../../test-utils/create-stub-cloudflare-api';
+import { createStubCloudflareApi } from '../../../testing/network/create-stub-cloudflare-api';
 import { createChalltestsrvProvider } from '../dns/challtestsrv-provider';
 import { createCloudflareProvider } from '../dns/cloudflare-provider';
 import { createAcmeIssuer } from './acme-issuer';

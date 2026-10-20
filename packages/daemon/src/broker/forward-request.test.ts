@@ -6,9 +6,9 @@ import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
+import { buildMockCredential } from '../../testing/network/build-mock-credential';
+import { startStubBrokerTlsUpstream } from '../../testing/network/start-stub-broker-tls-upstream';
 import type { NewAuditEntry } from '../db/broker-audit';
-import { buildMockCredential } from '../test-utils/build-mock-credential';
-import { startStubBrokerTlsUpstream } from '../test-utils/start-stub-broker-tls-upstream';
 import { loadOrCreateBrokerCa } from './broker-ca';
 import { createForwarder } from './forward-request';
 

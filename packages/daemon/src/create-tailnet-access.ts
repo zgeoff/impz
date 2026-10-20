@@ -2,7 +2,7 @@ import { createKnownHosts } from './auth/ambient-request';
 import { createTailnetIdentities, runWhois } from './auth/tailnet-identity';
 import type { Config } from './config';
 import type { AppDeps } from './create-app';
-import type { ImpdDeps } from './create-impd';
+import type { ImpdDeps } from './impd-deps';
 import { createStatusCache } from './net/tailscale-status';
 import type { TailscaleStatus } from './net/tailscale-status';
 

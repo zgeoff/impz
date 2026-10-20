@@ -7,7 +7,7 @@ import {
   openExecStream,
   openTapStream,
 } from '@impz/daemon/src/agent-client/exec-stream';
-import { startStubAgent } from '@impz/daemon/src/test-utils/start-stub-agent';
+import { startStubAgent } from '@impz/daemon/testing';
 import { waitFor } from '@impz/test-utils/wait-for';
 import {
   STUB_BOOT_ID,

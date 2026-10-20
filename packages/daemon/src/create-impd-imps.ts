@@ -1,0 +1,293 @@
+import { availableParallelism } from 'node:os';
+import type { Broker } from './broker/broker-service';
+import type { Config } from './config';
+import type { ImpdStorage } from './create-impd-storage';
+import { countImpsByState, listImps } from './db/imps';
+import type { EgressService } from './egress/egress-service';
+import { createRamGovernor } from './governor/ram-governor';
+import type { RamAdmission, RamGovernor } from './governor/ram-governor';
+import type { ImpBoundaries, ImpdDeps } from './impd-deps';
+import { growFilesystem } from './imps/imp-disk';
+import { createImpService } from './imps/imp-service';
+import type { ImpServiceDeps, Imps } from './imps/imp-service';
+import { createKernelOopsWatch } from './imps/kernel-oops-watch';
+import { createMemoryController } from './memory/memory-controller';
+import type { MemoryController } from './memory/memory-controller';
+import { createPluggedSizes } from './memory/plugged-sizes';
+import type { Ipv6Plan } from './net/ipv6-plan';
+import type { TailscaleStatus } from './net/tailscale-status';
+import { createTapDevices } from './net/tap-devices';
+import { printLog } from './process/print-log';
+import { runCommand } from './process/run-command';
+import { readHostIdentity, readVmIdentity } from './sleep/vm-identity';
+import type { HostIdentity } from './sleep/vm-identity';
+import { buildImpPaths } from './storage/data-layout';
+import { startImpTelemetry } from './telemetry/imp-telemetry';
+import { createCpuCgroups } from './vmm/cpu-cgroups';
+import { createJails } from './vmm/jail';
+import { checkGuestMemoryMergeable, readKsmProfitMib } from './vmm/ksm';
+import { createVmRunner } from './vmm/vm-runner';
+import {
+  readOwnedRamMib,
+  readOwnedRamMibAsync,
+  readRssMib,
+  readThreadIds,
+  readUnsharedRamMib,
+  readVmMemory,
+} from './vmm/vm-stats';
+
+export interface GovernedParts {
+  readonly storage: ImpdStorage;
+  readonly broker: Pick<Broker, 'readExecEnv'>;
+  readonly egress: EgressService;
+  readonly ipv6: Ipv6Plan | null;
+  readonly readServiceUrl: (name: string) => string | null;
+  readonly readTailscale: () => Promise<TailscaleStatus>;
+}
+
+export interface GovernedImps {
+  readonly imps: Imps;
+  readonly governor: RamGovernor;
+  readonly memory: MemoryController;
+
+  // what this host boots imps with
+  readonly identity: HostIdentity;
+}
+
+// The imp service, its RAM governor and its memory controller, on the
+// host's own cgroups, Firecracker and readers unless the deps stand in. The
+// governor admits each boot, and sleeps imps through the service.
+export function createImpdImps(
+  config: Config,
+  deps: Readonly<ImpdDeps>,
+  parts: Readonly<GovernedParts>,
+): GovernedImps {
+  const log = deps.log ?? printLog;
+  const cgroups = deps.cgroups ?? createCpuCgroups({ root: '/sys/fs/cgroup', log });
+
+  if (!cgroups.isEnforced) {
+    const effect =
+      config.jailerBin === null
+        ? 'CPU limits are kept, not applied'
+        : 'no jailed VM can start (IMP_JAILER=false runs them unjailed, with no limits)';
+
+    log(`impd: no cpu controller under /sys/fs/cgroup/imps; ${effect}`);
+  }
+
+  // spawns Firecracker once per version flag; system.info reuses it
+  const identity = (
+    deps.readIdentity ?? ((files, prefix) => readHostIdentity(config.firecrackerBin, files, prefix))
+  )(deps.systemFiles, parts.ipv6?.prefix.text ?? null);
+
+  // even with the jailer off, impd cleans up after jailed VMs it adopted
+  const vms =
+    deps.vms ??
+    createVmRunner(
+      createJails({
+        jailerBin: config.jailerBin ?? 'jailer',
+        firecrackerBin: Bun.which(config.firecrackerBin) ?? config.firecrackerBin,
+        chrootBase: config.jailDir,
+        run: deps.runCommand ?? runCommand,
+        log,
+        killCgroup: cgroups.kill,
+      }),
+      config.ksm?.execBin ?? null,
+    );
+
+  const {
+    readRamMibAsync,
+    readKsmProfitMib: readProfitMib,
+    ...host
+  } = resolveImpBoundaries(deps.imps ?? {});
+
+  const holder: { governor: RamGovernor | null } = { governor: null };
+
+  // the governor exists before any request reaches the service
+  const admission: RamAdmission = {
+    admit: (request) => holder.governor?.admit(request) ?? Promise.resolve(),
+    release: (id) => {
+      holder.governor?.release(id);
+    },
+  };
+
+  const pluggedSizes = createPluggedSizes();
+
+  // each VM's memory.max follows what its elastic guest holds
+  const memoryLimit = deps.imps?.memoryLimit ?? cgroups;
+
+  const serviceDeps: ImpServiceDeps = {
+    config,
+    db: deps.db,
+    images: parts.storage.images,
+    taps: deps.taps ?? createTapDevices(),
+    vms,
+    storage: deps.storage,
+    identity,
+    ipv6: parts.ipv6,
+    log,
+    cgroups,
+    memoryLimit,
+    readExecEnv: parts.broker.readExecEnv,
+    storageGate: parts.storage.storageGate,
+    diskBudget: parts.storage.diskBudget,
+    readDiskUsage: parts.storage.diskUsage.read,
+    egress: parts.egress,
+    readServiceUrl: parts.readServiceUrl,
+    readTailnetHostname: async () => {
+      const status = await parts.readTailscale();
+
+      return status.hostname;
+    },
+    ...(deps.now !== undefined && { now: deps.now }),
+    ...host,
+    admission,
+    pluggedSizes,
+  };
+
+  const imps = createImpService(serviceDeps);
+  const ksm = config.ksm;
+
+  // what KSM saves in the awake VMs only, not in the host's other processes;
+  // a VM's profit is negative while its metadata outweighs what it merged
+  const readHeadroomMib = async (pids: readonly number[]): Promise<number> => {
+    if (ksm === null) {
+      return 0;
+    }
+
+    const profits = await Promise.all(pids.map((pid) => readProfitMib(pid)));
+
+    const profitMib = profits.reduce<number>((sum, mib) => sum + (mib ?? 0), 0);
+
+    return Math.ceil((Math.max(profitMib, 0) * ksm.headroomPercent) / 100);
+  };
+
+  // an open exec session or proxied request pins the imp, like a hold
+  const isBusy = (id: string) => imps.isImpBusy(id) || imps.tracker.count(id) > 0;
+
+  // elastic guests grow and shrink here (docs/architecture/lifecycle/elastic-memory.md)
+  const memory = createMemoryController({
+    listElastic: async () => {
+      const listed = await listImps(deps.db);
+
+      return listed.flatMap((imp) => {
+        if (imp.state !== 'running' || imp.pid === null || imp.maxMemoryMib <= imp.memoryMib) {
+          return [];
+        }
+
+        const paths = buildImpPaths(config.dataDir, imp.id);
+
+        return [
+          {
+            id: imp.id,
+            name: imp.name,
+            pid: imp.pid,
+            memoryMib: imp.memoryMib,
+            maxMemoryMib: imp.maxMemoryMib,
+            paths,
+            agentVersion: readVmIdentity(paths)?.agentVersion,
+          },
+        ];
+      });
+    },
+    vms,
+    isLocked: (id) => imps.isImpBusy(id),
+    isBusy,
+    tryWhileRunning: imps.tryWhileRunning,
+    admitGrow: (request) => holder.governor?.admitGrow(request) ?? Promise.resolve(true),
+    releaseGrow: (id) => {
+      holder.governor?.releaseGrow(id);
+    },
+    limit: memoryLimit,
+    readRamMib: (imp) => host.readRamMib(imp.pid, imp.paths.apiSocket),
+    setPluggedMib: pluggedSizes.write,
+    log,
+    ...(deps.now !== undefined && { now: deps.now }),
+  });
+
+  const governor = createRamGovernor({
+    budgetMib: config.ramBudgetMib,
+    listAwake: async () => {
+      const listed = await listImps(deps.db);
+
+      return listed.flatMap((imp) =>
+        imp.state === 'running' && imp.pid !== null
+          ? [
+              {
+                id: imp.id,
+                name: imp.name,
+                pid: imp.pid,
+                apiSocket: buildImpPaths(config.dataDir, imp.id).apiSocket,
+                lastActiveAt: imp.lastActiveAt.getTime(),
+                holdUntil: imp.holdUntil?.getTime() ?? null,
+              },
+            ]
+          : [],
+      );
+    },
+    readRamMib: readRamMibAsync,
+    readHeadroomMib,
+    isBusy,
+    trySleepImp: imps.trySleepImp,
+    readDiskFullError: imps.readDiskFullError,
+    reclaim: memory.reclaimIdle,
+    log,
+    events: imps.events,
+    ...(deps.now !== undefined && { now: deps.now }),
+  });
+
+  holder.governor = governor;
+
+  startImpTelemetry({
+    bus: imps.events,
+    subscribeResources: imps.subscribeResources,
+    readDiskUsedBytes: parts.storage.diskUsage.readExclusiveTotal,
+    readStateCounts: () => countImpsByState(deps.db),
+    readRebootReason: imps.readRebootReason,
+    readRam: async () => {
+      const usage = await governor.readUsage();
+
+      return { usedMib: usage.usedMib, budgetMib: config.ramBudgetMib };
+    },
+  });
+
+  return { imps, governor, memory, identity };
+}
+
+// Every reader and tool the imps reach on the host, the host's own where a
+// test passes no stand-in: /proc, KSM, the filesystem grow, the cores, the
+// clocks and the kernel's taint flag.
+function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
+  const readRam = boundaries.readRamMib;
+  const readRss = boundaries.readRssMib;
+  const readRamMib = readRam ?? readOwnedRamMib;
+
+  return {
+    readRamMib,
+    readRssMib: readRss ?? readRssMib,
+
+    // a stand-in's readers take the place of smaps_rollup, which impd reads
+    // once for both
+    readVmMemory:
+      readRam === undefined && readRss === undefined
+        ? readVmMemory
+        : (pid: number, apiSocket: string) => ({
+            ramMib: readRamMib(pid, apiSocket),
+            rssMib: (readRss ?? readRssMib)(pid, apiSocket),
+          }),
+    readRamMibAsync:
+      readRam === undefined
+        ? readOwnedRamMibAsync
+        : (pid: number, apiSocket: string) => Promise.resolve(readRam(pid, apiSocket)),
+    readUnsharedRamMib: boundaries.readUnsharedRamMib ?? readUnsharedRamMib,
+    checkGuestMerge: boundaries.checkGuestMerge ?? checkGuestMemoryMergeable,
+    readKsmProfitMib: boundaries.readKsmProfitMib ?? readKsmProfitMib,
+    growFilesystem: boundaries.growFilesystem ?? growFilesystem,
+    hostCpus: boundaries.hostCpus ?? availableParallelism(),
+    sleep: boundaries.sleep ?? Bun.sleep,
+    sleepTiming: boundaries.sleepTiming ?? { now: () => performance.now(), sleep: Bun.sleep },
+    kernelOops: boundaries.kernelOops ?? createKernelOopsWatch(),
+    readThreadIds: boundaries.readThreadIds ?? ((pid: number) => readThreadIds(pid)),
+    ...(boundaries.openTap !== undefined && { openTap: boundaries.openTap }),
+    ...(boundaries.now !== undefined && { now: boundaries.now }),
+  };
+}

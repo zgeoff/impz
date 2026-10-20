@@ -1,346 +1,43 @@
-import { release } from 'node:os';
-import { join } from 'node:path';
 import packageJson from '../package.json' with { type: 'json' };
-import { buildApiListenOptions } from './api-listen-options';
 import { loadConfig } from './config';
 import { createImpd } from './create-impd';
-import { openDatabase } from './db/open-database';
-import { getErrorMessage } from './get-error-message';
-import { ENFORCE_INTERVAL_MS } from './governor/ram-governor';
-import { wireHttpsService } from './https/wire-https-service';
-import { createIdleLoop } from './idle/idle-loop';
-import { readSetfcapWarning } from './images/unpack-export';
-import { createKernelOopsWatch } from './imps/kernel-oops-watch';
-import { startPublicListener } from './oauth/public-listener';
-import { getImpdLogger } from './process/get-impd-logger';
-import { printLog } from './process/print-log';
 import { setupLogging } from './process/setup-logging';
-import { startTicker } from './process/ticker';
-import { waitWithin } from './process/wait-within';
-import { startWakeProxy } from './proxy/wake-proxy';
 import { renderNetworkEnv } from './render-network-env';
-import { startSsh } from './ssh/start-ssh';
-import { createStorageBackend } from './storage/create-storage-backend';
-import { createDataDirs } from './storage/data-layout';
-import { setupSystemFiles } from './storage/setup-system-files';
-import { startOtlpExport } from './telemetry/start-otlp-export';
-import { loadOrCreateToken } from './token';
-import { checkKsmHost, readKsmHostStats } from './vmm/ksm';
-
-// the whole stop, within the 120 s that scripts/dev/dev.sh gives `docker stop`
-const STOP_DEADLINE_MS = 100_000;
-
-// at most per step before the sleep pass, which gets whatever is left
-const STOP_STEP_MAX_MS = 10_000;
-
-// the broker's stop waits for a token exchange under way (30 s at most) and
-// its write, so a rotated refresh token is stored before the database closes
-const STOP_BROKER_MAX_MS = 40_000;
-
-// Bounded, and a failure is logged: impd always reaches its exit. True when
-// the step finished in time. A ticker stop waits for a pass under way.
-async function runStopStep(
-  step: string,
-  durationMs: number,
-  task: () => Promise<unknown>,
-): Promise<boolean> {
-  try {
-    const finished = await waitWithin(task(), durationMs);
-
-    if (!finished) {
-      printLog(`impd: stop: ${step} still running after ${String(durationMs)}ms; going on`);
-    }
-
-    return finished;
-  } catch (error) {
-    printLog(`impd: stop: ${step} failed: ${getErrorMessage(error)}`);
-
-    return true;
-  }
-}
 
 async function main(): Promise<void> {
   setupLogging();
 
-  const config = loadConfig(process.env);
+  const impd = await createImpd(loadConfig(process.env));
 
-  for (const warning of config.warnings) {
-    printLog(`impd: warning: ${warning}`);
-  }
-
-  if (config.ksm !== null) {
-    const ksm = readKsmHostStats();
-    const refusal = checkKsmHost(release(), ksm);
-
-    if (refusal !== null) {
-      throw new Error(refusal);
-    }
-
-    if (ksm?.running === false) {
-      printLog('impd: IMP_KSM is on, but ksmd does not run (/sys/kernel/mm/ksm/run is 0)');
-    }
-  }
-
-  // before any instrument is made: a meter taken earlier stays a no-op
-  const stopExport = await startOtlpExport(process.env, packageJson.version);
-
-  createDataDirs(config.dataDir);
-
-  const systemFiles = await setupSystemFiles(config);
-
-  // a start-time hint; an image with a file capability still fails its build
-  const setfcapWarning = readSetfcapWarning();
-
-  if (setfcapWarning !== null) {
-    printLog(setfcapWarning);
-  }
-
-  const db = await openDatabase(join(config.dataDir, 'db', 'imp.sqlite'));
-
-  const token = loadOrCreateToken(config.dataDir);
-
-  // one watch of the taint flag: the imps' hold and storage's reclaim log
-  const kernelOops = createKernelOopsWatch();
-  const storage = createStorageBackend(config, { zfs: { isKernelOopsed: kernelOops.isOopsed } });
-
-  const impd = await createImpd(config, {
-    db,
-    rootToken: token,
-    storage,
-    systemFiles,
-    imps: { kernelOops },
-  });
-
-  const app = impd.api.app.listen(buildApiListenOptions(config));
-
-  getImpdLogger('api').info('api on :{port}, data in {dataDir}', {
-    port: config.apiPort,
-    dataDir: config.dataDir,
-  });
-
-  // off unless the operator names the route's origin
-  const publicMcp =
-    config.publicMcp === null
-      ? null
-      : startPublicListener(
-          { config: config.publicMcp, oauth: impd.oauth, mcp: impd.api.publicMcp },
-          printLog,
-        );
-
-  const proxy = startWakeProxy({
-    config,
-    db,
-    imps: impd.imps,
-    log: printLog,
-    logger: getImpdLogger('proxy'),
-    peers: impd.peers,
-  });
-
-  impd.proxyHolder.proxy = proxy;
-
-  await proxy.syncListeners();
-
-  const https =
-    config.https === null
-      ? null
-      : wireHttpsService({
-          config: config.https,
-          dataDir: config.dataDir,
-          db,
-          proxy,
-          readTailscale: config.tailscaleEnabled ? impd.readTailscale : null,
-          dnsToken: impd.dnsToken,
-          log: printLog,
-        });
-
-  if (https !== null) {
-    impd.publicRecords.attach(https);
-    https.start();
-  }
-
-  // in the background: an API or tailscaled outage never holds up impd
-  void impd.tailnetNames?.runSync();
-
-  const brokerPort = await impd.broker.listen(config.brokerPort);
-
-  getImpdLogger('broker').info("credential broker on :{port} of every imp's gateway", {
-    port: brokerPort,
-  });
-
-  const ssh = await startSsh({
-    config,
-    db,
-    imps: impd.imps,
-    authorizedKeys: impd.authorizedKeys,
-    tokens: impd.tokens,
-    revocations: impd.revocations,
-    log: printLog,
-    audit: impd.audit,
-    now: Date.now,
-  });
-
-  const idle = createIdleLoop({ config, db, imps: impd.imps, log: printLog });
-
-  const tickers = [
-    startTicker('idle', 2000, idle.runCheck, printLog),
-    startTicker('oauth-expiry', 3_600_000, impd.oauth.removeExpired, printLog),
-    startTicker('governor', ENFORCE_INTERVAL_MS, impd.governor.enforce, printLog),
-    startTicker('resources', 5000, impd.imps.sampleResources, printLog),
-    startTicker('session-logs', 60_000, impd.imps.sweepSessionLogs, printLog),
-
-    // elastic guests grow within a second of running low
-    startTicker('memory', 500, impd.governed.memory.runTick, printLog),
-
-    // listeners follow creates and destroys; this catches anything missed
-    startTicker('proxy', 30_000, proxy.syncListeners, printLog),
-
-    ...(impd.tailnetNames === null
-      ? []
-      : [
-          // names follow creates and destroys; this repairs what failed
-          startTicker('tailnet-names', 600_000, impd.tailnetNames.runSync, printLog),
-        ]),
-
-    // terminators follow grants; this also renews leaves near their end
-    startTicker('broker', 60_000, impd.broker.applyGrants, printLog),
-
-    // what a crash or a failed removal left; start sweeps the same way
-    startTicker('gc', 3_600_000, impd.gc.runScheduled, printLog),
-
-    // FIEMAP over every file on XFS: often enough for `impz ls`
-    startTicker('disk-usage', 300_000, impd.diskUsage.runPass, printLog),
-    ...(impd.backups === null
-      ? []
-      : [
-          startTicker(
-            'backup',
-
-            // a run is due by the time since the last one, so a restart
-            // never puts it off by a whole interval
-            Math.min(config.backup?.intervalS ?? 0, 300) * 1000,
-            impd.backups.runScheduled,
-            printLog,
-          ),
-        ]),
-  ];
-
-  // the first usage numbers soon after start, not a ticker interval later
-  impd.diskUsage.requestRefresh();
-
-  // ready either way: a failed seed leaves `impz image add` to the user
-  const setupDefaultImage = async (): Promise<void> => {
-    try {
-      await impd.images.seedDefaultImage();
-
-      const existing = await impd.images.listImages();
-
-      if (!existing.some((image) => image.name === config.defaultImage)) {
-        printLog(
-          `impd: warning: no image named ${config.defaultImage} (IMP_DEFAULT_IMAGE); impz new uses ubuntu until \`impz image add <ref> --name ${config.defaultImage}\` adds it`,
-        );
-      }
-    } catch (error) {
-      getImpdLogger('image').error('could not add the default image: {error}', { error });
-    } finally {
-      impd.state.ready = true;
-    }
-  };
-
-  void setupDefaultImage();
+  const stopState = { stopping: false };
 
   // SIGTERM and SIGINT (container stop): every running imp goes to sleep, so a container
   // restart keeps memory. SIGHUP (impd restart in place): VMs keep running and the next impd
   // re-adopts them (docs/architecture/lifecycle/lifecycle.md#recovery-after-a-restart).
-  const stop = async (sleepImps: boolean) => {
-    const started = performance.now();
-    const readLeftMs = () => Math.max(0, STOP_DEADLINE_MS - (performance.now() - started));
-    const readStepMs = () => Math.min(STOP_STEP_MAX_MS, readLeftMs());
-
-    impd.diskUsage.stop();
-
-    await runStopStep('tickers', readStepMs(), () =>
-      Promise.all(tickers.map((ticker) => ticker.stop())),
-    );
-
-    if (https !== null) {
-      await runStopStep('https', readStepMs(), () => https.stop());
+  const stopOnSignal = (sleepImps: boolean): void => {
+    if (stopState.stopping) {
+      return;
     }
 
-    await runStopStep('proxy', readStepMs(), () => proxy.stop());
+    stopState.stopping = true;
 
-    await runStopStep('broker', Math.min(STOP_BROKER_MAX_MS, readLeftMs()), () =>
-      impd.broker.stop(),
-    );
+    void (async () => {
+      await impd.stop({ sleepImps });
 
-    impd.egress.stop();
-
-    // before the sleep pass, as exec sessions are: a client sees its
-    // connection end instead of hanging while its imp sleeps
-    await runStopStep('ssh', readStepMs(), () => ssh?.stop() ?? Promise.resolve());
-
-    impd.api.closeExecSessions();
-
-    if (publicMcp !== null) {
-      await runStopStep('public-mcp', readStepMs(), () => publicMcp.stop());
-    }
-
-    await runStopStep('api', readStepMs(), () => app.stop(true));
-
-    // either way, a wake or boot under way finishes first: one cut short
-    // leaves a Firecracker that no record knows
-    const settled = sleepImps
-      ? await runStopStep('sleep', readLeftMs(), () => impd.imps.sleepAllImps())
-      : await runStopStep('lifecycle', readLeftMs(), () => impd.imps.waitForLifecycle());
-
-    // a build cut short leaves a Firecracker no record knows
-    await runStopStep(
-      'templates',
-      readStepMs(),
-      () => impd.imps.bootTemplates?.stop() ?? Promise.resolve(),
-    );
-
-    if (sleepImps) {
-      const sleptMs = Math.round(performance.now() - started);
-
-      printLog(`impd: every imp asleep in ${String(sleptMs)}ms`);
-    }
-
-    // a reclaim pass left running would race the next impd's start
-    await runStopStep('storage', readStepMs(), () => storage.stop());
-
-    // sends what the sleep pass recorded; its gauges still read the database
-    if (stopExport !== null) {
-      await runStopStep('telemetry', readStepMs(), stopExport);
-    }
-
-    // a sleep still running writes its record later: closing the database
-    // under it would fail that write. The next start finds its snapshot.
-    if (settled) {
-      await runStopStep('database', readStepMs(), () => db.destroy());
-    }
-
-    process.exit(0);
-  };
-
-  const stopState = { stopping: false };
-
-  const handleSignal = (sleepImps: boolean): void => {
-    if (!stopState.stopping) {
-      stopState.stopping = true;
-      void stop(sleepImps);
-    }
+      process.exit(0);
+    })();
   };
 
   process.on('SIGINT', () => {
-    handleSignal(true);
+    stopOnSignal(true);
   });
 
   process.on('SIGTERM', () => {
-    handleSignal(true);
+    stopOnSignal(true);
   });
 
   process.on('SIGHUP', () => {
-    handleSignal(false);
+    stopOnSignal(false);
   });
 }
 

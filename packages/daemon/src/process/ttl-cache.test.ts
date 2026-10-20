@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '../test-utils/build-stub-clock';
+import { buildStubClock } from '../../testing/platform/build-stub-clock';
 import { createTtlCache } from './ttl-cache';
 
 test('it keeps an entry set at the clock time 0 until its time passes', () => {

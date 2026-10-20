@@ -181,7 +181,7 @@ export interface Config {
   readonly hostAddresses: readonly string[];
 
   // tests only: a file of fake upstreams for granted hosts
-  // (broker/test-upstreams.ts)
+  // (broker/create-upstream-resolver.ts)
   readonly brokerTestUpstreams: string | null;
   readonly ramBudgetMib: number;
   readonly idleTimeoutS: number;

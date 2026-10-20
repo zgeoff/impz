@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { buildMockPublicImp } from '../test-utils/build-mock-public-imp';
-import { buildMockStoredPublicAuth } from '../test-utils/build-mock-stored-public-auth';
+import { buildMockPublicImp } from '../../testing/network/build-mock-public-imp';
+import { buildMockStoredPublicAuth } from '../../testing/network/build-mock-stored-public-auth';
 import { buildCredentialHash, createCredential, createPublicRoute } from './public-auth';
 import { createPublicLimits } from './public-limits';
 

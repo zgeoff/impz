@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { buildMockMoveSendRow } from '../test-utils/build-mock-move-send-row';
-import { createTestDatabase } from '../test-utils/create-test-database';
+import { buildMockMoveSendRow } from '../../testing/imp-ops/build-mock-move-send-row';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { readMoveSend, removeMoveSend, updateMoveSend, writeMoveSend } from './move-sends';
 
 async function setupTest() {
@@ -9,7 +9,7 @@ async function setupTest() {
   return { db: database.db };
 }
 
-test('#readMoveSend reads the row it wrote for the imp', async () => {
+test('#findMoveSend reads the row it wrote for the imp', async () => {
   const ctx = await setupTest();
 
   const row = buildMockMoveSendRow({ imp_id: 'imp-1' });
@@ -21,7 +21,7 @@ test('#readMoveSend reads the row it wrote for the imp', async () => {
   expect(found).toStrictEqual(row);
 });
 
-test('#readMoveSend finds nothing for an imp with no send', async () => {
+test('#findMoveSend finds nothing for an imp with no send', async () => {
   const ctx = await setupTest();
 
   await writeMoveSend(ctx.db, buildMockMoveSendRow({ imp_id: 'imp-1' }));

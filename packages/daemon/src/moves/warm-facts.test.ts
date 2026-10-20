@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
+import { buildMockWarmHost } from '../../testing/imp-ops/build-mock-warm-host';
+import { buildMockWarmMove } from '../../testing/imp-ops/build-mock-warm-move';
 import { parseSubnet } from '../net/addressing';
-import { buildMockWarmHost } from '../test-utils/build-mock-warm-host';
-import { buildMockWarmMove } from '../test-utils/build-mock-warm-move';
 import { buildWarmMove, collectWarmMismatches, readWarmHost } from './warm-facts';
 
 test('#readWarmHost reports the identity, the config and the storage a warm move needs', () => {
@@ -123,7 +123,7 @@ test('#buildWarmMove records a snapshot from an older impd without its CPU or IP
   });
 });
 
-test('#collectWarmMismatches finds nothing when the target shares every fact of an open imp', () => {
+test('#findWarmMismatches finds nothing when the target shares every fact of an open imp', () => {
   const target = buildMockWarmHost();
 
   const move = buildMockWarmMove({
@@ -243,7 +243,7 @@ test.each([
     ['IMP_DNS differs (1.1.1.1,8.8.8.8 here, 9.9.9.9 there)'],
   ],
 ])(
-  '#collectWarmMismatches refuses an open imp whose target differs in %s',
+  '#findWarmMismatches refuses an open imp whose target differs in %s',
   (_fact, snapshot, moveHost, targetOverrides, expected) => {
     const base = buildMockWarmHost();
     const target = { ...base, ...targetOverrides };
@@ -273,7 +273,7 @@ test.each([
   },
 );
 
-test('#collectWarmMismatches ignores IMP_DNS for a box imp, which asks the host resolver', () => {
+test('#findWarmMismatches ignores IMP_DNS for a box imp, which asks the host resolver', () => {
   const target = buildMockWarmHost({ dns: ['9.9.9.9'] });
 
   const move = buildMockWarmMove({
@@ -298,7 +298,7 @@ test('#collectWarmMismatches ignores IMP_DNS for a box imp, which asks the host 
   expect(collectWarmMismatches(move, target)).toStrictEqual([]);
 });
 
-test('#collectWarmMismatches refuses a slot past the target slot count', () => {
+test('#findWarmMismatches refuses a slot past the target slot count', () => {
   const target = buildMockWarmHost({ slotCount: 16 });
 
   const move = buildMockWarmMove({
@@ -324,7 +324,7 @@ test('#collectWarmMismatches refuses a slot past the target slot count', () => {
   ]);
 });
 
-test('#collectWarmMismatches reports every fact that differs, in order', () => {
+test('#findWarmMismatches reports every fact that differs, in order', () => {
   const target = buildMockWarmHost({ slotCount: 16 });
 
   const move = buildMockWarmMove({

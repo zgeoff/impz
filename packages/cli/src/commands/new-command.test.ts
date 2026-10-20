@@ -4,12 +4,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImage } from '@impz/daemon/src/db/images';
 import { readImpByName } from '@impz/daemon/src/db/imps';
-import { buildImagePaths } from '@impz/daemon/src/storage/data-layout';
-import { buildMockNewImage } from '@impz/daemon/src/test-utils/build-mock-new-image';
+import {
+  buildImagePaths,
+  buildMockNewImage,
+  createStubCloudflareApi,
+  startStubImpdRelease,
+} from '@impz/daemon/testing';
+import { server } from '@impz/test-utils/mock-server';
 import { writeHostConfig } from '../config/host-store';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';
-import { startStubOlderImpd } from '../test-utils/start-stub-older-impd';
 
 // The CLI's home, where config.json keeps the saved hosts, so none of this
 // machine's reaches it; each impd host a test starts releases into `stack`
@@ -129,7 +133,7 @@ test('#new refuses --no-backup on an impd from before the setting, and creates n
 
   await createImage(box.db, image);
 
-  const older = startStubOlderImpd(ctx.stack, box.sendRequest, {
+  const older = startStubImpdRelease(ctx.stack, box.sendRequest, {
     withoutFeatures: ['backupOptOut'],
   });
 
@@ -369,6 +373,13 @@ test('#new refuses --place for a name a saved host has already', async () => {
 test('#new passes over a host whose token is limited, then exposes, under --place --public', async () => {
   const ctx = await setupTest();
   const big = await startImpdHost(ctx.stack, { env: {} });
+
+  // Cloudflare, where impd's startup and the expose write the records
+  const cloudflare = createStubCloudflareApi({ tokens: ['unused'] });
+
+  await cloudflare.zones.create({ name: 'imp.example.com' });
+
+  server.use(...cloudflare.handlers);
 
   // a domain and a public address, so imps.expose works
   const small = await startImpdHost(ctx.stack, {

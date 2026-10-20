@@ -212,11 +212,13 @@ An `imp-host:dev` image from before the per-checkout tags has no label, so remov
 
 ## Daemon tests
 
-The daemon's tests need no VM. `packages/daemon/src/imps/test-imps.ts` runs the governed imp service
-over an in-memory database and a stub VMM (`test-utils/build-stub-vmm.ts`). A test scripts what the
-next boot, wake, sleep, stop or agent check does (succeed, fail, die or hang), holds a step until it
-releases it, and restarts impd over the same database and VMs. `readBrokenInvariants` reads the raw
-records, because a read through the service repairs what it finds.
+The daemon's tests need no VM. `startTestImpd` in `packages/daemon/testing/` starts impd through the
+same startup as production, over an in-memory database and a stub VMM
+(`testing/vm/build-stub-vmm.ts`). A test scripts what the next boot, wake, sleep, stop or agent
+check does (succeed, fail, die or hang), holds a step until it releases it, and restarts impd over
+the same database and VMs. Another package's tests import the harness from `@impz/daemon/testing`.
+`readBrokenInvariants` reads the raw records, because a read through the service repairs what it
+finds.
 
 After you add a migration, run `bun run render:db-schema`: kysely-codegen writes the daemon's typed
 schema from a freshly migrated database, and `bun test` fails while the committed file differs.

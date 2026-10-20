@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { buildMockCheckpointRecord } from '../test-utils/build-mock-checkpoint-record';
-import { buildMockNewCheckpoint } from '../test-utils/build-mock-new-checkpoint';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { createTestDatabase } from '../test-utils/create-test-database';
+import { buildMockCheckpointRecord } from '../../testing/imp-ops/build-mock-checkpoint-record';
+import { buildMockNewCheckpoint } from '../../testing/imp-ops/build-mock-new-checkpoint';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import {
   createCheckpoint,
   listCheckpoints,

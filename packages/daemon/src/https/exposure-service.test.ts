@@ -1,12 +1,12 @@
 import { expect, mock, test } from 'bun:test';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../testing/imps/build-mock-new-imp';
+import { buildQueryGate } from '../../testing/platform/build-query-gate';
+import { createTestDatabase } from '../../testing/platform/create-test-database';
 import { loadConfig } from '../config';
 import { readPublicImp } from '../db/exposure';
 import { createImage } from '../db/images';
 import { createImp, updateImpExposure, updateImpMove } from '../db/imps';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildMockNewImp } from '../test-utils/build-mock-new-imp';
-import { buildQueryGate } from '../test-utils/build-query-gate';
-import { createTestDatabase } from '../test-utils/create-test-database';
 import { createExposureService } from './exposure-service';
 import { buildCredentialHash } from './public-auth';
 

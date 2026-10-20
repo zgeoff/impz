@@ -3,7 +3,7 @@ import { linkSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startStubAgent } from '../test-utils/start-stub-agent';
+import { startStubAgent } from '../../testing/vm/start-stub-agent';
 import { openAgentConnection } from './agent-connection';
 import { FRAME_TYPES, encodeJsonFrame } from './frame-codec';
 

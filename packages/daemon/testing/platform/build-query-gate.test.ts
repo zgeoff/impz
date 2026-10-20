@@ -1,0 +1,194 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { runChildTests } from '@impz/test-utils/run-child-tests';
+import { createImage } from '../../src/db/images';
+import { buildMockNewImage } from '../imps/build-mock-new-image';
+import { buildQueryGate } from './build-query-gate';
+import { createTestDatabase } from './create-test-database';
+
+test('it holds nothing before it is armed', async () => {
+  const testDatabase = await createTestDatabase();
+
+  await createImage(
+    testDatabase.db,
+    buildMockNewImage({ name: 'ubuntu', ref: 'imp/ubuntu:24.04' }),
+  );
+
+  const gate = buildQueryGate('images');
+
+  const rows = await testDatabase.db
+    .withPlugin(gate.plugin)
+    .selectFrom('images')
+    .select('name')
+    .where('name', '=', 'ubuntu')
+    .execute();
+
+  expect(rows).toStrictEqual([{ name: 'ubuntu' }]);
+  expect(Bun.peek.status(gate.reached)).toBe('pending');
+});
+
+test('it holds the first select naming it once armed', async () => {
+  const testDatabase = await createTestDatabase();
+
+  const gate = buildQueryGate('images');
+
+  gate.arm();
+
+  const held = testDatabase.db
+    .withPlugin(gate.plugin)
+    .selectFrom('images')
+    .select('name')
+    .where('name', '=', 'ubuntu')
+    .execute();
+
+  await gate.reached;
+
+  expect(Bun.peek.status(held)).toBe('pending');
+});
+
+test('it lets the held select finish with its rows after release', async () => {
+  const testDatabase = await createTestDatabase();
+
+  await createImage(
+    testDatabase.db,
+    buildMockNewImage({ name: 'ubuntu', ref: 'imp/ubuntu:24.04' }),
+  );
+
+  const gate = buildQueryGate('images');
+
+  gate.arm();
+
+  const held = testDatabase.db
+    .withPlugin(gate.plugin)
+    .selectFrom('images')
+    .select('name')
+    .where('name', '=', 'ubuntu')
+    .execute();
+
+  await gate.reached;
+
+  gate.release();
+
+  expect(held).resolves.toStrictEqual([{ name: 'ubuntu' }]);
+});
+
+test('it holds only the first matching select', async () => {
+  const testDatabase = await createTestDatabase();
+
+  await createImage(
+    testDatabase.db,
+    buildMockNewImage({ name: 'ubuntu', ref: 'imp/ubuntu:24.04' }),
+  );
+
+  const gate = buildQueryGate('images');
+  const gated = testDatabase.db.withPlugin(gate.plugin);
+
+  gate.arm();
+
+  const held = gated.selectFrom('images').select('name').execute();
+
+  await gate.reached;
+
+  const rows = await gated
+    .selectFrom('images')
+    .select('ref')
+    .where('name', '=', 'ubuntu')
+    .execute();
+
+  expect(rows).toStrictEqual([{ ref: 'imp/ubuntu:24.04' }]);
+  expect(Bun.peek.status(held)).toBe('pending');
+});
+
+test('it ignores a select that does not name it', async () => {
+  const testDatabase = await createTestDatabase();
+
+  await createImage(
+    testDatabase.db,
+    buildMockNewImage({ name: 'ubuntu', ref: 'imp/ubuntu:24.04' }),
+  );
+
+  const gate = buildQueryGate('imps');
+
+  gate.arm();
+
+  const rows = await testDatabase.db
+    .withPlugin(gate.plugin)
+    .selectFrom('images')
+    .select('name')
+    .where('name', '=', 'ubuntu')
+    .execute();
+
+  expect(rows).toStrictEqual([{ name: 'ubuntu' }]);
+  expect(Bun.peek.status(gate.reached)).toBe('pending');
+});
+
+test('it stays armed past a select that does not name it', async () => {
+  const testDatabase = await createTestDatabase();
+
+  const gate = buildQueryGate('images');
+  const gated = testDatabase.db.withPlugin(gate.plugin);
+
+  gate.arm();
+
+  await gated.selectFrom('imps').select('name').execute();
+
+  const held = gated.selectFrom('images').select('name').execute();
+
+  await gate.reached;
+
+  expect(Bun.peek.status(held)).toBe('pending');
+});
+
+test('it holds a select through the database it wraps', async () => {
+  const testDatabase = await createTestDatabase();
+
+  const gate = buildQueryGate('images');
+  const gated = gate.wrap(testDatabase.db);
+
+  gate.arm();
+
+  const held = gated.selectFrom('images').select('name').execute();
+
+  await gate.reached;
+
+  expect(Bun.peek.status(held)).toBe('pending');
+});
+
+test('it keeps the wrapped database’s write feed', async () => {
+  const testDatabase = await createTestDatabase();
+
+  const gate = buildQueryGate('images');
+  const gated = gate.wrap(testDatabase.db);
+
+  expect(gated.writes).toBe(testDatabase.db.writes);
+});
+
+test('it releases a held select when the test finishes', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'query-gate-'));
+
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+
+  // the gate comes first, so its release runs before the database closes
+  const run = runChildTests(
+    directory,
+    [
+      "import { expect, test } from 'bun:test';",
+      `import { buildQueryGate } from ${JSON.stringify(join(import.meta.dir, 'build-query-gate.ts'))};`,
+      `import { createTestDatabase } from ${JSON.stringify(join(import.meta.dir, 'create-test-database.ts'))};`,
+      'const left: { held: Promise<unknown> | null } = { held: null };',
+      "test('it holds', async () => {",
+      "  const gate = buildQueryGate('images');",
+      '  const testDatabase = await createTestDatabase();',
+      '  gate.arm();',
+      "  left.held = testDatabase.db.withPlugin(gate.plugin).selectFrom('images').select('name').execute();",
+      '  await gate.reached;',
+      '});',
+      "test('it finds it released', () => { expect(left.held).resolves.toStrictEqual([]); });",
+    ].join('\n'),
+  );
+
+  expect(run.exitCode).toBe(0);
+  expect(run.output).toInclude(' 2 pass');
+});

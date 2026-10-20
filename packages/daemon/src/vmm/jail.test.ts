@@ -16,9 +16,9 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
+import { buildStubMounts } from '../../testing/vm/build-stub-mounts';
+import { buildStubUidProcesses } from '../../testing/vm/build-stub-uid-processes';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildStubMounts } from '../test-utils/build-stub-mounts';
-import { buildStubUidProcesses } from '../test-utils/build-stub-uid-processes';
 import {
   buildJailerCommand,
   createJails,

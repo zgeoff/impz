@@ -1,20 +1,12 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IMAGE_BUILD_STREAM_TYPE } from '@impz/api';
 import type { ImageBuildProgress } from '@impz/api';
-import { loadConfig } from '@impz/daemon/src/config';
-import { createImpd } from '@impz/daemon/src/create-impd';
-import type { ImpdDeps } from '@impz/daemon/src/create-impd';
-import { openDatabase } from '@impz/daemon/src/db/open-database';
+import { DOCKERFILE_FRONTEND } from '@impz/daemon/src/docker-proxy/dockerfile-frontend';
 import { BUILD_KEEPALIVE_MS } from '@impz/daemon/src/images/build-event-stream';
-import { MOVE_PART_BYTES } from '@impz/daemon/src/moves/move-parts';
-import { buildSystemDrivePath, buildSystemDrivesDir } from '@impz/daemon/src/storage/data-layout';
-import { createXfsBackend } from '@impz/daemon/src/storage/xfs-backend';
-import { buildStubCpuCgroups } from '@impz/daemon/src/test-utils/build-stub-cpu-cgroups';
-import { buildStubVmm } from '@impz/daemon/src/test-utils/build-stub-vmm';
-import { claimFreePorts } from '@impz/daemon/src/test-utils/claim-free-ports';
+import { createStubDockerCli, startTestImpd } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -22,7 +14,6 @@ import { ORPCError } from '@orpc/client';
 import { http } from 'msw';
 import { createImpClient } from './create-imp-client';
 import { buildStubImpdBeforeBuildStream } from './test-utils/build-stub-impd-before-build-stream';
-import { createStubDockerBin } from './test-utils/create-stub-docker-bin';
 import { startStubDockerEngine } from './test-utils/start-stub-docker-engine';
 
 // impd on stub VMs and a loopback port, building on the host engine at
@@ -36,126 +27,24 @@ async function setupTest(options: { readonly keepaliveMs?: number } = {}) {
   // impd boots with a root token, the bearer the test's client sends
   const rootToken = 'root-token';
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'imp-client-build-'));
-
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
   const workDir = await mkdtemp(join(tmpdir(), 'imp-client-engine-'));
 
   stack.defer(() => rm(workDir, { recursive: true, force: true }));
 
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
-  const deps: ImpdDeps = {
-    db,
-    rootToken,
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-
-    // the host's free space, so a build never meets this machine's disk
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
-
-    // a frozen clock, so each progress line's elapsed time is 0
-    now: () => Date.UTC(2026, 0, 1),
-    keepaliveMs: options.keepaliveMs ?? BUILD_KEEPALIVE_MS,
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  };
-
   const dockerSocket = join(workDir, 'docker.sock');
 
-  // the stub VMM runs no jailer and builds no boot template; the resolver
-  // binds its port on every address, so each impd takes a free one; builds
-  // run on the host engine, as no builder imp has an agent here
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
-    IMP_BUILD_ISOLATION: 'host',
-    DOCKER_HOST: `unix://${dockerSocket}`,
-  });
-
-  const impd = await createImpd(config, deps);
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
-  });
-
-  // main.ts's body limit, so the build route, not Bun, refuses a large context
-  impd.api.app.listen({
-    port: 0,
-    hostname: '127.0.0.1',
-    maxRequestBodySize: Math.max(config.buildContextMaxBytes, MOVE_PART_BYTES) + 1024 ** 2,
-  });
-
-  stack.defer(async () => {
-    await impd.api.app.stop(true);
+  // builds run on the host engine, as no builder imp has an agent here; a
+  // frozen clock, so each progress line's elapsed time is 0
+  const harness = await startTestImpd(stack, {
+    rootToken,
+    env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: `unix://${dockerSocket}` },
+    frozenClockMs: Date.UTC(2026, 0, 1),
+    boundaries: { keepaliveMs: options.keepaliveMs ?? BUILD_KEEPALIVE_MS },
   });
 
   return {
-    impd,
-    url: `http://127.0.0.1:${String(impd.api.app.server?.port)}/`,
+    impd: harness.impd,
+    url: `${harness.url}/`,
     dockerSocket,
     workDir,
     rootToken,
@@ -208,11 +97,24 @@ test('it uploads a Blob as the build context and answers the image', async () =>
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
-  const docker = createStubDockerBin(ctx.workDir, {
-    'imp/web:latest': { id: imageId, repoDigests: [], files: { hello: 'built\n' } },
+  await mkdir(join(ctx.workDir, 'tree'));
+  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
+
+  // the frontend is on the host, and the engine tags what it builds
+  const docker = createStubDockerCli({
+    directory: ctx.workDir,
+    images: [
+      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
+      {
+        refs: ['imp/web:latest'],
+        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
+      },
+    ],
+    create: { id: 'c'.repeat(64) },
+    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
   });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', docker.path);
 
   const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
 
@@ -248,11 +150,24 @@ test('it uploads bytes as the build context', async () => {
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
-  const docker = createStubDockerBin(ctx.workDir, {
-    'imp/web:latest': { id: imageId, repoDigests: [], files: { hello: 'built\n' } },
+  await mkdir(join(ctx.workDir, 'tree'));
+  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
+
+  // the frontend is on the host, and the engine tags what it builds
+  const docker = createStubDockerCli({
+    directory: ctx.workDir,
+    images: [
+      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
+      {
+        refs: ['imp/web:latest'],
+        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
+      },
+    ],
+    create: { id: 'c'.repeat(64) },
+    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
   });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', docker.path);
 
   const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
 
@@ -288,11 +203,24 @@ test('it uploads a stream as the build context', async () => {
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
-  const docker = createStubDockerBin(ctx.workDir, {
-    'imp/web:latest': { id: imageId, repoDigests: [], files: { hello: 'built\n' } },
+  await mkdir(join(ctx.workDir, 'tree'));
+  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
+
+  // the frontend is on the host, and the engine tags what it builds
+  const docker = createStubDockerCli({
+    directory: ctx.workDir,
+    images: [
+      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
+      {
+        refs: ['imp/web:latest'],
+        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
+      },
+    ],
+    create: { id: 'c'.repeat(64) },
+    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
   });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', docker.path);
 
   const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
 
@@ -328,11 +256,24 @@ test('it sends the name, the Dockerfile, the token and what it accepts', async (
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
-  const docker = createStubDockerBin(ctx.workDir, {
-    'imp/web:latest': { id: imageId, repoDigests: [], files: { hello: 'built\n' } },
+  await mkdir(join(ctx.workDir, 'tree'));
+  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
+
+  // the frontend is on the host, and the engine tags what it builds
+  const docker = createStubDockerCli({
+    directory: ctx.workDir,
+    images: [
+      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
+      {
+        refs: ['imp/web:latest'],
+        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
+      },
+    ],
+    create: { id: 'c'.repeat(64) },
+    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
   });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', docker.path);
 
   const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
 
@@ -373,11 +314,24 @@ test('it sends the size of a stream as its Content-Length, which impd builds to'
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
-  const docker = createStubDockerBin(ctx.workDir, {
-    'imp/web:latest': { id: imageId, repoDigests: [], files: { hello: 'built\n' } },
+  await mkdir(join(ctx.workDir, 'tree'));
+  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
+
+  // the frontend is on the host, and the engine tags what it builds
+  const docker = createStubDockerCli({
+    directory: ctx.workDir,
+    images: [
+      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
+      {
+        refs: ['imp/web:latest'],
+        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
+      },
+    ],
+    create: { id: 'c'.repeat(64) },
+    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
   });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', docker.path);
 
   const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
 
@@ -429,11 +383,24 @@ test(
       release.resolve();
     });
 
-    const docker = createStubDockerBin(ctx.workDir, {
-      'imp/web:latest': { id: imageId, repoDigests: [], files: { hello: 'built\n' } },
+    await mkdir(join(ctx.workDir, 'tree'));
+    await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
+
+    // the frontend is on the host, and the engine tags what it builds
+    const docker = createStubDockerCli({
+      directory: ctx.workDir,
+      images: [
+        { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
+        {
+          refs: ['imp/web:latest'],
+          inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
+        },
+      ],
+      create: { id: 'c'.repeat(64) },
+      exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
     });
 
-    updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+    updateEnv('PATH', docker.path);
 
     const engine = startStubDockerEngine({
       socketPath: ctx.dockerSocket,
@@ -526,11 +493,24 @@ test(
       release.resolve();
     });
 
-    const docker = createStubDockerBin(ctx.workDir, {
-      'imp/web:latest': { id: imageId, repoDigests: [], files: { hello: 'built\n' } },
+    await mkdir(join(ctx.workDir, 'tree'));
+    await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
+
+    // the frontend is on the host, and the engine tags what it builds
+    const docker = createStubDockerCli({
+      directory: ctx.workDir,
+      images: [
+        { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
+        {
+          refs: ['imp/web:latest'],
+          inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
+        },
+      ],
+      create: { id: 'c'.repeat(64) },
+      exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
     });
 
-    updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+    updateEnv('PATH', docker.path);
 
     const engine = startStubDockerEngine({
       socketPath: ctx.dockerSocket,
@@ -616,11 +596,24 @@ test('it reports each progress line as it arrives, before the image', async () =
   const imageId = `sha256:${'b'.repeat(64)}`;
   const release = Promise.withResolvers<void>();
 
-  const docker = createStubDockerBin(ctx.workDir, {
-    'imp/web:latest': { id: imageId, repoDigests: [], files: { hello: 'built\n' } },
+  await mkdir(join(ctx.workDir, 'tree'));
+  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
+
+  // the frontend is on the host, and the engine tags what it builds
+  const docker = createStubDockerCli({
+    directory: ctx.workDir,
+    images: [
+      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
+      {
+        refs: ['imp/web:latest'],
+        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
+      },
+    ],
+    create: { id: 'c'.repeat(64) },
+    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
   });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', docker.path);
 
   const engine = startStubDockerEngine({
     socketPath: ctx.dockerSocket,
@@ -670,9 +663,13 @@ test('it reports each progress line as it arrives, before the image', async () =
 test('it throws the ORPCError of the error line that ends the stream', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerBin(ctx.workDir, {});
+  // the frontend is on the host
+  const docker = createStubDockerCli({
+    directory: ctx.workDir,
+    images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
+  });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', docker.path);
 
   const engine = startStubDockerEngine({
     socketPath: ctx.dockerSocket,
@@ -703,11 +700,24 @@ test('it answers the image from an impd that answers JSON, from before the strea
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
-  const docker = createStubDockerBin(ctx.workDir, {
-    'imp/web:latest': { id: imageId, repoDigests: [], files: { hello: 'built\n' } },
+  await mkdir(join(ctx.workDir, 'tree'));
+  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
+
+  // the frontend is on the host, and the engine tags what it builds
+  const docker = createStubDockerCli({
+    directory: ctx.workDir,
+    images: [
+      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
+      {
+        refs: ['imp/web:latest'],
+        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
+      },
+    ],
+    create: { id: 'c'.repeat(64) },
+    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
   });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', docker.path);
 
   const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
 
@@ -741,9 +751,13 @@ test('it answers the image from an impd that answers JSON, from before the strea
 test('it throws the ORPCError that an impd from before the stream answers', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerBin(ctx.workDir, {});
+  // the frontend is on the host
+  const docker = createStubDockerCli({
+    directory: ctx.workDir,
+    images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
+  });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', docker.path);
 
   const engine = startStubDockerEngine({
     socketPath: ctx.dockerSocket,

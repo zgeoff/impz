@@ -10,8 +10,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildMockHostIdentity } from '../../testing/vm/build-mock-host-identity';
 import { buildImpPaths } from '../storage/data-layout';
-import { buildMockHostIdentity } from '../test-utils/build-mock-host-identity';
 import {
   buildSnapshotIdentity,
   probeSnapshot,

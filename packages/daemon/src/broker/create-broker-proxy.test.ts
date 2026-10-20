@@ -1,44 +1,30 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ImpContract } from '@impz/api';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
 import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/fetch';
-import type { ContractRouterClient } from '@orpc/contract';
 import { HttpResponse, http } from 'msw';
-import { loadConfig } from '../config';
-import { createImpd } from '../create-impd';
+import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
+import { buildStubBrokerGuest } from '../../testing/network/build-stub-broker-guest';
+import { createStubBrokerTokenEndpoint } from '../../testing/network/create-stub-broker-token-endpoint';
+import { startStubBrokerGuestSocket } from '../../testing/network/start-stub-broker-guest-socket';
+import { startStubBrokerHoldTarget } from '../../testing/network/start-stub-broker-hold-target';
+import { startStubBrokerPlainUpstream } from '../../testing/network/start-stub-broker-plain-upstream';
+import { startStubBrokerReplyTarget } from '../../testing/network/start-stub-broker-reply-target';
+import { startStubBrokerTlsUpstream } from '../../testing/network/start-stub-broker-tls-upstream';
+import { startStubBrokerTunnel } from '../../testing/network/start-stub-broker-tunnel';
+import { buildStubHeldAnswer } from '../../testing/platform/build-stub-held-answer';
+import { startTestImpd } from '../../testing/start-test-impd';
 import { listAuditEntries } from '../db/broker-audit';
 import { createImage } from '../db/images';
 import { readImpByName } from '../db/imps';
-import { openDatabase } from '../db/open-database';
 import { listGrantNames, readSecret, removeCheckedGrant } from '../db/secrets';
-import {
-  buildImagePaths,
-  buildSystemDrivePath,
-  buildSystemDrivesDir,
-} from '../storage/data-layout';
-import { createXfsBackend } from '../storage/xfs-backend';
-import { buildMockNewImage } from '../test-utils/build-mock-new-image';
-import { buildStubBrokerGuest } from '../test-utils/build-stub-broker-guest';
-import { buildStubCpuCgroups } from '../test-utils/build-stub-cpu-cgroups';
-import { buildStubHeldAnswer } from '../test-utils/build-stub-held-answer';
-import { buildStubVmm } from '../test-utils/build-stub-vmm';
-import { claimFreePorts } from '../test-utils/claim-free-ports';
-import { createStubBrokerTokenEndpoint } from '../test-utils/create-stub-broker-token-endpoint';
-import { startStubBrokerGuestSocket } from '../test-utils/start-stub-broker-guest-socket';
-import { startStubBrokerHoldTarget } from '../test-utils/start-stub-broker-hold-target';
-import { startStubBrokerPlainUpstream } from '../test-utils/start-stub-broker-plain-upstream';
-import { startStubBrokerReplyTarget } from '../test-utils/start-stub-broker-reply-target';
-import { startStubBrokerTlsUpstream } from '../test-utils/start-stub-broker-tls-upstream';
-import { startStubBrokerTunnel } from '../test-utils/start-stub-broker-tunnel';
+import { buildImagePaths } from '../storage/data-layout';
 import { loadOrCreateBrokerCa } from './broker-ca';
 
 // The broker end to end on loopback: with IMP_SUBNET 127.0.0.0/16, curl
@@ -55,10 +41,6 @@ async function setupTest() {
   const dataDir = await mkdtemp(join(tmpdir(), 'broker-'));
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const db = await openDatabase(':memory:');
-
-  stack.defer(() => db.destroy());
 
   // the real host past a plain tunnel, with a CA nobody trusts: the guest
   // must see a certificate the broker CA did not sign
@@ -123,103 +105,26 @@ async function setupTest() {
   // the broker reads the file when a request comes; a test writes it
   const upstreamsFile = join(dataDir, 'upstreams.json');
 
-  // a loopback subnet, so a local address stands for a guest; the stub VMM
-  // runs no jailer; each impd's resolver takes a free port
-  const config = loadConfig({
-    IMP_DATA_DIR: dataDir,
-    IMP_JAILER: 'false',
-    IMP_BOOT_TEMPLATES: 'false',
-    IMP_EGRESS_DNS_PORT: String(claimFreePorts(1).take()),
-    IMP_SUBNET: '127.0.0.0/16',
-    IMP_BROKER_TEST_UPSTREAMS: upstreamsFile,
-  });
-
-  // the system drive impd boots imps with, as setupSystemFiles installs it
-  const drive = 'd1'.repeat(32);
-  const systemDrivePath = buildSystemDrivePath(dataDir, drive);
-
-  await mkdir(buildSystemDrivesDir(dataDir), { recursive: true });
-  await writeFile(systemDrivePath, drive);
-
-  const vmm = buildStubVmm();
-
   // what a request does between its rule read and its value read
   const ruleRead = { hook: (): Promise<void> => Promise.resolve() };
 
   // plain tunnels stay on loopback, and port 443 goes to the real host
   const tunnelPorts = new Map([[443, realHost.port]]);
 
-  // impd's clock, which a test moves on
+  // the broker's clock, which a test moves on
   const clock = { nowMs: Date.now() };
   const log = mock<(message: string) => void>(() => {});
 
-  const impd = await createImpd(config, {
-    db,
-    now: () => clock.nowMs,
-
-    // the bearer the test's root client sends
-    rootToken: 'root-token',
-    storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-    systemFiles: {
-      kernelPath: join(dataDir, 'system', 'vmlinux'),
-      systemDrivePath,
-      info: {
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: drive },
-      },
-    },
-    readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log,
-    readIdentity: (files, ipv6Prefix) => ({
-      firecrackerVersion: 'v1.17.0',
-      snapshotVersion: 'v12.0.0',
-      hostKernel: 'test',
-      guestKernel: files.info.guestKernel.sha256,
-      systemDrive: files.info.systemDrive.sha256,
-      systemDrivePath: files.systemDrivePath,
-      cpuModel: 'Test CPU',
-      cpuFlags: 'test-flags',
-      ipv6Prefix,
-    }),
-    resolveIpv6: () => Promise.resolve(null),
-    readTailscale: () =>
-      Promise.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] }),
-    cgroups: buildStubCpuCgroups().cgroups,
-    vms: vmm.startGeneration(),
-    taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
-    broker: {
-      installBundle: () => Promise.resolve(),
-      resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),
-      dialTunnel: (address, port) =>
-        createConnection({ host: address, port: tunnelPorts.get(port) ?? port }),
-      afterRuleRead: () => ruleRead.hook(),
-      runOAuthTimer: false,
-    },
-    egress: {
-      runNft: () => Promise.resolve(),
-      flushConnections: () => Promise.resolve(),
-      flushPair: () => Promise.resolve(),
-      readForwardRules: () => Promise.resolve(''),
-      forward: () => Promise.reject(new Error('no upstream in tests')),
-      resolveExact: () => Promise.resolve([]),
-      readConnected4: () => Promise.resolve(['172.17.0.0/16']),
-      readConnected6: () => Promise.resolve([]),
-      readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
-    },
-    imps: {
-      readRamMib: (pid) => (vmm.alive.has(pid) ? 300 : null),
-      readRssMib: (pid) => (vmm.alive.has(pid) ? 340 : null),
-      growFilesystem: () => Promise.resolve(false),
-      hostCpus: 8,
-    },
-    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-  });
-
-  stack.defer(() => impd.broker.stop());
-
-  stack.defer(() => {
-    impd.egress.stop();
-    impd.diskUsage.stop();
+  // a loopback subnet, so a local address stands for a guest
+  const harness = await startTestImpd(stack, {
+    dataDir,
+    env: { IMP_SUBNET: '127.0.0.0/16', IMP_BROKER_TEST_UPSTREAMS: upstreamsFile },
+    onLog: log,
+    brokerNow: () => clock.nowMs,
+    resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),
+    dialTunnel: (address, port) =>
+      createConnection({ host: address, port: tunnelPorts.get(port) ?? port }),
+    afterRuleRead: () => ruleRead.hook(),
   });
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
@@ -227,28 +132,19 @@ async function setupTest() {
   // the image every imp boots from
   await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
 
-  await createImage(db, image);
+  await createImage(harness.db, image);
 
-  const proxyPort = await impd.broker.listen(0);
-
+  const proxyPort = harness.config.brokerPort;
   const caFile = join(dataDir, 'broker', 'ca', 'ca.pem');
-
-  const link = new RPCLink({
-    url: 'http://impd.test/rpc',
-    headers: { authorization: 'Bearer root-token' },
-    fetch: (request) => impd.api.app.handle(request),
-  });
-
-  const client: ContractRouterClient<ImpContract> = createORPCClient(link);
 
   return {
     stack,
-    db,
+    db: harness.db,
     dataDir,
-    impd,
+    impd: harness.impd,
     clock,
     log,
-    client,
+    client: harness.client,
     seen,
     tunnelled,
     answers,

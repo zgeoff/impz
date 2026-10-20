@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
+import { startStubFirecrackerProcess } from '../../testing/vm/start-stub-firecracker-process';
 import { stopPid } from '../process/proc';
-import { startStubFirecrackerProcess } from '../test-utils/start-stub-firecracker-process';
 import {
   buildFirecrackerCommand,
   buildSpawnArgv,
