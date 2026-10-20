@@ -192,6 +192,39 @@ test('it reports a file under src that no move or root stem covers', async () =>
   });
 });
 
+test('it carries on from a run that stopped after it wrote a moved file', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/src/imps/imp-service.ts'),
+    "import { readImp } from '../db/imps';\n",
+  );
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/src/imps/imps/imp-service.ts'),
+    "import { readImp } from '../../platform/db/imps';\n",
+  );
+
+  await Bun.write(join(ctx.root, 'packages/daemon/src/db/imps.ts'), 'export const readImp = 1;\n');
+
+  const report = applyLayerMoves(ctx.root, [
+    'packages/daemon/src/imps/imp-service.ts',
+    'packages/daemon/src/imps/imps/imp-service.ts',
+    'packages/daemon/src/db/imps.ts',
+  ]);
+
+  expect(report.collisions).toStrictEqual([]);
+  expect(existsSync(join(ctx.root, 'packages/daemon/src/imps/imp-service.ts'))).toBeFalse();
+
+  expect(readFileSync(join(ctx.root, 'packages/daemon/src/imps/imps/imp-service.ts'), 'utf8')).toBe(
+    "import { readImp } from '../../platform/db/imps';\n",
+  );
+
+  expect(readFileSync(join(ctx.root, 'packages/daemon/src/platform/db/imps.ts'), 'utf8')).toBe(
+    'export const readImp = 1;\n',
+  );
+});
+
 test('it moves no file when a destination already holds one', async () => {
   const ctx = await setupTest();
 

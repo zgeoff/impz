@@ -4,6 +4,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  rmSync,
   rmdirSync,
   statSync,
   writeFileSync,
@@ -39,37 +40,88 @@ export function applyLayerMoves(root: string, files: readonly string[]): LayerRe
     }
   }
 
-  const collisions = [...moves].filter(
-    ([from, to]) =>
-      existsSync(join(root, to)) ||
-      [...moves].some(([other, otherTo]) => other !== from && otherTo === to),
-  );
+  const plans = [...moves].map(([from, to]) => planMove(root, from, to));
+
+  const collisions = plans
+    .filter(
+      (plan) =>
+        isTakenByOther(root, plan) ||
+        plans.some((other) => other.from !== plan.from && other.to === plan.to),
+    )
+    .map((plan) => [plan.from, plan.to] as const);
 
   if (collisions.length > 0) {
     return { moved: [], rewritten: [], unplaced: [], collisions };
   }
 
-  for (const [from, to] of moves) {
-    mkdirSync(dirname(join(root, to)), { recursive: true });
-    renameSync(join(root, from), join(root, to));
+  // each file moves with its text already rewritten, so a run that stops part way leaves every
+  // file consistent with its own folder, and the next run carries on from there
+  for (const plan of plans) {
+    if (!existsSync(join(root, plan.to))) {
+      mkdirSync(dirname(join(root, plan.to)), { recursive: true });
+
+      if (plan.next === null) {
+        renameSync(join(root, plan.from), join(root, plan.to));
+      } else {
+        writeFileSync(join(root, plan.to), plan.next, { mode: plan.mode });
+      }
+    }
+
+    rmSync(join(root, plan.from), { force: true });
   }
 
   removeEmptyFolders(root, [...moves.keys()]);
 
-  const rewritten = files.flatMap((file) => {
-    const current = moves.get(file) ?? file;
+  const relinked = plans
+    .filter((plan) => plan.next !== null && plan.next !== plan.text)
+    .map((plan) => plan.to);
 
-    return updateFilePaths(root, file, current) ? [current] : [];
-  });
+  const rewritten = files.flatMap((file) =>
+    !moves.has(file) && updateFilePaths(root, file) ? [file] : [],
+  );
 
   return {
     moved: [...moves],
-    rewritten,
+    rewritten: [...relinked, ...rewritten],
     unplaced: files
       .map((file) => moves.get(file) ?? file)
       .filter((file) => file.startsWith(`${DAEMON_SRC}/`) && !isCovered(file)),
     collisions: [],
   };
+}
+
+// a file's move, with its text before and after its paths are rewritten from its old folder;
+// both are null for a binary file, which moves as it is
+interface MovePlan {
+  readonly from: string;
+  readonly to: string;
+  readonly text: string | null;
+  readonly next: string | null;
+  readonly mode: number;
+}
+
+function planMove(root: string, from: string, to: string): MovePlan {
+  const text = readText(join(root, from));
+
+  return {
+    from,
+    to,
+    text,
+    next: text === null ? null : transformLayerPaths(text, { root, file: from, current: to }),
+    mode: statSync(join(root, from)).mode,
+  };
+}
+
+// true when another file sits at the move's destination; the file that an interrupted run wrote
+// there, which holds what this move would write, is the move's own
+function isTakenByOther(root: string, plan: MovePlan): boolean {
+  if (!existsSync(join(root, plan.to))) {
+    return false;
+  }
+
+  return plan.next === null
+    ? !readFileSync(join(root, plan.to)).equals(readFileSync(join(root, plan.from)))
+    : readText(join(root, plan.to)) !== plan.next;
 }
 
 function planRepoPath(file: string): string {
@@ -106,21 +158,21 @@ function removeEmptyFolders(root: string, movedFrom: readonly string[]): void {
   }
 }
 
-// rewrites the paths in `file`, which now sits at `current`; true when its text changed
-function updateFilePaths(root: string, file: string, current: string): boolean {
-  const text = readText(join(root, current));
+// rewrites the paths in `file`, which stays where it is; true when its text changed
+function updateFilePaths(root: string, file: string): boolean {
+  const text = readText(join(root, file));
 
   if (text === null) {
     return false;
   }
 
-  const next = transformLayerPaths(text, { root, file, current });
+  const next = transformLayerPaths(text, { root, file, current: file });
 
   if (next === text) {
     return false;
   }
 
-  writeFileSync(join(root, current), next);
+  writeFileSync(join(root, file), next);
 
   return true;
 }
