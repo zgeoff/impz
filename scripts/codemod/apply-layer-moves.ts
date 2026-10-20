@@ -166,7 +166,7 @@ function updateFilePaths(root: string, file: string): boolean {
     return false;
   }
 
-  const next = transformLayerPaths(text, { root, file, current: file });
+  const next = transformLayerPaths(text, { root, file, current: file, exists: existsSync });
 
   if (next === text) {
     return false;

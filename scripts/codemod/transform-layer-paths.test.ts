@@ -111,6 +111,30 @@ test("it rewrites the src paths of knip's daemon workspace only", () => {
   );
 });
 
+test('it resolves a stale import in a placed file from its old folder', () => {
+  const files = new Set(['/repo/packages/daemon/src/platform/db/new-query.ts']);
+
+  expect(
+    transformLayerPaths("import { readQuery } from '../db/new-query';\n", {
+      root: '/repo',
+      file: 'packages/daemon/src/imps/imps/imp-service.ts',
+      current: 'packages/daemon/src/imps/imps/imp-service.ts',
+      exists: (path) => files.has(path),
+    }),
+  ).toBe("import { readQuery } from '../../platform/db/new-query';\n");
+});
+
+test('it leaves a stale import that resolves from neither folder', () => {
+  expect(
+    transformLayerPaths("import { readQuery } from '../db/gone';\n", {
+      root: '/repo',
+      file: 'packages/daemon/src/imps/imps/imp-service.ts',
+      current: 'packages/daemon/src/imps/imps/imp-service.ts',
+      exists: () => false,
+    }),
+  ).toBe("import { readQuery } from '../db/gone';\n");
+});
+
 test('it leaves the imports of a placed file as they are', () => {
   expect(
     transformLayerPaths("import { readImp } from '../../platform/db/imps';\n", {

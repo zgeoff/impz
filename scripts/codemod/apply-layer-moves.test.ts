@@ -192,6 +192,29 @@ test('it reports a file under src that no move or root stem covers', async () =>
   });
 });
 
+test('it relinks an import that a merge carried into a placed file', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/src/imps/imps/imp-service.ts'),
+    "import { readQuery } from '../db/new-query';\n",
+  );
+
+  await Bun.write(
+    join(ctx.root, 'packages/daemon/src/db/new-query.ts'),
+    'export const readQuery = 1;\n',
+  );
+
+  applyLayerMoves(ctx.root, [
+    'packages/daemon/src/imps/imps/imp-service.ts',
+    'packages/daemon/src/db/new-query.ts',
+  ]);
+
+  expect(readFileSync(join(ctx.root, 'packages/daemon/src/imps/imps/imp-service.ts'), 'utf8')).toBe(
+    "import { readQuery } from '../../platform/db/new-query';\n",
+  );
+});
+
 test('it carries on from a run that stopped after it wrote a moved file', async () => {
   const ctx = await setupTest();
 

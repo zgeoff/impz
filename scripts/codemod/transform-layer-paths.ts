@@ -1,11 +1,15 @@
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { LAYER_TABLE, planLayerPath } from './plan-layer-path';
+import { planOriginalLayerPath } from './plan-original-layer-path';
 
 // where a file sits: `file` before the move and `current` after it, both relative to `root`
 export interface LayerPlace {
   readonly root: string;
   readonly file: string;
   readonly current: string;
+
+  // whether an absolute path holds a file; without it, a stale import in a placed file stays
+  readonly exists?: (path: string) => boolean;
 }
 
 // the text of the file at `place` with every path that names a moved daemon file rewritten
@@ -46,11 +50,7 @@ const RELATIVE_PATHS = [
 function planSpecifier(place: LayerPlace, specifier: string): string {
   const src = resolve(place.root, LAYER_TABLE.daemonSrc);
   const target = resolve(place.root, dirname(place.file), specifier);
-  const isInSrc = target === src || target.startsWith(`${src}${sep}`);
-
-  const movedTarget = isInSrc
-    ? join(src, planLayerPath(relative(src, target).split(sep).join('/')))
-    : target;
+  const movedTarget = planStaleTarget(place, src, specifier) ?? planTarget(src, target);
 
   if (movedTarget === target && place.file === place.current) {
     return specifier;
@@ -70,6 +70,48 @@ function planSpecifier(place: LayerPlace, specifier: string): string {
   const prefix = path.startsWith('.') || !specifier.startsWith('.') ? '' : './';
 
   return `${prefix}${path}${trailing}`;
+}
+
+// where an absolute `target` under src moves to; a target outside src stays
+function planTarget(src: string, target: string): string {
+  const isInSrc = target === src || target.startsWith(`${src}${sep}`);
+
+  return isInSrc ? join(src, planLayerPath(relative(src, target).split(sep).join('/'))) : target;
+}
+
+// A merge can carry a file to its layer folder with an import that a branch wrote from its old
+// folder. When that import resolves nowhere, this resolves it from the old folder instead and
+// returns where its target sits now; an import that resolves from neither folder stays as it is.
+function planStaleTarget(place: LayerPlace, src: string, specifier: string): string | undefined {
+  const exists = place.exists;
+
+  if (exists === undefined || place.file !== place.current) {
+    return undefined;
+  }
+
+  const target = resolve(place.root, dirname(place.file), specifier);
+
+  if (canResolve(exists, target) || canResolve(exists, planTarget(src, target))) {
+    return undefined;
+  }
+
+  const path = relative(src, resolve(place.root, place.file)).split(sep).join('/');
+  const original = planOriginalLayerPath(path);
+
+  if (original === path || path.startsWith('..')) {
+    return undefined;
+  }
+
+  const movedTarget = planTarget(src, resolve(src, dirname(original), specifier));
+
+  return canResolve(exists, movedTarget) ? movedTarget : target;
+}
+
+// the suffixes that Bun tries on an import specifier
+const RESOLVED_SUFFIXES = ['', '.ts', '.tsx', '.js', '.d.ts', '.json', '/index.ts'];
+
+function canResolve(exists: (path: string) => boolean, path: string): boolean {
+  return RESOLVED_SUFFIXES.some((suffix) => exists(`${path}${suffix}`));
 }
 
 // a path under the daemon's src in any text: `@impz/daemon/src/db/imps`, a relative import from
