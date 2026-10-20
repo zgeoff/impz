@@ -1,9 +1,11 @@
 // Moves impd's folders under one folder per layer and rewrites every path that names them. A run
 // on its own output changes nothing, so a branch that conflicts with the move merges main and runs
-// it again. Usage (from the repo root): bun scripts/codemod/nest-daemon-layers.ts
+// it again. Usage: bun scripts/codemod/nest-daemon-layers.ts [repo root, default the cwd]
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { applyLayerMoves } from './apply-layer-moves';
+
+const OXFMT = join(import.meta.dir, '..', '..', 'node_modules', '.bin', 'oxfmt');
 
 // the release notes keep the paths that each release had, and the codemod keeps its own fixtures
 const SKIPPED_FILES = /(?:^|\/)CHANGELOG\.md$|^bun\.lock$|^scripts\/codemod\//u;
@@ -12,7 +14,7 @@ const SKIPPED_FILES = /(?:^|\/)CHANGELOG\.md$|^bun\.lock$|^scripts\/codemod\//u;
 const FORMATTED_FILE = /\.(?:[cm]?[jt]sx?|jsonc?|md|css|ya?ml|html)$/u;
 
 function main(): void {
-  const root = process.cwd();
+  const root = resolve(process.argv[2] ?? process.cwd());
 
   const listed = Bun.spawnSync(
     ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'],
@@ -47,7 +49,7 @@ function main(): void {
   const formattable = report.rewritten.filter((file) => FORMATTED_FILE.test(file));
 
   if (formattable.length > 0) {
-    Bun.spawnSync(['node_modules/.bin/oxfmt', '--no-error-on-unmatched-pattern', ...formattable], {
+    Bun.spawnSync([OXFMT, '--no-error-on-unmatched-pattern', ...formattable], {
       cwd: root,
       stdout: 'inherit',
       stderr: 'inherit',
