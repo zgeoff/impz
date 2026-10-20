@@ -498,7 +498,7 @@ test('it ends the wait for a wake when the forward stops', async () => {
 
     expect(seen).toPartiallyContain({
       ev: 'ImpChanged',
-      imp: expect.objectContaining({ state: 'running' }) as unknown,
+      imp: expect.objectContaining({ state: 'running' }),
     });
   });
 
