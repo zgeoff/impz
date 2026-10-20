@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.2](https://github.com/zgeoff/impz/compare/v2.8.1...v2.8.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* **deps:** update follow-redirects to fix advisories ([#562](https://github.com/zgeoff/impz/issues/562)) ([183e39d](https://github.com/zgeoff/impz/commit/183e39d8d406264295fc0797892dae51644a7611))
+
 ## [2.8.1](https://github.com/zgeoff/impz/compare/v2.8.0...v2.8.1) (2026-10-19)
 
 ### Bug Fixes
