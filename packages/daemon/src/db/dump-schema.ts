@@ -1,6 +1,6 @@
 // `bun run render:db-schema`: the migrated database's tables into schema.ts,
 // through kysely-codegen. `--check` writes nothing and fails on a difference,
-// as render-schema.test.ts does under `bun test`.
+// as dump-schema.test.ts does under `bun test`.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sql } from 'kysely';
@@ -118,20 +118,20 @@ async function main(): Promise<void> {
   if (process.argv.includes('--check')) {
     if (next !== current) {
       console.error(
-        'render-schema: schema.ts differs from the migrations; run bun run render:db-schema',
+        'dump-schema: schema.ts differs from the migrations; run bun run render:db-schema',
       );
 
       process.exit(1);
     }
 
-    console.log('render-schema: schema.ts matches the migrations');
+    console.log('dump-schema: schema.ts matches the migrations');
 
     return;
   }
 
   writeFileSync(SCHEMA_FILE, next);
 
-  console.log(`render-schema: ${next === current ? 'nothing new' : 'wrote schema.ts'}`);
+  console.log(`dump-schema: ${next === current ? 'nothing new' : 'wrote schema.ts'}`);
 }
 
 if (import.meta.main) {

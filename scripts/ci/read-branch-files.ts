@@ -69,7 +69,7 @@ async function runCLI(): Promise<void> {
     }
   } catch (error) {
     process.stderr.write(
-      `collect-branch-files: ${error instanceof Error ? error.message : String(error)}\n`,
+      `read-branch-files: ${error instanceof Error ? error.message : String(error)}\n`,
     );
 
     process.exit(1);

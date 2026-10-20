@@ -42,7 +42,7 @@ export function resolveLogout(context: RouteContext): Response {
   return new HttpResponse(null, { status: 204 });
 }
 
-// impd's /rpc (packages/daemon build-app.ts): the browser's session, only
+// impd's /rpc (packages/daemon create-app.ts): the browser's session, only
 // from impd's own origin and before it expires, or impd's 401; oRPC's own
 // fetch handler answers through impdRouter
 export async function resolveRpc(context: RouteContext): Promise<Response> {

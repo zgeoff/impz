@@ -48,7 +48,7 @@ export function emitImpdEvent(event: ImpEvent): void {
 }
 
 // events.stream through impd's own openEventStream, filtered and ended as
-// packages/daemon build-router.ts does: by the session's imp patterns, and
+// packages/daemon create-router.ts does: by the session's imp patterns, and
 // at the caller's abort, a logout, or the session's expiry
 export function openImpdEventStream(
   session: StreamSession,

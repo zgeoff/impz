@@ -29,7 +29,7 @@ export interface AuditDetail {
 }
 
 // the implementer every procedure is built on, which a topic's routes take
-// (build-system-routes.ts, build-token-routes.ts)
+// (create-system-routes.ts, create-token-routes.ts)
 export type RpcImplementer = ReturnType<typeof createImplementer>;
 
 export function createImplementer(deps: RouterDeps) {

@@ -686,7 +686,7 @@ function writeDockerImage(name: string, ref: string): Promise<Image> {
   return writeImageRow(name, { ref });
 }
 
-// impd's readSystemInfo (packages/daemon build-router.ts): the host's
+// impd's readSystemInfo (packages/daemon create-system-routes.ts): the host's
 // numbers, and what the imp rows add up to
 async function readSystemInfo(): Promise<SystemInfo> {
   const host = await readHost();

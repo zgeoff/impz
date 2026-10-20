@@ -157,7 +157,7 @@ export const PROCEDURE_ACCESS: Readonly<Record<ImpProcedurePath, Access>> = {
   'images.add': { scope: 'manage', on: 'image' },
   'images.build': manageHost,
 
-  // audited as the work ends, with its outcome (build-image-routes.ts)
+  // audited as the work ends, with its outcome (create-image-routes.ts)
   'images.addStream': { scope: 'manage', on: 'image', audit: 'refusals' },
   'images.buildStream': { scope: 'manage', on: 'host', audit: 'refusals' },
   'images.delete': manageHost,
