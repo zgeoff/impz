@@ -2,6 +2,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { toJson } from '@bufbuild/protobuf';
 import type { JsonValue } from '@bufbuild/protobuf';
 import * as z from 'zod';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
 import type { SeenSession } from '../../imps/sessions/session-cache';
 import { writeFileDurably, writeRenamed } from '../../platform/process/write-file-durably';
 import { ServicesListSchema, SessionInfoSchema } from '../agent-client/agent-protocol';

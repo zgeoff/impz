@@ -1,3 +1,4 @@
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildExitError, runCommand } from '../../platform/process/run-command';

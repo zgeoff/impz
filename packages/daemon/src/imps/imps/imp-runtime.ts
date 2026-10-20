@@ -1,8 +1,10 @@
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import { listColdBoots } from '../../platform/db/cold-boots';
 import { findImpById, findImpByName, listImps, updateImpActivity } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { readErrorMessage } from '../../platform/process/read-error-message';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildBuilderError,
   buildInvalidStateError,

@@ -1,5 +1,7 @@
 import type { DroppedStorage, OrphanStorage, StorageGc } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
 import type { SecretFiles } from '../../network/broker/secret-files';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { printSweep } from './print-sweep';

@@ -2,6 +2,7 @@ import { copyFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { EgressPolicySchema } from '@impz/api';
 import type { BackupRestore, EgressPolicy, Imp } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { Imps } from '../../imps/imps/imp-service';
@@ -12,6 +13,7 @@ import { createImage, findImageByDigest, findImageByName } from '../../platform/
 import { findImpByName, listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { readErrorMessage } from '../../platform/process/read-error-message';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildConflictError,
   buildNotBackedUpError,

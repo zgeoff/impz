@@ -1,8 +1,10 @@
 import type { Logger } from '@logtape/logtape';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { Server, WebSocketHandler } from 'bun';
 import type { Config } from '../../config';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 moves the caller into platform
 import { removeSessionCookie } from '../../identity/auth/session-cookie';
 import type { ImpRuntime } from '../../imps/imps/imp-runtime';
 import type { ImpRecord } from '../../platform/db/imps';
@@ -13,6 +15,7 @@ import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { readErrorMessage } from '../../platform/process/read-error-message';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { startRealTimer } from '../../platform/process/start-real-timer';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { MOVING_RETRY_AFTER_S } from '../../surface/api-errors';
 import { buildTrackedBody } from './build-tracked-body';
 import { buildErrorPage } from './error-pages';

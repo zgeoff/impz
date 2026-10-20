@@ -1,5 +1,6 @@
 import type { ApiActor, ApiCall } from '@impz/api';
 import type { Selectable } from 'kysely';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 moves the caller into platform
 import { toLikePattern } from '../../identity/auth/imp-patterns';
 import type { ImpDatabase } from './open-database';
 import type { ApiAudit } from './schema';

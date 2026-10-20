@@ -2,6 +2,7 @@ import { ImpStateSchema } from '@impz/api';
 import type { ImpEvent, ImpState } from '@impz/api';
 import { ROOT_CONTEXT, metrics, trace } from '@opentelemetry/api';
 import type { BatchObservableCallback } from '@opentelemetry/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
 import type { ResourceDelta } from '../../imps/imps/resource-sampler';
 import type { EventBus } from '../events/event-bus';
 import { SCOPE } from './scope';

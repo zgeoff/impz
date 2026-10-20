@@ -1,4 +1,5 @@
 import { EVENT_VERSION } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 moves the caller into platform
 import type { AuditActor } from '../../identity/auth/caller';
 import { withAuditedOpen } from '../../platform/audit/api-audit';
 import type { ApiAudit } from '../../platform/audit/api-audit';

@@ -1,12 +1,15 @@
 import { EVENT_VERSION } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
 import type { LockFreeSleep } from '../../imps/imps/lock-free-sleep';
 import type { EventBus } from '../../platform/events/event-bus';
 import { createSemaphore } from '../../platform/process/semaphore';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildImpOverBudgetError,
   buildRamBudgetError,
   readNeededMib,
 } from '../../surface/api-errors';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import type { ProtectedImp } from '../../surface/api-errors';
 import { pickSleepVictims } from './pick-sleep-victims';
 

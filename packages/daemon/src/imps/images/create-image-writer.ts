@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path';
 import { NameSchema } from '@impz/api';
 import type { ImageBuildPhase } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import * as z from 'zod';
 import type { Config } from '../../config';
@@ -17,6 +18,7 @@ import { createKeyedMutex } from '../../platform/process/keyed-mutex';
 import { readErrorMessage } from '../../platform/process/read-error-message';
 import { runChecked, runCommand } from '../../platform/process/run-command';
 import { createSingleFlight } from '../../platform/process/single-flight';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildConflictError } from '../../surface/api-errors';
 import { buildImagePaths, buildImagesDir } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';

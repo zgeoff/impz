@@ -1,8 +1,10 @@
 import type { ExposeResult, PublicAuth } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import { findImpByName, updateImpExposure } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildMovingError, buildNotFoundError } from '../../surface/api-errors';
 import type { HttpsConfig } from './https-config';
 import type { RecordsStatus } from './https-service';

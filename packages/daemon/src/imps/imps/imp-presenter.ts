@@ -1,4 +1,5 @@
 import type { Imp } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives each module its config
 import type { HttpsConfig } from '../../network/https/https-config';
 import { findImageById, listImages } from '../../platform/db/images';
 import type { ImpRecord } from '../../platform/db/imps';

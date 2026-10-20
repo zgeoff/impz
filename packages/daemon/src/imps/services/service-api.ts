@@ -1,10 +1,12 @@
 import { ServiceRestartSchema, ServiceStateSchema } from '@impz/api';
 import type { Service, ServiceDef, ServiceList, ServiceLog } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { EventBus } from '../../platform/events/event-bus';
 import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildAgentOutdatedApiError,
   buildConflictError,

@@ -1,10 +1,12 @@
 import type { ColdBootCause } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import { removeNextBootCause, writeColdBoot } from '../../platform/db/cold-boots';
 import { removeIdentityReset, updateImpActivity, updateImpDisk } from '../../platform/db/imps';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { readErrorMessage } from '../../platform/process/read-error-message';
 import { createSemaphore } from '../../platform/process/semaphore';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildAgentOutdatedApiError, buildStoppingError } from '../../surface/api-errors';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
 import { removeSnapshot } from '../../vm/sleep/snapshot-meta';

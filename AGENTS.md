@@ -60,6 +60,10 @@ docs/
   setting in [`bunfig.toml`](bunfig.toml), so the rule covers hand-written edits.
 - The `zgeoff/import-zones` options in [`.oxlintrc.json`](.oxlintrc.json) hold the package
   boundaries, and each entry's reason holds the fix.
+- impd's code in `packages/daemon/src/` sits in one folder per layer, and the `daemon-layer-*`
+  entries of `zgeoff/import-zones` give the order: a layer imports only itself and the layers below
+  it. The composition root's files sit at the top of `src/`, above every layer. A known upward
+  import carries a disable comment that holds the issue that removes it.
 
 ## Commands
 

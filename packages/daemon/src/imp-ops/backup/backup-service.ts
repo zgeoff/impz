@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { BackupRestore, BackupRun, BackupStatus, ImpState } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import * as z from 'zod';
 import type { TokenStore } from '../../identity/auth/token-store';
@@ -23,6 +24,7 @@ import { createKeyedMutex } from '../../platform/process/keyed-mutex';
 import { printLog } from '../../platform/process/print-log';
 import { readErrorMessage } from '../../platform/process/read-error-message';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { NOT_BACKED_UP_REASON } from '../../surface/api-errors';
 import { sendFreeze, sendThaw } from '../../vm/agent-client/agent-requests';
 import { FREEZE_TIMEOUT_MS } from '../../vm/checkpoints/consistent-disk';

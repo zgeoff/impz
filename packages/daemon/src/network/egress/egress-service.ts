@@ -1,5 +1,6 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { Config } from '../../config';
 import { formatSubnet, parseIpv4 } from '../../host-net/net/addressing';
@@ -23,6 +24,7 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import { createKeyedMutex } from '../../platform/process/keyed-mutex';
 import { readErrorMessage } from '../../platform/process/read-error-message';
 import { startInterval } from '../../platform/process/start-interval';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildNotFoundError } from '../../surface/api-errors';
 import { REFUSED_RANGES } from '../broker/tunnel-target';
 import { checkDenyList } from './check-deny-list';

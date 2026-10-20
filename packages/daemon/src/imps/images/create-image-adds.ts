@@ -1,5 +1,6 @@
 import { ImageRefSchema, NameSchema } from '@impz/api';
 import type { ImageBuildPhase } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { Config } from '../../config';
 import { findImageByName, listImages } from '../../platform/db/images';

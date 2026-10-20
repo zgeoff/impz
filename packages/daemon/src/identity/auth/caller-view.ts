@@ -1,7 +1,9 @@
 import type { Lease, LeaseSummary } from '@impz/api';
 import { hasScope } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { LeaseRecord } from '../../platform/db/leases';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildForbiddenError, readCallerData } from '../../surface/api-errors';
 import { formatCaller, isCallerAllowed } from './caller';
 import type { Caller } from './caller';

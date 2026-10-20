@@ -4,6 +4,7 @@ import { listCheckpoints } from '../../platform/db/checkpoints';
 import type { ImageRecord } from '../../platform/db/images';
 import { listImps, removeImp, updateImpDisk, updateImpSettings } from '../../platform/db/imps';
 import { readErrorMessage } from '../../platform/process/read-error-message';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildInvalidStateError, isRamBudgetError } from '../../surface/api-errors';
 import { resolveMaxMemoryMib } from '../../vm/memory/elastic-memory';
 import { buildImagePaths } from '../../vm/storage/data-layout';
