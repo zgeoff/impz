@@ -8,7 +8,7 @@ const PKCE_CHALLENGE = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
 
 export interface SignInRoute {
   // the route's handler, as the listener calls it
-  readonly handle: (request: Request) => Promise<Response>;
+  readonly respond: (request: Request) => Promise<Response>;
   readonly origin: string;
   readonly clientID: string;
   readonly redirectURI: string;
@@ -39,7 +39,7 @@ export async function createPendingSignIn(route: Readonly<SignInRoute>): Promise
     resource: `${route.origin}/mcp`,
   });
 
-  const authorized = await route.handle(
+  const authorized = await route.respond(
     new Request(`${route.origin}/oauth2/authorize?${query.toString()}`, { headers: { host } }),
   );
 
@@ -51,7 +51,7 @@ export async function createPendingSignIn(route: Readonly<SignInRoute>): Promise
     throw new Error(`authorize answered ${String(authorized.status)} to ${location}`);
   }
 
-  const page = await route.handle(new Request(login.href, { headers: { host } }));
+  const page = await route.respond(new Request(login.href, { headers: { host } }));
   const text = await page.text();
 
   const code = /impz oauth approve (?<code>[A-Z0-9\-]+)/v.exec(text)?.groups?.['code'];

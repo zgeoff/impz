@@ -40,9 +40,11 @@ export function buildV6Plan(portOffset: number): V6Plan {
 // The address a guest gets in a /64, worked out by hand: the prefix, then
 // the guest's IPv4 address as the interface ID (10.66.0.6 is ::a42:6).
 export function buildGuestIpv6(network: string, ipv4: string): string {
-  const [a = 0, b = 0, c = 0, d = 0] = ipv4.split('.').map(Number);
+  const [firstOctet = 0, secondOctet = 0, thirdOctet = 0, fourthOctet = 0] = ipv4
+    .split('.')
+    .map(Number);
 
-  return `${network}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  return `${network}${((firstOctet << 8) | secondOctet).toString(16)}:${((thirdOctet << 8) | fourthOctet).toString(16)}`;
 }
 
 // the ULA /64 impd logged for NAT66
@@ -108,7 +110,7 @@ export interface RaCounts {
 
 // the two counters of `nft list table netdev <table>`
 export function parseRaCounts(listing: string): RaCounts {
-  const readCount = (type: string) => {
+  const getCount = (type: string) => {
     const match = new RegExp(String.raw`${type} counter packets (?<n>\d+)`, 'v').exec(listing);
 
     const count = match?.groups?.['n'];
@@ -120,7 +122,7 @@ export function parseRaCounts(listing: string): RaCounts {
     return Number(count);
   };
 
-  return { adverts: readCount('nd-router-advert'), solicits: readCount('nd-router-solicit') };
+  return { adverts: getCount('nd-router-advert'), solicits: getCount('nd-router-solicit') };
 }
 
 // the device the instance routes an address through

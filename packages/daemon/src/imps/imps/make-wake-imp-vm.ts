@@ -2,11 +2,11 @@ import type { ColdBootCause } from '@impz/api';
 import { writeUnknownBoot } from '../../platform/db/cold-boots';
 import { claimTrustPending, updateImpActivity } from '../../platform/db/imps';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildStoppingError } from '../../surface/api-errors';
 import {
-  findColdBootReason,
+  readColdBootReason,
   readSnapshotMeta,
   removeSnapshot,
   removeSnapshotMeta,
@@ -60,7 +60,7 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     const meta = readSnapshotMeta(paths);
 
     const mismatch =
-      meta === null ? 'no snapshot it can load' : findColdBootReason(meta, context.identity);
+      meta === null ? 'no snapshot it can load' : readColdBootReason(meta, context.identity);
 
     // a snapshot with no drive path has a mismatch too: the check narrows it
     if (meta === null || mismatch !== null || meta.systemDrivePath === undefined) {
@@ -164,7 +164,7 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
 
       await context.readExecEnv(imp, paths.vsockSocket);
     } catch (error) {
-      context.log(`impd: ${imp.name}: broker CA after the wake: ${readErrorMessage(error)}`);
+      context.log(`impd: ${imp.name}: broker CA after the wake: ${getErrorMessage(error)}`);
     }
 
     return toLockedImp(imp, { ...imp, isTrustPending: false });
@@ -194,7 +194,7 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
         readOnlyFiles: [systemDrivePath],
       });
     } catch (error) {
-      const failure = error instanceof Error ? error : new Error(readErrorMessage(error));
+      const failure = error instanceof Error ? error : new Error(getErrorMessage(error));
 
       // the first line is the failure the record keeps: the limit, not the API error
       return hasOomKill()
@@ -210,7 +210,7 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     try {
       await context.vms.stopVm(pid, paths, false);
     } catch (error) {
-      const message = readErrorMessage(error);
+      const message = getErrorMessage(error);
 
       context.log(`impd: ${imp.name}: could not stop the woken VM: ${message}`);
       context.admission?.release(imp.id);

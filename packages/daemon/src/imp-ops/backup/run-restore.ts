@@ -9,10 +9,10 @@ import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
 import type { NetworkService } from '../../network/networks/network-service';
 import { createCheckpoint } from '../../platform/db/checkpoints';
-import { createImage, findImageByDigest, findImageByName } from '../../platform/db/images';
-import { findImpByName, listImps } from '../../platform/db/imps';
+import { createImage, readImageByDigest, readImageByName } from '../../platform/db/images';
+import { listImps, readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildConflictError,
@@ -74,7 +74,7 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
   // a stale lock from a crashed run would block even reading the repository
   await deps.restic.unlock();
 
-  const point = await findPoint(deps, input.at ?? deps.now(), input.name);
+  const point = await readPoint(deps, input.at ?? deps.now(), input.name);
 
   const base = point.paths[0] ?? deps.paths.tree;
 
@@ -179,7 +179,7 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
 
 // the newest point at or before `at` that holds `name`, or that names it
 // as left out, when one is given
-async function findPoint(
+async function readPoint(
   deps: RestoreDeps,
   at: Date,
   name: string | undefined,
@@ -212,10 +212,10 @@ async function createRestoredDatabase(
   workDir: string,
 ) {
   const file = requireTreeDatabase(database.file);
-  const dir = join(workDir, dirname(file));
+  const directory = join(workDir, dirname(file));
 
   const access = await deps.diskBudget.withRoom(database.sizeBytes, async () => {
-    await deps.restic.restore(point.id, join(base, dirname(file)), dir, []);
+    await deps.restic.restore(point.id, join(base, dirname(file)), directory, []);
 
     return createRestoredAccess(deps.db, deps.tokens, join(workDir, file));
   });
@@ -263,7 +263,7 @@ async function createJoinedImage(
   image: ManifestImage,
   workDir: string,
 ): Promise<string> {
-  const existing = await findImageByDigest(deps.db, image.digest);
+  const existing = await readImageByDigest(deps.db, image.digest);
 
   if (existing !== undefined) {
     return existing.name;
@@ -272,19 +272,19 @@ async function createJoinedImage(
   // the name first: a clash on the fallback fails before any storage
   const name = await resolveRestoredImageName(deps, image);
 
-  const dir = join(workDir, image.dir);
+  const directory = join(workDir, image.dir);
 
-  await deps.restic.restore(point.id, join(base, image.dir), dir, []);
+  await deps.restic.restore(point.id, join(base, image.dir), directory, []);
 
   await deps.storage.createImage(image.digest, async (target) => {
     writeFileSync(join(target, 'rootfs.ext4'), '');
 
-    await writeChangedBlocks(join(dir, 'rootfs.ext4'), join(target, 'rootfs.ext4'));
+    await writeChangedBlocks(join(directory, 'rootfs.ext4'), join(target, 'rootfs.ext4'));
 
-    copyFileSync(join(dir, 'config.json'), join(target, 'config.json'));
+    copyFileSync(join(directory, 'config.json'), join(target, 'config.json'));
   });
 
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(directory, { recursive: true, force: true });
 
   await createImage(deps.db, {
     name,
@@ -300,7 +300,7 @@ async function createJoinedImage(
 
 // its own name, else `<name>-<tag>` when another image has it
 async function resolveRestoredImageName(deps: RestoreDeps, image: ManifestImage): Promise<string> {
-  const taken = await findImageByName(deps.db, image.name);
+  const taken = await readImageByName(deps.db, image.name);
 
   if (taken === undefined) {
     return image.name;
@@ -308,7 +308,7 @@ async function resolveRestoredImageName(deps: RestoreDeps, image: ManifestImage)
 
   const fallback = `${image.name.slice(0, 22)}-${buildDigestTag(image.digest)}`;
 
-  const fallbackTaken = await findImageByName(deps.db, fallback);
+  const fallbackTaken = await readImageByName(deps.db, fallback);
 
   if (fallbackTaken !== undefined) {
     throw buildConflictError(
@@ -455,14 +455,14 @@ async function removeFailedImp(
   name: string,
   impId: string | null,
 ): Promise<void> {
-  const found = await findImpByName(deps.db, name);
+  const found = await readImpByName(deps.db, name);
 
   if (impId === null || found?.id !== impId) {
     return;
   }
 
   await deps.imps.destroyImp(name).catch((error: unknown) => {
-    deps.log(`impd: backup: ${name}: a failed restore left the imp: ${readErrorMessage(error)}`);
+    deps.log(`impd: backup: ${name}: a failed restore left the imp: ${getErrorMessage(error)}`);
   });
 }
 
@@ -482,7 +482,7 @@ async function createRestoredGrants(deps: RestoreDeps, impName: string, imp: Man
     try {
       await deps.grants.addGrant(impName, secret, null, grant.filter);
     } catch (error) {
-      skipped.push({ imp: impName, secret, reason: readErrorMessage(error) });
+      skipped.push({ imp: impName, secret, reason: getErrorMessage(error) });
     }
   }
 

@@ -8,7 +8,7 @@ export type AwakeRow = Readonly<Pick<ImpRow, 'state' | 'lastActiveAt' | 'resourc
 // Whether impd's idle loop found the running imp active `idleTimeoutS` after
 // `sinceMs` (it moves lastActiveAt only while something keeps the imp awake),
 // with no sleep or wake since `before`.
-export function checkAwakePastIdle(
+export function isAwakePastIdle(
   row: AwakeRow,
   before: AwakeRow,
   sinceMs: number,
@@ -23,7 +23,7 @@ export function checkAwakePastIdle(
 }
 
 // Waits, without touching `name` (a listing records no activity), until
-// checkAwakePastIdle holds against its first read as running (it may still
+// isAwakePastIdle holds against its first read as running (it may still
 // be waking); fails a few idle-loop ticks past the timeout.
 export async function waitAwakePastIdle(name: string, sinceMs: number): Promise<void> {
   const before = await waitFor(`${name} to run`, async () => {
@@ -41,7 +41,7 @@ export async function waitAwakePastIdle(name: string, sinceMs: number): Promise<
     async () => {
       const row = await requireImp(name);
 
-      if (!checkAwakePastIdle(row, before, sinceMs, config.idleTimeoutS)) {
+      if (!isAwakePastIdle(row, before, sinceMs, config.idleTimeoutS)) {
         throw new Error(
           `${name} is ${row.state}, last active at ${row.lastActiveAt}, woken ${String(row.resources?.wakeCount)} times, last slept at ${String(row.sleptAt)}`,
         );

@@ -47,7 +47,7 @@ export async function runGitCommand(
   argv: readonly string[],
   options: Readonly<GitCommandOptions> = {},
 ): Promise<CommandResult> {
-  const proc = Bun.spawn([...argv], {
+  const subprocess = Bun.spawn([...argv], {
     stdin: options.stdin === undefined ? 'ignore' : Buffer.from(options.stdin),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -55,9 +55,9 @@ export async function runGitCommand(
   });
 
   const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
+    new Response(subprocess.stdout).text(),
+    new Response(subprocess.stderr).text(),
+    subprocess.exited,
   ]);
 
   return { exitCode, stdout, stderr };

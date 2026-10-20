@@ -84,7 +84,7 @@ export interface HttpsConfig {
 
 // null when IMP_DOMAIN is unset: no HTTPS, and the per-port URLs are the only
 // tailnet URLs
-export function parseHttpsConfig(env: z.infer<typeof HttpsEnvSchema>): HttpsConfig | null {
+export function readHttpsConfig(env: z.infer<typeof HttpsEnvSchema>): HttpsConfig | null {
   if (env.IMP_DNS_API_TOKEN !== undefined && env.IMP_DNS_API_TOKEN_FILE !== undefined) {
     throw new Error('set IMP_DNS_API_TOKEN or IMP_DNS_API_TOKEN_FILE, not both');
   }
@@ -103,10 +103,10 @@ export function parseHttpsConfig(env: z.infer<typeof HttpsEnvSchema>): HttpsConf
     );
   }
 
-  const token = readTokenSource(env);
+  const token = findTokenSource(env);
 
   // a file that is missing or empty is not checked here: impd starts, and
-  // says so until the file holds a token (buildHttpsService)
+  // says so until the file holds a token (wireHttpsService)
   if (env.IMP_DNS_PROVIDER === 'cloudflare' && token === null) {
     throw new Error(
       'IMP_DNS_PROVIDER=cloudflare needs IMP_DNS_API_TOKEN or IMP_DNS_API_TOKEN_FILE',
@@ -193,7 +193,7 @@ function isUnreachable(ip: string): boolean {
   );
 }
 
-function readTokenSource(env: z.infer<typeof HttpsEnvSchema>): DnsTokenSource | null {
+function findTokenSource(env: z.infer<typeof HttpsEnvSchema>): DnsTokenSource | null {
   if (env.IMP_DNS_API_TOKEN_FILE !== undefined) {
     return { kind: 'file', path: env.IMP_DNS_API_TOKEN_FILE };
   }

@@ -11,7 +11,7 @@ import type { EgressDeps } from './network/egress/egress-service';
 import type { ImpDatabase } from './platform/db/open-database';
 import type { CommandRunner } from './platform/process/run-command';
 import type { TickerTimer } from './platform/process/ticker';
-import type { AppDeps } from './surface/build-app';
+import type { AppDeps } from './surface/create-app';
 import type { DiskFreezer } from './vm/checkpoints/consistent-disk';
 import type { HostIdentity } from './vm/sleep/vm-identity';
 import type { SystemFiles } from './vm/storage/setup-system-files';

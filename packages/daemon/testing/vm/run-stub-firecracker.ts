@@ -30,54 +30,56 @@ const SnapshotCreateSchema = z.object({
 
 const PAGE_BYTES = 4096;
 
+async function handleRequest(request: Request): Promise<Response> {
+  const path = new URL(request.url).pathname;
+
+  const body = await request.text();
+
+  const call = body === '' ? `${request.method} ${path}` : `${request.method} ${path} ${body}`;
+
+  appendFileSync(log, `${mode === 'bodies' ? call : `${request.method} ${path}`}\n`);
+
+  if (failures.some((prefix) => call.startsWith(prefix))) {
+    return Response.json({ fault_message: `refused ${request.method} ${path}` }, { status: 400 });
+  }
+
+  if (path === '/version') {
+    return Response.json({ firecracker_version: 'v1.17.0' });
+  }
+
+  if (memory !== null && request.method === 'GET' && path === '/machine-config') {
+    return Response.json({
+      vcpu_count: 1,
+      mem_size_mib: 128,
+      smt: false,
+      track_dirty_pages: memory.isTrackingDirtyPages,
+      huge_pages: 'None',
+    });
+  }
+
+  if (memory !== null && request.method === 'PUT' && path === '/snapshot/create') {
+    writeSnapshot(memory, SnapshotCreateSchema.parse(JSON.parse(body)));
+  }
+
+  if (path === '/') {
+    return Response.json({ id: 'anonymous-instance', state: vm.state });
+  }
+
+  if (request.method === 'PATCH' && path === '/vm') {
+    const patch: unknown = JSON.parse(body);
+
+    vm.state =
+      typeof patch === 'object' && patch !== null && 'state' in patch && patch.state === 'Paused'
+        ? 'Paused'
+        : 'Running';
+  }
+
+  return new Response(null, { status: 204 });
+}
+
 Bun.serve({
   unix: apiSocket,
-  fetch: async (request) => {
-    const path = new URL(request.url).pathname;
-
-    const body = await request.text();
-
-    const call = body === '' ? `${request.method} ${path}` : `${request.method} ${path} ${body}`;
-
-    appendFileSync(log, `${mode === 'bodies' ? call : `${request.method} ${path}`}\n`);
-
-    if (failures.some((prefix) => call.startsWith(prefix))) {
-      return Response.json({ fault_message: `refused ${request.method} ${path}` }, { status: 400 });
-    }
-
-    if (path === '/version') {
-      return Response.json({ firecracker_version: 'v1.17.0' });
-    }
-
-    if (memory !== null && request.method === 'GET' && path === '/machine-config') {
-      return Response.json({
-        vcpu_count: 1,
-        mem_size_mib: 128,
-        smt: false,
-        track_dirty_pages: memory.isTrackingDirtyPages,
-        huge_pages: 'None',
-      });
-    }
-
-    if (memory !== null && request.method === 'PUT' && path === '/snapshot/create') {
-      writeSnapshot(memory, SnapshotCreateSchema.parse(JSON.parse(body)));
-    }
-
-    if (path === '/') {
-      return Response.json({ id: 'anonymous-instance', state: vm.state });
-    }
-
-    if (request.method === 'PATCH' && path === '/vm') {
-      const patch: unknown = JSON.parse(body);
-
-      vm.state =
-        typeof patch === 'object' && patch !== null && 'state' in patch && patch.state === 'Paused'
-          ? 'Paused'
-          : 'Running';
-    }
-
-    return new Response(null, { status: 204 });
-  },
+  fetch: handleRequest,
 });
 
 // As Firecracker's snapshot_memory_to_file: the mem file is opened without a

@@ -4,10 +4,10 @@ import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { buildQueryClient } from './lib/build-query-client';
-import { ImpdProvider, createBrowserImpd } from './lib/impd';
+import { ImpdProvider, buildBrowserImpd } from './lib/impd';
 import { buildRouter } from './router';
 
-const impd = createBrowserImpd(globalThis.location.origin);
+const impd = buildBrowserImpd(globalThis.location.origin);
 
 const queryClient = buildQueryClient(() => {
   void router.navigate({ to: '/login' });

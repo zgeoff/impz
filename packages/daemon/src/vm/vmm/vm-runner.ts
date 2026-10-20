@@ -1,12 +1,12 @@
 import { lstatSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { stopPid } from '../../platform/process/proc';
-import { readErrorMessage } from '../../platform/process/read-error-message';
 import { runCommand } from '../../platform/process/run-command';
 import { VM_DEADLINES } from '../../platform/process/vm-deadlines';
 import { writeToDisk } from '../../platform/process/write-file-durably';
 import { sendGrow, sendPing, sendResumed, sendShutdown } from '../agent-client/agent-requests';
 import { waitForAgent } from '../agent-client/wait-for-agent';
-import { BLOCK_MIB, SLOT_MIB, findRegionMib } from '../memory/elastic-memory';
+import { BLOCK_MIB, SLOT_MIB, getRegionMib } from '../memory/elastic-memory';
 import type { ImpPaths, SnapshotPaths } from '../storage/data-layout';
 import { buildBootArgs } from './build-boot-args';
 import type { VmPlan } from './build-boot-args';
@@ -17,8 +17,8 @@ import type { HotplugState, InstanceState, SnapshotType } from './firecracker-cl
 import type { FoundVm, VmOwner } from './firecracker-process';
 import {
   buildFirecrackerCommand,
-  isFirecrackerAlive,
   listFirecrackers,
+  probeFirecrackerAlive,
   readLogTail,
   readPidFile,
   readVmOwner,
@@ -27,7 +27,7 @@ import {
 } from './firecracker-process';
 import { setupSnapshotFile } from './jail';
 import type { JailUser, Jails } from './jail';
-import { buildTemplateVm, loadTemplateVm } from './template-vm';
+import { createTemplateVm, loadTemplateVm } from './template-vm';
 import type { TemplateBuildPlan, TemplateRestorePlan } from './template-vm';
 import { createOwnedFile } from './vm-files';
 import { writeSnapshotBase } from './write-snapshot-base';
@@ -117,8 +117,8 @@ export interface VmRunner {
   // the jails of imps not in `impIds`, as after destroys while impd was
   // down; returns their ids
   readonly removeOrphanJails: (impIds: ReadonlySet<string>) => Promise<string[]>;
-  readonly isVmAlive: (pid: number, paths: ImpPaths) => boolean;
-  readonly isAgentReady: (paths: ImpPaths, deadlineMs?: number) => Promise<boolean>;
+  readonly probeVmAlive: (pid: number, paths: ImpPaths) => boolean;
+  readonly probeAgentReady: (paths: ImpPaths, deadlineMs?: number) => Promise<boolean>;
 
   // the guest's uptime from the agent's ping, without the time asleep; null
   // when the agent does not answer within 250 ms or cannot read its clock
@@ -145,7 +145,7 @@ export interface VmRunner {
 
   // a boot template: a cold boot parked for a claim, snapshotted and killed
   // (docs/architecture/lifecycle/boot-templates.md#build)
-  readonly buildTemplateVm: (plan: TemplateBuildPlan) => Promise<void>;
+  readonly createTemplateVm: (plan: TemplateBuildPlan) => Promise<void>;
 
   // a start from a template, in place of startVm; throws, with the process
   // gone, when any step fails (docs/architecture/lifecycle/boot-templates.md#restore)
@@ -176,7 +176,7 @@ export function createVmRunner(
 
   // the jailer's command in a prepared chroot, or Firecracker's own beside
   // a swept run/
-  const buildCommand = async (
+  const setupVmCommand = async (
     bin: string,
     paths: ImpPaths,
     jail: JailUser | null,
@@ -222,7 +222,7 @@ export function createVmRunner(
   };
 
   const stopVm = async (pid: number, paths: ImpPaths, graceful: boolean): Promise<void> => {
-    if (!isFirecrackerAlive(pid, paths.apiSocket, procRoot)) {
+    if (!probeFirecrackerAlive(pid, paths.apiSocket, procRoot)) {
       await removeVmMounts(paths);
 
       return;
@@ -256,19 +256,19 @@ export function createVmRunner(
       const timer = createMarks();
       const setMark = timer.setMark;
 
-      const buildArgv = () =>
-        buildCommand(plan.firecrackerBin, plan.paths, plan.jail, [
+      const readArgv = () =>
+        setupVmCommand(plan.firecrackerBin, plan.paths, plan.jail, [
           plan.kernelPath,
           plan.systemDrivePath,
         ]);
 
-      const pid = await startVmProcess(buildArgv, plan.paths, plan.cgroup);
+      const pid = await startVmProcess(readArgv, plan.paths, plan.cgroup);
 
       setMark('spawn');
 
       try {
         const api = createFirecrackerClient(plan.paths.apiSocket);
-        const versionPromise = api.getVersion();
+        const versionPromise = api.readVersion();
 
         await setupVm(api, {
           kernelPath: plan.kernelPath,
@@ -282,7 +282,7 @@ export function createVmRunner(
           guestMac: plan.address.guestMac,
         });
 
-        const regionMib = findRegionMib(plan.memoryMib, plan.maxMemoryMib);
+        const regionMib = getRegionMib(plan.memoryMib, plan.maxMemoryMib);
 
         if (regionMib > 0) {
           await api.putHotplugMemory({
@@ -326,7 +326,7 @@ export function createVmRunner(
         // put a second VM on it
         await waitForExit(pid, plan.paths.apiSocket, VM_DEADLINES.killMs);
 
-        const reason = readErrorMessage(error);
+        const reason = getErrorMessage(error);
 
         throw new Error(`boot failed: ${reason}\n${readLogTail(plan.paths.logFile)}`, {
           cause: error,
@@ -427,10 +427,10 @@ export function createVmRunner(
       plan.cgroup?.liftLimit();
 
       // startFirecracker removes the stale vsock socket, which would end the load
-      const buildArgv = () =>
-        buildCommand(plan.firecrackerBin, plan.paths, plan.jail, plan.readOnlyFiles);
+      const readArgv = () =>
+        setupVmCommand(plan.firecrackerBin, plan.paths, plan.jail, plan.readOnlyFiles);
 
-      const pid = await startVmProcess(buildArgv, plan.paths, plan.cgroup).catch(
+      const pid = await startVmProcess(readArgv, plan.paths, plan.cgroup).catch(
         (error: unknown) => {
           plan.cgroup?.applyLimit();
           throw error;
@@ -466,7 +466,7 @@ export function createVmRunner(
 
         await sendResumed(plan.paths.vsockSocket, Date.now());
 
-        const firecrackerVersion = await api.getVersion();
+        const firecrackerVersion = await api.readVersion();
 
         setMark('resumed');
 
@@ -481,7 +481,7 @@ export function createVmRunner(
         await stopVmNow(pid, plan.paths);
 
         plan.cgroup?.applyLimit();
-        const reason = readErrorMessage(error);
+        const reason = getErrorMessage(error);
 
         throw new Error(`wake failed: ${reason}\n${readLogTail(plan.paths.logFile, 5)}`, {
           cause: error,
@@ -503,15 +503,15 @@ export function createVmRunner(
     readGuestMemory: async (paths) => {
       const api = createFirecrackerClient(paths.apiSocket, GUEST_MEMORY_TIMEOUTS);
 
-      const [hotplug, stats] = await Promise.all([api.getHotplugMemory(), api.getBalloonStats()]);
+      const [hotplug, stats] = await Promise.all([api.readHotplugMemory(), api.readBalloonStats()]);
 
       return { ...hotplug, ...stats };
     },
     requestPluggedMib: async (paths, mib) => {
       await createFirecrackerClient(paths.apiSocket, GUEST_MEMORY_TIMEOUTS).patchHotplugMemory(mib);
     },
-    isVmAlive: (pid, paths) => isFirecrackerAlive(pid, paths.apiSocket, procRoot),
-    isAgentReady: async (paths, deadlineMs = 2000) => {
+    probeVmAlive: (pid, paths) => probeFirecrackerAlive(pid, paths.apiSocket, procRoot),
+    probeAgentReady: async (paths, deadlineMs = 2000) => {
       try {
         await waitForAgent(paths.vsockSocket, { deadlineMs });
 
@@ -531,7 +531,7 @@ export function createVmRunner(
     },
     readVmState: async (paths) => {
       try {
-        return await createFirecrackerClient(paths.apiSocket).getInstanceState();
+        return await createFirecrackerClient(paths.apiSocket).readInstanceState();
       } catch {
         return null;
       }
@@ -560,11 +560,11 @@ export function createVmRunner(
 
       await sendResumed(paths.vsockSocket, Date.now());
 
-      const firecrackerVersion = await createFirecrackerClient(paths.apiSocket).getVersion();
+      const firecrackerVersion = await createFirecrackerClient(paths.apiSocket).readVersion();
 
       return { agentVersion: ping.version, firecrackerVersion, bootId: ping.bootId };
     },
-    buildTemplateVm: (plan) => buildTemplateVm(plan, jails, mergeWrapper),
+    createTemplateVm: (plan) => createTemplateVm(plan, jails, mergeWrapper),
     loadTemplateVm: (plan) => loadTemplateVm(plan, jails, mergeWrapper),
   };
 }

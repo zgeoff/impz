@@ -13,11 +13,11 @@ import {
 } from './data-layout';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-data-layout-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-data-layout-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#buildImpsDir puts the imps directory under the data dir', () => {
@@ -38,41 +38,47 @@ test.each([
 
 test('#buildImagePaths names the image directory by its bare digest', () => {
   expect(buildImagePaths('/var/lib/imp', 'sha256:3f1a')).toStrictEqual({
-    dir: '/var/lib/imp/images/3f1a',
+    directory: '/var/lib/imp/images/3f1a',
     rootfs: '/var/lib/imp/images/3f1a/rootfs.ext4',
     config: '/var/lib/imp/images/3f1a/config.json',
   });
 });
 
 test('#buildImpPaths puts the imp directory under the imps directory', () => {
-  expect(buildImpPaths('/var/lib/imp', 'imp-1').dir).toBe('/var/lib/imp/imps/imp-1');
+  expect(buildImpPaths('/var/lib/imp', 'imp-1').directory).toBe('/var/lib/imp/imps/imp-1');
 });
 
 test('#createDataDirs makes the database, system, images and imps directories', async () => {
   const ctx = await setupTest();
 
-  createDataDirs(join(ctx.dir, 'data'));
+  createDataDirs(join(ctx.directoryPath, 'data'));
 
-  expect(readdirSync(join(ctx.dir, 'data')).toSorted()).toStrictEqual([
+  expect(readdirSync(join(ctx.directoryPath, 'data')).toSorted()).toStrictEqual([
     'db',
     'images',
     'imps',
     'system',
   ]);
 
-  expect(statSync(join(ctx.dir, 'data', 'db')).isDirectory()).toBe(true);
-  expect(statSync(join(ctx.dir, 'data', 'system')).isDirectory()).toBe(true);
-  expect(statSync(join(ctx.dir, 'data', 'images')).isDirectory()).toBe(true);
-  expect(statSync(join(ctx.dir, 'data', 'imps')).isDirectory()).toBe(true);
+  expect(statSync(join(ctx.directoryPath, 'data', 'db')).isDirectory()).toBe(true);
+  expect(statSync(join(ctx.directoryPath, 'data', 'system')).isDirectory()).toBe(true);
+  expect(statSync(join(ctx.directoryPath, 'data', 'images')).isDirectory()).toBe(true);
+  expect(statSync(join(ctx.directoryPath, 'data', 'imps')).isDirectory()).toBe(true);
 });
 
 test('#createDataDirs keeps the directories and files a data dir already holds', async () => {
   const ctx = await setupTest();
 
-  createDataDirs(ctx.dir);
-  writeFileSync(join(ctx.dir, 'db', 'imp.sqlite'), 'database');
-  createDataDirs(ctx.dir);
+  createDataDirs(ctx.directoryPath);
+  writeFileSync(join(ctx.directoryPath, 'db', 'imp.sqlite'), 'database');
+  createDataDirs(ctx.directoryPath);
 
-  expect(readFileSync(join(ctx.dir, 'db', 'imp.sqlite'), 'utf8')).toBe('database');
-  expect(readdirSync(ctx.dir).toSorted()).toStrictEqual(['db', 'images', 'imps', 'system']);
+  expect(readFileSync(join(ctx.directoryPath, 'db', 'imp.sqlite'), 'utf8')).toBe('database');
+
+  expect(readdirSync(ctx.directoryPath).toSorted()).toStrictEqual([
+    'db',
+    'images',
+    'imps',
+    'system',
+  ]);
 });

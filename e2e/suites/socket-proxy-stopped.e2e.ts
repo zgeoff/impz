@@ -6,7 +6,7 @@ import { holdImp, waitForExec } from '../lib/imps';
 import { instance, runChecked } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // impd reaches Docker only through imp-docker-proxy, and only to build and
@@ -20,7 +20,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('socket'), stack, client };
+  return { prefix: getSuitePrefix('socket'), stack, client };
 }
 
 test('it keeps imps running, and answering exec, while the proxy is stopped', async () => {

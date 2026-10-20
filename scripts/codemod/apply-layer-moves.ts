@@ -46,7 +46,7 @@ export function applyLayerMoves(root: string, files: readonly string[]): LayerRe
   const collisions = plans
     .filter(
       (plan) =>
-        isTakenByOther(root, plan) ||
+        probeTakenByOther(root, plan) ||
         plans.some((other) => other.from !== plan.from && other.to === plan.to),
     )
     .map((plan) => [plan.from, plan.to] as const);
@@ -91,6 +91,14 @@ export function applyLayerMoves(root: string, files: readonly string[]): LayerRe
   };
 }
 
+function planRepoPath(file: string): string {
+  if (!file.startsWith(`${DAEMON_SRC}/`)) {
+    return file;
+  }
+
+  return `${DAEMON_SRC}/${planLayerPath(file.slice(DAEMON_SRC.length + 1))}`;
+}
+
 // a file's move, with its text before and after its paths are rewritten from its old folder;
 // both are null for a binary file, which moves as it is
 interface MovePlan {
@@ -113,9 +121,21 @@ function planMove(root: string, from: string, to: string): MovePlan {
   };
 }
 
+// null for a file that is gone or binary (a NUL byte or invalid UTF-8), which holds no path to
+// rewrite and keeps its bytes as they are
+function readText(path: string): string | null {
+  if (!existsSync(path) || !statSync(path).isFile()) {
+    return null;
+  }
+
+  const bytes = readFileSync(path);
+
+  return bytes.includes(0) || !isUtf8(bytes) ? null : bytes.toString('utf8');
+}
+
 // true when another file sits at the move's destination; the file that an interrupted run wrote
 // there, which holds what this move would write, is the move's own
-function isTakenByOther(root: string, plan: MovePlan): boolean {
+function probeTakenByOther(root: string, plan: MovePlan): boolean {
   if (!existsSync(join(root, plan.to))) {
     return false;
   }
@@ -125,28 +145,11 @@ function isTakenByOther(root: string, plan: MovePlan): boolean {
     : readText(join(root, plan.to)) !== plan.next;
 }
 
-function planRepoPath(file: string): string {
-  if (!file.startsWith(`${DAEMON_SRC}/`)) {
-    return file;
-  }
-
-  return `${DAEMON_SRC}/${planLayerPath(file.slice(DAEMON_SRC.length + 1))}`;
-}
-
-function isCovered(file: string): boolean {
-  const path = file.slice(DAEMON_SRC.length + 1);
-
-  const isRoot =
-    !path.includes('/') && LAYER_TABLE.rootStems.some((stem) => path.startsWith(`${stem}.`));
-
-  return isRoot || (LAYER_TABLE.layers as readonly string[]).includes(path.split('/')[0] ?? '');
-}
-
 // removes each folder that a move emptied, up to src
 function removeEmptyFolders(root: string, movedFrom: readonly string[]): void {
   const folders = new Set(movedFrom.map((file) => dirname(file)));
 
-  for (const start of [...folders].toSorted((a, b) => b.length - a.length)) {
+  for (const start of [...folders].toSorted((left, right) => right.length - left.length)) {
     for (
       let folder = start;
       folder.startsWith(`${DAEMON_SRC}/`) &&
@@ -178,14 +181,11 @@ function updateFilePaths(root: string, file: string): boolean {
   return true;
 }
 
-// null for a file that is gone or binary (a NUL byte or invalid UTF-8), which holds no path to
-// rewrite and keeps its bytes as they are
-function readText(path: string): string | null {
-  if (!existsSync(path) || !statSync(path).isFile()) {
-    return null;
-  }
+function isCovered(file: string): boolean {
+  const path = file.slice(DAEMON_SRC.length + 1);
 
-  const bytes = readFileSync(path);
+  const isRoot =
+    !path.includes('/') && LAYER_TABLE.rootStems.some((stem) => path.startsWith(`${stem}.`));
 
-  return bytes.includes(0) || !isUtf8(bytes) ? null : bytes.toString('utf8');
+  return isRoot || (LAYER_TABLE.layers as readonly string[]).includes(path.split('/')[0] ?? '');
 }

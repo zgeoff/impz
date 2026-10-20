@@ -17,11 +17,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'stub-exec-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-exec-agent-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir, stack };
+  return { directoryPath: directory, stack };
 }
 
 test('it runs an exec on the guest and sends its output and exit as frames', async () => {
@@ -29,13 +29,13 @@ test('it runs an exec on the guest and sends its output and exit as frames', asy
 
   const guest = buildStubExecGuest();
 
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), guest);
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), guest);
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const stream = await openExecStream(join(ctx.dir, 'v.sock'), {
+  const stream = await openExecStream(join(ctx.directoryPath, 'v.sock'), {
     argv: ['/bin/sh', '-c', 'echo hi'],
     tty: false,
   });
@@ -54,13 +54,13 @@ test('it runs an exec on the guest and sends its output and exit as frames', asy
 
 test('it sends the guest’s stderr as frames', async () => {
   const ctx = await setupTest();
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), buildStubExecGuest());
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), buildStubExecGuest());
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const stream = await openExecStream(join(ctx.dir, 'v.sock'), {
+  const stream = await openExecStream(join(ctx.directoryPath, 'v.sock'), {
     argv: ['/bin/sh', '-c', 'fail'],
     tty: false,
   });
@@ -85,7 +85,7 @@ test('it sends a detach of the guest’s command as a frame', async () => {
   const detached = { type: 'detached' as const, reason: 'the session went on' };
 
   // the guest's stream, ended by a detach where its command would run on
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), {
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), {
     openExec: async (name, request) => {
       const stream = await guest.openExec(name, request);
 
@@ -102,7 +102,7 @@ test('it sends a detach of the guest’s command as a frame', async () => {
     agent.close();
   });
 
-  const stream = await openExecStream(join(ctx.dir, 'v.sock'), {
+  const stream = await openExecStream(join(ctx.directoryPath, 'v.sock'), {
     argv: ['/bin/sh', '-c', 'sleepy'],
     tty: false,
   });
@@ -121,13 +121,13 @@ test('it hands the guest the request as impd sent it', async () => {
 
   const guest = buildStubExecGuest();
 
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), guest);
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), guest);
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const stream = await openExecStream(join(ctx.dir, 'v.sock'), {
+  const stream = await openExecStream(join(ctx.directoryPath, 'v.sock'), {
     argv: ['/bin/sh', '-c', 'echo hi'],
     env: ['A=1'],
     cwd: '/work',
@@ -146,13 +146,13 @@ test('it hands the guest the request as impd sent it', async () => {
 
 test('it reports the guest’s group kill in STARTED', async () => {
   const ctx = await setupTest();
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), buildStubExecGuest());
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), buildStubExecGuest());
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const stream = await openExecStream(join(ctx.dir, 'v.sock'), {
+  const stream = await openExecStream(join(ctx.directoryPath, 'v.sock'), {
     argv: ['/bin/sh', '-c', 'sleepy'],
     tty: false,
     killGraceMs: 50,
@@ -170,13 +170,13 @@ test('it hands the guest the user, session and terminal size impd sent', async (
 
   const guest = buildStubExecGuest();
 
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), guest);
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), guest);
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const connection = await openAgentConnection(join(ctx.dir, 'v.sock'));
+  const connection = await openAgentConnection(join(ctx.directoryPath, 'v.sock'));
 
   ctx.stack.defer(() => {
     connection.close();
@@ -208,13 +208,13 @@ test('it hands the guest the user, session and terminal size impd sent', async (
 
 test('it echoes the asked kill grace in STARTED, capped at a minute', async () => {
   const ctx = await setupTest();
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), buildStubExecGuest());
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), buildStubExecGuest());
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const connection = await openAgentConnection(join(ctx.dir, 'v.sock'));
+  const connection = await openAgentConnection(join(ctx.directoryPath, 'v.sock'));
 
   ctx.stack.defer(() => {
     connection.close();
@@ -236,13 +236,13 @@ test('it echoes the asked kill grace in STARTED, capped at a minute', async () =
 
 test('it echoes the asked kill grace in STARTED as it was under a minute', async () => {
   const ctx = await setupTest();
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), buildStubExecGuest());
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), buildStubExecGuest());
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const connection = await openAgentConnection(join(ctx.dir, 'v.sock'));
+  const connection = await openAgentConnection(join(ctx.directoryPath, 'v.sock'));
 
   ctx.stack.defer(() => {
     connection.close();
@@ -264,13 +264,13 @@ test('it echoes the asked kill grace in STARTED as it was under a minute', async
 
 test('it leaves the kill grace out of STARTED for an exec with a terminal', async () => {
   const ctx = await setupTest();
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), buildStubExecGuest());
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), buildStubExecGuest());
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const connection = await openAgentConnection(join(ctx.dir, 'v.sock'));
+  const connection = await openAgentConnection(join(ctx.directoryPath, 'v.sock'));
 
   ctx.stack.defer(() => {
     connection.close();
@@ -294,7 +294,7 @@ test('it leaves the kill grace out of STARTED for a guest from before the group 
   const ctx = await setupTest();
 
   const agent = await startStubExecAgent(
-    join(ctx.dir, 'v.sock'),
+    join(ctx.directoryPath, 'v.sock'),
     buildStubExecGuest({ oldAgent: true }),
   );
 
@@ -302,7 +302,7 @@ test('it leaves the kill grace out of STARTED for a guest from before the group 
     agent.close();
   });
 
-  const stream = await openExecStream(join(ctx.dir, 'v.sock'), {
+  const stream = await openExecStream(join(ctx.directoryPath, 'v.sock'), {
     argv: ['/bin/sh', '-c', 'sleepy'],
     tty: false,
     killGraceMs: 50,
@@ -321,7 +321,7 @@ test('it names the guest’s session in STARTED', async () => {
   const guest = buildStubExecGuest();
 
   // the guest's stream, as a session's that this exec created
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), {
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), {
     openExec: async (name, request) => {
       const stream = await guest.openExec(name, request);
 
@@ -333,7 +333,7 @@ test('it names the guest’s session in STARTED', async () => {
     agent.close();
   });
 
-  const stream = await openExecStream(join(ctx.dir, 'v.sock'), {
+  const stream = await openExecStream(join(ctx.directoryPath, 'v.sock'), {
     argv: ['/bin/sh', '-c', 'sleepy'],
     tty: true,
     session: 'work',
@@ -352,13 +352,13 @@ test('it passes a signal to the guest’s command', async () => {
 
   const guest = buildStubExecGuest();
 
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), guest);
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), guest);
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const stream = await openExecStream(join(ctx.dir, 'v.sock'), {
+  const stream = await openExecStream(join(ctx.directoryPath, 'v.sock'), {
     argv: ['/bin/sh', '-c', 'sleepy'],
     tty: false,
   });
@@ -377,13 +377,13 @@ test('it passes a signal to the guest’s command', async () => {
 
 test('it passes stdin and its end to the guest’s command', async () => {
   const ctx = await setupTest();
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), buildStubExecGuest());
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), buildStubExecGuest());
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const stream = await openExecStream(join(ctx.dir, 'v.sock'), {
+  const stream = await openExecStream(join(ctx.directoryPath, 'v.sock'), {
     argv: ['/bin/sh', '-c', 'cat'],
     tty: false,
   });
@@ -408,13 +408,13 @@ test('it closes the guest’s stream when impd drops the connection', async () =
 
   const guest = buildStubExecGuest();
 
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), guest);
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), guest);
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const stream = await openExecStream(join(ctx.dir, 'v.sock'), {
+  const stream = await openExecStream(join(ctx.directoryPath, 'v.sock'), {
     argv: ['/bin/sh', '-c', 'sleepy'],
     tty: false,
   });
@@ -430,13 +430,13 @@ test('it closes the guest’s stream when impd drops the connection', async () =
 
 test('it refuses an op other than exec with UNKNOWN_OP', async () => {
   const ctx = await setupTest();
-  const agent = await startStubExecAgent(join(ctx.dir, 'v.sock'), buildStubExecGuest());
+  const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), buildStubExecGuest());
 
   ctx.stack.defer(() => {
     agent.close();
   });
 
-  const connection = await openAgentConnection(join(ctx.dir, 'v.sock'));
+  const connection = await openAgentConnection(join(ctx.directoryPath, 'v.sock'));
 
   ctx.stack.defer(() => {
     connection.close();

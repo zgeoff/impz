@@ -13,19 +13,21 @@ export function buildStubProxyListen() {
     startListener: (options: ProxyListenOptions) => {
       const hostname = options.hostname ?? '';
 
+      const handleRequest = async (request: Request) => {
+        const route = await options.route(request);
+
+        routes.push(route.kind);
+
+        return new Response(`served on ${hostname}`, { headers: { 'x-route': route.kind } });
+      };
+
       const server = Bun.serve({
         port: options.port,
         ...(options.hostname !== undefined && { hostname: options.hostname }),
         ...(options.tls !== undefined && { tls: options.tls }),
         ...(options.reusePort === true && { reusePort: true }),
         idleTimeout: 0,
-        fetch: async (request) => {
-          const route = await options.route(request);
-
-          routes.push(route.kind);
-
-          return new Response(`served on ${hostname}`, { headers: { 'x-route': route.kind } });
-        },
+        fetch: handleRequest,
       });
 
       events.push(`start ${hostname}`);

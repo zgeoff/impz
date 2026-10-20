@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findFreePorts } from '../../packages/daemon/testing';
+import { claimFreePorts } from '../../packages/daemon/testing';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { createInstanceClient, runImp, runImpWith, runShellInImp } from '../lib/imp-cli';
@@ -13,7 +13,7 @@ import { runCommand } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { SSH_HOST, readTapLinkLocal, runSsh, setupSshClient, startSsh } from '../lib/ssh';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { openCommandTerminal } from '../lib/terminal';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
@@ -39,7 +39,7 @@ async function setupTest() {
 
   stack.defer(() => rm(sockets, { recursive: true, force: true }));
 
-  return { prefix: readSuitePrefix('ssh'), stack, client, ssh, sockets };
+  return { prefix: getSuitePrefix('ssh'), stack, client, ssh, sockets };
 }
 
 test('it runs a command over ssh and returns its output, stderr, exit status and connection', async () => {
@@ -100,8 +100,8 @@ test('it copies a file both ways with scp, and serves sftp without an sftp-serve
   const ctx = await setupTest();
 
   const name = `${ctx.prefix}scp`;
-  const local = join(ctx.ssh.dir, 'blob');
-  const back = join(ctx.ssh.dir, 'blob.back');
+  const local = join(ctx.ssh.directory, 'blob');
+  const back = join(ctx.ssh.directory, 'blob.back');
   const blob = randomBytes(4 * 1024 * 1024);
 
   await runImp('new', name, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
@@ -156,7 +156,7 @@ test('it carries a local forward from a TCP port to a port in the imp', async ()
 
   // a port no other picker hands out, and ExitOnForwardFailure fails the
   // test should anything else bind it first
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
 
   await runImp('new', name, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
@@ -228,7 +228,7 @@ test('it carries a SOCKS forward next to a shell on stdin, as VS Code opens it',
 
   // -D listens on a TCP port only: one no other picker hands out, and
   // ExitOnForwardFailure fails the test should anything else bind it first
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
 
   await runImp('new', name, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
@@ -308,7 +308,7 @@ test('it refuses a forward to anything but the imp', async () => {
 
   await forward.stop();
 
-  const stderr = await new Response(forward.proc.stderr).text();
+  const stderr = await new Response(forward.childProcess.stderr).text();
 
   expect(curl.exitCode).not.toBe(0);
   expect(stderr).toContain('administratively prohibited');

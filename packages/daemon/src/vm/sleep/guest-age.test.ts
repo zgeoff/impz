@@ -44,10 +44,10 @@ test('it checks whether the sleep is still wanted every 50 ms of the wait', asyn
       return Promise.resolve(true);
     },
     now: clock.now,
-    sleep: (ms) => {
-      steps.push(ms);
+    sleep: (durationMs) => {
+      steps.push(durationMs);
 
-      return clock.sleep(ms);
+      return clock.sleep(durationMs);
     },
   });
 

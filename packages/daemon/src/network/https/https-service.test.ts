@@ -7,12 +7,12 @@ import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { buildMockCertificate } from '../../../testing/network/build-mock-certificate';
 import { buildMockPublicImp } from '../../../testing/network/build-mock-public-imp';
-import { buildStubCloudflareApi } from '../../../testing/network/build-stub-cloudflare-api';
 import { buildStubProxyListen } from '../../../testing/network/build-stub-proxy-listen';
+import { createMockCertificate } from '../../../testing/network/create-mock-certificate';
+import { createStubCloudflareApi } from '../../../testing/network/create-stub-cloudflare-api';
 import { buildStubTickerTimer } from '../../../testing/platform/build-stub-ticker-timer';
-import { findFreePorts } from '../../../testing/platform/find-free-ports';
+import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import type { Certificate } from './acme/cert-store';
 import { createCertStore } from './acme/cert-store';
 import { createCloudflareProvider } from './dns/cloudflare-provider';
@@ -25,16 +25,16 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-https-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-https-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   const logs: string[] = [];
 
   return {
     stack,
-    dir,
-    store: createCertStore(dir),
+    directoryPath: directory,
+    store: createCertStore(directory),
     logs,
     log: (message: string) => {
       logs.push(message);
@@ -48,7 +48,7 @@ test('it serves nothing until the first certificate arrives', async () => {
   const ctx = await setupTest();
 
   const issued = Promise.withResolvers<Certificate>();
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -72,7 +72,7 @@ test('it serves nothing until the first certificate arrives', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -81,7 +81,7 @@ test('it serves nothing until the first certificate arrives', async () => {
   // the certificate arrives once the test is over, and is on disk before the
   // dir goes: the service writes it there as it arrives
   ctx.stack.defer(async () => {
-    const arrived = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+    const arrived = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
     issued.resolve(arrived);
 
@@ -99,7 +99,7 @@ test('it serves the certificate on loopback once it arrives', async () => {
   const ctx = await setupTest();
 
   const issued = Promise.withResolvers<Certificate>();
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -123,7 +123,7 @@ test('it serves the certificate on loopback once it arrives', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -131,7 +131,7 @@ test('it serves the certificate on loopback once it arrives', async () => {
 
   service.start();
 
-  const arrived = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const arrived = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   issued.resolve(arrived);
 
@@ -156,13 +156,13 @@ test('it serves the certificate on loopback once it arrives', async () => {
 test('it logs the certificate it got', async () => {
   const ctx = await setupTest();
 
-  const certificate = await buildMockCertificate({
+  const certificate = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
     notBefore: new Date('2030-01-01T00:00:00Z'),
     notAfter: new Date('2030-03-01T00:00:00Z'),
   });
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -186,7 +186,7 @@ test('it logs the certificate it got', async () => {
     now: () => Date.parse('2030-01-02T00:00:00Z'),
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -204,7 +204,7 @@ test('it logs the certificate it got', async () => {
 test('it says the domain answers only inside the host container when there is no tailnet', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -228,7 +228,7 @@ test('it says the domain answers only inside the host container when there is no
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -244,11 +244,11 @@ test('it says the domain answers only inside the host container when there is no
 test('it serves an expired certificate on disk at start while renewal fails', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
-  const expired = await buildMockCertificate({
+  const expired = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
     notBefore: new Date(Date.now() - 100 * 86_400_000),
     notAfter: new Date(Date.now() - 86_400_000),
@@ -276,7 +276,7 @@ test('it serves an expired certificate on disk at start while renewal fails', as
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -301,11 +301,11 @@ test('it serves an expired certificate on disk at start while renewal fails', as
 test('it says it serves an expired certificate until a renewal succeeds', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
-  const expired = await buildMockCertificate({
+  const expired = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
     notBefore: new Date('2030-01-01T00:00:00Z'),
     notAfter: new Date('2030-02-01T00:00:00Z'),
@@ -333,7 +333,7 @@ test('it says it serves an expired certificate until a renewal succeeds', async 
     now: () => Date.parse('2030-03-01T00:00:00Z'),
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -349,7 +349,7 @@ test('it says it serves an expired certificate until a renewal succeeds', async 
 test('it logs Cloudflare’s refusal of a bad DNS token', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['the-right-token'] });
+  const api = createStubCloudflareApi({ tokens: ['the-right-token'] });
 
   server.use(...api.handlers);
 
@@ -390,7 +390,7 @@ test('it logs Cloudflare’s refusal of a bad DNS token', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -410,7 +410,7 @@ test('it logs Cloudflare’s refusal of a bad DNS token', async () => {
 test('it keeps a bad DNS token out of the log', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['the-right-token'] });
+  const api = createStubCloudflareApi({ tokens: ['the-right-token'] });
 
   server.use(...api.handlers);
 
@@ -451,7 +451,7 @@ test('it keeps a bad DNS token out of the log', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -470,11 +470,11 @@ test('it keeps a bad DNS token out of the log', async () => {
 test('it serves nothing on any port without a DNS token file', async () => {
   const ctx = await setupTest();
 
-  const tokenPath = join(ctx.dir, 'dns-api-token');
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const tokenPath = join(ctx.directoryPath, 'dns-api-token');
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   // fixed ports, so the test can knock on each one the service would open
-  const free = findFreePorts(4);
+  const free = claimFreePorts(4);
   const httpsPort = free.take();
   const httpPort = free.take();
   const publicHttpsPort = free.take();
@@ -518,7 +518,7 @@ test('it serves nothing on any port without a DNS token file', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
-    findPublicImp: () =>
+    readPublicImpByName: () =>
       Promise.resolve(buildMockPublicImp({ stored: { auth: 'none', user: null, hash: null } })),
     publicAddress: '127.0.0.1',
     timer: ctx.timer.timer,
@@ -564,8 +564,8 @@ test('it serves nothing on any port without a DNS token file', async () => {
 test('it sends Cloudflare no call without a DNS token file', async () => {
   const ctx = await setupTest();
 
-  const tokenPath = join(ctx.dir, 'dns-api-token');
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const tokenPath = join(ctx.directoryPath, 'dns-api-token');
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -605,7 +605,7 @@ test('it sends Cloudflare no call without a DNS token file', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
     timer: ctx.timer.timer,
   });
@@ -626,8 +626,8 @@ test('it sends Cloudflare no call without a DNS token file', async () => {
 test('it names the missing DNS token file in the log', async () => {
   const ctx = await setupTest();
 
-  const tokenPath = join(ctx.dir, 'dns-api-token');
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const tokenPath = join(ctx.directoryPath, 'dns-api-token');
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -661,7 +661,7 @@ test('it names the missing DNS token file in the log', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -679,7 +679,7 @@ test('it names the missing DNS token file in the log', async () => {
 test('it logs a records failure that repeats once, until it changes', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const failure: { message: string | null } = { message: 'DNS down' };
 
   // Cloudflare fails each list of the zone's records while `failure` holds
@@ -730,7 +730,7 @@ test('it logs a records failure that repeats once, until it changes', async () =
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -763,7 +763,7 @@ test('it logs a records failure that repeats once, until it changes', async () =
 test('it points the domain and its wildcard at the tailnet IP', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -796,7 +796,7 @@ test('it points the domain and its wildcard at the tailnet IP', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -819,13 +819,13 @@ test('it points the domain and its wildcard at the tailnet IP', async () => {
 test('it serves the domain on the tailnet IP', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   ctx.store.writeCertificate(certificate);
 
@@ -856,7 +856,7 @@ test('it serves the domain on the tailnet IP', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -881,7 +881,7 @@ test('it serves the domain on the tailnet IP', async () => {
 test('it keeps the public records in line with the public imps, and leaves the rest', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -930,7 +930,7 @@ test('it keeps the public records in line with the public imps, and leaves the r
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
     timer: ctx.timer.timer,
   });
@@ -953,7 +953,7 @@ test('it keeps the public records in line with the public imps, and leaves the r
 test('it removes the record of an imp that is no longer public, and says so', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -986,7 +986,7 @@ test('it removes the record of an imp that is no longer public, and says so', as
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
     timer: ctx.timer.timer,
   });
@@ -1002,13 +1002,13 @@ test('it removes the record of an imp that is no longer public, and says so', as
 test('it serves the public listener on its own port', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   ctx.store.writeCertificate(certificate);
 
@@ -1032,7 +1032,7 @@ test('it serves the public listener on its own port', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
     timer: ctx.timer.timer,
   });
@@ -1060,7 +1060,7 @@ test('it serves the public listener on its own port', async () => {
 test('it takes the public records impd left when public mode is off', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -1093,7 +1093,7 @@ test('it takes the public records impd left when public mode is off', async () =
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -1107,7 +1107,7 @@ test('it takes the public records impd left when public mode is off', async () =
 test('it logs a DNS failure on the public records', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(
     http.get('https://api.cloudflare.com/client/v4/zones/:zoneId/dns_records', () =>
@@ -1146,7 +1146,7 @@ test('it logs a DNS failure on the public records', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
     timer: ctx.timer.timer,
   });
@@ -1163,7 +1163,7 @@ test('it logs a DNS failure on the public records', async () => {
 test('it reports a failed pass over the public records', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(
     http.get('https://api.cloudflare.com/client/v4/zones/:zoneId/dns_records', () =>
@@ -1202,7 +1202,7 @@ test('it reports a failed pass over the public records', async () => {
     now: () => 1_800_000_000_000,
     log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
     timer: ctx.timer.timer,
   });
@@ -1221,7 +1221,7 @@ test('it reports a failed pass over the public records', async () => {
 test('it writes the public records on the pass after one that failed', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const outage = { isDown: true };
 
   // Cloudflare fails each list of the zone's records until the outage ends
@@ -1264,7 +1264,7 @@ test('it writes the public records on the pass after one that failed', async () 
     now: () => 1_800_000_000_000,
     log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
     timer: ctx.timer.timer,
   });
@@ -1288,7 +1288,7 @@ test('it writes the public records on the pass after one that failed', async () 
 test('it warns that tailscale serve holds the tailnet HTTPS port', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -1321,7 +1321,7 @@ test('it warns that tailscale serve holds the tailnet HTTPS port', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -1339,7 +1339,7 @@ test('it warns that tailscale serve holds the tailnet HTTPS port', async () => {
 test('it keeps the tailnet listener and its connections when a tailscale status fails', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   // the tailnet IP, then two failed reads, then the IP again
   const answers = buildStubAnswerQueue(['127.0.0.2', null, null, '127.0.0.2']);
@@ -1348,7 +1348,7 @@ test('it keeps the tailnet listener and its connections when a tailscale status 
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
-  const certificate = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const certificate = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   ctx.store.writeCertificate(certificate);
 
@@ -1383,7 +1383,7 @@ test('it keeps the tailnet listener and its connections when a tailscale status 
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -1409,7 +1409,7 @@ test('it keeps the tailnet listener and its connections when a tailscale status 
 test('it logs an address pass that fails', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -1433,7 +1433,7 @@ test('it logs an address pass that fails', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -1449,7 +1449,7 @@ test('it logs an address pass that fails', async () => {
 test('it runs renewal and the public records every 10 minutes, and the addresses every 30 seconds', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -1473,7 +1473,7 @@ test('it runs renewal and the public records every 10 minutes, and the addresses
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -1491,7 +1491,7 @@ test('it runs renewal and the public records every 10 minutes, and the addresses
 test('it asks for a certificate again on each renewal tick', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const asked: string[] = [];
   const clock = { now: Date.parse('2030-01-10T00:00:00Z') };
 
@@ -1521,7 +1521,7 @@ test('it asks for a certificate again on each renewal tick', async () => {
     now: () => clock.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -1545,7 +1545,7 @@ test('it asks for a certificate again on each renewal tick', async () => {
 test('it writes the public records again on each public records tick', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const publicImps: string[] = [];
 
   server.use(...api.handlers);
@@ -1572,7 +1572,7 @@ test('it writes the public records again on each public records tick', async () 
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([...publicImps]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
     timer: ctx.timer.timer,
   });
@@ -1598,7 +1598,7 @@ test('it writes the public records again on each public records tick', async () 
 test('it cancels every pending tick when it stops', async () => {
   const ctx = await setupTest();
 
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -1622,7 +1622,7 @@ test('it cancels every pending tick when it stops', async () => {
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -1647,7 +1647,7 @@ test('it starts no listener for a certificate that arrives after it stopped', as
   const ctx = await setupTest();
 
   const issued = Promise.withResolvers<Certificate>();
-  const api = buildStubCloudflareApi({ tokens: ['cf-token'] });
+  const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
   server.use(...api.handlers);
 
@@ -1671,7 +1671,7 @@ test('it starts no listener for a certificate that arrives after it stopped', as
     now: Date.now,
     log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
-    findPublicImp: () => Promise.resolve(undefined),
+    readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
   });
 
@@ -1681,7 +1681,7 @@ test('it starts no listener for a certificate that arrives after it stopped', as
 
   await service.stop();
 
-  const arrived = await buildMockCertificate({ names: ['imp.test', '*.imp.test'] });
+  const arrived = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
   issued.resolve(arrived);
 

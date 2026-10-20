@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findImageByName } from '../../src/platform/db/images';
+import { readImageByName } from '../../src/platform/db/images';
 import { createTestDatabase } from '../platform/create-test-database';
 import { createBuilderImage } from './create-builder-image';
 
@@ -21,7 +21,7 @@ test('it writes the builders image row for the reference', async () => {
 
   await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: 'ghcr.io/zgeoff/imp-base:1' });
 
-  const row = await findImageByName(ctx.db, 'imp-builder');
+  const row = await readImageByName(ctx.db, 'imp-builder');
 
   expect(row).toMatchObject({
     name: 'imp-builder',
@@ -60,7 +60,7 @@ test('it returns the row it wrote', async () => {
     ref: 'ghcr.io/zgeoff/imp-base:2',
   });
 
-  const row = await findImageByName(ctx.db, 'imp-builder');
+  const row = await readImageByName(ctx.db, 'imp-builder');
 
   expect(row).toStrictEqual(image);
 });

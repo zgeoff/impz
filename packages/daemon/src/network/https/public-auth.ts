@@ -24,7 +24,7 @@ export function createPublicScope(
   return {
     kind: 'public',
     routeImp: createPublicRoute(findPublicImp, limits),
-    isPublic: async (name) => {
+    probePublic: async (name) => {
       const found = await findPublicImp(name);
 
       return found !== undefined;
@@ -154,6 +154,6 @@ function buildDigest(text: string): Buffer {
   return createHash('sha256').update(text).digest();
 }
 
-function isSameDigest(a: string, b: string): boolean {
-  return timingSafeEqual(buildDigest(a), buildDigest(b));
+function isSameDigest(left: string, right: string): boolean {
+  return timingSafeEqual(buildDigest(left), buildDigest(right));
 }

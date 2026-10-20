@@ -4,20 +4,22 @@ import type { OrphanStorage } from './storage-backend';
 
 // Anything in `dir` but empty directories: a socket or a log may be all an
 // imp left, and only an empty directory is provably nothing
-export function isHoldingFiles(dir: string): boolean {
+export function probeHoldingFiles(directory: string): boolean {
   return (
-    existsSync(dir) &&
-    readdirSync(dir, { recursive: true, withFileTypes: true }).some((entry) => !entry.isDirectory())
+    existsSync(directory) &&
+    readdirSync(directory, { recursive: true, withFileTypes: true }).some(
+      (entry) => !entry.isDirectory(),
+    )
   );
 }
 
 // every regular file under `dir`
-export function listFilesUnder(dir: string): string[] {
-  if (!existsSync(dir)) {
+export function listFilesUnder(directory: string): string[] {
+  if (!existsSync(directory)) {
     return [];
   }
 
-  return readdirSync(dir, { recursive: true, withFileTypes: true })
+  return readdirSync(directory, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile())
     .map((entry) => join(entry.parentPath, entry.name));
 }
@@ -27,16 +29,16 @@ export function listFilesUnder(dir: string): string[] {
 export function readDirectoryOrphan(
   kind: OrphanStorage['kind'],
   id: string,
-  dir: string,
+  directory: string,
   snapshots: readonly string[],
 ): OrphanStorage {
-  const birth = statSync(dir).birthtimeMs;
+  const birth = statSync(directory).birthtimeMs;
 
   return {
     kind,
     id,
-    location: dir,
-    bytes: listFilesUnder(dir).reduce((sum, path) => sum + statSync(path).blocks * 512, 0),
+    location: directory,
+    bytes: listFilesUnder(directory).reduce((sum, path) => sum + statSync(path).blocks * 512, 0),
     createdAt: birth > 0 ? new Date(birth) : null,
     snapshots,
   };

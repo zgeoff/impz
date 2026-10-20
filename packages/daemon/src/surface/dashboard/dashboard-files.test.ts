@@ -11,20 +11,20 @@ function setupTest() {
     rmSync(parent, { recursive: true, force: true });
   });
 
-  const dir = join(parent, 'dist');
+  const directory = join(parent, 'dist');
 
-  mkdirSync(join(dir, 'assets'), { recursive: true });
+  mkdirSync(join(directory, 'assets'), { recursive: true });
 
-  return { parent, dir };
+  return { parent, directoryPath: directory };
 }
 
 test('it serves a hashed asset as immutable', async () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'index.html'), '<!doctype html><title>imp</title>');
-  writeFileSync(join(ctx.dir, 'assets', 'index-abc123.js'), 'console.log(1)');
+  writeFileSync(join(ctx.directoryPath, 'index.html'), '<!doctype html><title>imp</title>');
+  writeFileSync(join(ctx.directoryPath, 'assets', 'index-abc123.js'), 'console.log(1)');
 
-  const response = createDashboardFiles(ctx.dir).serve(
+  const response = createDashboardFiles(ctx.directoryPath).serve(
     new Request('http://imp:7070/ui/assets/index-abc123.js'),
   );
 
@@ -39,9 +39,9 @@ test('it serves a hashed asset as immutable', async () => {
 test('it serves the shell for an app route, uncached and unframeable', async () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'index.html'), '<!doctype html><title>imp</title>');
+  writeFileSync(join(ctx.directoryPath, 'index.html'), '<!doctype html><title>imp</title>');
 
-  const response = createDashboardFiles(ctx.dir).serve(
+  const response = createDashboardFiles(ctx.directoryPath).serve(
     new Request('http://imp:7070/ui/imps/box/console'),
   );
 
@@ -58,9 +58,9 @@ test('it serves the shell for an app route, uncached and unframeable', async () 
 test('it answers 404 for a missing asset instead of the shell', async () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'index.html'), '<!doctype html><title>imp</title>');
+  writeFileSync(join(ctx.directoryPath, 'index.html'), '<!doctype html><title>imp</title>');
 
-  const response = createDashboardFiles(ctx.dir).serve(
+  const response = createDashboardFiles(ctx.directoryPath).serve(
     new Request('http://imp:7070/ui/assets/gone-123.js'),
   );
 
@@ -83,10 +83,12 @@ test.each([
   async (path, status, expected) => {
     const ctx = setupTest();
 
-    writeFileSync(join(ctx.dir, 'index.html'), '<!doctype html><title>imp</title>');
+    writeFileSync(join(ctx.directoryPath, 'index.html'), '<!doctype html><title>imp</title>');
     writeFileSync(join(ctx.parent, 'secret'), 'outside');
 
-    const response = createDashboardFiles(ctx.dir).serve(new Request(`http://imp:7070${path}`));
+    const response = createDashboardFiles(ctx.directoryPath).serve(
+      new Request(`http://imp:7070${path}`),
+    );
 
     const body = await response.text();
 
@@ -106,7 +108,10 @@ test('it says so when impd has no dashboard', async () => {
 
 test('it says so when the dashboard directory holds no shell', async () => {
   const ctx = setupTest();
-  const response = createDashboardFiles(ctx.dir).serve(new Request('http://imp:7070/ui/'));
+
+  const response = createDashboardFiles(ctx.directoryPath).serve(
+    new Request('http://imp:7070/ui/'),
+  );
 
   const body = await response.text();
 

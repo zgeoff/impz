@@ -13,7 +13,7 @@ import { buildConflictError, buildNotFoundError } from '../../surface/api-errors
 import type { Caller } from '../auth/caller';
 import type { Revocations } from '../auth/revocations';
 import type { TokenStore } from '../auth/token-store';
-import { CLIENT_SCOPES, buildApproverPlugin } from './build-approver-plugin';
+import { CLIENT_SCOPES, createApproverPlugin } from './create-approver-plugin';
 import { createSignIns } from './create-sign-ins';
 import { deriveTokenHash } from './derive-token-hash';
 import { isPatternsWithin, pickGrantScope, readLowerScope } from './grant-limits';
@@ -145,7 +145,7 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     // the provider's endpoint types do not satisfy the plugin type under
     // exactOptionalPropertyTypes, as atc found
     // oxlint-disable-next-line no-unsafe-type-assertion -- a BetterAuthPlugin at runtime; only its endpoint option types disagree with the stricter compiler settings
-    plugins: [provider as BetterAuthPlugin, buildApproverPlugin()],
+    plugins: [provider as BetterAuthPlugin, createApproverPlugin()],
   });
 
   const signIns = createSignIns({ now: deps.now });
@@ -198,7 +198,7 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
         asResponse: true,
       });
     },
-    findSessionID: async (cookie) => {
+    readSessionID: async (cookie) => {
       const found = await auth.api.getSession({ headers: new Headers({ cookie }) });
 
       return found?.session.id ?? null;
@@ -244,7 +244,7 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     return client;
   };
 
-  const hasClientNamed = async (name: string): Promise<boolean> => {
+  const probeClientNamed = async (name: string): Promise<boolean> => {
     const client = await db
       .selectFrom('oauthClient')
       .select('clientId')
@@ -260,7 +260,7 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     try {
       return await auth.api.createFixedClient({ body: { name, redirectURIs: [...redirectUris] } });
     } catch (error) {
-      const isTaken = await hasClientNamed(name);
+      const isTaken = await probeClientNamed(name);
 
       if (isTaken) {
         throw buildConflictError('oauth-client', name);
@@ -285,7 +285,7 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     },
 
     addClient: async (name, redirectUris) => {
-      const isTaken = await hasClientNamed(name);
+      const isTaken = await probeClientNamed(name);
 
       if (isTaken) {
         throw buildConflictError('oauth-client', name);
@@ -504,6 +504,38 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
   };
 }
 
+interface ClientRow {
+  readonly clientId: string;
+  readonly name: string | null;
+  readonly redirectUris: string;
+  readonly createdAt: string | null;
+}
+
+function toClient(row: Readonly<ClientRow>): OAuthClient {
+  return {
+    name: row.name ?? row.clientId,
+    clientId: row.clientId,
+    redirectUris: parseStrings(row.redirectUris),
+    createdAt: new Date(row.createdAt ?? 0),
+  };
+}
+
+function parseStrings(text: string): string[] {
+  const parsed: unknown = JSON.parse(text);
+
+  return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+}
+
+function parseImps(text: string | null): string[] | null {
+  if (text === null) {
+    return null;
+  }
+
+  const parsed: unknown = JSON.parse(text);
+
+  return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+}
+
 interface AccessPayload {
   readonly userID: string;
   readonly clientID: string;
@@ -539,37 +571,5 @@ function readAccessPayload(payload: unknown): AccessPayload | null {
     clientID,
     audiences: [audience].flat().filter((item): item is string => typeof item === 'string'),
     scopes: typeof scope === 'string' ? scope.split(' ') : [],
-  };
-}
-
-function parseStrings(text: string): string[] {
-  const parsed: unknown = JSON.parse(text);
-
-  return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
-}
-
-function parseImps(text: string | null): string[] | null {
-  if (text === null) {
-    return null;
-  }
-
-  const parsed: unknown = JSON.parse(text);
-
-  return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
-}
-
-interface ClientRow {
-  readonly clientId: string;
-  readonly name: string | null;
-  readonly redirectUris: string;
-  readonly createdAt: string | null;
-}
-
-function toClient(row: Readonly<ClientRow>): OAuthClient {
-  return {
-    name: row.name ?? row.clientId,
-    clientId: row.clientId,
-    redirectUris: parseStrings(row.redirectUris),
-    createdAt: new Date(row.createdAt ?? 0),
   };
 }

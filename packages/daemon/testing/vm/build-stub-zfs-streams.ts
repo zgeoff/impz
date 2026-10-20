@@ -52,7 +52,10 @@ export function buildStubZfsStreams(ctx: StubZfsStreamContext): StreamRunner {
     } else if (exists) {
       const latest = ctx
         .findSnapshotsOf(dataset)
-        .toSorted((a, b) => (ctx.snapshots.get(a)?.txg ?? 0) - (ctx.snapshots.get(b)?.txg ?? 0))
+        .toSorted(
+          (left, right) =>
+            (ctx.snapshots.get(left)?.txg ?? 0) - (ctx.snapshots.get(right)?.txg ?? 0),
+        )
         .at(-1);
 
       if (latest === undefined || ctx.snapshots.get(latest)?.guid !== stream.baseGuid) {

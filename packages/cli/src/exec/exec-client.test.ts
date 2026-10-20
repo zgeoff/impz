@@ -17,7 +17,7 @@ import {
   buildImpPaths,
   buildMockNewImage,
   buildStubExecReplies,
-  findFreePorts,
+  claimFreePorts,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
@@ -555,7 +555,7 @@ test('it exits 255 with the token hint when impd rejects the token', async () =>
 
 test('it exits 255 and names the address when nothing listens there', async () => {
   // a port that a probe held a moment ago and nothing holds now
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
   const url = `http://127.0.0.1:${String(port)}`;
   const errors: string[] = [];
 
@@ -1523,10 +1523,10 @@ test('it doubles the pause before each try, up to 8 s, while impd stays down und
       isAttachedElsewhere: () => Promise.resolve(false),
       reattachWindowMs: 20_000,
       now: () => clock.nowMs,
-      wait: (ms) => {
-        pauses.push(ms);
+      wait: (durationMs) => {
+        pauses.push(durationMs);
 
-        clock.nowMs += ms;
+        clock.nowMs += durationMs;
 
         return Promise.resolve();
       },
@@ -1590,8 +1590,8 @@ test('it fails with the last reason once the window to attach again is over, whi
       isAttachedElsewhere: () => Promise.resolve(false),
       reattachWindowMs: 1500,
       now: () => clock.nowMs,
-      wait: (ms) => {
-        clock.nowMs += ms;
+      wait: (durationMs) => {
+        clock.nowMs += durationMs;
 
         return Promise.resolve();
       },

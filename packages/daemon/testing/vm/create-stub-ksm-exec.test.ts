@@ -5,18 +5,18 @@ import { join } from 'node:path';
 import { createStubKsmExec } from './create-stub-ksm-exec';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'stub-ksm-exec-'));
+  const directory = mkdtempSync(join(tmpdir(), 'stub-ksm-exec-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it records the command it was asked to exec, one argument a line', () => {
   const ctx = setupTest();
-  const wrapper = createStubKsmExec(ctx.dir);
+  const wrapper = createStubKsmExec(ctx.directoryPath);
 
   Bun.spawnSync([wrapper.path, 'jailer', '--id', 'a b']);
 
@@ -25,7 +25,7 @@ test('it records the command it was asked to exec, one argument a line', () => {
 
 test('it fails as an exec that never started', () => {
   const ctx = setupTest();
-  const wrapper = createStubKsmExec(ctx.dir);
+  const wrapper = createStubKsmExec(ctx.directoryPath);
   const result = Bun.spawnSync([wrapper.path, 'jailer']);
 
   expect(result.exitCode).toBe(1);

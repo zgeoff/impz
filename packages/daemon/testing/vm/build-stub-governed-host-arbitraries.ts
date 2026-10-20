@@ -1,7 +1,7 @@
 import fc from 'fast-check';
-import type { HostChange } from './build-stub-governed-host';
+import type { HostChange } from './create-stub-governed-host';
 
-// Generators for the property cases of buildStubGovernedHost over imps
+// Generators for the property cases of createStubGovernedHost over imps
 // `ids`: the imps awake at the start, an admit, and a change between calls.
 export function buildStubGovernedHostArbitraries(ids: readonly string[]) {
   const id = fc.constantFrom(...ids);
@@ -30,7 +30,10 @@ export function buildStubGovernedHostArbitraries(ids: readonly string[]) {
       fc.record({ kind: fc.constant('spare' as const), id, mib: fc.integer({ min: 0, max: 300 }) }),
       fc.record({ kind: fc.constant('touch' as const), id }),
       fc.record({ kind: fc.constant('stop' as const), id }),
-      fc.record({ kind: fc.constant('tick' as const), ms: fc.integer({ min: 0, max: 25_000 }) }),
+      fc.record({
+        kind: fc.constant('tick' as const),
+        durationMs: fc.integer({ min: 0, max: 25_000 }),
+      }),
     ),
   };
 }

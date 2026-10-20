@@ -18,7 +18,7 @@ import { waitForExec } from '../lib/imps';
 import { runInContainer } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
 // An imp of the default image through its life: create, exec, console,
@@ -32,7 +32,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('lifecycle'), stack, client };
+  return { prefix: getSuitePrefix('lifecycle'), stack, client };
 }
 
 test('it boots the default image on impz new and answers the first exec within the limit', async () => {
@@ -47,10 +47,10 @@ test('it boots the default image on impz new and answers the first exec within t
 
   await runInImp(name, 'true');
 
-  const ms = Date.now() - started;
+  const durationMs = Date.now() - started;
 
-  writeMetric('newPlusExecMs', ms);
-  checkLimit('impz new + first exec', ms, config.maxNewMs);
+  writeMetric('newPlusExecMs', durationMs);
+  checkLimit('impz new + first exec', durationMs, config.maxNewMs);
 
   const row = await requireImp(name);
   const urls = await readImpUrls(name);

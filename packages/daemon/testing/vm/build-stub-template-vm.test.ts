@@ -7,9 +7,9 @@ import { buildMockTemplateBuildPlan } from './build-mock-template-build-plan';
 import { buildStubTemplateVm } from './build-stub-template-vm';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-template-vm-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-template-vm-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   // a host with 1 TiB free, so no build meets this machine's disk
   const diskBudget = createDiskBudget({
@@ -18,19 +18,23 @@ async function setupTest() {
     log: () => {},
   });
 
-  return { dir, diskBudget };
+  return { directoryPath: directory, diskBudget };
 }
 
 test('it writes the snapshot files where the plan names them', async () => {
   const ctx = await setupTest();
 
   const vm = buildStubTemplateVm(ctx.diskBudget);
-  const plan = buildMockTemplateBuildPlan({ workDir: join(ctx.dir, '.build-a') });
+  const plan = buildMockTemplateBuildPlan({ workDir: join(ctx.directoryPath, '.build-a') });
 
   await vm.buildVm(plan);
 
-  const vmstate = await readFile(join(ctx.dir, '.build-a', 'snapshot', 'vmstate'), 'utf8');
-  const mem = await readFile(join(ctx.dir, '.build-a', 'snapshot', 'mem'), 'utf8');
+  const vmstate = await readFile(
+    join(ctx.directoryPath, '.build-a', 'snapshot', 'vmstate'),
+    'utf8',
+  );
+
+  const mem = await readFile(join(ctx.directoryPath, '.build-a', 'snapshot', 'mem'), 'utf8');
 
   expect(vmstate).toBe('vmstate');
   expect(mem).toBe('mem');
@@ -40,8 +44,8 @@ test('it records each plan it boots, in order', async () => {
   const ctx = await setupTest();
 
   const vm = buildStubTemplateVm(ctx.diskBudget);
-  const first = buildMockTemplateBuildPlan({ workDir: join(ctx.dir, '.build-a') });
-  const second = buildMockTemplateBuildPlan({ workDir: join(ctx.dir, '.build-b') });
+  const first = buildMockTemplateBuildPlan({ workDir: join(ctx.directoryPath, '.build-a') });
+  const second = buildMockTemplateBuildPlan({ workDir: join(ctx.directoryPath, '.build-b') });
 
   await vm.buildVm(first);
   await vm.buildVm(second);
@@ -53,7 +57,7 @@ test('it records the disk room the budget holds while a build runs', async () =>
   const ctx = await setupTest();
 
   const vm = buildStubTemplateVm(ctx.diskBudget);
-  const plan = buildMockTemplateBuildPlan({ workDir: join(ctx.dir, '.build-a') });
+  const plan = buildMockTemplateBuildPlan({ workDir: join(ctx.directoryPath, '.build-a') });
 
   await ctx.diskBudget.withRoom(64 * 1024 ** 2, () => vm.buildVm(plan));
   await vm.buildVm(plan);

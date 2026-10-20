@@ -3,7 +3,7 @@ import { startRealTimer } from './start-real-timer';
 
 // when the call gives up, and what it throws then
 interface RequestDeadline {
-  readonly ms: number;
+  readonly delayMs: number;
   readonly buildError: () => Error;
 }
 
@@ -58,7 +58,7 @@ export async function sendLongRequest(
 
     expiry.abort(error);
     expired.reject(error);
-  }, deadline.ms);
+  }, deadline.delayMs);
 
   try {
     return await Promise.race([send(new Request(url, { ...init, signal })), expired.promise]);

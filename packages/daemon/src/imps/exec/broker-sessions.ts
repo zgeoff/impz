@@ -1,4 +1,4 @@
-import { isBrokerSession, writeBrokerSession } from '../../platform/db/broker-sessions';
+import { probeBrokerSession, writeBrokerSession } from '../../platform/db/broker-sessions';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { SessionInfo } from '../../vm/agent-client/agent-protocol';
 import type { ExecStream } from '../../vm/agent-client/exec-stream';
@@ -29,7 +29,7 @@ export async function checkBrokerAttach(
     // an agent from before output offsets names no generation
     const generation = session.executionGeneration === '' ? undefined : session.executionGeneration;
 
-    const refused = await isCovered(db, impId, generation, name);
+    const refused = await checkCoverage(db, impId, generation, name);
 
     if (refused !== null) {
       return refused;
@@ -52,7 +52,7 @@ export async function checkOpenedSession(
   const generation = output?.continuity === 'offsets' ? output.executionGeneration : undefined;
 
   if (!stream.created) {
-    return isCovered(db, impId, generation, name);
+    return checkCoverage(db, impId, generation, name);
   }
 
   // an agent from before output offsets names no generation: its sessions
@@ -69,14 +69,14 @@ export async function checkOpenedSession(
   return null;
 }
 
-async function isCovered(
+async function checkCoverage(
   db: ImpDatabase,
   impId: string,
   generation: string | undefined,
   name: string,
 ): Promise<Error | null> {
   const isRecorded =
-    generation === undefined ? false : await isBrokerSession(db, impId, generation);
+    generation === undefined ? false : await probeBrokerSession(db, impId, generation);
 
   return isRecorded
     ? null

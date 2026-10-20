@@ -70,10 +70,6 @@ const SESSION_OPS: ReadonlySet<string> = new Set(['session.attach', 'session.kil
 // proto.ExitOf reports a signal
 const HANGUP_EXIT: StubExit = { code: 128 + 1, signal: 1 };
 
-function sendError(socket: Socket, error: Readonly<Record<string, unknown>>): void {
-  socket.end(encodeJsonFrame(FRAME_TYPES.response, { error }));
-}
-
 // A guest agent at `path` that runs sessions as agent/internal/session's
 // Manager does. It keeps every output byte from offset 0, so a resume never
 // meets a gap.
@@ -91,7 +87,7 @@ export async function startStubSessionAgent(
 
   const listSessions = () =>
     [...runs]
-      .toSorted(([a], [b]) => a.localeCompare(b))
+      .toSorted(([left], [right]) => left.localeCompare(right))
       .map(([name, run]) => ({
         name,
         pid: 9,
@@ -534,6 +530,10 @@ export async function startStubSessionAgent(
       previous.clear();
     },
   };
+}
+
+function sendError(socket: Socket, error: Readonly<Record<string, unknown>>): void {
+  socket.end(encodeJsonFrame(FRAME_TYPES.response, { error }));
 }
 
 function isExecPayload(payload: JsonValue): boolean {

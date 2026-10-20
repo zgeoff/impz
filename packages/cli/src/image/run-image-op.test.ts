@@ -41,14 +41,16 @@ async function setupTest() {
   // the procedure of each call the client sends, such as `system/info`
   const calls: string[] = [];
 
+  const sendClientRequest = (request: Request) => {
+    calls.push(new URL(request.url).pathname.slice('/rpc/'.length));
+
+    return sendRequest(request);
+  };
+
   const client = createImpClient({
     url: 'http://impd.test',
     token: rootToken,
-    fetch: (request) => {
-      calls.push(new URL(request.url).pathname.slice('/rpc/'.length));
-
-      return sendRequest(request);
-    },
+    fetch: sendClientRequest,
   });
 
   return { rootToken, dataDir: harness.dataDir, db: harness.db, client, sendRequest, calls };

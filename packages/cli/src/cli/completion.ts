@@ -21,13 +21,13 @@ const ROOT_FLAGS = ['--host', '--version', '--help'];
 // a command as gunshi holds it: the command, or the loader of a lazy one
 type CommandEntry = SubCommandable | LazyCommand;
 
-export async function buildCompletionTree(command: CommandEntry): Promise<CompletionNode> {
-  const root = await buildNode(command, 'impz');
+export async function readCompletionTree(command: CommandEntry): Promise<CompletionNode> {
+  const root = await readNode(command, 'impz');
 
   return { ...root, flags: [...new Set([...ROOT_FLAGS, ...root.flags])] };
 }
 
-async function buildNode(command: CommandEntry, path: string): Promise<CompletionNode> {
+async function readNode(command: CommandEntry, path: string): Promise<CompletionNode> {
   const resolved = await loadCommand(command);
 
   const args: Readonly<Record<string, ArgSchema>> = resolved.args ?? {};
@@ -35,7 +35,7 @@ async function buildNode(command: CommandEntry, path: string): Promise<Completio
   const children: CompletionNode[] = [];
 
   for (const [name, child] of subCommands) {
-    const node = await buildNode(child, `${path} ${name}`);
+    const node = await readNode(child, `${path} ${name}`);
 
     children.push(node);
   }

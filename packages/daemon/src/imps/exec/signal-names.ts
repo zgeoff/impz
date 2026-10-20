@@ -7,7 +7,7 @@ export function findSignalNumber(name: string): number | undefined {
   return signals[name];
 }
 
-export function findSignalName(signal: number): string {
+export function getSignalName(signal: number): string {
   const entry = Object.entries(constants.signals).find(([, number]) => number === signal);
 
   return entry?.[0] ?? `SIG${String(signal)}`;

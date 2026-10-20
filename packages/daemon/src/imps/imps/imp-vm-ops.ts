@@ -4,7 +4,7 @@ import { ORPCError } from '@orpc/server';
 import { removeNextBootCause, writeColdBoot } from '../../platform/db/cold-boots';
 import { removeIdentityReset, updateImpActivity, updateImpDisk } from '../../platform/db/imps';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSemaphore } from '../../platform/process/semaphore';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildAgentOutdatedApiError, buildStoppingError } from '../../surface/api-errors';
@@ -115,7 +115,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
   };
 
   const writeFailure = async (imp: LockedImp, error: unknown): Promise<void> => {
-    const message = readErrorMessage(error);
+    const message = getErrorMessage(error);
 
     context.log(`impd: ${imp.name}: ${message}`);
 
@@ -133,7 +133,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
     try {
       writeVmIdentity(paths, identity);
     } catch (error) {
-      context.log(`impd: ${imp.name}: could not write vm.json: ${readErrorMessage(error)}`);
+      context.log(`impd: ${imp.name}: could not write vm.json: ${getErrorMessage(error)}`);
     }
   };
 
@@ -319,7 +319,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
     try {
       await context.vms.growDrive(context.findPaths(imp.id), imp.diskBytes);
     } catch (error) {
-      const message = readErrorMessage(error);
+      const message = getErrorMessage(error);
 
       context.log(`impd: ${imp.name}: the guest did not grow into its disk: ${message}`);
 
@@ -406,5 +406,5 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
 }
 
 function countStepsMs(timings: Readonly<Record<string, number>>): number {
-  return Object.values(timings).reduce((total, ms) => total + ms, 0);
+  return Object.values(timings).reduce((total, durationMs) => total + durationMs, 0);
 }

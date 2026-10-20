@@ -19,7 +19,7 @@ export async function readTailscaleE2EAuthKey(): Promise<{ key: string; tags: st
 }
 
 // whether main.ts gave this run the e2e key; the tailnet suites skip without it
-export function hasTailscaleE2EKey(): boolean {
+export function probeTailscaleE2EKey(): boolean {
   return (
     (process.env['TAILSCALE_AUTHKEY'] ?? '') !== '' &&
     process.env['IMP_TAILSCALE_TAGS'] === 'tag:imp-e2e'

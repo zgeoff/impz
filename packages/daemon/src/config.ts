@@ -16,7 +16,7 @@ import { createPeerRanges, readPeerUrlAddress } from './imp-ops/moves/peer-addre
 import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from './imps/images/build-image';
 import type { SessionLogLimits } from './imps/session-logs/session-log-service';
 import { checkPublicPorts } from './network/https/check-public-ports';
-import { HttpsEnvSchema, listHttpsWarnings, parseHttpsConfig } from './network/https/https-config';
+import { HttpsEnvSchema, listHttpsWarnings, readHttpsConfig } from './network/https/https-config';
 import type { HttpsConfig } from './network/https/https-config';
 import {
   TailnetNamesEnvSchema,
@@ -411,7 +411,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
 
   const hostAddresses = [...new Set(parseCidrList(parsed.IMP_HOST_ADDRESSES))];
   const isTailnetNode = parsed.TAILSCALE_AUTHKEY !== undefined || parsed.IMP_TAILSCALE_NODE === '1';
-  const https = parseHttpsConfig(parsed);
+  const https = readHttpsConfig(parsed);
 
   if (https !== null && https.public !== null) {
     checkPublicPorts(

@@ -15,14 +15,14 @@ import { createStubBin } from './test-utils/create-stub-bin';
 import { runSourcedFunction } from './test-utils/run-sourced-function';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-lib-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-lib-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   return {
-    dir,
+    directoryPath: directory,
   };
 }
 
@@ -87,7 +87,7 @@ test('#IMP_HOST_IMAGE defaults to the tag of the checkout lib.sh is in', () => {
 
 test('#IMP_HOST_IMAGE defaults to the same tag for a checkout reached through a symlink', () => {
   const ctx = setupTest();
-  const link = join(ctx.dir, 'linked-checkout');
+  const link = join(ctx.directoryPath, 'linked-checkout');
 
   symlinkSync(realpathSync(new URL('..', import.meta.url).pathname), link);
 
@@ -133,7 +133,7 @@ test('#load_tailscale_authkey keeps a key from the env out of a bash -x trace', 
     {
       env: {
         PATH: process.env['PATH'] ?? '',
-        HOME: ctx.dir,
+        HOME: ctx.directoryPath,
         TAILSCALE_AUTHKEY: 'fake-tskey-for-the-trace-check',
       },
     },
@@ -145,7 +145,7 @@ test('#load_tailscale_authkey keeps a key from the env out of a bash -x trace', 
 
 test('#load_tailscale_authkey exports a key from op and keeps it out of a bash -x trace', () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', "echo 'fake-tskey-for-the-trace-check'");
+  const op = createStubBin(ctx.directoryPath, 'op', "echo 'fake-tskey-for-the-trace-check'");
 
   // the comparison runs untraced: only the function's own trace is checked
   const result = Bun.spawnSync(
@@ -161,7 +161,7 @@ test('#load_tailscale_authkey exports a key from op and keeps it out of a bash -
     {
       env: {
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
-        HOME: ctx.dir,
+        HOME: ctx.directoryPath,
         IMP_TAILSCALE_OP: '1',
         IMP_OP_VAULT: 'example',
       },
@@ -174,7 +174,7 @@ test('#load_tailscale_authkey exports a key from op and keeps it out of a bash -
 
 test('#load_tailscale_authkey asks op once in a run after an op miss', () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', 'exit 1');
+  const op = createStubBin(ctx.directoryPath, 'op', 'exit 1');
 
   const result = Bun.spawnSync(
     [
@@ -187,7 +187,7 @@ test('#load_tailscale_authkey asks op once in a run after an op miss', () => {
     {
       env: {
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
-        HOME: ctx.dir,
+        HOME: ctx.directoryPath,
         IMP_TAILSCALE_OP: '1',
         IMP_OP_VAULT: 'example',
       },
@@ -203,7 +203,7 @@ test('#load_tailscale_authkey asks op once in a run after an op miss', () => {
 
 test("#load_tailscale_authkey joins a dev instance with impz's tag:imp-e2e client from op, ephemeral and preauthorized, untraced", () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', "echo 'tskey-client-fake-for-the-trace-check'");
+  const op = createStubBin(ctx.directoryPath, 'op', "echo 'tskey-client-fake-for-the-trace-check'");
 
   // the comparison runs untraced: only the function's own trace is checked
   const result = Bun.spawnSync(
@@ -221,7 +221,7 @@ test("#load_tailscale_authkey joins a dev instance with impz's tag:imp-e2e clien
     {
       env: {
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
-        HOME: ctx.dir,
+        HOME: ctx.directoryPath,
         IMP_TAILSCALE_OP: '1',
         IMP_OP_VAULT: 'example',
       },
@@ -238,7 +238,7 @@ test("#load_tailscale_authkey joins a dev instance with impz's tag:imp-e2e clien
 
 test('#load_tailscale_authkey keeps the tags IMP_TAILSCALE_TAGS sets for a client secret from op', () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', "echo 'tskey-client-fake-other'");
+  const op = createStubBin(ctx.directoryPath, 'op', "echo 'tskey-client-fake-other'");
 
   const result = Bun.spawnSync(
     [
@@ -251,7 +251,7 @@ test('#load_tailscale_authkey keeps the tags IMP_TAILSCALE_TAGS sets for a clien
     {
       env: {
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
-        HOME: ctx.dir,
+        HOME: ctx.directoryPath,
         IMP_TAILSCALE_OP: '1',
         IMP_OP_VAULT: 'example',
         IMP_TAILSCALE_TAGS: 'tag:sandbox-dev',
@@ -264,7 +264,7 @@ test('#load_tailscale_authkey keeps the tags IMP_TAILSCALE_TAGS sets for a clien
 
 test('#load_tailscale_authkey never asks op without IMP_TAILSCALE_OP=1', () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', "echo 'fake-tskey-for-the-trace-check'");
+  const op = createStubBin(ctx.directoryPath, 'op', "echo 'fake-tskey-for-the-trace-check'");
 
   const result = Bun.spawnSync(
     [
@@ -274,7 +274,7 @@ test('#load_tailscale_authkey never asks op without IMP_TAILSCALE_OP=1', () => {
       'bash',
       new URL('lib.sh', import.meta.url).pathname,
     ],
-    { env: { PATH: `${op.bin}:${process.env['PATH'] ?? ''}`, HOME: ctx.dir } },
+    { env: { PATH: `${op.bin}:${process.env['PATH'] ?? ''}`, HOME: ctx.directoryPath } },
   );
 
   // the run reaches its end: sourcing and the lookup left the shell alive
@@ -284,9 +284,9 @@ test('#load_tailscale_authkey never asks op without IMP_TAILSCALE_OP=1', () => {
 
 test('#load_tailscale_authkey skips op without a vault, names the variables to set, and falls back to .env', () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', "echo 'fake-tskey-from-op'");
+  const op = createStubBin(ctx.directoryPath, 'op', "echo 'fake-tskey-from-op'");
 
-  writeFileSync(join(ctx.dir, '.env'), 'TAILSCALE_AUTHKEY=fake-tskey-from-env\n');
+  writeFileSync(join(ctx.directoryPath, '.env'), 'TAILSCALE_AUTHKEY=fake-tskey-from-env\n');
 
   const result = Bun.spawnSync(
     [
@@ -295,12 +295,12 @@ test('#load_tailscale_authkey skips op without a vault, names the variables to s
       'source "$1"; IMP_ROOT=$2; unset TAILSCALE_AUTHKEY; load_tailscale_authkey; echo "found $? [$TAILSCALE_AUTHKEY] [$IMP_TAILSCALE_OP_MISSED]"',
       'bash',
       new URL('lib.sh', import.meta.url).pathname,
-      ctx.dir,
+      ctx.directoryPath,
     ],
     {
       env: {
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
-        HOME: ctx.dir,
+        HOME: ctx.directoryPath,
         IMP_TAILSCALE_OP: '1',
       },
     },
@@ -320,7 +320,7 @@ test('#load_tailscale_authkey skips op without a vault, names the variables to s
 
 test('#load_tailscale_e2e_authkey joins e2e nodes with the tag:imp-e2e client from op, ephemeral and preauthorized, untraced', () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', "echo 'fake-tskey-client-for-the-trace-check'");
+  const op = createStubBin(ctx.directoryPath, 'op', "echo 'fake-tskey-client-for-the-trace-check'");
 
   // the comparison runs untraced: only the function's own trace is checked
   const result = Bun.spawnSync(
@@ -338,7 +338,7 @@ test('#load_tailscale_e2e_authkey joins e2e nodes with the tag:imp-e2e client fr
     {
       env: {
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
-        HOME: ctx.dir,
+        HOME: ctx.directoryPath,
         IMP_OP_VAULT: 'example',
       },
     },
@@ -354,7 +354,7 @@ test('#load_tailscale_e2e_authkey joins e2e nodes with the tag:imp-e2e client fr
 
 test('#load_tailscale_e2e_authkey reads the reference IMP_E2E_TAILSCALE_OAUTH_REF names over the vault', () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', "echo 'fake-tskey-client-other'");
+  const op = createStubBin(ctx.directoryPath, 'op', "echo 'fake-tskey-client-other'");
 
   const result = Bun.spawnSync(
     [
@@ -367,7 +367,7 @@ test('#load_tailscale_e2e_authkey reads the reference IMP_E2E_TAILSCALE_OAUTH_RE
     {
       env: {
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
-        HOME: ctx.dir,
+        HOME: ctx.directoryPath,
         IMP_OP_VAULT: 'example',
         IMP_E2E_TAILSCALE_OAUTH_REF: 'op://vault/e2e-client/secret',
       },
@@ -380,7 +380,7 @@ test('#load_tailscale_e2e_authkey reads the reference IMP_E2E_TAILSCALE_OAUTH_RE
 
 test('#load_tailscale_e2e_authkey never asks op without a vault, and names the variables to set', () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', "echo 'fake-tskey-client-other'");
+  const op = createStubBin(ctx.directoryPath, 'op', "echo 'fake-tskey-client-other'");
 
   const result = Bun.spawnSync(
     [
@@ -390,7 +390,7 @@ test('#load_tailscale_e2e_authkey never asks op without a vault, and names the v
       'bash',
       new URL('lib.sh', import.meta.url).pathname,
     ],
-    { env: { PATH: `${op.bin}:${process.env['PATH'] ?? ''}`, HOME: ctx.dir } },
+    { env: { PATH: `${op.bin}:${process.env['PATH'] ?? ''}`, HOME: ctx.directoryPath } },
   );
 
   expect({
@@ -409,12 +409,12 @@ test('#write_tailnet_oauth_file writes the OAuth client from the item in IMP_OP_
   const ctx = setupTest();
 
   const op = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'op',
     `case "$2" in */client-id) echo 'fake-client-id' ;; */client-secret) echo 'fake-client-secret' ;; esac`,
   );
 
-  const file = join(ctx.dir, 'data/tailnet-oauth.json');
+  const file = join(ctx.directoryPath, 'data/tailnet-oauth.json');
 
   const result = Bun.spawnSync(
     [
@@ -428,7 +428,7 @@ test('#write_tailnet_oauth_file writes the OAuth client from the item in IMP_OP_
     {
       env: {
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
-        HOME: ctx.dir,
+        HOME: ctx.directoryPath,
         IMP_OP_VAULT: 'example',
       },
     },
@@ -450,8 +450,8 @@ test('#write_tailnet_oauth_file writes the OAuth client from the item in IMP_OP_
 
 test('#write_tailnet_oauth_file never asks op without a vault, and names the variables to set', () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', "echo 'fake-client-id'");
-  const file = join(ctx.dir, 'data/tailnet-oauth.json');
+  const op = createStubBin(ctx.directoryPath, 'op', "echo 'fake-client-id'");
+  const file = join(ctx.directoryPath, 'data/tailnet-oauth.json');
 
   const result = Bun.spawnSync(
     [
@@ -462,7 +462,7 @@ test('#write_tailnet_oauth_file never asks op without a vault, and names the var
       new URL('lib.sh', import.meta.url).pathname,
       file,
     ],
-    { env: { PATH: `${op.bin}:${process.env['PATH'] ?? ''}`, HOME: ctx.dir } },
+    { env: { PATH: `${op.bin}:${process.env['PATH'] ?? ''}`, HOME: ctx.directoryPath } },
   );
 
   expect({
@@ -480,9 +480,9 @@ test('#write_tailnet_oauth_file never asks op without a vault, and names the var
 
 test("#load_tailscale_e2e_authkey never gives e2e nodes dev's tag:imp key from the env or .env", () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', 'exit 1');
+  const op = createStubBin(ctx.directoryPath, 'op', 'exit 1');
 
-  writeFileSync(join(ctx.dir, '.env'), 'TAILSCALE_AUTHKEY=fake-tag-imp-key\n');
+  writeFileSync(join(ctx.directoryPath, '.env'), 'TAILSCALE_AUTHKEY=fake-tag-imp-key\n');
 
   const result = Bun.spawnSync(
     [
@@ -491,12 +491,12 @@ test("#load_tailscale_e2e_authkey never gives e2e nodes dev's tag:imp key from t
       'source "$1"; IMP_ROOT=$2; load_tailscale_e2e_authkey; echo "found $? [$TAILSCALE_AUTHKEY] [$IMP_TAILSCALE_TAGS]"',
       'bash',
       new URL('lib.sh', import.meta.url).pathname,
-      ctx.dir,
+      ctx.directoryPath,
     ],
     {
       env: {
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
-        HOME: ctx.dir,
+        HOME: ctx.directoryPath,
         TAILSCALE_AUTHKEY: 'fake-tag-imp-key',
       },
     },
@@ -507,7 +507,7 @@ test("#load_tailscale_e2e_authkey never gives e2e nodes dev's tag:imp key from t
 
 test('#load_tailscale_e2e_authkey takes the e2e client secret from IMP_E2E_TAILSCALE_AUTHKEY without asking op', () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.dir, 'op', "echo 'fake-from-op'");
+  const op = createStubBin(ctx.directoryPath, 'op', "echo 'fake-from-op'");
 
   const result = Bun.spawnSync(
     [
@@ -520,7 +520,7 @@ test('#load_tailscale_e2e_authkey takes the e2e client secret from IMP_E2E_TAILS
     {
       env: {
         PATH: `${op.bin}:${process.env['PATH'] ?? ''}`,
-        HOME: ctx.dir,
+        HOME: ctx.directoryPath,
         IMP_E2E_TAILSCALE_AUTHKEY: 'fake-client-secret?ephemeral=false',
       },
     },

@@ -14,7 +14,7 @@ import { holdImp, waitForExec } from '../lib/imps';
 import { runInContainer } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // `impz new --disk` and `impz disk resize` on one imp, through each state a
@@ -27,7 +27,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('disks'), stack, client };
+  return { prefix: getSuitePrefix('disks'), stack, client };
 }
 
 test('it grows a disk past its image at the first boot, at once while running, on a wake or the next boot, never shrinks it, and fsck finds it clean', async () => {

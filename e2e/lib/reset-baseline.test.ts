@@ -25,11 +25,12 @@ async function setupTest() {
   const harness = await startTestImpd(stack, { rootToken: 'root-token' });
 
   const dataDir = harness.dataDir;
+  const sendClientRequest = (request: Request) => harness.impd.api.app.handle(request);
 
   const client = createImpClient({
     url: 'http://impd.test',
     token: 'root-token',
-    fetch: (request) => harness.impd.api.app.handle(request),
+    fetch: sendClientRequest,
   });
 
   // the image an imp boots from when it names none, as impd's image
@@ -388,10 +389,12 @@ test('#removeImpIfPresent fails when impd refuses the removal', async () => {
 
   await ctx.client.imps.create({ name: 'e2e-x-dev' });
 
+  const sendStrangerRequest = (request: Request) => ctx.impd.api.app.handle(request);
+
   const stranger = createImpClient({
     url: 'http://impd.test',
     token: 'not-a-token',
-    fetch: (request) => ctx.impd.api.app.handle(request),
+    fetch: sendStrangerRequest,
   });
 
   expect(removeImpIfPresent(stranger, 'e2e-x-dev')).rejects.toMatchObject({
@@ -453,10 +456,12 @@ test('#removeTokenIfPresent fails when impd refuses the removal', async () => {
 
   await ctx.client.tokens.create({ name: 'e2e-x-reader', scope: 'read' });
 
+  const sendStrangerRequest = (request: Request) => ctx.impd.api.app.handle(request);
+
   const stranger = createImpClient({
     url: 'http://impd.test',
     token: 'not-a-token',
-    fetch: (request) => ctx.impd.api.app.handle(request),
+    fetch: sendStrangerRequest,
   });
 
   expect(removeTokenIfPresent(stranger, 'e2e-x-reader')).rejects.toMatchObject({
@@ -491,10 +496,12 @@ test('#removeSecretIfPresent fails when impd refuses the removal', async () => {
 
   await ctx.client.secrets.add({ name: 'e2e-x-gh', kind: 'github', value: 'ghp_e2e' });
 
+  const sendStrangerRequest = (request: Request) => ctx.impd.api.app.handle(request);
+
   const stranger = createImpClient({
     url: 'http://impd.test',
     token: 'not-a-token',
-    fetch: (request) => ctx.impd.api.app.handle(request),
+    fetch: sendStrangerRequest,
   });
 
   expect(removeSecretIfPresent(stranger, 'e2e-x-gh')).rejects.toMatchObject({
@@ -525,10 +532,12 @@ test('#removeNetworkIfPresent fails when impd refuses the removal', async () => 
 
   await ctx.client.networks.create({ name: 'e2e-x-lab' });
 
+  const sendStrangerRequest = (request: Request) => ctx.impd.api.app.handle(request);
+
   const stranger = createImpClient({
     url: 'http://impd.test',
     token: 'not-a-token',
-    fetch: (request) => ctx.impd.api.app.handle(request),
+    fetch: sendStrangerRequest,
   });
 
   expect(removeNetworkIfPresent(stranger, 'e2e-x-lab')).rejects.toMatchObject({
@@ -565,10 +574,12 @@ test('#removeOAuthClientIfPresent fails when impd refuses the removal', async ()
     redirectUris: ['https://claude.ai/api/mcp/auth_callback'],
   });
 
+  const sendStrangerRequest = (request: Request) => ctx.impd.api.app.handle(request);
+
   const stranger = createImpClient({
     url: 'http://impd.test',
     token: 'not-a-token',
-    fetch: (request) => ctx.impd.api.app.handle(request),
+    fetch: sendStrangerRequest,
   });
 
   expect(removeOAuthClientIfPresent(stranger, 'e2e-x-conn')).rejects.toMatchObject({

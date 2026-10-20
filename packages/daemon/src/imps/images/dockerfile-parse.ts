@@ -59,11 +59,11 @@ const WORD_KEYWORDS = new Set(['from', 'expose']);
 // each character, with unicode.IsSpace
 const FLAG_SPACE_BYTES = new Set([0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0x85, 0xa0]);
 
-function removeGoSpace(text: string): string {
+function stripGoSpace(text: string): string {
   return text.replace(LEADING_SPACE, '').replace(TRAILING_SPACE, '');
 }
 
-function removeNewline(line: string): string {
+function stripNewline(line: string): string {
   return line.replace(/[\r\n]+$/v, '');
 }
 
@@ -87,57 +87,61 @@ function buildContinuation(escape: string): RegExp {
 
 // The parser directives, which come first: the first line that is not one
 // ends them. Holds the escape token they set.
-class DirectiveReader {
-  escape = '\\';
+function buildDirectiveReader() {
+  let escape = '\\';
+  let continuation = buildContinuation('\\');
+  let isDone = false;
 
-  private continuation = buildContinuation('\\');
+  const seen = new Set<string>();
 
-  private isDone = false;
+  return {
+    get escape(): string {
+      return escape;
+    },
 
-  private readonly seen = new Set<string>();
-
-  readLine(line: string): void {
-    if (this.isDone) {
-      return;
-    }
-
-    const match = DIRECTIVE.exec(line);
-    const key = match?.groups?.['key']?.toLowerCase();
-
-    if (key === undefined || !DIRECTIVE_KEYS.has(key)) {
-      this.isDone = true;
-
-      return;
-    }
-
-    if (this.seen.has(key)) {
-      throw new DockerfileError(`the Dockerfile has more than one ${key} parser directive`);
-    }
-
-    this.seen.add(key);
-
-    const value = match?.groups?.['value'] ?? '';
-
-    if (key === 'escape') {
-      if (value !== '\\' && value !== '`') {
-        throw new DockerfileError(
-          `the escape parser directive ${JSON.stringify(value)} is not \\ or \``,
-        );
+    scanLine: (line: string): void => {
+      if (isDone) {
+        return;
       }
 
-      this.escape = value;
-      this.continuation = buildContinuation(value);
-    }
-  }
+      const match = DIRECTIVE.exec(line);
+      const key = match?.groups?.['key']?.toLowerCase();
 
-  // the line with a trailing escape token removed, and whether it ends there
-  splitContinuation(line: string): [string, boolean] {
-    if (this.continuation.test(line)) {
-      return [line.replace(this.continuation, '$1'), false];
-    }
+      if (key === undefined || !DIRECTIVE_KEYS.has(key)) {
+        isDone = true;
 
-    return [line, true];
-  }
+        return;
+      }
+
+      if (seen.has(key)) {
+        throw new DockerfileError(`the Dockerfile has more than one ${key} parser directive`);
+      }
+
+      seen.add(key);
+
+      const value = match?.groups?.['value'] ?? '';
+
+      if (key === 'escape') {
+        if (value !== '\\' && value !== '`') {
+          throw new DockerfileError(
+            `the escape parser directive ${JSON.stringify(value)} is not \\ or \``,
+          );
+        }
+
+        escape = value;
+        continuation = buildContinuation(value);
+      }
+    },
+
+    // the line with a trailing escape token removed, and whether it ends there
+    splitContinuation: (line: string): [string, boolean] => {
+      if (continuation.test(line)) {
+        return [line.replace(continuation, '$1'), false];
+      }
+
+      return [line, true];
+    },
+  };
 }
 
 interface SplitFlags {
@@ -248,7 +252,7 @@ function splitFlags(rest: string, escape: string): SplitFlags {
 }
 
 // parseJSON: a JSON array of strings, or null when the text is not one
-function readJsonWords(args: string): string[] | null {
+function parseJsonWords(args: string): string[] | null {
   const text = args.replace(LEADING_SPACE, '');
 
   if (!text.startsWith('[')) {
@@ -276,12 +280,12 @@ function readJsonWords(args: string): string[] | null {
   });
 }
 
-function readWords(keyword: string, args: string): { words: string[]; isJson: boolean } {
+function parseWords(keyword: string, args: string): { words: string[]; isJson: boolean } {
   if (args === '') {
     return { words: [], isJson: false };
   }
 
-  const json = JSON_KEYWORDS.has(keyword) || keyword === 'run' ? readJsonWords(args) : null;
+  const json = JSON_KEYWORDS.has(keyword) || keyword === 'run' ? parseJsonWords(args) : null;
 
   if (json !== null) {
     return { words: json, isJson: true };
@@ -295,8 +299,13 @@ function readWords(keyword: string, args: string): { words: string[]; isJson: bo
 }
 
 // newNodeFromLine: the keyword, its flags and its arguments
-function readInstruction(text: string, escape: string, line: number, endLine: number): Instruction {
-  const trimmed = removeGoSpace(text);
+function parseInstruction(
+  text: string,
+  escape: string,
+  line: number,
+  endLine: number,
+): Instruction {
+  const trimmed = stripGoSpace(text);
   const commandEnd = WORD_SPACE.exec(trimmed);
   const command = commandEnd === null ? trimmed : trimmed.slice(0, commandEnd.index);
   const rest = commandEnd === null ? '' : trimmed.slice(commandEnd.index + commandEnd[0].length);
@@ -315,12 +324,12 @@ function readInstruction(text: string, escape: string, line: number, endLine: nu
 
   const keyword = command.toLowerCase();
   const split = splitFlags(rest, escape);
-  const args = removeGoSpace(split.args);
+  const args = stripGoSpace(split.args);
 
   const trigger =
-    keyword === 'onbuild' && args !== '' ? readInstruction(args, escape, line, endLine) : null;
+    keyword === 'onbuild' && args !== '' ? parseInstruction(args, escape, line, endLine) : null;
 
-  const read = keyword === 'onbuild' ? { words: [], isJson: false } : readWords(keyword, args);
+  const read = keyword === 'onbuild' ? { words: [], isJson: false } : parseWords(keyword, args);
 
   return {
     keyword,
@@ -451,7 +460,7 @@ function splitShellWords(text: string, escape: string, keepQuotes: boolean): str
     const char = text.charAt(index);
 
     if (char === "'" || char === '"') {
-      const end = findQuoteEnd(text, index, escape);
+      const end = getQuoteEnd(text, index, escape);
 
       if (end === -1) {
         return null;
@@ -506,7 +515,7 @@ function splitShellWords(text: string, escape: string, keepQuotes: boolean): str
 }
 
 // the index of the quote that closes the one at start, or -1
-function findQuoteEnd(text: string, start: number, escape: string): number {
+function getQuoteEnd(text: string, start: number, escape: string): number {
   const quote = text.charAt(start);
 
   for (let index = start + 1; index < text.length; index += 1) {
@@ -537,7 +546,7 @@ interface Heredoc {
 }
 
 // heredocsFromLine: the heredocs the instruction opens, in order
-function findHeredocs(text: string, line: number): Heredoc[] {
+function collectHeredocs(text: string, line: number): Heredoc[] {
   // a ${...} expansion can hold spaces, which would move the word breaks
   if (text.includes('${')) {
     throw new DockerfileError(
@@ -570,24 +579,22 @@ function findHeredocs(text: string, line: number): Heredoc[] {
 // Splits the Dockerfile as the frontend's parser.Parse does.
 export function parseDockerfile(text: string): ParsedDockerfile {
   const lines = splitDockerfileLines(text);
-
-  const directives = new DirectiveReader();
-
+  const directives = buildDirectiveReader();
   const instructions: Instruction[] = [];
   let index = 0;
 
   // the parser's processLine: the line without its ending, and without a comment
-  const readLine = (raw: string, isFirst: boolean): string => {
-    const trimmed = isFirst ? removeNewline(raw).replace(LEADING_SPACE, '') : removeNewline(raw);
+  const scanSourceLine = (raw: string, isFirst: boolean): string => {
+    const trimmed = isFirst ? stripNewline(raw).replace(LEADING_SPACE, '') : stripNewline(raw);
 
-    directives.readLine(trimmed);
+    directives.scanLine(trimmed);
 
     return isComment(trimmed) ? '' : trimmed;
   };
 
   while (index < lines.length) {
     const startLine = index + 1;
-    const first = readLine(lines[index] ?? '', true);
+    const first = scanSourceLine(lines[index] ?? '', true);
 
     index += 1;
 
@@ -599,7 +606,7 @@ export function parseDockerfile(text: string): ParsedDockerfile {
 
     while (!isEnd && index < lines.length) {
       const raw = lines[index] ?? '';
-      const next = readLine(raw, false);
+      const next = scanSourceLine(raw, false);
 
       index += 1;
 
@@ -613,14 +620,14 @@ export function parseDockerfile(text: string): ParsedDockerfile {
       isEnd = ended;
     }
 
-    const instruction = readInstruction(joined, directives.escape, startLine, index);
+    const instruction = parseInstruction(joined, directives.escape, startLine, index);
 
     if (canHoldHeredoc(instruction) && joined.includes('<<')) {
-      for (const heredoc of findHeredocs(joined, startLine)) {
+      for (const heredoc of collectHeredocs(joined, startLine)) {
         let isTerminated = false;
 
         while (index < lines.length && !isTerminated) {
-          const body = removeNewline(lines[index] ?? '');
+          const body = stripNewline(lines[index] ?? '');
           const candidate = heredoc.isStripped ? body.replace(/^\t+/v, '') : body;
 
           index += 1;

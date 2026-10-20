@@ -49,12 +49,12 @@ export async function writeDatabaseCopy(
   now: () => number,
 ): Promise<DatabaseCopyFile> {
   const path = buildDatabaseCopyPath(dataDir, name);
-  const dir = join(dataDir, 'db-copies');
+  const directory = join(dataDir, 'db-copies');
 
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
 
   // mkdirSync leaves a directory that was there as it was
-  chmodSync(dir, 0o700);
+  chmodSync(directory, 0o700);
 
   const sizeBytes = await readDatabaseBytes(db);
 

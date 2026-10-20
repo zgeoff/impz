@@ -8,7 +8,7 @@ import { waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { listSessions, requireSession } from '../lib/sessions';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { openTerminal } from '../lib/terminal';
 import { waitFor } from '../lib/wait-for';
 
@@ -23,7 +23,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('sessions'), stack, client };
+  return { prefix: getSuitePrefix('sessions'), stack, client };
 }
 
 test('it keeps a detached console session through an idle sleep, and redraws it at the new size on attach', async () => {

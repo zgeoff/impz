@@ -15,7 +15,7 @@ export interface AgentForwarding {
 
   // the guest socket for SSH_AUTH_SOCK, made on first use, or null when no
   // session asked; throws when the imp cannot serve one
-  readonly findSocket: () => Promise<string | null>;
+  readonly readSocket: () => Promise<string | null>;
   readonly stop: () => void;
 }
 
@@ -181,7 +181,7 @@ export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwardin
     enable: () => {
       state.enabled = true;
     },
-    findSocket: async () => {
+    readSocket: async () => {
       if (!state.enabled) {
         return null;
       }

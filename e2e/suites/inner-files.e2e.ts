@@ -5,7 +5,7 @@ import { createInstanceClient, readState, runImp, runShellInImp, tryImp } from '
 import { holdImp, waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // impd writes the read-only files through the agent, and the inner
 // container sees them on a read-only bind, so root inside cannot change one
@@ -18,7 +18,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('inner'), stack, client };
+  return { prefix: getSuitePrefix('inner'), stack, client };
 }
 
 test('it shows a file impd wrote read-only to root, replaces it, keeps it through a sleep and removes it', async () => {

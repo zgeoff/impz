@@ -12,9 +12,9 @@ export interface StubBin {
 // Writes an executable <dir>/bin/<name> that logs `<name> $*` to <dir>/calls, then runs
 // script with the call's "$@"; script may log more through $STUB_CALLS. Stubs that share
 // dir share the log, which keeps their calls in order.
-export function createStubBin(dir: string, name: string, script = ''): StubBin {
-  const bin = join(dir, 'bin');
-  const calls = join(dir, 'calls');
+export function createStubBin(directory: string, name: string, script = ''): StubBin {
+  const bin = join(directory, 'bin');
+  const calls = join(directory, 'calls');
   const file = join(bin, name);
 
   mkdirSync(bin, { recursive: true });

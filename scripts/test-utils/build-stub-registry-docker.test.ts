@@ -6,18 +6,23 @@ import { buildStubRegistryDocker } from './build-stub-registry-docker';
 import { createStubBin } from './create-stub-bin';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-registry-docker-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-registry-docker-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it fails an inspect of a missing tag with buildx’s not-found error', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubRegistryDocker({ kind: 'missing' }));
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubRegistryDocker({ kind: 'missing' }),
+  );
 
   const result = Bun.spawnSync(
     ['docker', 'buildx', 'imagetools', 'inspect', 'ghcr.io/a/b:1', '--format', '{{x}}'],
@@ -34,7 +39,7 @@ test('it prints what the registry has for a found tag', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubRegistryDocker({ kind: 'found', stdout: 'WARN: x\nsha256:abc' }),
   );
@@ -54,7 +59,7 @@ test('it fails an inspect with the registry’s error on stderr', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubRegistryDocker({ kind: 'failed', error: "ERROR: it's 403 Forbidden" }),
   );
@@ -74,7 +79,7 @@ test('it fails a call that is not an imagetools inspect', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubRegistryDocker({ kind: 'found', stdout: 'sha256:abc' }),
   );

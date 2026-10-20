@@ -1,8 +1,8 @@
 import { createActor } from 'xstate';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildLogKey } from './build-log-key';
 import type { GenerationEnd, GenerationLog, GenerationLogOptions } from './generation-log';
-import { findGenerationDir } from './session-log-files';
+import { getGenerationDir } from './session-log-files';
 import { sessionLogMachine } from './session-log-machine';
 import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp, SessionLogLimits } from './session-log-service';
@@ -54,10 +54,10 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
 
   // destroyed and not back yet
   const isDestroyed = (impId: string) => getContext().forgotten.has(impId);
-  const readLife = (impId: string) => getContext().lives.get(impId) ?? 0;
+  const getLife = (impId: string) => getContext().lives.get(impId) ?? 0;
 
   const isForgotten = (impId: string, life: number) =>
-    isDestroyed(impId) || readLife(impId) !== life;
+    isDestroyed(impId) || getLife(impId) !== life;
 
   const countCreating = (impId: string) =>
     [...getContext().creating].filter((key) => key.startsWith(`${impId}/`)).length;
@@ -65,7 +65,7 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
   const readUncheckedBytes = (impId: string) => getContext().uncheckedBytes.get(impId) ?? 0;
 
   const buildOptions = (imp: SessionLogImp, generation: string): GenerationLogOptions => ({
-    dir: findGenerationDir(imp.sessionLogsDir, generation),
+    directory: getGenerationDir(imp.sessionLogsDir, generation),
     segmentBytes,
     maxBytes: deps.limits.generationMaxBytes,
     requireRoom: deps.requireRoom,
@@ -81,7 +81,7 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
     [...getContext().live.values()].filter((entry) => entry.impId === impId);
 
   const printError = (imp: SessionLogImp, error: unknown): void => {
-    deps.log(`impd: session logs of imp ${imp.id}: ${readErrorMessage(error)}`);
+    deps.log(`impd: session logs of imp ${imp.id}: ${getErrorMessage(error)}`);
   };
 
   const setLive = (
@@ -119,7 +119,7 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
     isRecovered,
     isCurrent,
     isDestroyed,
-    readLife,
+    readLife: getLife,
     isForgotten,
     countCreating,
     readUncheckedBytes,

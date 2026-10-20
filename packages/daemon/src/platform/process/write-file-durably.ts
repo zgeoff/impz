@@ -87,12 +87,12 @@ export async function writeFileDurablyAsync(
     await rm(next, { force: true });
   }
 
-  const dir = await open(dirname(path), 'r');
+  const directory = await open(dirname(path), 'r');
 
   try {
-    await dir.sync();
+    await directory.sync();
   } finally {
-    await dir.close();
+    await directory.close();
   }
 }
 

@@ -6,7 +6,7 @@ import { waitForExec } from '../lib/imps';
 import { HOST_B, readMoveHosts } from '../lib/move-hosts';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // A warm move keeps the imp's slot, so two warm imps that live on A side by
@@ -21,9 +21,9 @@ async function setupTest() {
   const hosts = readMoveHosts({ tailnet: false });
 
   const client = await createInstanceClient();
-  const clientB = await createInstanceClient(hosts.b);
+  const clientB = await createInstanceClient(hosts.hostB);
 
-  return { prefix: readSuitePrefix('moves'), stack, hosts, client, clientB };
+  return { prefix: getSuitePrefix('moves'), stack, hosts, client, clientB };
 }
 
 test('it moves two sleeping imps from slots of their own on A onto B side by side, and both wake there', async () => {
@@ -59,16 +59,16 @@ test('it moves two sleeping imps from slots of their own on A onto B side by sid
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, second));
 
-  const firstMoved = await requireImp(first, ctx.hosts.b);
-  const secondMoved = await requireImp(second, ctx.hosts.b);
+  const firstMoved = await requireImp(first, ctx.hosts.hostB);
+  const secondMoved = await requireImp(second, ctx.hosts.hostB);
 
   // the first exec wakes each on B, while the other is there too
-  const onB = { target: ctx.hosts.b };
+  const onB = { target: ctx.hosts.hostB };
 
   const firstSaid = await runImpWith(onB, 'exec', first, '--', 'echo', 'pair1-ok');
   const secondSaid = await runImpWith(onB, 'exec', second, '--', 'echo', 'pair2-ok');
-  const firstAwake = await requireImp(first, ctx.hosts.b);
-  const secondAwake = await requireImp(second, ctx.hosts.b);
+  const firstAwake = await requireImp(first, ctx.hosts.hostB);
+  const secondAwake = await requireImp(second, ctx.hosts.hostB);
 
   expect(firstOnA.slot).not.toBe(secondOnA.slot);
   expect(firstOut).toContain(`${first}: moved to ${HOST_B}, asleep with its memory`);

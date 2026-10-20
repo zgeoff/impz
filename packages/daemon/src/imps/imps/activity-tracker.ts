@@ -6,10 +6,6 @@ const CONNECTION_KINDS = ['exec', 'proxy', 'ssh', 'tunnel'] as const;
 
 export type ConnectionKind = (typeof CONNECTION_KINDS)[number];
 
-function buildKey(impId: string, kind: ConnectionKind): string {
-  return `${impId}:${kind}`;
-}
-
 export interface ActivityTracker {
   // counts one connection until the returned function runs (once is enough;
   // later calls do nothing)
@@ -17,7 +13,7 @@ export interface ActivityTracker {
   readonly count: (impId: string, kind?: ConnectionKind) => number;
 }
 
-export function createActivityTracker(): ActivityTracker {
+export function buildActivityTracker(): ActivityTracker {
   const counts = new Map<string, number>();
 
   const readCount = (impId: string, kind: ConnectionKind): number =>
@@ -51,4 +47,8 @@ export function createActivityTracker(): ActivityTracker {
         ? CONNECTION_KINDS.reduce((sum, each) => sum + readCount(impId, each), 0)
         : readCount(impId, kind),
   };
+}
+
+function buildKey(impId: string, kind: ConnectionKind): string {
+  return `${impId}:${kind}`;
 }

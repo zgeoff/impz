@@ -9,11 +9,11 @@ import { runCommand } from './instance';
 import { listAgentThroughUnixForward, startLocalSshAgent } from './ssh';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'ssh-'));
+  const directory = await mkdtemp(join(tmpdir(), 'ssh-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#listAgentThroughUnixForward lists the agent at the far end of the forward, and removes the local socket', async () => {
@@ -22,7 +22,7 @@ test('#listAgentThroughUnixForward lists the agent at the far end of the forward
   // ssh that serves its -L listen path with an empty agent of its own, as
   // the forward to an agent in the imp would
   const ssh = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'ssh',
     [
       'for arg in "$@"; do',
@@ -36,10 +36,14 @@ test('#listAgentThroughUnixForward lists the agent at the far end of the forward
 
   updateEnv('PATH', `${ssh.bin}:${process.env['PATH'] ?? ''}`);
 
-  const local = join(ctx.dir, 'dev.sock');
+  const local = join(ctx.directoryPath, 'dev.sock');
 
   const forwarded = await listAgentThroughUnixForward(
-    { configArgs: ['-F', join(ctx.dir, 'config')], dir: ctx.dir, cleanup: () => Promise.resolve() },
+    {
+      configArgs: ['-F', join(ctx.directoryPath, 'config')],
+      directory: ctx.directoryPath,
+      cleanup: () => Promise.resolve(),
+    },
     'e2e-sa-unix',
     '/tmp/e2e-dev.sock',
     local,
@@ -57,7 +61,7 @@ test('#startLocalSshAgent serves the key it made until stop, which removes its s
   const ctx = await setupTest();
 
   const agent = await startLocalSshAgent(
-    { configArgs: [], dir: ctx.dir, cleanup: () => Promise.resolve() },
+    { configArgs: [], directory: ctx.directoryPath, cleanup: () => Promise.resolve() },
     'unit',
   );
 
@@ -76,7 +80,7 @@ test('#startLocalSshAgent stops again without an error once it has stopped', asy
   const ctx = await setupTest();
 
   const agent = await startLocalSshAgent(
-    { configArgs: [], dir: ctx.dir, cleanup: () => Promise.resolve() },
+    { configArgs: [], directory: ctx.directoryPath, cleanup: () => Promise.resolve() },
     'unit',
   );
 

@@ -27,10 +27,14 @@ test('it prints a step as it starts, its output line by line, then its end', () 
 
   readTrace({
     vertexes: [],
-    logs: [{ vertex: 'sha256:aa', msg: encoder.encode('cc -o widget main.c\nlinking') }],
+    logs: [{ vertex: 'sha256:aa', message: encoder.encode('cc -o widget main.c\nlinking') }],
   });
 
-  readTrace({ vertexes: [], logs: [{ vertex: 'sha256:aa', msg: encoder.encode(' widget\n') }] });
+  readTrace({
+    vertexes: [],
+    logs: [{ vertex: 'sha256:aa', message: encoder.encode(' widget\n') }],
+  });
+
   readTrace({ vertexes: [{ ...vertex, started: true, completed: true }], logs: [] });
 
   expect(lines).toStrictEqual([
@@ -64,7 +68,7 @@ test('it prints the output of a message before the end the same message reports'
         error: 'exit code: 1',
       },
     ],
-    logs: [{ vertex: 'sha256:bb', msg: new TextEncoder().encode('about to fail') }],
+    logs: [{ vertex: 'sha256:bb', message: new TextEncoder().encode('about to fail') }],
   });
 
   expect(lines).toStrictEqual(['#1 [1/1] RUN false', '#1 about to fail', '#1 ERROR: exit code: 1']);
@@ -122,7 +126,7 @@ test('it passes over a vertex that has not started and output of a vertex it nev
         error: '',
       },
     ],
-    logs: [{ vertex: 'sha256:ff', msg: new TextEncoder().encode('stray\n') }],
+    logs: [{ vertex: 'sha256:ff', message: new TextEncoder().encode('stray\n') }],
   });
 
   expect(lines).toStrictEqual([]);
@@ -148,9 +152,9 @@ test('it reads a character a vertex split across two log chunks, beside another 
       { ...vertex, digest: 'sha256:bb', name: '[builder 2/2] RUN make' },
     ],
     logs: [
-      { vertex: 'sha256:aa', msg: bytes.slice(0, 4) },
-      { vertex: 'sha256:bb', msg: new TextEncoder().encode('ok\n') },
-      { vertex: 'sha256:aa', msg: bytes.slice(4) },
+      { vertex: 'sha256:aa', message: bytes.slice(0, 4) },
+      { vertex: 'sha256:bb', message: new TextEncoder().encode('ok\n') },
+      { vertex: 'sha256:aa', message: bytes.slice(4) },
     ],
   });
 
@@ -183,7 +187,7 @@ test('it sends output with no newline in pieces as it grows past what a log even
         error: '',
       },
     ],
-    logs: [{ vertex: 'sha256:aa', msg: new TextEncoder().encode('z'.repeat(10_000)) }],
+    logs: [{ vertex: 'sha256:aa', message: new TextEncoder().encode('z'.repeat(10_000)) }],
   });
 
   expect(lines).toStrictEqual(['#1 [1/1] RUN ./progress-bar', `#1 ${'z'.repeat(8128)}`]);
@@ -210,7 +214,7 @@ test('it cuts a line longer than a log event holds', () => {
         error: '',
       },
     ],
-    logs: [{ vertex: 'sha256:aa', msg: new TextEncoder().encode(`${'y'.repeat(9000)}\n`) }],
+    logs: [{ vertex: 'sha256:aa', message: new TextEncoder().encode(`${'y'.repeat(9000)}\n`) }],
   });
 
   expect(lines[1]).toHaveLength(8192);

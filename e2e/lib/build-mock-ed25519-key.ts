@@ -12,15 +12,6 @@ export interface MockEd25519Key {
   readonly publicKey: Buffer;
 }
 
-function encodeString(value: Buffer | string): Buffer {
-  const bytes = Buffer.from(value);
-  const length = Buffer.alloc(4);
-
-  length.writeUInt32BE(bytes.length);
-
-  return Buffer.concat([length, bytes]);
-}
-
 // An ed25519 key that node makes, written out in the OpenSSH key format
 // (PROTOCOL.key in OpenSSH) without ssh-keygen, whose versions differ in the
 // formats they read; the seed comes from node, not from the file.
@@ -70,4 +61,13 @@ export function buildMockEd25519Key(
     seed,
     publicKey,
   };
+}
+
+function encodeString(value: Buffer | string): Buffer {
+  const bytes = Buffer.from(value);
+  const length = Buffer.alloc(4);
+
+  length.writeUInt32BE(bytes.length);
+
+  return Buffer.concat([length, bytes]);
 }

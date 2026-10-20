@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { closeSync, ftruncateSync, mkdtempSync, openSync, rmSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findDataBlocks } from '../../src/imp-ops/backup/find-data-blocks';
+import { readDataBlocks } from '../../src/imp-ops/backup/read-data-blocks';
 import { buildStubLseek } from './build-stub-lseek';
 
 test('it answers SEEK_DATA with the next extent’s start from a hole', () => {
@@ -79,13 +79,13 @@ test('it counts the extents and the metadata as allocated', () => {
 });
 
 test('it finds the same blocks as the kernel’s lseek on a real sparse file', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'stub-lseek-test-'));
+  const directory = mkdtempSync(join(tmpdir(), 'stub-lseek-test-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  const fd = openSync(join(dir, 'sparse'), 'w+');
+  const fd = openSync(join(directory, 'sparse'), 'w+');
 
   onTestFinished(() => {
     closeSync(fd);
@@ -103,8 +103,8 @@ test('it finds the same blocks as the kernel’s lseek on a real sparse file', (
     ],
   });
 
-  const real = findDataBlocks(fd, 48 * 1024 ** 2, 1024 ** 2);
-  const stubbed = findDataBlocks(3, 48 * 1024 ** 2, 1024 ** 2, lseek.seek, lseek.readAllocated);
+  const real = readDataBlocks(fd, 48 * 1024 ** 2, 1024 ** 2);
+  const stubbed = readDataBlocks(3, 48 * 1024 ** 2, 1024 ** 2, lseek.seek, lseek.readAllocated);
 
   expect([...stubbed]).toIncludeSameMembers([...real]);
 });

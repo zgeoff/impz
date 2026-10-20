@@ -12,17 +12,20 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'stub-docker-cli-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-docker-cli-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it prints the version platform as the format impd passes renders it', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir, version: { os: 'linux', arch: 'aarch64' } });
+  const docker = createStubDockerCli({
+    directory: ctx.directoryPath,
+    version: { os: 'linux', arch: 'aarch64' },
+  });
 
   const result = await runCommand(
     ['docker', 'version', '--format', '{{json .Server.Os}} {{json .Server.Arch}}'],
@@ -36,7 +39,7 @@ test('it prints an inspect as a one-element JSON array without a format', async 
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [{ refs: ['busybox:1.37'], inspects: [{ Id: 'sha256:1', Config: { Env: ['A=1'] } }] }],
   });
 
@@ -51,7 +54,7 @@ test('it renders the pin inspect format with the fields the CLI prints', async (
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [
       { refs: ['busybox:1.37'], inspects: [{ Id: 'sha256:1', RepoDigests: ['busybox@sha256:2'] }] },
     ],
@@ -75,7 +78,7 @@ test('it prints the image ID for the Id format', async () => {
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [{ refs: ['busybox:1.37'], inspects: [{ Id: 'sha256:1' }] }],
   });
 
@@ -91,7 +94,7 @@ test('it prints the config for the config format', async () => {
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [{ refs: ['busybox:1.37'], inspects: [{ Id: 'sha256:1', Config: { Cmd: ['sh'] } }] }],
   });
 
@@ -107,7 +110,7 @@ test('it prints each inspect of a sequence in turn, then the last again', async 
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [{ refs: ['moving:1'], inspects: [{ Id: 'sha256:1' }, { Id: 'sha256:2' }] }],
   });
 
@@ -131,7 +134,7 @@ test('it prints the inspect of each of many parallel calls for one image', async
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [{ refs: ['shared:1', 'shared:2'], inspects: [{ Id: 'sha256:1' }] }],
   });
 
@@ -154,7 +157,7 @@ test('it fails the inspect of an image that is not on the host yet', async () =>
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [{ refs: ['busybox:1.37'], inspects: [{ Id: 'sha256:1' }], isOnHost: false }],
   });
 
@@ -173,7 +176,7 @@ test('it lands an image on the host when its pull succeeds', async () => {
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [{ refs: ['busybox:1.37'], inspects: [{ Id: 'sha256:1' }], isOnHost: false }],
   });
 
@@ -193,7 +196,7 @@ test('it reports a lost pull as done', async () => {
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [
       { refs: ['busybox:1.37'], inspects: [{ Id: 'sha256:1' }], isOnHost: false, pull: 'lost' },
     ],
@@ -210,7 +213,7 @@ test('it leaves the image of a lost pull off the host', async () => {
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [
       { refs: ['busybox:1.37'], inspects: [{ Id: 'sha256:1' }], isOnHost: false, pull: 'lost' },
     ],
@@ -234,7 +237,10 @@ test('it leaves the image of a lost pull off the host', async () => {
 test('it prints the version line it was given as it is', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir, version: { stdout: 'null null' } });
+  const docker = createStubDockerCli({
+    directory: ctx.directoryPath,
+    version: { stdout: 'null null' },
+  });
 
   const result = await runCommand(
     ['docker', 'version', '--format', '{{json .Server.Os}} {{json .Server.Arch}}'],
@@ -248,7 +254,7 @@ test('it fails a pull with the stderr it was given', async () => {
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [
       {
         refs: ['mnt.test/x:1'],
@@ -269,7 +275,7 @@ test('it holds a hanging pull until its kill', async () => {
   const ctx = await setupTest();
 
   const docker = createStubDockerCli({
-    dir: ctx.dir,
+    directory: ctx.directoryPath,
     images: [{ refs: ['slow:1'], inspects: [{ Id: 'sha256:1' }], pull: 'hang' }],
   });
 
@@ -298,10 +304,10 @@ test('it holds a hanging pull until its kill', async () => {
 test('it ends a hanging pull once its directory is gone', async () => {
   const ctx = await setupTest();
 
-  const dir = join(ctx.dir, 'stub');
+  const directory = join(ctx.directoryPath, 'stub');
 
   const docker = createStubDockerCli({
-    dir,
+    directory,
     images: [{ refs: ['slow:1'], inspects: [{ Id: 'sha256:1' }], pull: 'hang' }],
   });
 
@@ -318,7 +324,7 @@ test('it ends a hanging pull once its directory is gone', async () => {
     expect(docker.readCalls()).toStrictEqual(['pull --quiet slow:1']);
   });
 
-  await rm(dir, { recursive: true, force: true });
+  await rm(directory, { recursive: true, force: true });
 
   const code = await pull.exited;
 
@@ -328,7 +334,10 @@ test('it ends a hanging pull once its directory is gone', async () => {
 test('it prints the container ID a create makes', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir, create: { id: 'c'.repeat(64) } });
+  const docker = createStubDockerCli({
+    directory: ctx.directoryPath,
+    create: { id: 'c'.repeat(64) },
+  });
 
   const result = await runCommand(['docker', 'create', 'busybox', '/bin/true'], {
     env: { PATH: docker.path },
@@ -340,7 +349,10 @@ test('it prints the container ID a create makes', async () => {
 test('it fails a create with the stderr it was given', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir, create: { stderr: 'no space left' } });
+  const docker = createStubDockerCli({
+    directory: ctx.directoryPath,
+    create: { stderr: 'no space left' },
+  });
 
   const result = await runCommand(['docker', 'create', 'busybox', '/bin/true'], {
     env: { PATH: docker.path },
@@ -352,7 +364,10 @@ test('it fails a create with the stderr it was given', async () => {
 test('it prints the export tar it was given', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir, exportTar: new TextEncoder().encode('tar') });
+  const docker = createStubDockerCli({
+    directory: ctx.directoryPath,
+    exportTar: new TextEncoder().encode('tar'),
+  });
 
   const result = await runCommand(['docker', 'export', 'c'.repeat(64)], {
     env: { PATH: docker.path },
@@ -364,7 +379,7 @@ test('it prints the export tar it was given', async () => {
 test('it fails a call it does not model and names it', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir });
+  const docker = createStubDockerCli({ directory: ctx.directoryPath });
 
   const result = await runCommand(['docker', 'run', 'busybox'], { env: { PATH: docker.path } });
 
@@ -378,7 +393,7 @@ test('it fails a call it does not model and names it', async () => {
 test('it logs each call argv in order', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir });
+  const docker = createStubDockerCli({ directory: ctx.directoryPath });
 
   await runCommand(['docker', 'rm', '-f', 'abc'], { env: { PATH: docker.path } });
   await runCommand(['docker', 'run', 'x'], { env: { PATH: docker.path } });
@@ -389,7 +404,7 @@ test('it logs each call argv in order', async () => {
 test('it logs no calls before the first', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({ dir: ctx.dir });
+  const docker = createStubDockerCli({ directory: ctx.directoryPath });
 
   expect(docker.readCalls()).toStrictEqual([]);
 });

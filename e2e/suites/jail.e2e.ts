@@ -11,7 +11,7 @@ import {
 import { holdImp, waitForExec } from '../lib/imps';
 import { checkHealthReady, runDevScript } from '../lib/instance';
 import {
-  findJailViolations,
+  collectJailViolations,
   listJailMounts,
   readImpCgroupText,
   readJailState,
@@ -21,7 +21,7 @@ import { checkMemoryProof, startMemoryProof } from '../lib/memory-proof';
 import { parseWholeNumber } from '../lib/parse-whole-number';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // The jailer (docs/architecture/isolation.md#the-jailer): each VM in its own uid,
@@ -35,7 +35,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('jail'), stack, client };
+  return { prefix: getSuitePrefix('jail'), stack, client };
 }
 
 test('it runs a new imp jailed under a memory cap, sleeps and wakes it full under the cap, and re-adopts it across an impd restart', async () => {
@@ -52,7 +52,7 @@ test('it runs a new imp jailed under a memory cap, sleeps and wakes it full unde
 
   const booted = await readJailState(name);
 
-  expect(findJailViolations(booted)).toStrictEqual([]);
+  expect(collectJailViolations(booted)).toStrictEqual([]);
 
   await waitFor(`a RAM sample for ${name}`, async () => {
     const row = await requireImp(name);
@@ -106,7 +106,7 @@ test('it runs a new imp jailed under a memory cap, sleeps and wakes it full unde
   expect(parseWholeNumber(size, 'the fill size')).toBe(380 * 1024 * 1024);
   expect(wokeEvents).toMatch(/^oom_kill 0$/mu);
   expect(parseWholeNumber(peak, 'memory.peak')).toBeLessThanOrEqual((512 + 256) * 1024 * 1024);
-  expect(findJailViolations(woke)).toStrictEqual([]);
+  expect(collectJailViolations(woke)).toStrictEqual([]);
 
   const beforeRestart = await readVmProcess(name);
 

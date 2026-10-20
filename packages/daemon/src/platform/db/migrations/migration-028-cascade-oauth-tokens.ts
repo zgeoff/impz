@@ -11,14 +11,14 @@ export const MIGRATION_028_CASCADE_OAUTH_TOKENS: Migration = {
     await db.transaction().execute(async (trx) => {
       await trx.schema
         .createTable('oauth_tokens_cascade')
-        .addColumn('id', 'text', (c) => c.primaryKey())
-        .addColumn('grant_id', 'text', (c) =>
-          c.notNull().references('oauth_grants.id').onDelete('cascade'),
+        .addColumn('id', 'text', (column) => column.primaryKey())
+        .addColumn('grant_id', 'text', (column) =>
+          column.notNull().references('oauth_grants.id').onDelete('cascade'),
         )
-        .addColumn('kind', 'text', (c) => c.notNull())
-        .addColumn('secret_hash', 'text', (c) => c.notNull())
-        .addColumn('created_at', 'integer', (c) => c.notNull())
-        .addColumn('expires_at', 'integer', (c) => c.notNull())
+        .addColumn('kind', 'text', (column) => column.notNull())
+        .addColumn('secret_hash', 'text', (column) => column.notNull())
+        .addColumn('created_at', 'integer', (column) => column.notNull())
+        .addColumn('expires_at', 'integer', (column) => column.notNull())
         .addColumn('spent_at', 'integer')
         .execute();
 

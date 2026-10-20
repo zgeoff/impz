@@ -12,22 +12,22 @@ import { createGitFreeEnv } from './git-env';
 // never move (docs/runbooks/releasing.md). The Plan step's tests run its shell as Actions does (bash -eo
 // pipefail), with a stub docker and gh on PATH and a checked-out tree in a scratch directory.
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-release-workflow-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-release-workflow-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   // the checked-out tree the Plan step reads, and the file Actions collects its outputs from
-  mkdirSync(join(dir, 'tree', 'images', 'base'), { recursive: true });
-  mkdirSync(join(dir, 'tree', 'host'));
-  mkdirSync(join(dir, 'tree', 'scripts', 'release'), { recursive: true });
-  writeFileSync(join(dir, 'outputs'), '');
+  mkdirSync(join(directory, 'tree', 'images', 'base'), { recursive: true });
+  mkdirSync(join(directory, 'tree', 'host'));
+  mkdirSync(join(directory, 'tree', 'scripts', 'release'), { recursive: true });
+  writeFileSync(join(directory, 'outputs'), '');
 
   return {
-    dir,
-    tree: join(dir, 'tree'),
-    outputs: join(dir, 'outputs'),
+    directoryPath: directory,
+    tree: join(directory, 'tree'),
+    outputs: join(directory, 'outputs'),
   };
 }
 
@@ -96,7 +96,11 @@ test('it pushes a tag the registry does not have', () => {
     readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8'),
   ).base.steps.find((step) => step.id === 'plan')?.run;
 
-  const docker = createStubBin(ctx.dir, 'docker', buildStubRegistryDocker({ kind: 'missing' }));
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubRegistryDocker({ kind: 'missing' }),
+  );
 
   invariant(plan !== undefined);
   writeFileSync(join(ctx.tree, 'scripts/release/check-base-image.sh'), '');
@@ -129,7 +133,11 @@ test('it pushes a missing tag of a tree that keeps its check script in host/', (
     readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8'),
   ).base.steps.find((step) => step.id === 'plan')?.run;
 
-  const docker = createStubBin(ctx.dir, 'docker', buildStubRegistryDocker({ kind: 'missing' }));
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubRegistryDocker({ kind: 'missing' }),
+  );
 
   invariant(plan !== undefined);
   writeFileSync(join(ctx.tree, 'host/check-base-image.sh'), '');
@@ -164,12 +172,12 @@ test('it leaves an attested existing tag alone, with a notice', () => {
   const digest = `sha256:${'0123456789abcdef'.repeat(4)}`;
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubRegistryDocker({ kind: 'found', stdout: digest }),
   );
 
-  const gh = createStubBin(ctx.dir, 'gh', 'exit 0');
+  const gh = createStubBin(ctx.directoryPath, 'gh', 'exit 0');
 
   invariant(plan !== undefined);
   writeFileSync(join(ctx.tree, 'scripts/release/check-base-image.sh'), '');
@@ -212,12 +220,12 @@ test('it fails the job on an existing tag without an attestation, and plans noth
   const digest = `sha256:${'0123456789abcdef'.repeat(4)}`;
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubRegistryDocker({ kind: 'found', stdout: digest }),
   );
 
-  createStubBin(ctx.dir, 'gh', 'exit 1');
+  createStubBin(ctx.directoryPath, 'gh', 'exit 1');
   invariant(plan !== undefined);
   writeFileSync(join(ctx.tree, 'scripts/release/check-base-image.sh'), '');
 
@@ -253,12 +261,12 @@ test('it fails the job on an existing tag whose digest is not a sha256', () => {
   ).base.steps.find((step) => step.id === 'plan')?.run;
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubRegistryDocker({ kind: 'found', stdout: 'WARN: something\nsha256:abc' }),
   );
 
-  createStubBin(ctx.dir, 'gh', 'exit 0');
+  createStubBin(ctx.directoryPath, 'gh', 'exit 0');
   invariant(plan !== undefined);
   writeFileSync(join(ctx.tree, 'scripts/release/check-base-image.sh'), '');
 
@@ -294,7 +302,7 @@ test.each([
   ).base.steps.find((step) => step.id === 'plan')?.run;
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubRegistryDocker({ kind: 'failed', error }),
   );
@@ -333,7 +341,11 @@ test('it skips a release from before imp-base without asking the registry', () =
     readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8'),
   ).base.steps.find((step) => step.id === 'plan')?.run;
 
-  const docker = createStubBin(ctx.dir, 'docker', buildStubRegistryDocker({ kind: 'missing' }));
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubRegistryDocker({ kind: 'missing' }),
+  );
 
   invariant(plan !== undefined);
   writeFileSync(join(ctx.tree, 'images/base/Dockerfile'), 'FROM ubuntu:24.04\n');
@@ -451,10 +463,10 @@ test('it leaves latest on the newer release when the older run holds the lock af
     readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8'),
   ).latest.steps.find((candidate) => candidate.id === 'latest')?.run;
 
-  const newest = join(ctx.dir, 'newest');
-  const gh = createStubBin(ctx.dir, 'gh', `cat '${newest}'`);
+  const newest = join(ctx.directoryPath, 'newest');
+  const gh = createStubBin(ctx.directoryPath, 'gh', `cat '${newest}'`);
 
-  createStubBin(ctx.dir, 'docker', 'exit 0');
+  createStubBin(ctx.directoryPath, 'docker', 'exit 0');
   invariant(step !== undefined);
   writeFileSync(newest, 'v1.0.4\n');
 
@@ -493,10 +505,10 @@ test('it leaves latest on the newer release when the older run holds the lock fi
     readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8'),
   ).latest.steps.find((candidate) => candidate.id === 'latest')?.run;
 
-  const newest = join(ctx.dir, 'newest');
-  const gh = createStubBin(ctx.dir, 'gh', `cat '${newest}'`);
+  const newest = join(ctx.directoryPath, 'newest');
+  const gh = createStubBin(ctx.directoryPath, 'gh', `cat '${newest}'`);
 
-  createStubBin(ctx.dir, 'docker', 'exit 0');
+  createStubBin(ctx.directoryPath, 'docker', 'exit 0');
   invariant(step !== undefined);
   writeFileSync(newest, 'v1.0.4\n');
 
@@ -535,8 +547,8 @@ test('it moves latest forward when the older run holds the lock before the newer
     readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8'),
   ).latest.steps.find((candidate) => candidate.id === 'latest')?.run;
 
-  const newest = join(ctx.dir, 'newest');
-  const gh = createStubBin(ctx.dir, 'gh', `cat '${newest}'`);
+  const newest = join(ctx.directoryPath, 'newest');
+  const gh = createStubBin(ctx.directoryPath, 'gh', `cat '${newest}'`);
 
   const env = {
     PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
@@ -545,7 +557,7 @@ test('it moves latest forward when the older run holds the lock before the newer
     GITHUB_REPOSITORY: 'zgeoff/impz',
   };
 
-  createStubBin(ctx.dir, 'docker', 'exit 0');
+  createStubBin(ctx.directoryPath, 'docker', 'exit 0');
   invariant(step !== undefined);
   writeFileSync(newest, 'v1.0.3\n');
 
@@ -580,9 +592,9 @@ test('it tells the formula and npm that a release behind the newest is not the n
     readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8'),
   ).latest.steps.find((candidate) => candidate.id === 'latest')?.run;
 
-  const gh = createStubBin(ctx.dir, 'gh', 'echo v1.0.4');
+  const gh = createStubBin(ctx.directoryPath, 'gh', 'echo v1.0.4');
 
-  createStubBin(ctx.dir, 'docker', 'exit 0');
+  createStubBin(ctx.directoryPath, 'docker', 'exit 0');
   invariant(step !== undefined);
 
   const result = Bun.spawnSync(['bash', '--noprofile', '--norc', '-eo', 'pipefail', '-c', step], {
@@ -611,9 +623,9 @@ test('it tells the formula and npm that the newest release is the newest', () =>
     readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8'),
   ).latest.steps.find((candidate) => candidate.id === 'latest')?.run;
 
-  const gh = createStubBin(ctx.dir, 'gh', 'echo v1.0.4');
+  const gh = createStubBin(ctx.directoryPath, 'gh', 'echo v1.0.4');
 
-  createStubBin(ctx.dir, 'docker', 'exit 0');
+  createStubBin(ctx.directoryPath, 'docker', 'exit 0');
   invariant(step !== undefined);
 
   const result = Bun.spawnSync(['bash', '--noprofile', '--norc', '-eo', 'pipefail', '-c', step], {
@@ -638,9 +650,9 @@ test('it fails the job, moving nothing, when the newest release cannot be read',
     readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8'),
   ).latest.steps.find((candidate) => candidate.id === 'latest')?.run;
 
-  const gh = createStubBin(ctx.dir, 'gh', 'echo "HTTP 502" >&2; exit 1');
+  const gh = createStubBin(ctx.directoryPath, 'gh', 'echo "HTTP 502" >&2; exit 1');
 
-  createStubBin(ctx.dir, 'docker', 'exit 0');
+  createStubBin(ctx.directoryPath, 'docker', 'exit 0');
   invariant(step !== undefined);
 
   const result = Bun.spawnSync(['bash', '--noprofile', '--norc', '-eo', 'pipefail', '-c', step], {
@@ -670,25 +682,25 @@ test('it leaves the formula of a tag from before the rename, class Imp, out of t
 
   invariant(step !== undefined);
 
-  const gitEnv = { ...createGitFreeEnv(process.env), HOME: ctx.dir };
+  const gitEnv = { ...createGitFreeEnv(process.env), HOME: ctx.directoryPath };
 
   const runGit = (...args: readonly string[]) =>
     Bun.spawnSync(['git', ...args], { env: gitEnv }).stdout.toString();
 
   // the tap as it is: impz's formula only
-  mkdirSync(join(ctx.dir, 'seed', 'Formula'), { recursive: true });
+  mkdirSync(join(ctx.directoryPath, 'seed', 'Formula'), { recursive: true });
 
   writeFileSync(
-    join(ctx.dir, 'seed', 'Formula', 'impz.rb'),
+    join(ctx.directoryPath, 'seed', 'Formula', 'impz.rb'),
     'class Impz < Formula\n  version "2.0.0"\nend\n',
   );
 
-  runGit('-C', join(ctx.dir, 'seed'), 'init', '-q', '-b', 'main');
-  runGit('-C', join(ctx.dir, 'seed'), 'add', '.');
+  runGit('-C', join(ctx.directoryPath, 'seed'), 'init', '-q', '-b', 'main');
+  runGit('-C', join(ctx.directoryPath, 'seed'), 'add', '.');
 
   runGit(
     '-C',
-    join(ctx.dir, 'seed'),
+    join(ctx.directoryPath, 'seed'),
     '-c',
     'user.name=seed',
     '-c',
@@ -699,7 +711,13 @@ test('it leaves the formula of a tag from before the rename, class Imp, out of t
     'seed',
   );
 
-  runGit('clone', '-q', '--bare', join(ctx.dir, 'seed'), join(ctx.dir, 'tap.git'));
+  runGit(
+    'clone',
+    '-q',
+    '--bare',
+    join(ctx.directoryPath, 'seed'),
+    join(ctx.directoryPath, 'tap.git'),
+  );
 
   // the generator a tag from before the rename checks out, at its old path
   mkdirSync(join(ctx.tree, 'scripts'), { recursive: true });
@@ -715,7 +733,7 @@ test('it leaves the formula of a tag from before the rename, class Imp, out of t
   rmSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
 
   const gh = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'gh',
     '[ "$1 $2" = "repo clone" ] && exec git clone -q "$STUB_TAP_REMOTE" "$4"\nexit 0',
   );
@@ -728,23 +746,30 @@ test('it leaves the formula of a tag from before the rename, class Imp, out of t
       GH_TOKEN: 'tap-token',
       TAP: 'zgeoff/homebrew-tap',
       VERSION: '1.6.0',
-      STUB_TAP_REMOTE: join(ctx.dir, 'tap.git'),
+      STUB_TAP_REMOTE: join(ctx.directoryPath, 'tap.git'),
     },
   });
 
   expect(result.exitCode).toBe(0);
 
-  expect(runGit('--git-dir', join(ctx.dir, 'tap.git'), 'log', '-1', '--format=%s', 'main')).toBe(
-    'seed\n',
-  );
+  expect(
+    runGit('--git-dir', join(ctx.directoryPath, 'tap.git'), 'log', '-1', '--format=%s', 'main'),
+  ).toBe('seed\n');
 
   expect(
-    runGit('--git-dir', join(ctx.dir, 'tap.git'), 'ls-tree', '--name-only', 'main', 'Formula/'),
+    runGit(
+      '--git-dir',
+      join(ctx.directoryPath, 'tap.git'),
+      'ls-tree',
+      '--name-only',
+      'main',
+      'Formula/',
+    ),
   ).toBe('Formula/impz.rb\n');
 
-  expect(runGit('--git-dir', join(ctx.dir, 'tap.git'), 'show', 'main:Formula/impz.rb')).toBe(
-    'class Impz < Formula\n  version "2.0.0"\nend\n',
-  );
+  expect(
+    runGit('--git-dir', join(ctx.directoryPath, 'tap.git'), 'show', 'main:Formula/impz.rb'),
+  ).toBe('class Impz < Formula\n  version "2.0.0"\nend\n');
 });
 
 test('it writes the formula of a tag after the rename to impz.rb with the generator in scripts/release', () => {
@@ -756,25 +781,25 @@ test('it writes the formula of a tag after the rename to impz.rb with the genera
 
   invariant(step !== undefined);
 
-  const gitEnv = { ...createGitFreeEnv(process.env), HOME: ctx.dir };
+  const gitEnv = { ...createGitFreeEnv(process.env), HOME: ctx.directoryPath };
 
   const runGit = (...args: readonly string[]) =>
     Bun.spawnSync(['git', ...args], { env: gitEnv }).stdout.toString();
 
   // the tap as it is: impz's formula only
-  mkdirSync(join(ctx.dir, 'seed', 'Formula'), { recursive: true });
+  mkdirSync(join(ctx.directoryPath, 'seed', 'Formula'), { recursive: true });
 
   writeFileSync(
-    join(ctx.dir, 'seed', 'Formula', 'impz.rb'),
+    join(ctx.directoryPath, 'seed', 'Formula', 'impz.rb'),
     'class Impz < Formula\n  version "2.0.0"\nend\n',
   );
 
-  runGit('-C', join(ctx.dir, 'seed'), 'init', '-q', '-b', 'main');
-  runGit('-C', join(ctx.dir, 'seed'), 'add', '.');
+  runGit('-C', join(ctx.directoryPath, 'seed'), 'init', '-q', '-b', 'main');
+  runGit('-C', join(ctx.directoryPath, 'seed'), 'add', '.');
 
   runGit(
     '-C',
-    join(ctx.dir, 'seed'),
+    join(ctx.directoryPath, 'seed'),
     '-c',
     'user.name=seed',
     '-c',
@@ -785,7 +810,13 @@ test('it writes the formula of a tag after the rename to impz.rb with the genera
     'seed',
   );
 
-  runGit('clone', '-q', '--bare', join(ctx.dir, 'seed'), join(ctx.dir, 'tap.git'));
+  runGit(
+    'clone',
+    '-q',
+    '--bare',
+    join(ctx.directoryPath, 'seed'),
+    join(ctx.directoryPath, 'tap.git'),
+  );
 
   writeFileSync(
     join(ctx.tree, 'scripts', 'release', 'build-formula.sh'),
@@ -803,7 +834,7 @@ test('it writes the formula of a tag after the rename to impz.rb with the genera
   );
 
   const gh = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'gh',
     '[ "$1 $2" = "repo clone" ] && exec git clone -q "$STUB_TAP_REMOTE" "$4"\nexit 0',
   );
@@ -816,22 +847,29 @@ test('it writes the formula of a tag after the rename to impz.rb with the genera
       GH_TOKEN: 'tap-token',
       TAP: 'zgeoff/homebrew-tap',
       VERSION: '2.0.1',
-      STUB_TAP_REMOTE: join(ctx.dir, 'tap.git'),
+      STUB_TAP_REMOTE: join(ctx.directoryPath, 'tap.git'),
     },
   });
 
   expect(result.exitCode).toBe(0);
 
-  expect(runGit('--git-dir', join(ctx.dir, 'tap.git'), 'log', '-1', '--format=%s', 'main')).toBe(
-    'impz 2.0.1\n',
-  );
-
-  expect(runGit('--git-dir', join(ctx.dir, 'tap.git'), 'show', 'main:Formula/impz.rb')).toStartWith(
-    'class Impz < Formula\n',
-  );
+  expect(
+    runGit('--git-dir', join(ctx.directoryPath, 'tap.git'), 'log', '-1', '--format=%s', 'main'),
+  ).toBe('impz 2.0.1\n');
 
   expect(
-    runGit('--git-dir', join(ctx.dir, 'tap.git'), 'ls-tree', '--name-only', 'main', 'Formula/'),
+    runGit('--git-dir', join(ctx.directoryPath, 'tap.git'), 'show', 'main:Formula/impz.rb'),
+  ).toStartWith('class Impz < Formula\n');
+
+  expect(
+    runGit(
+      '--git-dir',
+      join(ctx.directoryPath, 'tap.git'),
+      'ls-tree',
+      '--name-only',
+      'main',
+      'Formula/',
+    ),
   ).toBe('Formula/impz.rb\n');
 });
 
@@ -855,13 +893,17 @@ test('it fails the job, moving no formula, when the generator prints no formula 
   mkdirSync(join(ctx.tree, 'dist'));
   writeFileSync(join(ctx.tree, 'dist', 'SHA256SUMS'), '');
 
-  const gh = createStubBin(ctx.dir, 'gh', '[ "$1 $2" = "repo clone" ] && mkdir -p "$4"\nexit 0');
+  const gh = createStubBin(
+    ctx.directoryPath,
+    'gh',
+    '[ "$1 $2" = "repo clone" ] && mkdir -p "$4"\nexit 0',
+  );
 
   const result = Bun.spawnSync(['bash', '--noprofile', '--norc', '-eo', 'pipefail', '-c', step], {
     cwd: ctx.tree,
     env: {
       ...createGitFreeEnv(process.env),
-      HOME: ctx.dir,
+      HOME: ctx.directoryPath,
       PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
       GH_TOKEN: 'tap-token',
       TAP: 'zgeoff/homebrew-tap',

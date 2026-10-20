@@ -179,8 +179,8 @@ test('it prints waited and exits 0 once the wait for N ms ends', async () => {
   const timer = Promise.withResolvers<void>();
 
   const guest = buildStubExecGuest({
-    wait: (ms) => {
-      waits.push(ms);
+    wait: (durationMs) => {
+      waits.push(durationMs);
 
       return timer.promise;
     },

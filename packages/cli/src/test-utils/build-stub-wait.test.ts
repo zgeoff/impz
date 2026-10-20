@@ -7,7 +7,7 @@ test('it records each wait with its length in the order they began', () => {
 
   void stub.wait(30_000, new AbortController().signal);
   void stub.wait(2000, new AbortController().signal);
-  expect(stub.calls.map((call) => call.ms)).toStrictEqual([30_000, 2000]);
+  expect(stub.calls.map((call) => call.durationMs)).toStrictEqual([30_000, 2000]);
 });
 
 test('it ends a wait when the test releases it', async () => {

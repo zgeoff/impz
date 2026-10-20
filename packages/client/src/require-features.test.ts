@@ -4,7 +4,7 @@ import type { SystemFeaturesInfo, SystemInfo } from '@impz/api';
 import { buildMockSystemInfo } from '@impz/api/test-utils/build-mock-system-info';
 import { ORPCError } from '@orpc/client';
 import invariant from 'tiny-invariant';
-import { findMissingFeatures, readFeatures, requireFeatures } from './require-features';
+import { collectMissingFeatures, readFeatures, requireFeatures } from './require-features';
 import { UnknownProcedureError } from './unknown-procedure-error';
 
 test('#requireFeatures resolves when impd reports every needed feature on', () => {
@@ -173,8 +173,10 @@ test('#readFeatures passes on a refusal of system.features that is no missing pr
   expect(readFeatures(source)).rejects.toBe(refusal);
 });
 
-test('#findMissingFeatures names the wanted features a system.info answer lacks', () => {
+test('#collectMissingFeatures names the wanted features a system.info answer lacks', () => {
   const info = buildMockSystemInfo({ features: { publicEgress: false, sessionLog: true } });
 
-  expect(findMissingFeatures(info, ['sessionLog', 'publicEgress'])).toStrictEqual(['publicEgress']);
+  expect(collectMissingFeatures(info, ['sessionLog', 'publicEgress'])).toStrictEqual([
+    'publicEgress',
+  ]);
 });

@@ -27,7 +27,10 @@ export function hasImpDir(impId: string): Promise<boolean> {
 }
 
 // a reflink file on XFS; on ZFS a live snapshot (hasLiveSnapshot)
-export async function hasCheckpointStorage(impId: string, checkpointId: string): Promise<boolean> {
+export async function probeCheckpointStorage(
+  impId: string,
+  checkpointId: string,
+): Promise<boolean> {
   const info = await readInfo();
 
   if (info.storage.backend === 'xfs') {
@@ -62,13 +65,17 @@ export interface CrossWrites {
 
 // writes a file named for `tag` on each of two imps, then reads both from
 // each side
-export async function writeCrossFiles(a: string, b: string, tag: string): Promise<CrossWrites> {
-  await writeGuestFile(a, `/root/only-${tag}-a`, 'a');
-  await writeGuestFile(b, `/root/only-${tag}-b`, 'b');
+export async function writeCrossFiles(
+  left: string,
+  right: string,
+  tag: string,
+): Promise<CrossWrites> {
+  await writeGuestFile(left, `/root/only-${tag}-a`, 'a');
+  await writeGuestFile(right, `/root/only-${tag}-b`, 'b');
 
-  const seenInA = await readGuestFile(a, `/root/only-${tag}-b`);
-  const seenInB = await readGuestFile(b, `/root/only-${tag}-a`);
-  const ownInB = await readGuestFile(b, `/root/only-${tag}-b`);
+  const seenInA = await readGuestFile(left, `/root/only-${tag}-b`);
+  const seenInB = await readGuestFile(right, `/root/only-${tag}-a`);
+  const ownInB = await readGuestFile(right, `/root/only-${tag}-b`);
 
   return { seenInA, seenInB, ownInB };
 }

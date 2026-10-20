@@ -6,7 +6,7 @@ import { resolveImageName } from '../lib/fixtures';
 import {
   assertState,
   createInstanceClient,
-  findImp,
+  readImp,
   requireImp,
   runImp,
   runImpWith,
@@ -17,7 +17,7 @@ import { buildUpstreamsPath, readAllowSet, writeUpstreamsFile } from '../lib/mov
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent, removeSecretIfPresent } from '../lib/reset-baseline';
 import { startStubUpstream } from '../lib/start-stub-upstream';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // A warm move of a sleeping box imp with a granted secret, between A and B
@@ -33,9 +33,9 @@ async function setupTest() {
   const hosts = readMoveHosts({ tailnet: false });
 
   const client = await createInstanceClient();
-  const clientB = await createInstanceClient(hosts.b);
+  const clientB = await createInstanceClient(hosts.hostB);
 
-  return { prefix: readSuitePrefix('moves'), stack, hosts, client, clientB };
+  return { prefix: getSuitePrefix('moves'), stack, hosts, client, clientB };
 }
 
 test('it moves a sleeping box imp with its allow list, and the target’s broker answers right after the wake', async () => {
@@ -52,20 +52,20 @@ test('it moves a sleeping box imp with its allow list, and the target’s broker
 
   ctx.stack.defer(() => upstream.stop());
 
-  await writeUpstreamsFile(ctx.hosts.a, upstream);
+  await writeUpstreamsFile(ctx.hosts.hostA, upstream);
 
-  ctx.stack.defer(() => rm(buildUpstreamsPath(ctx.hosts.a), { force: true }));
+  ctx.stack.defer(() => rm(buildUpstreamsPath(ctx.hosts.hostA), { force: true }));
 
-  await writeUpstreamsFile(ctx.hosts.b, upstream);
+  await writeUpstreamsFile(ctx.hosts.hostB, upstream);
 
-  ctx.stack.defer(() => rm(buildUpstreamsPath(ctx.hosts.b), { force: true }));
+  ctx.stack.defer(() => rm(buildUpstreamsPath(ctx.hosts.hostB), { force: true }));
 
   await runImpWith({ stdin: `${tokenA}\n` }, 'secret', 'add', secret, '--kind', 'github');
 
   registerRemoval(ctx.stack, config.keep, () => removeSecretIfPresent(ctx.client, secret));
 
   await runImpWith(
-    { target: ctx.hosts.b, stdin: `${tokenB}\n` },
+    { target: ctx.hosts.hostB, stdin: `${tokenB}\n` },
     'secret',
     'add',
     secret,
@@ -118,7 +118,7 @@ test('it moves a sleeping box imp with its allow list, and the target’s broker
   await runImp('exec', box, '--', 'getent', 'hosts', 'en.wikipedia.org');
 
   const onA = await requireImp(box);
-  const before = await readAllowSet(ctx.hosts.a, onA.slot);
+  const before = await readAllowSet(ctx.hosts.hostA, onA.slot);
 
   await runImp('hold', box, '0');
   await runImp('sleep', box);
@@ -128,8 +128,8 @@ test('it moves a sleeping box imp with its allow list, and the target’s broker
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, box));
 
-  const left = await findImp(box);
-  const moved = await requireImp(box, ctx.hosts.b);
+  const left = await readImp(box);
+  const moved = await requireImp(box, ctx.hosts.hostB);
 
   expect(pid).not.toBe('');
   expect(out).toContain(`${box}: moved to ${HOST_B}, asleep with its memory`);
@@ -137,10 +137,10 @@ test('it moves a sleeping box imp with its allow list, and the target’s broker
   expect(moved.state).toBe('sleeping');
 
   // read before the guest can look anything up again on B
-  const held = await readAllowSet(ctx.hosts.b, onA.slot);
+  const held = await readAllowSet(ctx.hosts.hostB, onA.slot);
 
   // the broker call first: the target installs its CA at the first wake
-  const onB = { target: ctx.hosts.b };
+  const onB = { target: ctx.hosts.hostB };
 
   const body = await runImpWith(
     onB,

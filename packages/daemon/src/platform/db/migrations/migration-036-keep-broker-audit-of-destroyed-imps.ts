@@ -11,18 +11,18 @@ export const MIGRATION_036_KEEP_BROKER_AUDIT_OF_DESTROYED_IMPS: Migration = {
     await db.transaction().execute(async (trx) => {
       await trx.schema
         .createTable('broker_audit_kept')
-        .addColumn('id', 'integer', (c) => c.primaryKey().autoIncrement())
-        .addColumn('imp_id', 'text', (c) => c.notNull())
-        .addColumn('imp_name', 'text', (c) => c.notNull())
+        .addColumn('id', 'integer', (column) => column.primaryKey().autoIncrement())
+        .addColumn('imp_id', 'text', (column) => column.notNull())
+        .addColumn('imp_name', 'text', (column) => column.notNull())
         .addColumn('secret_name', 'text')
-        .addColumn('at', 'integer', (c) => c.notNull())
+        .addColumn('at', 'integer', (column) => column.notNull())
         .addColumn('method', 'text')
         .addColumn('host', 'text')
         .addColumn('path', 'text')
-        .addColumn('status', 'integer', (c) => c.notNull())
-        .addColumn('request_bytes', 'integer', (c) => c.notNull())
-        .addColumn('response_bytes', 'integer', (c) => c.notNull())
-        .addColumn('duration_ms', 'integer', (c) => c.notNull())
+        .addColumn('status', 'integer', (column) => column.notNull())
+        .addColumn('request_bytes', 'integer', (column) => column.notNull())
+        .addColumn('response_bytes', 'integer', (column) => column.notNull())
+        .addColumn('duration_ms', 'integer', (column) => column.notNull())
         .addColumn('reason', 'text')
         .execute();
 

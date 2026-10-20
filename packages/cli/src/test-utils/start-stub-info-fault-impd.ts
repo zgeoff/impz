@@ -7,27 +7,29 @@ export function startStubInfoFaultImpd(
 ) {
   const calls: string[] = [];
 
+  const handleRequest = (request: Request) => {
+    const path = new URL(request.url).pathname;
+
+    calls.push(path.slice(path.indexOf('/rpc/') + '/rpc/'.length));
+
+    if (path.endsWith('/rpc/system/features') || path.endsWith('/rpc/system/info')) {
+      // a body that fails before its first byte resets the connection
+      return new Response(
+        new ReadableStream({
+          start: (controller) => {
+            controller.error(new Error('the connection dropped'));
+          },
+        }),
+      );
+    }
+
+    return fetch(request);
+  };
+
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: (request) => {
-      const path = new URL(request.url).pathname;
-
-      calls.push(path.slice(path.indexOf('/rpc/') + '/rpc/'.length));
-
-      if (path.endsWith('/rpc/system/features') || path.endsWith('/rpc/system/info')) {
-        // a body that fails before its first byte resets the connection
-        return new Response(
-          new ReadableStream({
-            start: (controller) => {
-              controller.error(new Error('the connection dropped'));
-            },
-          }),
-        );
-      }
-
-      return fetch(request);
-    },
+    fetch: handleRequest,
   });
 
   stack.defer(async () => {

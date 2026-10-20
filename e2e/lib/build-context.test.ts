@@ -48,10 +48,10 @@ test('#writeBuildContext makes a named directory that holds the Dockerfile', asy
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
-  const dir = await writeBuildContext(root, 'syntax', 'FROM busybox:1.37\n');
+  const directory = await writeBuildContext(root, 'syntax', 'FROM busybox:1.37\n');
   const dockerfile = await readFile(join(root, 'syntax', 'Dockerfile'), 'utf8');
 
-  expect(dir).toBe(join(root, 'syntax'));
+  expect(directory).toBe(join(root, 'syntax'));
   expect(dockerfile).toBe('FROM busybox:1.37\n');
 });
 
@@ -68,15 +68,15 @@ test('#sendRawBuild builds a tar of exactly the named files on impd under the to
 
   const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
 
-  const dir = await writeBuildContext(ctx.root, 'ctx', 'FROM scratch\nCOPY kept.txt /\n');
+  const directoryPath = await writeBuildContext(ctx.root, 'ctx', 'FROM scratch\nCOPY kept.txt /\n');
 
-  await writeFile(join(dir, 'kept.txt'), 'kept');
-  await writeFile(join(dir, 'left-out.txt'), 'left out');
+  await writeFile(join(directoryPath, 'kept.txt'), 'kept');
+  await writeFile(join(directoryPath, 'left-out.txt'), 'left out');
 
   const response = await sendRawBuild({
     apiUrl: ctx.apiUrl,
     token: ctx.rootToken,
-    dir,
+    directoryPath,
     files: ['Dockerfile', 'kept.txt'],
     name: 'e2e-img-raw',
   });
@@ -94,12 +94,12 @@ test('#sendRawBuild builds a tar of exactly the named files on impd under the to
 
 test('#sendRawBuild answers impd’s refusal of another token', async () => {
   const ctx = await setupTest();
-  const dir = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
+  const directoryPath = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
 
   const response = await sendRawBuild({
     apiUrl: ctx.apiUrl,
     token: 'imp_wrong',
-    dir,
+    directoryPath,
     files: ['Dockerfile'],
     name: 'e2e-img-raw',
   });
@@ -109,13 +109,13 @@ test('#sendRawBuild answers impd’s refusal of another token', async () => {
 
 test('#sendRawBuild throws with tar’s reason when a named file is missing', async () => {
   const ctx = await setupTest();
-  const dir = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
+  const directoryPath = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
 
   expect(
     sendRawBuild({
       apiUrl: ctx.apiUrl,
       token: ctx.rootToken,
-      dir,
+      directoryPath,
       files: ['missing.txt'],
       name: 'e2e-img-raw',
     }),

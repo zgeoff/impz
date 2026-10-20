@@ -1,4 +1,4 @@
-import { readErrorMessage } from '../../../platform/process/read-error-message';
+import { getErrorMessage } from '../../../platform/process/get-error-message';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
 import { planReclaimStep } from './zfs-reclaim';
 
@@ -61,7 +61,7 @@ export function createZfsReclaim(ctx: ZfsReclaimContext) {
       ctx.log(`impd: zfs: reclaim stopped after ${String(MAX_RECLAIM_STEPS)} steps`);
     } catch (error) {
       // the space comes back on the next pass; the change itself is done
-      const message = readErrorMessage(error);
+      const message = getErrorMessage(error);
       const busy = BUSY_DATASET.exec(message)?.groups?.['name'];
 
       // no pass frees it before the reboot, so one line says so

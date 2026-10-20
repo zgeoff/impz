@@ -1,46 +1,46 @@
 import { expect, test } from 'bun:test';
-import { GuardError, createImpGuard, createPatternGuard } from './imp-guard';
+import { GuardError, buildImpGuard, createPatternGuard } from './imp-guard';
 
-test('#createImpGuard refuses a guard with no prefix, allow-list or --all', () => {
-  expect(() => createImpGuard({})).toThrowWithMessage(
+test('#buildImpGuard refuses a guard with no prefix, allow-list or --all', () => {
+  expect(() => buildImpGuard({})).toThrowWithMessage(
     GuardError,
     'choose the imps this server may touch: --prefix, --allow or --all',
   );
 });
 
-test('#createImpGuard refuses --all together with a prefix', () => {
-  expect(() => createImpGuard({ all: true, prefix: 'a-' })).toThrowWithMessage(
+test('#buildImpGuard refuses --all together with a prefix', () => {
+  expect(() => buildImpGuard({ all: true, prefix: 'a-' })).toThrowWithMessage(
     GuardError,
     '--all allows every imp; leave out --prefix and --allow',
   );
 });
 
-test('#createImpGuard refuses --all together with an allow-list', () => {
-  expect(() => createImpGuard({ all: true, allow: ['a'] })).toThrowWithMessage(
+test('#buildImpGuard refuses --all together with an allow-list', () => {
+  expect(() => buildImpGuard({ all: true, allow: ['a'] })).toThrowWithMessage(
     GuardError,
     '--all allows every imp; leave out --prefix and --allow',
   );
 });
 
 test.each([['Agent-'], ['-x'], ['aaaaaaaaaaaaaaaaaaaaaaaa']])(
-  '#createImpGuard refuses the prefix %s',
+  '#buildImpGuard refuses the prefix %s',
   (prefix) => {
-    expect(() => createImpGuard({ prefix })).toThrowWithMessage(
+    expect(() => buildImpGuard({ prefix })).toThrowWithMessage(
       GuardError,
       `--prefix ${prefix}: must start with a lowercase letter, hold only lowercase letters, digits and hyphens, and be at most 23 characters`,
     );
   },
 );
 
-test('#createImpGuard picks a 31-character name under the longest prefix it takes', () => {
-  const guard = createImpGuard({ prefix: 'aaaaaaaaaaaaaaaaaaaaaaa' });
+test('#buildImpGuard picks a 31-character name under the longest prefix it takes', () => {
+  const guard = buildImpGuard({ prefix: 'aaaaaaaaaaaaaaaaaaaaaaa' });
   const name = guard.pickNewName();
 
   expect(name).toMatch(/^a{23}[a-z0-9]{8}$/u);
 });
 
-test('#createImpGuard refuses an allow-list that holds an invalid name', () => {
-  expect(() => createImpGuard({ allow: ['ok', 'Not Ok'] })).toThrowWithMessage(
+test('#buildImpGuard refuses an allow-list that holds an invalid name', () => {
+  expect(() => buildImpGuard({ allow: ['ok', 'Not Ok'] })).toThrowWithMessage(
     GuardError,
     '--allow: Not Ok is not a valid imp name',
   );
@@ -51,28 +51,28 @@ test.each([
   ['shared', true],
   ['shared2', false],
   ['agent', false],
-])('#createImpGuard answers %s with %p under a prefix and an allow-list', (name, allowed) => {
-  const guard = createImpGuard({ prefix: 'agent-', allow: ['shared'] });
+])('#buildImpGuard answers %s with %p under a prefix and an allow-list', (name, allowed) => {
+  const guard = buildImpGuard({ prefix: 'agent-', allow: ['shared'] });
 
   expect(guard.isAllowed(name)).toBe(allowed);
 });
 
-test('#createImpGuard names both the prefix and the allow-list in its summary', () => {
-  const guard = createImpGuard({ prefix: 'agent-', allow: ['shared'] });
+test('#buildImpGuard names both the prefix and the allow-list in its summary', () => {
+  const guard = buildImpGuard({ prefix: 'agent-', allow: ['shared'] });
 
   expect(guard.summary).toBe('imps named agent-* and the imps shared');
 });
 
-test('#createImpGuard passes an imp inside the guard', () => {
-  const guard = createImpGuard({ prefix: 'agent-', allow: ['shared'] });
+test('#buildImpGuard passes an imp inside the guard', () => {
+  const guard = buildImpGuard({ prefix: 'agent-', allow: ['shared'] });
 
   expect(() => {
     guard.require('agent-x');
   }).not.toThrow();
 });
 
-test('#createImpGuard refuses an imp outside the guard with the summary', () => {
-  const guard = createImpGuard({ prefix: 'agent-', allow: ['shared'] });
+test('#buildImpGuard refuses an imp outside the guard with the summary', () => {
+  const guard = buildImpGuard({ prefix: 'agent-', allow: ['shared'] });
 
   expect(() => {
     guard.require('prod');
@@ -82,26 +82,26 @@ test('#createImpGuard refuses an imp outside the guard with the summary', () => 
   );
 });
 
-test('#createImpGuard allows every imp under --all', () => {
-  const guard = createImpGuard({ all: true });
+test('#buildImpGuard allows every imp under --all', () => {
+  const guard = buildImpGuard({ all: true });
 
   expect(guard.isAllowed('anything')).toBeTrue();
 });
 
-test('#createImpGuard leaves the new name to impd under --all', () => {
-  const guard = createImpGuard({ all: true });
+test('#buildImpGuard leaves the new name to impd under --all', () => {
+  const guard = buildImpGuard({ all: true });
 
   expect(guard.pickNewName()).toBeNull();
 });
 
-test('#createImpGuard summarises --all as every imp', () => {
-  const guard = createImpGuard({ all: true });
+test('#buildImpGuard summarises --all as every imp', () => {
+  const guard = buildImpGuard({ all: true });
 
   expect(guard.summary).toBe('every imp');
 });
 
-test('#createImpGuard asks for a name when only an allow-list guards the server', () => {
-  const guard = createImpGuard({ allow: ['shared', 'box'] });
+test('#buildImpGuard asks for a name when only an allow-list guards the server', () => {
+  const guard = buildImpGuard({ allow: ['shared', 'box'] });
 
   expect(() => guard.pickNewName()).toThrowWithMessage(
     GuardError,

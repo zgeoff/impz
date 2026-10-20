@@ -1,6 +1,6 @@
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
 import type { PublicImp } from '../../platform/db/exposure';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSemaphore } from '../../platform/process/semaphore';
 import type { Ticker, TickerTimer } from '../../platform/process/ticker';
 import { startTicker } from '../../platform/process/ticker';
@@ -28,6 +28,11 @@ export interface RecordsStatus {
   readonly at: number;
 }
 
+interface HttpsPorts {
+  readonly https: number | null;
+  readonly http: number | null;
+}
+
 export interface HttpsService {
   // returns at once: issuance runs in the background, so a CA or DNS
   // outage never holds up impd
@@ -49,11 +54,6 @@ export interface HttpsService {
   readonly stop: () => Promise<void>;
 }
 
-interface HttpsPorts {
-  readonly https: number | null;
-  readonly http: number | null;
-}
-
 interface HttpsServiceDeps {
   readonly config: HttpsConfig;
   readonly store: CertStore;
@@ -70,7 +70,7 @@ interface HttpsServiceDeps {
 
   // the public imps, for their A records and the public listeners
   readonly listPublicImps: () => Promise<readonly string[]>;
-  readonly findPublicImp: (name: string) => Promise<PublicImp | undefined>;
+  readonly readPublicImpByName: (name: string) => Promise<PublicImp | undefined>;
 
   // where the renewal, records and address passes wait out their intervals:
   // the runtime's timers unless a test steps them by hand
@@ -118,7 +118,7 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
           httpsPort: publicConfig.httpsPort,
           httpPort: publicConfig.httpPort,
           log,
-          scope: createPublicScope(deps.findPublicImp, createPublicLimits(deps.now)),
+          scope: createPublicScope(deps.readPublicImpByName, createPublicLimits(deps.now)),
         });
 
   const setCertificate = (certificate: Certificate): void => {
@@ -172,7 +172,7 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
 
       log(`impd: https: ${domain} and *.${domain} point at ${ip}`);
     } catch (error) {
-      const message = `impd: https: cannot point ${domain} at ${ip}: ${readErrorMessage(error)}`;
+      const message = `impd: https: cannot point ${domain} at ${ip}: ${getErrorMessage(error)}`;
 
       if (message !== state.recordsError) {
         state.recordsError = message;
@@ -272,7 +272,7 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
 
         recordsStatus = { isOk: true, error: null, at: deps.now() };
       } catch (error) {
-        const message = readErrorMessage(error);
+        const message = getErrorMessage(error);
 
         log(`impd: https: public records: ${message}`);
 
@@ -342,6 +342,6 @@ async function runLogged(
   try {
     await task();
   } catch (error) {
-    log(`impd: https: ${label}: ${readErrorMessage(error)}`);
+    log(`impd: https: ${label}: ${getErrorMessage(error)}`);
   }
 }

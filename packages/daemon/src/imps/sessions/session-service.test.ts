@@ -5,7 +5,7 @@ import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { startStubSessionAgent } from '../../../testing/vm/start-stub-session-agent';
 import { createImage } from '../../platform/db/images';
-import { findImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/imps';
 import { sendActivity } from '../../vm/agent-client/agent-requests';
 import { openExecStream } from '../../vm/agent-client/exec-stream';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
@@ -159,7 +159,7 @@ test('it records the sessions that the idle loop’s activity read finds', async
     main.close();
   });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 

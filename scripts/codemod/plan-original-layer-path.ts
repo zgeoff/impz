@@ -1,7 +1,7 @@
 import { LAYER_TABLE } from './plan-layer-path';
 
 const MOVES_BY_TARGET = Object.entries(LAYER_TABLE.moves).toSorted(
-  ([, a], [, b]) => b.length - a.length,
+  ([, left], [, right]) => right.length - left.length,
 );
 
 // the path under src that a placed `path` had before the move, or `path` itself when no move

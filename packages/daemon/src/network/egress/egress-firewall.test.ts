@@ -8,11 +8,11 @@ import { createStubNftBin } from '../../../testing/network/create-stub-nft-bin';
 import { createNftRunner, createNftWriter, formatNftError } from './egress-firewall';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'egress-firewall-'));
+  const directory = await mkdtemp(join(tmpdir(), 'egress-firewall-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#createNftWriter runs the scripts that wait while one runs as one script, in order', async () => {
@@ -61,7 +61,7 @@ test('#createNftWriter runs a refused batch again one script at a time, so only 
 
 test('#createNftRunner runs nft with -f -', async () => {
   const ctx = await setupTest();
-  const nft = await createStubNftBin(ctx.dir);
+  const nft = await createStubNftBin(ctx.directoryPath);
 
   await createNftRunner(nft.path)('table inet imp_egress {}\n');
 
@@ -72,7 +72,7 @@ test('#createNftRunner runs nft with -f -', async () => {
 
 test('#createNftRunner hands nft the script on its stdin', async () => {
   const ctx = await setupTest();
-  const nft = await createStubNftBin(ctx.dir);
+  const nft = await createStubNftBin(ctx.directoryPath);
 
   await createNftRunner(nft.path)('table inet imp_egress {}\n');
 
@@ -83,9 +83,9 @@ test('#createNftRunner hands nft the script on its stdin', async () => {
 
 test('#createNftRunner runs the nft it finds on PATH by default', async () => {
   const ctx = await setupTest();
-  const nft = await createStubNftBin(ctx.dir);
+  const nft = await createStubNftBin(ctx.directoryPath);
 
-  updateEnv('PATH', `${ctx.dir}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   await createNftRunner()('table inet imp_egress {}\n');
 
@@ -97,7 +97,7 @@ test('#createNftRunner runs the nft it finds on PATH by default', async () => {
 test('#createNftRunner rejects with the exit code and the first line nft printed', async () => {
   const ctx = await setupTest();
 
-  const nft = await createStubNftBin(ctx.dir, {
+  const nft = await createStubNftBin(ctx.directoryPath, {
     stderr: 'Error: syntax error, unexpected newline\ngarbage\n',
     exitCode: 3,
   });
@@ -110,9 +110,9 @@ test('#createNftRunner rejects with the exit code and the first line nft printed
 test('#createNftRunner rejects with ENOENT when the nft binary is missing', async () => {
   const ctx = await setupTest();
 
-  expect(createNftRunner(join(ctx.dir, 'nft'))('table inet imp_egress {}\n')).rejects.toThrow(
-    /^ENOENT: no such file or directory, posix_spawn /v,
-  );
+  expect(
+    createNftRunner(join(ctx.directoryPath, 'nft'))('table inet imp_egress {}\n'),
+  ).rejects.toThrow(/^ENOENT: no such file or directory, posix_spawn /v);
 });
 
 test('#formatNftError says nft is not installed for a binary that could not start', () => {

@@ -3,7 +3,7 @@ import type { EgressPolicy, Imp, ImpKind } from '@impz/api';
 import { listCheckpoints } from '../../platform/db/checkpoints';
 import type { ImageRecord } from '../../platform/db/images';
 import { listImps, removeImp, updateImpDisk, updateImpSettings } from '../../platform/db/imps';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildInvalidStateError, isRamBudgetError } from '../../surface/api-errors';
 import { resolveMaxMemoryMib } from '../../vm/memory/elastic-memory';
@@ -69,11 +69,18 @@ interface DestroyOptions {
   readonly isMove?: boolean;
 }
 
+interface ImpUpdate {
+  readonly cpuLimit?: number | null | undefined;
+  readonly cpuWeight?: number | undefined;
+  readonly vcpus?: number | undefined;
+  readonly httpPort?: number | undefined;
+}
+
 // The imp API's commands. Each takes the imp's lock for its whole run.
 export interface ImpCommands {
   readonly createImp: (input: CreateImpInput) => Promise<Imp>;
   readonly listImps: () => Promise<Imp[]>;
-  readonly getImp: (name: string) => Promise<Imp>;
+  readonly readImp: (name: string) => Promise<Imp>;
   readonly startImp: (name: string) => Promise<Imp>;
 
   // `force` ends the imp's leases from leases.*, which fail it with LEASED
@@ -102,13 +109,6 @@ export interface ImpCommands {
   // one when it next starts; the vCPU count only while stopped, since a
   // memory snapshot fixes it. The HTTP port holds from the next request.
   readonly updateImp: (name: string, change: ImpUpdate) => Promise<Imp>;
-}
-
-interface ImpUpdate {
-  readonly cpuLimit?: number | null | undefined;
-  readonly cpuWeight?: number | undefined;
-  readonly vcpus?: number | undefined;
-  readonly httpPort?: number | undefined;
 }
 
 interface ImpCommandParts {
@@ -266,7 +266,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
           const stopped = await ops.updateState(imp, { reason: 'stopped', state: 'stopped' });
 
-          return presenter.toApi(stopped);
+          return presenter.readApi(stopped);
         }
 
         // the clone first: a ZFS disk is a mount, which a jail prepared before
@@ -292,7 +292,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
           const bootMs = Math.round(performance.now() - bootStarted);
 
-          const presented = await presenter.toApi(running);
+          const presented = await presenter.readApi(running);
 
           const totalMs = Math.round(performance.now() - received);
 
@@ -327,20 +327,20 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
         imps.map((imp) => checkLiveness(context, imp, !lock.isLocked(imp.id))),
       );
 
-      return presenter.toApiList(fresh);
+      return presenter.readApiList(fresh);
     },
 
-    getImp: async (name) => {
+    readImp: async (name) => {
       const imp = await lock.findImp(name);
 
-      return presenter.toApi(imp);
+      return presenter.readApi(imp);
     },
 
     startImp: (name) =>
       lock.withImp(name, async (imp) => {
         const running = await ops.requireRunningImp(imp);
 
-        return presenter.toApi(running);
+        return presenter.readApi(running);
       }),
 
     // a call that changes nothing answers as it always did, leased or not;
@@ -348,7 +348,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
     stopImp: (name, force = false) =>
       lock.withImp(name, async (imp) => {
         if (imp.state === 'stopped') {
-          return presenter.toApi(imp);
+          return presenter.readApi(imp);
         }
 
         // the table's creating → stopped is a create's own, never a stop
@@ -365,7 +365,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
         const after =
           force && stopped.state === 'stopped' ? await leases.endForcedLeases(stopped) : stopped;
 
-        return presenter.toApi(after);
+        return presenter.readApi(after);
       }),
 
     destroyImp: async (name, options = {}) => {
@@ -390,7 +390,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
     sleepImp: (name, force = false) =>
       lock.withImp(name, async (imp) => {
         if (imp.state === 'sleeping') {
-          return presenter.toApi(imp);
+          return presenter.readApi(imp);
         }
 
         requireTransition(imp.state, 'sleeping', 'sleep');
@@ -402,7 +402,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
         const after =
           force && asleep.state === 'sleeping' ? await leases.endForcedLeases(asleep) : asleep;
 
-        return presenter.toApi(after);
+        return presenter.readApi(after);
       }),
 
     wakeImp: (name, restartError = true) =>
@@ -413,7 +413,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
         const running = await ops.requireRunningImp(imp);
 
-        return presenter.toApi(running);
+        return presenter.readApi(running);
       }),
 
     resizeDisk: (name, diskMib) =>
@@ -433,7 +433,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
         }
 
         if (diskBytes === imp.diskBytes) {
-          return presenter.toApi(imp);
+          return presenter.readApi(imp);
         }
 
         const paths = context.findPaths(imp.id);
@@ -459,12 +459,12 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
         }
 
         if (grown.state !== 'running') {
-          return presenter.toApi(grown);
+          return presenter.readApi(grown);
         }
 
         const resized = await ops.growGuestDisk(grown);
 
-        return presenter.toApi(resized);
+        return presenter.readApi(resized);
       }),
 
     updateImp: (name, change) =>
@@ -487,9 +487,26 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
           context.cgroups.apply(imp.id, cpu);
         }
 
-        return presenter.toApi(toLockedImp(imp, updated));
+        return presenter.readApi(toLockedImp(imp, updated));
       }),
   };
+}
+
+// The disk goes through the backend first: on ZFS a dataset is mounted inside
+// the imp's directory, and rm -r fails on it.
+async function removeImpFiles(
+  context: ImpVms & ImpGuest,
+  impId: string,
+  checkpointIds: readonly string[],
+): Promise<void> {
+  const paths = context.findPaths(impId);
+
+  context.sessionLogs.forgetImp(impId);
+
+  await context.storage.removeImpDisk(impId, checkpointIds);
+
+  rmSync(paths.directory, { recursive: true, force: true });
+  rmSync(paths.snapshotDir, { recursive: true, force: true });
 }
 
 // The size a new disk gets. A size below the image's filesystem (a
@@ -528,25 +545,6 @@ async function growStoppedFilesystem(context: ImpHost & ImpVms, name: string, di
       context.log(`impd: ${name}: the filesystem was not unmounted cleanly; its boot grows it`);
     }
   } catch (error) {
-    context.log(
-      `impd: ${name}: the host could not grow the filesystem: ${readErrorMessage(error)}`,
-    );
+    context.log(`impd: ${name}: the host could not grow the filesystem: ${getErrorMessage(error)}`);
   }
-}
-
-// The disk goes through the backend first: on ZFS a dataset is mounted inside
-// the imp's directory, and rm -r fails on it.
-async function removeImpFiles(
-  context: ImpVms & ImpGuest,
-  impId: string,
-  checkpointIds: readonly string[],
-): Promise<void> {
-  const paths = context.findPaths(impId);
-
-  context.sessionLogs.forgetImp(impId);
-
-  await context.storage.removeImpDisk(impId, checkpointIds);
-
-  rmSync(paths.dir, { recursive: true, force: true });
-  rmSync(paths.snapshotDir, { recursive: true, force: true });
 }

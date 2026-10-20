@@ -1,7 +1,7 @@
 // The distance between two u32 values, around the wrap: how far apart two
 // guests' TCP ISN secrets lie.
-export function findU32Span(a: number, b: number): number {
-  const span = Math.abs(a - b);
+export function getU32Span(left: number, right: number): number {
+  const span = Math.abs(left - right);
 
   return Math.min(span, 2 ** 32 - span);
 }
@@ -45,7 +45,7 @@ export function parseLoggedGuestSteps(
 
 // the nearest-rank percentile, 0 for no values
 export function pickPercentile(values: readonly number[], fraction: number): number {
-  const sorted = values.toSorted((a, b) => a - b);
+  const sorted = values.toSorted((left, right) => left - right);
 
   return sorted[Math.max(0, Math.ceil(fraction * sorted.length) - 1)] ?? 0;
 }

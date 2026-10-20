@@ -13,7 +13,7 @@ import { parsePrefix64 } from '../../host-net/net/addressing6';
 import { resolveIpv6Plan } from '../../host-net/net/ipv6-plan';
 import type { ImpdDeps } from '../../impd-deps';
 import { createImage } from '../../platform/db/images';
-import { findImpByName, updateImpMove } from '../../platform/db/imps';
+import { readImpByName, updateImpMove } from '../../platform/db/imps';
 import { removeMember, removeNetwork, writeNetwork } from '../../platform/db/networks';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import type { EgressDeps } from './egress-service';
@@ -202,7 +202,7 @@ test('it takes a destroyed imp out of the table while its row still holds the sl
 
   await held.reached;
 
-  const row = await findImpByName(ctx.db, 'dev');
+  const row = await readImpByName(ctx.db, 'dev');
 
   held.release();
 
@@ -853,7 +853,7 @@ test('it builds the table again for a public imp once the routes are back', asyn
 
   routes.restoreUplinks();
 
-  const pub = await findImpByName(ctx.db, 'pub');
+  const pub = await readImpByName(ctx.db, 'pub');
 
   invariant(pub);
 
@@ -953,7 +953,7 @@ test('it leaves nft and the database agreeing when a create meets a failing poli
   const second = ctx.impd.imps.createImp({ name: 'second' });
 
   await waitFor(async () => {
-    const row = await findImpByName(ctx.db, 'second');
+    const row = await readImpByName(ctx.db, 'second');
 
     expect(row).toBeDefined();
   });
@@ -1244,7 +1244,7 @@ test('it rethrows the refusal of nft, and keeps the network, when the undo of a 
   await ctx.impd.imps.createImp({ name: 'web', networkIds: [network.id] });
   await ctx.impd.imps.createImp({ name: 'db', networkIds: [network.id] });
 
-  const dbImp = await findImpByName(ctx.db, 'db');
+  const dbImp = await readImpByName(ctx.db, 'db');
 
   invariant(dbImp);
 

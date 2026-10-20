@@ -13,7 +13,7 @@ export type StubDnsUdpMode = 'answer' | 'truncate' | 'drop' | 'wrong-id';
 export type StubDnsTcpMode = 'answer' | 'drop' | 'hang-up' | 'wrong-id';
 
 interface StubDnsUpstreamOptions {
-  // UDP and TCP on this one number: pick a free one (findFreePorts), since a
+  // UDP and TCP on this one number: pick a free one (claimFreePorts), since a
   // UDP bind to 0 and then TCP on its number can meet a TCP socket there
   readonly port: number;
 
@@ -31,10 +31,6 @@ interface StubDnsQueryRecord {
   readonly id: number;
 }
 
-function readId(query: Uint8Array): number {
-  return ((query[0] ?? 0) << 8) | (query[1] ?? 0);
-}
-
 // An upstream DNS server on loopback, over UDP and TCP (RFC 1035 framing).
 // `queries` holds each query it read, in order; a test picks each side's
 // behaviour. Its sockets close when the test finishes.
@@ -48,7 +44,7 @@ export async function startStubDnsUpstream(options: Readonly<StubDnsUpstreamOpti
     buildMockDnsReply(query, {
       answers: mode === 'truncate' ? [] : answers,
       truncated: mode === 'truncate',
-      id: mode === 'wrong-id' ? (readId(query) + 1) % 0x1_00_00 : readId(query),
+      id: mode === 'wrong-id' ? (getId(query) + 1) % 0x1_00_00 : getId(query),
     });
 
   const udp = await Bun.udpSocket({
@@ -63,7 +59,7 @@ export async function startStubDnsUpstream(options: Readonly<StubDnsUpstreamOpti
           socket.send(buildReply(query, udpMode), port, address);
         }
 
-        queries.push({ transport: 'udp', id: readId(query) });
+        queries.push({ transport: 'udp', id: getId(query) });
       },
     },
   });
@@ -106,7 +102,7 @@ export async function startStubDnsUpstream(options: Readonly<StubDnsUpstreamOpti
             socket.write(framed);
           }
 
-          queries.push({ transport: 'tcp', id: readId(query) });
+          queries.push({ transport: 'tcp', id: getId(query) });
         }
       },
     },
@@ -117,4 +113,8 @@ export async function startStubDnsUpstream(options: Readonly<StubDnsUpstreamOpti
   });
 
   return { port: udp.port, queries: queries as readonly StubDnsQueryRecord[] };
+}
+
+function getId(query: Uint8Array): number {
+  return ((query[0] ?? 0) << 8) | (query[1] ?? 0);
 }

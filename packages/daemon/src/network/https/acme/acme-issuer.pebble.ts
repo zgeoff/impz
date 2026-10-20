@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { server } from '@impz/test-utils/mock-server';
 import invariant from 'tiny-invariant';
 import { startPebbleStack } from '../../../../../../e2e/lib/pebble';
-import { buildStubCloudflareApi } from '../../../../testing/network/build-stub-cloudflare-api';
+import { createStubCloudflareApi } from '../../../../testing/network/create-stub-cloudflare-api';
 import { createChalltestsrvProvider } from '../dns/challtestsrv-provider';
 import { createCloudflareProvider } from '../dns/cloudflare-provider';
 import { createAcmeIssuer } from './acme-issuer';
@@ -25,13 +25,13 @@ async function setupTest() {
   // an earlier test left behind ever holds this test's container names
   const prefix = `imp-acme-it-${String(process.pid)}-${randomUUID().slice(0, 8)}`;
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-acme-it-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-acme-it-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  const pebble = await startPebbleStack(stack, prefix, { minicaDir: dir });
+  const pebble = await startPebbleStack(stack, prefix, { minicaDir: directory });
 
-  return { pebble, dir };
+  return { pebble, directoryPath: directory };
 }
 
 test('it issues one certificate for the domain and its wildcard', async () => {
@@ -41,7 +41,7 @@ test('it issues one certificate for the domain and its wildcard', async () => {
     directoryUrl: ctx.pebble.directoryUrl,
     email: null,
     caPem: ctx.pebble.minicaPem,
-    store: createCertStore(ctx.dir),
+    store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
     log: () => {},
 
@@ -75,7 +75,7 @@ test('it renews with the account the stored key already has', async () => {
     directoryUrl: ctx.pebble.directoryUrl,
     email: null,
     caPem: ctx.pebble.minicaPem,
-    store: createCertStore(ctx.dir),
+    store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
     log: () => {},
 
@@ -84,7 +84,7 @@ test('it renews with the account the stored key already has', async () => {
     poll: { backoffAttempts: 10, backoffMin: 50, backoffMax: 500 },
   });
 
-  const store = createCertStore(ctx.dir);
+  const store = createCertStore(ctx.directoryPath);
 
   const first = await issue('imp.test');
 
@@ -105,7 +105,7 @@ test('it opens a new account and still issues when the account file is lost', as
     directoryUrl: ctx.pebble.directoryUrl,
     email: null,
     caPem: ctx.pebble.minicaPem,
-    store: createCertStore(ctx.dir),
+    store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
     log: () => {},
 
@@ -114,7 +114,7 @@ test('it opens a new account and still issues when the account file is lost', as
     poll: { backoffAttempts: 10, backoffMin: 50, backoffMax: 500 },
   });
 
-  const store = createCertStore(ctx.dir);
+  const store = createCertStore(ctx.directoryPath);
 
   await first('imp.test');
 
@@ -123,13 +123,13 @@ test('it opens a new account and still issues when the account file is lost', as
   invariant(lost);
 
   // what the https e2e suite does between runs, when Pebble starts afresh
-  await rm(join(ctx.dir, 'tls', 'account.json'));
+  await rm(join(ctx.directoryPath, 'tls', 'account.json'));
 
   const second = createAcmeIssuer({
     directoryUrl: ctx.pebble.directoryUrl,
     email: null,
     caPem: ctx.pebble.minicaPem,
-    store: createCertStore(ctx.dir),
+    store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
     log: () => {},
   });
@@ -155,7 +155,7 @@ test('it rejects an untrusted ACME server in words, not as an axios crash', asyn
     directoryUrl: ctx.pebble.directoryUrl,
     email: null,
     caPem: null,
-    store: createCertStore(ctx.dir),
+    store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
     log: () => {},
   });
@@ -173,7 +173,7 @@ test('it rejects an ACME directory that answers with an error status', async () 
     directoryUrl: `${ctx.pebble.directoryUrl}-missing`,
     email: null,
     caPem: ctx.pebble.minicaPem,
-    store: createCertStore(ctx.dir),
+    store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
     log: () => {},
   });
@@ -188,7 +188,7 @@ test('it rejects with the DNS provider reason, and no token, when the provider r
   const ctx = await setupTest();
 
   // a stand-in that accepts no token refuses every call with Cloudflare's 403
-  server.use(...buildStubCloudflareApi({ tokens: [] }).handlers);
+  server.use(...createStubCloudflareApi({ tokens: [] }).handlers);
 
   const logs: string[] = [];
 
@@ -196,7 +196,7 @@ test('it rejects with the DNS provider reason, and no token, when the provider r
     directoryUrl: ctx.pebble.directoryUrl,
     email: null,
     caPem: ctx.pebble.minicaPem,
-    store: createCertStore(ctx.dir),
+    store: createCertStore(ctx.directoryPath),
     dns: createCloudflareProvider({ readToken: () => Promise.resolve('integration-secret-token') }),
     log: (message) => {
       logs.push(message);

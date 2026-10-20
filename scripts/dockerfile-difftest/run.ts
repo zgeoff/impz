@@ -191,7 +191,7 @@ function normalizeFlag(flag: string): string {
 const WORD_KEYWORDS = new Set(['from', 'add', 'copy']);
 
 // ARG's words come from parseWords, which impd ports as splitNameWords
-function readWords(instruction: Readonly<Instruction>, escape: string): readonly string[] | null {
+function parseWords(instruction: Readonly<Instruction>, escape: string): readonly string[] | null {
   if (instruction.keyword === 'arg') {
     return splitNameWords(instruction.args, escape);
   }
@@ -203,7 +203,7 @@ function toComparable(instruction: Readonly<Instruction>, escape: string): Compa
   return {
     keyword: instruction.keyword,
     flags: instruction.flags.map((flag) => normalizeFlag(flag)),
-    words: readWords(instruction, escape),
+    words: parseWords(instruction, escape),
     trigger: instruction.trigger?.keyword ?? null,
   };
 }
@@ -283,14 +283,17 @@ function runGo(binary: string, dockerfiles: readonly string[]): GoResult[] {
     .map((line) => GoResultSchema.parse(JSON.parse(line)));
 }
 
-function buildGo(): string {
-  const dir = import.meta.dir;
-  const outDir = join(dir, '..', '..', '.cache', 'dockerfile-difftest');
+function compileGo(): string {
+  const directory = import.meta.dir;
+  const outDir = join(directory, '..', '..', '.cache', 'dockerfile-difftest');
   const binary = join(outDir, 'dockerfile-difftest');
 
   mkdirSync(outDir, { recursive: true });
 
-  const built = Bun.spawnSync(['go', 'build', '-o', binary, '.'], { cwd: dir, stderr: 'inherit' });
+  const built = Bun.spawnSync(['go', 'build', '-o', binary, '.'], {
+    cwd: directory,
+    stderr: 'inherit',
+  });
 
   if (built.exitCode !== 0) {
     throw new Error('go build failed');
@@ -310,7 +313,7 @@ function main(): number {
   const values = args.values;
   const random = makeRandom(Number(values.seed));
   const dockerfiles = Array.from({ length: Number(values.count) }, () => buildDockerfile(random));
-  const binary = buildGo();
+  const binary = compileGo();
   const theirs = runGo(binary, dockerfiles);
 
   const counts = {

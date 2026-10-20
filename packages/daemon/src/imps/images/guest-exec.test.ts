@@ -14,11 +14,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-guest-exec-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-guest-exec-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it runs a step as root and gives its exit code, stdout and stderr', async () => {
@@ -59,10 +59,10 @@ test('it sends a file to the step as its stdin', async () => {
     return {};
   });
 
-  writeFileSync(join(ctx.dir, 'context.tar'), 'the context');
+  writeFileSync(join(ctx.directoryPath, 'context.tar'), 'the context');
 
   await createGuestExec(guest.open)(['docker', 'build', '-'], {
-    stdinPath: join(ctx.dir, 'context.tar'),
+    stdinPath: join(ctx.directoryPath, 'context.tar'),
     signal: new AbortController().signal,
   });
 
@@ -76,7 +76,7 @@ test('it rethrows at the exit the error that stopped the stdin', async () => {
 
   expect(
     createGuestExec(guest.open)(['docker', 'build', '-'], {
-      stdinPath: join(ctx.dir, 'missing.tar'),
+      stdinPath: join(ctx.directoryPath, 'missing.tar'),
       signal: new AbortController().signal,
     }),
   ).rejects.toMatchObject({ code: 'ENOENT' });

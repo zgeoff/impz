@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { pickNewCalls, readAuditCalls } from '../lib/audit-calls';
 import { config } from '../lib/config';
-import { collectEventLines } from '../lib/event-lines';
+import { readEventLines } from '../lib/event-lines';
 import { createInstanceClient, runImp, startImp } from '../lib/imp-cli';
 import { waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // `impz events` (docs/guides/events.md) and the api audit log, over one imp's
@@ -20,7 +20,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('lifecycle'), stack, client };
+  return { prefix: getSuitePrefix('lifecycle'), stack, client };
 }
 
 test('it streams a create, sleep, wake and rm as events with no reconnect, and logs each call in the api audit log', async () => {
@@ -46,7 +46,7 @@ test('it streams a create, sleep, wake and rm as events with no reconnect, and l
 
   const seen: string[] = [];
 
-  const collecting = collectEventLines(events.stdout, (line) => {
+  const collecting = readEventLines(events.stdout, (line) => {
     seen.push(line);
   });
 

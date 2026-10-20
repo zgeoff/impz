@@ -20,22 +20,22 @@ import {
 } from './vm-files';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-vm-files-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-vm-files-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   // the test's own uid, so the chown works without root
   const owner = { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 };
 
-  return { dir, owner };
+  return { directoryPath: directory, owner };
 }
 
 test('#writeRegularFile writes a regular file in place of a planted symlink and leaves its target untouched', () => {
   const ctx = setupTest();
-  const target = join(ctx.dir, 'target');
-  const link = join(ctx.dir, 'link');
+  const target = join(ctx.directoryPath, 'target');
+  const link = join(ctx.directoryPath, 'link');
 
   writeFileSync(target, 'untouched');
   symlinkSync(target, link);
@@ -48,7 +48,7 @@ test('#writeRegularFile writes a regular file in place of a planted symlink and 
 
 test('#writeRegularFile writes a regular file in place of a planted FIFO without blocking', () => {
   const ctx = setupTest();
-  const fifo = join(ctx.dir, 'fifo');
+  const fifo = join(ctx.directoryPath, 'fifo');
 
   Bun.spawnSync(['mkfifo', fifo]);
 
@@ -60,8 +60,8 @@ test('#writeRegularFile writes a regular file in place of a planted FIFO without
 
 test('#setupLogFile opens the log as a regular file in place of a planted symlink and leaves its target untouched', () => {
   const ctx = setupTest();
-  const target = join(ctx.dir, 'target');
-  const link = join(ctx.dir, 'link');
+  const target = join(ctx.directoryPath, 'target');
+  const link = join(ctx.directoryPath, 'link');
 
   writeFileSync(target, 'untouched');
   symlinkSync(target, link);
@@ -78,7 +78,7 @@ test('#setupLogFile opens the log as a regular file in place of a planted symlin
 
 test('#setupLogFile opens the log as a regular file in place of a planted FIFO without blocking', () => {
   const ctx = setupTest();
-  const fifo = join(ctx.dir, 'fifo');
+  const fifo = join(ctx.directoryPath, 'fifo');
 
   Bun.spawnSync(['mkfifo', fifo]);
 
@@ -93,7 +93,7 @@ test('#setupLogFile opens the log as a regular file in place of a planted FIFO w
 
 test('#readRegularFile reads a regular file', () => {
   const ctx = setupTest();
-  const file = join(ctx.dir, 'file');
+  const file = join(ctx.directoryPath, 'file');
 
   writeFileSync(file, 'untouched');
 
@@ -102,8 +102,8 @@ test('#readRegularFile reads a regular file', () => {
 
 test('#readRegularFile refuses to read through a symlink', () => {
   const ctx = setupTest();
-  const target = join(ctx.dir, 'target');
-  const link = join(ctx.dir, 'link');
+  const target = join(ctx.directoryPath, 'target');
+  const link = join(ctx.directoryPath, 'link');
 
   writeFileSync(target, 'untouched');
   symlinkSync(target, link);
@@ -113,7 +113,7 @@ test('#readRegularFile refuses to read through a symlink', () => {
 
 test('#readRegularFile refuses to read a FIFO without blocking', () => {
   const ctx = setupTest();
-  const fifo = join(ctx.dir, 'fifo');
+  const fifo = join(ctx.directoryPath, 'fifo');
 
   Bun.spawnSync(['mkfifo', fifo]);
 
@@ -122,8 +122,8 @@ test('#readRegularFile refuses to read a FIFO without blocking', () => {
 
 test('#createOwnedFile makes a snapshot file new in place of a planted symlink and leaves its target untouched', () => {
   const ctx = setupTest();
-  const target = join(ctx.dir, 'target');
-  const link = join(ctx.dir, 'link');
+  const target = join(ctx.directoryPath, 'target');
+  const link = join(ctx.directoryPath, 'link');
 
   writeFileSync(target, 'untouched');
   symlinkSync(target, link);
@@ -139,7 +139,7 @@ test('#createOwnedFile makes a snapshot file new in place of a planted symlink a
 
 test('#createOwnedFile makes a snapshot file new in place of a planted FIFO', () => {
   const ctx = setupTest();
-  const fifo = join(ctx.dir, 'fifo');
+  const fifo = join(ctx.directoryPath, 'fifo');
 
   Bun.spawnSync(['mkfifo', fifo]);
 
@@ -154,7 +154,7 @@ test('#createOwnedFile makes a snapshot file new in place of a planted FIFO', ()
 
 test('#createOwnedFile makes a snapshot file new and empty in place of an old one', () => {
   const ctx = setupTest();
-  const file = join(ctx.dir, 'mem');
+  const file = join(ctx.directoryPath, 'mem');
 
   writeFileSync(file, 'old snapshot');
   createOwnedFile(file, ctx.owner);
@@ -169,7 +169,7 @@ test('#createOwnedFile makes a snapshot file new and empty in place of an old on
 
 test('#requireSocket accepts a socket', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'api.sock');
+  const path = join(ctx.directoryPath, 'api.sock');
   const server = Bun.listen({ unix: path, socket: { data: () => {} } });
 
   onTestFinished(() => {
@@ -183,8 +183,8 @@ test('#requireSocket accepts a socket', () => {
 
 test('#requireSocket refuses a symlink to a socket', () => {
   const ctx = setupTest();
-  const path = join(ctx.dir, 'api.sock');
-  const link = join(ctx.dir, 'sock-link');
+  const path = join(ctx.directoryPath, 'api.sock');
+  const link = join(ctx.directoryPath, 'sock-link');
   const server = Bun.listen({ unix: path, socket: { data: () => {} } });
 
   onTestFinished(() => {
@@ -200,7 +200,7 @@ test('#requireSocket refuses a symlink to a socket', () => {
 
 test('#requireSocket refuses a FIFO in place of a socket', () => {
   const ctx = setupTest();
-  const fifo = join(ctx.dir, 'fifo');
+  const fifo = join(ctx.directoryPath, 'fifo');
 
   Bun.spawnSync(['mkfifo', fifo]);
 

@@ -1,25 +1,6 @@
 import { createServer } from 'node:net';
 import type { Server, Socket } from 'node:net';
 
-// closes the listener and ends its connections; safe again once stopped
-async function stopServer(server: Server, sockets: ReadonlySet<Socket>): Promise<void> {
-  for (const socket of sockets) {
-    socket.destroy();
-  }
-
-  if (!server.listening) {
-    return;
-  }
-
-  const closed = Promise.withResolvers<void>();
-
-  server.close(() => {
-    closed.resolve();
-  });
-
-  await closed.promise;
-}
-
 // The far end of a plain tunnel on a free loopback port that holds every
 // connection open, saying nothing, until it stops
 export async function startStubBrokerHoldTarget(stack: Readonly<AsyncDisposableStack>) {
@@ -52,4 +33,23 @@ export async function startStubBrokerHoldTarget(stack: Readonly<AsyncDisposableS
     // ends the held connections at once; the stack then finds it stopped
     stop: () => stopServer(server, held),
   };
+}
+
+// closes the listener and ends its connections; safe again once stopped
+async function stopServer(server: Server, sockets: ReadonlySet<Socket>): Promise<void> {
+  for (const socket of sockets) {
+    socket.destroy();
+  }
+
+  if (!server.listening) {
+    return;
+  }
+
+  const closed = Promise.withResolvers<void>();
+
+  server.close(() => {
+    closed.resolve();
+  });
+
+  await closed.promise;
 }

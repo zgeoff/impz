@@ -10,7 +10,7 @@ async function setupTest() {
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
-  return { dir: join(root, 'a'.repeat(32)) };
+  return { directory: join(root, 'a'.repeat(32)) };
 }
 
 test('it holds the chosen making of a log until the test releases it', async () => {
@@ -20,7 +20,7 @@ test('it holds the chosen making of a log until the test releases it', async () 
 
   const making = gate.createLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 10,
       maxBytes: 20,
       requireRoom: () => Promise.resolve(),
@@ -43,7 +43,7 @@ test('it holds the chosen making of a log until the test releases it', async () 
   });
 
   expect(whileHeld).toBe('pending');
-  expect(readGenerationMeta(ctx.dir)?.executionGeneration).toBe('a'.repeat(32));
+  expect(readGenerationMeta(ctx.directory)?.executionGeneration).toBe('a'.repeat(32));
 });
 
 test('it lets the calls before the held one through and holds the chosen append', async () => {
@@ -53,7 +53,7 @@ test('it lets the calls before the held one through and holds the chosen append'
 
   const log = await gate.createLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 100,
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
@@ -79,7 +79,7 @@ test('it lets the calls before the held one through and holds the chosen append'
 
   await appending;
 
-  const text = await readFile(join(ctx.dir, '0.seg'), 'utf8');
+  const text = await readFile(join(ctx.directory, '0.seg'), 'utf8');
 
   expect(whileHeld).toBe('pending');
   expect(text).toBe('first+second');
@@ -92,7 +92,7 @@ test('it holds the chosen removal of a segment until the test releases it', asyn
 
   const log = await gate.createLog(
     {
-      dir: ctx.dir,
+      directory: ctx.directory,
       segmentBytes: 4,
       maxBytes: 100,
       requireRoom: () => Promise.resolve(),

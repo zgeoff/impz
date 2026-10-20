@@ -8,7 +8,7 @@ import invariant from 'tiny-invariant';
 import { readMcpAnswer } from '../../../../mcp/src/test-utils/read-mcp-answer';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubTailscale } from '../../../testing/network/build-stub-tailscale';
-import { findFreePorts } from '../../../testing/platform/find-free-ports';
+import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { TEST_TOKEN } from '../../../testing/test-token';
 import { buildStubExecGuest } from '../../../testing/vm/build-stub-exec-guest';
@@ -18,7 +18,7 @@ import { PEER_HEADER } from '../../network/proxy/forwarded-peers';
 import { startWakeProxy } from '../../network/proxy/wake-proxy';
 import { listApiCalls } from '../../platform/db/api-audit';
 import { createImage } from '../../platform/db/images';
-import { findImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/imps';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 
 interface SetupOptions {
@@ -179,7 +179,7 @@ test('it runs a command in an imp its token may touch', async () => {
 
   await ctx.client.imps.create({ name: 'agent-a' });
 
-  const record = await findImpByName(ctx.db, 'agent-a');
+  const record = await readImpByName(ctx.db, 'agent-a');
 
   invariant(record);
 
@@ -419,7 +419,7 @@ test.each([
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const record = await findImpByName(ctx.db, 'box');
+  const record = await readImpByName(ctx.db, 'box');
 
   invariant(record);
 
@@ -663,7 +663,7 @@ test('it ends the streamed call and running command of a token that is removed',
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const record = await findImpByName(ctx.db, 'box');
+  const record = await readImpByName(ctx.db, 'box');
 
   invariant(record);
 
@@ -922,7 +922,7 @@ test('it answers a tool call through the wake proxy’s API route', async () => 
     config: {
       ...ctx.config,
       apiPort: Number(new URL(ctx.url).port),
-      proxyPort: findFreePorts(1).take(),
+      proxyPort: claimFreePorts(1).take(),
     },
     db: ctx.db,
     imps: ctx.impd.imps,
@@ -1003,7 +1003,7 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const record = await findImpByName(ctx.db, 'box');
+  const record = await readImpByName(ctx.db, 'box');
 
   invariant(record);
 
@@ -1018,7 +1018,7 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
     config: {
       ...ctx.config,
       apiPort: Number(new URL(ctx.url).port),
-      proxyPort: findFreePorts(1).take(),
+      proxyPort: claimFreePorts(1).take(),
     },
     db: ctx.db,
     imps: ctx.impd.imps,
@@ -1047,16 +1047,18 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
 
   const answers: (string | null)[] = [];
 
+  const sendRequest = async (url: string | URL, init: RequestInit | undefined) => {
+    const response = await fetch(url, init);
+
+    answers.push(response.headers.get('content-type'));
+
+    return response;
+  };
+
   await client.connect(
     new StreamableHTTPClientTransport(new URL(`${via}/mcp`), {
       requestInit: { headers: { authorization: `Bearer ${TEST_TOKEN}` } },
-      fetch: async (url, init) => {
-        const response = await fetch(url, init);
-
-        answers.push(response.headers.get('content-type'));
-
-        return response;
-      },
+      fetch: sendRequest,
     }),
   );
 
@@ -1097,7 +1099,7 @@ test('it keeps a call answered as server-sent events open through the wake proxy
 
   await ctx.client.imps.create({ name: 'box' });
 
-  const record = await findImpByName(ctx.db, 'box');
+  const record = await readImpByName(ctx.db, 'box');
 
   invariant(record);
 
@@ -1112,7 +1114,7 @@ test('it keeps a call answered as server-sent events open through the wake proxy
     config: {
       ...ctx.config,
       apiPort: Number(new URL(ctx.url).port),
-      proxyPort: findFreePorts(1).take(),
+      proxyPort: claimFreePorts(1).take(),
     },
     db: ctx.db,
     imps: ctx.impd.imps,

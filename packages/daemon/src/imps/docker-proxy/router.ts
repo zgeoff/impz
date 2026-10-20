@@ -110,7 +110,7 @@ function findRoute(method: string, path: string): Route | null {
 // `target` is the path and query, not decoded; Bun's URL has already
 // resolved dot segments and `\`. One left, an escape or an empty segment is
 // refused, so the proxy checks and forwards one spelling.
-export function findRequestRoute(method: string, target: string): RouteResult {
+export function getRequestRoute(method: string, target: string): RouteResult {
   const queryStart = target.indexOf('?');
   const rawPath = queryStart === -1 ? target : target.slice(0, queryStart);
   const rawQuery = queryStart === -1 ? '' : target.slice(queryStart + 1);

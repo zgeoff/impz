@@ -10,8 +10,8 @@ import { buildLogKey } from './build-log-key';
 import { createSessionLogState } from './create-session-log-state';
 import {
   createGenerationLog,
+  getGenerationBounds,
   loadGenerationLog,
-  readGenerationBounds,
   readGenerationMeta,
 } from './generation-log';
 import type { GenerationEnd, GenerationLogOptions } from './generation-log';
@@ -19,7 +19,7 @@ import { makeApplyImpLimit } from './make-apply-imp-limit';
 import { makeCreateLiveLog } from './make-create-live-log';
 import { makeRunTap } from './make-run-tap';
 import {
-  findGenerationDir,
+  getGenerationDir,
   listTombstones,
   readImpMetas,
   readSessionLogRange,
@@ -85,7 +85,7 @@ export interface SessionLogs {
 
   readonly listLogs: (imp: SessionLogImp, session?: string) => SessionLog[];
   readonly readLog: (imp: SessionLogImp, request: SessionLogReadRequest) => Promise<SessionLogRead>;
-  readonly deleteLogs: (imp: SessionLogImp, target: SessionLogTarget) => number;
+  readonly removeLogs: (imp: SessionLogImp, target: SessionLogTarget) => number;
 
   // ends the live logs of imps whose VM is gone and removes ended logs past
   // their age; `imps` is every imp the database has
@@ -118,18 +118,6 @@ interface SessionLogDeps {
 // NO_SESSION's data in the API's shape: the generation that last left the
 // name, with its final end and exit code
 const NoSessionPreviousSchema = z.object({ previous: PreviousGenerationSchema.optional() });
-
-// the final end of the generation `previous` names, if it is this one
-function toPreviousEnd(
-  previous: PreviousGeneration | undefined,
-  generation: string,
-): GenerationEnd {
-  if (previous?.executionGeneration !== generation) {
-    return {};
-  }
-
-  return { end: previous.end, exitCode: previous.exitCode };
-}
 
 export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
   const openTap = deps.openTap ?? openTapStream;
@@ -207,9 +195,9 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
     }
 
     const key = buildLogKey(imp.id, output.executionGeneration);
-    const dir = findGenerationDir(imp.sessionLogsDir, output.executionGeneration);
+    const directory = getGenerationDir(imp.sessionLogsDir, output.executionGeneration);
 
-    if (ctx.isTapped(key) || ctx.isDropped(key) || readGenerationMeta(dir) !== null) {
+    if (ctx.isTapped(key) || ctx.isDropped(key) || readGenerationMeta(directory) !== null) {
       tap.close();
 
       return;
@@ -263,7 +251,7 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
     emitReached: () => void,
   ): Promise<void> => {
     const meta = entry.log.readMeta();
-    const logEnd = readGenerationBounds(meta).logEnd;
+    const logEnd = getGenerationBounds(meta).logEnd;
 
     const resumeFrom =
       meta.segments.length === 0 && logEnd === 0
@@ -361,7 +349,7 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
 
       if (entry === undefined) {
         // an ended log is not written again
-        if (readGenerationMeta(findGenerationDir(imp.sessionLogsDir, generation)) !== null) {
+        if (readGenerationMeta(getGenerationDir(imp.sessionLogsDir, generation)) !== null) {
           ctx.send({ type: 'tap.release', key, owner: opening });
 
           return;
@@ -540,13 +528,13 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
     listLogs: (imp, session) =>
       readImpMetas(imp.sessionLogsDir, ctx.readLive(imp.id))
         .filter((meta) => session === undefined || meta.session === session)
-        .toSorted((a, b) => b.startedAt - a.startedAt)
+        .toSorted((left, right) => right.startedAt - left.startedAt)
         .map((meta) => toApiSessionLog(meta)),
 
     readLog: (imp, request) =>
       readSessionLogRange(imp.sessionLogsDir, ctx.readLive(imp.id), request),
 
-    deleteLogs: (imp, target) => {
+    removeLogs: (imp, target) => {
       const doomed = readImpMetas(imp.sessionLogsDir, ctx.readLive(imp.id)).filter(
         (meta) =>
           (target.session === undefined || meta.session === target.session) &&
@@ -586,4 +574,16 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
       }
     },
   };
+}
+
+// the final end of the generation `previous` names, if it is this one
+function toPreviousEnd(
+  previous: PreviousGeneration | undefined,
+  generation: string,
+): GenerationEnd {
+  if (previous?.executionGeneration !== generation) {
+    return {};
+  }
+
+  return { end: previous.end, exitCode: previous.exitCode };
 }

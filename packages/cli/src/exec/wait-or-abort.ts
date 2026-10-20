@@ -1,6 +1,6 @@
 // a timer that an abort clears, so a wait left behind keeps no process
 // alive; a finished wait takes its listener off the shared signal
-export function waitOrAbort(ms: number, signal: AbortSignal): Promise<void> {
+export function waitOrAbort(durationMs: number, signal: AbortSignal): Promise<void> {
   const waited = Promise.withResolvers<void>();
 
   const onAbort = (): void => {
@@ -12,7 +12,7 @@ export function waitOrAbort(ms: number, signal: AbortSignal): Promise<void> {
   const timer = setTimeout(() => {
     signal.removeEventListener('abort', onAbort);
     waited.resolve();
-  }, ms);
+  }, durationMs);
 
   signal.addEventListener('abort', onAbort, { once: true });
 

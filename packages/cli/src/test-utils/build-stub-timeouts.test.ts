@@ -9,8 +9,8 @@ test('it records each timer’s delay as pending and fires none on its own', () 
   stub.startTimer(50, fire);
 
   expect(stub.timers).toStrictEqual([
-    { ms: 5000, state: 'pending' },
-    { ms: 50, state: 'pending' },
+    { durationMs: 5000, state: 'pending' },
+    { durationMs: 50, state: 'pending' },
   ]);
 
   expect(fire).not.toHaveBeenCalled();
@@ -22,7 +22,7 @@ test('it marks a timer cancelled once the unit cancels it', () => {
 
   cancel();
 
-  expect(stub.timers).toStrictEqual([{ ms: 5000, state: 'cancelled' }]);
+  expect(stub.timers).toStrictEqual([{ durationMs: 5000, state: 'cancelled' }]);
 });
 
 test('it fires only the pending timers, once, when the test fires them', () => {
@@ -42,8 +42,8 @@ test('it fires only the pending timers, once, when the test fires them', () => {
   expect(second).toHaveBeenCalledOnce();
 
   expect(stub.timers).toStrictEqual([
-    { ms: 5000, state: 'cancelled' },
-    { ms: 5000, state: 'fired' },
+    { durationMs: 5000, state: 'cancelled' },
+    { durationMs: 5000, state: 'fired' },
   ]);
 });
 
@@ -55,5 +55,5 @@ test('it leaves a fired timer fired when the unit cancels it after', () => {
 
   cancel();
 
-  expect(stub.timers).toStrictEqual([{ ms: 5000, state: 'fired' }]);
+  expect(stub.timers).toStrictEqual([{ durationMs: 5000, state: 'fired' }]);
 });

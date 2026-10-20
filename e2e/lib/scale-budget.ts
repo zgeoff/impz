@@ -1,4 +1,4 @@
-import { findBudgetBreaches, readMaxOpenMs } from './budget-overshoot';
+import { collectBudgetBreaches, readMaxOpenMs } from './budget-overshoot';
 import type { BudgetCheck, Overshoot, OvershootLimits, SleepSpan } from './budget-overshoot';
 import {
   FIRECRACKER_MEMORY_SCRIPT,
@@ -60,7 +60,7 @@ export function buildFillScript(fillMib: number): string {
 
 // A guest grows past its boot reserve after admission, so use may pass the
 // budget by the memory its reserve leaves out, until an enforce sleep due
-// within one period and one sample ends it (findBudgetBreaches)
+// within one period and one sample ends it (collectBudgetBreaches)
 export function buildOvershootLimits(input: Readonly<OvershootLimitsInput>): OvershootLimits {
   return {
     budgetMib: input.budgetMib,
@@ -72,7 +72,7 @@ export function buildOvershootLimits(input: Readonly<OvershootLimitsInput>): Ove
 // Breaches in impd's figure and in what the VMs own per smaps, so a wrong
 // figure cannot hide one; full PSS adds clean file pages the governor leaves
 // out, so it is only reported (docs/runbooks/development.md).
-export function findBudgetViolations(
+export function collectBudgetViolations(
   samples: readonly BudgetSample[],
   sleeps: readonly SleepSpan[],
   limits: OvershootLimits,
@@ -87,7 +87,7 @@ export function findBudgetViolations(
   ] as const;
 
   return series.flatMap(([name, usage]) =>
-    findBudgetBreaches(usage, sleeps, limits, check).map(
+    collectBudgetBreaches(usage, sleeps, limits, check).map(
       (breach) => `${name} ${String(breach.maxOverMib)} MiB over the budget: ${breach.why}`,
     ),
   );
@@ -131,13 +131,13 @@ export interface BudgetMonitorDeps {
   readonly startWatch: () => Promise<SleepWatch>;
 
   // the pause between samples
-  readonly wait: (ms: number) => Promise<void>;
+  readonly wait: (durationMs: number) => Promise<void>;
 }
 
 const MONITOR_DEPS: BudgetMonitorDeps = {
   readSample: readBudgetSample,
   startWatch: startSleepWatch,
-  wait: (ms) => Bun.sleep(ms),
+  wait: (durationMs) => Bun.sleep(durationMs),
 };
 
 // Samples the budget every BUDGET_SAMPLE_MS and follows the sleeps that end

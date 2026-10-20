@@ -13,20 +13,20 @@ import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildFilesTar } from '../../../testing/imps/build-files-tar';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import {
   STUB_BUILDER_CONTAINER,
   buildStubImageBuilder,
 } from '../../../testing/imps/build-stub-image-builder';
-import { buildTreeTar } from '../../../testing/imps/build-tree-tar';
+import { createFilesTar } from '../../../testing/imps/create-files-tar';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
 import { createStubImageMkfs } from '../../../testing/imps/create-stub-image-mkfs';
+import { createTreeTar } from '../../../testing/imps/create-tree-tar';
 import { spawnSparseFilesTar } from '../../../testing/imps/spawn-sparse-files-tar';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { startDiskSampler } from '../../../testing/vm/start-disk-sampler';
 import { loadConfig } from '../../config';
-import { createImage, findImageByName, listImages } from '../../platform/db/images';
+import { createImage, listImages, readImageByName } from '../../platform/db/images';
 import { openDatabase } from '../../platform/db/open-database';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
@@ -42,11 +42,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'image-builds-'));
+  const directory = await mkdtemp(join(tmpdir(), 'image-builds-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  const dataDir = join(dir, 'data');
+  const dataDir = join(directory, 'data');
 
   await mkdir(dataDir);
 
@@ -55,7 +55,7 @@ async function setupTest() {
   stack.defer(() => db.destroy());
 
   // a host docker that logs every call: an isolated build makes none
-  const docker = createStubDockerCli({ dir });
+  const docker = createStubDockerCli({ directory });
 
   updateEnv('PATH', docker.path);
 
@@ -90,7 +90,7 @@ async function setupTest() {
   return {
     // a release deferred here runs before the database closes
     stack,
-    dir,
+    directoryPath: directory,
     dataDir,
     db,
     docker,
@@ -132,7 +132,7 @@ test('it pins, builds and exports in its builder, with no host engine call', asy
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -147,15 +147,20 @@ test('it pins, builds and exports in its builder, with no host engine call', asy
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const image = await images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const image = await images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
-  const saved = await findImageByName(ctx.db, 'web');
+  const saved = await readImageByName(ctx.db, 'web');
 
   // the digest's own form: no Docker image ID is one
   expect(image as unknown).toStrictEqual({
@@ -197,7 +202,7 @@ test('it lists an on-host build with its builder and step while it runs, and sen
   const lines: string[] = [];
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     buildLog: '#4 [2/2] RUN make all\n#4 0.301 cc -o widget main.c\n#4 DONE 0.5s\n',
     onExport: async () => {
@@ -218,11 +223,14 @@ test('it lists an on-host build with its builder and step while it runs, and sen
     now: () => Date.parse('2026-05-06T07:08:09.000Z'),
   });
 
-  await mkdir(join(ctx.dir, 'context'));
+  await mkdir(join(ctx.directoryPath, 'context'));
 
-  await Bun.write(join(ctx.dir, 'context', 'Dockerfile'), 'FROM base.test/a:1\nRUN make all\n');
+  await Bun.write(
+    join(ctx.directoryPath, 'context', 'Dockerfile'),
+    'FROM base.test/a:1\nRUN make all\n',
+  );
 
-  const building = images.buildImage(join(ctx.dir, 'context'), 'web', undefined, {
+  const building = images.runImageBuild(join(ctx.directoryPath, 'context'), 'web', undefined, {
     output: {
       emitLog: (line) => {
         lines.push(line);
@@ -263,7 +271,7 @@ test('it holds disk in 256 MiB steps as the export grows, not at the image cap',
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -278,11 +286,11 @@ test('it holds disk in 256 MiB steps as the export grows, not at the image cap',
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  await images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+  await images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
     signal: new AbortController().signal,
   });
 
@@ -297,7 +305,7 @@ test('it refuses with DISK_FULL an export that outgrows the free disk', async ()
   ctx.usage.availableBytes = 256 * 1024 ** 2;
 
   const builder = buildStubImageBuilder({
-    exported: spawnSparseFilesTar(ctx.dir, { big: 200 * 1024 ** 2 }).stdout,
+    exported: spawnSparseFilesTar(ctx.directoryPath, { big: 200 * 1024 ** 2 }).stdout,
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -312,13 +320,18 @@ test('it refuses with DISK_FULL an export that outgrows the free disk', async ()
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   expect(building).rejects.toMatchObject({ code: 'DISK_FULL' });
 });
@@ -329,7 +342,7 @@ test('it stops the export at the step the free disk refuses', async () => {
   ctx.usage.availableBytes = 600 * 1024 ** 2;
 
   const builder = buildStubImageBuilder({
-    exported: spawnSparseFilesTar(ctx.dir, { big: 200 * 1024 ** 2 }).stdout,
+    exported: spawnSparseFilesTar(ctx.directoryPath, { big: 200 * 1024 ** 2 }).stdout,
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -344,13 +357,18 @@ test('it stops the export at the step the free disk refuses', async () => {
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   await building.catch(() => {});
 
@@ -367,7 +385,7 @@ test('it releases the disk hold once a build succeeds', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -382,11 +400,11 @@ test('it releases the disk hold once a build succeeds', async () => {
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  await images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+  await images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
     signal: new AbortController().signal,
   });
 
@@ -399,10 +417,12 @@ test('it releases the disk hold once a build succeeds', async () => {
 test('it releases the disk hold when the export is over the file limit', async () => {
   const ctx = await setupTest();
 
-  const many = Object.fromEntries(Array.from({ length: 20 }, (_, n) => [`f${String(n)}`, 'x']));
+  const many = Object.fromEntries(
+    Array.from({ length: 20 }, (_, index) => [`f${String(index)}`, 'x']),
+  );
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, many)],
+    exported: [createFilesTar(ctx.directoryPath, many)],
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -417,13 +437,18 @@ test('it releases the disk hold when the export is over the file limit', async (
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   await building.catch(() => {});
 
@@ -441,10 +466,12 @@ test('it releases the disk hold when the export is over the file limit', async (
 test('it refuses an export over IMP_BUILD_IMAGE_MAX_FILES', async () => {
   const ctx = await setupTest();
 
-  const many = Object.fromEntries(Array.from({ length: 20 }, (_, n) => [`f${String(n)}`, 'x']));
+  const many = Object.fromEntries(
+    Array.from({ length: 20 }, (_, index) => [`f${String(index)}`, 'x']),
+  );
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, many)],
+    exported: [createFilesTar(ctx.directoryPath, many)],
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -459,13 +486,18 @@ test('it refuses an export over IMP_BUILD_IMAGE_MAX_FILES', async () => {
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   expect(building).rejects.toThrowWithMessage(
     Error,
@@ -480,7 +512,7 @@ test('it releases the disk hold when the free disk refuses the export', async ()
   ctx.usage.availableBytes = 256 * 1024 ** 2;
 
   const builder = buildStubImageBuilder({
-    exported: spawnSparseFilesTar(ctx.dir, { big: 200 * 1024 ** 2 }).stdout,
+    exported: spawnSparseFilesTar(ctx.directoryPath, { big: 200 * 1024 ** 2 }).stdout,
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -495,13 +527,18 @@ test('it releases the disk hold when the free disk refuses the export', async ()
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   await building.catch(() => {});
 
@@ -517,7 +554,7 @@ test('it releases the disk hold when the client goes while the builder holds its
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     isExportStalled: true,
   });
@@ -533,15 +570,20 @@ test('it releases the disk hold when the client goes while the builder holds its
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
   const client = new AbortController();
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: client.signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: client.signal,
+    },
+  );
 
   // the export's output is in, and its exit never comes
   await waitFor(() => {
@@ -563,7 +605,7 @@ test('it fails the build when the client goes while the builder holds its export
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     isExportStalled: true,
   });
@@ -579,15 +621,20 @@ test('it fails the build when the client goes while the builder holds its export
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
   const client = new AbortController();
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: client.signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: client.signal,
+    },
+  );
 
   // the export's output is in, and its exit never comes
   await waitFor(() => {
@@ -606,7 +653,7 @@ test('it leaves no new row and no rootfs when a template takes the name during t
   const templated = Promise.withResolvers<null>();
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     onExport: async () => {
       exporting.resolve(null);
@@ -626,13 +673,18 @@ test('it leaves no new row and no rootfs when a template takes the name during t
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   await exporting.promise;
   await createImage(ctx.db, buildMockNewImage({ name: 'web', source: 'imp', sourceImp: 'dev' }));
@@ -665,7 +717,7 @@ test('it refuses a build whose name a template took during the build', async () 
   const templated = Promise.withResolvers<null>();
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     onExport: async () => {
       exporting.resolve(null);
@@ -685,13 +737,18 @@ test('it refuses a build whose name a template took during the build', async () 
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   await exporting.promise;
   await createImage(ctx.db, buildMockNewImage({ name: 'web', source: 'imp', sourceImp: 'dev' }));
@@ -707,12 +764,12 @@ test('it refuses a build whose name a template took during the build', async () 
 test('it keeps the rootfs another build of the digest is writing when its own row fails', async () => {
   const ctx = await setupTest();
 
-  const mkfs = createStubImageMkfs(ctx.dir);
+  const mkfs = createStubImageMkfs(ctx.directoryPath);
 
   updateEnv('PATH', `${mkfs.bin}:${process.env['PATH'] ?? ''}`);
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -728,22 +785,32 @@ test('it keeps the rootfs another build of the digest is writing when its own ro
 
   // each build reads its own upload
   await Bun.write(
-    join(ctx.dir, 'web.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'web.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
   await Bun.write(
-    join(ctx.dir, 'web2.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'web2.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const failing = images.buildImageFromContext(join(ctx.dir, 'web.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const failing = images.buildImageFromContext(
+    join(ctx.directoryPath, 'web.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
-  const kept = images.buildImageFromContext(join(ctx.dir, 'web2.tar'), 'web2', undefined, {
-    signal: new AbortController().signal,
-  });
+  const kept = images.buildImageFromContext(
+    join(ctx.directoryPath, 'web2.tar'),
+    'web2',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   // both exports are in, so both builds wait on the one mkfs.ext4
   await mkfs.waitForStart();
@@ -782,7 +849,7 @@ test('it keeps the rootfs when an image rm runs while a build of its digest is b
 
   // the second build's export arms the gate, after its name check
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     onExport: () => {
       exports.count += 1;
@@ -807,22 +874,32 @@ test('it keeps the rootfs when an image rm runs while a build of its digest is b
 
   // each build reads its own upload
   await Bun.write(
-    join(ctx.dir, 'web.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'web.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
   await Bun.write(
-    join(ctx.dir, 'web2.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'web2.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const first = await images.buildImageFromContext(join(ctx.dir, 'web.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const first = await images.buildImageFromContext(
+    join(ctx.directoryPath, 'web.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
-  const second = images.buildImageFromContext(join(ctx.dir, 'web2.tar'), 'web2', undefined, {
-    signal: new AbortController().signal,
-  });
+  const second = images.buildImageFromContext(
+    join(ctx.directoryPath, 'web2.tar'),
+    'web2',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   await gate.reached;
 
@@ -852,7 +929,7 @@ test("it removes that rootfs after all when the build's row then fails", async (
 
   // the second build's export arms the gate, after its name check
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     onExport: () => {
       exports.count += 1;
@@ -877,22 +954,32 @@ test("it removes that rootfs after all when the build's row then fails", async (
 
   // each build reads its own upload
   await Bun.write(
-    join(ctx.dir, 'web.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'web.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
   await Bun.write(
-    join(ctx.dir, 'web2.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'web2.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const first = await images.buildImageFromContext(join(ctx.dir, 'web.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const first = await images.buildImageFromContext(
+    join(ctx.directoryPath, 'web.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
-  const second = images.buildImageFromContext(join(ctx.dir, 'web2.tar'), 'web2', undefined, {
-    signal: new AbortController().signal,
-  });
+  const second = images.buildImageFromContext(
+    join(ctx.directoryPath, 'web2.tar'),
+    'web2',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   await gate.reached;
 
@@ -917,7 +1004,7 @@ test('it removes a rootfs whose write fails after it is published', async () => 
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -941,13 +1028,18 @@ test('it removes a rootfs whose write fails after it is published', async () => 
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   await building.catch(() => {});
 
@@ -966,7 +1058,7 @@ test('it returns the error of a rootfs write that fails after it is published', 
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -990,13 +1082,18 @@ test('it returns the error of a rootfs write that fails after it is published', 
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   expect(building).rejects.toThrowWithMessage(Error, 'the mount failed');
 });
@@ -1004,12 +1101,12 @@ test('it returns the error of a rootfs write that fails after it is published', 
 test('it leaves no row, rootfs or hold when the client goes while mkfs.ext4 runs', async () => {
   const ctx = await setupTest();
 
-  const mkfs = createStubImageMkfs(ctx.dir);
+  const mkfs = createStubImageMkfs(ctx.directoryPath);
 
   updateEnv('PATH', `${mkfs.bin}:${process.env['PATH'] ?? ''}`);
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, { hello: 'from the builder\n' })],
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
@@ -1024,15 +1121,20 @@ test('it leaves no row, rootfs or hold when the client goes while mkfs.ext4 runs
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
   const client = new AbortController();
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: client.signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: client.signal,
+    },
+  );
 
   await mkfs.waitForStart();
 
@@ -1058,10 +1160,12 @@ test('it leaves no row, rootfs or hold when the client goes while mkfs.ext4 runs
 test('it ends a stalled export over a limit at once, with its builder and its disk hold', async () => {
   const ctx = await setupTest();
 
-  const many = Object.fromEntries(Array.from({ length: 20 }, (_, n) => [`f${String(n)}`, 'x']));
+  const many = Object.fromEntries(
+    Array.from({ length: 20 }, (_, index) => [`f${String(index)}`, 'x']),
+  );
 
   const builder = buildStubImageBuilder({
-    exported: [buildFilesTar(ctx.dir, many)],
+    exported: [createFilesTar(ctx.directoryPath, many)],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     isExportStalled: true,
   });
@@ -1077,13 +1181,18 @@ test('it ends a stalled export over a limit at once, with its builder and its di
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   await building.catch(() => {});
 
@@ -1115,13 +1224,20 @@ test('it refuses a Dockerfile the input guard refuses', async () => {
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nADD https://example.com/x /x\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, {
+      Dockerfile: 'FROM base.test/a:1\nADD https://example.com/x /x\n',
+    }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   expect(building).rejects.toMatchObject({ code: 'BAD_REQUEST' });
 });
@@ -1142,13 +1258,20 @@ test('it boots no builder for a Dockerfile the input guard refuses', async () =>
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nADD https://example.com/x /x\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, {
+      Dockerfile: 'FROM base.test/a:1\nADD https://example.com/x /x\n',
+    }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   await building.catch(() => {});
 
@@ -1160,8 +1283,8 @@ test('it boots no builder for a Dockerfile the input guard refuses', async () =>
 test("it changes no host file through a built image's image.json link", async () => {
   const ctx = await setupTest();
 
-  const hostFile = join(ctx.dir, 'host-file');
-  const tree = join(ctx.dir, 'linked-tree');
+  const hostFile = join(ctx.directoryPath, 'host-file');
+  const tree = join(ctx.directoryPath, 'linked-tree');
 
   await writeFile(hostFile, "the host's\n");
   await mkdir(join(tree, 'etc', 'imp'), { recursive: true });
@@ -1184,11 +1307,11 @@ test("it changes no host file through a built image's image.json link", async ()
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  await images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+  await images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
     signal: new AbortController().signal,
   });
 
@@ -1198,8 +1321,8 @@ test("it changes no host file through a built image's image.json link", async ()
 test('it refuses an image whose /etc/imp is a link to a host directory', async () => {
   const ctx = await setupTest();
 
-  const hostDir = join(ctx.dir, 'host-dir');
-  const tree = join(ctx.dir, 'linked-tree');
+  const hostDir = join(ctx.directoryPath, 'host-dir');
+  const tree = join(ctx.directoryPath, 'linked-tree');
 
   await mkdir(hostDir);
   await mkdir(join(tree, 'etc'), { recursive: true });
@@ -1222,13 +1345,18 @@ test('it refuses an image whose /etc/imp is a link to a host directory', async (
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
@@ -1239,8 +1367,8 @@ test('it refuses an image whose /etc/imp is a link to a host directory', async (
 test('it writes nothing into the host directory an /etc/imp link names', async () => {
   const ctx = await setupTest();
 
-  const hostDir = join(ctx.dir, 'host-dir');
-  const tree = join(ctx.dir, 'linked-tree');
+  const hostDir = join(ctx.directoryPath, 'host-dir');
+  const tree = join(ctx.directoryPath, 'linked-tree');
 
   await mkdir(hostDir);
   await mkdir(join(tree, 'etc'), { recursive: true });
@@ -1263,13 +1391,18 @@ test('it writes nothing into the host directory an /etc/imp link names', async (
   });
 
   await Bun.write(
-    join(ctx.dir, 'context.tar'),
-    buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
   );
 
-  const building = images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
-    signal: new AbortController().signal,
-  });
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
 
   await building.catch(() => {});
 
@@ -1308,7 +1441,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
 
     const grows: number[] = [];
 
-    const exported = buildTreeTar(ctx.dir, (tree) => {
+    const exported = createTreeTar(ctx.directoryPath, (tree) => {
       writeFileSync(join(tree, 'hello'), 'from the builder\n');
     });
 
@@ -1352,12 +1485,12 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     await Bun.write(
-      join(ctx.dir, 'context.tar'),
-      buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+      join(ctx.directoryPath, 'context.tar'),
+      createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
     );
 
     const trial = await sampler.measure(() =>
-      images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+      images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
         signal: new AbortController().signal,
       }),
     );
@@ -1399,12 +1532,12 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
 
     const grows: number[] = [];
 
-    const exported = buildTreeTar(ctx.dir, (tree) => {
-      for (let d = 0; d < 30; d += 1) {
-        mkdirSync(join(tree, `d${String(d)}`));
+    const exported = createTreeTar(ctx.directoryPath, (tree) => {
+      for (let directoryIndex = 0; directoryIndex < 30; directoryIndex += 1) {
+        mkdirSync(join(tree, `d${String(directoryIndex)}`));
 
-        for (let n = 0; n < 1000; n += 1) {
-          writeFileSync(join(tree, `d${String(d)}`, `f${String(n)}`), '');
+        for (let index = 0; index < 1000; index += 1) {
+          writeFileSync(join(tree, `d${String(directoryIndex)}`, `f${String(index)}`), '');
         }
       }
     });
@@ -1449,12 +1582,12 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     await Bun.write(
-      join(ctx.dir, 'context.tar'),
-      buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+      join(ctx.directoryPath, 'context.tar'),
+      createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
     );
 
     const trial = await sampler.measure(() =>
-      images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+      images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
         signal: new AbortController().signal,
       }),
     );
@@ -1496,7 +1629,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
 
     const grows: number[] = [];
 
-    const exported = buildTreeTar(ctx.dir, (tree) => {
+    const exported = createTreeTar(ctx.directoryPath, (tree) => {
       for (let chain = 0; chain < 300; chain += 1) {
         mkdirSync(join(tree, `c${String(chain)}`, ...Array.from({ length: 40 }, () => 'd')), {
           recursive: true,
@@ -1544,12 +1677,12 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     await Bun.write(
-      join(ctx.dir, 'context.tar'),
-      buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+      join(ctx.directoryPath, 'context.tar'),
+      createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
     );
 
     const trial = await sampler.measure(() =>
-      images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+      images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
         signal: new AbortController().signal,
       }),
     );
@@ -1592,7 +1725,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const grows: number[] = [];
 
     // as docker export sends it
-    const exported = buildTreeTar(ctx.dir, (tree) => {
+    const exported = createTreeTar(ctx.directoryPath, (tree) => {
       const file = join(tree, 'sparse');
 
       writeFileSync(file, 'x'.repeat(1024 ** 2));
@@ -1640,12 +1773,12 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     await Bun.write(
-      join(ctx.dir, 'context.tar'),
-      buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+      join(ctx.directoryPath, 'context.tar'),
+      createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
     );
 
     const trial = await sampler.measure(() =>
-      images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+      images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
         signal: new AbortController().signal,
       }),
     );
@@ -1687,8 +1820,8 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
 
     const grows: number[] = [];
 
-    const exported = buildTreeTar(
-      ctx.dir,
+    const exported = createTreeTar(
+      ctx.directoryPath,
       (tree) => {
         const file = join(tree, 'sparse');
 
@@ -1739,12 +1872,12 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     await Bun.write(
-      join(ctx.dir, 'context.tar'),
-      buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+      join(ctx.directoryPath, 'context.tar'),
+      createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
     );
 
     const trial = await sampler.measure(() =>
-      images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+      images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
         signal: new AbortController().signal,
       }),
     );
@@ -1787,10 +1920,10 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const grows: number[] = [];
 
     // random data, which no tool can store as holes
-    const exported = buildTreeTar(ctx.dir, (tree) => {
-      for (let n = 0; n < 3200; n += 1) {
+    const exported = createTreeTar(ctx.directoryPath, (tree) => {
+      for (let index = 0; index < 3200; index += 1) {
         writeFileSync(
-          join(tree, `r${String(n)}`),
+          join(tree, `r${String(index)}`),
           crypto.getRandomValues(new Uint8Array(64 * 1024)),
         );
       }
@@ -1836,12 +1969,12 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     await Bun.write(
-      join(ctx.dir, 'context.tar'),
-      buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+      join(ctx.directoryPath, 'context.tar'),
+      createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
     );
 
     const trial = await sampler.measure(() =>
-      images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+      images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
         signal: new AbortController().signal,
       }),
     );
@@ -1885,13 +2018,13 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
 
     // twice the archive just under a 256 MiB step: held at twice the archive
     // alone, it held 512 MiB and took 536 on XFS
-    const exported = buildTreeTar(ctx.dir, (tree) => {
-      for (let d = 0; d < 58; d += 1) {
-        mkdirSync(join(tree, `d${String(d)}`));
+    const exported = createTreeTar(ctx.directoryPath, (tree) => {
+      for (let directoryIndex = 0; directoryIndex < 58; directoryIndex += 1) {
+        mkdirSync(join(tree, `d${String(directoryIndex)}`));
 
-        for (let n = 0; n < 1000; n += 1) {
+        for (let index = 0; index < 1000; index += 1) {
           writeFileSync(
-            join(tree, `d${String(d)}`, `r${String(n)}`),
+            join(tree, `d${String(directoryIndex)}`, `r${String(index)}`),
             crypto.getRandomValues(new Uint8Array(4096)),
           );
         }
@@ -1938,8 +2071,8 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     await Bun.write(
-      join(ctx.dir, 'context.tar'),
-      buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+      join(ctx.directoryPath, 'context.tar'),
+      createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
     );
 
     // the archive is in the window the comment above names
@@ -1947,7 +2080,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     invariant(2 * exported.byteLength < 512 * 1024 ** 2);
 
     const trial = await sampler.measure(() =>
-      images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+      images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
         signal: new AbortController().signal,
       }),
     );
@@ -1988,7 +2121,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     // one file that tar lists in full at once
-    const exported = buildTreeTar(ctx.dir, (tree) => {
+    const exported = createTreeTar(ctx.directoryPath, (tree) => {
       Bun.spawnSync(['truncate', '-s', String(500 * 1024 ** 2), join(tree, 'big')]);
     });
 
@@ -2024,12 +2157,12 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     await Bun.write(
-      join(ctx.dir, 'context.tar'),
-      buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+      join(ctx.directoryPath, 'context.tar'),
+      createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
     );
 
     const trial = await sampler.measure(() =>
-      images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+      images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
         signal: new AbortController().signal,
       }),
     );
@@ -2066,10 +2199,10 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     // files that tar lists as they come
-    const exported = buildTreeTar(ctx.dir, (tree) => {
-      for (let n = 0; n < 400; n += 1) {
+    const exported = createTreeTar(ctx.directoryPath, (tree) => {
+      for (let index = 0; index < 400; index += 1) {
         writeFileSync(
-          join(tree, `r${String(n)}`),
+          join(tree, `r${String(index)}`),
           crypto.getRandomValues(new Uint8Array(1024 ** 2)),
         );
       }
@@ -2107,12 +2240,12 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     await Bun.write(
-      join(ctx.dir, 'context.tar'),
-      buildFilesTar(ctx.dir, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+      join(ctx.directoryPath, 'context.tar'),
+      createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
     );
 
     const trial = await sampler.measure(() =>
-      images.buildImageFromContext(join(ctx.dir, 'context.tar'), 'web', undefined, {
+      images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
         signal: new AbortController().signal,
       }),
     );

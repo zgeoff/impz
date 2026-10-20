@@ -33,12 +33,12 @@ test('#readKernelInfo reads the kernel release and the sha256 of the whole image
 });
 
 test('#deriveFileSha256 streams the sha256 of a file', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-system-files-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-system-files-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
-  writeFileSync(join(dir, 'imp-system.squashfs'), 'drive');
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  writeFileSync(join(directory, 'imp-system.squashfs'), 'drive');
 
-  const sha256 = await deriveFileSha256(join(dir, 'imp-system.squashfs'));
+  const sha256 = await deriveFileSha256(join(directory, 'imp-system.squashfs'));
 
   expect(sha256).toBe('7062520c5a0ea9deac825278c9f4f0cbad48864b2c7d0c7f1ebccdb752afb058');
 });

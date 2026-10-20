@@ -44,7 +44,7 @@ export function openCommandTerminal(
 
   const shown = { text: '' };
 
-  const proc = Bun.spawn([...argv], {
+  const subprocess = Bun.spawn([...argv], {
     env: { ...process.env, ...env },
     terminal: {
       ...(size ?? DEFAULT_SIZE),
@@ -57,19 +57,19 @@ export function openCommandTerminal(
   const readOutput = (): string => shown.text.replaceAll('\r', '');
 
   const exited = (async () => {
-    const code = await proc.exited;
+    const code = await subprocess.exited;
 
-    proc.terminal?.close();
+    subprocess.terminal?.close();
 
     return code;
   })();
 
   return {
     type: (text) => {
-      proc.terminal?.write(text);
+      subprocess.terminal?.write(text);
     },
     resize: (cols, rows) => {
-      proc.terminal?.resize(cols, rows);
+      subprocess.terminal?.resize(cols, rows);
     },
     waitForText: (text, since = 0) =>
       waitFor(
@@ -84,7 +84,7 @@ export function openCommandTerminal(
     readOutput,
     exited,
     close: async () => {
-      proc.kill();
+      subprocess.kill();
 
       await exited;
     },

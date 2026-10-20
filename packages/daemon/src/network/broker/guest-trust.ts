@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { rootCertificates } from 'node:tls';
 import type { StartTimer } from '../../platform/process/clock';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildExitError } from '../../platform/process/run-command';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import { openExecStream } from '../../vm/agent-client/exec-stream';
@@ -172,7 +172,7 @@ export function createGuestTrust(
 
           return { installed: true };
         } catch (error) {
-          const detail = readErrorMessage(error);
+          const detail = getErrorMessage(error);
 
           log(
             `impd: ${imp.name}: broker CA not installed, so this exec gets no broker variables: ${detail}`,

@@ -1,15 +1,15 @@
 import { release } from 'node:os';
 import { join } from 'node:path';
 import packageJson from '../package.json' with { type: 'json' };
-import { buildImpdApp } from './build-impd-app';
-import { buildImpdServices } from './build-impd-services';
-import { buildImpdStorage } from './build-impd-storage';
-import type { ImpdStorage } from './build-impd-storage';
-import { buildTailnetAccess } from './build-tailnet-access';
 import type { Config } from './config';
+import { createImpdApp } from './create-impd-app';
 import { createImpdFirewall } from './create-impd-firewall';
 import { createImpdImps } from './create-impd-imps';
 import { createImpdMoves } from './create-impd-moves';
+import { createImpdServices } from './create-impd-services';
+import { createImpdStorage } from './create-impd-storage';
+import type { ImpdStorage } from './create-impd-storage';
+import { createTailnetAccess } from './create-tailnet-access';
 import { readTailscaleStatus } from './host-net/net/tailscale-status';
 import { loadOrCreateToken } from './identity/token';
 import { createBackupService } from './imp-ops/backup/backup-service';
@@ -29,13 +29,13 @@ import { createDnsToken } from './network/https/dns/dns-token';
 import { createPublicRecordsLink } from './network/https/public-records-link';
 import { createForwardedPeers } from './network/proxy/forwarded-peers';
 import type { WakeProxy } from './network/proxy/wake-proxy';
-import { buildTailnetNames } from './network/tailnet-names/build-tailnet-names';
 import type { TailnetNames } from './network/tailnet-names/tailnet-names';
+import { wireTailnetNames } from './network/tailnet-names/wire-tailnet-names';
 import { isImpSetWrite } from './platform/db/is-imp-set-write';
 import { openDatabase } from './platform/db/open-database';
+import { getErrorMessage } from './platform/process/get-error-message';
 import { getImpdLogger } from './platform/process/get-impd-logger';
 import { printLog } from './platform/process/print-log';
-import { readErrorMessage } from './platform/process/read-error-message';
 import { startOtlpExport } from './platform/telemetry/start-otlp-export';
 import { startImpdListeners } from './start-impd-listeners';
 import { startImpdTickers } from './start-impd-tickers';
@@ -161,7 +161,7 @@ async function startImpdParts(
 
   plan.storage = storage;
 
-  const stored = buildImpdStorage(config, deps);
+  const stored = createImpdStorage(config, deps);
   const diskUsage = stored.diskUsage;
 
   plan.diskUsage = diskUsage;
@@ -284,7 +284,7 @@ async function startImpdParts(
     }
   });
 
-  const services = buildImpdServices(config, deps, {
+  const services = createImpdServices(config, deps, {
     storage: stored,
     imps,
     egress,
@@ -301,7 +301,7 @@ async function startImpdParts(
   );
 
   const access = await runStep('access', () =>
-    loadImpdAccess(config, deps, authorizedKeys.isListed),
+    loadImpdAccess(config, deps, authorizedKeys.probeListed),
   );
 
   const backups =
@@ -325,7 +325,7 @@ async function startImpdParts(
   const tailnetNames =
     config.tailnetNames === null
       ? null
-      : buildTailnetNames({
+      : wireTailnetNames({
           names: config.tailnetNames,
           config,
           db,
@@ -368,7 +368,7 @@ async function startImpdParts(
 
   await runStep('moves', () => moves.recover());
 
-  const api = buildImpdApp(config, deps, {
+  const api = createImpdApp(config, deps, {
     storage: stored,
     access,
     services,
@@ -378,7 +378,7 @@ async function startImpdParts(
     egress,
     identity,
     peers,
-    tailnet: buildTailnetAccess(config, deps, readTailscale),
+    tailnet: createTailnetAccess(config, deps, readTailscale),
     backups,
     moves,
     publicRecords,
@@ -441,7 +441,7 @@ async function startImpdParts(
     if (boundaries.log === undefined) {
       getImpdLogger('image').error('could not add the default image: {error}', { error });
     } else {
-      log(`impd: could not add the default image: ${readErrorMessage(error)}`);
+      log(`impd: could not add the default image: ${getErrorMessage(error)}`);
     }
   };
 

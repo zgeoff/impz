@@ -1,6 +1,6 @@
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { listFileRemovals, listValueFiles, removeFileRemoval } from '../../platform/db/secrets';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import type { SecretFiles } from './secret-files';
 
 // The broker's start over the value files (docs/guides/connectors.md#value-files):
@@ -22,7 +22,7 @@ export async function removeStaleSecretFiles(
 
   for (const file of orphans.files) {
     log(
-      `impd: broker: kept secret value file ${file}, which no database row names, in ${orphans.dir ?? ''}`,
+      `impd: broker: kept secret value file ${file}, which no database row names, in ${orphans.directory ?? ''}`,
     );
   }
 }
@@ -50,7 +50,7 @@ async function removeRecordedFiles(
     } catch (error) {
       failed.push(file);
 
-      log(`impd: broker: could not remove an old secret value file: ${readErrorMessage(error)}`);
+      log(`impd: broker: could not remove an old secret value file: ${getErrorMessage(error)}`);
     }
   }
 

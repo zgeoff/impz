@@ -6,9 +6,9 @@ import {
 import type { GrowRequest } from '../governor/ram-governor';
 import type { ImpPaths } from '../storage/data-layout';
 import type { GuestMemory, VmRunner } from '../vmm/vm-runner';
-import { GROW_STEP_MIB, findLowMib, findRegionMib, findStructPageMib } from './elastic-memory';
+import { GROW_STEP_MIB, getLowMib, getRegionMib, getStructPageMib } from './elastic-memory';
 import type { MemoryLimit } from './memory-limit';
-import { findShrinkTargetMib, shrinkGuest } from './shrink-guest';
+import { getShrinkTargetMib, shrinkGuest } from './shrink-guest';
 
 // a guest that could give back a step for this long shrinks
 const SHRINK_AFTER_MS = 60_000;
@@ -69,7 +69,7 @@ export interface MemoryControllerDeps {
   readonly setPluggedMib: (id: string, mib: number | null) => void;
   readonly log: (message: string) => void;
   readonly now?: () => number;
-  readonly sleep?: (ms: number) => Promise<void>;
+  readonly sleep?: (durationMs: number) => Promise<void>;
 }
 
 interface ImpState {
@@ -177,7 +177,7 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     const state = readState(imp, memory);
 
     const capMib = Math.min(
-      findRegionMib(imp.memoryMib, imp.maxMemoryMib),
+      getRegionMib(imp.memoryMib, imp.maxMemoryMib),
       imp.maxMemoryMib - imp.memoryMib,
     );
 
@@ -205,7 +205,7 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     const admitted = await deps.admitGrow({
       id: imp.id,
       name: imp.name,
-      mib: stepMib + findStructPageMib(stepMib),
+      mib: stepMib + getStructPageMib(stepMib),
     });
 
     if (!admitted) {
@@ -247,7 +247,7 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
       totalMib:
         Math.max(memory.totalMib, state.uncountedGrow?.totalMib ?? 0) +
         stepMib -
-        findStructPageMib(stepMib),
+        getStructPageMib(stepMib),
       until: null,
     };
 
@@ -279,7 +279,7 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
   // and a later tick sees whether it did
   const shrinkImp = async (imp: ElasticImp, memory: Readonly<GuestMemory>) => {
     const state = readState(imp, memory);
-    const targetMib = findShrinkTargetMib(memory);
+    const targetMib = getShrinkTargetMib(memory);
 
     state.spareSince = null;
 
@@ -378,7 +378,7 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     const held = state.uncountedGrow;
     const isGrowHeld = held !== null && held.until !== null && time < held.until;
 
-    if (memory.availableMib < findLowMib(memory.totalMib)) {
+    if (memory.availableMib < getLowMib(memory.totalMib)) {
       state.spareSince = null;
 
       if (time >= state.growAfter && !isGrowHeld) {
@@ -389,7 +389,7 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     }
 
     const isSpare =
-      memory.pluggedMib - findShrinkTargetMib(memory) >= GROW_STEP_MIB && time >= state.shrinkAfter;
+      memory.pluggedMib - getShrinkTargetMib(memory) >= GROW_STEP_MIB && time >= state.shrinkAfter;
 
     if (!isSpare) {
       state.spareSince = null;

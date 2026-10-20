@@ -4,7 +4,7 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { listApiCalls } from '../../src/platform/db/api-audit';
 import { createImage } from '../../src/platform/db/images';
-import { findImpByName } from '../../src/platform/db/imps';
+import { readImpByName } from '../../src/platform/db/imps';
 import { buildImagePaths, buildImpPaths } from '../../src/vm/storage/data-layout';
 import { buildMockNewImage } from '../imps/build-mock-new-image';
 import { buildQueryGate } from '../platform/build-query-gate';
@@ -181,7 +181,7 @@ test('#tryExecSocket starts true without a terminal', async () => {
 
   await ctx.client.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 

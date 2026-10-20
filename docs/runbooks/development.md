@@ -217,7 +217,7 @@ same startup as production, over an in-memory database and a stub VMM
 (`testing/vm/build-stub-vmm.ts`). A test scripts what the next boot, wake, sleep, stop or agent
 check does (succeed, fail, die or hang), holds a step until it releases it, and restarts impd over
 the same database and VMs. Another package's tests import the harness from `@impz/daemon/testing`.
-`findBrokenInvariants` reads the raw records, because a read through the service repairs what it
+`readBrokenInvariants` reads the raw records, because a read through the service repairs what it
 finds.
 
 After you add a migration, run `bun run render:db-schema`: kysely-codegen writes the daemon's typed

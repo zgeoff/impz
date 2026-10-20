@@ -7,15 +7,15 @@ export const MIGRATION_004_ADD_API_AUDIT: Migration = {
   async up(db: Kysely<NoTables>) {
     await db.schema
       .createTable('api_audit')
-      .addColumn('id', 'integer', (c) => c.primaryKey().autoIncrement())
-      .addColumn('at', 'integer', (c) => c.notNull())
-      .addColumn('procedure', 'text', (c) => c.notNull())
-      .addColumn('actor', 'text', (c) => c.notNull())
+      .addColumn('id', 'integer', (column) => column.primaryKey().autoIncrement())
+      .addColumn('at', 'integer', (column) => column.notNull())
+      .addColumn('procedure', 'text', (column) => column.notNull())
+      .addColumn('actor', 'text', (column) => column.notNull())
 
       // the name, not a reference: a destroyed imp's rows stay
       .addColumn('imp_name', 'text')
-      .addColumn('outcome', 'text', (c) => c.notNull())
-      .addColumn('duration_ms', 'integer', (c) => c.notNull())
+      .addColumn('outcome', 'text', (column) => column.notNull())
+      .addColumn('duration_ms', 'integer', (column) => column.notNull())
       .execute();
 
     await db.schema

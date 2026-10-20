@@ -15,13 +15,13 @@ import {
 
 // an empty /proc in a temp dir; the test writes each process's files
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-vm-stats-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-vm-stats-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  const procRoot = join(dir, 'proc');
+  const procRoot = join(directory, 'proc');
 
   mkdirSync(procRoot);
 

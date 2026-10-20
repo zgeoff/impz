@@ -255,13 +255,17 @@ test('#backups.run ends when its caller aborts in a runtime without AbortSignal.
 test('#backups.run throws the error of a transport that throws at once, and stops its deadline', async () => {
   const clock = buildStubClock();
 
+  const transportError = new Error('no transport');
+
+  const sendClientRequest = () => {
+    throw transportError;
+  };
+
   const client = createImpClient({
     url: 'http://impd.test',
     token: 'root-token',
     startTimer: clock.startTimer,
-    fetch: () => {
-      throw new Error('no transport');
-    },
+    fetch: sendClientRequest,
   });
 
   const [settled] = await Promise.allSettled([client.backups.run()]);
@@ -272,7 +276,7 @@ test('#backups.run throws the error of a transport that throws at once, and stop
 
   const reason: unknown = settled.reason;
 
-  expect(reason).toMatchObject({ message: 'no transport' });
+  expect(reason).toBe(transportError);
   expect(clock.delays).toStrictEqual([86_400_000]);
   expect(clock.countPending()).toBe(0);
 });

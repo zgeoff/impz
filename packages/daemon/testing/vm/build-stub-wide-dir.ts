@@ -5,8 +5,8 @@ import { join } from 'node:path';
 // countTreeBytes' readDir over a real tree, where `dir` also lists `count`
 // empty subdirectories, `sub-0` on, held as no state each: a directory too
 // wide to make. Every other directory lists as readdir does.
-export function buildStubWideDir(dir: string, count: number) {
-  const prefix = join(dir, 'sub-');
+export function buildStubWideDir(directory: string, count: number) {
+  const prefix = join(directory, 'sub-');
 
   const isGenerated = (path: string): boolean => {
     const index = path.slice(prefix.length);
@@ -21,12 +21,12 @@ export function buildStubWideDir(dir: string, count: number) {
 
     const entries = await readdir(path, { withFileTypes: true });
 
-    if (path !== dir) {
+    if (path !== directory) {
       return entries;
     }
 
     for (let index = 0; index < count; index++) {
-      entries.push(buildDirEntry(dir, `sub-${String(index)}`));
+      entries.push(buildDirEntry(directory, `sub-${String(index)}`));
     }
 
     return entries;
@@ -50,10 +50,10 @@ function buildDirEntry(parentPath: string, name: string): Dirent {
   };
 }
 
-function isTrue(): boolean {
-  return true;
-}
-
 function isFalse(): boolean {
   return false;
+}
+
+function isTrue(): boolean {
+  return true;
 }

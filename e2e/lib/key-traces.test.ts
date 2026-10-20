@@ -9,11 +9,11 @@ import { instance } from './instance';
 import { countKeyTraces, readKeyPatterns } from './key-traces';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'key-traces-'));
+  const directory = await mkdtemp(join(tmpdir(), 'key-traces-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#readKeyPatterns gives a seed pattern that matches the seed the key holds', async () => {
@@ -22,7 +22,7 @@ test('#readKeyPatterns gives a seed pattern that matches the seed the key holds'
   // the seed by another road: node made the key, and its file is built from
   // node's seed
   const key = buildMockEd25519Key();
-  const path = join(ctx.dir, 'id');
+  const path = join(ctx.directoryPath, 'id');
 
   await writeFile(path, key.privateKey, { mode: 0o600 });
 
@@ -38,7 +38,7 @@ test('#readKeyPatterns gives a base64 line of the key file as its text', async (
   const ctx = await setupTest();
 
   const key = buildMockEd25519Key();
-  const path = join(ctx.dir, 'id');
+  const path = join(ctx.directoryPath, 'id');
 
   await writeFile(path, key.privateKey);
 
@@ -51,7 +51,7 @@ test('#readKeyPatterns gives a base64 line of the key file as its text', async (
 test('#readKeyPatterns rejects a file that is not a key', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'id');
+  const path = join(ctx.directoryPath, 'id');
 
   await writeFile(path, 'not a key\n');
 
@@ -62,17 +62,17 @@ test('#countKeyTraces counts the key’s file line and its seed in a file in the
   const ctx = await setupTest();
 
   // the container's own shell is this machine's: the stub drops `exec <name>`
-  const docker = createStubBin(ctx.dir, 'docker', 'shift 2\nexec "$@"');
+  const docker = createStubBin(ctx.directoryPath, 'docker', 'shift 2\nexec "$@"');
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
   const key = buildMockEd25519Key();
-  const keyPath = join(ctx.dir, 'id');
+  const keyPath = join(ctx.directoryPath, 'id');
 
   await writeFile(keyPath, key.privateKey, { mode: 0o600 });
 
   const patterns = readKeyPatterns(keyPath);
-  const disk = join(ctx.dir, 'disk.ext4');
+  const disk = join(ctx.directoryPath, 'disk.ext4');
 
   await writeFile(
     disk,
@@ -94,17 +94,17 @@ test('#countKeyTraces finds no control and no trace in a file that holds neither
   const ctx = await setupTest();
 
   // the container's own shell is this machine's: the stub drops `exec <name>`
-  const docker = createStubBin(ctx.dir, 'docker', 'shift 2\nexec "$@"');
+  const docker = createStubBin(ctx.directoryPath, 'docker', 'shift 2\nexec "$@"');
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
   const key = buildMockEd25519Key();
-  const keyPath = join(ctx.dir, 'id');
+  const keyPath = join(ctx.directoryPath, 'id');
 
   await writeFile(keyPath, key.privateKey);
 
   const patterns = readKeyPatterns(keyPath);
-  const disk = join(ctx.dir, 'disk.ext4');
+  const disk = join(ctx.directoryPath, 'disk.ext4');
 
   await writeFile(disk, 'nothing of the key here\n');
 

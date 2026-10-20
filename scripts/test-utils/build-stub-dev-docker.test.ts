@@ -6,20 +6,20 @@ import { buildStubDevDocker } from './build-stub-dev-docker';
 import { createStubBin } from './create-stub-bin';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-dev-docker-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-dev-docker-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it lists each image as its tag and id', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevDocker([
       { tag: 'imp-host:dev-a-1', id: 'id-a', labels: null },
@@ -37,7 +37,7 @@ test('it lists each image as its tag and id', () => {
 
 test('it lists nothing when there are no images', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubDevDocker([]));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubDevDocker([]));
 
   const result = Bun.spawnSync(
     ['docker', 'image', 'ls', '--filter', 'label=imp.worktree', '--format', '{{.Tag}}'],
@@ -54,7 +54,7 @@ test('it answers an inspect with the worktree and machine labels, tab-separated'
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevDocker([
       { tag: 'imp-host:dev-a-1', id: 'id-a', labels: { worktree: '/w/a b', machine: 'm1' } },
@@ -72,7 +72,7 @@ test('it fails an inspect of an image without labels', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevDocker([{ tag: 'imp-host:dev-a-1', id: 'id-a', labels: null }]),
   );
@@ -88,7 +88,7 @@ test('it answers ps with the container that uses an image, and nothing for anoth
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevDocker([
       { tag: 'imp-host:dev-a-1', id: 'id-a', labels: null, container: 'c0ffee' },
@@ -108,7 +108,7 @@ test('it fails the rm of a stuck image', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevDocker([
       { tag: 'imp-host:dev-a-1', id: 'id-a', labels: null, isStuck: true },
@@ -127,7 +127,7 @@ test('it removes an image that is not stuck beside a stuck one', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubDevDocker([
       { tag: 'imp-host:dev-a-1', id: 'id-a', labels: null, isStuck: true },
@@ -144,7 +144,7 @@ test('it removes an image that is not stuck beside a stuck one', () => {
 
 test('it fails a call that prune does not make', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubDevDocker([]));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubDevDocker([]));
 
   const result = Bun.spawnSync(['docker', 'run', 'busybox'], {
     env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },

@@ -16,11 +16,11 @@ import { readDatabaseCopy } from './read-database-copy';
 
 async function setupTest() {
   const database = await createTestDatabase();
-  const dir = await mkdtemp(join(tmpdir(), 'imp-db-copy-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-db-copy-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { db: database.db, dir };
+  return { db: database.db, directoryPath: directory };
 }
 
 test('it copies the user imps and leaves out image builders', async () => {
@@ -48,7 +48,7 @@ test('it copies the user imps and leaves out image builders', async () => {
     buildMockNewImp({ imageId: image.id, slot: 2, ip: '10.66.0.4', kind: 'builder' }),
   );
 
-  const copy = await readDatabaseCopy(ctx.db, join(ctx.dir, 'copy.sqlite'));
+  const copy = await readDatabaseCopy(ctx.db, join(ctx.directoryPath, 'copy.sqlite'));
 
   expect(copy.imps).toStrictEqual([
     {
@@ -90,7 +90,7 @@ test('it copies the checkpoints oldest first', async () => {
   await createCheckpoint(ctx.db, newer);
   await createCheckpoint(ctx.db, older);
 
-  const copy = await readDatabaseCopy(ctx.db, join(ctx.dir, 'copy.sqlite'));
+  const copy = await readDatabaseCopy(ctx.db, join(ctx.directoryPath, 'copy.sqlite'));
 
   expect(copy.checkpoints).toStrictEqual([
     {
@@ -118,7 +118,7 @@ test('it copies the images by name', async () => {
 
   const ubuntu = await createImage(ctx.db, newUbuntu);
   const saved = await createImage(ctx.db, newSaved);
-  const copy = await readDatabaseCopy(ctx.db, join(ctx.dir, 'copy.sqlite'));
+  const copy = await readDatabaseCopy(ctx.db, join(ctx.directoryPath, 'copy.sqlite'));
 
   expect(copy.images).toStrictEqual([
     {
@@ -152,7 +152,7 @@ test('it copies the grants by secret name', async () => {
   await createCheckedGrant(ctx.db, imp.id, 'npm', null);
   await createCheckedGrant(ctx.db, imp.id, 'gh', null);
 
-  const copy = await readDatabaseCopy(ctx.db, join(ctx.dir, 'copy.sqlite'));
+  const copy = await readDatabaseCopy(ctx.db, join(ctx.directoryPath, 'copy.sqlite'));
 
   expect(copy.grants).toStrictEqual([
     { impId: imp.id, secretName: 'gh', filter: null },
@@ -173,7 +173,7 @@ test('it copies the network members by network name', async () => {
   await writeMember(ctx.db, web.id, imp.id);
   await writeMember(ctx.db, db.id, imp.id);
 
-  const copy = await readDatabaseCopy(ctx.db, join(ctx.dir, 'copy.sqlite'));
+  const copy = await readDatabaseCopy(ctx.db, join(ctx.directoryPath, 'copy.sqlite'));
 
   expect(copy.members).toStrictEqual([
     { impId: imp.id, network: 'db' },

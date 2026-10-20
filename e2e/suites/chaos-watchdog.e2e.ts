@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { findStrayVms, listContainerVms, readLoopDevices, waitForImpd } from '../lib/chaos';
+import { collectStrayVms, listContainerVms, readLoopDevices, waitForImpd } from '../lib/chaos';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { createInstanceClient, listImps, requireImp, runImp, runInImp } from '../lib/imp-cli';
@@ -8,7 +8,7 @@ import { instance, runDevScript, runInContainer } from '../lib/instance';
 import { checkMemoryKept, startMemoryProof } from '../lib/memory-proof';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // The watchdog (IMP_WATCHDOG_ACTION) on a guest that stops answering: impd
@@ -21,7 +21,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('chaos'), stack, client };
+  return { prefix: getSuitePrefix('chaos'), stack, client };
 }
 
 test('it restarts a paused VM whose agent stops answering with the watchdog', async () => {
@@ -87,7 +87,7 @@ test('it restarts a paused VM whose agent stops answering with the watchdog', as
   const isKept = await checkMemoryKept(proof);
 
   expect(devices.length).toBeLessThanOrEqual(1);
-  expect(findStrayVms(rows, vms)).toStrictEqual([]);
+  expect(collectStrayVms(rows, vms)).toStrictEqual([]);
   expect(restarted.coldBootReason).toContain('watchdog');
   expect(isKept).toBeFalse();
 });

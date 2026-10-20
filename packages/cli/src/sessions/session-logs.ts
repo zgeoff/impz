@@ -35,7 +35,7 @@ export async function listSessionLogs(
 }
 
 // the newest log of the session when no generation is named
-async function findGeneration(
+async function readGeneration(
   client: SessionLogClient,
   name: string,
   session: string,
@@ -74,7 +74,7 @@ export async function writeSessionLog(
 
   await requireFeatures(client, { sessionLog: 'read no log' });
 
-  const executionGeneration = await findGeneration(client, name, session, named);
+  const executionGeneration = await readGeneration(client, name, session, named);
 
   // the output of one generation only: a reader who named none learns which
   if (named === undefined) {

@@ -14,17 +14,17 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'stub-inner-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-inner-agent-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir, stack };
+  return { directoryPath: directory, stack };
 }
 
 test('it reports the inner container it was given in its ping', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubInnerAgent(path, {
     inner: { up: false, restarts: 2, lastError: 'exit status 1' },
@@ -45,7 +45,7 @@ test('it reports the inner container it was given in its ping', async () => {
 test('it writes an inner container’s zero fields, as the agent does', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubInnerAgent(path, { inner: { up: false, restarts: 0 }, stack: ctx.stack });
 
@@ -61,7 +61,7 @@ test('it writes an inner container’s zero fields, as the agent does', async ()
 test('it answers the activity with no connections and no sessions', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubInnerAgent(path, { inner: { up: true, restarts: 0 }, stack: ctx.stack });
 
@@ -75,7 +75,7 @@ test('it answers the activity with no connections and no sessions', async () => 
 test('it answers any other op UNKNOWN_OP', async () => {
   const ctx = await setupTest();
 
-  const path = join(ctx.dir, 'v.sock');
+  const path = join(ctx.directoryPath, 'v.sock');
 
   await startStubInnerAgent(path, { inner: { up: true, restarts: 0 }, stack: ctx.stack });
 

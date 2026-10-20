@@ -15,40 +15,6 @@ export interface DiskTrial {
   readonly lowestFree: number;
 }
 
-function readDisk(mount: string): { free: number; used: number } {
-  const stats = statfsSync(mount);
-
-  return { free: stats.bavail * stats.bsize, used: (stats.blocks - stats.bfree) * stats.bsize };
-}
-
-function readOutcome(error: unknown): string {
-  return typeof error === 'object' && error !== null && 'code' in error
-    ? String(error.code)
-    : String(error);
-}
-
-// XFS frees a removed file's blocks in the background: waits until free
-// space reads the same twice, 200 ms apart
-async function waitForSettled(mount: string): Promise<void> {
-  Bun.spawnSync(['sync', '-f', mount]);
-
-  const last = { free: -1 };
-
-  await waitFor(
-    () => {
-      const free = readDisk(mount).free;
-      const isStill = free === last.free;
-
-      last.free = free;
-
-      if (!isStill) {
-        throw new Error(`free space on ${mount} is still changing`);
-      }
-    },
-    { intervalMs: 200, timeoutMs: 10_000 },
-  );
-}
-
 // Samples a filesystem every millisecond while a run writes to it, once its
 // free space has settled. A filler of its own, which fill() makes and the
 // test's end removes, leaves a chosen room free; `filler` names its path.
@@ -123,4 +89,38 @@ export async function startDiskSampler(
       };
     },
   };
+}
+
+function readDisk(mount: string): { free: number; used: number } {
+  const stats = statfsSync(mount);
+
+  return { free: stats.bavail * stats.bsize, used: (stats.blocks - stats.bfree) * stats.bsize };
+}
+
+// XFS frees a removed file's blocks in the background: waits until free
+// space reads the same twice, 200 ms apart
+async function waitForSettled(mount: string): Promise<void> {
+  Bun.spawnSync(['sync', '-f', mount]);
+
+  const last = { free: -1 };
+
+  await waitFor(
+    () => {
+      const free = readDisk(mount).free;
+      const isStill = free === last.free;
+
+      last.free = free;
+
+      if (!isStill) {
+        throw new Error(`free space on ${mount} is still changing`);
+      }
+    },
+    { intervalMs: 200, timeoutMs: 10_000 },
+  );
+}
+
+function readOutcome(error: unknown): string {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String(error.code)
+    : String(error);
 }

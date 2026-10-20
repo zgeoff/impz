@@ -6,7 +6,7 @@ import { createInstanceClient, listCheckpoints, readState, runImp, tryImp } from
 import { holdImp, readGuestFile, waitForExec, writeGuestFile } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 
 // What a wiped user disk leaves: the agent outside the inner container
 // (docs/architecture/guest/agent.md#the-inner-container) keeps answering, so a
@@ -19,7 +19,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('inner'), stack, client };
+  return { prefix: getSuitePrefix('inner'), stack, client };
 }
 
 test('it keeps the agent answering after rm -rf / inside, and a checkpoint restores the disk', async () => {

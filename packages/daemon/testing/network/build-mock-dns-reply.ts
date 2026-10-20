@@ -1,4 +1,4 @@
-import { DNS_CLASS_IN, DNS_TYPE_CODES, writeDnsName, writeDnsUint16 } from './write-dns-wire';
+import { DNS_CLASS_IN, DNS_TYPE_CODES, encodeDnsName, encodeDnsUint16 } from './write-dns-wire';
 
 // An upstream's reply, byte by byte from RFC 1035 (RFC 3596 for AAAA), with
 // no name compression.
@@ -42,19 +42,19 @@ export function buildMockDnsReply(
   const flags = QR | RD | RA | (reply.truncated === true ? TC : 0);
 
   return Uint8Array.from([
-    ...writeDnsUint16(id),
-    ...writeDnsUint16(flags),
-    ...writeDnsUint16(1),
-    ...writeDnsUint16(answers.length),
-    ...writeDnsUint16(authorities.length),
-    ...writeDnsUint16(additionals.length),
-    ...readQuestion(query),
-    ...[...answers, ...authorities, ...additionals].flatMap((record) => writeRecord(record)),
+    ...encodeDnsUint16(id),
+    ...encodeDnsUint16(flags),
+    ...encodeDnsUint16(1),
+    ...encodeDnsUint16(answers.length),
+    ...encodeDnsUint16(authorities.length),
+    ...encodeDnsUint16(additionals.length),
+    ...getQuestion(query),
+    ...[...answers, ...authorities, ...additionals].flatMap((record) => encodeRecord(record)),
   ]);
 }
 
 // the query's one question, as it came: the name's labels, type and class
-function readQuestion(query: Uint8Array): number[] {
+function getQuestion(query: Uint8Array): number[] {
   let end = 12;
 
   while ((query[end] ?? 0) !== 0) {
@@ -64,16 +64,16 @@ function readQuestion(query: Uint8Array): number[] {
   return [...query.subarray(12, end + 5)];
 }
 
-function writeRecord(record: MockDnsRecord): number[] {
+function encodeRecord(record: MockDnsRecord): number[] {
   const data = writeRecordData(record);
 
   return [
-    ...writeDnsName(record.name),
-    ...writeDnsUint16(DNS_TYPE_CODES[record.type]),
-    ...writeDnsUint16(DNS_CLASS_IN),
-    ...writeDnsUint16(Math.floor(record.ttl / 0x1_00_00)),
-    ...writeDnsUint16(record.ttl % 0x1_00_00),
-    ...writeDnsUint16(data.length),
+    ...encodeDnsName(record.name),
+    ...encodeDnsUint16(DNS_TYPE_CODES[record.type]),
+    ...encodeDnsUint16(DNS_CLASS_IN),
+    ...encodeDnsUint16(Math.floor(record.ttl / 0x1_00_00)),
+    ...encodeDnsUint16(record.ttl % 0x1_00_00),
+    ...encodeDnsUint16(data.length),
     ...data,
   ];
 }
@@ -87,7 +87,7 @@ function writeRecordData(record: MockDnsRecord): number[] {
     return writeIpv6(record.data);
   }
 
-  return writeDnsName(record.data);
+  return encodeDnsName(record.data);
 }
 
 function writeIpv6(address: string): number[] {
@@ -97,5 +97,5 @@ function writeIpv6(address: string): number[] {
   const fill = Array.from({ length: 8 - headGroups.length - tailGroups.length }, () => '0');
   const groups = address.includes('::') ? [...headGroups, ...fill, ...tailGroups] : headGroups;
 
-  return groups.flatMap((group) => writeDnsUint16(Number.parseInt(group, 16)));
+  return groups.flatMap((group) => encodeDnsUint16(Number.parseInt(group, 16)));
 }

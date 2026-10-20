@@ -2,7 +2,7 @@ import type { StartTimer } from '../hosts/fan-out';
 
 // one timer a unit started, as the test reads it
 interface StubTimeout {
-  readonly ms: number;
+  readonly durationMs: number;
   state: 'pending' | 'fired' | 'cancelled';
 }
 
@@ -14,8 +14,8 @@ export function buildStubTimeouts() {
 
   const fires = new Map<StubTimeout, () => void>();
 
-  const startTimer: StartTimer = (ms, fire) => {
-    const timer: StubTimeout = { ms, state: 'pending' };
+  const startTimer: StartTimer = (durationMs, fire) => {
+    const timer: StubTimeout = { durationMs, state: 'pending' };
 
     timers.push(timer);
     fires.set(timer, fire);

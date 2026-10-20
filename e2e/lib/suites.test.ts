@@ -10,8 +10,8 @@ import {
   SUITE_SETS,
   buildJourneyArgv,
   buildKsmSettings,
+  getSuitePrefix,
   listJourneys,
-  readSuitePrefix,
   readSuiteSettings,
 } from './suites';
 
@@ -42,12 +42,12 @@ test('#listJourneys runs the journeys a suite lists, in their order', () => {
   ).toStrictEqual(['proxy-b', 'proxy-a']);
 });
 
-test('#readSuitePrefix reads the prefix of a suite', () => {
-  expect(readSuitePrefix('templates')).toBe('e2e-tpl-');
+test('#getSuitePrefix reads the prefix of a suite', () => {
+  expect(getSuitePrefix('templates')).toBe('e2e-tpl-');
 });
 
-test('#readSuitePrefix rejects a name that no suite has', () => {
-  expect(() => readSuitePrefix('nope')).toThrowWithMessage(Error, 'no suite named nope');
+test('#getSuitePrefix rejects a name that no suite has', () => {
+  expect(() => getSuitePrefix('nope')).toThrowWithMessage(Error, 'no suite named nope');
 });
 
 test('#readSuiteSettings reads the settings a suite runs its journeys on', () => {

@@ -278,9 +278,9 @@ test('#findSocketDrift flags a mount of the host Docker socket', () => {
 
 test.each(['/var/run', '/run', '/var', '/'])(
   '#findSocketDrift flags a mount of %s, which holds the host Docker socket',
-  (dir) => {
-    expect(findSocketDrift([{ Source: dir, Destination: '/host' }])).toBe(
-      `it mounts ${dir} at /host`,
+  (directory) => {
+    expect(findSocketDrift([{ Source: directory, Destination: '/host' }])).toBe(
+      `it mounts ${directory} at /host`,
     );
   },
 );

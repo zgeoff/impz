@@ -9,18 +9,18 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'stub-image-mkfs-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-image-mkfs-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it holds the write until the test releases it, then runs the real mkfs.ext4', async () => {
   const ctx = await setupTest();
 
-  const mkfs = createStubImageMkfs(ctx.dir);
-  const image = join(ctx.dir, 'rootfs.ext4');
+  const mkfs = createStubImageMkfs(ctx.directoryPath);
+  const image = join(ctx.directoryPath, 'rootfs.ext4');
 
   Bun.spawnSync(['truncate', '-s', '8M', image]);
 
@@ -47,9 +47,9 @@ test('it holds the write until the test releases it, then runs the real mkfs.ext
 test('it keeps the write waiting while the test holds it', async () => {
   const ctx = await setupTest();
 
-  const mkfs = createStubImageMkfs(ctx.dir);
+  const mkfs = createStubImageMkfs(ctx.directoryPath);
 
-  const child = Bun.spawn([join(mkfs.bin, 'mkfs.ext4'), join(ctx.dir, 'none.ext4')], {
+  const child = Bun.spawn([join(mkfs.bin, 'mkfs.ext4'), join(ctx.directoryPath, 'none.ext4')], {
     stdout: 'ignore',
     stderr: 'ignore',
   });
@@ -66,9 +66,9 @@ test('it keeps the write waiting while the test holds it', async () => {
 test('it fails the held write with the stderr the test gives', async () => {
   const ctx = await setupTest();
 
-  const mkfs = createStubImageMkfs(ctx.dir);
+  const mkfs = createStubImageMkfs(ctx.directoryPath);
 
-  const child = Bun.spawn([join(mkfs.bin, 'mkfs.ext4'), join(ctx.dir, 'rootfs.ext4')], {
+  const child = Bun.spawn([join(mkfs.bin, 'mkfs.ext4'), join(ctx.directoryPath, 'rootfs.ext4')], {
     stdout: 'ignore',
     stderr: 'pipe',
   });
@@ -90,10 +90,10 @@ test('it fails the held write with the stderr the test gives', async () => {
 test('it ends a held write with no release once its directory is gone', async () => {
   const ctx = await setupTest();
 
-  const dir = join(ctx.dir, 'stub');
-  const mkfs = createStubImageMkfs(dir);
+  const directory = join(ctx.directoryPath, 'stub');
+  const mkfs = createStubImageMkfs(directory);
 
-  const child = Bun.spawn([join(mkfs.bin, 'mkfs.ext4'), join(ctx.dir, 'rootfs.ext4')], {
+  const child = Bun.spawn([join(mkfs.bin, 'mkfs.ext4'), join(ctx.directoryPath, 'rootfs.ext4')], {
     stdout: 'ignore',
     stderr: 'ignore',
   });
@@ -104,7 +104,7 @@ test('it ends a held write with no release once its directory is gone', async ()
 
   await mkfs.waitForStart();
 
-  await rm(dir, { recursive: true, force: true });
+  await rm(directory, { recursive: true, force: true });
 
   const code = await child.exited;
 

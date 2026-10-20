@@ -1,11 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '../lib/config';
-import { getThroughProxy } from '../lib/http';
+import { readThroughProxy } from '../lib/http';
 import { createInstanceClient, runImp, runInImp, runShellInImp } from '../lib/imp-cli';
 import { holdImp, waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // Docker inside an imp of images/base, whose dockerd starts with the guest.
@@ -18,7 +18,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('docker'), stack, client };
+  return { prefix: getSuitePrefix('docker'), stack, client };
 }
 
 test('it runs and builds images with docker inside an imp', async () => {
@@ -134,7 +134,7 @@ test('it serves a container port published on 8080 through the wake proxy, again
 
   // until nginx's own page comes through, not just any answer
   const page = await waitFor(`nginx in ${name} through the proxy`, async () => {
-    const body = await getThroughProxy(name);
+    const body = await readThroughProxy(name);
 
     if (!body.includes('<title>Welcome to nginx!</title>')) {
       throw new Error(`not nginx's page yet: ${body.slice(0, 80)}`);
@@ -157,7 +157,7 @@ test('it serves a container port published on 8080 through the wake proxy, again
   await runInImp(name, 'docker', 'start', 'web');
 
   const again = await waitFor(`nginx in ${name} after the cold boot`, async () => {
-    const body = await getThroughProxy(name);
+    const body = await readThroughProxy(name);
 
     if (!body.includes('<title>Welcome to nginx!</title>')) {
       throw new Error(`not nginx's page yet: ${body.slice(0, 80)}`);

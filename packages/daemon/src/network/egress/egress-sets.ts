@@ -20,6 +20,12 @@ interface SetChange {
   readonly removed: readonly string[];
 }
 
+export interface HeldAnswer {
+  readonly names: readonly string[];
+  readonly address: string;
+  readonly ttlS: number;
+}
+
 export interface EgressSets {
   // The answers to a query for an allowed name. `names` is the name asked for
   // and the CNAME chain from it; the chain's names become allowed aliases.
@@ -42,12 +48,6 @@ export interface EgressSets {
   // what the slot's set holds, each address with its names and the seconds
   // it has left: what a warm move carries to the target
   readonly listAnswers: (slot: number, now: number) => readonly HeldAnswer[];
-}
-
-export interface HeldAnswer {
-  readonly names: readonly string[];
-  readonly address: string;
-  readonly ttlS: number;
 }
 
 interface Entry {
@@ -103,7 +103,7 @@ export function createEgressSets(limits: SetLimits): EgressSets {
       // a full set drops what expires soonest, never this answer
       const removed = [...slotEntries]
         .filter(([address]) => !touched.has(address))
-        .toSorted(([, a], [, b]) => a.expiresAt - b.expiresAt)
+        .toSorted(([, left], [, right]) => left.expiresAt - right.expiresAt)
         .slice(0, Math.max(0, slotEntries.size - limits.maxPerSlot))
         .map(([address]) => address);
 

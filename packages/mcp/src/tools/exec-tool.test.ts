@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import { createImage } from '@impz/daemon/src/platform/db/images';
-import { findImpByName } from '@impz/daemon/src/platform/db/imps';
+import { readImpByName } from '@impz/daemon/src/platform/db/imps';
 import {
   buildImagePaths,
   buildImpPaths,
@@ -12,7 +12,7 @@ import {
 } from '@impz/daemon/testing';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { createImpGuard } from '../imp-guard';
+import { buildImpGuard } from '../imp-guard';
 import { buildStubAfter } from '../test-utils/build-stub-after';
 import { buildStubRepeat } from '../test-utils/build-stub-repeat';
 import { createMcpServer } from '../test-utils/create-mcp-server';
@@ -79,7 +79,7 @@ test('it runs a command line through /bin/sh -c and returns its output', async (
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -96,13 +96,13 @@ test('it runs a command line through /bin/sh -c and returns its output', async (
       method: 'tools/call',
       params: {
         name: 'imp_exec',
-        arguments: { name: 'dev', command: 'echo hi', cwd: '/srv', env: { A: '1' } },
+        arguments: { name: 'dev', command: 'echo hi', cwd: '/srv', env: { GREETING: 'hi' } },
       },
     }),
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -128,7 +128,7 @@ test('it runs a command line through /bin/sh -c and returns its output', async (
   ]);
 
   expect(guest.requests).toMatchObject([
-    { argv: ['/bin/sh', '-c', 'echo hi'], cwd: '/srv', env: ['A=1'] },
+    { argv: ['/bin/sh', '-c', 'echo hi'], cwd: '/srv', env: ['GREETING=hi'] },
   ]);
 });
 
@@ -139,7 +139,7 @@ test('it runs argv as it is, with stdin', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -159,7 +159,7 @@ test('it runs argv as it is, with stdin', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -194,7 +194,7 @@ test('it answers a non-zero exit as a result, not a tool error', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -214,7 +214,7 @@ test('it answers a non-zero exit as a result, not a tool error', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -247,7 +247,7 @@ test("it passes a requirement to impd, whose refusal comes back as the tool's er
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -267,7 +267,7 @@ test("it passes a requirement to impd, whose refusal comes back as the tool's er
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -301,7 +301,7 @@ test('it runs a command whose broker requirement impd meets, with the broker var
   await ctx.rootClient.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-1' });
   await ctx.rootClient.grants.add({ name: 'dev', secret: 'gh' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -324,7 +324,7 @@ test('it runs a command whose broker requirement impd meets, with the broker var
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -364,7 +364,7 @@ test('it refuses an unknown requirement before anything runs', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -384,7 +384,7 @@ test('it refuses an unknown requirement before anything runs', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -421,7 +421,7 @@ test('it refuses a call with neither command nor argv', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -456,7 +456,7 @@ test('it refuses a call with both command and argv', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -485,7 +485,7 @@ test('it refuses an outer exec in the agent, and nothing runs', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -505,7 +505,7 @@ test('it refuses an outer exec in the agent, and nothing runs', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -533,7 +533,7 @@ test('it keeps the head and the tail of a large output and counts what it droppe
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -556,7 +556,7 @@ test('it keeps the head and the tail of a large output and counts what it droppe
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -597,7 +597,7 @@ test('it sends SIGTERM to a command at its timeout and reports timedOut', async 
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -626,7 +626,7 @@ test('it sends SIGTERM to a command at its timeout and reports timedOut', async 
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -667,7 +667,7 @@ test('it opens no second exec to stop a command on an agent from before the grou
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -690,7 +690,7 @@ test('it opens no second exec to stop a command on an agent from before the grou
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -734,7 +734,7 @@ test('it sends SIGKILL after the grace to a command that ignores SIGTERM', async
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -757,7 +757,7 @@ test('it sends SIGKILL after the grace to a command that ignores SIGTERM', async
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -811,7 +811,7 @@ test('it stops a cancelled exec and sends no response', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -824,7 +824,7 @@ test('it stops a cancelled exec and sends no response', async () => {
   const context = {
     reply: ctx.reply,
     client: createImpClient({ url: ctx.url, token: 'root-token' }),
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage' as const,
   };
 
@@ -872,7 +872,7 @@ test('it stops every call in flight on close, as when the client goes away', asy
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -892,7 +892,7 @@ test('it stops every call in flight on close, as when the client goes away', asy
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -917,7 +917,7 @@ test('it sends a progress notification on each tick while a call with a progress
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -930,7 +930,7 @@ test('it sends a progress notification on each tick while a call with a progress
   const context = {
     reply: ctx.reply,
     client: createImpClient({ url: ctx.url, token: 'root-token' }),
-    guard: createImpGuard({ all: true }),
+    guard: buildImpGuard({ all: true }),
     scope: 'manage' as const,
   };
 
@@ -993,7 +993,7 @@ test('it boots a stopped imp for an exec', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -1015,7 +1015,7 @@ test('it boots a stopped imp for an exec', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );
@@ -1048,7 +1048,7 @@ test('it leaves a stopped imp running after an exec', async () => {
 
   await ctx.rootClient.imps.create({ name: 'dev' });
 
-  const record = await findImpByName(ctx.db, 'dev');
+  const record = await readImpByName(ctx.db, 'dev');
 
   invariant(record);
 
@@ -1070,7 +1070,7 @@ test('it leaves a stopped imp running after an exec', async () => {
     {
       reply: ctx.reply,
       client: createImpClient({ url: ctx.url, token: 'root-token' }),
-      guard: createImpGuard({ all: true }),
+      guard: buildImpGuard({ all: true }),
       scope: 'manage',
     },
   );

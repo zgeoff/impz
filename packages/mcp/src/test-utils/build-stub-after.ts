@@ -6,22 +6,23 @@ export interface StubAfter {
 
   // fires every pending timer of `ms`, as if that much time had passed; each
   // fires once
-  readonly fire: (ms: number) => void;
+  readonly fire: (durationMs: number) => void;
 
   // how many timers of `ms` wait now: a test waits for its code to start one
-  readonly countPending: (ms: number) => number;
+  readonly countPending: (durationMs: number) => number;
 }
 
 // A one-shot timer the test fires by hand, in place of setTimeout: nothing
 // fires until the test calls `fire`, and a cancelled timer never fires.
 export function buildStubAfter(): StubAfter {
-  const pending = new Set<{ readonly ms: number; readonly fire: () => void }>();
+  const pending = new Set<{ readonly durationMs: number; readonly fire: () => void }>();
 
-  const listPending = (ms: number) => [...pending].filter((entry) => entry.ms === ms);
+  const listPending = (durationMs: number) =>
+    [...pending].filter((entry) => entry.durationMs === durationMs);
 
   return {
-    after: (ms, fire) => {
-      const entry = { ms, fire };
+    after: (durationMs, fire) => {
+      const entry = { durationMs, fire };
 
       pending.add(entry);
 
@@ -29,12 +30,12 @@ export function buildStubAfter(): StubAfter {
         pending.delete(entry);
       };
     },
-    fire: (ms) => {
-      for (const entry of listPending(ms)) {
+    fire: (durationMs) => {
+      for (const entry of listPending(durationMs)) {
         pending.delete(entry);
         entry.fire();
       }
     },
-    countPending: (ms) => listPending(ms).length,
+    countPending: (durationMs) => listPending(durationMs).length,
   };
 }

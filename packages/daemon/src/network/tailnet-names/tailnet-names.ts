@@ -1,6 +1,6 @@
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { listServeEntries } from './service-serve';
 import type { ServedServices, ServiceServe } from './service-serve';
@@ -127,7 +127,7 @@ export function createTailnetNames(deps: TailnetNamesDeps): TailnetNames {
       await deps.serve.clearServe(service);
     }
 
-    await deps.api.deleteService(service);
+    await deps.api.removeService(service);
 
     deps.log(`impd: tailnet names: removed ${service}, which no imp has`);
   };
@@ -158,7 +158,7 @@ export function createTailnetNames(deps: TailnetNamesDeps): TailnetNames {
       served = await deps.serve.readServed();
     } catch (error) {
       for (const imp of imps) {
-        writeState(imp.name, { live: false, error: readErrorMessage(error) });
+        writeState(imp.name, { live: false, error: getErrorMessage(error) });
       }
 
       return;
@@ -178,7 +178,7 @@ export function createTailnetNames(deps: TailnetNamesDeps): TailnetNames {
 
         writeState(imp.name, { live: true });
       } catch (error) {
-        writeState(imp.name, { live: false, error: readErrorMessage(error) });
+        writeState(imp.name, { live: false, error: getErrorMessage(error) });
       }
     }
 
@@ -201,7 +201,7 @@ export function createTailnetNames(deps: TailnetNamesDeps): TailnetNames {
     try {
       await remove();
     } catch (error) {
-      deps.log(`impd: tailnet names: removing ${service}: ${readErrorMessage(error)}`);
+      deps.log(`impd: tailnet names: removing ${service}: ${getErrorMessage(error)}`);
     }
   };
 

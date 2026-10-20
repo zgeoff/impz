@@ -61,7 +61,7 @@ test('it lists what a sweep would drop and keep in a dry run, and removes nothin
   // its row went
   const lost = buildImpPaths(ctx.dataDir, 'lost');
 
-  await mkdir(lost.dir, { recursive: true });
+  await mkdir(lost.directory, { recursive: true });
   await writeFile(lost.disk, 'disk');
 
   // what a destroy leaves once the disk is gone
@@ -74,10 +74,10 @@ test('it lists what a sweep would drop and keep in a dry run, and removes nothin
   expect(listed).toMatchObject({
     dryRun: true,
     dropped: [{ kind: 'imp', id: 'done' }],
-    kept: [{ kind: 'imp', id: 'lost', location: lost.dir }],
+    kept: [{ kind: 'imp', id: 'lost', location: lost.directory }],
   });
 
-  expect(existsSync(done.dir)).toBeTrue();
+  expect(existsSync(done.directory)).toBeTrue();
 });
 
 test('it removes what a destroy left and keeps an imp no row names', async () => {
@@ -93,7 +93,7 @@ test('it removes what a destroy left and keeps an imp no row names', async () =>
 
   const lost = buildImpPaths(ctx.dataDir, 'lost');
 
-  await mkdir(lost.dir, { recursive: true });
+  await mkdir(lost.directory, { recursive: true });
   await writeFile(lost.disk, 'disk');
   await mkdir(buildImpPaths(ctx.dataDir, 'done').runDir, { recursive: true });
 
@@ -102,7 +102,7 @@ test('it removes what a destroy left and keeps an imp no row names', async () =>
   expect(swept).toMatchObject({
     dryRun: false,
     dropped: [{ kind: 'imp', id: 'done' }],
-    kept: [{ kind: 'imp', id: 'lost', location: lost.dir }],
+    kept: [{ kind: 'imp', id: 'lost', location: lost.directory }],
   });
 
   expect(readdirSync(join(ctx.dataDir, 'imps'))).toIncludeSameMembers([dev.id, 'lost']);
@@ -113,7 +113,7 @@ test('it lists an imp no row names as dropped in a dry run with orphans, and kee
 
   const lost = buildImpPaths(ctx.dataDir, 'lost');
 
-  await mkdir(lost.dir, { recursive: true });
+  await mkdir(lost.directory, { recursive: true });
   await writeFile(lost.disk, 'disk');
 
   const listed = await ctx.client.system.gc({ dryRun: true, orphans: true });
@@ -135,7 +135,7 @@ test('it removes an imp no row names when asked for orphans, and keeps a live im
 
   const lost = buildImpPaths(ctx.dataDir, 'lost');
 
-  await mkdir(lost.dir, { recursive: true });
+  await mkdir(lost.directory, { recursive: true });
   await writeFile(lost.disk, 'disk');
 
   const removed = await ctx.client.system.gc({ orphans: true });
@@ -163,8 +163,8 @@ test('it keeps every orphan of a lost database through start, the hourly pass an
 
   // an empty database over an image, and the disks, checkpoints and memory
   // snapshots of two imps
-  await ctx.storage.createImage('sha256:old', async (dir) => {
-    await Bun.write(join(dir, 'rootfs.ext4'), 'rootfs');
+  await ctx.storage.createImage('sha256:old', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
 
   for (const impId of ['a', 'b']) {
@@ -176,8 +176,8 @@ test('it keeps every orphan of a lost database through start, the hourly pass an
     await Bun.write(paths.snapshotMeta, '{}');
   }
 
-  const a = ctx.storage.resolveImpPaths('a');
-  const b = ctx.storage.resolveImpPaths('b');
+  const first = ctx.storage.resolveImpPaths('a');
+  const second = ctx.storage.resolveImpPaths('b');
 
   const live = await readLiveStorage(ctx.db);
 
@@ -188,14 +188,14 @@ test('it keeps every orphan of a lost database through start, the hourly pass an
   const manual = await gc.runGc({ isDryRun: false, isOrphans: false });
 
   expect([
-    a.disk,
-    a.vmstate,
-    a.snapshotMeta,
-    join(a.checkpointsDir, 'cp-a'),
-    b.disk,
-    b.vmstate,
-    b.snapshotMeta,
-    join(b.checkpointsDir, 'cp-b'),
+    first.disk,
+    first.vmstate,
+    first.snapshotMeta,
+    join(first.checkpointsDir, 'cp-a'),
+    second.disk,
+    second.vmstate,
+    second.snapshotMeta,
+    join(second.checkpointsDir, 'cp-b'),
     join(ctx.dataDir, 'images', 'old', 'rootfs.ext4'),
   ]).toSatisfyAll((path: string) => existsSync(path));
 
@@ -502,13 +502,13 @@ test('it lists the secret values kept aside when asked', async () => {
 
   const listed = await ctx.client.system.gc({ secretFiles: true });
 
-  invariant(kept.dir !== null);
+  invariant(kept.directory !== null);
 
   expect(listed.kept?.filter((orphan) => orphan.kind === 'secrets')).toStrictEqual([
     {
       kind: 'secrets',
       id: '2026-10-04T05-30-00.000Z',
-      location: kept.dir,
+      location: kept.directory,
       bytes: 8,
       createdAt: new Date('2026-10-04T05:30:00.000Z'),
       snapshots: [],
@@ -533,9 +533,9 @@ test('it only lists the secret values kept aside when asked for orphans alone', 
   expect(orphans.kept).toPartiallyContain({ kind: 'secrets', id: '2026-10-04T05-30-00.000Z' });
   expect(orphans.dropped).not.toPartiallyContain({ kind: 'secrets' });
 
-  invariant(kept.dir !== null);
+  invariant(kept.directory !== null);
 
-  expect(existsSync(kept.dir)).toBeTrue();
+  expect(existsSync(kept.directory)).toBeTrue();
 });
 
 test('it lists the secret values kept aside as dropped in a dry run told to remove them', async () => {
@@ -554,10 +554,10 @@ test('it lists the secret values kept aside as dropped in a dry run told to remo
     dryRun: true,
   });
 
-  invariant(kept.dir !== null);
+  invariant(kept.directory !== null);
 
   expect(dry.dropped).toStrictEqual([{ kind: 'secrets', id: '2026-10-04T05-30-00.000Z' }]);
-  expect(existsSync(kept.dir)).toBeTrue();
+  expect(existsSync(kept.directory)).toBeTrue();
 });
 
 test('it removes the secret values kept aside when told to with orphans', async () => {
@@ -575,9 +575,9 @@ test('it removes the secret values kept aside when told to with orphans', async 
     orphans: true,
   });
 
-  invariant(kept.dir !== null);
+  invariant(kept.directory !== null);
 
   expect(removed.dropped).toStrictEqual([{ kind: 'secrets', id: '2026-10-04T05-30-00.000Z' }]);
-  expect(existsSync(kept.dir)).toBeFalse();
+  expect(existsSync(kept.directory)).toBeFalse();
   expect(files.listKept()).toStrictEqual([]);
 });

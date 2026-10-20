@@ -1,7 +1,7 @@
-import { readErrorMessage } from '../../../platform/process/read-error-message';
+import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { CheckpointIdTakenError } from '../storage-backend';
 import type { StorageBackend } from '../storage-backend';
-import { findCheckpointSnapshot, listCheckpointSnapshots } from './zfs-commands';
+import { getCheckpointSnapshot, listCheckpointSnapshots } from './zfs-commands';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
 
 // what the ZFS backend lends its checkpoints: its commands, its lanes, its
@@ -12,8 +12,8 @@ interface ZfsCheckpointContext {
   readonly runSnapshot: <T>(task: () => Promise<T>) => Promise<T>;
   readonly listAll: () => Promise<ZfsEntry[]>;
   readonly log: (message: string) => void;
-  readonly setupMount: (name: string, dir: string, isReadOnly?: boolean) => Promise<void>;
-  readonly removeMount: (dir: string) => Promise<void>;
+  readonly setupMount: (name: string, directory: string, isReadOnly?: boolean) => Promise<void>;
+  readonly removeMount: (directory: string) => Promise<void>;
   readonly removeDataset: (name: string) => Promise<void>;
   readonly startReclaim: () => void;
   readonly buildDiskName: (impId: string) => string;
@@ -43,7 +43,7 @@ export function createZfsCheckpoints(
       await ctx.setupMount(ctx.buildDiskName(impId), ctx.buildDiskDir(impId));
     } catch (error) {
       ctx.log(
-        `impd: zfs: ${impId}: the disk swap failed and so did its repair: ${readErrorMessage(error)}`,
+        `impd: zfs: ${impId}: the disk swap failed and so did its repair: ${getErrorMessage(error)}`,
       );
     }
   };
@@ -97,7 +97,7 @@ export function createZfsCheckpoints(
       await ctx.runSerial(async () => {
         const entries = await ctx.listAll();
 
-        const snapshot = findCheckpointSnapshot(entries, checkpointId);
+        const snapshot = getCheckpointSnapshot(entries, checkpointId);
 
         if (entries.some((entry) => entry.name === staged)) {
           await ctx.zfs.destroy(staged);
@@ -111,7 +111,7 @@ export function createZfsCheckpoints(
           await ctx.runSerial(() => ctx.zfs.destroy(staged));
         } catch (destroyError) {
           // the next start destroys it: the disk is still in place
-          ctx.log(`impd: zfs: could not drop ${staged}: ${readErrorMessage(destroyError)}`);
+          ctx.log(`impd: zfs: could not drop ${staged}: ${getErrorMessage(destroyError)}`);
         }
 
         throw error;

@@ -6,14 +6,14 @@ import { buildStubHostDocker } from './build-stub-host-docker';
 import { createStubBin } from './create-stub-bin';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-host-docker-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-host-docker-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   return {
-    dir,
+    directoryPath: directory,
   };
 }
 
@@ -21,7 +21,7 @@ test('it answers the image ids and contract labels of the running and the pulled
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -48,7 +48,7 @@ test('it answers the running image id for the pulled image when that runs alread
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -70,7 +70,7 @@ test("it prints the pulled image's unit and an empty seccomp profile", () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -97,7 +97,7 @@ test('it fails to print the deploy file it is told cannot be read', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -123,7 +123,7 @@ test('it prints the compose config and logs the variables compose saw', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -150,7 +150,7 @@ test('it fails compose config, after printing its error, as an old Compose does'
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -180,7 +180,7 @@ test('it fails a call that upgrade.sh does not make', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -204,7 +204,7 @@ test('it lists the awake imps as running, and sleeps each but the sleepless one'
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -235,7 +235,7 @@ test('it lists no imps when none are awake', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -256,7 +256,7 @@ test('it answers inspect, pull, plain impz ls and compose up with success and no
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -287,7 +287,7 @@ test('it fails a pull of another image than the one it was given', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -308,7 +308,7 @@ test('it answers impz info with an empty object unless told otherwise', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -329,7 +329,7 @@ test('it answers impz info with what it was given', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',
@@ -351,7 +351,7 @@ test('it fails impz info when told to', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubHostDocker({
       image: 'imp-host:next',

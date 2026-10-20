@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test';
-import { planLogRead, readLogBounds } from './plan-log-read';
+import { getLogBounds, planLogRead } from './plan-log-read';
 
-test('#readLogBounds runs from the start of the first segment to the end of the last', () => {
+test('#getLogBounds runs from the start of the first segment to the end of the last', () => {
   expect(
-    readLogBounds(
+    getLogBounds(
       [
         { start: 100, length: 50 },
         { start: 200, length: 60 },
@@ -13,8 +13,8 @@ test('#readLogBounds runs from the start of the first segment to the end of the 
   ).toStrictEqual({ logStart: 100, logEnd: 260 });
 });
 
-test('#readLogBounds puts both bounds of an empty log at its origin', () => {
-  expect(readLogBounds([], 42)).toStrictEqual({ logStart: 42, logEnd: 42 });
+test('#getLogBounds puts both bounds of an empty log at its origin', () => {
+  expect(getLogBounds([], 42)).toStrictEqual({ logStart: 42, logEnd: 42 });
 });
 
 test('#planLogRead reads from the offset inside a segment up to that segment end', () => {

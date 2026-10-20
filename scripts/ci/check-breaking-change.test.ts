@@ -7,23 +7,23 @@ import { createGitFreeEnv, runGitChecked } from '../../e2e/lib/git-env';
 // A git repository on `main` with no commit; each test commits the base and
 // the pull request's branch itself.
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-breaking-change-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-breaking-change-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  await runGitChecked(['git', 'init', '--quiet', '--initial-branch=main', dir]);
+  await runGitChecked(['git', 'init', '--quiet', '--initial-branch=main', directory]);
 
   // commits need an author, and a signing setup of the host must not apply
-  await runGitChecked(['git', '-C', dir, 'config', 'user.name', 'test']);
-  await runGitChecked(['git', '-C', dir, 'config', 'user.email', 'test@example.com']);
-  await runGitChecked(['git', '-C', dir, 'config', 'commit.gpgsign', 'false']);
-  await mkdir(join(dir, 'packages/api'), { recursive: true });
-  await mkdir(join(dir, 'packages/cli'), { recursive: true });
+  await runGitChecked(['git', '-C', directory, 'config', 'user.name', 'test']);
+  await runGitChecked(['git', '-C', directory, 'config', 'user.email', 'test@example.com']);
+  await runGitChecked(['git', '-C', directory, 'config', 'commit.gpgsign', 'false']);
+  await mkdir(join(directory, 'packages/api'), { recursive: true });
+  await mkdir(join(directory, 'packages/cli'), { recursive: true });
 
   return {
-    dir,
-    schemaPath: join(dir, 'packages/api/protocol-schema.json'),
-    outputsPath: join(dir, 'packages/cli/json-output-schema.json'),
+    directoryPath: directory,
+    schemaPath: join(directory, 'packages/api/protocol-schema.json'),
+    outputsPath: join(directory, 'packages/cli/json-output-schema.json'),
   };
 }
 
@@ -43,14 +43,23 @@ test('it fails a pull request that breaks the protocol without a mark', async ()
     }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'add', '.']);
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'feat: add imps']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'add', '.']);
 
-  const baseOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-m',
+    'feat: add imps',
+  ]);
+
+  const baseOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const baseSHA = baseOut.trim();
 
-  await runGitChecked(['git', '-C', ctx.dir, 'switch', '--quiet', '-c', 'drop-get']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'switch', '--quiet', '-c', 'drop-get']);
 
   await writeFile(
     ctx.schemaPath,
@@ -64,27 +73,41 @@ test('it fails a pull request that breaks the protocol without a mark', async ()
     }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-am', 'feat: drop imps.get']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-am',
+    'feat: drop imps.get',
+  ]);
 
-  const headOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  const headOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const headSHA = headOut.trim();
 
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, 'check-breaking-change.ts')], {
-    cwd: ctx.dir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      ...createGitFreeEnv(process.env),
-      BASE_SHA: baseSHA,
-      HEAD_SHA: headSHA,
-      PR_NUMBER: '7',
-      PR_TITLE: 'feat: drop imps.get',
-      PR_BODY: '',
+  const subprocess = Bun.spawn(
+    [process.execPath, join(import.meta.dir, 'check-breaking-change.ts')],
+    {
+      cwd: ctx.directoryPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...createGitFreeEnv(process.env),
+        BASE_SHA: baseSHA,
+        HEAD_SHA: headSHA,
+        PR_NUMBER: '7',
+        PR_TITLE: 'feat: drop imps.get',
+        PR_BODY: '',
+      },
     },
-  });
+  );
 
-  const [stderr, exitCode] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+  const [stderr, exitCode] = await Promise.all([
+    new Response(subprocess.stderr).text(),
+    subprocess.exited,
+  ]);
 
   expect(stderr).toBe(
     'check-breaking-change: this pull request breaks the protocol a client of the same major speaks:\n' +
@@ -112,41 +135,64 @@ test('it passes a breaking change whose lone commit has a ! subject', async () =
     }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'add', '.']);
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'feat: add imps']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'add', '.']);
 
-  const baseOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-m',
+    'feat: add imps',
+  ]);
+
+  const baseOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const baseSHA = baseOut.trim();
 
-  await runGitChecked(['git', '-C', ctx.dir, 'switch', '--quiet', '-c', 'drop-get']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'switch', '--quiet', '-c', 'drop-get']);
 
   await writeFile(
     ctx.schemaPath,
     JSON.stringify({ procedures: {}, messages: {}, errors: {}, constants: {} }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-am', 'feat!: drop imps.get']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-am',
+    'feat!: drop imps.get',
+  ]);
 
-  const headOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  const headOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const headSHA = headOut.trim();
 
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, 'check-breaking-change.ts')], {
-    cwd: ctx.dir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      ...createGitFreeEnv(process.env),
-      BASE_SHA: baseSHA,
-      HEAD_SHA: headSHA,
-      PR_NUMBER: '7',
-      PR_TITLE: 'feat: drop imps.get',
-      PR_BODY: '',
+  const subprocess = Bun.spawn(
+    [process.execPath, join(import.meta.dir, 'check-breaking-change.ts')],
+    {
+      cwd: ctx.directoryPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...createGitFreeEnv(process.env),
+        BASE_SHA: baseSHA,
+        HEAD_SHA: headSHA,
+        PR_NUMBER: '7',
+        PR_TITLE: 'feat: drop imps.get',
+        PR_BODY: '',
+      },
     },
-  });
+  );
 
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    subprocess.exited,
+  ]);
 
   expect(stdout).toBe(
     'check-breaking-change: breaking changes, marked so the release bumps the major:\n' +
@@ -171,14 +217,23 @@ test('it passes a breaking change with a BREAKING CHANGE footer in one of severa
     }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'add', '.']);
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'feat: add imps']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'add', '.']);
 
-  const baseOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-m',
+    'feat: add imps',
+  ]);
+
+  const baseOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const baseSHA = baseOut.trim();
 
-  await runGitChecked(['git', '-C', ctx.dir, 'switch', '--quiet', '-c', 'drop-get']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'switch', '--quiet', '-c', 'drop-get']);
 
   await writeFile(
     ctx.schemaPath,
@@ -188,7 +243,7 @@ test('it passes a breaking change with a BREAKING CHANGE footer in one of severa
   await runGitChecked([
     'git',
     '-C',
-    ctx.dir,
+    ctx.directoryPath,
     'commit',
     '--quiet',
     '-am',
@@ -198,7 +253,7 @@ test('it passes a breaking change with a BREAKING CHANGE footer in one of severa
   await runGitChecked([
     'git',
     '-C',
-    ctx.dir,
+    ctx.directoryPath,
     'commit',
     '--quiet',
     '--allow-empty',
@@ -206,25 +261,28 @@ test('it passes a breaking change with a BREAKING CHANGE footer in one of severa
     'docs: a',
   ]);
 
-  const headOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  const headOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const headSHA = headOut.trim();
 
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, 'check-breaking-change.ts')], {
-    cwd: ctx.dir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      ...createGitFreeEnv(process.env),
-      BASE_SHA: baseSHA,
-      HEAD_SHA: headSHA,
-      PR_NUMBER: '7',
-      PR_TITLE: 'feat: drop imps.get',
-      PR_BODY: '',
+  const subprocess = Bun.spawn(
+    [process.execPath, join(import.meta.dir, 'check-breaking-change.ts')],
+    {
+      cwd: ctx.directoryPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...createGitFreeEnv(process.env),
+        BASE_SHA: baseSHA,
+        HEAD_SHA: headSHA,
+        PR_NUMBER: '7',
+        PR_TITLE: 'feat: drop imps.get',
+        PR_BODY: '',
+      },
     },
-  });
+  );
 
-  const exitCode = await proc.exited;
+  const exitCode = await subprocess.exited;
 
   expect(exitCode).toBe(0);
 });
@@ -244,19 +302,28 @@ test('it fails a breaking change whose ! sits on a later commit of several', asy
     }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'add', '.']);
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'feat: add imps']);
-
-  const baseOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
-
-  const baseSHA = baseOut.trim();
-
-  await runGitChecked(['git', '-C', ctx.dir, 'switch', '--quiet', '-c', 'drop-get']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'add', '.']);
 
   await runGitChecked([
     'git',
     '-C',
-    ctx.dir,
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-m',
+    'feat: add imps',
+  ]);
+
+  const baseOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
+
+  const baseSHA = baseOut.trim();
+
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'switch', '--quiet', '-c', 'drop-get']);
+
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
     'commit',
     '--quiet',
     '--allow-empty',
@@ -269,27 +336,38 @@ test('it fails a breaking change whose ! sits on a later commit of several', asy
     JSON.stringify({ procedures: {}, messages: {}, errors: {}, constants: {} }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-am', 'feat!: drop imps.get']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-am',
+    'feat!: drop imps.get',
+  ]);
 
-  const headOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  const headOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const headSHA = headOut.trim();
 
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, 'check-breaking-change.ts')], {
-    cwd: ctx.dir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      ...createGitFreeEnv(process.env),
-      BASE_SHA: baseSHA,
-      HEAD_SHA: headSHA,
-      PR_NUMBER: '7',
-      PR_TITLE: 'feat: drop imps.get',
-      PR_BODY: '',
+  const subprocess = Bun.spawn(
+    [process.execPath, join(import.meta.dir, 'check-breaking-change.ts')],
+    {
+      cwd: ctx.directoryPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...createGitFreeEnv(process.env),
+        BASE_SHA: baseSHA,
+        HEAD_SHA: headSHA,
+        PR_NUMBER: '7',
+        PR_TITLE: 'feat: drop imps.get',
+        PR_BODY: '',
+      },
     },
-  });
+  );
 
-  const exitCode = await proc.exited;
+  const exitCode = await subprocess.exited;
 
   expect(exitCode).toBe(1);
 });
@@ -302,14 +380,14 @@ test('it passes a compatible change without a mark', async () => {
     JSON.stringify({ procedures: {}, messages: {}, errors: {}, constants: {} }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'add', '.']);
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'feat: start']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'add', '.']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'commit', '--quiet', '-m', 'feat: start']);
 
-  const baseOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  const baseOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const baseSHA = baseOut.trim();
 
-  await runGitChecked(['git', '-C', ctx.dir, 'switch', '--quiet', '-c', 'add-get']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'switch', '--quiet', '-c', 'add-get']);
 
   await writeFile(
     ctx.schemaPath,
@@ -323,27 +401,41 @@ test('it passes a compatible change without a mark', async () => {
     }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-am', 'feat: add imps.get']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-am',
+    'feat: add imps.get',
+  ]);
 
-  const headOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  const headOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const headSHA = headOut.trim();
 
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, 'check-breaking-change.ts')], {
-    cwd: ctx.dir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      ...createGitFreeEnv(process.env),
-      BASE_SHA: baseSHA,
-      HEAD_SHA: headSHA,
-      PR_NUMBER: '7',
-      PR_TITLE: 'feat: add imps.get',
-      PR_BODY: '',
+  const subprocess = Bun.spawn(
+    [process.execPath, join(import.meta.dir, 'check-breaking-change.ts')],
+    {
+      cwd: ctx.directoryPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...createGitFreeEnv(process.env),
+        BASE_SHA: baseSHA,
+        HEAD_SHA: headSHA,
+        PR_NUMBER: '7',
+        PR_TITLE: 'feat: add imps.get',
+        PR_BODY: '',
+      },
     },
-  });
+  );
 
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    subprocess.exited,
+  ]);
 
   expect(stdout).toBe('check-breaking-change: no breaking change to the protocol\n');
   expect(exitCode).toBe(0);
@@ -357,14 +449,14 @@ test('it compares from the merge base, so what main adds later is no removal', a
     JSON.stringify({ procedures: {}, messages: {}, errors: {}, constants: {} }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'add', '.']);
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'feat: start']);
-  await runGitChecked(['git', '-C', ctx.dir, 'switch', '--quiet', '-c', 'docs']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'add', '.']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'commit', '--quiet', '-m', 'feat: start']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'switch', '--quiet', '-c', 'docs']);
 
   await runGitChecked([
     'git',
     '-C',
-    ctx.dir,
+    ctx.directoryPath,
     'commit',
     '--quiet',
     '--allow-empty',
@@ -372,11 +464,11 @@ test('it compares from the merge base, so what main adds later is no removal', a
     'docs: a',
   ]);
 
-  const headOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  const headOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const headSHA = headOut.trim();
 
-  await runGitChecked(['git', '-C', ctx.dir, 'switch', '--quiet', 'main']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'switch', '--quiet', 'main']);
 
   await writeFile(
     ctx.schemaPath,
@@ -390,27 +482,41 @@ test('it compares from the merge base, so what main adds later is no removal', a
     }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-am', 'feat: add imps.get']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-am',
+    'feat: add imps.get',
+  ]);
 
-  const baseOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  const baseOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const baseSHA = baseOut.trim();
 
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, 'check-breaking-change.ts')], {
-    cwd: ctx.dir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      ...createGitFreeEnv(process.env),
-      BASE_SHA: baseSHA,
-      HEAD_SHA: headSHA,
-      PR_NUMBER: '7',
-      PR_TITLE: 'docs: a',
-      PR_BODY: '',
+  const subprocess = Bun.spawn(
+    [process.execPath, join(import.meta.dir, 'check-breaking-change.ts')],
+    {
+      cwd: ctx.directoryPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...createGitFreeEnv(process.env),
+        BASE_SHA: baseSHA,
+        HEAD_SHA: headSHA,
+        PR_NUMBER: '7',
+        PR_TITLE: 'docs: a',
+        PR_BODY: '',
+      },
     },
-  });
+  );
 
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    subprocess.exited,
+  ]);
 
   expect(stdout).toBe('check-breaking-change: no breaking change to the protocol\n');
   expect(exitCode).toBe(0);
@@ -422,7 +528,7 @@ test('it passes when the base has no protocol schema yet', async () => {
   await runGitChecked([
     'git',
     '-C',
-    ctx.dir,
+    ctx.directoryPath,
     'commit',
     '--quiet',
     '--allow-empty',
@@ -430,39 +536,54 @@ test('it passes when the base has no protocol schema yet', async () => {
     'chore: a',
   ]);
 
-  const baseOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  const baseOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const baseSHA = baseOut.trim();
 
-  await runGitChecked(['git', '-C', ctx.dir, 'switch', '--quiet', '-c', 'add-schema']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'switch', '--quiet', '-c', 'add-schema']);
 
   await writeFile(
     ctx.schemaPath,
     JSON.stringify({ procedures: {}, messages: {}, errors: {}, constants: {} }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'add', '.']);
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'ci: add the schema']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'add', '.']);
 
-  const headOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-m',
+    'ci: add the schema',
+  ]);
+
+  const headOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const headSHA = headOut.trim();
 
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, 'check-breaking-change.ts')], {
-    cwd: ctx.dir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      ...createGitFreeEnv(process.env),
-      BASE_SHA: baseSHA,
-      HEAD_SHA: headSHA,
-      PR_NUMBER: '7',
-      PR_TITLE: 'ci: add the schema',
-      PR_BODY: '',
+  const subprocess = Bun.spawn(
+    [process.execPath, join(import.meta.dir, 'check-breaking-change.ts')],
+    {
+      cwd: ctx.directoryPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...createGitFreeEnv(process.env),
+        BASE_SHA: baseSHA,
+        HEAD_SHA: headSHA,
+        PR_NUMBER: '7',
+        PR_TITLE: 'ci: add the schema',
+        PR_BODY: '',
+      },
     },
-  });
+  );
 
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    subprocess.exited,
+  ]);
 
   expect(stdout).toBe(
     'check-breaking-change: no packages/api/protocol-schema.json at the base; nothing to compare\n',
@@ -479,36 +600,68 @@ test('it fails a pull request that removes the protocol schema', async () => {
     JSON.stringify({ procedures: {}, messages: {}, errors: {}, constants: {} }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'add', '.']);
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'ci: add the schema']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'add', '.']);
 
-  const baseOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-m',
+    'ci: add the schema',
+  ]);
+
+  const baseOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const baseSHA = baseOut.trim();
 
-  await runGitChecked(['git', '-C', ctx.dir, 'switch', '--quiet', '-c', 'remove-schema']);
-  await runGitChecked(['git', '-C', ctx.dir, 'rm', '--quiet', 'packages/api/protocol-schema.json']);
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'ci: remove the schema']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'switch', '--quiet', '-c', 'remove-schema']);
 
-  const headOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'rm',
+    '--quiet',
+    'packages/api/protocol-schema.json',
+  ]);
+
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-m',
+    'ci: remove the schema',
+  ]);
+
+  const headOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const headSHA = headOut.trim();
 
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, 'check-breaking-change.ts')], {
-    cwd: ctx.dir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      ...createGitFreeEnv(process.env),
-      BASE_SHA: baseSHA,
-      HEAD_SHA: headSHA,
-      PR_NUMBER: '7',
-      PR_TITLE: 'ci: remove the schema',
-      PR_BODY: '',
+  const subprocess = Bun.spawn(
+    [process.execPath, join(import.meta.dir, 'check-breaking-change.ts')],
+    {
+      cwd: ctx.directoryPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...createGitFreeEnv(process.env),
+        BASE_SHA: baseSHA,
+        HEAD_SHA: headSHA,
+        PR_NUMBER: '7',
+        PR_TITLE: 'ci: remove the schema',
+        PR_BODY: '',
+      },
     },
-  });
+  );
 
-  const [stderr, exitCode] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+  const [stderr, exitCode] = await Promise.all([
+    new Response(subprocess.stderr).text(),
+    subprocess.exited,
+  ]);
 
   expect(stderr).toBe(
     'check-breaking-change: the pull request removes packages/api/protocol-schema.json\n',
@@ -542,14 +695,23 @@ test('it fails a pull request that renames a field of a --json output without a 
     }),
   );
 
-  await runGitChecked(['git', '-C', ctx.dir, 'add', '.']);
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'feat: add info']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'add', '.']);
 
-  const baseOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-m',
+    'feat: add info',
+  ]);
+
+  const baseOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const baseSHA = baseOut.trim();
 
-  await runGitChecked(['git', '-C', ctx.dir, 'switch', '--quiet', '-c', 'rename-budget']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'switch', '--quiet', '-c', 'rename-budget']);
 
   await writeFile(
     ctx.outputsPath,
@@ -571,32 +733,38 @@ test('it fails a pull request that renames a field of a --json output without a 
   await runGitChecked([
     'git',
     '-C',
-    ctx.dir,
+    ctx.directoryPath,
     'commit',
     '--quiet',
     '-am',
     'feat: rename the budget',
   ]);
 
-  const headOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  const headOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const headSHA = headOut.trim();
 
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, 'check-breaking-change.ts')], {
-    cwd: ctx.dir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      ...createGitFreeEnv(process.env),
-      BASE_SHA: baseSHA,
-      HEAD_SHA: headSHA,
-      PR_NUMBER: '7',
-      PR_TITLE: 'feat: rename the budget',
-      PR_BODY: '',
+  const subprocess = Bun.spawn(
+    [process.execPath, join(import.meta.dir, 'check-breaking-change.ts')],
+    {
+      cwd: ctx.directoryPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...createGitFreeEnv(process.env),
+        BASE_SHA: baseSHA,
+        HEAD_SHA: headSHA,
+        PR_NUMBER: '7',
+        PR_TITLE: 'feat: rename the budget',
+        PR_BODY: '',
+      },
     },
-  });
+  );
 
-  const [stderr, exitCode] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+  const [stderr, exitCode] = await Promise.all([
+    new Response(subprocess.stderr).text(),
+    subprocess.exited,
+  ]);
 
   expect(stderr).toBe(
     'check-breaking-change: this pull request breaks the protocol a client of the same major speaks:\n' +
@@ -618,45 +786,76 @@ test('it fails a pull request that removes the --json output schema', async () =
   );
 
   await writeFile(ctx.outputsPath, JSON.stringify({ outputs: {} }));
-  await runGitChecked(['git', '-C', ctx.dir, 'add', '.']);
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'ci: add the schemas']);
-
-  const baseOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
-
-  const baseSHA = baseOut.trim();
-
-  await runGitChecked(['git', '-C', ctx.dir, 'switch', '--quiet', '-c', 'remove-outputs']);
+  await runGitChecked(['git', '-C', ctx.directoryPath, 'add', '.']);
 
   await runGitChecked([
     'git',
     '-C',
-    ctx.dir,
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-m',
+    'ci: add the schemas',
+  ]);
+
+  const baseOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
+
+  const baseSHA = baseOut.trim();
+
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'switch',
+    '--quiet',
+    '-c',
+    'remove-outputs',
+  ]);
+
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
     'rm',
     '--quiet',
     'packages/cli/json-output-schema.json',
   ]);
 
-  await runGitChecked(['git', '-C', ctx.dir, 'commit', '--quiet', '-m', 'ci: remove the outputs']);
+  await runGitChecked([
+    'git',
+    '-C',
+    ctx.directoryPath,
+    'commit',
+    '--quiet',
+    '-m',
+    'ci: remove the outputs',
+  ]);
 
-  const headOut = await runGitChecked(['git', '-C', ctx.dir, 'rev-parse', 'HEAD']);
+  const headOut = await runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'HEAD']);
 
   const headSHA = headOut.trim();
 
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, 'check-breaking-change.ts')], {
-    cwd: ctx.dir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      ...createGitFreeEnv(process.env),
-      BASE_SHA: baseSHA,
-      HEAD_SHA: headSHA,
-      PR_NUMBER: '7',
-      PR_TITLE: 'ci: remove the outputs',
-      PR_BODY: '',
+  const subprocess = Bun.spawn(
+    [process.execPath, join(import.meta.dir, 'check-breaking-change.ts')],
+    {
+      cwd: ctx.directoryPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...createGitFreeEnv(process.env),
+        BASE_SHA: baseSHA,
+        HEAD_SHA: headSHA,
+        PR_NUMBER: '7',
+        PR_TITLE: 'ci: remove the outputs',
+        PR_BODY: '',
+      },
     },
-  });
+  );
 
-  const [stderr, exitCode] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+  const [stderr, exitCode] = await Promise.all([
+    new Response(subprocess.stderr).text(),
+    subprocess.exited,
+  ]);
 
   expect(stderr).toBe(
     'check-breaking-change: this pull request breaks the protocol a client of the same major speaks:\n' +

@@ -1,9 +1,9 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { findFreePorts, startTestImpd } from '@impz/daemon/testing';
+import { claimFreePorts, startTestImpd } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import { createRpcClient } from '../create-rpc-client';
-import { buildStubImpdWithoutFeature } from '../test-utils/build-stub-impd-without-feature';
+import { makeStubImpdWithoutFeature } from '../test-utils/make-stub-impd-without-feature';
 import { checkExecFeatures } from './check-exec-features';
 
 // impd booted in process on stub VMs, served at http://impd.test/ through
@@ -91,7 +91,7 @@ test('it reports an impd that rejects the token as unauthorized', async () => {
 test('it refuses an impd from before exec requirements as PRECONDITION_FAILED', async () => {
   const ctx = await setupTest();
 
-  const older = buildStubImpdWithoutFeature(
+  const older = makeStubImpdWithoutFeature(
     (request) => ctx.impd.api.app.handle(request),
     'execRequire',
   );
@@ -120,7 +120,7 @@ test('it refuses an impd from before exec requirements as PRECONDITION_FAILED', 
 test('it refuses an impd that cannot drop CAP_SYS_ADMIN as PRECONDITION_FAILED', async () => {
   const ctx = await setupTest();
 
-  const older = buildStubImpdWithoutFeature(
+  const older = makeStubImpdWithoutFeature(
     (request) => ctx.impd.api.app.handle(request),
     'execDropSysAdmin',
   );
@@ -149,7 +149,7 @@ test('it refuses an impd that cannot drop CAP_SYS_ADMIN as PRECONDITION_FAILED',
 test('it reports an impd it cannot reach as unreachable', async () => {
   // nothing listens on a free port
   const rpc = createRpcClient({
-    url: `http://127.0.0.1:${String(findFreePorts(1).take())}`,
+    url: `http://127.0.0.1:${String(claimFreePorts(1).take())}`,
     token: 'root-token',
   });
 

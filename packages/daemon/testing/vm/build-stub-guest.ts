@@ -23,13 +23,60 @@ export interface StubAnswer {
   readonly isDropped?: boolean;
 }
 
-const encoder = new TextEncoder();
-
 interface FakeRecord {
   readonly argv: readonly string[];
   readonly signals: number[];
   closed: boolean;
 }
+
+// A builder's agent for tests: each exec gets `answer`'s output, then its
+// exit. Records each exec's argv, the signals it got and when it closed.
+export function buildStubGuest(answer: (run: StubRun) => Promise<StubAnswer> | StubAnswer) {
+  const runs: FakeRecord[] = [];
+
+  const open = (request: AgentExecRequest): Promise<ExecStream> => {
+    const record: FakeRecord = { argv: request.argv, signals: [], closed: false };
+    const stdin: Uint8Array[] = [];
+    const stdinDone = Promise.withResolvers<Uint8Array>();
+    const closed = Promise.withResolvers<null>();
+
+    runs.push(record);
+
+    const answering = Promise.race([
+      Promise.resolve(answer({ argv: request.argv, readStdin: () => stdinDone.promise })),
+      closed.promise,
+    ]);
+
+    return Promise.resolve({
+      pid: runs.length,
+      session: null,
+      created: false,
+      groupKill: true,
+      output: null,
+      writeStdin: (data) => {
+        stdin.push(data);
+      },
+      stdinDrained: () => Promise.resolve(),
+      closeStdin: () => {
+        stdinDone.resolve(Buffer.concat(stdin));
+      },
+      resize: () => {},
+      sendSignal: (signal) => {
+        record.signals.push(signal);
+      },
+      events: () => readFakeEvents(answering, closed.promise, () => record.closed),
+      close: () => {
+        record.closed = true;
+
+        closed.resolve(null);
+      },
+    });
+  };
+
+  return { open, runs };
+}
+
+const encoder = new TextEncoder();
 
 // the answer's output, then its exit; nothing once the exec is closed
 async function* readFakeEvents(
@@ -86,51 +133,4 @@ async function* readChunks(
   source: readonly Uint8Array[] | AsyncIterable<Uint8Array>,
 ): AsyncGenerator<Uint8Array, void, undefined> {
   yield* source;
-}
-
-// A builder's agent for tests: each exec gets `answer`'s output, then its
-// exit. Records each exec's argv, the signals it got and when it closed.
-export function buildStubGuest(answer: (run: StubRun) => Promise<StubAnswer> | StubAnswer) {
-  const runs: FakeRecord[] = [];
-
-  const open = (request: AgentExecRequest): Promise<ExecStream> => {
-    const record: FakeRecord = { argv: request.argv, signals: [], closed: false };
-    const stdin: Uint8Array[] = [];
-    const stdinDone = Promise.withResolvers<Uint8Array>();
-    const closed = Promise.withResolvers<null>();
-
-    runs.push(record);
-
-    const answering = Promise.race([
-      Promise.resolve(answer({ argv: request.argv, readStdin: () => stdinDone.promise })),
-      closed.promise,
-    ]);
-
-    return Promise.resolve({
-      pid: runs.length,
-      session: null,
-      created: false,
-      groupKill: true,
-      output: null,
-      writeStdin: (data) => {
-        stdin.push(data);
-      },
-      stdinDrained: () => Promise.resolve(),
-      closeStdin: () => {
-        stdinDone.resolve(Buffer.concat(stdin));
-      },
-      resize: () => {},
-      sendSignal: (signal) => {
-        record.signals.push(signal);
-      },
-      events: () => readFakeEvents(answering, closed.promise, () => record.closed),
-      close: () => {
-        record.closed = true;
-
-        closed.resolve(null);
-      },
-    });
-  };
-
-  return { open, runs };
 }

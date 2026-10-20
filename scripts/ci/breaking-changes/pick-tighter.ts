@@ -2,13 +2,13 @@ import type { Bound, Side } from './bound';
 import { isWithin } from './is-within';
 
 export function pickTighter(
-  a: Bound | undefined,
-  b: Bound | undefined,
+  left: Bound | undefined,
+  right: Bound | undefined,
   side: Side,
 ): Bound | undefined {
-  if (a === undefined || b === undefined) {
-    return a ?? b;
+  if (left === undefined || right === undefined) {
+    return left ?? right;
   }
 
-  return isWithin(a, b, side) ? a : b;
+  return isWithin(left, right, side) ? left : right;
 }

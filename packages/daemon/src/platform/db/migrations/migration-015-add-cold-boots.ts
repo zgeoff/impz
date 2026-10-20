@@ -11,11 +11,13 @@ export const MIGRATION_015_ADD_COLD_BOOTS: Migration = {
       .createTable('imp_cold_boots')
 
       // the order impd recorded them in: `at` can tie within a millisecond
-      .addColumn('seq', 'integer', (c) => c.primaryKey().autoIncrement())
-      .addColumn('imp_id', 'text', (c) => c.notNull().references('imps.id').onDelete('cascade'))
-      .addColumn('boot_id', 'text', (c) => c.notNull())
-      .addColumn('cause', 'text', (c) => c.notNull())
-      .addColumn('at', 'integer', (c) => c.notNull())
+      .addColumn('seq', 'integer', (column) => column.primaryKey().autoIncrement())
+      .addColumn('imp_id', 'text', (column) =>
+        column.notNull().references('imps.id').onDelete('cascade'),
+      )
+      .addColumn('boot_id', 'text', (column) => column.notNull())
+      .addColumn('cause', 'text', (column) => column.notNull())
+      .addColumn('at', 'integer', (column) => column.notNull())
       .addUniqueConstraint('imp_cold_boots_imp_boot', ['imp_id', 'boot_id'])
       .execute();
 

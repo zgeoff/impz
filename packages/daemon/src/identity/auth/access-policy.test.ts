@@ -6,11 +6,11 @@ import {
   PROCEDURE_ACCESS,
   checkAccess,
   findAccess,
+  findField,
   findForkAuthority,
   findGrantAuthority,
   isAuditedProcedure,
   isRefusalAudited,
-  readField,
 } from './access-policy';
 
 test('#PROCEDURE_ACCESS has a rule for every procedure in the contract, and no stale rule', () => {
@@ -659,6 +659,6 @@ test.each([
   [{}, 'name', null],
   ['dev-a', 'name', null],
   [null, 'name', null],
-])('#readField reads from %p the field %s as %p', (input, field, value) => {
-  expect(readField(input, field)).toBe(value);
+])('#findField reads from %p the field %s as %p', (input, field, value) => {
+  expect(findField(input, field)).toBe(value);
 });

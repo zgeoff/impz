@@ -10,7 +10,7 @@ import { holdImp, waitForExec } from '../lib/imps';
 import { readImpdLogSince } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -25,7 +25,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('memory'), stack, client };
+  return { prefix: getSuitePrefix('memory'), stack, client };
 }
 
 test('it grows an elastic guest under a gradual allocation, shrinks it once the memory is freed, and unplugs the spare before a sleep whose wake works', async () => {
@@ -186,7 +186,7 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
   const slept = findAsleepLine(sleepLog, name);
 
   invariant(slept);
-  writeMetric('memory_sleep_after_unplug_ms', slept.ms);
+  writeMetric('memory_sleep_after_unplug_ms', slept.durationMs);
 
   // the sleep unplugged down to use and headroom before the pause
   expect(slept.pluggedMib).toBeLessThan(pluggedBeforeSleep);

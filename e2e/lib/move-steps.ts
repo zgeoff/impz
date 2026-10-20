@@ -95,17 +95,17 @@ export async function startMoveSend(target: DevInstance, name: string): Promise<
 // both hosts saved in a CLI config at `dir`, so the move config keeps B alone
 export async function writeBothHostsConfig(
   hosts: Readonly<MoveHosts>,
-  dir: string,
+  directory: string,
 ): Promise<Record<string, string>> {
-  const env = { XDG_CONFIG_HOME: dir };
+  const env = { XDG_CONFIG_HOME: directory };
 
-  const tokenA = await readToken(hosts.a);
+  const tokenA = await readToken(hosts.hostA);
 
-  await runImpWith({ stdin: `${tokenA}\n`, env }, 'login', hosts.a.apiUrl, '--name', HOST_A);
+  await runImpWith({ stdin: `${tokenA}\n`, env }, 'login', hosts.hostA.apiUrl, '--name', HOST_A);
 
-  const tokenB = await readToken(hosts.b);
+  const tokenB = await readToken(hosts.hostB);
 
-  await runImpWith({ stdin: `${tokenB}\n`, env }, 'login', hosts.b.apiUrl, '--name', HOST_B);
+  await runImpWith({ stdin: `${tokenB}\n`, env }, 'login', hosts.hostB.apiUrl, '--name', HOST_B);
 
   return env;
 }
@@ -156,14 +156,14 @@ export async function readJailOwners(
   id: string,
   slot: number,
 ): Promise<readonly string[]> {
-  const dir = `/var/lib/imp/imps/${id}`;
+  const directory = `/var/lib/imp/imps/${id}`;
 
   const result = await runInContainer(
     [
       'sh',
       '-c',
       `pid=$(pgrep -f 'firecracker.*imps/${id}/' | head -n 1)
-      disk=$(ls ${dir}/disk.ext4 ${dir}/disk/rootfs.ext4 2>/dev/null | head -n 1)
+      disk=$(ls ${directory}/disk.ext4 ${directory}/disk/rootfs.ext4 2>/dev/null | head -n 1)
       stat -c %u "/proc/$pid" "$disk"
       cat /sys/class/net/imp${String(slot)}/owner`,
     ],

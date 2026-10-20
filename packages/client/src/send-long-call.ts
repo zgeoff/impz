@@ -1,6 +1,7 @@
 // starts a timer that calls `fire` once after `ms`, and returns its cancel
-export type StartTimer = (fire: () => void, ms: number) => () => void;
+export type StartTimer = (fire: () => void, durationMs: number) => () => void;
 
+// oxlint-disable-next-line zgeoff/module-order -- LONG_CALL_DEADLINES_MS reads it as the module loads
 const HOUR_MS = 60 * 60 * 1000;
 
 // The calls that answer only when their work ends, which can be later than
@@ -82,8 +83,8 @@ export async function sendLongCall(
   }
 }
 
-function formatHours(ms: number): string {
-  const hours = ms / HOUR_MS;
+function formatHours(durationMs: number): string {
+  const hours = durationMs / HOUR_MS;
 
   return hours === 1 ? 'an hour' : `${String(hours)} hours`;
 }

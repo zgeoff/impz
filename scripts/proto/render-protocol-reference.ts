@@ -15,7 +15,7 @@ export function renderProtocolReference(file: DescFile, title: string): string {
     '',
     `<!-- Generated from ${file.proto.name} by bun run gen:proto. Edit the schema, not this file. -->`,
     '',
-    ...renderComment(findComment(file, [SYNTAX_PATH])),
+    ...renderComment(getComment(file, [SYNTAX_PATH])),
     'In each table, a field marked always is in every message the agent writes, zero or not; impd leaves a zero out, which reads as zero. A field marked when set appears only when its sender sets it, and a list appears as [] or not at all.',
     '',
   ];
@@ -27,31 +27,19 @@ export function renderProtocolReference(file: DescFile, title: string): string {
   return `${lines.join('\n')}\n`;
 }
 
-const MESSAGE_PATH = 4;
-const FIELD_PATH = 2;
+function renderComment(comment: string): string[] {
+  if (comment === '') {
+    return [];
+  }
 
-function renderMessage(file: DescFile, message: DescMessage): string[] {
-  const path = [MESSAGE_PATH, file.messages.indexOf(message)];
+  const lines = comment.split('\n').map((line) => line.replace(/^ /u, ''));
 
-  const rows = message.fields.map((field) => {
-    const comment = findComment(file, [...path, FIELD_PATH, message.fields.indexOf(field)]);
-
-    return `| \`${field.name}\` | ${formatType(field)} | ${formatPresence(field)} | ${formatCell(comment)} |`;
-  });
-
-  return [
-    `## ${message.name}`,
-    '',
-    ...renderComment(findComment(file, path)),
-    ...(rows.length === 0
-      ? ['No fields.', '']
-      : ['| Field | Type | Presence | Description |', '| --- | --- | --- | --- |', ...rows, '']),
-  ];
+  return [...lines, ''];
 }
 
 // the leading comment of the declaration at path, as the source code info
 // keeps it
-function findComment(file: DescFile, path: readonly number[]): string {
+function getComment(file: DescFile, path: readonly number[]): string {
   const location = file.proto.sourceCodeInfo?.location.find(
     (candidate) =>
       candidate.path.length === path.length &&
@@ -61,14 +49,26 @@ function findComment(file: DescFile, path: readonly number[]): string {
   return location?.leadingComments.trim() ?? '';
 }
 
-function renderComment(comment: string): string[] {
-  if (comment === '') {
-    return [];
-  }
+const MESSAGE_PATH = 4;
+const FIELD_PATH = 2;
 
-  const lines = comment.split('\n').map((line) => line.replace(/^ /u, ''));
+function renderMessage(file: DescFile, message: DescMessage): string[] {
+  const path = [MESSAGE_PATH, file.messages.indexOf(message)];
 
-  return [...lines, ''];
+  const rows = message.fields.map((field) => {
+    const comment = getComment(file, [...path, FIELD_PATH, message.fields.indexOf(field)]);
+
+    return `| \`${field.name}\` | ${formatType(field)} | ${formatPresence(field)} | ${formatCell(comment)} |`;
+  });
+
+  return [
+    `## ${message.name}`,
+    '',
+    ...renderComment(getComment(file, path)),
+    ...(rows.length === 0
+      ? ['No fields.', '']
+      : ['| Field | Type | Presence | Description |', '| --- | --- | --- | --- |', ...rows, '']),
+  ];
 }
 
 function formatType(field: DescField): string {
@@ -91,16 +91,16 @@ function formatScalar(scalar: ScalarType): string {
   return scalar === ScalarType.BYTES ? 'bytes (base64)' : ScalarType[scalar].toLowerCase();
 }
 
+function formatMessageLink(message: DescMessage): string {
+  return `[${message.name}](#${message.name.toLowerCase()})`;
+}
+
 function formatListMember(field: DescField): string {
   if (field.fieldKind !== 'list' || field.listKind !== 'message') {
     throw new Error(`render-protocol-reference: ${field.name} is not a list of messages`);
   }
 
   return formatMessageLink(field.message);
-}
-
-function formatMessageLink(message: DescMessage): string {
-  return `[${message.name}](#${message.name.toLowerCase()})`;
 }
 
 // what a reader finds in the JSON: a plain scalar is always written by the

@@ -61,9 +61,9 @@ export const setCommand = defineCommand({
 // and time awake.
 export function formatTop(imps: readonly Imp[]): string {
   const sorted = imps.toSorted(
-    (a, b) =>
-      (b.resources?.sample?.cpuPercent ?? -1) - (a.resources?.sample?.cpuPercent ?? -1) ||
-      a.name.localeCompare(b.name),
+    (left, right) =>
+      (right.resources?.sample?.cpuPercent ?? -1) - (left.resources?.sample?.cpuPercent ?? -1) ||
+      left.name.localeCompare(right.name),
   );
 
   return formatTable(

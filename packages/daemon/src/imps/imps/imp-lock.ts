@@ -1,6 +1,6 @@
-import { findImpById, findImpByName } from '../../platform/db/imps';
+import { readImpById, readImpByName } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
-import { createKeyedMutex } from '../../platform/process/keyed-mutex';
+import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import type { TryResult } from '../../platform/process/keyed-mutex';
 import { withImpLogContext } from '../../platform/process/with-imp-log-context';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
@@ -95,7 +95,7 @@ export function toLockedImp(held: LockedImp, next: ImpRecord): LockedImp {
 }
 
 export function createImpLock(context: ImpHost & ImpVms & ImpMemory & ImpDisk): ImpLock {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
 
   // under the imp's lock, inside the storage gate: the GC never runs while an
   // operation may have storage its rows do not name yet
@@ -107,7 +107,7 @@ export function createImpLock(context: ImpHost & ImpVms & ImpMemory & ImpDisk): 
     id: string,
     options: WithImpOptions,
   ): Promise<LockedImp | undefined> => {
-    const imp = await findImpById(context.db, id);
+    const imp = await readImpById(context.db, id);
 
     if (imp === undefined) {
       return undefined;
@@ -122,8 +122,8 @@ export function createImpLock(context: ImpHost & ImpVms & ImpMemory & ImpDisk): 
     return { ...live, [LOCKED]: { impId: id } };
   };
 
-  const findImp = async (name: string): Promise<ImpRecord> => {
-    const imp = await findImpByName(context.db, name);
+  const readImp = async (name: string): Promise<ImpRecord> => {
+    const imp = await readImpByName(context.db, name);
 
     if (imp === undefined) {
       throw buildNotFoundError('imp', name);
@@ -133,9 +133,9 @@ export function createImpLock(context: ImpHost & ImpVms & ImpMemory & ImpDisk): 
   };
 
   return {
-    findImp,
+    findImp: readImp,
     withImp: async (name, action, options = {}) => {
-      const found = await findImp(name);
+      const found = await readImp(name);
 
       return mutex.runExclusive(found.id, () =>
         runJoined(async () => {

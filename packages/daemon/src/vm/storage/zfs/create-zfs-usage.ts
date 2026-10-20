@@ -1,7 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import type { ImpPaths } from '../data-layout';
 import type { StorageBackend } from '../storage-backend';
-import { CHECKPOINT_SNAPSHOT, readSnapshotId } from './zfs-commands';
+import { CHECKPOINT_SNAPSHOT, getSnapshotId } from './zfs-commands';
 import type { ZfsCommands } from './zfs-commands';
 
 // what the ZFS backend lends its usage pass: its commands, its root and
@@ -35,7 +35,7 @@ export function createZfsUsage(ctx: ZfsUsageContext): Pick<StorageBackend, 'meas
             (entry) =>
               entry.name.startsWith(`${ctx.datasets.retired}/`) &&
               CHECKPOINT_SNAPSHOT.test(entry.name) &&
-              checkpointIds.has(readSnapshotId(entry.name)),
+              checkpointIds.has(getSnapshotId(entry.name)),
           );
 
           const retiredNames = new Set(

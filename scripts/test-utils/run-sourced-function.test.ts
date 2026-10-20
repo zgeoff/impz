@@ -5,20 +5,20 @@ import { join } from 'node:path';
 import { runSourcedFunction } from './run-sourced-function';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-sourced-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-sourced-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   return {
-    dir,
+    directoryPath: directory,
   };
 }
 
 test('it calls the function with its arguments and returns what it printed', () => {
   const ctx = setupTest();
-  const script = join(ctx.dir, 'lib.sh');
+  const script = join(ctx.directoryPath, 'lib.sh');
 
   writeFileSync(script, 'greet() { echo "hello $1 $2"; echo note >&2; }\n');
 
@@ -31,7 +31,7 @@ test('it calls the function with its arguments and returns what it printed', () 
 
 test('it returns the exit code of a function that fails, without throwing', () => {
   const ctx = setupTest();
-  const script = join(ctx.dir, 'lib.sh');
+  const script = join(ctx.directoryPath, 'lib.sh');
 
   writeFileSync(script, 'refuse() { echo "no" >&2; return 4; }\n');
 
@@ -44,7 +44,7 @@ test('it returns the exit code of a function that fails, without throwing', () =
 
 test('it feeds stdin to the function', () => {
   const ctx = setupTest();
-  const script = join(ctx.dir, 'lib.sh');
+  const script = join(ctx.directoryPath, 'lib.sh');
 
   writeFileSync(script, 'upper() { tr a-z A-Z; }\n');
 
@@ -53,7 +53,7 @@ test('it feeds stdin to the function', () => {
 
 test('it gives the function only PATH and the variables it is passed', () => {
   const ctx = setupTest();
-  const script = join(ctx.dir, 'lib.sh');
+  const script = join(ctx.directoryPath, 'lib.sh');
 
   writeFileSync(script, `show() { echo "\${IMP_SET-unset} \${HOME-unset} \${PATH:+path-set}"; }\n`);
 
@@ -64,7 +64,7 @@ test('it gives the function only PATH and the variables it is passed', () => {
 
 test('it runs nothing of the script that waits for a direct run', () => {
   const ctx = setupTest();
-  const script = join(ctx.dir, 'lib.sh');
+  const script = join(ctx.directoryPath, 'lib.sh');
 
   writeFileSync(
     script,

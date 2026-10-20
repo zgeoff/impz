@@ -15,11 +15,11 @@ interface StubSshAgentOptions {
 // finishes. It speaks no agent protocol: the gateway relays bytes, so an
 // echo with a prefix shows which way they went.
 export async function startStubSshAgent(options: Readonly<StubSshAgentOptions>) {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-agent-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-agent-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const path = join(dir, 'agent.sock');
+  const path = join(directory, 'agent.sock');
 
   const sockets = new Set<Socket>();
 

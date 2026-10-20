@@ -12,7 +12,7 @@ import {
 import type { DetachReason, ExecChannel, ExecServerMessage, SessionOutput } from '@impz/api';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { AgentError } from '../../vm/agent-client/agent-connection';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import type {
@@ -22,7 +22,7 @@ import type {
   ExecStream,
 } from '../../vm/agent-client/exec-stream';
 import { TOOL_FEATURES, buildToolRequest } from './exec-tools';
-import { findSignalName, findSignalNumber } from './signal-names';
+import { findSignalNumber, getSignalName } from './signal-names';
 
 // The two ends the session bridges: a WebSocket peer and the imp service.
 
@@ -155,7 +155,7 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
       send({
         type: 'exit',
         code: signalled ? null : event.code,
-        signal: signalled ? findSignalName(event.signal) : null,
+        signal: signalled ? getSignalName(event.signal) : null,
         ...readOffset(),
       });
 
@@ -486,20 +486,6 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
   };
 }
 
-function isStartMessage(message: unknown): boolean {
-  return (
-    typeof message === 'object' &&
-    message !== null &&
-    'type' in message &&
-    (message.type === 'start' || message.type === 'attach')
-  );
-}
-
-// the agent's reasons are the API's; one it does not know reads as lost
-function readDetachReason(reason: string): DetachReason {
-  return DETACH_REASONS.find((known) => known === reason) ?? 'lost';
-}
-
 function buildErrorMessage(error: unknown): ExecServerMessage {
   if (error instanceof ORPCError) {
     const data: unknown = error.data;
@@ -524,7 +510,12 @@ function buildErrorMessage(error: unknown): ExecServerMessage {
     };
   }
 
-  return { type: 'error', message: readErrorMessage(error) };
+  return { type: 'error', message: getErrorMessage(error) };
+}
+
+// the agent's reasons are the API's; one it does not know reads as lost
+function readDetachReason(reason: string): DetachReason {
+  return DETACH_REASONS.find((known) => known === reason) ?? 'lost';
 }
 
 // a session started with log whose agent predates session logs says so
@@ -534,4 +525,13 @@ function withLogAnswer(output: SessionOutput | null, asked: boolean): SessionOut
   }
 
   return { ...output, log: { enabled: false } };
+}
+
+function isStartMessage(message: unknown): boolean {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'type' in message &&
+    (message.type === 'start' || message.type === 'attach')
+  );
 }

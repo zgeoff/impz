@@ -29,16 +29,16 @@ export interface KernelOopsWatch {
 
   // when impd first read the flag set, after it had read it clear: the oops
   // came before then and since the clear read. Null without such a change
-  readonly findOopsSeenAt: () => number | null;
+  readonly readOopsSeenAt: () => number | null;
 
   // the kernel's id for this boot, which a hold records: a hold of another
   // boot's id came before a reboot. Null when impd cannot read it
-  readonly findBootId: () => string | null;
+  readonly readCurrentBootId: () => string | null;
 
   // the imps whose Firecracker owned a thread an oops killed, by the thread
   // ids `listOwners` gives. Null when an oops names a thread no VM owns, or
   // impd cannot read the oops from the kernel log: then any VM may hold it
-  readonly findOopsOwners: (
+  readonly readOopsOwners: (
     listOwners: (threadId: number) => readonly string[],
   ) => ReadonlySet<string> | null;
 }
@@ -47,9 +47,9 @@ export interface KernelOopsWatch {
 export const NO_KERNEL_OOPS: KernelOopsWatch = {
   readFlag: () => 'clear',
   isOopsed: () => false,
-  findOopsSeenAt: () => null,
-  findBootId: () => null,
-  findOopsOwners: () => null,
+  readOopsSeenAt: () => null,
+  readCurrentBootId: () => null,
+  readOopsOwners: () => null,
 };
 
 // Where the oops's thread comes from: the kernel log, and impd's own PID
@@ -102,7 +102,7 @@ export function createKernelOopsWatch(
     return 'set';
   };
 
-  const isOopsed = (): boolean => readFlag() === 'set';
+  const probeOopsed = (): boolean => readFlag() === 'set';
 
   // each oops's owners, by its number, from the first look: the VM it hit
   // stops and leaves the sampler, but the oops stays its
@@ -110,17 +110,17 @@ export function createKernelOopsWatch(
 
   return {
     readFlag,
-    isOopsed,
-    findOopsSeenAt: () => (isOopsed() && seen.clear ? seen.oopsedAt : null),
-    findBootId: () => {
+    isOopsed: probeOopsed,
+    readOopsSeenAt: () => (probeOopsed() && seen.clear ? seen.oopsedAt : null),
+    readCurrentBootId: () => {
       boot.id ??= readBootId(bootIdPath);
 
       return boot.id;
     },
-    findOopsOwners: (listOwners) => {
+    readOopsOwners: (listOwners) => {
       // the log names a thread by its id on the host; inside a container's
       // PID namespace the sampler's ids are other numbers, which may collide
-      if (!isHostPidNamespace(kernelLog.pidNamespacePath)) {
+      if (!probeHostPidNamespace(kernelLog.pidNamespacePath)) {
         return null;
       }
 
@@ -182,7 +182,7 @@ function readBootId(path: string): string | null {
 // the kernel's fixed inode for its first PID namespace, the host's
 const HOST_PID_NAMESPACE = 'pid:[4026531836]';
 
-function isHostPidNamespace(path: string): boolean {
+function probeHostPidNamespace(path: string): boolean {
   try {
     return readlinkSync(path) === HOST_PID_NAMESPACE;
   } catch {

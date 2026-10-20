@@ -53,8 +53,8 @@ test.each([
   ['exec', 'manage', 'exec'],
   ['read', 'manage', 'read'],
   ['exec', 'exec', 'exec'],
-] as const)('#readLowerScope reads %s and %s as %s', (a, b, lower) => {
-  expect(readLowerScope(a, b)).toBe(lower);
+] as const)('#readLowerScope reads %s and %s as %s', (first, second, lower) => {
+  expect(readLowerScope(first, second)).toBe(lower);
 });
 
 test.each([

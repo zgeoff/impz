@@ -17,7 +17,7 @@ test('it decodes a message from the agent’s JSON', () => {
 
 test('it drops a field a newer agent sends that the schema lacks', () => {
   expect(
-    decodeAgentMessage(PingSchema, { ok: true, version: '0.99.0', newer_field: { a: 1 } }),
+    decodeAgentMessage(PingSchema, { ok: true, version: '0.99.0', newer_field: { depth: 1 } }),
   ).toStrictEqual(create(PingSchema, { ok: true, version: '0.99.0' }));
 });
 

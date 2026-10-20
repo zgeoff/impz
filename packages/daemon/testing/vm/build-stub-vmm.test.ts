@@ -13,16 +13,16 @@ import { buildMockHostIdentity } from './build-mock-host-identity';
 import { STUB_AGENT_VERSION, StubVmError, buildStubBootId, buildStubVmm } from './build-stub-vmm';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'stub-vmm-'));
+  const directory = await mkdtemp(join(tmpdir(), 'stub-vmm-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   // every runner call takes an imp's paths; the fake writes snapshots there
-  const paths = buildImpPaths(dir, 'imp-1');
+  const paths = buildImpPaths(directory, 'imp-1');
   const fake = buildStubVmm();
   const runner = fake.startGeneration();
 
-  return { dir, paths, fake, runner };
+  return { directoryPath: directory, paths, fake, runner };
 }
 
 test('#STUB_AGENT_VERSION is the agent version a boot reports by default', async () => {
@@ -95,7 +95,7 @@ test('#buildStubVmm starts a running VM with a boot id from its pid on a boot', 
     bootId: buildStubBootId(1001),
   });
 
-  expect(ctx.runner.isVmAlive(1001, ctx.paths)).toBeTrue();
+  expect(ctx.runner.probeVmAlive(1001, ctx.paths)).toBeTrue();
   expect(ctx.fake.readState(1001)).toBe('Running');
   expect(ctx.runner.readPid(ctx.paths)).toBe(1001);
   expect(ctx.fake.boots).toStrictEqual([{ hostname: 'alpha', isIdentityReset: false }]);
@@ -202,7 +202,7 @@ test('#buildStubVmm returns the pid of a VM that is already gone when a boot die
     jail: null,
   });
 
-  expect(ctx.runner.isVmAlive(vm.pid, ctx.paths)).toBeFalse();
+  expect(ctx.runner.probeVmAlive(vm.pid, ctx.paths)).toBeFalse();
   expect(ctx.runner.readPid(ctx.paths)).toBe(vm.pid);
   expect(ctx.runner.listVms()).toStrictEqual([]);
 });
@@ -426,7 +426,7 @@ test('#buildStubVmm returns the pid of a VM that is already gone when a wake die
     readOnlyFiles: ['/images/system.ext4'],
   });
 
-  expect(ctx.runner.isVmAlive(vm.pid, ctx.paths)).toBeFalse();
+  expect(ctx.runner.probeVmAlive(vm.pid, ctx.paths)).toBeFalse();
 });
 
 test('#buildStubVmm records the jail user and the snapshot files present when a wake begins', async () => {
@@ -499,7 +499,7 @@ test('#buildStubVmm wakes a jailed VM whose jail binds the drive the snapshot na
     readOnlyFiles: ['/images/old.squashfs'],
   });
 
-  expect(ctx.runner.isVmAlive(vm.pid, ctx.paths)).toBeTrue();
+  expect(ctx.runner.probeVmAlive(vm.pid, ctx.paths)).toBeTrue();
 });
 
 test('#buildStubVmm wakes an unjailed VM whatever drive the snapshot names', async () => {
@@ -524,7 +524,7 @@ test('#buildStubVmm wakes an unjailed VM whatever drive the snapshot names', asy
     readOnlyFiles: ['/images/new.squashfs'],
   });
 
-  expect(ctx.runner.isVmAlive(vm.pid, ctx.paths)).toBeTrue();
+  expect(ctx.runner.probeVmAlive(vm.pid, ctx.paths)).toBeTrue();
 });
 
 test('#buildStubVmm pauses the VM while its snapshot is taken', async () => {
@@ -534,7 +534,7 @@ test('#buildStubVmm pauses the VM while its snapshot is taken', async () => {
   const seen: { state: string | undefined; isAlive: boolean }[] = [];
 
   ctx.fake.setPace(() => {
-    seen.push({ state: ctx.fake.readState(pid), isAlive: ctx.runner.isVmAlive(pid, ctx.paths) });
+    seen.push({ state: ctx.fake.readState(pid), isAlive: ctx.runner.probeVmAlive(pid, ctx.paths) });
 
     return Promise.resolve();
   });
@@ -561,7 +561,7 @@ test('#buildStubVmm writes the snapshot by rename and frees the VM on a sleep', 
   expect(readdirSync(ctx.paths.snapshotDir)).toIncludeSameMembers(['vmstate', 'mem']);
   expect(readFileSync(ctx.paths.vmstate, 'utf8')).toBe('vmstate');
   expect(readFileSync(ctx.paths.memFile, 'utf8')).toBe('mem');
-  expect(ctx.runner.isVmAlive(vm.pid, ctx.paths)).toBeFalse();
+  expect(ctx.runner.probeVmAlive(vm.pid, ctx.paths)).toBeFalse();
   expect(ctx.fake.readState(vm.pid)).toBe('Paused');
   expect(ctx.fake.usedSnapshots).toBeEmpty();
 });
@@ -570,7 +570,7 @@ test('#buildStubVmm writes the snapshot into the target a sleep names', async ()
   const ctx = await setupTest();
 
   const pid = ctx.fake.spawnOrphan({ paths: ctx.paths });
-  const target = buildSnapshotPaths(join(ctx.dir, 'watchdog'));
+  const target = buildSnapshotPaths(join(ctx.directoryPath, 'watchdog'));
 
   await ctx.runner.sleepVm(pid, ctx.paths, null, target);
 
@@ -588,7 +588,7 @@ test('#buildStubVmm resumes the VM and writes no snapshot when a sleep fails', a
   await expect(ctx.runner.sleepVm(pid, ctx.paths, null, ctx.paths)).toReject();
 
   expect(ctx.fake.readState(pid)).toBe('Running');
-  expect(ctx.runner.isVmAlive(pid, ctx.paths)).toBeTrue();
+  expect(ctx.runner.probeVmAlive(pid, ctx.paths)).toBeTrue();
   expect(existsSync(ctx.paths.snapshotDir)).toBeFalse();
 });
 
@@ -614,7 +614,7 @@ test('#buildStubVmm kills the VM and writes no snapshot when a sleep dies', asyn
 
   await expect(ctx.runner.sleepVm(pid, ctx.paths, null, ctx.paths)).toReject();
 
-  expect(ctx.runner.isVmAlive(pid, ctx.paths)).toBeFalse();
+  expect(ctx.runner.probeVmAlive(pid, ctx.paths)).toBeFalse();
   expect(existsSync(ctx.paths.snapshotDir)).toBeFalse();
 });
 
@@ -626,7 +626,7 @@ test('#buildStubVmm records a stop and frees the VM', async () => {
   await ctx.runner.stopVm(pid, ctx.paths, true);
 
   expect(ctx.fake.stops).toStrictEqual([{ pid, graceful: true }]);
-  expect(ctx.runner.isVmAlive(pid, ctx.paths)).toBeFalse();
+  expect(ctx.runner.probeVmAlive(pid, ctx.paths)).toBeFalse();
 });
 
 test.each(['fail', 'die'] as const)(
@@ -640,7 +640,7 @@ test.each(['fail', 'die'] as const)(
 
     await expect(ctx.runner.stopVm(pid, ctx.paths, false)).toReject();
 
-    expect(ctx.runner.isVmAlive(pid, ctx.paths)).toBeTrue();
+    expect(ctx.runner.probeVmAlive(pid, ctx.paths)).toBeTrue();
     expect(ctx.fake.stops).toStrictEqual([]);
   },
 );
@@ -700,7 +700,7 @@ test('#buildStubVmm rejects a grow that dies as an agent from before grow', asyn
 
 test('#buildStubVmm reports the agent ready by default', async () => {
   const ctx = await setupTest();
-  const isReady = await ctx.runner.isAgentReady(ctx.paths);
+  const isReady = await ctx.runner.probeAgentReady(ctx.paths);
 
   expect(isReady).toBeTrue();
 });
@@ -710,7 +710,7 @@ test('#buildStubVmm reports the agent not ready when the step fails', async () =
 
   ctx.fake.queue('agentReady', 'fail');
 
-  const isReady = await ctx.runner.isAgentReady(ctx.paths);
+  const isReady = await ctx.runner.probeAgentReady(ctx.paths);
 
   expect(isReady).toBeFalse();
 });
@@ -828,10 +828,10 @@ test('#buildStubVmm takes queued outcomes in order then succeeds', async () => {
   ctx.fake.queue('agentReady', 'fail');
 
   const results = [
-    await ctx.runner.isAgentReady(ctx.paths),
-    await ctx.runner.isAgentReady(ctx.paths),
-    await ctx.runner.isAgentReady(ctx.paths),
-    await ctx.runner.isAgentReady(ctx.paths),
+    await ctx.runner.probeAgentReady(ctx.paths),
+    await ctx.runner.probeAgentReady(ctx.paths),
+    await ctx.runner.probeAgentReady(ctx.paths),
+    await ctx.runner.probeAgentReady(ctx.paths),
   ];
 
   expect(results).toStrictEqual([false, true, false, true]);
@@ -843,7 +843,7 @@ test('#buildStubVmm succeeds after the queues are cleared', async () => {
   ctx.fake.queue('agentReady', 'fail');
   ctx.fake.clearQueues();
 
-  const isReady = await ctx.runner.isAgentReady(ctx.paths);
+  const isReady = await ctx.runner.probeAgentReady(ctx.paths);
 
   expect(isReady).toBeTrue();
 });
@@ -857,7 +857,7 @@ test('#buildStubVmm keeps a held call pending once it reaches the hold', async (
     hold.release();
   });
 
-  const call = ctx.runner.isAgentReady(ctx.paths);
+  const call = ctx.runner.probeAgentReady(ctx.paths);
 
   await hold.reached;
 
@@ -868,7 +868,7 @@ test('#buildStubVmm lets a held call through on release', async () => {
   const ctx = await setupTest();
 
   const hold = ctx.fake.hold('agentReady');
-  const call = ctx.runner.isAgentReady(ctx.paths);
+  const call = ctx.runner.probeAgentReady(ctx.paths);
 
   await hold.reached;
 
@@ -882,7 +882,7 @@ test('#buildStubVmm stops holding a step after release', async () => {
 
   ctx.fake.hold('agentReady').release();
 
-  const isReady = await ctx.runner.isAgentReady(ctx.paths);
+  const isReady = await ctx.runner.probeAgentReady(ctx.paths);
 
   expect(isReady).toBeTrue();
 });
@@ -896,7 +896,7 @@ test('#buildStubVmm keeps a hung call pending until the hangs are released', asy
     ctx.fake.releaseHangs();
   });
 
-  const call = ctx.runner.isAgentReady(ctx.paths);
+  const call = ctx.runner.probeAgentReady(ctx.paths);
 
   await waitFor(() => {
     expect(ctx.fake.countHungCalls()).toBe(1);
@@ -910,7 +910,7 @@ test('#buildStubVmm counts no hung call once the hangs are released', async () =
 
   ctx.fake.queue('agentReady', 'hang');
 
-  const call = ctx.runner.isAgentReady(ctx.paths);
+  const call = ctx.runner.probeAgentReady(ctx.paths);
 
   await waitFor(() => {
     expect(ctx.fake.countHungCalls()).toBe(1);
@@ -936,7 +936,7 @@ test('#buildStubVmm lets a hung call succeed when the hangs are released', async
 
   ctx.fake.queue('agentReady', 'hang');
 
-  const call = ctx.runner.isAgentReady(ctx.paths);
+  const call = ctx.runner.probeAgentReady(ctx.paths);
 
   await paced.promise;
 
@@ -955,7 +955,7 @@ test('#buildStubVmm hangs a later call again after the hangs are released', asyn
     ctx.fake.releaseHangs();
   });
 
-  const call = ctx.runner.isAgentReady(ctx.paths);
+  const call = ctx.runner.probeAgentReady(ctx.paths);
 
   await waitFor(() => {
     expect(ctx.fake.countHungCalls()).toBe(1);
@@ -969,7 +969,7 @@ test('#buildStubVmm never settles a call of a runner whose impd was replaced', a
 
   ctx.fake.startGeneration();
 
-  const call = ctx.runner.isAgentReady(ctx.paths);
+  const call = ctx.runner.probeAgentReady(ctx.paths);
 
   await waitFor(() => {
     expect(ctx.fake.countParkedCalls()).toBe(1);
@@ -981,7 +981,7 @@ test('#buildStubVmm never settles a call of a runner whose impd was replaced', a
 test('#buildStubVmm parks no call of the current runner', async () => {
   const ctx = await setupTest();
 
-  await ctx.runner.isAgentReady(ctx.paths);
+  await ctx.runner.probeAgentReady(ctx.paths);
 
   expect(ctx.fake.countParkedCalls()).toBe(0);
 });
@@ -990,7 +990,7 @@ test('#buildStubVmm never settles an in-flight call once its impd is replaced', 
   const ctx = await setupTest();
 
   const hold = ctx.fake.hold('agentReady');
-  const call = ctx.runner.isAgentReady(ctx.paths);
+  const call = ctx.runner.probeAgentReady(ctx.paths);
 
   await hold.reached;
 
@@ -1054,7 +1054,7 @@ test('#buildStubVmm throws on a liveness check by a runner whose impd was replac
 
   ctx.fake.startGeneration();
 
-  expect(() => ctx.runner.isVmAlive(pid, ctx.paths)).toThrowWithMessage(
+  expect(() => ctx.runner.probeVmAlive(pid, ctx.paths)).toThrowWithMessage(
     Error,
     'this impd was replaced',
   );
@@ -1066,7 +1066,7 @@ test('#buildStubVmm shares live VMs with the runner of the next impd', async () 
   const pid = ctx.fake.spawnOrphan({ paths: ctx.paths });
   const next = ctx.fake.startGeneration();
 
-  expect(next.isVmAlive(pid, ctx.paths)).toBeTrue();
+  expect(next.probeVmAlive(pid, ctx.paths)).toBeTrue();
 });
 
 test('#buildStubVmm reports a guest no test set up as 512 MiB with nothing plugged', async () => {
@@ -1105,7 +1105,7 @@ test.each([
   async (requestedMib, pluggedMib) => {
     const ctx = await setupTest();
 
-    ctx.fake.guestMemory.set(ctx.paths.dir, {
+    ctx.fake.guestMemory.set(ctx.paths.directory, {
       baseMib: 512,
       pluggedMib: 256,
       requestedMib: 256,
@@ -1115,7 +1115,7 @@ test.each([
 
     await ctx.runner.requestPluggedMib(ctx.paths, requestedMib);
 
-    expect(ctx.fake.guestMemory.get(ctx.paths.dir)).toStrictEqual({
+    expect(ctx.fake.guestMemory.get(ctx.paths.directory)).toStrictEqual({
       baseMib: 512,
       pluggedMib,
       requestedMib,
@@ -1128,7 +1128,7 @@ test.each([
 test('#buildStubVmm never plugs memory up to the unplug floor', async () => {
   const ctx = await setupTest();
 
-  ctx.fake.guestMemory.set(ctx.paths.dir, {
+  ctx.fake.guestMemory.set(ctx.paths.directory, {
     baseMib: 512,
     pluggedMib: 64,
     requestedMib: 64,
@@ -1138,7 +1138,7 @@ test('#buildStubVmm never plugs memory up to the unplug floor', async () => {
 
   await ctx.runner.requestPluggedMib(ctx.paths, 0);
 
-  expect(ctx.fake.guestMemory.get(ctx.paths.dir)?.pluggedMib).toBe(64);
+  expect(ctx.fake.guestMemory.get(ctx.paths.directory)?.pluggedMib).toBe(64);
 });
 
 test('#buildStubVmm spawns an orphan that serves the imp socket with a pid file', async () => {
@@ -1159,7 +1159,7 @@ test('#buildStubVmm spawns an orphan without a pid file when its start died firs
 
   const pid = ctx.fake.spawnOrphan({ paths: ctx.paths, pidFile: false });
 
-  expect(ctx.runner.isVmAlive(pid, ctx.paths)).toBeTrue();
+  expect(ctx.runner.probeVmAlive(pid, ctx.paths)).toBeTrue();
   expect(ctx.runner.readPid(ctx.paths)).toBeNull();
 });
 
@@ -1168,7 +1168,7 @@ test('#buildStubVmm spawns a live process that serves no socket without paths', 
 
   const pid = ctx.fake.spawnOrphan();
 
-  expect(ctx.runner.isVmAlive(pid, ctx.paths)).toBeTrue();
+  expect(ctx.runner.probeVmAlive(pid, ctx.paths)).toBeTrue();
   expect(ctx.runner.listVms()).toStrictEqual([]);
   expect(ctx.fake.readState(pid)).toBeUndefined();
 });
@@ -1195,7 +1195,7 @@ test('#buildStubVmm lists only the live VMs', async () => {
   const ctx = await setupTest();
 
   const stopped = ctx.fake.spawnOrphan({ paths: ctx.paths });
-  const other = buildImpPaths(ctx.dir, 'imp-2');
+  const other = buildImpPaths(ctx.directoryPath, 'imp-2');
   const live = ctx.fake.spawnOrphan({ paths: other, owner: { uid: 30_002, cgroup: null } });
 
   await ctx.runner.stopVm(stopped, ctx.paths, false);
@@ -1216,24 +1216,24 @@ test('#buildStubVmm records a jail sweep that finds no orphan jails', async () =
 test('#buildStubVmm writes the snapshot files on a template build', async () => {
   const ctx = await setupTest();
 
-  const snapshot = buildSnapshotPaths(join(ctx.dir, 'templates', 'shape-1'));
+  const snapshot = buildSnapshotPaths(join(ctx.directoryPath, 'templates', 'shape-1'));
 
-  await ctx.runner.buildTemplateVm({
+  await ctx.runner.createTemplateVm({
     firecrackerBin: '/usr/bin/firecracker',
     kernelPath: '/images/vmlinux',
     systemDrivePath: '/images/system.ext4',
     bootArgs: 'console=ttyS0',
     vcpus: 2,
     memoryMib: 1024,
-    workDir: join(ctx.dir, 'build'),
+    workDir: join(ctx.directoryPath, 'build'),
     paths: {
-      runDir: join(ctx.dir, 'build', 'run'),
-      apiSocket: join(ctx.dir, 'build', 'run', 'api.sock'),
-      vsockSocket: join(ctx.dir, 'build', 'run', 'vsock.sock'),
-      logFile: join(ctx.dir, 'build', 'run', 'firecracker.log'),
-      pidFile: join(ctx.dir, 'build', 'run', 'pid'),
+      runDir: join(ctx.directoryPath, 'build', 'run'),
+      apiSocket: join(ctx.directoryPath, 'build', 'run', 'api.sock'),
+      vsockSocket: join(ctx.directoryPath, 'build', 'run', 'vsock.sock'),
+      logFile: join(ctx.directoryPath, 'build', 'run', 'firecracker.log'),
+      pidFile: join(ctx.directoryPath, 'build', 'run', 'pid'),
     },
-    placeholderPath: join(ctx.dir, 'build', 'placeholder.ext4'),
+    placeholderPath: join(ctx.directoryPath, 'build', 'placeholder.ext4'),
     tap: 'imptpl0',
     guestMac: '06:00:0a:64:00:02',
     jailId: 'template-1',
@@ -1253,27 +1253,27 @@ test('#buildStubVmm writes the snapshot files on a template build', async () => 
 test('#buildStubVmm rejects a failed template build with a fake error', async () => {
   const ctx = await setupTest();
 
-  const snapshot = buildSnapshotPaths(join(ctx.dir, 'templates', 'shape-1'));
+  const snapshot = buildSnapshotPaths(join(ctx.directoryPath, 'templates', 'shape-1'));
 
   ctx.fake.queue('template', 'fail');
 
   expect(
-    ctx.runner.buildTemplateVm({
+    ctx.runner.createTemplateVm({
       firecrackerBin: '/usr/bin/firecracker',
       kernelPath: '/images/vmlinux',
       systemDrivePath: '/images/system.ext4',
       bootArgs: 'console=ttyS0',
       vcpus: 2,
       memoryMib: 1024,
-      workDir: join(ctx.dir, 'build'),
+      workDir: join(ctx.directoryPath, 'build'),
       paths: {
-        runDir: join(ctx.dir, 'build', 'run'),
-        apiSocket: join(ctx.dir, 'build', 'run', 'api.sock'),
-        vsockSocket: join(ctx.dir, 'build', 'run', 'vsock.sock'),
-        logFile: join(ctx.dir, 'build', 'run', 'firecracker.log'),
-        pidFile: join(ctx.dir, 'build', 'run', 'pid'),
+        runDir: join(ctx.directoryPath, 'build', 'run'),
+        apiSocket: join(ctx.directoryPath, 'build', 'run', 'api.sock'),
+        vsockSocket: join(ctx.directoryPath, 'build', 'run', 'vsock.sock'),
+        logFile: join(ctx.directoryPath, 'build', 'run', 'firecracker.log'),
+        pidFile: join(ctx.directoryPath, 'build', 'run', 'pid'),
       },
-      placeholderPath: join(ctx.dir, 'build', 'placeholder.ext4'),
+      placeholderPath: join(ctx.directoryPath, 'build', 'placeholder.ext4'),
       tap: 'imptpl0',
       guestMac: '06:00:0a:64:00:02',
       jailId: 'template-1',
@@ -1290,27 +1290,27 @@ test('#buildStubVmm rejects a failed template build with a fake error', async ()
 test('#buildStubVmm writes no snapshot when a template build fails', async () => {
   const ctx = await setupTest();
 
-  const snapshot = buildSnapshotPaths(join(ctx.dir, 'templates', 'shape-1'));
+  const snapshot = buildSnapshotPaths(join(ctx.directoryPath, 'templates', 'shape-1'));
 
   ctx.fake.queue('template', 'fail');
 
   await expect(
-    ctx.runner.buildTemplateVm({
+    ctx.runner.createTemplateVm({
       firecrackerBin: '/usr/bin/firecracker',
       kernelPath: '/images/vmlinux',
       systemDrivePath: '/images/system.ext4',
       bootArgs: 'console=ttyS0',
       vcpus: 2,
       memoryMib: 1024,
-      workDir: join(ctx.dir, 'build'),
+      workDir: join(ctx.directoryPath, 'build'),
       paths: {
-        runDir: join(ctx.dir, 'build', 'run'),
-        apiSocket: join(ctx.dir, 'build', 'run', 'api.sock'),
-        vsockSocket: join(ctx.dir, 'build', 'run', 'vsock.sock'),
-        logFile: join(ctx.dir, 'build', 'run', 'firecracker.log'),
-        pidFile: join(ctx.dir, 'build', 'run', 'pid'),
+        runDir: join(ctx.directoryPath, 'build', 'run'),
+        apiSocket: join(ctx.directoryPath, 'build', 'run', 'api.sock'),
+        vsockSocket: join(ctx.directoryPath, 'build', 'run', 'vsock.sock'),
+        logFile: join(ctx.directoryPath, 'build', 'run', 'firecracker.log'),
+        pidFile: join(ctx.directoryPath, 'build', 'run', 'pid'),
       },
-      placeholderPath: join(ctx.dir, 'build', 'placeholder.ext4'),
+      placeholderPath: join(ctx.directoryPath, 'build', 'placeholder.ext4'),
       tap: 'imptpl0',
       guestMac: '06:00:0a:64:00:02',
       jailId: 'template-1',
@@ -1329,25 +1329,25 @@ test('#buildStubVmm writes no snapshot when a template build fails', async () =>
 test('#buildStubVmm settles the parked-build signal once a template build of a replaced runner parks', async () => {
   const ctx = await setupTest();
 
-  const snapshot = buildSnapshotPaths(join(ctx.dir, 'templates', 'shape-1'));
+  const snapshot = buildSnapshotPaths(join(ctx.directoryPath, 'templates', 'shape-1'));
   const hold = ctx.fake.hold('template');
 
-  void ctx.runner.buildTemplateVm({
+  void ctx.runner.createTemplateVm({
     firecrackerBin: '/usr/bin/firecracker',
     kernelPath: '/images/vmlinux',
     systemDrivePath: '/images/system.ext4',
     bootArgs: 'console=ttyS0',
     vcpus: 2,
     memoryMib: 1024,
-    workDir: join(ctx.dir, 'build'),
+    workDir: join(ctx.directoryPath, 'build'),
     paths: {
-      runDir: join(ctx.dir, 'build', 'run'),
-      apiSocket: join(ctx.dir, 'build', 'run', 'api.sock'),
-      vsockSocket: join(ctx.dir, 'build', 'run', 'vsock.sock'),
-      logFile: join(ctx.dir, 'build', 'run', 'firecracker.log'),
-      pidFile: join(ctx.dir, 'build', 'run', 'pid'),
+      runDir: join(ctx.directoryPath, 'build', 'run'),
+      apiSocket: join(ctx.directoryPath, 'build', 'run', 'api.sock'),
+      vsockSocket: join(ctx.directoryPath, 'build', 'run', 'vsock.sock'),
+      logFile: join(ctx.directoryPath, 'build', 'run', 'firecracker.log'),
+      pidFile: join(ctx.directoryPath, 'build', 'run', 'pid'),
     },
-    placeholderPath: join(ctx.dir, 'build', 'placeholder.ext4'),
+    placeholderPath: join(ctx.directoryPath, 'build', 'placeholder.ext4'),
     tap: 'imptpl0',
     guestMac: '06:00:0a:64:00:02',
     jailId: 'template-1',
@@ -1370,24 +1370,24 @@ test('#buildStubVmm settles the parked-build signal once a template build of a r
 test('#buildStubVmm leaves the parked-build signal pending for a template build that got past its VM call', async () => {
   const ctx = await setupTest();
 
-  const snapshot = buildSnapshotPaths(join(ctx.dir, 'templates', 'shape-1'));
+  const snapshot = buildSnapshotPaths(join(ctx.directoryPath, 'templates', 'shape-1'));
 
-  await ctx.runner.buildTemplateVm({
+  await ctx.runner.createTemplateVm({
     firecrackerBin: '/usr/bin/firecracker',
     kernelPath: '/images/vmlinux',
     systemDrivePath: '/images/system.ext4',
     bootArgs: 'console=ttyS0',
     vcpus: 2,
     memoryMib: 1024,
-    workDir: join(ctx.dir, 'build'),
+    workDir: join(ctx.directoryPath, 'build'),
     paths: {
-      runDir: join(ctx.dir, 'build', 'run'),
-      apiSocket: join(ctx.dir, 'build', 'run', 'api.sock'),
-      vsockSocket: join(ctx.dir, 'build', 'run', 'vsock.sock'),
-      logFile: join(ctx.dir, 'build', 'run', 'firecracker.log'),
-      pidFile: join(ctx.dir, 'build', 'run', 'pid'),
+      runDir: join(ctx.directoryPath, 'build', 'run'),
+      apiSocket: join(ctx.directoryPath, 'build', 'run', 'api.sock'),
+      vsockSocket: join(ctx.directoryPath, 'build', 'run', 'vsock.sock'),
+      logFile: join(ctx.directoryPath, 'build', 'run', 'firecracker.log'),
+      pidFile: join(ctx.directoryPath, 'build', 'run', 'pid'),
     },
-    placeholderPath: join(ctx.dir, 'build', 'placeholder.ext4'),
+    placeholderPath: join(ctx.directoryPath, 'build', 'placeholder.ext4'),
     tap: 'imptpl0',
     guestMac: '06:00:0a:64:00:02',
     jailId: 'template-1',
@@ -1402,7 +1402,7 @@ test('#buildStubVmm leaves the parked-build signal pending for a template build 
   ctx.fake.startGeneration();
 
   // a call other than a template build parks, and settles nothing
-  void ctx.runner.isAgentReady(ctx.paths);
+  void ctx.runner.probeAgentReady(ctx.paths);
 
   await waitFor(() => {
     expect(ctx.fake.countParkedCalls()).toBe(1);
@@ -1459,7 +1459,7 @@ test('#buildStubVmm starts a running VM and records the claim on a template rest
     guestSteps: {},
   });
 
-  expect(ctx.runner.isVmAlive(1001, ctx.paths)).toBeTrue();
+  expect(ctx.runner.probeVmAlive(1001, ctx.paths)).toBeTrue();
 
   expect(ctx.fake.restores).toStrictEqual([
     { hostname: 'alpha', isIdentityReset: false, memFile: '/templates/shape-1/mem' },

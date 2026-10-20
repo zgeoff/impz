@@ -5,8 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runGitChecked, runGitCommand } from '../../e2e/lib/git-env';
 
-const CODEMOD = join(import.meta.dir, 'nest-daemon-layers.ts');
-
 async function setupTest() {
   const root = await mkdtemp(join(tmpdir(), 'nest-daemon-layers-'));
 
@@ -14,7 +12,7 @@ async function setupTest() {
 
   await runGitChecked(['git', '-C', root, 'init', '--quiet']);
 
-  return { root };
+  return { root, codemod: join(import.meta.dir, 'nest-daemon-layers.ts') };
 }
 
 test('it moves a daemon file that git does not track yet', async () => {
@@ -22,7 +20,7 @@ test('it moves a daemon file that git does not track yet', async () => {
 
   await Bun.write(join(ctx.root, 'packages/daemon/src/db/imps.ts'), 'export const readImp = 1;\n');
 
-  const result = await runGitCommand([process.execPath, CODEMOD, ctx.root]);
+  const result = await runGitCommand([process.execPath, ctx.codemod, ctx.root]);
 
   expect(result).toStrictEqual({
     exitCode: 0,
@@ -38,7 +36,7 @@ test('it prints its usage on --help and moves no file', async () => {
 
   await Bun.write(join(ctx.root, 'packages/daemon/src/db/imps.ts'), 'export const readImp = 1;\n');
 
-  const result = await runGitCommand([process.execPath, CODEMOD, ctx.root, '--help']);
+  const result = await runGitCommand([process.execPath, ctx.codemod, ctx.root, '--help']);
 
   expect(result).toStrictEqual({
     exitCode: 0,
@@ -57,7 +55,7 @@ test.each([
 
   await Bun.write(join(ctx.root, 'packages/daemon/src/db/imps.ts'), 'export const readImp = 1;\n');
 
-  const result = await runGitCommand([process.execPath, CODEMOD, ctx.root, ...args]);
+  const result = await runGitCommand([process.execPath, ctx.codemod, ctx.root, ...args]);
 
   expect(result).toStrictEqual({
     exitCode: 1,
@@ -78,7 +76,7 @@ test('it exits 1 and names a daemon file that no layer covers', async () => {
     'export const quota = 1;\n',
   );
 
-  const result = await runGitCommand([process.execPath, CODEMOD, ctx.root]);
+  const result = await runGitCommand([process.execPath, ctx.codemod, ctx.root]);
 
   expect(result).toStrictEqual({
     exitCode: 1,
@@ -98,7 +96,7 @@ test('it exits 1 and names the rewritten files when oxfmt fails on them', async 
     "import { readImp } from '../../daemon/src/db/imps';\nconst = ;\n",
   );
 
-  const result = await runGitCommand([process.execPath, CODEMOD, ctx.root]);
+  const result = await runGitCommand([process.execPath, ctx.codemod, ctx.root]);
 
   expect(result.exitCode).toBe(1);
 
@@ -117,7 +115,7 @@ test('it exits 1 and moves no file when a destination already holds one', async 
     'export const placed = 1;\n',
   );
 
-  const result = await runGitCommand([process.execPath, CODEMOD, ctx.root]);
+  const result = await runGitCommand([process.execPath, ctx.codemod, ctx.root]);
 
   expect(result).toStrictEqual({
     exitCode: 1,

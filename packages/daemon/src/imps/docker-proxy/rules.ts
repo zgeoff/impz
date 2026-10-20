@@ -112,6 +112,7 @@ function checkBuildArgs(value: string): string | null {
 // body; one tag, imp's own, so imp-host's cannot move. Every other param
 // (session, remote, outputs, networkmode, ...) is refused.
 const BUILD_RULES: Readonly<Record<string, ParamRule>> = {
+  // oxlint-disable-next-line id-length -- `t` is the Docker Engine API's tag param
   t: {
     isRequired: true,
     check: (value) =>
@@ -154,7 +155,7 @@ export interface ImageReference {
 
 // The parts of a reference as the engine reads them: the first component is
 // a registry when it has a dot or a colon, or is localhost.
-export function readImageReference(reference: string): ImageReference {
+export function parseImageReference(reference: string): ImageReference {
   const withoutDigest = reference.split('@')[0] ?? '';
   const lastSlash = withoutDigest.lastIndexOf('/');
   const tagColon = withoutDigest.indexOf(':', lastSlash + 1);
@@ -202,7 +203,7 @@ function checkRegistry(registry: string): string | null {
 // what is wrong with the registry a reference names, or null; impd checks a
 // ref it builds from, which the engine may reach without a pull
 export function checkReferenceRegistry(reference: string): string | null {
-  return checkRegistry(readImageReference(reference).registry);
+  return checkRegistry(parseImageReference(reference).registry);
 }
 
 // An image the proxy will pull or create from: from a named registry, and
@@ -213,14 +214,14 @@ export function checkImageReference(reference: string, hostImage: string): Check
     return buildFailure(`image ${JSON.stringify(reference)} is not a reference`);
   }
 
-  const image = readImageReference(reference);
+  const image = parseImageReference(reference);
   const problem = checkRegistry(image.registry);
 
   if (problem !== null) {
     return buildFailure(problem);
   }
 
-  const host = readImageReference(hostImage);
+  const host = parseImageReference(hostImage);
 
   if (image.registry === host.registry && image.path === host.path) {
     return buildFailure(`image ${reference} is the repository imp-host runs from`);
@@ -238,8 +239,8 @@ function checkTag(value: string): string | null {
 // A pull of `pullOnly`'s repository at its digest, the tag the CLI sends for
 // a digest; the engine pulls fromImage's repository at the tag alone
 function checkPullOnly(fromImage: string, tag: string, pullOnly: string): Check {
-  const image = readImageReference(fromImage);
-  const only = readImageReference(pullOnly);
+  const image = parseImageReference(fromImage);
+  const only = parseImageReference(pullOnly);
   const digest = pullOnly.split('@')[1] ?? '';
 
   if (image.registry === only.registry && image.path === only.path && tag === digest) {
@@ -359,8 +360,8 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 // A create from `builderImage` by its digest, as impd's `docker create` of
 // IMP_BUILD_IMAGE names it; a create of another image would reach a pull
 function checkCreateOnly(image: string, builderImage: string): Check {
-  const named = readImageReference(image);
-  const only = readImageReference(builderImage);
+  const named = parseImageReference(image);
+  const only = parseImageReference(builderImage);
   const digest = builderImage.split('@')[1] ?? '';
 
   if (

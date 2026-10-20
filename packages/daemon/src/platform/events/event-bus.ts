@@ -1,6 +1,6 @@
 import type { ImpEvent } from '@impz/api';
+import { getErrorMessage } from '../process/get-error-message';
 import { printLog } from '../process/print-log';
-import { readErrorMessage } from '../process/read-error-message';
 
 // Every lifecycle event, to whoever listens: the event stream's subscribers,
 // the proxy and broker resync, and the metrics. The database publishes its
@@ -26,7 +26,7 @@ export function createEventBus<T = Readonly<ImpEvent>>(
         try {
           listener(event);
         } catch (error) {
-          log(`impd: events: a listener failed: ${readErrorMessage(error)}`);
+          log(`impd: events: a listener failed: ${getErrorMessage(error)}`);
         }
       }
     },

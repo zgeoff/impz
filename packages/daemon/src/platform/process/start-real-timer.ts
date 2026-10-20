@@ -7,10 +7,10 @@ interface RealTimerOptions {
 // the cancel.
 export function startRealTimer(
   fire: () => void,
-  ms: number,
+  durationMs: number,
   options: RealTimerOptions = {},
 ): () => void {
-  const timer = setTimeout(fire, ms);
+  const timer = setTimeout(fire, durationMs);
 
   if (options.isUnref === true) {
     timer.unref();

@@ -1,6 +1,6 @@
 import type { GrantNotCopied } from '@impz/api';
 import type { ImpDatabase } from './open-database';
-import { findClash, findSecret, listGrants, writeGrant } from './secrets';
+import { listGrants, readClash, readSecret, writeGrant } from './secrets';
 import { readTokenGrantable } from './tokens';
 import type { GrantableSecret } from './tokens';
 
@@ -46,7 +46,7 @@ export function createForkGrants(
     for (const grant of grants) {
       const name = grant.secret;
 
-      const secret = await findSecret(trx, name);
+      const secret = await readSecret(trx, name);
 
       // on the caller's list and on the token's now: a tokens.update since
       // the call began may have taken it off
@@ -62,7 +62,7 @@ export function createForkGrants(
         // listGrants joins the live secret in this transaction, so none
         // is gone today; the reason stays in the contract all the same
         notCopied.push({ secret: name, reason: 'no-secret' });
-      } else if ((await findClash(trx, toImpId, name, secret.rules)) === null) {
+      } else if ((await readClash(trx, toImpId, name, secret.rules)) === null) {
         // the fork's grant is as narrow as its source's
         await writeGrant(trx, toImpId, secret, grant.filter ?? undefined);
       } else {

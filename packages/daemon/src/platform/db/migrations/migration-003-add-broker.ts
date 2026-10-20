@@ -11,42 +11,46 @@ export const MIGRATION_003_ADD_BROKER: Migration = {
 
       // the egress mode, `open`, `box` or `none` (docs/architecture/network/egress.md),
       // and a box's allow-list as a JSON array
-      .addColumn('egress_policy', 'text', (c) => c.notNull().defaultTo('open'))
+      .addColumn('egress_policy', 'text', (column) => column.notNull().defaultTo('open'))
       .execute();
 
     // A secret's metadata. Its value is a file in <dataDir>/secrets, never a row.
     await db.schema
       .createTable('secrets')
-      .addColumn('name', 'text', (c) => c.primaryKey())
-      .addColumn('kind', 'text', (c) => c.notNull())
+      .addColumn('name', 'text', (column) => column.primaryKey())
+      .addColumn('kind', 'text', (column) => column.notNull())
 
       // BrokerRule[] as JSON
-      .addColumn('rules', 'text', (c) => c.notNull())
-      .addColumn('created_at', 'integer', (c) => c.notNull())
+      .addColumn('rules', 'text', (column) => column.notNull())
+      .addColumn('created_at', 'integer', (column) => column.notNull())
       .execute();
 
     await db.schema
       .createTable('grants')
-      .addColumn('imp_id', 'text', (c) => c.notNull().references('imps.id').onDelete('cascade'))
-      .addColumn('secret_name', 'text', (c) =>
-        c.notNull().references('secrets.name').onDelete('cascade'),
+      .addColumn('imp_id', 'text', (column) =>
+        column.notNull().references('imps.id').onDelete('cascade'),
+      )
+      .addColumn('secret_name', 'text', (column) =>
+        column.notNull().references('secrets.name').onDelete('cascade'),
       )
       .addPrimaryKeyConstraint('grants_pk', ['imp_id', 'secret_name'])
       .execute();
 
     await db.schema
       .createTable('broker_audit')
-      .addColumn('id', 'integer', (c) => c.primaryKey().autoIncrement())
-      .addColumn('imp_id', 'text', (c) => c.notNull().references('imps.id').onDelete('cascade'))
-      .addColumn('secret_name', 'text', (c) => c.notNull())
-      .addColumn('at', 'integer', (c) => c.notNull())
-      .addColumn('method', 'text', (c) => c.notNull())
-      .addColumn('host', 'text', (c) => c.notNull())
-      .addColumn('path', 'text', (c) => c.notNull())
-      .addColumn('status', 'integer', (c) => c.notNull())
-      .addColumn('request_bytes', 'integer', (c) => c.notNull())
-      .addColumn('response_bytes', 'integer', (c) => c.notNull())
-      .addColumn('duration_ms', 'integer', (c) => c.notNull())
+      .addColumn('id', 'integer', (column) => column.primaryKey().autoIncrement())
+      .addColumn('imp_id', 'text', (column) =>
+        column.notNull().references('imps.id').onDelete('cascade'),
+      )
+      .addColumn('secret_name', 'text', (column) => column.notNull())
+      .addColumn('at', 'integer', (column) => column.notNull())
+      .addColumn('method', 'text', (column) => column.notNull())
+      .addColumn('host', 'text', (column) => column.notNull())
+      .addColumn('path', 'text', (column) => column.notNull())
+      .addColumn('status', 'integer', (column) => column.notNull())
+      .addColumn('request_bytes', 'integer', (column) => column.notNull())
+      .addColumn('response_bytes', 'integer', (column) => column.notNull())
+      .addColumn('duration_ms', 'integer', (column) => column.notNull())
       .execute();
 
     await db.schema

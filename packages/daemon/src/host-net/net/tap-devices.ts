@@ -128,17 +128,17 @@ export function createTapDevices(
   };
 }
 
-function isSameOwner(a: Readonly<TapOwner>, b: Readonly<TapOwner>): boolean {
-  return a.uid === b.uid && a.gid === b.gid;
+function isSameOwner(left: Readonly<TapOwner>, right: Readonly<TapOwner>): boolean {
+  return left.uid === right.uid && left.gid === right.gid;
 }
 
 function readTapOwner(tap: string): TapOwner | null {
   try {
-    const dir = `/sys/class/net/${tap}`;
+    const directory = `/sys/class/net/${tap}`;
 
     return {
-      uid: Number(readFileSync(`${dir}/owner`, 'utf8').trim()),
-      gid: Number(readFileSync(`${dir}/group`, 'utf8').trim()),
+      uid: Number(readFileSync(`${directory}/owner`, 'utf8').trim()),
+      gid: Number(readFileSync(`${directory}/group`, 'utf8').trim()),
     };
   } catch {
     return null;

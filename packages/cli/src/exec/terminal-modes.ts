@@ -29,19 +29,6 @@ export interface ModeWatcher {
   readonly buildReset: () => string;
 }
 
-interface Seen {
-  altScreen: boolean;
-  paste: boolean;
-  cursorKeys: boolean;
-
-  // kitty keyboard pushes less pops, per screen as kitty keeps them
-  kitty: { main: number; alt: number };
-}
-
-function createSeen(): Seen {
-  return { altScreen: false, paste: false, cursorKeys: false, kitty: { main: 0, alt: 0 } };
-}
-
 // Turns off what the session turned on, and leaves alone what it did not:
 // the local shell may use bracketed paste or cursor keys itself.
 export function createModeWatcher(): ModeWatcher {
@@ -106,6 +93,19 @@ export function createModeWatcher(): ModeWatcher {
       ].join('');
     },
   };
+}
+
+interface Seen {
+  altScreen: boolean;
+  paste: boolean;
+  cursorKeys: boolean;
+
+  // kitty keyboard pushes less pops, per screen as kitty keeps them
+  kitty: { main: number; alt: number };
+}
+
+function createSeen(): Seen {
+  return { altScreen: false, paste: false, cursorKeys: false, kitty: { main: 0, alt: 0 } };
 }
 
 function buildKittyPop(count: number): string {

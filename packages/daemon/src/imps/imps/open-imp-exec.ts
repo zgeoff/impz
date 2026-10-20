@@ -1,4 +1,4 @@
-import { findImpById } from '../../platform/db/imps';
+import { readImpById } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import type { SessionInfo } from '../../vm/agent-client/agent-protocol';
@@ -155,7 +155,7 @@ export function openImpExec(
 // The guest the bundle step ran in is the one the command starts in: the
 // caller holds the lock, and this catches any write that got past it.
 async function requireSameBoot(context: ImpHost, imp: ImpRecord): Promise<void> {
-  const fresh = await findImpById(context.db, imp.id);
+  const fresh = await readImpById(context.db, imp.id);
 
   if (fresh?.state !== 'running' || fresh.pid !== imp.pid) {
     throw buildBrokerNotReadyError('the imp booted again after the broker CA step');

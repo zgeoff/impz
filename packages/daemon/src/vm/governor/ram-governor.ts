@@ -6,8 +6,8 @@ import { createSemaphore } from '../../platform/process/semaphore';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildImpOverBudgetError,
+  buildNeededMib,
   buildRamBudgetError,
-  readNeededMib,
 } from '../../surface/api-errors';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import type { ProtectedImp } from '../../surface/api-errors';
@@ -407,7 +407,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           const usage = await readEffectiveUsage(request.id);
 
           emitAdmission(request, 'refused', usage.effectiveMib, {
-            neededMib: readNeededMib(usage.effectiveMib, request.memoryMib, deps.budgetMib),
+            neededMib: buildNeededMib(usage.effectiveMib, request.memoryMib, deps.budgetMib),
             protectedCount: 0,
           });
 
@@ -438,7 +438,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           const usage = await readEffectiveUsage(request.id);
 
           emitAdmission(request, 'refused', usage.effectiveMib, {
-            neededMib: readNeededMib(usage.effectiveMib, request.reserveMib, deps.budgetMib),
+            neededMib: buildNeededMib(usage.effectiveMib, request.reserveMib, deps.budgetMib),
             protectedCount: room.protected.length,
           });
 
@@ -491,7 +491,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           usedMib: usage.effectiveMib,
           reserveMib: request.mib,
           ...(!fits && {
-            neededMib: readNeededMib(usage.effectiveMib, request.mib, deps.budgetMib),
+            neededMib: buildNeededMib(usage.effectiveMib, request.mib, deps.budgetMib),
             protectedCount: room.protected.length,
           }),
         });

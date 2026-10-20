@@ -11,24 +11,6 @@ export interface CpPlan {
   readonly localPath: string;
 }
 
-interface GuestSide {
-  readonly name: string;
-  readonly path: string;
-}
-
-function parseGuestSide(spec: string): GuestSide | null {
-  const colon = spec.indexOf(':');
-
-  if (colon <= 0 || spec.slice(0, colon).includes('/')) {
-    return null;
-  }
-
-  const name = spec.slice(0, colon);
-  const path = spec.slice(colon + 1);
-
-  return NameSchema.safeParse(name).success ? { name, path } : null;
-}
-
 export function parseCpArgs(source: string, target: string): CpPlan {
   const from = parseGuestSide(source);
   const to = parseGuestSide(target);
@@ -48,4 +30,22 @@ export function parseCpArgs(source: string, target: string): CpPlan {
   return from === null
     ? { direction: 'upload', name: guest.name, guestPath: guest.path, localPath: source }
     : { direction: 'download', name: guest.name, guestPath: guest.path, localPath: target };
+}
+
+interface GuestSide {
+  readonly name: string;
+  readonly path: string;
+}
+
+function parseGuestSide(spec: string): GuestSide | null {
+  const colon = spec.indexOf(':');
+
+  if (colon <= 0 || spec.slice(0, colon).includes('/')) {
+    return null;
+  }
+
+  const name = spec.slice(0, colon);
+  const path = spec.slice(colon + 1);
+
+  return NameSchema.safeParse(name).success ? { name, path } : null;
 }

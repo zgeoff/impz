@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { buildMockMoveSendRow } from '../../../testing/imp-ops/build-mock-move-send-row';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
-import { findMoveSend, removeMoveSend, updateMoveSend, writeMoveSend } from './move-sends';
+import { readMoveSend, removeMoveSend, updateMoveSend, writeMoveSend } from './move-sends';
 
 async function setupTest() {
   const database = await createTestDatabase();
@@ -16,7 +16,7 @@ test('#findMoveSend reads the row it wrote for the imp', async () => {
 
   await writeMoveSend(ctx.db, row);
 
-  const found = await findMoveSend(ctx.db, 'imp-1');
+  const found = await readMoveSend(ctx.db, 'imp-1');
 
   expect(found).toStrictEqual(row);
 });
@@ -26,7 +26,7 @@ test('#findMoveSend finds nothing for an imp with no send', async () => {
 
   await writeMoveSend(ctx.db, buildMockMoveSendRow({ imp_id: 'imp-1' }));
 
-  const found = await findMoveSend(ctx.db, 'imp-2');
+  const found = await readMoveSend(ctx.db, 'imp-2');
 
   expect(found).toBeUndefined();
 });
@@ -41,7 +41,7 @@ test('#updateMoveSend sets the fields it is given on the imp’s row', async () 
     ticket: 'ticket',
   });
 
-  const found = await findMoveSend(ctx.db, 'imp-1');
+  const found = await readMoveSend(ctx.db, 'imp-1');
 
   expect(found).toMatchObject({ peer_url: 'https://target.test:7071', ticket: 'ticket' });
 });
@@ -55,7 +55,7 @@ test('#updateMoveSend never changes another imp’s row', async () => {
   await writeMoveSend(ctx.db, other);
   await updateMoveSend(ctx.db, 'imp-1', { error: 'the target did not answer' });
 
-  const found = await findMoveSend(ctx.db, 'imp-2');
+  const found = await readMoveSend(ctx.db, 'imp-2');
 
   expect(found).toStrictEqual(other);
 });

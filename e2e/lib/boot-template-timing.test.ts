@@ -1,17 +1,17 @@
 import { expect, test } from 'bun:test';
 import {
-  findU32Span,
+  getU32Span,
   parseLoggedGuestSteps,
   parseLoggedSteps,
   pickPercentile,
 } from './boot-template-timing';
 
-test('#findU32Span measures the distance between two values', () => {
-  expect(findU32Span(1000, 250)).toBe(750);
+test('#getU32Span measures the distance between two values', () => {
+  expect(getU32Span(1000, 250)).toBe(750);
 });
 
-test('#findU32Span measures around the wrap', () => {
-  expect(findU32Span(2 ** 32 - 10, 5)).toBe(15);
+test('#getU32Span measures around the wrap', () => {
+  expect(getU32Span(2 ** 32 - 10, 5)).toBe(15);
 });
 
 test('#parseLoggedSteps reads the steps of the last line that names the imp', () => {

@@ -1237,7 +1237,7 @@ test('it refuses a list as INVALID_STATE once a step holds a running imp past 10
   await ctx.client.imps.create({ name: 'dev' });
 
   const timers = buildStubClock();
-  const clock = { ms: 0 };
+  const clock = { durationMs: 0 };
 
   // impd's own services API over its runtime, with a clock and timers the
   // test moves
@@ -1246,7 +1246,7 @@ test('it refuses a list as INVALID_STATE once a step holds a running imp past 10
     events: ctx.impd.imps.events,
     readSleptServices: (record) =>
       readSnapshotMeta(buildImpPaths(ctx.dataDir, record.id))?.services,
-    now: () => clock.ms,
+    now: () => clock.durationMs,
     startTimer: timers.startTimer,
   });
 
@@ -1266,7 +1266,7 @@ test('it refuses a list as INVALID_STATE once a step holds a running imp past 10
     expect(timers.readPendingMs()).not.toBeEmpty();
   });
 
-  clock.ms = 10_001;
+  clock.durationMs = 10_001;
 
   timers.firePending();
 

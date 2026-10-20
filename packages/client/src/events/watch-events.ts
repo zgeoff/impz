@@ -13,6 +13,15 @@ export interface EventSource {
   };
 }
 
+export interface WatchReconnect {
+  // the wait before each new stream
+  readonly delayMs: number;
+
+  // whether a failed stream opens again; by default all but impd's refusal
+  // of the call (a 4xx answer, or no such procedure on an older impd)
+  readonly shouldRetry?: (error: unknown) => boolean;
+}
+
 export interface WatchEventsOptions {
   // each event in order; the next waits until this settles, and a throw
   // ends the watch with it
@@ -29,15 +38,6 @@ export interface WatchEventsOptions {
   // opens a fresh stream after one ends, as when impd restarts or drops a
   // reader that fell behind; without it the watch ends with its stream
   readonly reconnect?: WatchReconnect;
-}
-
-export interface WatchReconnect {
-  // the wait before each new stream
-  readonly delayMs: number;
-
-  // whether a failed stream opens again; by default all but impd's refusal
-  // of the call (a 4xx answer, or no such procedure on an older impd)
-  readonly shouldRetry?: (error: unknown) => boolean;
 }
 
 // One consumer of impd's event stream. Resolves once the signal aborts, or

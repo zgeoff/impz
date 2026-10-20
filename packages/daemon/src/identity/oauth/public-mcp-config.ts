@@ -32,7 +32,7 @@ export function parsePublicMcpConfig(
     return null;
   }
 
-  const origin = readOrigin(text);
+  const origin = parseOrigin(text);
   const port = env.IMP_MCP_PUBLIC_PORT;
   const clash = others.find(([, other]) => other === port);
 
@@ -52,7 +52,7 @@ export function parsePublicMcpConfig(
 }
 
 // an origin with no path, query or credentials: the issuer must be exactly it
-function readOrigin(text: string): URL {
+function parseOrigin(text: string): URL {
   let url: URL;
 
   try {

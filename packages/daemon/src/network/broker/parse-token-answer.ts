@@ -22,7 +22,7 @@ export function parseTokenAnswer(status: number, text: string): Classified {
     body = null;
   }
 
-  const code = readErrorCode(body);
+  const code = findErrorCode(body);
 
   // error codes that mean the refresh token is dead
   const PERMANENT_CODES = new Set([
@@ -44,7 +44,7 @@ export function parseTokenAnswer(status: number, text: string): Classified {
     return { kind: 'transient', error: `HTTP ${String(status)}` };
   }
 
-  return readTokens(body);
+  return parseTokens(body);
 }
 
 // the error of a token endpoint's answer: a string, or an object with a
@@ -53,7 +53,7 @@ const ErrorObjectSchema = z.object({ code: z.string().nullish(), error: z.string
 const ErrorAnswerSchema = z.object({ error: z.union([z.string(), ErrorObjectSchema]) });
 
 // a code a log line and an API answer may carry: short and plain
-function readErrorCode(body: unknown): string | null {
+function findErrorCode(body: unknown): string | null {
   const parsed = ErrorAnswerSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -73,7 +73,7 @@ const TokenAnswerSchema = z.object({
   expires_in: z.number().nullish(),
 });
 
-function readTokens(body: unknown): Classified {
+function parseTokens(body: unknown): Classified {
   const parsed = TokenAnswerSchema.safeParse(body);
 
   if (!parsed.success) {

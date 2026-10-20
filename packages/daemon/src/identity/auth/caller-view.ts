@@ -4,7 +4,7 @@ import { hasScope } from '@impz/api';
 import { ORPCError } from '@orpc/server';
 import type { LeaseRecord } from '../../platform/db/leases';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildForbiddenError, readCallerData } from '../../surface/api-errors';
+import { buildForbiddenError, findCallerData } from '../../surface/api-errors';
 import { formatCaller, isCallerAllowed } from './caller';
 import type { Caller } from './caller';
 
@@ -60,7 +60,7 @@ export function isLeaseVisible(caller: Readonly<Caller> | null, lease: Readonly<
 // The error as the caller may see it: LEASED with the caller's own leases,
 // RAM_BUDGET_EXCEEDED with the imps it may read. Any other error is as it was.
 export function toCallerError(error: unknown, caller: Readonly<Caller> | null): unknown {
-  const hidden = readCallerData(error);
+  const hidden = findCallerData(error);
 
   if (hidden === undefined || !(error instanceof ORPCError)) {
     return error;
@@ -72,7 +72,7 @@ export function toCallerError(error: unknown, caller: Readonly<Caller> | null): 
   const shown =
     hidden.kind === 'leases'
       ? toLeaseSummary(caller, hidden.name, hidden.leases)
-      : readVisibleProtected(caller, hidden.imps);
+      : buildVisibleProtected(caller, hidden.imps);
 
   return new ORPCError(error.code, {
     status: error.status,
@@ -82,7 +82,7 @@ export function toCallerError(error: unknown, caller: Readonly<Caller> | null): 
   });
 }
 
-function readVisibleProtected(
+function buildVisibleProtected(
   caller: Readonly<Caller> | null,
   imps: readonly { readonly name: string }[],
 ) {

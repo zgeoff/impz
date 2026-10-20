@@ -27,7 +27,7 @@ import {
   startSsh,
 } from '../lib/ssh';
 import { startStubGitSshServer } from '../lib/start-stub-git-ssh-server';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // ssh-agent forwarding (docs/guides/ssh.md): the agent on this machine signs
@@ -56,7 +56,7 @@ async function setupTest() {
 
   stack.defer(() => rm(sockets, { recursive: true, force: true }));
 
-  return { prefix: readSuitePrefix('ssh-agent'), stack, client, ssh, laptop, sockets };
+  return { prefix: getSuitePrefix('ssh-agent'), stack, client, ssh, laptop, sockets };
 }
 
 test('it lists the laptop key over ssh -A, from a socket only the image user owns', async () => {
@@ -95,7 +95,7 @@ test('it signs a git push from the imp with the laptop agent', async () => {
   const name = `${ctx.prefix}push`;
 
   const gateway = await readContainerGateway();
-  const git = await startStubGitSshServer(gateway, ctx.ssh.dir, ctx.laptop.publicKey);
+  const git = await startStubGitSshServer(gateway, ctx.ssh.directory, ctx.laptop.publicKey);
 
   ctx.stack.defer(() => git.stop());
 

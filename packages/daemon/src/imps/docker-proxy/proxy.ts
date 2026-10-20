@@ -5,7 +5,7 @@
 import { P, match } from 'ts-pattern';
 import { z } from 'zod';
 import { formatEngineFailure, formatRefusal } from './refusal';
-import { findRequestRoute, formatQuery } from './router';
+import { formatQuery, getRequestRoute } from './router';
 import type { RoutedRequest } from './router';
 import {
   BUILD_CONTENT_TYPE,
@@ -193,7 +193,7 @@ export function createDockerProxy(
   };
 
   // the container's full ID, when the proxy created it; null otherwise
-  const findOwnContainer = async (versionPrefix: string, id: string): Promise<string | null> => {
+  const readOwnContainer = async (versionPrefix: string, id: string): Promise<string | null> => {
     const inspected = await sendUpstream(versionPrefix, {
       method: 'GET',
       path: `/containers/${id}/json`,
@@ -335,7 +335,7 @@ export function createDockerProxy(
     path: string,
     id: string,
   ): Promise<Response> => {
-    const fullId = await findOwnContainer(versionPrefix, id);
+    const fullId = await readOwnContainer(versionPrefix, id);
 
     if (fullId === null) {
       return buildRefusal(request, path, `container ${id} was not created by this proxy`);
@@ -421,7 +421,7 @@ export function createDockerProxy(
   return async (request) => {
     const url = new URL(request.url);
 
-    const routed = findRequestRoute(request.method, `${url.pathname}${url.search}`);
+    const routed = getRequestRoute(request.method, `${url.pathname}${url.search}`);
 
     if (!routed.isAllowed) {
       return buildRefusal(request, url.pathname, routed.reason);

@@ -73,32 +73,13 @@ export const infoCommand = defineCommand({
     }),
 });
 
-// public imps, or why there are none; undefined from an impd before them
-function formatPublic(info: SystemInfo['public']): string {
-  if (info === undefined) {
-    return 'unknown';
-  }
-
-  if (info === null) {
-    return 'off (IMP_PUBLIC_IP unset)';
-  }
-
-  const records = info.records;
-  const at = records?.at.toISOString() ?? '';
-  let state = 'records not written yet';
-
-  if (records !== null) {
-    state = records.isOk
-      ? `records ok at ${at}`
-      : `records failing at ${at}: ${records.error ?? ''}`;
-  }
-
-  return `${String(info.imps)} imps at ${info.ip}, ${state}`;
-}
-
 // what sleeping imps take back on a wake; nothing from an impd before it
 function formatSleeping(mib: number | undefined): string {
   return mib === undefined ? '' : `, ${String(mib)} asleep`;
+}
+
+function formatGib(bytes: number): string {
+  return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
 }
 
 // what a create gets when it names no memory or image; no line from an
@@ -161,10 +142,6 @@ function formatKsm(ksm: SystemInfo['ksm']): string[][] {
   ];
 }
 
-function formatGib(bytes: number): string {
-  return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
-}
-
 // a line for the per-imp names, then one per name that is not live
 function formatTailnetNames(names: SystemInfo['tailscale']['names']): string[][] {
   if (names === null) {
@@ -175,4 +152,27 @@ function formatTailnetNames(names: SystemInfo['tailscale']['names']): string[][]
     ['names', `${String(names.live)} live, ${String(names.failed.length)} failed`],
     ...names.failed.map((failure) => ['', `${failure.name}: ${failure.error}`]),
   ];
+}
+
+// public imps, or why there are none; undefined from an impd before them
+function formatPublic(info: SystemInfo['public']): string {
+  if (info === undefined) {
+    return 'unknown';
+  }
+
+  if (info === null) {
+    return 'off (IMP_PUBLIC_IP unset)';
+  }
+
+  const records = info.records;
+  const at = records?.at.toISOString() ?? '';
+  let state = 'records not written yet';
+
+  if (records !== null) {
+    state = records.isOk
+      ? `records ok at ${at}`
+      : `records failing at ${at}: ${records.error ?? ''}`;
+  }
+
+  return `${String(info.imps)} imps at ${info.ip}, ${state}`;
 }

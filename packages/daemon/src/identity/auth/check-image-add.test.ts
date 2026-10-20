@@ -41,7 +41,7 @@ test('it lets a nixie-* token add nixie-x from a pinned ref under its prefix', a
   const ref = `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`;
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: [ref],
@@ -83,7 +83,7 @@ test('it lets a nixie-* token stream the add of nixie-x from a pinned ref under 
   const ref = `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`;
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: [ref],
@@ -326,7 +326,7 @@ test('it lets a token add an image once an update gives it a prefix', async () =
   const ref = `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`;
 
   const docker = createStubDockerCli({
-    dir: ctx.dataDir,
+    directory: ctx.dataDir,
     images: [
       {
         refs: [ref],

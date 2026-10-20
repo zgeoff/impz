@@ -2,14 +2,14 @@ import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { loadConfig } from '../../packages/daemon/src/config';
 import { ENFORCE_INTERVAL_MS } from '../../packages/daemon/src/vm/governor/ram-governor';
-import { findOvershoots } from '../lib/budget-overshoot';
+import { collectOvershoots } from '../lib/budget-overshoot';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
-import { getThroughProxy } from '../lib/http';
+import { readThroughProxy } from '../lib/http';
 import {
   createInstanceClient,
-  findImp,
   listImps,
+  readImp,
   readInfo,
   readState,
   runImp,
@@ -22,7 +22,7 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import {
   buildFillScript,
   buildOvershootLimits,
-  findBudgetViolations,
+  collectBudgetViolations,
   readOvershootMs,
   readPerImpMib,
   startBudgetMonitor,
@@ -30,7 +30,7 @@ import {
   waitForUnderBudget,
 } from '../lib/scale-budget';
 import { buildStats } from '../lib/stats';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
 // The RAM governor at scale (docs/runbooks/development.md): more imps than the
@@ -46,7 +46,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('scale'), stack, client };
+  return { prefix: getSuitePrefix('scale'), stack, client };
 }
 
 test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps the least recently active, and wakes each on request`, async () => {
@@ -161,7 +161,7 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
     `    peak ramUsedMib while creating: ${String(peak)} of ${String(config.ramBudgetMib)}`,
   );
 
-  expect(findBudgetViolations(monitor.samples, monitor.sleeps, limits, 'running')).toStrictEqual(
+  expect(collectBudgetViolations(monitor.samples, monitor.sleeps, limits, 'running')).toStrictEqual(
     [],
   );
 
@@ -178,7 +178,7 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
   // exec wakes the least recently active imp the governor slept, memory and
   // all: its tmpfs fill is still there, and RAM stays in budget
   const [lru] = sleeping.toSorted(
-    (a, b) => Date.parse(a.lastActiveAt) - Date.parse(b.lastActiveAt),
+    (left, right) => Date.parse(left.lastActiveAt) - Date.parse(right.lastActiveAt),
   );
 
   invariant(lru);
@@ -190,26 +190,26 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
 
   expect(Number(fillMib)).toBe(config.scaleFillMib);
 
-  expect(findBudgetViolations(monitor.samples, monitor.sleeps, limits, 'running')).toStrictEqual(
+  expect(collectBudgetViolations(monitor.samples, monitor.sleeps, limits, 'running')).toStrictEqual(
     [],
   );
 
   // each request to a sleeping imp must wake it within the budget
-  const requests: { state: string; ms: number; body: string }[] = [];
+  const requests: { state: string; durationMs: number; body: string }[] = [];
 
   for (const name of names) {
     const state = await readState(name);
 
     const started = Date.now();
 
-    const body = await getThroughProxy(name);
+    const body = await readThroughProxy(name);
 
-    requests.push({ state, ms: Date.now() - started, body });
+    requests.push({ state, durationMs: Date.now() - started, body });
   }
 
   const wakeMs = requests
     .filter((request) => request.state === 'sleeping')
-    .map((request) => request.ms);
+    .map((request) => request.durationMs);
 
   console.log(`    woke ${String(wakeMs.length)} sleeping imps by HTTP`);
 
@@ -230,7 +230,7 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, huge));
 
-  const leftBehind = await findImp(huge);
+  const leftBehind = await readImp(huge);
 
   expect(rejected).toStrictEqual({
     exitCode: 1,
@@ -310,7 +310,7 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
 
   const maxAwake = Math.max(...monitor.samples.map((sample) => sample.awake));
 
-  const overshoots = findOvershoots(
+  const overshoots = collectOvershoots(
     monitor.samples.map((sample) => ({ at: sample.at, usedMib: sample.ramUsedMib })),
     config.ramBudgetMib,
   );
@@ -350,5 +350,7 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
   writeMetric('createMs', buildStats(createMs));
   writeMetric('wakeMs', buildStats(wakeMs));
 
-  expect(findBudgetViolations(monitor.samples, monitor.sleeps, limits, 'final')).toStrictEqual([]);
+  expect(collectBudgetViolations(monitor.samples, monitor.sleeps, limits, 'final')).toStrictEqual(
+    [],
+  );
 });

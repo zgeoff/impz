@@ -85,81 +85,18 @@ export const newCommand = defineCommand({
   },
 });
 
-// Probes every saved host, ranks those that could take the imp, and
-// creates on the best; docs/guides/hosts.md#placement says how it picks.
-async function runPlacedNew(io: CommandIO, request: NewRequest): Promise<void> {
-  const targets = listSavedTargets(io.env, io.printError);
-  const place = toPlaceRequest(request);
-
-  const answers = await runOnHosts(targets, (client, signal) =>
-    readHostProbe(client, signal, place),
-  );
-
-  const ranking = buildRanking(answers, place);
-
-  for (const dropped of ranking.dropped) {
-    io.printError(`impz: ${dropped.host}: skipped: ${dropped.reason}`);
-  }
-
-  if (ranking.ranked.length === 0) {
-    throw new Error('no saved host can take the imp');
-  }
-
-  let config: CliConfig | null = null;
-
-  try {
-    await createPlaced(
-      ranking.ranked,
-      async (host) => {
-        const target = targets.find((saved) => saved.host === host);
-
-        if (target === undefined) {
-          throw new Error(`no saved host ${host}`);
-        }
-
-        config = target.config;
-
-        io.printError(`impz: placing on ${host}`);
-
-        await runNew(createImpClient(target.config), io, request, target);
-      },
-      (host, message) => {
-        io.printError(`impz: ${host}: ${message}; trying the next host`);
-      },
-    );
-  } catch (error) {
-    throw config === null ? error : toCallError(error, config);
-  }
-}
-
-function toPlaceRequest(request: NewRequest): PlaceRequest {
-  const input = request.input;
-
-  return {
-    name: input.name ?? null,
-    image: input.image ?? null,
-
-    // impd refuses an elastic imp whose max passes its budget
-    memoryMib: input.maxMemoryMib ?? input.memoryMib ?? null,
-    cpuLimit: input.cpuLimit ?? null,
-    policyMode: input.policy?.mode ?? null,
-    networks: input.networks ?? [],
-    needsWholeHost: request.auth !== null || input.networks !== undefined,
-  };
-}
-
-interface NewRequest {
-  readonly input: CreateInput;
-  readonly auth: ExposeAuth | null;
-  readonly json: boolean;
-}
-
 // the create's input, with its network list read-only until the call
 type CreateInput = Readonly<Omit<Parameters<ImpClient['imps']['create']>[0], 'networks'>> & {
   readonly networks?: readonly string[];
 };
 
 type ExposeAuth = ReturnType<typeof parsePublicAuth>;
+
+interface NewRequest {
+  readonly input: CreateInput;
+  readonly auth: ExposeAuth | null;
+  readonly json: boolean;
+}
 
 interface NewArgs extends Readonly<Record<string, unknown>> {
   readonly name?: string | undefined;
@@ -305,4 +242,67 @@ function printPlacedFailure(
   }
 
   return new Error(`${imp.name} was created on ${placed.host}; ${message}`);
+}
+
+// Probes every saved host, ranks those that could take the imp, and
+// creates on the best; docs/guides/hosts.md#placement says how it picks.
+async function runPlacedNew(io: CommandIO, request: NewRequest): Promise<void> {
+  const targets = listSavedTargets(io.env, io.printError);
+  const place = toPlaceRequest(request);
+
+  const answers = await runOnHosts(targets, (client, signal) =>
+    readHostProbe(client, signal, place),
+  );
+
+  const ranking = buildRanking(answers, place);
+
+  for (const dropped of ranking.dropped) {
+    io.printError(`impz: ${dropped.host}: skipped: ${dropped.reason}`);
+  }
+
+  if (ranking.ranked.length === 0) {
+    throw new Error('no saved host can take the imp');
+  }
+
+  let config: CliConfig | null = null;
+
+  try {
+    await createPlaced(
+      ranking.ranked,
+      async (host) => {
+        const target = targets.find((saved) => saved.host === host);
+
+        if (target === undefined) {
+          throw new Error(`no saved host ${host}`);
+        }
+
+        config = target.config;
+
+        io.printError(`impz: placing on ${host}`);
+
+        await runNew(createImpClient(target.config), io, request, target);
+      },
+      (host, message) => {
+        io.printError(`impz: ${host}: ${message}; trying the next host`);
+      },
+    );
+  } catch (error) {
+    throw config === null ? error : toCallError(error, config);
+  }
+}
+
+function toPlaceRequest(request: NewRequest): PlaceRequest {
+  const input = request.input;
+
+  return {
+    name: input.name ?? null,
+    image: input.image ?? null,
+
+    // impd refuses an elastic imp whose max passes its budget
+    memoryMib: input.maxMemoryMib ?? input.memoryMib ?? null,
+    cpuLimit: input.cpuLimit ?? null,
+    policyMode: input.policy?.mode ?? null,
+    networks: input.networks ?? [],
+    needsWholeHost: request.auth !== null || input.networks !== undefined,
+  };
 }

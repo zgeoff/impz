@@ -11,12 +11,12 @@ interface ChildTestRun {
 // Runs `source` as one test file in `dir`, its working and temp dir, with no
 // preload, so a later test can read what an earlier onTestFinished left. It
 // kills the child at timeoutMs, by default under bun test's 5 s timeout.
-export function runChildTests(dir: string, source: string, timeoutMs = 4000): ChildTestRun {
-  writeFileSync(join(dir, 'child.test.ts'), source);
+export function runChildTests(directory: string, source: string, timeoutMs = 4000): ChildTestRun {
+  writeFileSync(join(directory, 'child.test.ts'), source);
 
   const result = Bun.spawnSync([process.execPath, 'test', './child.test.ts'], {
-    cwd: dir,
-    env: { ...process.env, TMPDIR: dir },
+    cwd: directory,
+    env: { ...process.env, TMPDIR: directory },
     timeout: timeoutMs,
   });
 

@@ -6,11 +6,11 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { runSuite, stopSuiteGroup } from './run-suite';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'run-suite-'));
+  const directory = await mkdtemp(join(tmpdir(), 'run-suite-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#runSuite returns 0 for a suite that passes', async () => {
@@ -18,7 +18,7 @@ test('#runSuite returns 0 for a suite that passes', async () => {
 
   const exitCode = await runSuite({
     argv: [process.execPath, '-e', 'process.exit(0)'],
-    cwd: ctx.dir,
+    cwd: ctx.directoryPath,
     env: process.env,
     onStart: () => {},
   });
@@ -31,7 +31,7 @@ test('#runSuite returns the exit code of a suite that fails', async () => {
 
   const exitCode = await runSuite({
     argv: [process.execPath, '-e', 'process.exit(3)'],
-    cwd: ctx.dir,
+    cwd: ctx.directoryPath,
     env: process.env,
     onStart: () => {},
   });
@@ -42,7 +42,7 @@ test('#runSuite returns the exit code of a suite that fails', async () => {
 test('#stopSuiteGroup stops a running suite and the processes it started', async () => {
   const ctx = await setupTest();
 
-  const marker = join(ctx.dir, 'started');
+  const marker = join(ctx.directoryPath, 'started');
   const started = Promise.withResolvers<number>();
 
   // a suite that starts a child of its own, as the imp CLI calls do, and
@@ -54,7 +54,7 @@ test('#stopSuiteGroup stops a running suite and the processes it started', async
       'const child = Bun.spawn(["sleep", "1000"]); await Bun.write(process.argv[1], String(child.pid)); setInterval(() => {}, 1000)',
       marker,
     ],
-    cwd: ctx.dir,
+    cwd: ctx.directoryPath,
     env: process.env,
     onStart: (pid) => {
       started.resolve(pid);
@@ -101,7 +101,7 @@ test('#stopSuiteGroup treats a group that already exited as stopped', async () =
 
   await runSuite({
     argv: [process.execPath, '-e', 'process.exit(0)'],
-    cwd: ctx.dir,
+    cwd: ctx.directoryPath,
     env: process.env,
     onStart: (pid) => {
       started.resolve(pid);

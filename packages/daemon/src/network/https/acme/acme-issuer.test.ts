@@ -14,11 +14,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dir = await mkdtemp(join(tmpdir(), 'imp-acme-issuer-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-acme-issuer-'));
 
-  stack.defer(() => rm(dir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { stack, dir };
+  return { stack, directoryPath: directory };
 }
 
 test('it rejects an order whose authorization offers no dns-01 challenge', async () => {
@@ -30,7 +30,7 @@ test('it rejects an order whose authorization offers no dns-01 challenge', async
     directoryUrl: server.directoryUrl,
     email: null,
     caPem: null,
-    store: createCertStore(ctx.dir),
+    store: createCertStore(ctx.directoryPath),
 
     // never reached: the order fails before any TXT record goes up
     dns: createChalltestsrvProvider('http://127.0.0.1:9'),

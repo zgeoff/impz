@@ -5,10 +5,10 @@ export function buildStubBackoffClock(options: Readonly<{ at: number; onWait: ()
   const state = { nowMs: 0 };
   const delays: number[] = [];
 
-  const wait = (ms: number): Promise<void> => {
-    delays.push(ms);
+  const wait = (durationMs: number): Promise<void> => {
+    delays.push(durationMs);
 
-    state.nowMs += ms;
+    state.nowMs += durationMs;
 
     if (delays.length === options.at) {
       options.onWait();
@@ -23,8 +23,8 @@ export function buildStubBackoffClock(options: Readonly<{ at: number; onWait: ()
     now: (): number => state.nowMs,
 
     // time that passes outside a wait, such as a stream that stays open
-    advance: (ms: number): void => {
-      state.nowMs += ms;
+    advance: (durationMs: number): void => {
+      state.nowMs += durationMs;
     },
   };
 }

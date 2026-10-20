@@ -1,14 +1,14 @@
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildImpPaths, buildImpsDir, toDigestHex } from '../data-layout';
-import { isHoldingFiles, readDirectoryOrphan } from '../orphan-files';
+import { probeHoldingFiles, readDirectoryOrphan } from '../orphan-files';
 import type { DroppedStorage, LiveStorage, OrphanStorage, SweepResult } from '../storage-backend';
 import {
   CHECKPOINT_SNAPSHOT,
+  getChildId,
+  getSnapshotId,
   listChildren,
   parseZfsMounts,
-  readChildId,
-  readSnapshotId,
 } from './zfs-commands';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
 
@@ -22,7 +22,7 @@ interface ZfsSweepContext {
   readonly heldSnapshots: ReadonlySet<string>;
   readonly listAll: () => Promise<ZfsEntry[]>;
   readonly readMounts: () => string;
-  readonly removeMount: (dir: string) => Promise<void>;
+  readonly removeMount: (directory: string) => Promise<void>;
   readonly removeDataset: (name: string) => Promise<void>;
   readonly buildDiskDir: (impId: string) => string;
   readonly buildImageDir: (digest: string) => string;
@@ -36,6 +36,13 @@ const BACKUP_SNAPSHOT = /@bk-[^@]+$/u;
 // `@mv-<move>`: a move's copy of a stopped disk, gone once the move ends
 const MOVE_SNAPSHOT = /@mv-[^@]+$/u;
 
+// an `imps/<id>` or `mem/<id>` with files and no row, kept with no disk
+interface OrphanDir {
+  readonly kind: 'imp' | 'memory';
+  readonly id: string;
+  readonly directory: string;
+}
+
 // what removeLeftovers removes, in this order, and the orphans it keeps
 interface LeftoverPlan {
   readonly snapshots: readonly ZfsEntry[];
@@ -46,13 +53,6 @@ interface LeftoverPlan {
   readonly orphans: readonly ZfsEntry[];
   readonly orphanCheckpoints: readonly ZfsEntry[];
   readonly orphanDirs: readonly OrphanDir[];
-}
-
-// an `imps/<id>` or `mem/<id>` with files and no row, kept with no disk
-interface OrphanDir {
-  readonly kind: 'imp' | 'memory';
-  readonly id: string;
-  readonly dir: string;
 }
 
 // The ZFS backend's sweep of what the database does not name, at start and
@@ -69,11 +69,11 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
     const liveDigests = new Set([...live.imageDigests].map((digest) => toDigestHex(digest)));
 
     const unknownDisks = listChildren(entries, ctx.datasets.disks).filter(
-      (disk) => !live.impIds.has(readChildId(disk.name, ctx.datasets.disks)),
+      (disk) => !live.impIds.has(getChildId(disk.name, ctx.datasets.disks)),
     );
 
     const unknownImages = listChildren(entries, ctx.datasets.images).filter(
-      (image) => !liveDigests.has(readChildId(image.name, ctx.datasets.images)),
+      (image) => !liveDigests.has(getChildId(image.name, ctx.datasets.images)),
     );
 
     // every image, too: one with no `@base` may be a build cut short, but
@@ -84,11 +84,11 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
 
     const isLiveCheckpoint = (snapshot: ZfsEntry) =>
       CHECKPOINT_SNAPSHOT.test(snapshot.name) &&
-      live.checkpointIds.has(readSnapshotId(snapshot.name));
+      live.checkpointIds.has(getSnapshotId(snapshot.name));
 
     // An orphan's snapshots go only with it, before the retire, so the
     // reclaim can free it; its `@base` goes with the image.
-    const isOnOrphan = (snapshot: ZfsEntry) => orphanNames.has(readSnapshotDataset(snapshot.name));
+    const isOnOrphan = (snapshot: ZfsEntry) => orphanNames.has(getSnapshotDataset(snapshot.name));
 
     // A checkpoint with no row is an orphan wherever it is, on a named disk or
     // in `retired/`: an older database lacks the newer rows. A fork, backup or
@@ -120,20 +120,20 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
     // empty one is provably nothing; one with files is an orphan.
     const keptDisks = isOrphans ? [] : unknownDisks;
 
-    const keptImpIds = new Set(keptDisks.map((disk) => readChildId(disk.name, ctx.datasets.disks)));
+    const keptImpIds = new Set(keptDisks.map((disk) => getChildId(disk.name, ctx.datasets.disks)));
 
     const listUnknownDirs = (kind: OrphanDir['kind'], parent: string): OrphanDir[] =>
       (existsSync(parent) ? readdirSync(parent).toSorted() : [])
         .filter((id) => !live.impIds.has(id) && !keptImpIds.has(id))
-        .map((id) => ({ kind, id, dir: join(parent, id) }));
+        .map((id) => ({ kind, id, directory: join(parent, id) }));
 
     const unknownDirs = [
       ...listUnknownDirs('imp', buildImpsDir(ctx.dataDir)),
       ...listUnknownDirs('memory', join(ctx.dataDir, 'mem')),
     ];
 
-    const isDirDropped = (entry: OrphanDir) => isOrphans || !isHoldingFiles(entry.dir);
-    const droppedDirs = unknownDirs.filter((entry) => isDirDropped(entry));
+    const probeDirDropped = (entry: OrphanDir) => isOrphans || !probeHoldingFiles(entry.directory);
+    const droppedDirs = unknownDirs.filter((entry) => probeDirDropped(entry));
 
     return {
       snapshots,
@@ -143,23 +143,23 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
       memDirs: droppedDirs.filter((entry) => entry.kind === 'memory').map((entry) => entry.id),
       orphans: isOrphans ? [] : orphans,
       orphanCheckpoints,
-      orphanDirs: unknownDirs.filter((entry) => !isDirDropped(entry)),
+      orphanDirs: unknownDirs.filter((entry) => !probeDirDropped(entry)),
     };
   };
 
   const toDropped = (plan: LeftoverPlan): DroppedStorage[] => [
     ...plan.snapshots.map((snapshot) =>
       CHECKPOINT_SNAPSHOT.test(snapshot.name)
-        ? { kind: 'checkpoint' as const, id: readSnapshotId(snapshot.name) }
+        ? { kind: 'checkpoint' as const, id: getSnapshotId(snapshot.name) }
         : { kind: 'snapshot' as const, id: snapshot.name },
     ),
     ...plan.images.map((image) => ({
       kind: 'image' as const,
-      id: readChildId(image.name, ctx.datasets.images),
+      id: getChildId(image.name, ctx.datasets.images),
     })),
     ...[
       ...new Set([
-        ...plan.disks.map((disk) => readChildId(disk.name, ctx.datasets.disks)),
+        ...plan.disks.map((disk) => getChildId(disk.name, ctx.datasets.disks)),
         ...plan.impDirs,
       ]),
     ].map((impId) => ({ kind: 'imp' as const, id: impId })),
@@ -172,7 +172,7 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
     plan: LeftoverPlan,
   ): Promise<OrphanStorage[]> => {
     const dirs = plan.orphanDirs.map((entry) =>
-      readDirectoryOrphan(entry.kind, entry.id, entry.dir, []),
+      readDirectoryOrphan(entry.kind, entry.id, entry.directory, []),
     );
 
     if (plan.orphans.length === 0 && plan.orphanCheckpoints.length === 0) {
@@ -190,19 +190,19 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
 
       return {
         kind: isDisk ? 'imp' : 'image',
-        id: readChildId(orphan.name, parent),
+        id: getChildId(orphan.name, parent),
         location: orphan.name,
         bytes: found?.used ?? 0,
         createdAt: found?.createdAt ?? null,
         snapshots: entries
           .filter((entry) => entry.type === 'snapshot' && entry.name.startsWith(`${orphan.name}@`))
-          .map((snapshot) => readSnapshotId(snapshot.name)),
+          .map((snapshot) => getSnapshotId(snapshot.name)),
       };
     });
 
     const checkpoints = plan.orphanCheckpoints.map((snapshot): OrphanStorage => ({
       kind: 'checkpoint',
-      id: readSnapshotId(snapshot.name),
+      id: getSnapshotId(snapshot.name),
       location: snapshot.name,
       bytes: space.get(snapshot.name)?.used ?? 0,
       createdAt: space.get(snapshot.name)?.createdAt ?? null,
@@ -236,12 +236,12 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
     }
 
     for (const disk of plan.disks) {
-      await ctx.removeMount(ctx.buildDiskDir(readChildId(disk.name, ctx.datasets.disks)));
+      await ctx.removeMount(ctx.buildDiskDir(getChildId(disk.name, ctx.datasets.disks)));
       await ctx.removeDataset(disk.name);
     }
 
     for (const image of plan.images) {
-      await ctx.removeMount(ctx.buildImageDir(readChildId(image.name, ctx.datasets.images)));
+      await ctx.removeMount(ctx.buildImageDir(getChildId(image.name, ctx.datasets.images)));
 
       // a crash between the rename and the snapshot leaves an image without one
       if (names.has(`${image.name}@base`)) {
@@ -255,10 +255,10 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
     const mounted = [...parseZfsMounts(ctx.readMounts()).keys()];
 
     for (const impId of plan.impDirs) {
-      const dir = buildImpPaths(ctx.dataDir, impId).dir;
+      const directory = buildImpPaths(ctx.dataDir, impId).directory;
 
-      if (!mounted.some((mount) => mount.startsWith(`${dir}/`))) {
-        rmSync(dir, { recursive: true, force: true });
+      if (!mounted.some((mount) => mount.startsWith(`${directory}/`))) {
+        rmSync(directory, { recursive: true, force: true });
       }
     }
 
@@ -272,6 +272,6 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
   return { removeLeftovers };
 }
 
-function readSnapshotDataset(name: string): string {
+function getSnapshotDataset(name: string): string {
   return name.slice(0, name.indexOf('@'));
 }

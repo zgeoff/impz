@@ -36,7 +36,7 @@ export interface McpSession {
 export async function startMcpSession(args: readonly string[]): Promise<McpSession> {
   const env = await readImpEnv();
 
-  const proc = Bun.spawn([IMP_SCRIPT, 'mcp', ...args], {
+  const subprocess = Bun.spawn([IMP_SCRIPT, 'mcp', ...args], {
     env: { ...process.env, ...env },
     stdin: 'pipe',
     stdout: 'pipe',
@@ -50,7 +50,7 @@ export async function startMcpSession(args: readonly string[]): Promise<McpSessi
 
     let buffer = '';
 
-    for await (const chunk of proc.stdout) {
+    for await (const chunk of subprocess.stdout) {
       buffer += decoder.decode(chunk, { stream: true });
 
       const lines = buffer.split('\n');
@@ -70,8 +70,8 @@ export async function startMcpSession(args: readonly string[]): Promise<McpSessi
   const sendRequest = (method: string, params: unknown): Promise<unknown> => {
     const id = nextId++;
 
-    void proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
-    void proc.stdin.flush();
+    void subprocess.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+    void subprocess.stdin.flush();
 
     return waitFor(
       `the response to ${method}`,
@@ -101,9 +101,9 @@ export async function startMcpSession(args: readonly string[]): Promise<McpSessi
       return ToolResponseSchema.parse(response).result;
     },
     close: async () => {
-      await proc.stdin.end();
+      await subprocess.stdin.end();
 
-      return proc.exited;
+      return subprocess.exited;
     },
   };
 }

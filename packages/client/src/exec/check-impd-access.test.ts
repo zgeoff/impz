@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { findFreePorts, startTestImpd } from '@impz/daemon/testing';
+import { claimFreePorts, startTestImpd } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import { createRpcClient } from '../create-rpc-client';
@@ -56,7 +56,7 @@ test('it reports an older impd that has no system.features as reachable', async 
 
 test('it reports an impd it cannot reach as unreachable', async () => {
   // nothing listens on a free port
-  const port = findFreePorts(1).take();
+  const port = claimFreePorts(1).take();
 
   const access = await checkImpdAccess(
     createRpcClient({ url: `http://127.0.0.1:${String(port)}`, token: 'root-token' }),

@@ -4,19 +4,21 @@
 export function startStubSilentHost(stack: Readonly<AsyncDisposableStack>) {
   const requests: string[] = [];
 
+  const handleRequest = (request: Request) => {
+    requests.push(new URL(request.url).pathname);
+
+    return new Promise<Response>(() => {
+      // never answers
+    });
+  };
+
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
 
     // a stall outlasts any client deadline under test
     idleTimeout: 0,
-    fetch: (request) => {
-      requests.push(new URL(request.url).pathname);
-
-      return new Promise<Response>(() => {
-        // never answers
-      });
-    },
+    fetch: handleRequest,
   });
 
   stack.defer(async () => {

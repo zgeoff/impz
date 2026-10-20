@@ -2,7 +2,7 @@
 import type { LockedImp } from '../../imps/imps/imp-lock';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
 import type { ImpCheckpointHooks } from '../../imps/imps/imp-service';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildInvalidStateError } from '../../surface/api-errors';
 import { sendFreeze, sendThaw } from '../agent-client/agent-requests';
@@ -57,7 +57,7 @@ export function createConsistentDisk(deps: ConsistentDiskDeps): WithConsistentDi
       try {
         await freezer.thaw(paths.vsockSocket);
       } catch (error) {
-        const message = readErrorMessage(error);
+        const message = getErrorMessage(error);
 
         deps.log(`impd: ${imp.name}: thaw failed (the agent thaws on its own): ${message}`);
       }

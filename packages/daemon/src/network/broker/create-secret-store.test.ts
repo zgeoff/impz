@@ -9,12 +9,12 @@ import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubBrokerJwt } from '../../../testing/network/build-stub-broker-jwt';
-import { buildStubBrokerTokenEndpoint } from '../../../testing/network/build-stub-broker-token-endpoint';
+import { createStubBrokerTokenEndpoint } from '../../../testing/network/create-stub-broker-token-endpoint';
 import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { createImage } from '../../platform/db/images';
-import { findImpByName } from '../../platform/db/imps';
-import { findSecret, removeSecret, upsertSecret } from '../../platform/db/secrets';
+import { readImpByName } from '../../platform/db/imps';
+import { readSecret, removeSecret, upsertSecret } from '../../platform/db/secrets';
 import type { SecretRecord } from '../../platform/db/secrets';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createBroker } from './broker-service';
@@ -44,7 +44,7 @@ async function setupTest() {
 test('it sends the first refresh once the row is committed', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -52,7 +52,7 @@ test('it sends the first refresh once the row is committed', async () => {
 
   server.use(
     http.post('https://auth.example.com/oauth/token', async () => {
-      seen.row = await findSecret(ctx.db, 'codex');
+      seen.row = await readSecret(ctx.db, 'codex');
     }),
   );
 
@@ -85,7 +85,7 @@ test('it sends the first refresh once the row is committed', async () => {
 test('it answers a signed-in oauth secret ready, with its account claims only', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -135,7 +135,7 @@ test('it answers a signed-in oauth secret ready, with its account claims only', 
 test('it never shows a token of an oauth secret through the API', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -169,7 +169,7 @@ test('it never shows a token of an oauth secret through the API', async () => {
 test('it stores the rotated tokens in the value file', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -187,7 +187,7 @@ test('it stores the rotated tokens in the value file', async () => {
     oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
   });
 
-  const secret = await findSecret(ctx.db, 'codex');
+  const secret = await readSecret(ctx.db, 'codex');
 
   invariant(secret);
 
@@ -241,7 +241,7 @@ test('it answers an oauth secret whose first refresh fails pending', async () =>
 test('it lists an oauth secret whose refresh token is dead as needing a new sign-in', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -368,7 +368,7 @@ test.each([
 test('it sends nothing to the token endpoint for a refused oauth secret', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -390,7 +390,7 @@ test('it sends nothing to the token endpoint for a refused oauth secret', async 
 test('it keeps the grant through a new refresh token for the same endpoint', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -434,7 +434,7 @@ test.each([
 ] as const)('it refuses another %s without a rebind', async (_, override) => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -469,7 +469,7 @@ test.each([
 test('it takes another client and drops the grants on a rebind', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -509,7 +509,7 @@ test('it takes another client and drops the grants on a rebind', async () => {
 test('it refreshes on request with the rotated token and answers after it', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -534,7 +534,7 @@ test('it refreshes on request with the rotated token and answers after it', asyn
   });
 
   const refreshed = await ctx.client.secrets.refresh({ name: 'codex' });
-  const secret = await findSecret(ctx.db, 'codex');
+  const secret = await readSecret(ctx.db, 'codex');
 
   invariant(secret);
 
@@ -564,7 +564,7 @@ test('it refreshes on request with the rotated token and answers after it', asyn
 test('it answers a forced refresh of a dead refresh token as needing a new sign-in', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
@@ -610,7 +610,7 @@ test('it refuses a refresh of a secret that does not exist', async () => {
 test('it holds a replace behind a refresh under way, which never overwrites it', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -672,7 +672,7 @@ test('it holds a replace behind a refresh under way, which never overwrites it',
 
   await Promise.all([refreshing, replacing]);
 
-  const secret = await findSecret(ctx.db, 'codex');
+  const secret = await readSecret(ctx.db, 'codex');
 
   invariant(secret);
 
@@ -702,7 +702,7 @@ test('it holds a replace behind a refresh under way, which never overwrites it',
 test('it holds a delete behind a refresh under way, then removes the secret', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1' });
@@ -728,7 +728,7 @@ test('it holds a delete behind a refresh under way, then removes the secret', as
 
         await gate.promise;
 
-        seen.row = await findSecret(ctx.db, 'codex');
+        seen.row = await readSecret(ctx.db, 'codex');
       },
       { once: true },
     ),
@@ -751,7 +751,7 @@ test('it holds a delete behind a refresh under way, then removes the secret', as
 
   await deleting;
 
-  const gone = await findSecret(ctx.db, 'codex');
+  const gone = await readSecret(ctx.db, 'codex');
 
   expect(seen.row?.name).toBe('codex');
   expect(gone).toBeUndefined();
@@ -760,7 +760,7 @@ test('it holds a delete behind a refresh under way, then removes the secret', as
 test('it answers not found for a secret deleted outside the lock during its refresh', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1' });
@@ -809,7 +809,7 @@ test('it answers not found for a secret deleted outside the lock during its refr
 test('it shows an oauth secret whose value file is gone as needing a new sign-in', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1' });
@@ -822,7 +822,7 @@ test('it shows an oauth secret whose value file is gone as needing a new sign-in
     oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
   });
 
-  const secret = await findSecret(ctx.db, 'codex');
+  const secret = await readSecret(ctx.db, 'codex');
 
   invariant(secret);
 
@@ -837,7 +837,7 @@ test('it shows an oauth secret whose value file is gone as needing a new sign-in
 test('it refreshes a pending secret when the broker starts', async () => {
   const ctx = await setupTest();
 
-  const tokens = buildStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
 
@@ -883,7 +883,7 @@ test('it keeps the generation and the grants through a rotation that reorders th
   await ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'v1', rules: [ruleA, ruleB] });
   await ctx.client.grants.add({ name: 'dev', secret: 'api' });
 
-  const before = await findSecret(ctx.db, 'api');
+  const before = await readSecret(ctx.db, 'api');
 
   invariant(before);
 
@@ -895,11 +895,11 @@ test('it keeps the generation and the grants through a rotation that reorders th
     replace: true,
   });
 
-  const after = await findSecret(ctx.db, 'api');
+  const after = await readSecret(ctx.db, 'api');
 
   invariant(after);
 
-  const dev = await findImpByName(ctx.db, 'dev');
+  const dev = await readImpByName(ctx.db, 'dev');
 
   invariant(dev);
 
@@ -926,7 +926,7 @@ test('it refuses a changed binding without rebind and changes nothing', async ()
   await ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'v1', rules });
   await ctx.client.grants.add({ name: 'dev', secret: 'api' });
 
-  const before = await findSecret(ctx.db, 'api');
+  const before = await readSecret(ctx.db, 'api');
 
   const refused = ctx.client.secrets.add({
     name: 'api',
@@ -943,7 +943,7 @@ test('it refuses a changed binding without rebind and changes nothing', async ()
 
   invariant(before);
 
-  const after = await findSecret(ctx.db, 'api');
+  const after = await readSecret(ctx.db, 'api');
   const files = await readdir(join(ctx.dataDir, 'secrets'));
   const grants = await ctx.client.grants.list({ name: 'dev' });
 
@@ -1085,7 +1085,7 @@ test('it takes a new generation and drops every grant of the secret on a rebind'
   await ctx.client.grants.add({ name: 'dev', secret: 'api' });
   await ctx.client.grants.add({ name: 'dev-2', secret: 'api' });
 
-  const before = await findSecret(ctx.db, 'api');
+  const before = await readSecret(ctx.db, 'api');
 
   invariant(before);
 
@@ -1097,7 +1097,7 @@ test('it takes a new generation and drops every grant of the secret on a rebind'
     rebind: true,
   });
 
-  const after = await findSecret(ctx.db, 'api');
+  const after = await readSecret(ctx.db, 'api');
 
   invariant(after);
 
@@ -1128,7 +1128,7 @@ test('it gives no credential for a grant of another generation', async () => {
   // a row left from another generation, as a bug or a hand edit would
   await ctx.db.updateTable('grants').set({ secret_generation: 'other' }).execute();
 
-  const dev = await findImpByName(ctx.db, 'dev');
+  const dev = await readImpByName(ctx.db, 'dev');
 
   invariant(dev);
 
@@ -1151,7 +1151,7 @@ test('it leaves one file, the row’s, after two rotations at once', async () =>
     ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'v2', rules, replace: true }),
   ]);
 
-  const secret = await findSecret(ctx.db, 'api');
+  const secret = await readSecret(ctx.db, 'api');
 
   invariant(secret);
 
@@ -1205,7 +1205,7 @@ test('it removes its new file and keeps the old value when a replace fails to co
 
   await ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'v1', rules });
 
-  const before = await findSecret(ctx.db, 'api');
+  const before = await readSecret(ctx.db, 'api');
 
   invariant(before);
 
@@ -1227,7 +1227,7 @@ test('it removes its new file and keeps the old value when a replace fails to co
     (thrown: unknown) => thrown instanceof Error && !String(thrown).includes('v2'),
   );
 
-  const after = await findSecret(ctx.db, 'api');
+  const after = await readSecret(ctx.db, 'api');
   const files = await readdir(join(ctx.dataDir, 'secrets'));
 
   expect(after).toStrictEqual(before);
@@ -1241,7 +1241,7 @@ test('it keeps aside a new file whose row never came, on the next start', async 
 
   await ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'v1', rules });
 
-  const before = await findSecret(ctx.db, 'api');
+  const before = await readSecret(ctx.db, 'api');
 
   invariant(before);
 
@@ -1301,7 +1301,7 @@ test('it logs an old file a replace could not remove, and serves the new value',
 
   await ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'v1', rules });
 
-  const before = await findSecret(ctx.db, 'api');
+  const before = await readSecret(ctx.db, 'api');
 
   invariant(before);
 
@@ -1314,7 +1314,7 @@ test('it logs an old file a replace could not remove, and serves the new value',
 
   await ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'v2', rules, replace: true });
 
-  const after = await findSecret(ctx.db, 'api');
+  const after = await readSecret(ctx.db, 'api');
 
   invariant(after);
 
@@ -1336,7 +1336,7 @@ test('it removes on the next start the old file a replace could not, not keeping
 
   await ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'v1', rules });
 
-  const before = await findSecret(ctx.db, 'api');
+  const before = await readSecret(ctx.db, 'api');
 
   invariant(before);
 
@@ -1362,7 +1362,7 @@ test('it removes on the next start the old file a replace could not, not keeping
 
   ctx.stack.defer(() => restarted.stop());
 
-  const after = await findSecret(ctx.db, 'api');
+  const after = await readSecret(ctx.db, 'api');
 
   invariant(after);
 

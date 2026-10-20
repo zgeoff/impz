@@ -31,10 +31,6 @@ interface StubHostDocker {
   readonly composeConfigError?: string;
 }
 
-function buildShellWord(value: string): string {
-  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
-}
-
 // A stub docker's script, for createStubBin, that answers deploy/upgrade.sh as a host would:
 // imp-host runs sha256:old, the pull is sha256:new, `compose config` logs the variables it
 // saw, and any call upgrade.sh does not make fails as unexpected.
@@ -72,4 +68,8 @@ export function buildStubHostDocker(stub: StubHostDocker): string {
   "exec imp-host ${cli} ls" | "compose "*) ;;
   *) echo "unexpected: docker $*" >&2; exit 1 ;;
 esac`;
+}
+
+function buildShellWord(value: string): string {
+  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
 }

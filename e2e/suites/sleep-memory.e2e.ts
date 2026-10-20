@@ -21,7 +21,7 @@ import { checkFirecrackerRunning, readImpdLogSince } from '../lib/instance';
 import { checkMemoryProof, startMemoryProof } from '../lib/memory-proof';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -36,7 +36,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('sleep'), stack, client };
+  return { prefix: getSuitePrefix('sleep'), stack, client };
 }
 
 test('it sleeps an idle imp by itself, wakes it intact on a request, and keeps it awake only while something is active', async () => {
@@ -238,7 +238,7 @@ test('it keeps what a woken imp wrote through its next sleeps, which write only 
 
   invariant(second);
   invariant(third);
-  writeMetric('diffSleepMs', second.ms);
+  writeMetric('diffSleepMs', second.durationMs);
 
   expect(second.steps).toContainKey('copyBase');
   expect(third.steps).toContainKey('copyBase');

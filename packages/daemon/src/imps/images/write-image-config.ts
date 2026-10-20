@@ -8,13 +8,13 @@ import { ORPCError } from '@orpc/server';
 // the tree (docs/guides/images.md#what-the-guest-takes-from-the-image)
 export function writeImageConfig(root: string, contents: string): void {
   const etc = join(root, 'etc');
-  const dir = join(etc, 'imp');
+  const directory = join(etc, 'imp');
 
   // no race: the tree is under impd's 0700 directory, and tar has exited
   createDirectory(etc, '/etc');
-  createDirectory(dir, '/etc/imp');
+  createDirectory(directory, '/etc/imp');
 
-  const file = join(dir, 'image.json');
+  const file = join(directory, 'image.json');
 
   // rmSync looks at the name itself (lstat): a link goes, never its target
   rmSync(file, { recursive: true, force: true });

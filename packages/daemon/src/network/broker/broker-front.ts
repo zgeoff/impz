@@ -5,35 +5,21 @@ import type { AuditRefusal, EgressMode } from '@impz/api';
 import { findPeerSlot } from '../../host-net/net/addressing';
 import type { Subnet } from '../../host-net/net/addressing';
 import type { NewAuditEntry } from '../../platform/db/broker-audit';
-import type { BrokerPeer } from '../../platform/db/find-broker-peer';
+import type { BrokerPeer } from '../../platform/db/read-broker-peer';
 import { createCountedLimit } from '../../platform/process/counted-limit';
 import type { CountedLimit } from '../../platform/process/counted-limit';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { isTunnelAllowed } from '../egress/egress-rules';
 import { MAX_HEAD_BYTES, findHeadEnd, parseConnectHead } from './connect-head';
 import type { TerminatorKey } from './terminators';
 import { TunnelRefusedError } from './tunnel-target';
 
-// The front port every guest reaches on its own gateway. A CONNECT to a
-// granted host goes to its TLS terminator; any other is a plain tunnel to a
-// checked public address, when the imp's egress policy allows the host.
-
-// the time a client has to send its CONNECT head
-const HEAD_TIMEOUT_MS = 10_000;
-
-// a dead guest's connections go once keepalive probes fail
-const KEEPALIVE_MS = 60_000;
-
 // connections one imp may hold open through the broker at once
 const MAX_CONNECTIONS_PER_IMP = 256;
 
-// the longest host an audit row keeps, the API's bound: a bracketed host in a
-// head has none
-const MAX_AUDIT_HOST = 253;
-
 export interface BrokerFrontDeps {
   readonly subnet: Subnet;
-  readonly findPeer: (slot: number) => Promise<BrokerPeer | undefined>;
+  readonly readPeer: (slot: number) => Promise<BrokerPeer | undefined>;
   readonly isGranted: (impId: string, host: string) => Promise<boolean>;
   readonly openTerminator: (key: TerminatorKey) => Promise<string>;
 
@@ -53,7 +39,7 @@ export interface BrokerFrontDeps {
 
   // starts the deadline for a connection's head, given its length;
   // AbortSignal.timeout by default, and tests abort it themselves
-  readonly startHeadDeadline?: (ms: number) => AbortSignal;
+  readonly startHeadDeadline?: (durationMs: number) => AbortSignal;
 }
 
 export interface BrokerFront {
@@ -66,6 +52,57 @@ export interface BrokerFront {
   // egress policy needs: they are relays in impd, which conntrack never sees
   readonly closeTunnels: (impId: string, keep: (host: string) => boolean) => void;
   readonly stop: () => Promise<void>;
+}
+
+export function startBrokerFront(port: number, deps: BrokerFrontDeps): Promise<BrokerFront> {
+  // how many connections each imp holds open
+  const open = createCountedLimit(deps.maxConnectionsPerImp ?? MAX_CONNECTIONS_PER_IMP);
+  const tunnels = createTunnelRegistry();
+
+  const sockets = new Set<Socket>();
+
+  const server = createServer((socket) => {
+    // two pipelines and the bookkeeping here pass Node's default of 10
+    // close listeners, which would only warn
+    socket.setMaxListeners(32);
+    sockets.add(socket);
+
+    socket.once('close', () => {
+      sockets.delete(socket);
+    });
+
+    socket.on('error', () => {});
+    void handleConnection(socket, deps, open, tunnels);
+  });
+
+  const ready = Promise.withResolvers<BrokerFront>();
+
+  server.once('error', ready.reject);
+
+  server.listen(port, '0.0.0.0', () => {
+    const address = server.address();
+
+    ready.resolve({
+      server,
+      port: typeof address === 'object' && address !== null ? address.port : port,
+      closeTunnels: tunnels.closeDenied,
+      stop: async () => {
+        const closed = Promise.withResolvers<void>();
+
+        server.close(() => {
+          closed.resolve();
+        });
+
+        for (const socket of sockets) {
+          socket.destroy();
+        }
+
+        await closed.promise;
+      },
+    });
+  });
+
+  return ready.promise;
 }
 
 // Each imp's connections from accept, with their CONNECT's host once it
@@ -133,57 +170,6 @@ function createTunnelRegistry(): TunnelRegistry {
   };
 }
 
-export function startBrokerFront(port: number, deps: BrokerFrontDeps): Promise<BrokerFront> {
-  // how many connections each imp holds open
-  const open = createCountedLimit(deps.maxConnectionsPerImp ?? MAX_CONNECTIONS_PER_IMP);
-  const tunnels = createTunnelRegistry();
-
-  const sockets = new Set<Socket>();
-
-  const server = createServer((socket) => {
-    // two pipelines and the bookkeeping here pass Node's default of 10
-    // close listeners, which would only warn
-    socket.setMaxListeners(32);
-    sockets.add(socket);
-
-    socket.once('close', () => {
-      sockets.delete(socket);
-    });
-
-    socket.on('error', () => {});
-    void handleConnection(socket, deps, open, tunnels);
-  });
-
-  const ready = Promise.withResolvers<BrokerFront>();
-
-  server.once('error', ready.reject);
-
-  server.listen(port, '0.0.0.0', () => {
-    const address = server.address();
-
-    ready.resolve({
-      server,
-      port: typeof address === 'object' && address !== null ? address.port : port,
-      closeTunnels: tunnels.closeDenied,
-      stop: async () => {
-        const closed = Promise.withResolvers<void>();
-
-        server.close(() => {
-          closed.resolve();
-        });
-
-        for (const socket of sockets) {
-          socket.destroy();
-        }
-
-        await closed.promise;
-      },
-    });
-  });
-
-  return ready.promise;
-}
-
 // a failure ends the connection and is logged; it never reaches the server
 async function handleConnection(
   socket: Socket,
@@ -194,7 +180,7 @@ async function handleConnection(
   try {
     await runConnection(socket, deps, open, tunnels);
   } catch (error) {
-    deps.log(`impd: broker: ${readErrorMessage(error)}`);
+    deps.log(`impd: broker: ${getErrorMessage(error)}`);
     socket.destroy();
   }
 }
@@ -207,6 +193,20 @@ interface FrontRefusal {
   readonly method: string | null;
   readonly host: string | null;
 }
+
+// The front port every guest reaches on its own gateway. A CONNECT to a
+// granted host goes to its TLS terminator; any other is a plain tunnel to a
+// checked public address, when the imp's egress policy allows the host.
+
+// the time a client has to send its CONNECT head
+const HEAD_TIMEOUT_MS = 10_000;
+
+// a dead guest's connections go once keepalive probes fail
+const KEEPALIVE_MS = 60_000;
+
+// the longest host an audit row keeps, the API's bound: a bracketed host in a
+// head has none
+const MAX_AUDIT_HOST = 253;
 
 async function runConnection(
   socket: Socket,
@@ -224,7 +224,7 @@ async function runConnection(
     return;
   }
 
-  const peer = await deps.findPeer(slot);
+  const peer = await deps.readPeer(slot);
 
   if (peer === undefined) {
     socket.destroy();
@@ -269,7 +269,9 @@ async function runConnection(
   socket.setKeepAlive(true, KEEPALIVE_MS);
   tunnels.add(peer.id, socket);
 
-  const startHeadDeadline = deps.startHeadDeadline ?? ((ms: number) => AbortSignal.timeout(ms));
+  const startHeadDeadline =
+    deps.startHeadDeadline ?? ((durationMs: number) => AbortSignal.timeout(durationMs));
+
   const deadline = startHeadDeadline(HEAD_TIMEOUT_MS);
 
   const read = await readHead(socket, deadline);
@@ -313,7 +315,7 @@ async function runConnection(
   tunnels.setHost(peer.id, socket, head.host);
 
   // the policy as it is now: it may have changed while the head was coming
-  const current = await deps.findPeer(slot);
+  const current = await deps.readPeer(slot);
 
   if (current?.id !== peer.id) {
     socket.destroy();
@@ -344,13 +346,13 @@ async function runConnection(
     if (error instanceof TunnelRefusedError) {
       sendRefusal({
         status: 403,
-        message: readErrorMessage(error),
+        message: getErrorMessage(error),
         reason: 'address-refused',
         method: 'CONNECT',
         host: head.host,
       });
     } else {
-      sendReply(socket, 502, readErrorMessage(error));
+      sendReply(socket, 502, getErrorMessage(error));
     }
 
     return;
@@ -367,6 +369,24 @@ async function runConnection(
   const dialTunnel = deps.dialTunnel ?? ((host, port) => createConnection({ host, port }));
 
   startRelay(socket, dialTunnel(address, head.port), read.rest);
+}
+
+const REASONS: Readonly<Record<number, string>> = {
+  400: 'Bad Request',
+  403: 'Forbidden',
+  405: 'Method Not Allowed',
+  502: 'Bad Gateway',
+  503: 'Service Unavailable',
+};
+
+function sendReply(socket: Socket, status: number, message: string): void {
+  const body = `${message}\n`;
+
+  socket.end(
+    `HTTP/1.1 ${String(status)} ${REASONS[status] ?? 'Error'}\r\n` +
+      `content-type: text/plain\r\ncontent-length: ${String(Buffer.byteLength(body))}\r\n` +
+      `connection: close\r\n\r\n${body}`,
+  );
 }
 
 // The CONNECT head and any bytes after it, or null when the client sends
@@ -461,22 +481,4 @@ function startRelay(client: Socket, upstream: Socket, rest: Uint8Array): void {
 
     upstream.destroy();
   });
-}
-
-const REASONS: Readonly<Record<number, string>> = {
-  400: 'Bad Request',
-  403: 'Forbidden',
-  405: 'Method Not Allowed',
-  502: 'Bad Gateway',
-  503: 'Service Unavailable',
-};
-
-function sendReply(socket: Socket, status: number, message: string): void {
-  const body = `${message}\n`;
-
-  socket.end(
-    `HTTP/1.1 ${String(status)} ${REASONS[status] ?? 'Error'}\r\n` +
-      `content-type: text/plain\r\ncontent-length: ${String(Buffer.byteLength(body))}\r\n` +
-      `connection: close\r\n\r\n${body}`,
-  );
 }

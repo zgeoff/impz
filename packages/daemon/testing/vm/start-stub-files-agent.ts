@@ -20,14 +20,6 @@ interface StubFilesAgentOptions {
   readonly stack?: Readonly<AsyncDisposableStack>;
 }
 
-function sendResponse(socket: Socket, value: JsonValue): void {
-  socket.end(encodeJsonFrame(FRAME_TYPES.response, value));
-}
-
-function sendError(socket: Socket, code: string, message: string): void {
-  sendResponse(socket, { error: { code, message } });
-}
-
 // An imp's agent on `vsockPath` keeping read-only files as agent/internal/
 // files does: BAD_REQUEST for a path or size it refuses, and NO_SPACE for
 // every write while `full.isFull`. `files` holds each file's text.
@@ -95,4 +87,12 @@ export async function startStubFilesAgent(
   );
 
   return { files, requests, full, close: agent.close };
+}
+
+function sendError(socket: Socket, code: string, message: string): void {
+  sendResponse(socket, { error: { code, message } });
+}
+
+function sendResponse(socket: Socket, value: JsonValue): void {
+  socket.end(encodeJsonFrame(FRAME_TYPES.response, value));
 }

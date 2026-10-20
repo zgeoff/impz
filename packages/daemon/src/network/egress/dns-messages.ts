@@ -60,7 +60,7 @@ export function buildEmptyReply(message: Uint8Array, rcode: number, ede?: number
     return new Uint8Array();
   }
 
-  const question = readQuestionBytes(message);
+  const question = getQuestionBytes(message);
   const withEde = ede !== undefined && hasEdns(message);
 
   const opt = withEde
@@ -97,7 +97,7 @@ export function buildLocalReply(query: DnsQuery, answers: readonly Answer[]): Ui
 
 // the first question's bytes, or none when it uses compression or runs
 // past the end
-function readQuestionBytes(message: Uint8Array): Uint8Array {
+function getQuestionBytes(message: Uint8Array): Uint8Array {
   let offset = HEADER_BYTES;
 
   while (offset < message.byteLength) {

@@ -6,30 +6,30 @@ import { runShellcheck } from '@impz/test-utils/run-shellcheck';
 import { CONSOLE_SHELL, buildConsoleShell } from './login-shell';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-login-shell-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-login-shell-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   return {
-    dir,
+    directoryPath: directory,
   };
 }
 
 test('#buildConsoleShell runs the current user’s shell from the passwd file as a login shell', () => {
   const ctx = setupTest();
-  const shell = join(ctx.dir, 'user-shell');
+  const shell = join(ctx.directoryPath, 'user-shell');
 
   writeFileSync(shell, '#!/bin/sh\necho "user-shell $*"\n', { mode: 0o755 });
 
   writeFileSync(
-    join(ctx.dir, 'passwd'),
+    join(ctx.directoryPath, 'passwd'),
     `dev:x:${String(process.getuid?.())}:100::/home/dev:${shell}\n`,
   );
 
   const run = Bun.spawnSync(
-    ['/bin/sh', '-c', buildConsoleShell(join(ctx.dir, 'passwd'), ['/nonexistent/sh'])],
+    ['/bin/sh', '-c', buildConsoleShell(join(ctx.directoryPath, 'passwd'), ['/nonexistent/sh'])],
     { timeout: 5000 },
   );
 
@@ -41,14 +41,14 @@ test('#buildConsoleShell runs the current user’s shell from the passwd file as
 
 test('#buildConsoleShell skips the passwd entries of other users', () => {
   const ctx = setupTest();
-  const other = join(ctx.dir, 'other-shell');
-  const shell = join(ctx.dir, 'user-shell');
+  const other = join(ctx.directoryPath, 'other-shell');
+  const shell = join(ctx.directoryPath, 'user-shell');
 
   writeFileSync(other, '#!/bin/sh\necho "other-shell $*"\n', { mode: 0o755 });
   writeFileSync(shell, '#!/bin/sh\necho "user-shell $*"\n', { mode: 0o755 });
 
   writeFileSync(
-    join(ctx.dir, 'passwd'),
+    join(ctx.directoryPath, 'passwd'),
     [
       `other:x:${String((process.getuid?.() ?? 0) + 1)}:100::/home/other:${other}`,
       `dev:x:${String(process.getuid?.())}:100::/home/dev:${shell}`,
@@ -57,7 +57,7 @@ test('#buildConsoleShell skips the passwd entries of other users', () => {
   );
 
   const run = Bun.spawnSync(
-    ['/bin/sh', '-c', buildConsoleShell(join(ctx.dir, 'passwd'), ['/nonexistent/sh'])],
+    ['/bin/sh', '-c', buildConsoleShell(join(ctx.directoryPath, 'passwd'), ['/nonexistent/sh'])],
     { timeout: 5000 },
   );
 
@@ -66,20 +66,23 @@ test('#buildConsoleShell skips the passwd entries of other users', () => {
 
 test('#buildConsoleShell falls back to the first executable fallback when the user’s shell is missing', () => {
   const ctx = setupTest();
-  const fallback = join(ctx.dir, 'fallback-shell');
+  const fallback = join(ctx.directoryPath, 'fallback-shell');
 
   writeFileSync(fallback, '#!/bin/sh\necho "fallback-shell $*"\n', { mode: 0o755 });
 
   writeFileSync(
-    join(ctx.dir, 'passwd'),
-    `dev:x:${String(process.getuid?.())}:100::/home/dev:${join(ctx.dir, 'missing-shell')}\n`,
+    join(ctx.directoryPath, 'passwd'),
+    `dev:x:${String(process.getuid?.())}:100::/home/dev:${join(ctx.directoryPath, 'missing-shell')}\n`,
   );
 
   const run = Bun.spawnSync(
     [
       '/bin/sh',
       '-c',
-      buildConsoleShell(join(ctx.dir, 'passwd'), [join(ctx.dir, 'no-such-shell'), fallback]),
+      buildConsoleShell(join(ctx.directoryPath, 'passwd'), [
+        join(ctx.directoryPath, 'no-such-shell'),
+        fallback,
+      ]),
     ],
     { timeout: 5000 },
   );
@@ -89,13 +92,13 @@ test('#buildConsoleShell falls back to the first executable fallback when the us
 
 test('#buildConsoleShell falls back when the passwd file has no entry for the user', () => {
   const ctx = setupTest();
-  const fallback = join(ctx.dir, 'fallback-shell');
+  const fallback = join(ctx.directoryPath, 'fallback-shell');
 
   writeFileSync(fallback, '#!/bin/sh\necho "fallback-shell $*"\n', { mode: 0o755 });
-  writeFileSync(join(ctx.dir, 'passwd'), '');
+  writeFileSync(join(ctx.directoryPath, 'passwd'), '');
 
   const run = Bun.spawnSync(
-    ['/bin/sh', '-c', buildConsoleShell(join(ctx.dir, 'passwd'), [fallback])],
+    ['/bin/sh', '-c', buildConsoleShell(join(ctx.directoryPath, 'passwd'), [fallback])],
     { timeout: 5000 },
   );
 
@@ -104,17 +107,17 @@ test('#buildConsoleShell falls back when the passwd file has no entry for the us
 
 test('#buildConsoleShell passes on the exit code of the login shell', () => {
   const ctx = setupTest();
-  const shell = join(ctx.dir, 'user-shell');
+  const shell = join(ctx.directoryPath, 'user-shell');
 
   writeFileSync(shell, '#!/bin/sh\nexit 3\n', { mode: 0o755 });
 
   writeFileSync(
-    join(ctx.dir, 'passwd'),
+    join(ctx.directoryPath, 'passwd'),
     `dev:x:${String(process.getuid?.())}:100::/home/dev:${shell}\n`,
   );
 
   const run = Bun.spawnSync(
-    ['/bin/sh', '-c', buildConsoleShell(join(ctx.dir, 'passwd'), ['/nonexistent/sh'])],
+    ['/bin/sh', '-c', buildConsoleShell(join(ctx.directoryPath, 'passwd'), ['/nonexistent/sh'])],
     { timeout: 5000 },
   );
 

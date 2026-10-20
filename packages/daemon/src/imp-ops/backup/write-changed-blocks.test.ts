@@ -5,13 +5,13 @@ import { join } from 'node:path';
 import { writeChangedBlocks } from './write-changed-blocks';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'impd-blocks-test-'));
+  const directory = mkdtempSync(join(tmpdir(), 'impd-blocks-test-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { source: join(dir, 'source'), target: join(dir, 'target') };
+  return { source: join(directory, 'source'), target: join(directory, 'target') };
 }
 
 test('it writes only the 16 KiB blocks that differ', async () => {

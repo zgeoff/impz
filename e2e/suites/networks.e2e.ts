@@ -6,7 +6,7 @@ import { createInstanceClient, requireImp, runImp, runShellInImp, tryImp } from 
 import { holdImp, waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent, removeNetworkIfPresent } from '../lib/reset-baseline';
-import { readSuitePrefix } from '../lib/suites';
+import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
 // Private networks between imps (docs/guides/networks.md) in real guests.
@@ -20,7 +20,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: readSuitePrefix('networks'), stack, client };
+  return { prefix: getSuitePrefix('networks'), stack, client };
 }
 
 test('it lets the imps on a network reach and name each other past their policies, and nobody else', async () => {

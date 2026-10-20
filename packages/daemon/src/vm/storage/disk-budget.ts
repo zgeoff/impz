@@ -1,7 +1,7 @@
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { StartTimer } from '../../platform/process/clock';
-import { createKeyedMutex } from '../../platform/process/keyed-mutex';
+import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { StorageBackend } from './storage-backend';
 
@@ -56,22 +56,12 @@ interface DiskBudgetDeps {
   readonly log: (message: string) => void;
 }
 
-function buildDiskFullError(availableBytes: number, reserveBytes: number, requestedBytes: number) {
-  const formatGib = (bytes: number) => `${(bytes / GIB).toFixed(1)} GiB`;
-
-  return new ORPCError('DISK_FULL', {
-    status: 507,
-    message: `not enough free disk: ${formatGib(availableBytes)} free, ${formatGib(requestedBytes)} wanted, and ${formatGib(reserveBytes)} is held in reserve (IMP_DISK_RESERVE_GIB)`,
-    data: { availableBytes, reserveBytes, requestedBytes },
-  });
-}
-
 export function createDiskBudget(deps: DiskBudgetDeps): DiskBudget {
-  const mutex = createKeyedMutex();
+  const mutex = buildKeyedMutex();
 
   // a pending release never keeps impd running
   const startTimer: StartTimer =
-    deps.startTimer ?? ((fire, ms) => startRealTimer(fire, ms, { isUnref: true }));
+    deps.startTimer ?? ((fire, durationMs) => startRealTimer(fire, durationMs, { isUnref: true }));
 
   const ledger = { pendingBytes: 0, wasLow: false };
 
@@ -178,4 +168,14 @@ export function createDiskBudget(deps: DiskBudgetDeps): DiskBudget {
     requireRoom: (bytes) => withRoom(bytes, () => Promise.resolve()),
     readStatus,
   };
+}
+
+function buildDiskFullError(availableBytes: number, reserveBytes: number, requestedBytes: number) {
+  const formatGib = (bytes: number) => `${(bytes / GIB).toFixed(1)} GiB`;
+
+  return new ORPCError('DISK_FULL', {
+    status: 507,
+    message: `not enough free disk: ${formatGib(availableBytes)} free, ${formatGib(requestedBytes)} wanted, and ${formatGib(reserveBytes)} is held in reserve (IMP_DISK_RESERVE_GIB)`,
+    data: { availableBytes, reserveBytes, requestedBytes },
+  });
 }

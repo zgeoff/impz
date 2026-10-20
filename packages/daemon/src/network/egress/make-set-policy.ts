@@ -1,7 +1,7 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
 import { readEgressPolicy, writeEgressPolicy } from '../../platform/db/egress';
-import { findImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { KeyedMutex } from '../../platform/process/keyed-mutex';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
@@ -33,7 +33,7 @@ export function makeSetPolicy(
       // the routes a public policy needs are read with the table, below
       deps.requireFirewall(policy);
 
-      const imp = await findImpByName(deps.db, name);
+      const imp = await readImpByName(deps.db, name);
 
       const previous = imp === undefined ? undefined : await readEgressPolicy(deps.db, imp.id);
 

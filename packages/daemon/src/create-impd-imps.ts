@@ -1,6 +1,6 @@
 import { availableParallelism } from 'node:os';
-import type { ImpdStorage } from './build-impd-storage';
 import type { Config } from './config';
+import type { ImpdStorage } from './create-impd-storage';
 import type { Ipv6Plan } from './host-net/net/ipv6-plan';
 import type { TailscaleStatus } from './host-net/net/tailscale-status';
 import { createTapDevices } from './host-net/net/tap-devices';

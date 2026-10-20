@@ -4,7 +4,7 @@ import type { ImpDatabase } from './open-database';
 // one run of a session's process, which a sleep, a wake and an impd restart
 // keep, and which no later run repeats.
 
-export async function isBrokerSession(
+export async function probeBrokerSession(
   db: ImpDatabase,
   impId: string,
   generation: string,

@@ -10,7 +10,7 @@ test.each([
   ['a file of the old imps folder', 'imps/imp-service.ts', 'imps/imps/imp-service.ts'],
   ['a placed file of the imps layer', 'imps/imps/imp-service.ts', 'imps/imps/imp-service.ts'],
   ['a placed file', 'platform/db/imps.ts', 'platform/db/imps.ts'],
-  ['a file at the top of src', 'build-app.ts', 'surface/build-app.ts'],
+  ['a file at the top of src', 'create-app.ts', 'surface/create-app.ts'],
   ['a root file', 'main.ts', 'main.ts'],
   ['a name that only starts like a stem', 'token-store.ts', 'token-store.ts'],
 ])('it moves %s from %s to %s', (_label, path, expected) => {

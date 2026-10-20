@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
 import { buildQueryClient } from '../lib/build-query-client';
-import { ImpdProvider, createBrowserImpd } from '../lib/impd';
+import { ImpdProvider, buildBrowserImpd } from '../lib/impd';
 import { IMPD_ORIGIN } from '../mocks/handlers';
 import { buildRouter } from '../router';
 
@@ -17,7 +17,7 @@ export function renderApp(path = '/') {
   });
 
   const rendered = render(
-    <ImpdProvider impd={createBrowserImpd(IMPD_ORIGIN)}>
+    <ImpdProvider impd={buildBrowserImpd(IMPD_ORIGIN)}>
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
       </QueryClientProvider>

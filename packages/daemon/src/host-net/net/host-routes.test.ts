@@ -13,11 +13,11 @@ import {
 } from './host-routes';
 
 async function setupTest() {
-  const dir = await mkdtemp(join(tmpdir(), 'imp-host-routes-'));
+  const directory = await mkdtemp(join(tmpdir(), 'imp-host-routes-'));
 
-  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('#parseConnectedPrefixes4 reads the on-link IPv4 networks and every address off the taps', () => {
@@ -116,9 +116,9 @@ test('#readUplinks reads the uplinks of each family from the default routes', as
     },
   });
 
-  await mkdir(join(ctx.dir, 'ipv6'));
+  await mkdir(join(ctx.directoryPath, 'ipv6'));
 
-  const uplinks = await readUplinks(join(ctx.dir, 'ipv6'), ip.runChecked);
+  const uplinks = await readUplinks(join(ctx.directoryPath, 'ipv6'), ip.runChecked);
 
   expect(uplinks).toStrictEqual({ ipv4: ['eth0'], ipv6: ['eth1'] });
 });
@@ -130,7 +130,7 @@ test('#readUplinks reads no IPv6 uplinks, and runs no IPv6 read, on a kernel wit
     outputs: { 'ip -4 route show default': 'default via 172.17.0.1 dev eth0\n' },
   });
 
-  const uplinks = await readUplinks(join(ctx.dir, 'ipv6'), ip.runChecked);
+  const uplinks = await readUplinks(join(ctx.directoryPath, 'ipv6'), ip.runChecked);
 
   expect(uplinks).toStrictEqual({ ipv4: ['eth0'], ipv6: [] });
   expect(ip.calls).toStrictEqual(['ip -4 route show default']);

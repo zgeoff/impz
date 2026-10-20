@@ -36,14 +36,14 @@ test.skipIf(Bun.which('shellcheck') === null)('it removes its temp file once the
 
   runShellcheck('echo "$1"\n', 'sh');
 
-  const dir = readdirSync(tmpdir()).find(
+  const directory = readdirSync(tmpdir()).find(
     (name) => name.startsWith('imp-shellcheck-') && !before.has(name),
   );
 
   onTestFinished(() => {
-    const path = join(tmpdir(), dir ?? '');
+    const path = join(tmpdir(), directory ?? '');
 
-    expect(dir).toBeString();
+    expect(directory).toBeString();
     expect(existsSync(path)).toBeFalse();
   });
 });

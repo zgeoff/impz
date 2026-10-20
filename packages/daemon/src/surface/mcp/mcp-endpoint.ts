@@ -41,9 +41,11 @@ export function createMcpEndpoint(deps: Readonly<McpEndpointDeps>): HttpTranspor
         return null;
       }
 
+      const sendClientRequest = (rpc: Request) => deps.handleRpc(rpc, caller);
+
       const client = createImpClient({
         url: IN_PROCESS_URL,
-        fetch: (rpc) => deps.handleRpc(rpc, caller),
+        fetch: sendClientRequest,
         connect: deps.connectExec,
       });
 

@@ -6,12 +6,12 @@ import { buildSystemDrivesDir } from './data-layout';
 // crash cut short; returns the names it deleted. Names, not paths: a moved
 // data dir must not delete a drive in use.
 export function removeUnusedSystemDrives(dataDir: string, keep: ReadonlySet<string>): string[] {
-  const dir = buildSystemDrivesDir(dataDir);
+  const directory = buildSystemDrivesDir(dataDir);
   const removed: string[] = [];
 
-  for (const name of readNames(dir)) {
+  for (const name of readNames(directory)) {
     if (!keep.has(name)) {
-      rmSync(join(dir, name), { force: true });
+      rmSync(join(directory, name), { force: true });
 
       removed.push(name);
     }
@@ -20,9 +20,9 @@ export function removeUnusedSystemDrives(dataDir: string, keep: ReadonlySet<stri
   return removed;
 }
 
-function readNames(dir: string): string[] {
+function readNames(directory: string): string[] {
   try {
-    return readdirSync(dir);
+    return readdirSync(directory);
   } catch {
     return [];
   }

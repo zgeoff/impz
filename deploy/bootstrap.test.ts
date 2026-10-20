@@ -14,14 +14,14 @@ import { runSourcedFunction } from '../scripts/test-utils/run-sourced-function';
 // render_env's args: env file, template, budget, image, image set, storage, zfs root,
 // firewall, ipv6, subnet6, ksm; it gets files through $(...), which drops trailing newlines.
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-bootstrap-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-bootstrap-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
   return {
-    dir,
+    directoryPath: directory,
   };
 }
 
@@ -132,13 +132,13 @@ test.each([
 
     const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
-    writeFileSync(join(ctx.dir, 'fstab'), `UUID=abcd / ext4 defaults 0 1\n${lines}`);
+    writeFileSync(join(ctx.directoryPath, 'fstab'), `UUID=abcd / ext4 defaults 0 1\n${lines}`);
 
     expect(
       runSourcedFunction({
         script,
         fn: 'fstab_entry_state',
-        args: [join(ctx.dir, 'fstab'), entry],
+        args: [join(ctx.directoryPath, 'fstab'), entry],
       }),
     ).toStrictEqual({ exitCode: 0, stdout: state, stderr: '' });
   },
@@ -738,11 +738,11 @@ test.each([
 
     const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
-    writeFileSync(join(ctx.dir, 'run'), `${run}\n`);
-    writeFileSync(join(ctx.dir, 'pages_shared'), `${shared}\n`);
+    writeFileSync(join(ctx.directoryPath, 'run'), `${run}\n`);
+    writeFileSync(join(ctx.directoryPath, 'pages_shared'), `${shared}\n`);
 
     expect(
-      runSourcedFunction({ script, fn: 'ksm_merges', env: { KSM_DIR: ctx.dir } }),
+      runSourcedFunction({ script, fn: 'ksm_merges', env: { KSM_DIR: ctx.directoryPath } }),
     ).toStrictEqual({ exitCode, stdout: '', stderr: '' });
   },
 );
@@ -890,7 +890,7 @@ test('#blank_env_key blanks the key and leaves every other line alone', () => {
 
 test('#check_image_contract refuses an image from before the proxy, with how to get the new one', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', "echo 'unprivileged'");
+  const docker = createStubBin(ctx.directoryPath, 'docker', "echo 'unprivileged'");
 
   const result = runSourcedFunction({
     script: new URL('bootstrap.sh', import.meta.url).pathname,
@@ -908,7 +908,7 @@ test.each([
   ['socket-proxy', 0],
 ])('#check_image_contract answers an image labelled %p with exit %d', (label, exitCode) => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', `echo '${label}'`);
+  const docker = createStubBin(ctx.directoryPath, 'docker', `echo '${label}'`);
 
   const result = runSourcedFunction({
     script: new URL('bootstrap.sh', import.meta.url).pathname,
@@ -1005,12 +1005,12 @@ test('#parse_args refuses a Tailscale key file it cannot read', () => {
     runSourcedFunction({
       script,
       fn: 'parse_args',
-      args: ['--tailscale-authkey-file', join(ctx.dir, 'no-key')],
+      args: ['--tailscale-authkey-file', join(ctx.directoryPath, 'no-key')],
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: --tailscale-authkey-file: cannot read ${join(ctx.dir, 'no-key')}\n`,
+    stderr: `bootstrap: --tailscale-authkey-file: cannot read ${join(ctx.directoryPath, 'no-key')}\n`,
   });
 });
 
@@ -1019,14 +1019,14 @@ test('#parse_args reads the Tailscale key from its file without blanks', () => {
 
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
-  writeFileSync(join(ctx.dir, 'key'), ' fake-key-for-tests \n');
+  writeFileSync(join(ctx.directoryPath, 'key'), ' fake-key-for-tests \n');
 
   expect(
     runSourcedFunction({
       script,
       fn: 'eval',
       args: [
-        `parse_args --yes --tailscale-authkey-file '${join(ctx.dir, 'key')}' && echo "$authkey"`,
+        `parse_args --yes --tailscale-authkey-file '${join(ctx.directoryPath, 'key')}' && echo "$authkey"`,
       ],
     }).stdout,
   ).toBe('fake-key-for-tests\n');
@@ -1056,31 +1056,33 @@ test.each([
 test('#resolve_host_firewall refuses an env file host firewall other than own or none, naming the file', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_HOST_FIREWALL=ufw\n');
+  writeFileSync(join(ctx.directoryPath, 'imp-host.env'), 'IMP_HOST_FIREWALL=ufw\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'resolve_host_firewall',
-      args: [join(ctx.dir, 'imp-host.env')],
+      args: [join(ctx.directoryPath, 'imp-host.env')],
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: ${join(ctx.dir, 'imp-host.env')} says IMP_HOST_FIREWALL=ufw; want own or none\n`,
+    stderr: `bootstrap: ${join(ctx.directoryPath, 'imp-host.env')} says IMP_HOST_FIREWALL=ufw; want own or none\n`,
   });
 });
 
 test('#resolve_host_firewall takes the env file host firewall without the flag', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_HOST_FIREWALL=none\n');
+  writeFileSync(join(ctx.directoryPath, 'imp-host.env'), 'IMP_HOST_FIREWALL=none\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`resolve_host_firewall '${join(ctx.dir, 'imp-host.env')}'; echo "$host_firewall"`],
+      args: [
+        `resolve_host_firewall '${join(ctx.directoryPath, 'imp-host.env')}'; echo "$host_firewall"`,
+      ],
     }),
   ).toStrictEqual({ exitCode: 0, stdout: 'bootstrap: host firewall: none\nnone\n', stderr: '' });
 });
@@ -1088,14 +1090,14 @@ test('#resolve_host_firewall takes the env file host firewall without the flag',
 test('#resolve_host_firewall keeps the flag none over an env file that says own', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_HOST_FIREWALL=own\n');
+  writeFileSync(join(ctx.directoryPath, 'imp-host.env'), 'IMP_HOST_FIREWALL=own\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [
-        `host_firewall=none; resolve_host_firewall '${join(ctx.dir, 'imp-host.env')}'; echo "$host_firewall"`,
+        `host_firewall=none; resolve_host_firewall '${join(ctx.directoryPath, 'imp-host.env')}'; echo "$host_firewall"`,
       ],
     }),
   ).toStrictEqual({ exitCode: 0, stdout: 'bootstrap: host firewall: none\nnone\n', stderr: '' });
@@ -1108,7 +1110,9 @@ test('#resolve_host_firewall takes own without the flag or an env file', () => {
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`resolve_host_firewall '${join(ctx.dir, 'imp-host.env')}'; echo "$host_firewall"`],
+      args: [
+        `resolve_host_firewall '${join(ctx.directoryPath, 'imp-host.env')}'; echo "$host_firewall"`,
+      ],
     }),
   ).toStrictEqual({ exitCode: 0, stdout: 'bootstrap: host firewall: own\nown\n', stderr: '' });
 });
@@ -1116,31 +1120,31 @@ test('#resolve_host_firewall takes own without the flag or an env file', () => {
 test('#resolve_ipv6 refuses an env file IPv6 choice other than on or off, naming the file', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_HOST_IPV6=maybe\n');
+  writeFileSync(join(ctx.directoryPath, 'imp-host.env'), 'IMP_HOST_IPV6=maybe\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'resolve_ipv6',
-      args: [join(ctx.dir, 'imp-host.env')],
+      args: [join(ctx.directoryPath, 'imp-host.env')],
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: ${join(ctx.dir, 'imp-host.env')} says IMP_HOST_IPV6=maybe; want on or off\n`,
+    stderr: `bootstrap: ${join(ctx.directoryPath, 'imp-host.env')} says IMP_HOST_IPV6=maybe; want on or off\n`,
   });
 });
 
 test('#resolve_ipv6 takes the env file IPv6 choice without the flag', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_HOST_IPV6=off\n');
+  writeFileSync(join(ctx.directoryPath, 'imp-host.env'), 'IMP_HOST_IPV6=off\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`resolve_ipv6 '${join(ctx.dir, 'imp-host.env')}'; echo "$ipv6"`],
+      args: [`resolve_ipv6 '${join(ctx.directoryPath, 'imp-host.env')}'; echo "$ipv6"`],
     }),
   ).toStrictEqual({ exitCode: 0, stdout: 'bootstrap: ipv6: off\noff\n', stderr: '' });
 });
@@ -1148,13 +1152,13 @@ test('#resolve_ipv6 takes the env file IPv6 choice without the flag', () => {
 test('#resolve_ipv6 keeps the flag on over an env file that says off', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_HOST_IPV6=off\n');
+  writeFileSync(join(ctx.directoryPath, 'imp-host.env'), 'IMP_HOST_IPV6=off\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`ipv6=on; resolve_ipv6 '${join(ctx.dir, 'imp-host.env')}'; echo "$ipv6"`],
+      args: [`ipv6=on; resolve_ipv6 '${join(ctx.directoryPath, 'imp-host.env')}'; echo "$ipv6"`],
     }),
   ).toStrictEqual({ exitCode: 0, stdout: 'bootstrap: ipv6: on\non\n', stderr: '' });
 });
@@ -1164,18 +1168,21 @@ test('#resolve_storage refuses to switch a zfs host to xfs, naming the env file'
 
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_STORAGE_BACKEND=zfs\nIMP_ZFS_ROOT=tank/imp\n');
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.env'),
+    'IMP_STORAGE_BACKEND=zfs\nIMP_ZFS_ROOT=tank/imp\n',
+  );
 
   expect(
     runSourcedFunction({
       script,
       fn: 'eval',
-      args: [`storage=xfs; resolve_storage '${join(ctx.dir, 'imp-host.env')}'`],
+      args: [`storage=xfs; resolve_storage '${join(ctx.directoryPath, 'imp-host.env')}'`],
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: ${join(ctx.dir, 'imp-host.env')} says IMP_STORAGE_BACKEND=zfs on tank/imp; switching backends would leave every imp behind\n`,
+    stderr: `bootstrap: ${join(ctx.directoryPath, 'imp-host.env')} says IMP_STORAGE_BACKEND=zfs on tank/imp; switching backends would leave every imp behind\n`,
   });
 });
 
@@ -1184,18 +1191,21 @@ test('#resolve_storage refuses a ZFS pool whose dataset is not the env file one'
 
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_STORAGE_BACKEND=zfs\nIMP_ZFS_ROOT=tank/imp\n');
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.env'),
+    'IMP_STORAGE_BACKEND=zfs\nIMP_ZFS_ROOT=tank/imp\n',
+  );
 
   expect(
     runSourcedFunction({
       script,
       fn: 'eval',
-      args: [`zfs_pool=other; resolve_storage '${join(ctx.dir, 'imp-host.env')}'`],
+      args: [`zfs_pool=other; resolve_storage '${join(ctx.directoryPath, 'imp-host.env')}'`],
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: 'bootstrap: storage: zfs\n',
-    stderr: `bootstrap: ${join(ctx.dir, 'imp-host.env')} says IMP_ZFS_ROOT=tank/imp, not other/imp\n`,
+    stderr: `bootstrap: ${join(ctx.directoryPath, 'imp-host.env')} says IMP_ZFS_ROOT=tank/imp, not other/imp\n`,
   });
 });
 
@@ -1208,7 +1218,9 @@ test('#resolve_storage refuses --loop-file with zfs', () => {
     runSourcedFunction({
       script,
       fn: 'eval',
-      args: [`storage=zfs; loop_file=/srv/imp.xfs; resolve_storage '${join(ctx.dir, 'no-env')}'`],
+      args: [
+        `storage=zfs; loop_file=/srv/imp.xfs; resolve_storage '${join(ctx.directoryPath, 'no-env')}'`,
+      ],
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1222,18 +1234,18 @@ test('#resolve_subnet6 refuses an env file IMP_HOST_SUBNET6 that is no IPv6 /64'
 
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_HOST_SUBNET6=fd12::/56\n');
+  writeFileSync(join(ctx.directoryPath, 'imp-host.env'), 'IMP_HOST_SUBNET6=fd12::/56\n');
 
   expect(
     runSourcedFunction({
       script,
       fn: 'resolve_subnet6',
-      args: ['', join(ctx.dir, 'imp-host.env')],
+      args: ['', join(ctx.directoryPath, 'imp-host.env')],
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: ${join(ctx.dir, 'imp-host.env')} says IMP_HOST_SUBNET6=fd12::/56; want an IPv6 /64\n`,
+    stderr: `bootstrap: ${join(ctx.directoryPath, 'imp-host.env')} says IMP_HOST_SUBNET6=fd12::/56; want an IPv6 /64\n`,
   });
 });
 
@@ -1242,20 +1254,22 @@ test('#resolve_subnet6 takes the env file IMP_HOST_SUBNET6 as Docker prints it',
 
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
-  writeFileSync(join(ctx.dir, 'imp-host.env'), 'IMP_HOST_SUBNET6=FD12:0:0:1::/64\n');
+  writeFileSync(join(ctx.directoryPath, 'imp-host.env'), 'IMP_HOST_SUBNET6=FD12:0:0:1::/64\n');
 
   expect(
     runSourcedFunction({
       script,
       fn: 'eval',
-      args: [`resolve_subnet6 '' '${join(ctx.dir, 'imp-host.env')}'; echo "$ipv6_subnet"`],
+      args: [
+        `resolve_subnet6 '' '${join(ctx.directoryPath, 'imp-host.env')}'; echo "$ipv6_subnet"`,
+      ],
     }).stdout,
   ).toBe('fd12:0:0:1::/64\n');
 });
 
 test('#preflight refuses to run as a user other than root', () => {
   const ctx = setupTest();
-  const id = createStubBin(ctx.dir, 'id', 'echo 1000');
+  const id = createStubBin(ctx.directoryPath, 'id', 'echo 1000');
 
   expect(
     runSourcedFunction({
@@ -1273,13 +1287,13 @@ test('#preflight refuses to run as a user other than root', () => {
 test('#check_platform refuses a WSL kernel outside a container', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'osrelease'), '6.6.87.2-microsoft-standard-WSL2\n');
+  writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.6.87.2-microsoft-standard-WSL2\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_platform',
-      args: [join(ctx.dir, 'osrelease')],
+      args: [join(ctx.directoryPath, 'osrelease')],
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1291,10 +1305,10 @@ test('#check_platform refuses a WSL kernel outside a container', () => {
 test('#check_platform refuses an OS other than Ubuntu 24.04 or 26.04 or Debian 13, naming it', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'osrelease'), '6.8.0-85-generic\n');
+  writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.8.0-85-generic\n');
 
   writeFileSync(
-    join(ctx.dir, 'os-release'),
+    join(ctx.directoryPath, 'os-release'),
     'ID=fedora\nVERSION_ID=41\nPRETTY_NAME="Fedora Linux 41"\n',
   );
 
@@ -1302,7 +1316,7 @@ test('#check_platform refuses an OS other than Ubuntu 24.04 or 26.04 or Debian 1
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_platform',
-      args: [join(ctx.dir, 'osrelease'), join(ctx.dir, 'os-release')],
+      args: [join(ctx.directoryPath, 'osrelease'), join(ctx.directoryPath, 'os-release')],
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1313,12 +1327,12 @@ test('#check_platform refuses an OS other than Ubuntu 24.04 or 26.04 or Debian 1
 
 test('#check_platform refuses a machine other than x86_64', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.dir, 'uname', 'echo aarch64');
+  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo aarch64');
 
-  writeFileSync(join(ctx.dir, 'osrelease'), '6.8.0-85-generic\n');
+  writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.8.0-85-generic\n');
 
   writeFileSync(
-    join(ctx.dir, 'os-release'),
+    join(ctx.directoryPath, 'os-release'),
     'ID=ubuntu\nVERSION_ID="24.04"\nPRETTY_NAME="Ubuntu 24.04.3 LTS"\n',
   );
 
@@ -1326,7 +1340,7 @@ test('#check_platform refuses a machine other than x86_64', () => {
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_platform',
-      args: [join(ctx.dir, 'osrelease'), join(ctx.dir, 'os-release')],
+      args: [join(ctx.directoryPath, 'osrelease'), join(ctx.directoryPath, 'os-release')],
       env: { PATH: `${uname.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
@@ -1338,12 +1352,12 @@ test('#check_platform refuses a machine other than x86_64', () => {
 
 test('#check_platform refuses a host without the KVM device, naming it', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.dir, 'uname', 'echo x86_64');
+  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo x86_64');
 
-  writeFileSync(join(ctx.dir, 'osrelease'), '6.8.0-85-generic\n');
+  writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.8.0-85-generic\n');
 
   writeFileSync(
-    join(ctx.dir, 'os-release'),
+    join(ctx.directoryPath, 'os-release'),
     'ID=ubuntu\nVERSION_ID="24.04"\nPRETTY_NAME="Ubuntu 24.04.3 LTS"\n',
   );
 
@@ -1351,39 +1365,43 @@ test('#check_platform refuses a host without the KVM device, naming it', () => {
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_platform',
-      args: [join(ctx.dir, 'osrelease'), join(ctx.dir, 'os-release'), join(ctx.dir, 'kvm')],
+      args: [
+        join(ctx.directoryPath, 'osrelease'),
+        join(ctx.directoryPath, 'os-release'),
+        join(ctx.directoryPath, 'kvm'),
+      ],
       env: { PATH: `${uname.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: 'bootstrap: OS: Ubuntu 24.04.3 LTS\n',
-    stderr: `bootstrap: ${join(ctx.dir, 'kvm')} is missing; enable VT-x/AMD-V in the firmware\n`,
+    stderr: `bootstrap: ${join(ctx.directoryPath, 'kvm')} is missing; enable VT-x/AMD-V in the firmware\n`,
   });
 });
 
 // /dev/null stands in for /dev/kvm: the check wants a character device
 test('#check_platform refuses a CPU that reports neither vmx nor svm', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.dir, 'uname', 'echo x86_64');
+  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo x86_64');
 
-  writeFileSync(join(ctx.dir, 'osrelease'), '6.8.0-85-generic\n');
+  writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.8.0-85-generic\n');
 
   writeFileSync(
-    join(ctx.dir, 'os-release'),
+    join(ctx.directoryPath, 'os-release'),
     'ID=debian\nVERSION_ID="13"\nPRETTY_NAME="Debian GNU/Linux 13 (trixie)"\n',
   );
 
-  writeFileSync(join(ctx.dir, 'cpuinfo'), 'flags\t\t: fpu vme sse2 hypervisor\n');
+  writeFileSync(join(ctx.directoryPath, 'cpuinfo'), 'flags\t\t: fpu vme sse2 hypervisor\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_platform',
       args: [
-        join(ctx.dir, 'osrelease'),
-        join(ctx.dir, 'os-release'),
+        join(ctx.directoryPath, 'osrelease'),
+        join(ctx.directoryPath, 'os-release'),
         '/dev/null',
-        join(ctx.dir, 'cpuinfo'),
+        join(ctx.directoryPath, 'cpuinfo'),
       ],
       env: { PATH: `${uname.bin}:${process.env['PATH'] ?? ''}` },
     }),
@@ -1396,26 +1414,26 @@ test('#check_platform refuses a CPU that reports neither vmx nor svm', () => {
 
 test('#check_platform accepts Debian 13 on x86_64 with KVM and vmx', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.dir, 'uname', 'echo x86_64');
+  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo x86_64');
 
-  writeFileSync(join(ctx.dir, 'osrelease'), '6.12.48+deb13-amd64\n');
+  writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.12.48+deb13-amd64\n');
 
   writeFileSync(
-    join(ctx.dir, 'os-release'),
+    join(ctx.directoryPath, 'os-release'),
     'ID=debian\nVERSION_ID="13"\nPRETTY_NAME="Debian GNU/Linux 13 (trixie)"\n',
   );
 
-  writeFileSync(join(ctx.dir, 'cpuinfo'), 'flags\t\t: fpu vme vmx sse2\n');
+  writeFileSync(join(ctx.directoryPath, 'cpuinfo'), 'flags\t\t: fpu vme vmx sse2\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_platform',
       args: [
-        join(ctx.dir, 'osrelease'),
-        join(ctx.dir, 'os-release'),
+        join(ctx.directoryPath, 'osrelease'),
+        join(ctx.directoryPath, 'os-release'),
         '/dev/null',
-        join(ctx.dir, 'cpuinfo'),
+        join(ctx.directoryPath, 'cpuinfo'),
       ],
       env: { PATH: `${uname.bin}:${process.env['PATH'] ?? ''}` },
     }),
@@ -1428,7 +1446,7 @@ test('#check_platform accepts Debian 13 on x86_64 with KVM and vmx', () => {
 
 test('#check_data_source refuses XFS with no device, no loop file and nothing mounted', () => {
   const ctx = setupTest();
-  const mountpoint = createStubBin(ctx.dir, 'mountpoint', 'exit 1');
+  const mountpoint = createStubBin(ctx.directoryPath, 'mountpoint', 'exit 1');
 
   expect(
     runSourcedFunction({
@@ -1446,13 +1464,13 @@ test('#check_data_source refuses XFS with no device, no loop file and nothing mo
 
 test('#resolve_storage refuses zfs where /var/lib/imp is a mount on the host', () => {
   const ctx = setupTest();
-  const mountpoint = createStubBin(ctx.dir, 'mountpoint', 'exit 0');
+  const mountpoint = createStubBin(ctx.directoryPath, 'mountpoint', 'exit 0');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`storage=zfs; resolve_storage '${join(ctx.dir, 'no-env')}'`],
+      args: [`storage=zfs; resolve_storage '${join(ctx.directoryPath, 'no-env')}'`],
       env: { PATH: `${mountpoint.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
@@ -1467,7 +1485,7 @@ test('#apt_install refuses a failed install with the tail of the log and where t
   const ctx = setupTest();
 
   const aptGet = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'apt-get',
     "echo 'E: Unable to locate package nope'; exit 100",
   );
@@ -1476,13 +1494,13 @@ test('#apt_install refuses a failed install with the tail of the log and where t
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'apt_install',
-      args: [join(ctx.dir, 'apt.log'), 'nope'],
+      args: [join(ctx.directoryPath, 'apt.log'), 'nope'],
       env: { PATH: `${aptGet.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `E: Unable to locate package nope\nbootstrap: apt-get install nope failed; the whole log is in ${join(ctx.dir, 'apt.log')}\n`,
+    stderr: `E: Unable to locate package nope\nbootstrap: apt-get install nope failed; the whole log is in ${join(ctx.directoryPath, 'apt.log')}\n`,
   });
 });
 
@@ -1490,30 +1508,30 @@ test("#check_docker_key refuses a key file that holds another key than Docker's"
   const ctx = setupTest();
 
   const gpg = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'gpg',
     String.raw`printf '%s\n' 'pub:-:4096:1:7EA0A9C3F273FCD8:1487788586:::-:::scESA:::::::23::0:' 'fpr:::::::::1111222233334444555566667777888899990000:'`,
   );
 
-  writeFileSync(join(ctx.dir, 'docker.asc'), 'not the key\n');
+  writeFileSync(join(ctx.directoryPath, 'docker.asc'), 'not the key\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_docker_key',
-      args: [join(ctx.dir, 'docker.asc')],
+      args: [join(ctx.directoryPath, 'docker.asc')],
       env: { PATH: `${gpg.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: ${join(ctx.dir, 'docker.asc')} is not Docker's apt key (want 9DC858229FC7DD38854AE2D88D81803C0EBFCD88, got 1111222233334444555566667777888899990000)\n`,
+    stderr: `bootstrap: ${join(ctx.directoryPath, 'docker.asc')} is not Docker's apt key (want 9DC858229FC7DD38854AE2D88D81803C0EBFCD88, got 1111222233334444555566667777888899990000)\n`,
   });
 });
 
 test('#check_xfs_reflink refuses a mount on /var/lib/imp that is not XFS', () => {
   const ctx = setupTest();
-  const findmnt = createStubBin(ctx.dir, 'findmnt', 'echo ext4');
+  const findmnt = createStubBin(ctx.directoryPath, 'findmnt', 'echo ext4');
 
   expect(
     runSourcedFunction({
@@ -1531,10 +1549,10 @@ test('#check_xfs_reflink refuses a mount on /var/lib/imp that is not XFS', () =>
 test('#check_xfs_reflink refuses an XFS on /var/lib/imp without reflink', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.dir, 'findmnt', 'echo xfs');
+  createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
 
   const xfsInfo = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'xfs_info',
     "echo 'meta-data=/dev/vdb isize=512 agcount=4, crc=1 finobt=1, sparse=1, rmapbt=0, reflink=0'",
   );
@@ -1561,7 +1579,7 @@ test('#check_device_free refuses a path that is not a block device', () => {
     devices: {},
   });
 
-  const stat = createStubBin(ctx.dir, 'stat', scripts.stat);
+  const stat = createStubBin(ctx.directoryPath, 'stat', scripts.stat);
 
   expect(
     runSourcedFunction({
@@ -1585,10 +1603,10 @@ test('#check_device_free refuses the disk that holds the root filesystem', () =>
     devices: {},
   });
 
-  createStubBin(ctx.dir, 'stat', scripts.stat);
-  createStubBin(ctx.dir, 'findmnt', scripts.findmnt);
+  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
+  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
 
-  const lsblk = createStubBin(ctx.dir, 'lsblk', scripts.lsblk);
+  const lsblk = createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
 
   expect(
     runSourcedFunction({
@@ -1612,10 +1630,10 @@ test('#check_device_free refuses a device with partitions', () => {
     devices: { '/dev/imp-test-vdb': { partitions: ['/dev/imp-test-vdb1'] } },
   });
 
-  createStubBin(ctx.dir, 'stat', scripts.stat);
-  createStubBin(ctx.dir, 'findmnt', scripts.findmnt);
+  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
+  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
 
-  const lsblk = createStubBin(ctx.dir, 'lsblk', scripts.lsblk);
+  const lsblk = createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
 
   expect(
     runSourcedFunction({
@@ -1640,11 +1658,11 @@ test('#prepare_device refuses a device that carries a signature but no filesyste
     devices: { '/dev/imp-test-vdb': { signature: true } },
   });
 
-  createStubBin(ctx.dir, 'stat', scripts.stat);
-  createStubBin(ctx.dir, 'findmnt', scripts.findmnt);
-  createStubBin(ctx.dir, 'lsblk', scripts.lsblk);
+  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
+  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
+  createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
 
-  const blkid = createStubBin(ctx.dir, 'blkid', scripts.blkid);
+  const blkid = createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
 
   expect(
     runSourcedFunction({
@@ -1669,12 +1687,12 @@ test('#storage_zfs refuses a device that belongs to another ZFS pool', () => {
     devices: { '/dev/imp-test-vdb': { type: 'zfs_member', label: 'other' } },
   });
 
-  createStubBin(ctx.dir, 'stat', scripts.stat);
-  createStubBin(ctx.dir, 'findmnt', scripts.findmnt);
-  createStubBin(ctx.dir, 'lsblk', scripts.lsblk);
-  createStubBin(ctx.dir, 'blkid', scripts.blkid);
+  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
+  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
+  createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
+  createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
 
-  const zpool = createStubBin(ctx.dir, 'zpool', 'exit 1');
+  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'exit 1');
 
   expect(
     runSourcedFunction({
@@ -1698,12 +1716,12 @@ test('#storage_zfs refuses a device that carries a signature but no filesystem',
     devices: { '/dev/imp-test-vdb': { signature: true } },
   });
 
-  createStubBin(ctx.dir, 'stat', scripts.stat);
-  createStubBin(ctx.dir, 'findmnt', scripts.findmnt);
-  createStubBin(ctx.dir, 'lsblk', scripts.lsblk);
-  createStubBin(ctx.dir, 'blkid', scripts.blkid);
+  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
+  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
+  createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
+  createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
 
-  const zpool = createStubBin(ctx.dir, 'zpool', 'exit 1');
+  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'exit 1');
 
   expect(
     runSourcedFunction({
@@ -1728,12 +1746,12 @@ test('#storage_zfs refuses a device that holds a filesystem, naming it', () => {
     devices: { '/dev/imp-test-vdb': { type: 'ext4' } },
   });
 
-  createStubBin(ctx.dir, 'stat', scripts.stat);
-  createStubBin(ctx.dir, 'findmnt', scripts.findmnt);
-  createStubBin(ctx.dir, 'lsblk', scripts.lsblk);
-  createStubBin(ctx.dir, 'blkid', scripts.blkid);
+  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
+  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
+  createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
+  createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
 
-  const zpool = createStubBin(ctx.dir, 'zpool', 'exit 1');
+  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'exit 1');
 
   expect(
     runSourcedFunction({
@@ -1751,7 +1769,7 @@ test('#storage_zfs refuses a device that holds a filesystem, naming it', () => {
 
 test('#storage_zfs refuses a pool that is not there without a device to create it on', () => {
   const ctx = setupTest();
-  const zpool = createStubBin(ctx.dir, 'zpool', 'exit 1');
+  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'exit 1');
 
   expect(
     runSourcedFunction({
@@ -1769,7 +1787,7 @@ test('#storage_zfs refuses a pool that is not there without a device to create i
 
 test('#prepare_loop_file refuses a loop file off the root filesystem', () => {
   const ctx = setupTest();
-  const findmnt = createStubBin(ctx.dir, 'findmnt', 'echo /srv');
+  const findmnt = createStubBin(ctx.directoryPath, 'findmnt', 'echo /srv');
 
   expect(
     runSourcedFunction({
@@ -1789,23 +1807,23 @@ test('#prepare_loop_file refuses a loop file off the root filesystem', () => {
 test('#prepare_loop_file refuses an existing loop file that holds no XFS', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.dir, 'findmnt', 'echo /');
+  createStubBin(ctx.directoryPath, 'findmnt', 'echo /');
 
-  const blkid = createStubBin(ctx.dir, 'blkid', 'exit 2');
+  const blkid = createStubBin(ctx.directoryPath, 'blkid', 'exit 2');
 
-  writeFileSync(join(ctx.dir, 'imp.xfs'), 'not a filesystem\n');
+  writeFileSync(join(ctx.directoryPath, 'imp.xfs'), 'not a filesystem\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`loop_file='${join(ctx.dir, 'imp.xfs')}'; prepare_loop_file`],
+      args: [`loop_file='${join(ctx.directoryPath, 'imp.xfs')}'; prepare_loop_file`],
       env: { PATH: `${blkid.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: ${join(ctx.dir, 'imp.xfs')} exists and is not XFS\n`,
+    stderr: `bootstrap: ${join(ctx.directoryPath, 'imp.xfs')} exists and is not XFS\n`,
   });
 });
 
@@ -1813,15 +1831,17 @@ test('#prepare_loop_file refuses an existing loop file that holds no XFS', () =>
 test('#prepare_loop_file refuses a loop size below 20 GiB, naming the free space', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.dir, 'findmnt', 'echo /');
+  createStubBin(ctx.directoryPath, 'findmnt', 'echo /');
 
-  const df = createStubBin(ctx.dir, 'df', String.raw`printf '%s\n' Avail 104857600`);
+  const df = createStubBin(ctx.directoryPath, 'df', String.raw`printf '%s\n' Avail 104857600`);
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`loop_file='${join(ctx.dir, 'imp.xfs')}'; loop_size_gib=15; prepare_loop_file`],
+      args: [
+        `loop_file='${join(ctx.directoryPath, 'imp.xfs')}'; loop_size_gib=15; prepare_loop_file`,
+      ],
       env: { PATH: `${df.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
@@ -1834,18 +1854,21 @@ test('#prepare_loop_file refuses a loop size below 20 GiB, naming the free space
 test('#ensure_fstab refuses an fstab with another entry for /var/lib/imp', () => {
   const ctx = setupTest();
 
-  writeFileSync(join(ctx.dir, 'fstab'), 'UUID=abc /var/lib/imp ext4 defaults 0 2\n');
+  writeFileSync(join(ctx.directoryPath, 'fstab'), 'UUID=abc /var/lib/imp ext4 defaults 0 2\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'ensure_fstab',
-      args: ['UUID=def /var/lib/imp xfs defaults,nosuid,nofail 0 2', join(ctx.dir, 'fstab')],
+      args: [
+        'UUID=def /var/lib/imp xfs defaults,nosuid,nofail 0 2',
+        join(ctx.directoryPath, 'fstab'),
+      ],
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: ${join(ctx.dir, 'fstab')} has another entry for /var/lib/imp; fix or remove it first\n`,
+    stderr: `bootstrap: ${join(ctx.directoryPath, 'fstab')} has another entry for /var/lib/imp; fix or remove it first\n`,
   });
 });
 
@@ -1863,7 +1886,7 @@ test('#ensure_ksm refuses --ksm in a container', () => {
 
 test('#ensure_ksm refuses --ksm on a kernel older than 6.10, naming it', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.dir, 'uname', 'echo 6.6.87');
+  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo 6.6.87');
 
   expect(
     runSourcedFunction({
@@ -1881,13 +1904,13 @@ test('#ensure_ksm refuses --ksm on a kernel older than 6.10, naming it', () => {
 
 test('#ensure_ksm refuses --ksm on a kernel without KSM in sysfs', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.dir, 'uname', 'echo 6.12.48');
+  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo 6.12.48');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`ksm=on; ensure_ksm '${join(ctx.dir, 'ksm')}'`],
+      args: [`ksm=on; ensure_ksm '${join(ctx.directoryPath, 'ksm')}'`],
       env: { PATH: `${uname.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
@@ -1899,7 +1922,7 @@ test('#ensure_ksm refuses --ksm on a kernel without KSM in sysfs', () => {
 
 test('#ensure_firewall refuses its own firewall while nftables.service is enabled', () => {
   const ctx = setupTest();
-  const systemctl = createStubBin(ctx.dir, 'systemctl', 'exit 0');
+  const systemctl = createStubBin(ctx.directoryPath, 'systemctl', 'exit 0');
 
   expect(
     runSourcedFunction({
@@ -1919,11 +1942,11 @@ test('#ensure_firewall refuses its own firewall while nftables.service is enable
 test('#ensure_firewall refuses a host where it finds no SSH port', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.dir, 'systemctl', 'exit 1');
-  createStubBin(ctx.dir, 'ufw', "echo 'Status: inactive'");
-  createStubBin(ctx.dir, 'sshd', 'exit 1');
+  createStubBin(ctx.directoryPath, 'systemctl', 'exit 1');
+  createStubBin(ctx.directoryPath, 'ufw', "echo 'Status: inactive'");
+  createStubBin(ctx.directoryPath, 'sshd', 'exit 1');
 
-  const ss = createStubBin(ctx.dir, 'ss');
+  const ss = createStubBin(ctx.directoryPath, 'ss');
 
   expect(
     runSourcedFunction({
@@ -1942,11 +1965,11 @@ test('#ensure_firewall refuses a host where it finds no SSH port', () => {
 test('#ensure_firewall refuses a sudo run that dropped SSH_CONNECTION', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.dir, 'systemctl', 'exit 1');
-  createStubBin(ctx.dir, 'ufw', "echo 'Status: inactive'");
-  createStubBin(ctx.dir, 'sshd', "echo 'port 22'");
+  createStubBin(ctx.directoryPath, 'systemctl', 'exit 1');
+  createStubBin(ctx.directoryPath, 'ufw', "echo 'Status: inactive'");
+  createStubBin(ctx.directoryPath, 'sshd', "echo 'port 22'");
 
-  const ss = createStubBin(ctx.dir, 'ss');
+  const ss = createStubBin(ctx.directoryPath, 'ss');
 
   expect(
     runSourcedFunction({
@@ -1966,11 +1989,11 @@ test('#ensure_firewall refuses a sudo run that dropped SSH_CONNECTION', () => {
 test('#ensure_firewall refuses an SSH session on a port sshd does not report, naming it', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.dir, 'systemctl', 'exit 1');
-  createStubBin(ctx.dir, 'ufw', "echo 'Status: inactive'");
-  createStubBin(ctx.dir, 'sshd', "echo 'port 22'");
+  createStubBin(ctx.directoryPath, 'systemctl', 'exit 1');
+  createStubBin(ctx.directoryPath, 'ufw', "echo 'Status: inactive'");
+  createStubBin(ctx.directoryPath, 'sshd', "echo 'port 22'");
 
-  const ss = createStubBin(ctx.dir, 'ss');
+  const ss = createStubBin(ctx.directoryPath, 'ss');
 
   expect(
     runSourcedFunction({
@@ -1990,15 +2013,15 @@ test('#ensure_firewall refuses an SSH session on a port sshd does not report, na
 test('#check_ruleset refuses a run that makes changes without nft', () => {
   const ctx = setupTest();
 
-  mkdirSync(join(ctx.dir, 'bin'));
-  createCommandLinks({ bin: join(ctx.dir, 'bin'), names: ['bash'] });
+  mkdirSync(join(ctx.directoryPath, 'bin'));
+  createCommandLinks({ bin: join(ctx.directoryPath, 'bin'), names: ['bash'] });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ["mode=yes; check_ruleset 'table inet imp_host {}'"],
-      env: { PATH: join(ctx.dir, 'bin') },
+      env: { PATH: join(ctx.directoryPath, 'bin') },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2009,7 +2032,7 @@ test('#check_ruleset refuses a run that makes changes without nft', () => {
 
 test('#check_ruleset refuses a ruleset nft rejects', () => {
   const ctx = setupTest();
-  const nft = createStubBin(ctx.dir, 'nft', "echo 'Error: syntax error' >&2; exit 1");
+  const nft = createStubBin(ctx.directoryPath, 'nft', "echo 'Error: syntax error' >&2; exit 1");
 
   expect(
     runSourcedFunction({
@@ -2032,7 +2055,7 @@ test('#settle_host_network refuses to recreate a network that differs while othe
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({
       hostNetwork: 'true unnamed 172.18.0.0/16 fd12::/64',
@@ -2059,7 +2082,7 @@ test('#settle_host_network keeps a network that is right', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({
       hostNetwork: 'true br-imphost 172.18.0.0/16 fd12::/64',
@@ -2085,13 +2108,13 @@ test('#settle_host_network keeps a network that is right', () => {
 
 test('#check_docker_ipv6 refuses a Docker daemon whose version it cannot read', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubBootstrapDocker({}));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_docker_ipv6',
-      args: [join(ctx.dir, 'daemon.json')],
+      args: [join(ctx.directoryPath, 'daemon.json')],
       env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
@@ -2105,7 +2128,7 @@ test('#check_docker_ipv6 refuses IPv6 on with a Docker older than 27.0, naming i
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ serverVersion: '26.1.4' }),
   );
@@ -2114,7 +2137,7 @@ test('#check_docker_ipv6 refuses IPv6 on with a Docker older than 27.0, naming i
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_docker_ipv6',
-      args: [join(ctx.dir, 'daemon.json')],
+      args: [join(ctx.directoryPath, 'daemon.json')],
       env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
@@ -2129,24 +2152,24 @@ test('#check_docker_ipv6 refuses IPv6 on with ip6tables off in the daemon config
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ serverVersion: '27.3.1' }),
   );
 
-  writeFileSync(join(ctx.dir, 'daemon.json'), '{"ip6tables": false}\n');
+  writeFileSync(join(ctx.directoryPath, 'daemon.json'), '{"ip6tables": false}\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_docker_ipv6',
-      args: [join(ctx.dir, 'daemon.json')],
+      args: [join(ctx.directoryPath, 'daemon.json')],
       env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: ${join(ctx.dir, 'daemon.json')} sets ip6tables to false, so imp-host's network would have no NAT66; fix that, or give --ipv6 off\n`,
+    stderr: `bootstrap: ${join(ctx.directoryPath, 'daemon.json')} sets ip6tables to false, so imp-host's network would have no NAT66; fix that, or give --ipv6 off\n`,
   });
 });
 
@@ -2154,18 +2177,18 @@ test('#check_docker_ipv6 accepts Docker 27.0 or later with a daemon config that 
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ serverVersion: '27.3.1' }),
   );
 
-  writeFileSync(join(ctx.dir, 'daemon.json'), '{"log-driver": "journald"}\n');
+  writeFileSync(join(ctx.directoryPath, 'daemon.json'), '{"log-driver": "journald"}\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_docker_ipv6',
-      args: [join(ctx.dir, 'daemon.json')],
+      args: [join(ctx.directoryPath, 'daemon.json')],
       env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
@@ -2173,33 +2196,33 @@ test('#check_docker_ipv6 accepts Docker 27.0 or later with a daemon config that 
 
 test('#remove_ipv6 refuses an accept_ra file left without --ipv6 off, naming it', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubBootstrapDocker({}));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
 
-  writeFileSync(join(ctx.dir, '90-imp-ipv6.conf'), 'net.ipv6.conf.eth0.accept_ra = 2\n');
+  writeFileSync(join(ctx.directoryPath, '90-imp-ipv6.conf'), 'net.ipv6.conf.eth0.accept_ra = 2\n');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`mode=yes; remove_ipv6 '${join(ctx.dir, '90-imp-ipv6.conf')}'`],
+      args: [`mode=yes; remove_ipv6 '${join(ctx.directoryPath, '90-imp-ipv6.conf')}'`],
       env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: IMP_HOST_IPV6=off, but the imp-host network or ${join(ctx.dir, '90-imp-ipv6.conf')} is still there; run with --ipv6 off to remove them\n`,
+    stderr: `bootstrap: IMP_HOST_IPV6=off, but the imp-host network or ${join(ctx.directoryPath, '90-imp-ipv6.conf')} is still there; run with --ipv6 off to remove them\n`,
   });
 });
 
 test('#remove_ipv6 leaves a host with no network and no accept_ra file as it is', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubBootstrapDocker({}));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`mode=yes; remove_ipv6 '${join(ctx.dir, '90-imp-ipv6.conf')}'`],
+      args: [`mode=yes; remove_ipv6 '${join(ctx.directoryPath, '90-imp-ipv6.conf')}'`],
       env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
@@ -2213,7 +2236,7 @@ test('#remove_ipv6 refuses to remove the network while other containers use it',
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({
       hostNetwork: 'true br-imphost 172.18.0.0/16 fd12::/64',
@@ -2225,7 +2248,7 @@ test('#remove_ipv6 refuses to remove the network while other containers use it',
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`ipv6_set=1; remove_ipv6 '${join(ctx.dir, '90-imp-ipv6.conf')}'`],
+      args: [`ipv6_set=1; remove_ipv6 '${join(ctx.directoryPath, '90-imp-ipv6.conf')}'`],
       env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
@@ -2239,7 +2262,7 @@ test('#read_seccomp refuses an image without the seccomp profile', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ images: ['imp-host:1'] }),
   );
@@ -2264,7 +2287,7 @@ test('#read_seccomp prints the seccomp profile of an image that carries one', ()
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ images: ['imp-host:1'], seccompImages: ['imp-host:1'] }),
   );
@@ -2281,25 +2304,25 @@ test('#read_seccomp prints the seccomp profile of an image that carries one', ()
 
 test('#ensure_image refuses an image archive it cannot read', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubBootstrapDocker({}));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: [`image_archive='${join(ctx.dir, 'imp-host.tar')}'; ensure_image imp-host:1`],
+      args: [`image_archive='${join(ctx.directoryPath, 'imp-host.tar')}'; ensure_image imp-host:1`],
       env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: cannot read ${join(ctx.dir, 'imp-host.tar')}\n`,
+    stderr: `bootstrap: cannot read ${join(ctx.directoryPath, 'imp-host.tar')}\n`,
   });
 });
 
 test('#load_image refuses an archive that does not hold the image', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubBootstrapDocker({}));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
 
   expect(
     runSourcedFunction({
@@ -2319,7 +2342,7 @@ test('#health refuses imp-host publishing a port beyond loopback', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ impInfo: 'imp 0.40.4', published: '7070/tcp -> 0.0.0.0:7070' }),
   );
@@ -2341,7 +2364,7 @@ test('#health asks imp in an image from before the CLI was impz', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({
       impInfo: 'imp 1.6.0',
@@ -2367,7 +2390,7 @@ test('#check_storage_live refuses impd on another storage backend than the boots
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ impInfo: '{"storage":{"backend":"xfs"}}' }),
   );
@@ -2390,12 +2413,12 @@ test('#check_storage_live refuses a ZFS pool that is not ONLINE', () => {
   const ctx = setupTest();
 
   createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({ impInfo: '{"storage":{"backend":"zfs"}}' }),
   );
 
-  const zpool = createStubBin(ctx.dir, 'zpool', 'echo DEGRADED');
+  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'echo DEGRADED');
 
   expect(
     runSourcedFunction({
@@ -2415,7 +2438,7 @@ test('#check_storage_live refuses a container with another dataset on /var/lib/i
   const ctx = setupTest();
 
   createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({
       impInfo: '{"storage":{"backend":"zfs"}}',
@@ -2423,7 +2446,7 @@ test('#check_storage_live refuses a container with another dataset on /var/lib/i
     }),
   );
 
-  const zpool = createStubBin(ctx.dir, 'zpool', 'echo ONLINE');
+  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'echo ONLINE');
 
   expect(
     runSourcedFunction({
@@ -2441,7 +2464,7 @@ test('#check_storage_live refuses a container with another dataset on /var/lib/i
 
 test('#check_ipv6_live refuses imp-host without an IPv6 default route', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.dir, 'docker', buildStubBootstrapDocker({}));
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
 
   expect(
     runSourcedFunction({
@@ -2460,7 +2483,7 @@ test('#check_ipv6_live refuses an impd that logs IPv6 off, quoting its line', ()
   const ctx = setupTest();
 
   const docker = createStubBin(
-    ctx.dir,
+    ctx.directoryPath,
     'docker',
     buildStubBootstrapDocker({
       ipv6Route: 'default via fd12::1 dev eth0 metric 1024',

@@ -1,6 +1,6 @@
+import { collectSchemaMap } from './collect-schema-map';
+import { findValues } from './find-values';
 import { isSchemaObject } from './is-schema-object';
-import { readSchemaMap } from './read-schema-map';
-import { readValues } from './read-values';
 import type { Schema, SchemaObject } from './schema';
 
 // whether the two take no value in common on a discriminator: then they are
@@ -14,14 +14,14 @@ export function hasOtherTag(
     return false;
   }
 
-  const narrowProperties = readSchemaMap(narrow, 'properties');
-  const wideProperties = readSchemaMap(wide, 'properties');
+  const narrowProperties = collectSchemaMap(narrow, 'properties');
+  const wideProperties = collectSchemaMap(wide, 'properties');
 
   return tagKeys.some((key) => {
     const narrowProperty = narrowProperties[key];
     const wideProperty = wideProperties[key];
-    const narrowValues = narrowProperty === undefined ? undefined : readValues(narrowProperty);
-    const wideValues = wideProperty === undefined ? undefined : readValues(wideProperty);
+    const narrowValues = narrowProperty === undefined ? undefined : findValues(narrowProperty);
+    const wideValues = wideProperty === undefined ? undefined : findValues(wideProperty);
 
     return (
       narrowValues !== undefined &&

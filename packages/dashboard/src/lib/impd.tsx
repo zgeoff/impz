@@ -13,7 +13,7 @@ export interface Impd {
 
 // The browser talks to the impd that served the page, with the session
 // cookie and no token (docs/architecture/control/auth.md#the-dashboard-session)
-export function createBrowserImpd(origin: string): Impd {
+export function buildBrowserImpd(origin: string): Impd {
   const client = createImpClient({ url: origin });
 
   return { client, query: buildQueryUtils(client) };

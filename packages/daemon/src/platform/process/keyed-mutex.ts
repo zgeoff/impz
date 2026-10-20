@@ -18,7 +18,7 @@ export interface KeyedMutex {
   readonly waitForAll: () => Promise<void>;
 }
 
-export function createKeyedMutex(): KeyedMutex {
+export function buildKeyedMutex(): KeyedMutex {
   // per key, a promise that resolves when the newest queued task is done,
   // and how many tasks run or wait; the promise never rejects, so a failed
   // task never blocks the next one

@@ -72,7 +72,7 @@ export function readSessionCookies(header: string | null): string[] {
 // Every other cookie of a Cookie header, or null when none is left. The wake
 // proxy forwards cookies to imps, and a browser sends the session to every
 // port of the host, imps' ports included.
-export function removeSessionCookie(header: string): string | null {
+export function stripSessionCookie(header: string): string | null {
   const kept = header
     .split(';')
     .map((pair) => pair.trim())

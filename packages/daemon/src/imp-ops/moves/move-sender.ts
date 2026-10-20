@@ -7,17 +7,17 @@ import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
 import type { EgressService } from '../../network/egress/egress-service';
 import { listCheckpoints } from '../../platform/db/checkpoints';
-import { findImpById, findImpByName, listImps, updateImpMove } from '../../platform/db/imps';
+import { listImps, readImpById, readImpByName, updateImpMove } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import {
-  findMoveSend,
+  readMoveSend,
   removeMoveSend,
   updateMoveSend,
   writeMoveSend,
 } from '../../platform/db/move-sends';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StartTimer } from '../../platform/process/clock';
-import { readErrorMessage } from '../../platform/process/read-error-message';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildInvalidStateError, buildNotFoundError } from '../../surface/api-errors';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
@@ -33,6 +33,18 @@ import type { SendTarget } from './run-move-send';
 import { sendMoveAbort } from './send-move-abort';
 import { sendToPeer } from './send-to-peer';
 
+interface PrepareOptions {
+  readonly stop: boolean;
+
+  // a stop of a leased imp ends its leases from leases.* rather than fail
+  // with LEASED, as `imps.stop` does
+  readonly force: boolean;
+  readonly targetStorage: 'xfs' | 'zfs';
+
+  // the target's facts, for a warm move; null from an older CLI or target
+  readonly target: WarmHost | null;
+}
+
 export interface MoveSender {
   readonly prepare: (name: string, options: PrepareOptions) => Promise<MovePlan>;
   readonly send: (name: string, to: string, ticket: string) => Promise<MoveStatus>;
@@ -46,18 +58,6 @@ export interface MoveSender {
   // settles once the recovery that `recover` last started has run, at once
   // when none has; it never rejects, as the recovery logs its own failure
   readonly waitForRecovery: () => Promise<void>;
-}
-
-interface PrepareOptions {
-  readonly stop: boolean;
-
-  // a stop of a leased imp ends its leases from leases.* rather than fail
-  // with LEASED, as `imps.stop` does
-  readonly force: boolean;
-  readonly targetStorage: 'xfs' | 'zfs';
-
-  // the target's facts, for a warm move; null from an older CLI or target
-  readonly target: WarmHost | null;
 }
 
 export interface MoveSenderDeps {
@@ -108,13 +108,6 @@ interface SendTask {
   isDone: boolean;
 }
 
-// a public imp's credential and DNS record belong to this host's domain
-function buildPublicError(name: string) {
-  return new ORPCError('PRECONDITION_FAILED', {
-    message: `${name} is public: run impz unexpose ${name} first, and impz expose on the target after the move`,
-  });
-}
-
 export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   const tasks = new Map<string, SendTask>();
 
@@ -126,7 +119,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   const halted = new Set<string>();
 
   const requireImp = async (name: string): Promise<ImpRecord> => {
-    const imp = await findImpByName(deps.db, name);
+    const imp = await readImpByName(deps.db, name);
 
     if (imp === undefined) {
       throw buildNotFoundError('imp', name);
@@ -139,9 +132,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   // imp is live there, whether on this call or one before a crash
   const runCommit = async (imp: ImpRecord, peer: string, ticket: string): Promise<void> => {
     await deps.releaseName().catch((error: unknown) => {
-      deps.log(
-        `impd: move: ${imp.name}: tailnet name not released yet: ${readErrorMessage(error)}`,
-      );
+      deps.log(`impd: move: ${imp.name}: tailnet name not released yet: ${getErrorMessage(error)}`);
     });
 
     const response = await sendToPeer(deps, peer, MOVE_PATHS.commit, ticket);
@@ -172,7 +163,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     try {
       await runCommit(imp, peer, ticket);
     } catch (error) {
-      deps.log(`impd: move: ${imp.name}: commit after restart: ${readErrorMessage(error)}`);
+      deps.log(`impd: move: ${imp.name}: commit after restart: ${getErrorMessage(error)}`);
     }
   };
 
@@ -198,7 +189,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     try {
       await sendMoveAbort(deps, imp, peer, ticket);
     } catch (error) {
-      const message = `the target did not confirm the abort (${readErrorMessage(error)}); run impz move ${imp.name} <host> --abort`;
+      const message = `the target did not confirm the abort (${getErrorMessage(error)}); run impz move ${imp.name} <host> --abort`;
 
       await updateMoveSend(deps.db, imp.id, { error: message });
 
@@ -216,7 +207,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     try {
       await deps.imps.startImp(imp.name);
     } catch (error) {
-      deps.log(`impd: move: ${imp.name}: could not start it again: ${readErrorMessage(error)}`);
+      deps.log(`impd: move: ${imp.name}: could not start it again: ${getErrorMessage(error)}`);
     }
   };
 
@@ -246,11 +237,11 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
         task.isDone = true;
       } catch (error) {
-        const message = readErrorMessage(error);
+        const message = getErrorMessage(error);
 
         deps.log(`impd: move: ${imp.name}: ${message}`);
 
-        const fresh = await findImpById(deps.db, imp.id);
+        const fresh = await readImpById(deps.db, imp.id);
 
         if (fresh?.moveState === 'sending') {
           await resetSend(imp, peer, ticket);
@@ -282,7 +273,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   const readStatusOf = async (imp: ImpRecord): Promise<MoveStatus> => {
     const task = tasks.get(imp.id);
 
-    const row = await findMoveSend(deps.db, imp.id);
+    const row = await readMoveSend(deps.db, imp.id);
 
     const last = finished.get(imp.id);
 
@@ -363,7 +354,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       if (halted.delete(imp.id)) {
         await deps.imps.requireRunningImp(stopped).catch((startError: unknown) => {
           deps.log(
-            `impd: move: ${imp.name}: could not start it again: ${readErrorMessage(startError)}`,
+            `impd: move: ${imp.name}: could not start it again: ${getErrorMessage(startError)}`,
           );
         });
       }
@@ -390,7 +381,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   const runRecover = async (): Promise<void> => {
     try {
       for (const imp of await listImps(deps.db)) {
-        const row = await findMoveSend(deps.db, imp.id);
+        const row = await readMoveSend(deps.db, imp.id);
 
         if (imp.moveState === 'sending') {
           const isUndone = await resetSend(imp, row?.peer_url ?? null, row?.ticket ?? null);
@@ -410,7 +401,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
         }
       }
     } catch (error) {
-      deps.log(`impd: move: recovery after a restart failed: ${readErrorMessage(error)}`);
+      deps.log(`impd: move: recovery after a restart failed: ${getErrorMessage(error)}`);
     }
   };
 
@@ -452,7 +443,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       const peer = requirePeer(to);
 
       const imp = await requireImp(name);
-      const row = await findMoveSend(deps.db, imp.id);
+      const row = await readMoveSend(deps.db, imp.id);
 
       if (imp.moveState !== 'sending' || row === undefined || tasks.has(imp.id)) {
         throw new ORPCError('CONFLICT', {
@@ -469,7 +460,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     },
 
     readStatus: async (name) => {
-      const imp = await findImpByName(deps.db, name);
+      const imp = await readImpByName(deps.db, name);
 
       if (imp === undefined) {
         return { state: null, peer: null, sentBytes: 0, totalBytes: 0, isDone: true, error: null };
@@ -480,7 +471,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
     resume: async (name, ticket) => {
       const imp = await requireImp(name);
-      const row = await findMoveSend(deps.db, imp.id);
+      const row = await readMoveSend(deps.db, imp.id);
 
       const useTicket = ticket ?? row?.ticket ?? null;
 
@@ -532,12 +523,12 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
         await task.done;
 
-        const fresh = await findImpById(deps.db, imp.id);
+        const fresh = await readImpById(deps.db, imp.id);
 
         return readStatusOf(fresh ?? imp);
       }
 
-      const row = await findMoveSend(deps.db, imp.id);
+      const row = await readMoveSend(deps.db, imp.id);
 
       const peer = row?.peer_url ?? null;
       const ticket = row?.ticket ?? null;
@@ -558,7 +549,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
         await removeMark(imp);
       }
 
-      const after = await findImpById(deps.db, imp.id);
+      const after = await readImpById(deps.db, imp.id);
 
       return readStatusOf(after ?? imp);
     },
@@ -574,6 +565,13 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   };
 }
 
+// a public imp's credential and DNS record belong to this host's domain
+function buildPublicError(name: string) {
+  return new ORPCError('PRECONDITION_FAILED', {
+    message: `${name} is public: run impz unexpose ${name} first, and impz expose on the target after the move`,
+  });
+}
+
 // what the target or the network said, as the caller's error: never a bare 500
 async function withPeerError<T>(call: () => Promise<T>): Promise<T> {
   try {
@@ -583,6 +581,6 @@ async function withPeerError<T>(call: () => Promise<T>): Promise<T> {
       throw error;
     }
 
-    throw new ORPCError('BAD_GATEWAY', { message: readErrorMessage(error), cause: error });
+    throw new ORPCError('BAD_GATEWAY', { message: getErrorMessage(error), cause: error });
   }
 }

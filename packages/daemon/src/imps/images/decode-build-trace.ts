@@ -16,7 +16,7 @@ interface TraceVertex {
 // output a vertex wrote, in the chunks the engine sent
 interface TraceLog {
   readonly vertex: string;
-  readonly msg: Uint8Array;
+  readonly message: Uint8Array;
 }
 
 export interface BuildTrace {
@@ -93,7 +93,7 @@ function decodeVertex(bytes: Uint8Array): TraceVertex {
 function decodeLog(bytes: Uint8Array): TraceLog {
   const reader = new BinaryReader(bytes);
 
-  const log: { vertex: string; msg: Uint8Array } = { vertex: '', msg: new Uint8Array() };
+  const log: { vertex: string; message: Uint8Array } = { vertex: '', message: new Uint8Array() };
 
   while (reader.pos < reader.len) {
     const [field, wireType] = reader.tag();
@@ -101,7 +101,7 @@ function decodeLog(bytes: Uint8Array): TraceLog {
     if (field === 1 && wireType === WireType.LengthDelimited) {
       log.vertex = reader.string();
     } else if (field === 4 && wireType === WireType.LengthDelimited) {
-      log.msg = reader.bytes();
+      log.message = reader.bytes();
     } else {
       reader.skip(wireType, field);
     }

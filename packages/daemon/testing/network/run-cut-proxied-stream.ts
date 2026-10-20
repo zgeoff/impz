@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../../src/config';
-import { createActivityTracker } from '../../src/imps/imps/activity-tracker';
+import { buildActivityTracker } from '../../src/imps/imps/activity-tracker';
 import { createForwardedPeers } from '../../src/network/proxy/forwarded-peers';
 import { startWakeProxy } from '../../src/network/proxy/wake-proxy';
 import { openDatabase } from '../../src/platform/db/open-database';
@@ -34,7 +34,7 @@ const proxy = startWakeProxy({
   db,
   imps: {
     requireRunning: () => Promise.resolve({ imp, wokeMs: null }),
-    tracker: createActivityTracker(),
+    tracker: buildActivityTracker(),
     recordActivity: () => Promise.resolve(),
   },
   log: () => {},

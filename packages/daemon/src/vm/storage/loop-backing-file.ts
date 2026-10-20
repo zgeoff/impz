@@ -11,12 +11,12 @@ const HOST_DIRS: LoopHostDirs = { procDir: '/proc', sysDir: '/sys' };
 
 // The file behind the loop device mounted on `dir`, from mountinfo and the
 // loop driver's sysfs; null for any other mount, or when either is unreadable.
-export function findLoopBackingFile(
-  dir: string,
+export function readLoopBackingFile(
+  directory: string,
   hostDirs: Readonly<LoopHostDirs> = HOST_DIRS,
 ): string | null {
   try {
-    const target = realpathSync(dir);
+    const target = realpathSync(directory);
     const mountInfo = readFileSync(join(hostDirs.procDir, 'self', 'mountinfo'), 'utf8');
 
     for (const line of mountInfo.split('\n')) {
@@ -43,10 +43,10 @@ export function findLoopBackingFile(
 // filesystem inside can report room its sparse file can no longer get. null
 // when `dir` is no loop mount, or the host directory cannot be read.
 export function readLoopHostFreeBytes(
-  dir: string,
+  directory: string,
   hostDirs: Readonly<LoopHostDirs> = HOST_DIRS,
 ): number | null {
-  const backing = findLoopBackingFile(dir, hostDirs);
+  const backing = readLoopBackingFile(directory, hostDirs);
 
   if (backing === null) {
     return null;

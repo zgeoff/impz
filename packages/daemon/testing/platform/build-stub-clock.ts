@@ -2,7 +2,7 @@ import type { Clock } from '../../src/platform/process/clock';
 
 interface StubTimer {
   readonly at: number;
-  readonly ms: number;
+  readonly durationMs: number;
   readonly fire: () => void;
 }
 
@@ -18,13 +18,13 @@ export function buildStubClock(options: Readonly<{ startMs?: number }> = {}) {
   const delays: number[] = [];
   const sleeps: number[] = [];
 
-  const runFor = (ms: number): void => {
-    const until = state.nowMs + ms;
+  const runFor = (durationMs: number): void => {
+    const until = state.nowMs + durationMs;
 
     for (;;) {
       const [due] = [...pending]
         .filter(([, timer]) => timer.at <= until)
-        .toSorted(([, a], [, b]) => a.at - b.at);
+        .toSorted(([, left], [, right]) => left.at - right.at);
 
       if (due === undefined) {
         break;
@@ -43,13 +43,13 @@ export function buildStubClock(options: Readonly<{ startMs?: number }> = {}) {
   };
 
   // starts a timer `ms` from now; returns its cancel
-  const startTimer = (fire: () => void, ms: number): (() => void) => {
+  const startTimer = (fire: () => void, durationMs: number): (() => void) => {
     state.nextId += 1;
 
     const id = state.nextId;
 
-    delays.push(ms);
-    pending.set(id, { at: state.nowMs + ms, ms, fire });
+    delays.push(durationMs);
+    pending.set(id, { at: state.nowMs + durationMs, durationMs, fire });
 
     return () => {
       pending.delete(id);
@@ -57,10 +57,10 @@ export function buildStubClock(options: Readonly<{ startMs?: number }> = {}) {
   };
 
   // an injected sleep: it moves the clock by `ms`, and records it
-  const sleep = (ms: number): Promise<void> => {
-    sleeps.push(ms);
+  const sleep = (durationMs: number): Promise<void> => {
+    sleeps.push(durationMs);
 
-    runFor(ms);
+    runFor(durationMs);
 
     return Promise.resolve();
   };
@@ -87,7 +87,7 @@ export function buildStubClock(options: Readonly<{ startMs?: number }> = {}) {
     },
 
     // the delay of each timer that has neither fired nor been cancelled
-    readPendingMs: (): number[] => [...pending.values()].map((timer) => timer.ms),
+    readPendingMs: (): number[] => [...pending.values()].map((timer) => timer.durationMs),
 
     countPending: (): number => pending.size,
   };

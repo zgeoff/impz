@@ -37,19 +37,19 @@ export function toImpRecord(row: Readonly<ImpRow>): ImpRecord {
     isIdentityResetPending: row.identity_reset_pending === 1,
     isTrustPending: row.trust_pending === 1,
     isBackedUp: row.backup !== 0,
-    publicAuth: readPublicAuth(row),
+    publicAuth: findPublicAuth(row),
     moveState: row.move_state,
     jailUid: row.jail_uid,
   };
 }
 
+function toDate(durationMs: number | null): Date | null {
+  return durationMs === null ? null : new Date(durationMs);
+}
+
 // a value impd did not write reads as tailnet-only: closed, never open
-function readPublicAuth(row: Readonly<ImpRow>): PublicAuth | null {
+function findPublicAuth(row: Readonly<ImpRow>): PublicAuth | null {
   const auth = PublicAuthSchema.safeParse(row.public_auth);
 
   return row.exposure === 'public' && auth.success ? auth.data : null;
-}
-
-function toDate(ms: number | null): Date | null {
-  return ms === null ? null : new Date(ms);
 }

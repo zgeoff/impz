@@ -4,6 +4,10 @@ import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';
 import { buildStubGuest } from '../vm/build-stub-guest';
 import type { StubAnswer, StubRun } from '../vm/build-stub-guest';
 
+// the engine steps a test can fail: the pin inspect of a pulled image,
+// its tag, and the built tag's config inspect, create and export
+type StubBuilderStep = 'pin' | 'tag' | 'config' | 'create' | 'export';
+
 export interface StubImageBuilderOptions {
   // the chunks `docker export` streams, as a builder sends its tree: a list,
   // or a stream such as a running tar's output, which one export reads
@@ -34,10 +38,6 @@ export interface StubImageBuilderOptions {
   readonly buildLog?: string;
 }
 
-// the engine steps a test can fail: the pin inspect of a pulled image,
-// its tag, and the built tag's config inspect, create and export
-type StubBuilderStep = 'pin' | 'tag' | 'config' | 'create' | 'export';
-
 // what `docker image inspect --format {{json .Config}}` prints for the built tag
 const BUILT_CONFIG = '{"Cmd":["/bin/sh"],"Env":["PATH=/bin"]}';
 
@@ -47,19 +47,6 @@ export const STUB_BUILDER_CONTAINER = 'e'.repeat(64);
 // the builder imp's name, as a real builder's `imp-build-<8 letters>`
 const STUB_BUILDER_NAME = 'imp-build-stubstub';
 
-// the step a builder's docker call is, when a test can fail it
-function readStep(argv: string, ref: string): StubBuilderStep | null {
-  const steps: Readonly<Record<string, StubBuilderStep>> = {
-    [`image inspect --format ${PIN_INSPECT_FORMAT} ${ref}`]: 'pin',
-    [`tag ${argv.split(' ')[1] ?? ''} imp-build:latest`]: 'tag',
-    'image inspect --format {{json .Config}} imp-build:latest': 'config',
-    'create imp-build:latest /bin/true': 'create',
-    [`export ${STUB_BUILDER_CONTAINER}`]: 'export',
-  };
-
-  return steps[argv] ?? null;
-}
-
 // A builder's engine on linux/amd64 behind its agent: it pulls and pins
 // any image, builds what it gets and exports `exported`. `builders` runs
 // builds on it with no builder imp; the real lifecycle takes `guest.open`.
@@ -67,7 +54,7 @@ export function buildStubImageBuilder(options: Readonly<StubImageBuilderOptions>
   const builtDockerfiles: string[] = [];
   const counts = { boots: 0, live: 0 };
 
-  const buildAnswer = (run: StubRun): Promise<StubAnswer> | StubAnswer => {
+  const answerRun = (run: StubRun): Promise<StubAnswer> | StubAnswer => {
     const step = readStep(run.argv.slice(1).join(' '), run.argv.at(-1) ?? '');
     const failure = step === null ? undefined : options.failures?.[step];
 
@@ -75,10 +62,10 @@ export function buildStubImageBuilder(options: Readonly<StubImageBuilderOptions>
       return { code: 1, stderr: `${failure}\n` };
     }
 
-    return buildStepAnswer(run);
+    return answerStep(run);
   };
 
-  const buildStepAnswer = async (run: StubRun): Promise<StubAnswer> => {
+  const answerStep = async (run: StubRun): Promise<StubAnswer> => {
     const argv = run.argv.slice(1).join(' ');
     const ref = run.argv.at(-1) ?? '';
 
@@ -141,7 +128,7 @@ export function buildStubImageBuilder(options: Readonly<StubImageBuilderOptions>
     return { code: 1, stderr: `the stub builder has no ${argv}` };
   };
 
-  const guest = buildStubGuest(buildAnswer);
+  const guest = buildStubGuest(answerRun);
 
   const builders: Builders = {
     withBuilder: (_signal, run) => {
@@ -165,4 +152,17 @@ export function buildStubImageBuilder(options: Readonly<StubImageBuilderOptions>
     readBoots: () => counts.boots,
     readLive: () => counts.live,
   };
+}
+
+// the step a builder's docker call is, when a test can fail it
+function readStep(argv: string, ref: string): StubBuilderStep | null {
+  const steps: Readonly<Record<string, StubBuilderStep>> = {
+    [`image inspect --format ${PIN_INSPECT_FORMAT} ${ref}`]: 'pin',
+    [`tag ${argv.split(' ')[1] ?? ''} imp-build:latest`]: 'tag',
+    'image inspect --format {{json .Config}} imp-build:latest': 'config',
+    'create imp-build:latest /bin/true': 'create',
+    [`export ${STUB_BUILDER_CONTAINER}`]: 'export',
+  };
+
+  return steps[argv] ?? null;
 }

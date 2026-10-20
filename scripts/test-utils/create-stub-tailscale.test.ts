@@ -5,18 +5,18 @@ import { join } from 'node:path';
 import { createStubTailscale } from './create-stub-tailscale';
 
 function setupTest() {
-  const dir = mkdtempSync(join(tmpdir(), 'imp-stub-tailscale-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-stub-tailscale-'));
 
   onTestFinished(() => {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
 
-  return { dir };
+  return { directoryPath: directory };
 }
 
 test('it prints the node it was given as its status', () => {
   const ctx = setupTest();
-  const tailscale = createStubTailscale(ctx.dir);
+  const tailscale = createStubTailscale(ctx.directoryPath);
 
   tailscale.writeNode({
     BackendState: 'Running',
@@ -48,7 +48,7 @@ test('it prints the node it was given as its status', () => {
 
 test('it fails status before any node is written, as with no tailscaled', () => {
   const ctx = setupTest();
-  const tailscale = createStubTailscale(ctx.dir);
+  const tailscale = createStubTailscale(ctx.directoryPath);
 
   const result = Bun.spawnSync([
     join(tailscale.bin, 'tailscale'),
@@ -62,7 +62,7 @@ test('it fails status before any node is written, as with no tailscaled', () => 
 
 test('it reports Starting while held, whatever the node says', () => {
   const ctx = setupTest();
-  const tailscale = createStubTailscale(ctx.dir);
+  const tailscale = createStubTailscale(ctx.directoryPath);
 
   tailscale.writeNode({
     BackendState: 'Running',
@@ -83,7 +83,7 @@ test('it reports Starting while held, whatever the node says', () => {
 
 test('it reports the node again once the start is released', () => {
   const ctx = setupTest();
-  const tailscale = createStubTailscale(ctx.dir);
+  const tailscale = createStubTailscale(ctx.directoryPath);
 
   tailscale.writeNode({
     BackendState: 'NeedsLogin',
@@ -108,7 +108,7 @@ test('it reports the node again once the start is released', () => {
 
 test('it saves a Running node with the hostname and tags that up names', () => {
   const ctx = setupTest();
-  const tailscale = createStubTailscale(ctx.dir);
+  const tailscale = createStubTailscale(ctx.directoryPath);
 
   Bun.spawnSync([
     join(tailscale.bin, 'tailscale'),
@@ -134,7 +134,7 @@ test('it saves a Running node with the hostname and tags that up names', () => {
 
 test('it stops the node on down and keeps the rest of it', () => {
   const ctx = setupTest();
-  const tailscale = createStubTailscale(ctx.dir);
+  const tailscale = createStubTailscale(ctx.directoryPath);
 
   tailscale.writeNode({
     BackendState: 'Running',
@@ -161,7 +161,7 @@ test('it stops the node on down and keeps the rest of it', () => {
 
 test('it reads back the arguments after the socket of each call with one verb, in order', () => {
   const ctx = setupTest();
-  const tailscale = createStubTailscale(ctx.dir);
+  const tailscale = createStubTailscale(ctx.directoryPath);
 
   Bun.spawnSync([join(tailscale.bin, 'tailscale'), '--socket=/run/ts.sock', 'up', '--hostname=a']);
   Bun.spawnSync([join(tailscale.bin, 'tailscale'), '--socket=/run/ts.sock', 'down']);

@@ -1,6 +1,6 @@
 import { listApiCalls } from '../platform/db/api-audit';
-import type { RpcImplementer } from './build-implementer';
-import type { RouterDeps } from './build-router';
+import type { RpcImplementer } from './create-implementer';
+import type { RouterDeps } from './create-router';
 import { requireNamedImp } from './require-named-imp';
 
 // audit rows `audit.list` gives when the caller names no limit
