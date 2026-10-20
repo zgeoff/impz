@@ -246,7 +246,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # --external cpu-features: ssh2 loads this optional native module in a
 # try/catch, and --ignore-scripts leaves its .node file unbuilt.
 RUN bun build --compile --external cpu-features packages/daemon/src/main.ts --outfile /out/impd \
- && bun build --compile packages/daemon/src/docker-proxy/main.ts --outfile /out/imp-docker-proxy \
+ && bun build --compile packages/daemon/src/imps/docker-proxy/main.ts --outfile /out/imp-docker-proxy \
  && bun build --compile packages/cli/src/main.ts --outfile /out/impz
 
 # --- dashboard: the web dashboard's static files. Its own stage: the build

@@ -1,5 +1,5 @@
 import { NetworkEnvSchema } from './config';
-import { formatSubnet, parseSubnet } from './net/addressing';
+import { formatSubnet, parseSubnet } from './host-net/net/addressing';
 
 // `impd --network-env`: the settings that the host container's network setup reads, as impd
 // resolves them with its defaults, for the entrypoint to export before setup-net.sh runs

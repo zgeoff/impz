@@ -3,8 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
-import { ActivitySchema, PingSchema } from '../../src/agent-client/agent-protocol';
-import { sendActivity, sendAgentRequest, sendPing } from '../../src/agent-client/agent-requests';
+import { ActivitySchema, PingSchema } from '../../src/vm/agent-client/agent-protocol';
+import { sendActivity, sendAgentRequest, sendPing } from '../../src/vm/agent-client/agent-requests';
 import { startStubInnerAgent } from './start-stub-inner-agent';
 
 // a temp dir for the agent's socket, and `stack`, whose releases (the

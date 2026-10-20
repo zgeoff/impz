@@ -1,5 +1,9 @@
-import { createFrameReader } from '../../src/moves/move-frames';
-import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MOVE_PATHS } from '../../src/moves/move-header';
+import { createFrameReader } from '../../src/imp-ops/moves/move-frames';
+import {
+  MOVE_FINISH_HEADER,
+  MOVE_PART_HEADER,
+  MOVE_PATHS,
+} from '../../src/imp-ops/moves/move-header';
 import type { FetchHook } from './create-move-hosts';
 
 // one frame of a move stream: its type byte and its payload

@@ -1,32 +1,32 @@
 import { availableParallelism } from 'node:os';
-import type { Broker } from './broker/broker-service';
 import type { ImpdStorage } from './build-impd-storage';
 import type { Config } from './config';
-import { countImpsByState, listImps } from './db/imps';
-import type { EgressService } from './egress/egress-service';
-import { createRamGovernor } from './governor/ram-governor';
-import type { RamAdmission, RamGovernor } from './governor/ram-governor';
+import type { Ipv6Plan } from './host-net/net/ipv6-plan';
+import type { TailscaleStatus } from './host-net/net/tailscale-status';
+import { createTapDevices } from './host-net/net/tap-devices';
 import type { ImpBoundaries, ImpdDeps } from './impd-deps';
-import { growFilesystem } from './imps/imp-disk';
-import { createImpService } from './imps/imp-service';
-import type { ImpServiceDeps, Imps } from './imps/imp-service';
-import { createKernelOopsWatch } from './imps/kernel-oops-watch';
-import { createMemoryController } from './memory/memory-controller';
-import type { MemoryController } from './memory/memory-controller';
-import { createPluggedSizes } from './memory/plugged-sizes';
-import type { Ipv6Plan } from './net/ipv6-plan';
-import type { TailscaleStatus } from './net/tailscale-status';
-import { createTapDevices } from './net/tap-devices';
-import { printLog } from './process/print-log';
-import { runCommand } from './process/run-command';
-import { readHostIdentity, readVmIdentity } from './sleep/vm-identity';
-import type { HostIdentity } from './sleep/vm-identity';
-import { buildImpPaths } from './storage/data-layout';
-import { startImpTelemetry } from './telemetry/imp-telemetry';
-import { createCpuCgroups } from './vmm/cpu-cgroups';
-import { createJails } from './vmm/jail';
-import { checkGuestMemoryMergeable, readKsmProfitMib } from './vmm/ksm';
-import { createVmRunner } from './vmm/vm-runner';
+import { growFilesystem } from './imps/imps/imp-disk';
+import { createImpService } from './imps/imps/imp-service';
+import type { ImpServiceDeps, Imps } from './imps/imps/imp-service';
+import { createKernelOopsWatch } from './imps/imps/kernel-oops-watch';
+import type { Broker } from './network/broker/broker-service';
+import type { EgressService } from './network/egress/egress-service';
+import { countImpsByState, listImps } from './platform/db/imps';
+import { printLog } from './platform/process/print-log';
+import { runCommand } from './platform/process/run-command';
+import { startImpTelemetry } from './platform/telemetry/imp-telemetry';
+import { createRamGovernor } from './vm/governor/ram-governor';
+import type { RamAdmission, RamGovernor } from './vm/governor/ram-governor';
+import { createMemoryController } from './vm/memory/memory-controller';
+import type { MemoryController } from './vm/memory/memory-controller';
+import { createPluggedSizes } from './vm/memory/plugged-sizes';
+import { readHostIdentity, readVmIdentity } from './vm/sleep/vm-identity';
+import type { HostIdentity } from './vm/sleep/vm-identity';
+import { buildImpPaths } from './vm/storage/data-layout';
+import { createCpuCgroups } from './vm/vmm/cpu-cgroups';
+import { createJails } from './vm/vmm/jail';
+import { checkGuestMemoryMergeable, readKsmProfitMib } from './vm/vmm/ksm';
+import { createVmRunner } from './vm/vmm/vm-runner';
 import {
   readOwnedRamMib,
   readOwnedRamMibAsync,
@@ -34,7 +34,7 @@ import {
   readThreadIds,
   readUnsharedRamMib,
   readVmMemory,
-} from './vmm/vm-stats';
+} from './vm/vmm/vm-stats';
 
 export interface GovernedParts {
   readonly storage: ImpdStorage;

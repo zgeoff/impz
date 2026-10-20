@@ -1,6 +1,6 @@
 import { existsSync, writeFileSync } from 'node:fs';
-import type { StorageBackend } from '../../src/storage/storage-backend';
-import { createZfsBackend } from '../../src/storage/zfs/zfs-backend';
+import type { StorageBackend } from '../../src/vm/storage/storage-backend';
+import { createZfsBackend } from '../../src/vm/storage/zfs/zfs-backend';
 import { buildStubZfs } from './build-stub-zfs';
 import type { StubZfs } from './build-stub-zfs';
 

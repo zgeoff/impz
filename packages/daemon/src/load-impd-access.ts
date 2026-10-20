@@ -1,9 +1,9 @@
-import { createRevocations } from './auth/revocations';
-import { loadTokenStore } from './auth/token-store';
 import type { Config } from './config';
+import { createRevocations } from './identity/auth/revocations';
+import { loadTokenStore } from './identity/auth/token-store';
+import { createMcpAuth } from './identity/oauth/create-mcp-auth';
 import type { ImpdDeps } from './impd-deps';
-import { createMcpAuth } from './oauth/create-mcp-auth';
-import { printLog } from './process/print-log';
+import { printLog } from './platform/process/print-log';
 
 // The API tokens, their revocations and the OAuth grants on top of them
 export async function loadImpdAccess(

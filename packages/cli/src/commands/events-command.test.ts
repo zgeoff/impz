@@ -1,7 +1,7 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
 import { CLIENT_VERSION, ORPCError, createImpClient } from '@impz/client';
-import { createImage } from '@impz/daemon/src/db/images';
+import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildMockNewImage,

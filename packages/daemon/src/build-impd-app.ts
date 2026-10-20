@@ -1,19 +1,19 @@
-import type { Broker } from './broker/broker-service';
-import { buildApp } from './build-app';
-import type { AppDeps } from './build-app';
 import type { ImpdServices } from './build-impd-services';
 import type { ImpdStorage } from './build-impd-storage';
 import type { Config } from './config';
-import type { EgressService } from './egress/egress-service';
-import { createBuildContextRoute } from './images/build-context-route';
-import { BUILD_KEEPALIVE_MS } from './images/build-event-stream';
+import type { TailscaleStatus } from './host-net/net/tailscale-status';
 import type { ImpdDeps } from './impd-deps';
-import type { Imps } from './imps/imp-service';
+import { BUILD_KEEPALIVE_MS } from './imps/images/build-event-stream';
+import type { Imps } from './imps/imps/imp-service';
 import type { ImpdAccess } from './load-impd-access';
-import type { TailscaleStatus } from './net/tailscale-status';
-import { printLog } from './process/print-log';
-import { UNKNOWN_VERSION } from './sleep/vm-identity';
-import type { HostIdentity } from './sleep/vm-identity';
+import type { Broker } from './network/broker/broker-service';
+import type { EgressService } from './network/egress/egress-service';
+import { printLog } from './platform/process/print-log';
+import { buildApp } from './surface/build-app';
+import type { AppDeps } from './surface/build-app';
+import { createBuildContextRoute } from './surface/images/build-context-route';
+import { UNKNOWN_VERSION } from './vm/sleep/vm-identity';
+import type { HostIdentity } from './vm/sleep/vm-identity';
 
 export interface ImpdAppParts {
   readonly storage: Pick<ImpdStorage, 'images' | 'diskBudget'>;

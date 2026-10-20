@@ -1,6 +1,6 @@
-import type { Builders } from '../../src/images/builder-imps';
-import { createGuestExec } from '../../src/images/guest-exec';
-import { PIN_INSPECT_FORMAT } from '../../src/images/image-pin';
+import type { Builders } from '../../src/imps/images/builder-imps';
+import { createGuestExec } from '../../src/imps/images/guest-exec';
+import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';
 import { buildStubGuest } from '../vm/build-stub-guest';
 import type { StubAnswer, StubRun } from '../vm/build-stub-guest';
 

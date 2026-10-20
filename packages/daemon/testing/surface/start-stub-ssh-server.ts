@@ -2,7 +2,7 @@ import { onTestFinished } from 'bun:test';
 import { Server } from 'ssh2';
 import type { ServerChannel } from 'ssh2';
 import { z } from 'zod';
-import { createEd25519Key } from '../../src/ssh/host-key';
+import { createEd25519Key } from '../../src/surface/ssh/host-key';
 
 interface StubSshServerOptions {
   // the one password the server takes; it refuses any other

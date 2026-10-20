@@ -1,15 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import type { Socket } from 'node:net';
 import type { JsonValue } from '@bufbuild/protobuf';
-import { RequestSchema } from '../../src/agent-client/agent-protocol';
-import type { Request, ResumeFrom } from '../../src/agent-client/agent-protocol';
-import { decodeAgentMessage } from '../../src/agent-client/decode-agent-message';
+import { RequestSchema } from '../../src/vm/agent-client/agent-protocol';
+import type { Request, ResumeFrom } from '../../src/vm/agent-client/agent-protocol';
+import { decodeAgentMessage } from '../../src/vm/agent-client/decode-agent-message';
 import {
   FRAME_TYPES,
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
-} from '../../src/agent-client/frame-codec';
+} from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
 // what a start reads of an exec with a session name

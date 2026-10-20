@@ -1,4 +1,4 @@
-import type { TickerTimer } from '../../src/process/ticker';
+import type { TickerTimer } from '../../src/platform/process/ticker';
 
 interface PendingRun {
   readonly run: () => Promise<void>;

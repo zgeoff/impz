@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { listImps } from '../src/db/imps';
 import { IMPD_STARTUP_STEPS } from '../src/impd-startup-steps';
+import { listImps } from '../src/platform/db/imps';
 import { startTestImpd } from './start-test-impd';
 import { StubVmError } from './vm/build-stub-vmm';
 

@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { BackupConfig, BackupKeep } from '../../src/backup/backup-config';
+import type { BackupConfig, BackupKeep } from '../../src/imp-ops/backup/backup-config';
 
 type BackupConfigOverrides = Partial<Omit<BackupConfig, 'keep'>> & {
   readonly keep?: Partial<BackupKeep>;

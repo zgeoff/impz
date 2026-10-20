@@ -1,4 +1,4 @@
-import type { CommandResult } from '../../src/process/run-command';
+import type { CommandResult } from '../../src/platform/process/run-command';
 
 // /proc/self/mounts escapes a space, a tab, a newline and a backslash in octal
 function encodeMountPath(path: string): string {

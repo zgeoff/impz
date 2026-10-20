@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sendAgentRequest } from '../../src/agent-client/agent-requests';
-import { sendFilesRemove, sendFilesWrite } from '../../src/agent-client/file-requests';
+import { sendAgentRequest } from '../../src/vm/agent-client/agent-requests';
+import { sendFilesRemove, sendFilesWrite } from '../../src/vm/agent-client/file-requests';
 import { startStubFilesAgent } from './start-stub-files-agent';
 
 async function setupTest() {

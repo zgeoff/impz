@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { parseBackupSummary, parseSnapshots } from '../../src/backup/restic';
+import { parseBackupSummary, parseSnapshots } from '../../src/imp-ops/backup/restic';
 import { buildStubResticLockRunner } from './build-stub-restic-lock-runner';
 
 test('it refuses a command without --retry-lock that meets an exclusive lock', async () => {

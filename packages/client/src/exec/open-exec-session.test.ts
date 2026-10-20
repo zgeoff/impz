@@ -1,5 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { createImage } from '@impz/daemon/src/db/images';
+import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildImpPaths,

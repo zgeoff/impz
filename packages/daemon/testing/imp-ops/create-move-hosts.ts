@@ -3,11 +3,11 @@ import { writeFileSync } from 'node:fs';
 import type { MoveStatus } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { createImage } from '../../src/db/images';
-import { readWarmHost } from '../../src/moves/warm-facts';
-import { deriveSlotAddress } from '../../src/net/addressing';
-import type { StartTimer } from '../../src/process/clock';
-import { buildImagePaths } from '../../src/storage/data-layout';
+import { deriveSlotAddress } from '../../src/host-net/net/addressing';
+import { readWarmHost } from '../../src/imp-ops/moves/warm-facts';
+import { createImage } from '../../src/platform/db/images';
+import type { StartTimer } from '../../src/platform/process/clock';
+import { buildImagePaths } from '../../src/vm/storage/data-layout';
 import { startTestImpd } from '../start-test-impd';
 import type { TestImpd, TestImpdOptions } from '../start-test-impd';
 

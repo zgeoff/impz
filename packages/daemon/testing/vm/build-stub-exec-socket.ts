@@ -1,5 +1,5 @@
 import { decodeExecFrame } from '@impz/api';
-import type { ExecPeer } from '../../src/exec/exec-session';
+import type { ExecPeer } from '../../src/imps/exec/exec-session';
 
 interface StubExecSocketOptions {
   // binary messages the socket takes before it drops the rest, as a socket

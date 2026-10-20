@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { NetworkRecord } from '../../src/db/networks';
+import type { NetworkRecord } from '../../src/platform/db/networks';
 
 // A network as listNetworks reads it, with no members; its id, name and
 // time arbitrary.

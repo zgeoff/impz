@@ -1,4 +1,4 @@
-import type { DiskUsageReport, StorageBackend } from '../../src/storage/storage-backend';
+import type { DiskUsageReport, StorageBackend } from '../../src/vm/storage/storage-backend';
 
 // A storage backend's `measureUsage` that takes `ms` of the test's clock, as a
 // slow XFS measure does: each call moves `clock` on by `ms`, then answers

@@ -1,11 +1,11 @@
 import { Database } from 'bun:sqlite';
 import { onTestFinished } from 'bun:test';
 import { Kysely, SqliteAdapter, SqliteIntrospector, SqliteQueryCompiler } from 'kysely';
-import { BunSqliteDriver } from '../../src/db/bun-sqlite-driver';
-import type { ImpWrite } from '../../src/db/imp-write-feed';
-import type { ImpDatabase } from '../../src/db/open-database';
-import type { DB } from '../../src/db/schema';
-import { createEventBus } from '../../src/events/event-bus';
+import { BunSqliteDriver } from '../../src/platform/db/bun-sqlite-driver';
+import type { ImpWrite } from '../../src/platform/db/imp-write-feed';
+import type { ImpDatabase } from '../../src/platform/db/open-database';
+import type { DB } from '../../src/platform/db/schema';
+import { createEventBus } from '../../src/platform/events/event-bus';
 
 // A database opened as openDatabase opens one, with no migration run: a
 // test migrates it to the point an older impd left it at. `:memory:` when

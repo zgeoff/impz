@@ -1,8 +1,8 @@
 import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { buildNotFoundError } from '../../src/api-errors';
-import { parseSnapshots } from '../../src/backup/restic';
-import type { Restic, ResticSnapshot } from '../../src/backup/restic';
+import { parseSnapshots } from '../../src/imp-ops/backup/restic';
+import type { Restic, ResticSnapshot } from '../../src/imp-ops/backup/restic';
+import { buildNotFoundError } from '../../src/surface/api-errors';
 
 interface StubResticOptions {
   // each snapshot's tree, and the snapshot list every stub over this

@@ -2,7 +2,10 @@ import { faker } from '@faker-js/faker';
 import { Collection } from '@msw/data';
 import { HttpResponse, http } from 'msw';
 import * as z from 'zod';
-import type { CloudflareRecord, CloudflareZone } from '../../src/https/dns/cloudflare-provider';
+import type {
+  CloudflareRecord,
+  CloudflareZone,
+} from '../../src/network/https/dns/cloudflare-provider';
 
 // Cloudflare's v4 API, where impd's provider sends every call
 const CLOUDFLARE_API = 'https://api.cloudflare.com/client/v4';

@@ -1,13 +1,13 @@
-import type { ApiAudit } from './audit/api-audit';
 import type { ImpdStorage } from './build-impd-storage';
 import type { Config } from './config';
-import type { EgressService } from './egress/egress-service';
+import { createMoveService } from './imp-ops/moves/move-service';
+import type { MoveServiceDeps } from './imp-ops/moves/move-service';
 import type { ImpdDeps } from './impd-deps';
-import type { Imps } from './imps/imp-service';
-import { createMoveService } from './moves/move-service';
-import type { MoveServiceDeps } from './moves/move-service';
-import { printLog } from './process/print-log';
-import type { HostIdentity } from './sleep/vm-identity';
+import type { Imps } from './imps/imps/imp-service';
+import type { EgressService } from './network/egress/egress-service';
+import type { ApiAudit } from './platform/audit/api-audit';
+import { printLog } from './platform/process/print-log';
+import type { HostIdentity } from './vm/sleep/vm-identity';
 
 // A move's reach past impd: the other host, the deadline on each request to
 // it, the part size, the warm facts and the source's taps

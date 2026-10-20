@@ -1,4 +1,4 @@
-import type { GuestMemory } from '../../src/vmm/vm-runner';
+import type { GuestMemory } from '../../src/vm/vmm/vm-runner';
 
 interface StubElasticGuestOptions {
   readonly baseMib: number;

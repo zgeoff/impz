@@ -6,12 +6,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { loadConfig } from '../../src/config';
-import { openDatabase } from '../../src/db/open-database';
-import { createDockerProxy } from '../../src/docker-proxy/proxy';
-import { createActivityTracker } from '../../src/imps/activity-tracker';
-import { sendLongRequest } from '../../src/process/send-long-request';
-import { createForwardedPeers } from '../../src/proxy/forwarded-peers';
-import { startWakeProxy } from '../../src/proxy/wake-proxy';
+import { createDockerProxy } from '../../src/imps/docker-proxy/proxy';
+import { createActivityTracker } from '../../src/imps/imps/activity-tracker';
+import { createForwardedPeers } from '../../src/network/proxy/forwarded-peers';
+import { startWakeProxy } from '../../src/network/proxy/wake-proxy';
+import { openDatabase } from '../../src/platform/db/open-database';
+import { sendLongRequest } from '../../src/platform/process/send-long-request';
 
 // an HTTP origin, or the engine's unix socket for imp-docker-proxy
 const ArgsSchema = z.discriminatedUnion('via', [

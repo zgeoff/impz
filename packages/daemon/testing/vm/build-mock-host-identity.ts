@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { HostIdentity } from '../../src/sleep/vm-identity';
+import type { HostIdentity } from '../../src/vm/sleep/vm-identity';
 
 // What a host boots imps with, as readHostIdentity reads it: no IPv6, and
 // its versions, hashes, drive path and CPU arbitrary.

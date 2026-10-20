@@ -1,6 +1,6 @@
 import { onTestFinished } from 'bun:test';
 import type { KyselyPlugin } from 'kysely';
-import type { ImpDatabase } from '../../src/db/open-database';
+import type { ImpDatabase } from '../../src/platform/db/open-database';
 
 // Holds the result of the first select that names `name` once armed, until
 // released: a build stops there between finding its rootfs and its row. The

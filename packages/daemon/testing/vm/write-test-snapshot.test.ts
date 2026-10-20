@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { hasSnapshot, readSnapshotMeta } from '../../src/sleep/snapshot-meta';
-import { buildImpPaths } from '../../src/storage/data-layout';
+import { hasSnapshot, readSnapshotMeta } from '../../src/vm/sleep/snapshot-meta';
+import { buildImpPaths } from '../../src/vm/storage/data-layout';
 import { writeTestSnapshot } from './write-test-snapshot';
 
 async function setupTest() {

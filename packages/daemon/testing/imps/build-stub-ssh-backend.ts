@@ -1,13 +1,17 @@
-import type { DialEvent, DialStream, DialTarget } from '../../src/agent-client/dial-stream';
-import type { AgentExecRequest, ExecEvent, ExecStream } from '../../src/agent-client/exec-stream';
-import type { GuestListener, ListenSpec } from '../../src/agent-client/listener-stream';
-import { buildNotFoundError } from '../../src/api-errors';
-import type { AuditActor } from '../../src/auth/caller';
-import type { ImpRecord } from '../../src/db/imps';
-import { createActivityTracker } from '../../src/imps/activity-tracker';
-import type { ConnectionKind } from '../../src/imps/activity-tracker';
-import type { ImpRuntime } from '../../src/imps/imp-runtime';
-import type { SshBackend } from '../../src/ssh/ssh-connection-context';
+import type { AuditActor } from '../../src/identity/auth/caller';
+import { createActivityTracker } from '../../src/imps/imps/activity-tracker';
+import type { ConnectionKind } from '../../src/imps/imps/activity-tracker';
+import type { ImpRuntime } from '../../src/imps/imps/imp-runtime';
+import type { SshBackend } from '../../src/imps/ssh/ssh-connection-context';
+import type { ImpRecord } from '../../src/platform/db/imps';
+import { buildNotFoundError } from '../../src/surface/api-errors';
+import type { DialEvent, DialStream, DialTarget } from '../../src/vm/agent-client/dial-stream';
+import type {
+  AgentExecRequest,
+  ExecEvent,
+  ExecStream,
+} from '../../src/vm/agent-client/exec-stream';
+import type { GuestListener, ListenSpec } from '../../src/vm/agent-client/listener-stream';
 
 // events a stub stream yields, in order; null ends the stream
 interface EventQueue<T> {

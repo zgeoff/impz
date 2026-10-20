@@ -1,4 +1,4 @@
-import { MOVE_PATHS, MoveOfferReplySchema } from '../../src/moves/move-header';
+import { MOVE_PATHS, MoveOfferReplySchema } from '../../src/imp-ops/moves/move-header';
 import type { FetchHook } from './create-move-hosts';
 
 // A target whose storage changed between the prepare and the send, as a

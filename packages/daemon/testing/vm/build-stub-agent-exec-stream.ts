@@ -1,4 +1,4 @@
-import type { ExecEvent, ExecStream } from '../../src/agent-client/exec-stream';
+import type { ExecEvent, ExecStream } from '../../src/vm/agent-client/exec-stream';
 
 type StreamFields = Pick<
   ExecStream,

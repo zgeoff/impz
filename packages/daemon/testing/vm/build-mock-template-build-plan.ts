@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
-import type { TemplateBuildPlan } from '../../src/vmm/template-vm';
+import type { TemplateBuildPlan } from '../../src/vm/vmm/template-vm';
 
 type TemplateBuildPlanOverrides = Partial<Omit<TemplateBuildPlan, 'paths'>> & {
   readonly paths?: Partial<TemplateBuildPlan['paths']>;

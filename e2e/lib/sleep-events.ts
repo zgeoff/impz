@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { ENFORCE_TRIGGER } from '../../packages/daemon/src/governor/ram-governor';
+import { ENFORCE_TRIGGER } from '../../packages/daemon/src/vm/governor/ram-governor';
 import type { SleepSpan } from './budget-overshoot';
 import { startImp } from './imp-cli';
 

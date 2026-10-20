@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { ENFORCE_INTERVAL_MS } from '../../packages/daemon/src/governor/ram-governor';
+import { ENFORCE_INTERVAL_MS } from '../../packages/daemon/src/vm/governor/ram-governor';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { readPluggedMib } from '../lib/guest-memory';

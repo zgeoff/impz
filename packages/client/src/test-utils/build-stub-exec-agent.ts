@@ -4,8 +4,8 @@ import {
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
-} from '@impz/daemon/src/agent-client/frame-codec';
-import type { AgentFrame } from '@impz/daemon/src/agent-client/frame-codec';
+} from '@impz/daemon/src/vm/agent-client/frame-codec';
+import type { AgentFrame } from '@impz/daemon/src/vm/agent-client/frame-codec';
 import type { StubAgentHandler } from '@impz/daemon/testing';
 import * as z from 'zod';
 

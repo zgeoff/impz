@@ -5,13 +5,13 @@ import { faker } from '@faker-js/faker';
 import { EXEC_CHANNELS } from '@impz/api';
 import { createImpClient } from '@impz/client';
 import { buildStubExecPeer } from '@impz/client/test-utils/build-stub-exec-peer';
+import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   FRAME_TYPES,
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
-} from '@impz/daemon/src/agent-client/frame-codec';
-import { createImage } from '@impz/daemon/src/db/images';
+} from '@impz/daemon/src/vm/agent-client/frame-codec';
 import {
   buildImagePaths,
   buildImpPaths,

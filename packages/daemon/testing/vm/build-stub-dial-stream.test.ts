@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import type { DialEvent } from '../../src/agent-client/dial-stream';
+import type { DialEvent } from '../../src/vm/agent-client/dial-stream';
 import { buildStubDialStream } from './build-stub-dial-stream';
 
 test('it yields the guest events in order and ends with the relay', async () => {

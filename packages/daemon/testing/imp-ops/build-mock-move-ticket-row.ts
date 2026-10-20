@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
 import type { Selectable } from 'kysely';
-import type { DB } from '../../src/db/schema';
+import type { DB } from '../../src/platform/db/schema';
 
 type MoveTicketRow = Selectable<DB['move_tickets']>;
 

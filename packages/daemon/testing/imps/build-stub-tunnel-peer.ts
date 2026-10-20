@@ -1,4 +1,4 @@
-import type { TunnelPeer } from '../../src/tunnel/tunnel-session';
+import type { TunnelPeer } from '../../src/imps/tunnel/tunnel-session';
 
 // The client's end of one `/tunnel` socket: it parses each text message as
 // the JSON the protocol sends, decodes each binary one, and keeps the code

@@ -4,8 +4,8 @@ import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '../../src/agent-client/frame-codec';
-import type { AgentFrame } from '../../src/agent-client/frame-codec';
+import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '../../src/vm/agent-client/frame-codec';
+import type { AgentFrame } from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
 async function setupTest() {

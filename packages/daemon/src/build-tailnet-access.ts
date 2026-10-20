@@ -1,10 +1,10 @@
-import { createKnownHosts } from './auth/ambient-request';
-import { createTailnetIdentities, runWhois } from './auth/tailnet-identity';
-import type { AppDeps } from './build-app';
 import type { Config } from './config';
+import { createStatusCache } from './host-net/net/tailscale-status';
+import type { TailscaleStatus } from './host-net/net/tailscale-status';
+import { createKnownHosts } from './identity/auth/ambient-request';
+import { createTailnetIdentities, runWhois } from './identity/auth/tailnet-identity';
 import type { ImpdDeps } from './impd-deps';
-import { createStatusCache } from './net/tailscale-status';
-import type { TailscaleStatus } from './net/tailscale-status';
+import type { AppDeps } from './surface/build-app';
 
 // tailnet identity, when IMP_TAILNET_IDENTITIES has rules; both ask about
 // the node on every request, so they share one cached status

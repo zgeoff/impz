@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runChildTests } from '@impz/test-utils/run-child-tests';
-import { createImage } from '../../src/db/images';
+import { createImage } from '../../src/platform/db/images';
 import { buildMockNewImage } from '../imps/build-mock-new-image';
 import { buildQueryGate } from './build-query-gate';
 import { createTestDatabase } from './create-test-database';

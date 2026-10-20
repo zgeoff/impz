@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { createImpClient } from '../../packages/client/src/index';
-import { createImage } from '../../packages/daemon/src/db/images';
+import { createImage } from '../../packages/daemon/src/platform/db/images';
 import { buildImagePaths, buildMockNewImage, startTestImpd } from '../../packages/daemon/testing';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
 import { createInstance } from './instance';

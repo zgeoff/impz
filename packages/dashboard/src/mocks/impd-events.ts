@@ -1,8 +1,8 @@
 import type { Imp, ImpEvent } from '@impz/api';
 import { EVENT_VERSION, isImpAllowed } from '@impz/api';
-import { createLogouts } from '@impz/daemon/src/auth/logouts';
-import type { EventBus } from '@impz/daemon/src/events/event-bus';
-import { openEventStream } from '@impz/daemon/src/events/event-stream';
+import { createLogouts } from '@impz/daemon/src/identity/auth/logouts';
+import type { EventBus } from '@impz/daemon/src/platform/events/event-bus';
+import { openEventStream } from '@impz/daemon/src/platform/events/event-stream';
 
 type ImpdEventListener = (event: Readonly<ImpEvent>) => void;
 

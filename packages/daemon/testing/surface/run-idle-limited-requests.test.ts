@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PROXY_LABEL } from '../../src/docker-proxy/proxy';
+import { PROXY_LABEL } from '../../src/imps/docker-proxy/proxy';
 
 function setupTest() {
   // an origin that answers each path at once, with the path it got

@@ -1,4 +1,4 @@
-import type { Repeat } from '../../src/images/build-event-stream';
+import type { Repeat } from '../../src/imps/images/build-event-stream';
 
 export interface StubRepeat {
   // pass as the code's `repeat`

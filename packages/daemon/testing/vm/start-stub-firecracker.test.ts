@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isFirecrackerAlive } from '../../src/vmm/firecracker-process';
+import { isFirecrackerAlive } from '../../src/vm/vmm/firecracker-process';
 import { buildStubFirecrackerArgv, startStubFirecracker } from './start-stub-firecracker';
 
 function setupTest() {

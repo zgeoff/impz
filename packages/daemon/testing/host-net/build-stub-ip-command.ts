@@ -1,5 +1,5 @@
-import { runChecked } from '../../src/process/run-command';
-import type { CommandResult } from '../../src/process/run-command';
+import { runChecked } from '../../src/platform/process/run-command';
+import type { CommandResult } from '../../src/platform/process/run-command';
 
 interface StubIpCommandOptions {
   // stderr for each call whose argv, joined by spaces, starts with the key

@@ -20,9 +20,9 @@ Scopes nest: `manage` includes `exec`, and `exec` includes `read`.
 | `exec`   | Run things in imps: `impz exec`, `impz console`, `attach`, `impz proxy` and its reverse forwards, and ticket requests for the dashboard console. Start, stop, sleep, wake and hold an imp, and take its [leases](./leases.md); kill a session; add, restart and remove a service, and `impz logs`.                                              |
 | `manage` | Create, destroy and fork imps; resize a disk; set an egress policy; `impz set` CPU limits and HTTP port; checkpoints; `impz cp`, to copy files in and out, as root; `impz move` from this host. Host-wide: images, secrets and grants, networks, backups, `impz gc`, `impz db copy`, tokens, taking in an `impz move`, and `impz exec --agent`. |
 
-`packages/daemon/src/auth/access-policy.ts` maps every procedure to its scope. The map covers every
-path of the API contract, so a new procedure without an entry fails the typecheck, and impd refuses
-a path with no entry to every caller. A refused call fails with `FORBIDDEN`.
+`packages/daemon/src/identity/auth/access-policy.ts` maps every procedure to its scope. The map
+covers every path of the API contract, so a new procedure without an entry fails the typecheck, and
+impd refuses a path with no entry to every caller. A refused call fails with `FORBIDDEN`.
 
 ## Imp patterns
 
@@ -297,15 +297,16 @@ The dashboard needs no login for a tailnet member a rule matches.
 
 ## Tests
 
-- `packages/daemon/src/auth/access-policy.test.ts`: every contract path has a rule.
-- `packages/daemon/src/auth/caller.test.ts`: every procedure refuses a token whose scope is too low,
-  and every host-wide one a token with patterns. It also covers patterns, the event stream, sockets,
-  tickets, revocation, the peer handle and cross-site sockets.
-- `packages/daemon/src/auth/authenticate.test.ts`: sessions, a rebound host and an imp's page.
-- `packages/daemon/src/auth/check-grantable.test.ts`: tokens that may grant secrets, through a
-  bearer token and a dashboard session: every pairing of imp and secret, refusals, stale list
-  entries, forks and moves, and what survives a restart. `build-token-routes.test.ts` changes a list
-  in place. `db/secrets.test.ts` races grants, revokes, fork copies and replaces against one
+- `packages/daemon/src/identity/auth/access-policy.test.ts`: every contract path has a rule.
+- `packages/daemon/src/identity/auth/caller.test.ts`: every procedure refuses a token whose scope is
+  too low, and every host-wide one a token with patterns. It also covers patterns, the event stream,
+  sockets, tickets, revocation, the peer handle and cross-site sockets.
+- `packages/daemon/src/identity/auth/authenticate.test.ts`: sessions, a rebound host and an imp's
+  page.
+- `packages/daemon/src/identity/auth/check-grantable.test.ts`: tokens that may grant secrets,
+  through a bearer token and a dashboard session: every pairing of imp and secret, refusals, stale
+  list entries, forks and moves, and what survives a restart. `build-token-routes.test.ts` changes a
+  list in place. `db/secrets.test.ts` races grants, revokes, fork copies and replaces against one
   another.
 - The `tokens` e2e suite drives it all through the CLI. The `tailscale` suite reboots impd with a
   rule and calls the API over the tailnet without a token.

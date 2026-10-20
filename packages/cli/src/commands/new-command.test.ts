@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createImage } from '@impz/daemon/src/db/images';
-import { findImpByName } from '@impz/daemon/src/db/imps';
+import { createImage } from '@impz/daemon/src/platform/db/images';
+import { findImpByName } from '@impz/daemon/src/platform/db/imps';
 import {
   buildImagePaths,
   buildMockNewImage,

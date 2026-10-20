@@ -111,7 +111,7 @@ jobs:
           sudo mount -o loop "$fs.img" "$fs"
           trap 'sudo umount "$fs" && rm -f "$fs.img" && rmdir "$fs"' EXIT
           sudo chown "$(id -u):$(id -g)" "$fs"
-          IMP_TEST_SMALL_FS="$fs" bun test packages/daemon/src/images/create-image-builds.test.ts -t 'small filesystem'
+          IMP_TEST_SMALL_FS="$fs" bun test packages/daemon/src/imps/images/create-image-builds.test.ts -t 'small filesystem'
 
       # impd's port of the Dockerfile parser against the Go parser it ports,
       # at the commit behind the pinned frontend (scripts/dockerfile-difftest)
@@ -135,7 +135,7 @@ jobs:
       - name: Generated Protocol Code
         run: |
           bun run gen:proto
-          changed="$(git status --porcelain -- agent/internal/proto packages/daemon/src/agent-client/gen docs/reference)"
+          changed="$(git status --porcelain -- agent/internal/proto packages/daemon/src/vm/agent-client/gen docs/reference)"
           if [ -n "$changed" ]; then
             echo "$changed"
             echo "::error::the generated protocol code differs from proto/; run bun run gen:proto"

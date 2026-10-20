@@ -1,4 +1,8 @@
-import type { AgentExecRequest, ExecEvent, ExecStream } from '../../src/agent-client/exec-stream';
+import type {
+  AgentExecRequest,
+  ExecEvent,
+  ExecStream,
+} from '../../src/vm/agent-client/exec-stream';
 
 const SIGKILL = 9;
 const SIGTERM = 15;

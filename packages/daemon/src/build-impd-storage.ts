@@ -1,15 +1,15 @@
 import type { Config } from './config';
-import type { Builders } from './images/builder-imps';
-import { createImageService } from './images/image-service';
-import type { ImageService } from './images/image-service';
 import type { ImpdDeps } from './impd-deps';
-import { printLog } from './process/print-log';
-import { createDiskBudget } from './storage/disk-budget';
-import type { DiskBudget } from './storage/disk-budget';
-import { createDiskUsageCache } from './storage/disk-usage-cache';
-import type { DiskUsageCache } from './storage/disk-usage-cache';
-import { createStorageGate } from './storage/storage-gate';
-import type { StorageGate } from './storage/storage-gate';
+import type { Builders } from './imps/images/builder-imps';
+import { createImageService } from './imps/images/image-service';
+import type { ImageService } from './imps/images/image-service';
+import { printLog } from './platform/process/print-log';
+import { createDiskBudget } from './vm/storage/disk-budget';
+import type { DiskBudget } from './vm/storage/disk-budget';
+import { createDiskUsageCache } from './vm/storage/disk-usage-cache';
+import type { DiskUsageCache } from './vm/storage/disk-usage-cache';
+import { createStorageGate } from './vm/storage/storage-gate';
+import type { StorageGate } from './vm/storage/storage-gate';
 
 // What the storage services need, and the data dir's backend
 export interface ImpdStorage {

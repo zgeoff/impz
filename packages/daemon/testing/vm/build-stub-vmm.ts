@@ -1,13 +1,13 @@
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
-import { buildAgentOutdatedError } from '../../src/agent-client/agent-outdated';
-import { readLoadingMeta } from '../../src/sleep/snapshot-meta';
-import type { ImpPaths } from '../../src/storage/data-layout';
-import type { InstanceState } from '../../src/vmm/firecracker-client';
-import type { FirecrackerPaths, VmOwner } from '../../src/vmm/firecracker-process';
-import type { JailUser } from '../../src/vmm/jail';
-import { TemplateRestoreError } from '../../src/vmm/template-vm';
-import type { TemplateRestorePlan } from '../../src/vmm/template-vm';
-import type { VmRunner } from '../../src/vmm/vm-runner';
+import { buildAgentOutdatedError } from '../../src/vm/agent-client/agent-outdated';
+import { readLoadingMeta } from '../../src/vm/sleep/snapshot-meta';
+import type { ImpPaths } from '../../src/vm/storage/data-layout';
+import type { InstanceState } from '../../src/vm/vmm/firecracker-client';
+import type { FirecrackerPaths, VmOwner } from '../../src/vm/vmm/firecracker-process';
+import type { JailUser } from '../../src/vm/vmm/jail';
+import { TemplateRestoreError } from '../../src/vm/vmm/template-vm';
+import type { TemplateRestorePlan } from '../../src/vm/vmm/template-vm';
+import type { VmRunner } from '../../src/vm/vmm/vm-runner';
 
 // what every fake agent's ping reports
 export const STUB_AGENT_VERSION = '0.1.0';

@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { NetworkMember } from '../../src/db/networks';
+import type { NetworkMember } from '../../src/platform/db/networks';
 
 // One imp on one network, as listNetworkMembers reads it: every field is
 // arbitrary, so a test that needs a slot to match its address sets both.

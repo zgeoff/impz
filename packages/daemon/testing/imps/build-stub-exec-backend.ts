@@ -1,12 +1,12 @@
 import { ORPCError } from '@orpc/server';
-import type { AgentFeature } from '../../src/agent-client/agent-outdated';
+import type { ExecBackend } from '../../src/imps/exec/exec-session';
+import { buildInvalidStateError } from '../../src/surface/api-errors';
+import type { AgentFeature } from '../../src/vm/agent-client/agent-outdated';
 import type {
   AgentAttachRequest,
   AgentExecRequest,
   ExecStream,
-} from '../../src/agent-client/exec-stream';
-import { buildInvalidStateError } from '../../src/api-errors';
-import type { ExecBackend } from '../../src/exec/exec-session';
+} from '../../src/vm/agent-client/exec-stream';
 
 type StubOpen =
   | {

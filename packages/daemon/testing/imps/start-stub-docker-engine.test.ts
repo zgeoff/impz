@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { z } from 'zod';
-import { PinInspectSchema } from '../../src/images/image-pin';
+import { PinInspectSchema } from '../../src/imps/images/image-pin';
 import { startStubDockerEngine } from './start-stub-docker-engine';
 
 async function setupTest() {

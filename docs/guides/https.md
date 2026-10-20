@@ -317,6 +317,6 @@ refuses the token. Both errors must be readable and must not contain the token.
 ## Not yet
 
 - Cloudflare is the only real DNS provider. Another provider implements `DnsProvider` in
-  `packages/daemon/src/https/dns/`: add a TXT value, remove it by ID, wait for the nameservers, and
-  set, list and remove A records.
+  `packages/daemon/src/network/https/dns/`: add a TXT value, remove it by ID, wait for the
+  nameservers, and set, list and remove A records.
 - Public imps have no AAAA records, and the public IP is set by hand.

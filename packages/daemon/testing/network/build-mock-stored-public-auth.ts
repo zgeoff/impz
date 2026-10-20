@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
-import type { StoredPublicAuth } from '../../src/db/imps';
-import { buildCredentialHash } from '../../src/https/public-auth';
+import { buildCredentialHash } from '../../src/network/https/public-auth';
+import type { StoredPublicAuth } from '../../src/platform/db/imps';
 
 // A public imp's auth as the imps table stores it: basic auth for an
 // arbitrary user, with the hash of an arbitrary credential.

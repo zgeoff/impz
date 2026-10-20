@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { createImage } from '@impz/daemon/src/db/images';
-import { findImpByName } from '@impz/daemon/src/db/imps';
+import { createImage } from '@impz/daemon/src/platform/db/images';
+import { findImpByName } from '@impz/daemon/src/platform/db/imps';
 import {
   buildImagePaths,
   buildImpPaths,

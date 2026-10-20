@@ -1,4 +1,4 @@
-import type { TailscaleStatus } from '../../src/net/tailscale-status';
+import type { TailscaleStatus } from '../../src/host-net/net/tailscale-status';
 
 // tailscaled, as on a host that is not on a tailnet
 export function readNoTailscale(): Promise<TailscaleStatus> {

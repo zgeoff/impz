@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
 import * as x509 from '@peculiar/x509';
-import type { Certificate } from '../../src/https/acme/cert-store';
+import type { Certificate } from '../../src/network/https/acme/cert-store';
 
 const ALGORITHM = { name: 'ECDSA', namedCurve: 'P-256', hash: 'SHA-256' } as const;
 

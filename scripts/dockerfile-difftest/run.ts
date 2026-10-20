@@ -9,9 +9,12 @@ import * as z from 'zod';
 import {
   checkDockerfile,
   renderPinnedDockerfile,
-} from '../../packages/daemon/src/images/dockerfile-check';
-import { parseDockerfile, splitNameWords } from '../../packages/daemon/src/images/dockerfile-parse';
-import type { Instruction } from '../../packages/daemon/src/images/dockerfile-parse';
+} from '../../packages/daemon/src/imps/images/dockerfile-check';
+import {
+  parseDockerfile,
+  splitNameWords,
+} from '../../packages/daemon/src/imps/images/dockerfile-parse';
+import type { Instruction } from '../../packages/daemon/src/imps/images/dockerfile-parse';
 
 const GoInstructionSchema = z.object({
   keyword: z.string(),

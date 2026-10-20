@@ -5,12 +5,12 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../../src/config';
-import { openDatabase } from '../../src/db/open-database';
-import { createActivityTracker } from '../../src/imps/activity-tracker';
-import { getImpdLogger } from '../../src/process/get-impd-logger';
-import { setupLogging } from '../../src/process/setup-logging';
-import { createForwardedPeers } from '../../src/proxy/forwarded-peers';
-import { startWakeProxy } from '../../src/proxy/wake-proxy';
+import { createActivityTracker } from '../../src/imps/imps/activity-tracker';
+import { createForwardedPeers } from '../../src/network/proxy/forwarded-peers';
+import { startWakeProxy } from '../../src/network/proxy/wake-proxy';
+import { openDatabase } from '../../src/platform/db/open-database';
+import { getImpdLogger } from '../../src/platform/process/get-impd-logger';
+import { setupLogging } from '../../src/platform/process/setup-logging';
 import { buildMockImpRecord } from '../imps/build-mock-imp-record';
 import { startStubCutStream } from './start-stub-cut-stream';
 

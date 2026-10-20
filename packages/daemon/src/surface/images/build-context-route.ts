@@ -1,0 +1,315 @@
+import { mkdirSync, rmSync } from 'node:fs';
+import { open } from 'node:fs/promises';
+import { join } from 'node:path';
+import { IMAGE_BUILD_STREAM_TYPE, ImageBuildQuerySchema } from '@impz/api';
+import type { Image, ImageBuildQuery } from '@impz/api';
+import { ORPCError } from '@orpc/server';
+import type { Config } from '../../config';
+import { checkAccess, findAccess } from '../../identity/auth/access-policy';
+import type { Caller } from '../../identity/auth/caller';
+import { createBuildEventStream } from '../../imps/images/build-event-stream';
+import type { BuildReport, Repeat } from '../../imps/images/build-event-stream';
+import type { BuildRun } from '../../imps/images/create-build-runs';
+import type { ImageService } from '../../imps/images/image-service';
+import type { ApiAudit } from '../../platform/audit/api-audit';
+import type { ImageRecord } from '../../platform/db/images';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { readErrorMessage } from '../../platform/process/read-error-message';
+import { buildUploadsDir } from '../../vm/storage/data-layout';
+import type { DiskBudget } from '../../vm/storage/disk-budget';
+
+const PROCEDURE = 'images.build';
+
+function readNoSecret(): Promise<null> {
+  return Promise.resolve(null);
+}
+
+export interface BuildContextRoute {
+  // `toApi` turns the image into what the API shows
+  readonly handle: (
+    request: Request,
+    caller: Readonly<Caller>,
+    toApi: (image: ImageRecord) => Image,
+  ) => Promise<Response>;
+}
+
+export interface BuildContextDeps {
+  readonly config: Pick<Config, 'dataDir' | 'buildContextMaxBytes'>;
+  readonly images: Pick<ImageService, 'buildImageFromContext' | 'claimBuildSlot' | 'startBuildRun'>;
+
+  // holds room for the uploaded tar while it is on disk
+  readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
+  readonly audit: ApiAudit;
+  readonly now: () => number;
+
+  // the gap between progress lines of a streamed build; BUILD_KEEPALIVE_MS
+  readonly keepaliveMs: number;
+
+  // the keepalive's timer; runOnInterval by default
+  readonly repeat?: Repeat;
+}
+
+// an error as the route answers it, with the code an oRPC call would give
+interface BuildFailure {
+  readonly code: string;
+  readonly message: string;
+  readonly status: number;
+}
+
+// a build's end: the image as the API shows it, or its failure
+type BuildOutcome =
+  | { readonly ok: true; readonly image: Image }
+  | { readonly ok: false; readonly failure: BuildFailure };
+
+// `POST /images/build` (docs/guides/images.md#build-an-image): the context
+// streams to a temp file, never into memory, and the build reads it from
+// there. Clears what an earlier impd left in the uploads directory.
+export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRoute {
+  const uploadsDir = buildUploadsDir(deps.config.dataDir);
+
+  rmSync(uploadsDir, { recursive: true, force: true });
+  mkdirSync(uploadsDir, { recursive: true, mode: 0o700 });
+
+  const runBuild = async (
+    request: Request,
+    query: ImageBuildQuery,
+    limitBytes: number,
+    signal: AbortSignal,
+    report: Readonly<BuildReport>,
+    setBuilder: (name: string) => void,
+  ): Promise<ImageRecord> => {
+    const tarPath = join(uploadsDir, `${Bun.randomUUIDv7()}.tar`);
+
+    try {
+      return await deps.diskBudget.withRoom(limitBytes, async () => {
+        await writeBody(request, tarPath, limitBytes, deps.config.buildContextMaxBytes);
+
+        signal.throwIfAborted();
+        report.setPhase('build');
+
+        return deps.images.buildImageFromContext(tarPath, query.name, query.dockerfile, {
+          signal,
+          setPhase: report.setPhase,
+          output: report.output,
+          setBuilder,
+        });
+      });
+    } finally {
+      rmSync(tarPath, { force: true });
+    }
+  };
+
+  return {
+    handle: async (request, caller, toApi) => {
+      const startedAt = deps.now();
+      const params = Object.fromEntries(new URL(request.url).searchParams);
+      const parsed = ImageBuildQuerySchema.safeParse(params);
+
+      // images.build is host-wide, so no secret is read
+      const denial = await checkAccess(findAccess(PROCEDURE), caller, params, readNoSecret);
+
+      // writes the audit row with what was thrown
+      const writeFailure = (error: unknown): BuildFailure => {
+        deps.audit.record({ procedure: PROCEDURE, actor: caller, impName: null, startedAt }, error);
+
+        const known =
+          error instanceof ORPCError
+            ? error
+            : new ORPCError('INTERNAL_SERVER_ERROR', { message: readErrorMessage(error) });
+
+        return { code: String(known.code), message: known.message, status: known.status };
+      };
+
+      const sendFailure = (error: unknown): Response => sendError(writeFailure(error));
+
+      if (denial !== null) {
+        return sendFailure(new ORPCError('FORBIDDEN', { message: denial.message }));
+      }
+
+      if (!parsed.success) {
+        const message = parsed.error.issues.map((issue) => issue.message).join('; ');
+
+        return sendFailure(new ORPCError('BAD_REQUEST', { message }));
+      }
+
+      // refused with a real status, before a stream answers 200
+      let reserved: {
+        readonly limitBytes: number;
+        readonly run: BuildRun;
+        readonly release: () => void;
+      };
+
+      try {
+        const limitBytes = readLimit(request, deps.config.buildContextMaxBytes);
+        const releaseSlot = deps.images.claimBuildSlot();
+
+        // images.builds lists the build from its upload on
+        const run = deps.images.startBuildRun(parsed.data.name, 'upload');
+
+        reserved = {
+          limitBytes,
+          run,
+          release: () => {
+            run.end();
+
+            releaseSlot();
+          },
+        };
+      } catch (error) {
+        return sendFailure(error);
+      }
+
+      const runToOutcome = async (
+        signal: AbortSignal,
+        report: Readonly<BuildReport>,
+      ): Promise<BuildOutcome> => {
+        const run = reserved.run;
+
+        // what the stream hears, images.builds hears too
+        const tracked: BuildReport = {
+          setPhase: (phase) => {
+            run.setPhase(phase);
+            report.setPhase(phase);
+          },
+          output: {
+            emitLog: report.output.emitLog,
+            setStep: (step) => {
+              run.setStep(step);
+              report.output.setStep(step);
+            },
+          },
+        };
+
+        try {
+          const image = await runBuild(
+            request,
+            parsed.data,
+            reserved.limitBytes,
+            signal,
+            tracked,
+            run.setBuilder,
+          );
+
+          deps.audit.record(
+            { procedure: PROCEDURE, actor: caller, impName: null, startedAt },
+            null,
+          );
+
+          return { ok: true, image: toApi(image) };
+        } catch (error) {
+          // a client that went is in the audit, not the log
+          if (!(error instanceof ORPCError) && !signal.aborted) {
+            getImpdLogger('image').error('image build from an upload failed: {error}', { error });
+          }
+
+          return { ok: false, failure: writeFailure(error) };
+        } finally {
+          reserved.release();
+        }
+      };
+
+      if (isStreamAccepted(request)) {
+        return createBuildEventStream(
+          request.signal,
+          async (signal, report) => {
+            const outcome = await runToOutcome(signal, report);
+
+            return outcome.ok
+              ? { type: 'image', image: outcome.image }
+              : { type: 'error', code: outcome.failure.code, message: outcome.failure.message };
+          },
+          {
+            keepaliveMs: deps.keepaliveMs,
+            now: deps.now,
+            ...(deps.repeat !== undefined && { repeat: deps.repeat }),
+          },
+        );
+      }
+
+      // the JSON answer shows no phase and no output
+      const outcome = await runToOutcome(request.signal, {
+        setPhase: () => {},
+        output: { emitLog: () => {}, setStep: () => {} },
+      });
+
+      return outcome.ok ? Response.json(outcome.image) : sendError(outcome.failure);
+    },
+  };
+}
+
+// a client from before the stream sends no Accept, and gets JSON at the end
+function isStreamAccepted(request: Request): boolean {
+  return request.headers.get('accept')?.includes(IMAGE_BUILD_STREAM_TYPE) === true;
+}
+
+// answered with its code, as oRPC would
+function sendError(failure: BuildFailure): Response {
+  return Response.json(
+    { code: failure.code, message: failure.message },
+    { status: failure.status },
+  );
+}
+
+// The bytes the body may hold. A Content-Length can only lower the limit:
+// writeBody counts the bytes that come, whatever the header said.
+function readLimit(request: Request, maxBytes: number): number {
+  const declared = Number(request.headers.get('content-length') ?? Number.NaN);
+
+  if (!Number.isSafeInteger(declared) || declared < 0) {
+    return maxBytes;
+  }
+
+  if (declared > maxBytes) {
+    throw buildTooLargeError(maxBytes);
+  }
+
+  return declared;
+}
+
+function buildTooLargeError(maxBytes: number): ORPCError<string, unknown> {
+  const mib = String(Math.floor(maxBytes / 1024 ** 2));
+
+  return new ORPCError('PAYLOAD_TOO_LARGE', {
+    message: `the build context is larger than the limit, ${mib} MiB (IMP_BUILD_CONTEXT_MAX_MIB)`,
+  });
+}
+
+// Streams the body to `path` and stops past `limitBytes`
+async function writeBody(
+  request: Request,
+  path: string,
+  limitBytes: number,
+  maxBytes: number,
+): Promise<void> {
+  if (request.body === null) {
+    throw new ORPCError('BAD_REQUEST', { message: 'the build context is missing: send a tar' });
+  }
+
+  const file = await open(path, 'wx', 0o600);
+
+  let written = 0;
+
+  try {
+    for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
+      written += chunk.byteLength;
+
+      if (written > maxBytes) {
+        throw buildTooLargeError(maxBytes);
+      }
+
+      if (written > limitBytes) {
+        throw new ORPCError('BAD_REQUEST', {
+          message: 'the body is longer than its Content-Length',
+        });
+      }
+
+      await file.write(chunk);
+    }
+  } finally {
+    await file.close();
+  }
+
+  if (written === 0) {
+    throw new ORPCError('BAD_REQUEST', { message: 'the build context is empty: send a tar' });
+  }
+}

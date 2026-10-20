@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { Collection } from '@msw/data';
 import { z } from 'zod';
-import type { ContainerSchema as ProxyContainerSchema } from '../../src/docker-proxy/proxy';
-import type { PinInspectSchema } from '../../src/images/image-pin';
+import type { ContainerSchema as ProxyContainerSchema } from '../../src/imps/docker-proxy/proxy';
+import type { PinInspectSchema } from '../../src/imps/images/image-pin';
 
 // a container a test adds: its full ID, its labels, and what its export
 // streams (nothing by default)

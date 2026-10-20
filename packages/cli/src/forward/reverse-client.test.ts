@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import type { ImpState } from '@impz/api';
-import { FRAME_TYPES, decodeJsonPayload } from '@impz/daemon/src/agent-client/frame-codec';
-import { createImage } from '@impz/daemon/src/db/images';
+import { createImage } from '@impz/daemon/src/platform/db/images';
+import { FRAME_TYPES, decodeJsonPayload } from '@impz/daemon/src/vm/agent-client/frame-codec';
 import {
   buildImagePaths,
   buildImpPaths,

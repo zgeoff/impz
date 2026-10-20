@@ -63,22 +63,22 @@ each; open one when the task touches its area.
 
 ## Commands
 
-| Layer                       | Command                                                                                                         | Needs                                                          |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Unit and package (one file) | `bun test <path>`                                                                                               | Bun, bash, git, jq, tar, truncate, mkfs.ext4                   |
-| Unit and package (all)      | `bun test`                                                                                                      | The same, and more memory than a small host has                |
-| Dashboard components        | `bun run test:dashboard`                                                                                        | Bun                                                            |
-| Agent Go                    | `scripts/test-go.sh`                                                                                            | Go from `agent/go.mod`                                         |
-| Agent Go, root-only tests   | `cd agent && sudo -E env "PATH=$PATH" go test -tags root -race ./...`                                           | Root, a writable cgroup2                                       |
-| Host networking             | `sudo env "PATH=$PATH" IMP_HOST_TESTS=required bun run test:host`                                               | Root, `nft`, `iptables`, `ip6tables`, `ip`, `ping`, `sysctl`   |
-| ACME issuer                 | `bun run test:pebble`                                                                                           | Docker                                                         |
-| Build disk hold             | `IMP_TEST_SMALL_FS=<dir> bun test packages/daemon/src/images/create-image-builds.test.ts -t 'small filesystem'` | A 4 GiB loop-mounted filesystem at `<dir>`; a tiny tmpfs fails |
-| End to end                  | `e2e/test-e2e.sh [--only <suites> \| --group <1-3>] [--clean \| --reuse] [--keep]`                              | KVM, Docker; `--help` lists suites and extra needs             |
-| One journey                 | `bun test --config=e2e/bunfig.toml ./e2e/suites/<journey>.e2e.ts`                                               | A dev instance that is already up                              |
-| NixOS module evaluation     | `nix build -L --no-link .#checks.x86_64-linux.eval`                                                             | Nix with flakes                                                |
-| NixOS VMs                   | `nix build -L --no-link .#checks.x86_64-linux.vm`                                                               | Nix with `kvm nixos-test` system features                      |
-| ZFS on a real pool          | `sudo env "PATH=$PATH" scripts/test-zfs.sh`                                                                     | Root, the zfs module, `zpool`                                  |
-| ZFS host with VMs           | `scripts/zfs-host-test.sh`                                                                                      | sudo, Docker, KVM, the zfs module                              |
+| Layer                       | Command                                                                                                              | Needs                                                          |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Unit and package (one file) | `bun test <path>`                                                                                                    | Bun, bash, git, jq, tar, truncate, mkfs.ext4                   |
+| Unit and package (all)      | `bun test`                                                                                                           | The same, and more memory than a small host has                |
+| Dashboard components        | `bun run test:dashboard`                                                                                             | Bun                                                            |
+| Agent Go                    | `scripts/test-go.sh`                                                                                                 | Go from `agent/go.mod`                                         |
+| Agent Go, root-only tests   | `cd agent && sudo -E env "PATH=$PATH" go test -tags root -race ./...`                                                | Root, a writable cgroup2                                       |
+| Host networking             | `sudo env "PATH=$PATH" IMP_HOST_TESTS=required bun run test:host`                                                    | Root, `nft`, `iptables`, `ip6tables`, `ip`, `ping`, `sysctl`   |
+| ACME issuer                 | `bun run test:pebble`                                                                                                | Docker                                                         |
+| Build disk hold             | `IMP_TEST_SMALL_FS=<dir> bun test packages/daemon/src/imps/images/create-image-builds.test.ts -t 'small filesystem'` | A 4 GiB loop-mounted filesystem at `<dir>`; a tiny tmpfs fails |
+| End to end                  | `e2e/test-e2e.sh [--only <suites> \| --group <1-3>] [--clean \| --reuse] [--keep]`                                   | KVM, Docker; `--help` lists suites and extra needs             |
+| One journey                 | `bun test --config=e2e/bunfig.toml ./e2e/suites/<journey>.e2e.ts`                                                    | A dev instance that is already up                              |
+| NixOS module evaluation     | `nix build -L --no-link .#checks.x86_64-linux.eval`                                                                  | Nix with flakes                                                |
+| NixOS VMs                   | `nix build -L --no-link .#checks.x86_64-linux.vm`                                                                    | Nix with `kvm nixos-test` system features                      |
+| ZFS on a real pool          | `sudo env "PATH=$PATH" scripts/test-zfs.sh`                                                                          | Root, the zfs module, `zpool`                                  |
+| ZFS host with VMs           | `scripts/zfs-host-test.sh`                                                                                           | sudo, Docker, KVM, the zfs module                              |
 
 CI runs every row but the lone journey, in [`ci.yml`](../../../.github/workflows/ci.yml) and
 [`nix.yml`](../../../.github/workflows/nix.yml). When this host lacks what a row needs, push and

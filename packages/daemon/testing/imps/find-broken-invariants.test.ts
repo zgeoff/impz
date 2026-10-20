@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { listImps } from '../../src/db/imps';
+import { listImps } from '../../src/platform/db/imps';
 import { startTestImpd } from '../start-test-impd';
 import { findBrokenInvariants } from './find-broken-invariants';
 

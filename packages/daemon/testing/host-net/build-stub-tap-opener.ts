@@ -1,5 +1,5 @@
 import type { ResumeFrom } from '@impz/api';
-import type { ExecStream } from '../../src/agent-client/exec-stream';
+import type { ExecStream } from '../../src/vm/agent-client/exec-stream';
 
 // one call of the tap opener: the session it tapped and where it resumed
 interface TapCall {

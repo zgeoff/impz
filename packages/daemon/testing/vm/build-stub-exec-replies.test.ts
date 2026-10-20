@@ -9,8 +9,8 @@ import {
   createFrameDecoder,
   encodeFrame,
   encodeJsonFrame,
-} from '../../src/agent-client/frame-codec';
-import type { AgentFrame } from '../../src/agent-client/frame-codec';
+} from '../../src/vm/agent-client/frame-codec';
+import type { AgentFrame } from '../../src/vm/agent-client/frame-codec';
 import { buildStubExecReplies } from './build-stub-exec-replies';
 import { startStubAgent } from './start-stub-agent';
 

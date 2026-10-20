@@ -1,0 +1,94 @@
+import { readFileSync } from 'node:fs';
+import { readServePorts } from '../../host-net/net/tailscale-serve';
+import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
+import { findPublicImp, listPublicImpNames } from '../../platform/db/exposure';
+import type { ImpDatabase } from '../../platform/db/open-database';
+import { readErrorMessage } from '../../platform/process/read-error-message';
+import type { WakeProxy } from '../proxy/wake-proxy';
+import { createAcmeIssuer } from './acme/acme-issuer';
+import { createCertStore } from './acme/cert-store';
+import { createDnsProvider } from './dns/create-dns-provider';
+import type { DnsToken } from './dns/dns-token';
+import type { HttpsConfig } from './https-config';
+import type { HttpsService } from './https-service';
+import { createHttpsService } from './https-service';
+
+interface BuildHttpsOptions {
+  readonly config: HttpsConfig;
+  readonly dataDir: string;
+  readonly db: ImpDatabase;
+  readonly proxy: Pick<WakeProxy, 'startListener'>;
+  readonly readTailscale: (() => Promise<TailscaleStatus>) | null;
+
+  // the DNS API token, read at each use; null for a provider that needs none
+  readonly dnsToken: DnsToken | null;
+  readonly log: (message: string) => void;
+}
+
+// The HTTPS service from impd's config, with the real CA, DNS provider and
+// tailscaled.
+export function buildHttpsService(options: BuildHttpsOptions): HttpsService {
+  const config = options.config;
+  const log = options.log;
+  const store = createCertStore(options.dataDir, log);
+  const dns = createDnsProvider(config.dns, options.dnsToken, log);
+
+  const issue = createAcmeIssuer({
+    directoryUrl: config.acmeDirectory,
+    email: config.acmeEmail,
+    caPem: config.acmeCaFile === null ? null : readFileSync(config.acmeCaFile, 'utf8'),
+    store,
+    dns,
+    log,
+  });
+
+  const service = createHttpsService({
+    config,
+    store,
+    issue,
+    dns,
+    proxy: options.proxy,
+    readTailscale: options.readTailscale,
+    readServePorts,
+    now: Date.now,
+    log,
+    listPublicImps: () => listPublicImpNames(options.db),
+    findPublicImp: (name) => findPublicImp(options.db, name),
+  });
+
+  // the destroy of a public imp takes its record; an expose and an unexpose
+  // update the records themselves, to report how the write went
+  const unsubscribe = options.db.writes.subscribe((write) => {
+    if (write.kind === 'removed' && write.imp.publicAuth !== null) {
+      void service.updatePublicRecords();
+    }
+  });
+
+  return {
+    ...service,
+    start: () => {
+      if (options.dnsToken !== null) {
+        void checkDnsToken(options.dnsToken, log);
+      }
+
+      service.start();
+    },
+    stop: async () => {
+      unsubscribe();
+
+      await service.stop();
+    },
+  };
+}
+
+// A token file that is missing or empty does not stop impd: it says so at
+// start, and in system info, and each DNS call reads the file again.
+async function checkDnsToken(token: DnsToken, log: (message: string) => void): Promise<void> {
+  try {
+    await token.read();
+  } catch (error) {
+    log(
+      `impd: https: ${readErrorMessage(error)}; DNS records and certificates wait until it holds a token`,
+    );
+  }
+}

@@ -1,15 +1,19 @@
 import type { Socket } from 'node:net';
-import { RequestSchema, SignalSchema } from '../../src/agent-client/agent-protocol';
-import type { Request } from '../../src/agent-client/agent-protocol';
-import { decodeAgentMessage } from '../../src/agent-client/decode-agent-message';
-import type { AgentExecRequest, ExecEvent, ExecStream } from '../../src/agent-client/exec-stream';
+import { RequestSchema, SignalSchema } from '../../src/vm/agent-client/agent-protocol';
+import type { Request } from '../../src/vm/agent-client/agent-protocol';
+import { decodeAgentMessage } from '../../src/vm/agent-client/decode-agent-message';
+import type {
+  AgentExecRequest,
+  ExecEvent,
+  ExecStream,
+} from '../../src/vm/agent-client/exec-stream';
 import {
   FRAME_TYPES,
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
-} from '../../src/agent-client/frame-codec';
-import type { AgentFrame } from '../../src/agent-client/frame-codec';
+} from '../../src/vm/agent-client/frame-codec';
+import type { AgentFrame } from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
 // the agent's maxKillGrace, as the host's API caps it too

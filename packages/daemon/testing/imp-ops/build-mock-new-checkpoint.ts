@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { NewCheckpoint } from '../../src/db/checkpoints';
+import type { NewCheckpoint } from '../../src/platform/db/checkpoints';
 
 // A checkpoint as createCheckpoint takes it: an arbitrary id, label and size
 // for a fresh imp id, with no disk size or time, so createCheckpoint's own

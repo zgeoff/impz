@@ -10,13 +10,13 @@ import {
   TUNNEL_MAX_FRAME_BYTES,
   TUNNEL_WINDOW_BYTES,
 } from '@impz/api';
+import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   FRAME_TYPES,
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
-} from '@impz/daemon/src/agent-client/frame-codec';
-import { createImage } from '@impz/daemon/src/db/images';
+} from '@impz/daemon/src/vm/agent-client/frame-codec';
 import {
   buildImagePaths,
   buildImpPaths,

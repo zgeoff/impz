@@ -1,10 +1,10 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
-import { RequestSchema } from '@impz/daemon/src/agent-client/agent-protocol';
-import { encodeAgentMessage } from '@impz/daemon/src/agent-client/encode-agent-message';
-import { sendServicesAdd } from '@impz/daemon/src/agent-client/service-requests';
-import { createImage } from '@impz/daemon/src/db/images';
+import { createImage } from '@impz/daemon/src/platform/db/images';
+import { RequestSchema } from '@impz/daemon/src/vm/agent-client/agent-protocol';
+import { encodeAgentMessage } from '@impz/daemon/src/vm/agent-client/encode-agent-message';
+import { sendServicesAdd } from '@impz/daemon/src/vm/agent-client/service-requests';
 import {
   buildImagePaths,
   buildImpPaths,

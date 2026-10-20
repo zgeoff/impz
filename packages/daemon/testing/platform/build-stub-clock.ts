@@ -1,4 +1,4 @@
-import type { Clock } from '../../src/process/clock';
+import type { Clock } from '../../src/platform/process/clock';
 
 interface StubTimer {
   readonly at: number;

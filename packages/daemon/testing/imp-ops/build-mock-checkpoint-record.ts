@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
-import { CHECKPOINT_ID_ALPHABET } from '../../src/checkpoints/checkpoint-service';
-import type { CheckpointRecord } from '../../src/db/checkpoints';
+import { CHECKPOINT_ID_ALPHABET } from '../../src/imp-ops/checkpoints/checkpoint-service';
+import type { CheckpointRecord } from '../../src/platform/db/checkpoints';
 
 // A checkpoint as the checkpoints table reads it, labelled and sized; its id
 // shaped as buildCheckpointId makes one, its imp a fresh id, its sizes and

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { formatKeyFingerprint } from '../../src/ssh/authorized-keys';
+import { formatKeyFingerprint } from '../../src/imps/ssh/authorized-keys';
 import { buildMockTokenSshKeyRecord } from './build-mock-token-ssh-key-record';
 
 test('it builds a default token ssh key record', () => {

@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
-import type { TailscaleStatus } from '../../src/net/tailscale-status';
-import type { CommandResult } from '../../src/process/run-command';
+import type { TailscaleStatus } from '../../src/host-net/net/tailscale-status';
+import type { CommandResult } from '../../src/platform/process/run-command';
 
 // a node on the tailnet, as a test names it: the short MagicDNS name, the
 // user's login (null for a tagged node), its tags and its stable ID

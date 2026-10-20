@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import type { Jails } from '../../src/vmm/jail';
+import type { Jails } from '../../src/vm/vmm/jail';
 
 interface StubJailsOptions {
   // the command a prepare hands back; without one a prepare rejects, as for

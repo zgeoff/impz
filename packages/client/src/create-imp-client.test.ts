@@ -2,8 +2,8 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createImage } from '@impz/daemon/src/db/images';
-import { DOCKERFILE_FRONTEND } from '@impz/daemon/src/docker-proxy/dockerfile-frontend';
+import { DOCKERFILE_FRONTEND } from '@impz/daemon/src/imps/docker-proxy/dockerfile-frontend';
+import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildMockNewImage,

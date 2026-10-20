@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { NewImp } from '../../src/db/imps';
+import type { NewImp } from '../../src/platform/db/imps';
 
 // An imp row as createImp inserts it: a user imp with no optional field set;
 // its name, image and shape arbitrary. Slot 0 of the default IMP_SUBNET,

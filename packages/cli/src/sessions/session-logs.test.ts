@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
-import { createImage } from '@impz/daemon/src/db/images';
-import { createGenerationLog } from '@impz/daemon/src/session-logs/generation-log';
+import { createGenerationLog } from '@impz/daemon/src/imps/session-logs/generation-log';
+import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildImpPaths,

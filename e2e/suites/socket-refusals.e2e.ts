@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { DOCKERFILE_FRONTEND } from '../../packages/daemon/src/docker-proxy/dockerfile-frontend';
+import { DOCKERFILE_FRONTEND } from '../../packages/daemon/src/imps/docker-proxy/dockerfile-frontend';
 import { buildProxyBuildScript, parseProxyAnswer } from '../lib/docker-proxy-build';
 import { getHostImage, runChecked, runCommand, runInContainer } from '../lib/instance';
 

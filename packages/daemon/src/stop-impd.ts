@@ -1,7 +1,7 @@
-import type { Imps } from './imps/imp-service';
-import type { Ticker } from './process/ticker';
-import { waitWithin } from './process/wait-within';
-import { readErrorMessage } from './read-error-message';
+import type { Imps } from './imps/imps/imp-service';
+import { readErrorMessage } from './platform/process/read-error-message';
+import type { Ticker } from './platform/process/ticker';
+import { waitWithin } from './platform/process/wait-within';
 
 // the whole stop, within the 120 s that scripts/dev/dev.sh gives `docker stop`
 const STOP_DEADLINE_MS = 100_000;

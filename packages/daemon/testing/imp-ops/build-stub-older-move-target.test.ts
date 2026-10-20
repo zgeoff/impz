@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { MOVE_PATHS } from '../../src/moves/move-header';
-import { buildTicketHeader } from '../../src/moves/move-tickets';
+import { MOVE_PATHS } from '../../src/imp-ops/moves/move-header';
+import { buildTicketHeader } from '../../src/imp-ops/moves/move-tickets';
 import { buildStubOlderMoveTarget } from './build-stub-older-move-target';
 import { SOURCE_PEER, TARGET_URL, setupMoveHosts } from './create-move-hosts';
 

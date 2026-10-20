@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
-import type { ElasticImp } from '../../src/memory/memory-controller';
-import { buildImpPaths } from '../../src/storage/data-layout';
+import type { ElasticImp } from '../../src/vm/memory/memory-controller';
+import { buildImpPaths } from '../../src/vm/storage/data-layout';
 
 // A running imp that may grow, as the memory controller lists it: its paths
 // follow its id under /data, and its max is twice its memory.
