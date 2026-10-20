@@ -8,8 +8,9 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, join } from 'node:path';
 import { LAYER_TABLE, planLayerPath } from './plan-layer-path';
+import { transformLayerPaths } from './transform-layer-paths';
 
 const DAEMON_SRC = LAYER_TABLE.daemonSrc;
 
@@ -90,19 +91,6 @@ function removeEmptyFolders(root: string, movedFrom: readonly string[]): void {
   }
 }
 
-// the relative paths in code: an import, export, dynamic import, require or module mock, and a
-// path from the file's own folder through `join(import.meta.dir, …)` or `new URL(…, import.meta.url)`
-const RELATIVE_PATHS = [
-  /(?<head>\b(?:from|import|require|mock\.module)\s*\(?\s*)(?<quote>['"])(?<specifier>\.{1,2}(?:\/[^'"\n]*)?)\k<quote>/gu,
-  /(?<head>\bjoin\(\s*import\.meta\.dir\s*,\s*)(?<quote>['"])(?<specifier>[\w.-][^'"\n]*)\k<quote>/gu,
-  /(?<head>\bnew URL\(\s*)(?<quote>['"])(?<specifier>[\w.-][^'"\n:]*)\k<quote>(?=\s*,\s*import\.meta\.url)/gu,
-];
-
-// a path under the daemon's src in any text: `@impz/daemon/src/db/imps`, a relative import from
-// another package, a doc, a config file or a comment
-const DAEMON_PATH = /(?<head>daemon\/src\/)(?<path>[\w.@-]+(?:\/[\w.@-]+)*)/gu;
-const CODE_FILE = /\.(?:[cm]?[jt]sx?)$/u;
-
 // rewrites the paths in `file`, which now sits at `current`; true when its text changed
 function updateFilePaths(root: string, file: string, current: string): boolean {
   const text = readText(join(root, current));
@@ -111,26 +99,7 @@ function updateFilePaths(root: string, file: string, current: string): boolean {
     return false;
   }
 
-  const relinked = CODE_FILE.test(current)
-    ? RELATIVE_PATHS.reduce(
-        (code, pattern) =>
-          code.replaceAll(pattern, (match, head: string, quote: string, specifier: string) => {
-            const relinkedSpecifier = planSpecifier(root, file, current, specifier);
-
-            return relinkedSpecifier === specifier
-              ? match
-              : `${head}${quote}${relinkedSpecifier}${quote}`;
-          }),
-        text,
-      )
-    : text;
-
-  const repathed = relinked.replaceAll(
-    DAEMON_PATH,
-    (_match, head: string, path: string) => `${head}${planLayerPath(path)}`,
-  );
-
-  const next = current === 'knip.json' ? buildKnipConfig(repathed) : repathed;
+  const next = transformLayerPaths(text, { root, file, current });
 
   if (next === text) {
     return false;
@@ -139,49 +108,6 @@ function updateFilePaths(root: string, file: string, current: string): boolean {
   writeFileSync(join(root, current), next);
 
   return true;
-}
-
-// knip's daemon workspace names its files from the package root, as `src/docker-proxy/main.ts`
-const KNIP_DAEMON_WORKSPACE = /"packages\/daemon": \{[^}]*(?:\{[^}]*\}[^}]*)*\}/u;
-const KNIP_SRC_PATH = /(?<head>"src\/)(?<path>[\w.@-]+(?:\/[\w.@-]+)*)/gu;
-
-function buildKnipConfig(text: string): string {
-  return text.replace(KNIP_DAEMON_WORKSPACE, (workspace) =>
-    workspace.replaceAll(
-      KNIP_SRC_PATH,
-      (_match, head: string, path: string) => `${head}${planLayerPath(path)}`,
-    ),
-  );
-}
-
-// the specifier that `specifier` becomes once `file` sits at `current` and its target has moved
-function planSpecifier(root: string, file: string, current: string, specifier: string): string {
-  const src = resolve(root, DAEMON_SRC);
-  const target = resolve(root, dirname(file), specifier);
-  const isInSrc = target === src || target.startsWith(`${src}${sep}`);
-
-  const movedTarget = isInSrc
-    ? join(src, planLayerPath(relative(src, target).split(sep).join('/')))
-    : target;
-
-  if (movedTarget === target && file === current) {
-    return specifier;
-  }
-
-  const path = relative(resolve(root, dirname(current)), movedTarget)
-    .split(sep)
-    .join('/');
-
-  const trailing = specifier.endsWith('/') && !path.endsWith('/') ? '/' : '';
-
-  if (path === '') {
-    return `.${trailing}`;
-  }
-
-  // a path from the file's own folder keeps its form: `./x` stays `./x`, and `x` stays `x`
-  const prefix = path.startsWith('.') || !specifier.startsWith('.') ? '' : './';
-
-  return `${prefix}${path}${trailing}`;
 }
 
 // null for a file that is gone or binary (a NUL byte), which holds no path to rewrite

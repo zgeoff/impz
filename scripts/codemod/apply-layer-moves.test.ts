@@ -119,43 +119,6 @@ test('it moves the files and rewrites the paths that name them', async () => {
   );
 });
 
-test("it rewrites the src paths of knip's daemon workspace only", async () => {
-  const ctx = await setupTest();
-
-  await Bun.write(
-    join(ctx.root, 'knip.json'),
-    [
-      '{',
-      '  "workspaces": {',
-      '    "packages/daemon": {',
-      '      "entry": ["src/docker-proxy/main.ts", "src/**/*.pebble.ts"],',
-      '      "ignoreIssues": { "src/db/schema.ts": ["types"] }',
-      '    },',
-      '    "packages/cli": { "entry": ["src/db/main.ts"] }',
-      '  }',
-      '}',
-      '',
-    ].join('\n'),
-  );
-
-  applyLayerMoves(ctx.root, ['knip.json']);
-
-  expect(readFileSync(join(ctx.root, 'knip.json'), 'utf8')).toBe(
-    [
-      '{',
-      '  "workspaces": {',
-      '    "packages/daemon": {',
-      '      "entry": ["src/imps/docker-proxy/main.ts", "src/**/*.pebble.ts"],',
-      '      "ignoreIssues": { "src/platform/db/schema.ts": ["types"] }',
-      '    },',
-      '    "packages/cli": { "entry": ["src/db/main.ts"] }',
-      '  }',
-      '}',
-      '',
-    ].join('\n'),
-  );
-});
-
 test('it changes nothing on a second run', async () => {
   const ctx = await setupTest();
 
