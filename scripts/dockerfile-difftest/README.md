@@ -21,7 +21,7 @@ Run it on every change to `DOCKERFILE_FRONTEND` (the `BUILDKIT_SYNTAX` pin in
 
 - Go, at the version in `go.mod`.
 - `go.mod` requires the moby/buildkit commit behind the pinned frontend. For
-  `docker/dockerfile:1.19` that is v0.25.0, the commit tagged `dockerfile/1.19.0`. When you change
+  `docker/dockerfile:1.28` that is v0.34.0, the commit tagged `dockerfile/1.28.0`. When you change
   the pin, find the commit for the new `dockerfile/<version>` tag, then update `go.mod`:
 
   ```sh
