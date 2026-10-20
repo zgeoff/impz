@@ -7,6 +7,6 @@ COPY ws-echo.go isn-probe.go ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /ws-echo ws-echo.go \
  && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /isn-probe isn-probe.go
 
-FROM busybox:1.37
+FROM busybox:1.38
 COPY --from=build /ws-echo /isn-probe /usr/local/bin/
 COPY rootfs/ /

@@ -5,5 +5,5 @@ WORKDIR /src
 COPY ra-send.go .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /ra-send ra-send.go
 
-FROM busybox:1.37
+FROM busybox:1.38
 COPY --from=build /ra-send /usr/local/bin/ra-send
