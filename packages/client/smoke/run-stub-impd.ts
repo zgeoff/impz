@@ -159,33 +159,35 @@ interface ProxySocket {
 // A reverse proxy that strips /impd, as one in front of a real impd would,
 // for HTTP and for the exec WebSocket. Anything outside the prefix is a 404.
 function startPrefixProxy(upstreamBase: string): Server<ProxySocket> {
+  const handleRequest = (request: Request, server: Server<ProxySocket>) => {
+    const incoming = new URL(request.url);
+
+    if (!incoming.pathname.startsWith(`${PREFIX}/`)) {
+      return new Response('not under the prefix', { status: 404 });
+    }
+
+    const target = new URL(
+      `${incoming.pathname.slice(PREFIX.length)}${incoming.search}`,
+      upstreamBase,
+    );
+
+    if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
+      return fetch(new Request(target.href, request));
+    }
+
+    target.protocol = 'ws:';
+
+    const data: ProxySocket = { upstreamUrl: target.href, upstream: null, pending: [] };
+
+    return server.upgrade(request, { data })
+      ? undefined
+      : new Response('upgrade failed', { status: 400 });
+  };
+
   return Bun.serve<ProxySocket>({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: (request, server) => {
-      const incoming = new URL(request.url);
-
-      if (!incoming.pathname.startsWith(`${PREFIX}/`)) {
-        return new Response('not under the prefix', { status: 404 });
-      }
-
-      const target = new URL(
-        `${incoming.pathname.slice(PREFIX.length)}${incoming.search}`,
-        upstreamBase,
-      );
-
-      if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
-        return fetch(new Request(target.href, request));
-      }
-
-      target.protocol = 'ws:';
-
-      const data: ProxySocket = { upstreamUrl: target.href, upstream: null, pending: [] };
-
-      return server.upgrade(request, { data })
-        ? undefined
-        : new Response('upgrade failed', { status: 400 });
-    },
+    fetch: handleRequest,
     websocket: {
       open: (socket) => {
         const upstream = new WebSocket(socket.data.upstreamUrl);
@@ -235,7 +237,12 @@ function stopSocket(socket: Pick<WebSocket, 'close'> | null, code: number, reaso
 }
 
 async function readClosedUrl(): Promise<string> {
-  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response() });
+  const server = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    routes: { '/*': () => new Response() },
+  });
+
   const closed = `http://127.0.0.1:${String(server.port)}`;
 
   await server.stop(true);

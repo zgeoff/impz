@@ -12,8 +12,10 @@ function setupTest() {
   const target = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: (request, server) =>
-      server.upgrade(request) ? undefined : new Response(new URL(request.url).pathname),
+    routes: {
+      '/*': (request: Request, server: Bun.Server<undefined>) =>
+        server.upgrade(request) ? undefined : new Response(new URL(request.url).pathname),
+    },
     websocket: {
       message: (ws, data) => {
         ws.send(`echo ${String(data)}`);
@@ -115,7 +117,10 @@ test('it drops the client without a close frame when the target drops its side',
   const dropping = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: (request, server) => (server.upgrade(request) ? undefined : new Response('')),
+    routes: {
+      '/*': (request: Request, server: Bun.Server<undefined>) =>
+        server.upgrade(request) ? undefined : new Response(''),
+    },
     websocket: {
       message: (target) => {
         target.terminate();

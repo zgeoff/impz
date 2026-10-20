@@ -923,7 +923,8 @@ test('it forwards over TLS to a test upstream that the test CA signed', async ()
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: ctx.directoryPath,
-    fetch: (request) => new Response(`saw ${request.headers.get('authorization') ?? 'none'}`),
+    respond: (request: Request) =>
+      new Response(`saw ${request.headers.get('authorization') ?? 'none'}`),
   });
 
   const forward = createForwarder({
@@ -954,7 +955,7 @@ test('it answers 502 for a test upstream whose certificate the test CA did not s
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: ctx.directoryPath,
-    fetch: (request) => {
+    respond: (request: Request) => {
       reached(request.url);
 
       return new Response('reached');
@@ -992,7 +993,7 @@ test('it sends the upstream its own authority as Host, not the guest’s', async
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: ctx.directoryPath,
-    fetch: (request) => {
+    respond: (request: Request) => {
       received(request.headers.get('host'));
 
       return new Response('upstream body');
@@ -1027,7 +1028,7 @@ test('it passes gzip bytes through unchanged, without decompressing them', async
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: ctx.directoryPath,
-    fetch: () => new Response(gzipped, { headers: { 'content-encoding': 'gzip' } }),
+    respond: () => new Response(gzipped, { headers: { 'content-encoding': 'gzip' } }),
   });
 
   const forward = createForwarder({

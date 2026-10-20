@@ -103,6 +103,9 @@ export async function createMoveHosts(
     return call(request, (replacement) => sendToTarget(replacement ?? request), built.hosts);
   };
 
+  const sendSourceRequest = (request: Request) =>
+    hook === undefined ? sendToTarget(request) : runHook(request, hook);
+
   const source = await startTestImpd(stack, {
     ...options.source,
     boundaries: {
@@ -112,7 +115,7 @@ export async function createMoveHosts(
         readTapMac:
           options.readTapMac ??
           ((tap) => deriveSlotAddress(Number(tap.slice('imp'.length)), slotPlan).hostMac),
-        fetch: (request) => (hook === undefined ? sendToTarget(request) : runHook(request, hook)),
+        fetch: sendSourceRequest,
         ...(options.startPeerDeadline !== undefined && {
           startPeerDeadline: options.startPeerDeadline,
         }),

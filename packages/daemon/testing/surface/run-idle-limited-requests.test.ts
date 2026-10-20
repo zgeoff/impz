@@ -9,10 +9,12 @@ function setupTest() {
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: async (request) => {
-      await request.text();
+    routes: {
+      '/*': async (request: Request) => {
+        await request.text();
 
-      return new Response(`answered ${new URL(request.url).pathname}`);
+        return new Response(`answered ${new URL(request.url).pathname}`);
+      },
     },
   });
 
@@ -32,14 +34,19 @@ test('it prints the outcome of imp-docker-proxy’s pull and export as JSON line
   // inspect with a container of this proxy's, the rest with their path
   const engine = Bun.serve({
     unix: socket,
-    fetch: async (request: Request) => {
-      await request.text();
+    routes: {
+      '/*': async (request: Request) => {
+        await request.text();
 
-      const path = new URL(request.url).pathname;
+        const path = new URL(request.url).pathname;
 
-      return path.endsWith('/json')
-        ? Response.json({ Id: 'a'.repeat(64), Config: { Labels: { [PROXY_LABEL]: 'test-token' } } })
-        : new Response(`answered ${path}`);
+        return path.endsWith('/json')
+          ? Response.json({
+              Id: 'a'.repeat(64),
+              Config: { Labels: { [PROXY_LABEL]: 'test-token' } },
+            })
+          : new Response(`answered ${path}`);
+      },
     },
   });
 

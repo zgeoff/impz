@@ -28,10 +28,12 @@ async function setupTest() {
     wrapDatabase: (db) => gate.wrap(db),
   });
 
+  const sendClientRequest = (request: Request) => harness.impd.api.app.handle(request);
+
   const client = createImpClient({
     url: 'http://impd.test',
     token: 'root-token',
-    fetch: (request) => harness.impd.api.app.handle(request),
+    fetch: sendClientRequest,
   });
 
   const timer = buildStubRepeat();
@@ -2121,16 +2123,18 @@ test('it lists only the read tools to a read caller over the 2026-07-28 protocol
 
   const sessions: (string | null)[] = [];
 
+  const sendRequest = async (url: string | URL, init: RequestInit | undefined) => {
+    const response = await ctx.transport.respond(new Request(url.toString(), init));
+
+    sessions.push(response.headers.get('mcp-session-id'));
+
+    return response;
+  };
+
   await client.connect(
     new StreamableHTTPClientTransport(new URL('http://impd.test/mcp'), {
       requestInit: { headers: { authorization: 'Bearer reader' } },
-      fetch: async (url, init) => {
-        const response = await ctx.transport.respond(new Request(url.toString(), init));
-
-        sessions.push(response.headers.get('mcp-session-id'));
-
-        return response;
-      },
+      fetch: sendRequest,
     }),
   );
 
@@ -2158,10 +2162,13 @@ test('it lists every tool to a manage caller over the 2026-07-28 protocol', asyn
     { versionNegotiation: { mode: { pin: '2026-07-28' } } },
   );
 
+  const sendRequest = (url: string | URL, init: RequestInit | undefined) =>
+    ctx.transport.respond(new Request(url.toString(), init));
+
   await client.connect(
     new StreamableHTTPClientTransport(new URL('http://impd.test/mcp'), {
       requestInit: { headers: { authorization: 'Bearer alice' } },
-      fetch: (url, init) => ctx.transport.respond(new Request(url.toString(), init)),
+      fetch: sendRequest,
     }),
   );
 
@@ -2189,10 +2196,13 @@ test('it ends a 2026-07-28 call unanswered when what its caller authenticated wi
     { versionNegotiation: { mode: { pin: '2026-07-28' } } },
   );
 
+  const sendRequest = (url: string | URL, init: RequestInit | undefined) =>
+    ctx.transport.respond(new Request(url.toString(), init));
+
   await client.connect(
     new StreamableHTTPClientTransport(new URL('http://impd.test/mcp'), {
       requestInit: { headers: { authorization: 'Bearer alice' } },
-      fetch: (url, init) => ctx.transport.respond(new Request(url.toString(), init)),
+      fetch: sendRequest,
     }),
   );
 
@@ -2231,11 +2241,13 @@ test('it waits at close for a 2026-07-28 create whose request the client aborted
   // what drops the connection under every request, as a client gone away
   const abort = new AbortController();
 
+  const sendRequest = (url: string | URL, init: RequestInit | undefined) =>
+    transport.respond(new Request(url.toString(), { ...init, signal: abort.signal }));
+
   await client.connect(
     new StreamableHTTPClientTransport(new URL('http://impd.test/mcp'), {
       requestInit: { headers: { authorization: 'Bearer alice' } },
-      fetch: (url, init) =>
-        transport.respond(new Request(url.toString(), { ...init, signal: abort.signal })),
+      fetch: sendRequest,
     }),
   );
 
@@ -2277,18 +2289,20 @@ test('it ends the call behind an aborted 2026-07-28 create’s response only whe
 
   const responses: Response[] = [];
 
+  const sendRequest = async (url: string | URL, init: RequestInit | undefined) => {
+    const response = await ctx.transport.respond(
+      new Request(url.toString(), { ...init, signal: abort.signal }),
+    );
+
+    responses.push(response);
+
+    return response;
+  };
+
   await client.connect(
     new StreamableHTTPClientTransport(new URL('http://impd.test/mcp'), {
       requestInit: { headers: { authorization: 'Bearer alice' } },
-      fetch: async (url, init) => {
-        const response = await ctx.transport.respond(
-          new Request(url.toString(), { ...init, signal: abort.signal }),
-        );
-
-        responses.push(response);
-
-        return response;
-      },
+      fetch: sendRequest,
     }),
   );
 

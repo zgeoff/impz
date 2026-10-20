@@ -161,7 +161,7 @@ test('it refreshes over TLS from a test upstream that the test CA signed', async
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: ctx.dataDir,
-    fetch: () => Response.json({ access_token: 'fake-access-1', expires_in: 3600 }),
+    respond: () => Response.json({ access_token: 'fake-access-1', expires_in: 3600 }),
   });
 
   const valueFile = buildValueFile('codex');
@@ -193,7 +193,7 @@ test('it treats a test upstream whose certificate the test CA did not sign as a 
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: ctx.dataDir,
-    fetch: () => Response.json({ access_token: 'fake-access-1', expires_in: 3600 }),
+    respond: () => Response.json({ access_token: 'fake-access-1', expires_in: 3600 }),
   });
 
   const other = await loadOrCreateBrokerCa(join(ctx.dataDir, 'other-ca'));

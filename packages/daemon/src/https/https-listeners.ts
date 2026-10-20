@@ -152,18 +152,20 @@ export function createHttpsListeners(options: HttpsListenersOptions): HttpsListe
       }),
     );
 
+  const handleRedirectRequest = async (request: Request) => {
+    const isRedirected = await checkRedirect(request);
+
+    return isRedirected
+      ? buildRedirect(request, domain, readRedirectPort(), hint)
+      : buildErrorPage(404, hint);
+  };
+
   const startRedirect = (address: string): Listener | null =>
     tryBind(address, 'http', () =>
       Bun.serve({
         hostname: address,
         port: ports.http,
-        fetch: async (request) => {
-          const isRedirected = await checkRedirect(request);
-
-          return isRedirected
-            ? buildRedirect(request, domain, readRedirectPort(), hint)
-            : buildErrorPage(404, hint);
-        },
+        fetch: handleRedirectRequest,
       }),
     );
 

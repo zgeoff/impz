@@ -54,14 +54,16 @@ async function setupTest() {
     // the image's config, which a move sends with it
     await Bun.write(buildImagePaths(harness.dataDir, 'sha256:ubuntu').config, '{}');
 
+    const sendClientRequest = (request: Request) => {
+      calls.push(`${host} ${new URL(request.url).pathname.slice('/rpc/'.length)}`);
+
+      return impd.api.app.handle(request);
+    };
+
     const client = createImpClient({
       url: `http://${host}.test`,
       token: 'root-token',
-      fetch: (request) => {
-        calls.push(`${host} ${new URL(request.url).pathname.slice('/rpc/'.length)}`);
-
-        return impd.api.app.handle(request);
-      },
+      fetch: sendClientRequest,
     });
 
     return {

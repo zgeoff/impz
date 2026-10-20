@@ -564,7 +564,11 @@ test('it logs an address it cannot bind once', async () => {
   const ctx = await setupTest();
 
   // a process that is not impd holds the HTTPS port on loopback
-  const squatter = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response('') });
+  const squatter = Bun.serve({
+    port: 0,
+    hostname: '127.0.0.1',
+    routes: { '/*': () => new Response('') },
+  });
 
   ctx.stack.defer(() => squatter.stop(true));
 
@@ -598,7 +602,11 @@ test('it binds an address it could not bind once the port is free, and says so',
   const ctx = await setupTest();
 
   // a process that is not impd holds the HTTPS port on loopback, for a while
-  const squatter = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response('') });
+  const squatter = Bun.serve({
+    port: 0,
+    hostname: '127.0.0.1',
+    routes: { '/*': () => new Response('') },
+  });
 
   ctx.stack.defer(() => squatter.stop(true));
 

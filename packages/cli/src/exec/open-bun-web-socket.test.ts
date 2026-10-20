@@ -4,19 +4,21 @@ import { openBunWebSocket } from './open-bun-web-socket';
 test('it sends the headers with the upgrade, not in the URL', async () => {
   const upgraded = Promise.withResolvers<{ path: string; authorization: string | null }>();
 
+  const handleRequest = (request: Request, bun: Bun.Server<undefined>) => {
+    const url = new URL(request.url);
+
+    upgraded.resolve({
+      path: `${url.pathname}${url.search}`,
+      authorization: request.headers.get('authorization'),
+    });
+
+    return bun.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 });
+  };
+
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: (request, bun) => {
-      const url = new URL(request.url);
-
-      upgraded.resolve({
-        path: `${url.pathname}${url.search}`,
-        authorization: request.headers.get('authorization'),
-      });
-
-      return bun.upgrade(request) ? undefined : new Response('no upgrade', { status: 400 });
-    },
+    fetch: handleRequest,
     websocket: { message: () => {} },
   });
 

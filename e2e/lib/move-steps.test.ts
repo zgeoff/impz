@@ -37,10 +37,12 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, { dataDir, rootToken });
 
+  const sendClientRequest = (request: Request) => harness.impd.api.app.handle(request);
+
   const client = createImpClient({
     url: 'http://impd.test',
     token: rootToken,
-    fetch: (request) => harness.impd.api.app.handle(request),
+    fetch: sendClientRequest,
   });
 
   // the image an imp boots from when it names none, as impd's image

@@ -179,14 +179,16 @@ async function checkClosedPort(): Promise<void> {
 async function checkAbort(): Promise<void> {
   const controller = new AbortController();
 
+  const sendAbortingRequest = (request: Request) => {
+    controller.abort();
+
+    return fetch(request);
+  };
+
   const aborting = createImpClient({
     url: impd.url,
     token: impd.token,
-    fetch: (request) => {
-      controller.abort();
-
-      return fetch(request);
-    },
+    fetch: sendAbortingRequest,
   });
 
   const opened = aborting.openExec('smoke', ['cat'], { signal: controller.signal });

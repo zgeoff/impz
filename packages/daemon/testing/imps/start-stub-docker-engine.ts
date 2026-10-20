@@ -212,28 +212,30 @@ export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>
     return image ?? container ?? buildUnmodelledAnswer(method, path);
   };
 
+  const handleRequest = async (request: Request) => {
+    const url = new URL(request.url);
+
+    const read = await readBody(request);
+
+    const received: StubEngineRequest = {
+      method: request.method,
+      target: `${url.pathname}${url.search}`,
+      headers: Object.fromEntries(request.headers),
+      ...read,
+    };
+
+    seen.push(received);
+
+    const answered = state.answer === null ? null : await state.answer(request, received);
+
+    return (
+      answered ?? answerDefault(request.method, readApiPath(url.pathname), url.search, read.body)
+    );
+  };
+
   const server = Bun.serve({
     unix: socket,
-    fetch: async (request) => {
-      const url = new URL(request.url);
-
-      const read = await readBody(request);
-
-      const received: StubEngineRequest = {
-        method: request.method,
-        target: `${url.pathname}${url.search}`,
-        headers: Object.fromEntries(request.headers),
-        ...read,
-      };
-
-      seen.push(received);
-
-      const answered = state.answer === null ? null : await state.answer(request, received);
-
-      return (
-        answered ?? answerDefault(request.method, readApiPath(url.pathname), url.search, read.body)
-      );
-    },
+    fetch: handleRequest,
   });
 
   // the first stop closes the engine; a later one waits on the same close

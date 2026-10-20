@@ -9,7 +9,7 @@ interface StubTlsUpstreamOptions {
   readonly host?: string;
 
   // answers each request the upstream receives
-  readonly fetch: (request: Request) => Response | Promise<Response>;
+  readonly respond: (request: Request) => Response | Promise<Response>;
 }
 
 // An HTTPS host on a free loopback port, its certificate signed by a CA of
@@ -26,7 +26,7 @@ export async function startStubBrokerTlsUpstream(
     hostname: '127.0.0.1',
     port: 0,
     tls: { cert: leaf.certPem, key: leaf.keyPem },
-    fetch: options.fetch,
+    fetch: options.respond,
   });
 
   stack.defer(() => server.stop(true));

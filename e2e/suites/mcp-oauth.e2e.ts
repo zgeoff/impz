@@ -51,7 +51,7 @@ async function setupTest() {
   const catcher = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: () => new Response('signed in'),
+    routes: { '/*': () => new Response('signed in') },
   });
 
   stack.defer(() => catcher.stop(true));

@@ -1047,16 +1047,18 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
 
   const answers: (string | null)[] = [];
 
+  const sendRequest = async (url: string | URL, init: RequestInit | undefined) => {
+    const response = await fetch(url, init);
+
+    answers.push(response.headers.get('content-type'));
+
+    return response;
+  };
+
   await client.connect(
     new StreamableHTTPClientTransport(new URL(`${via}/mcp`), {
       requestInit: { headers: { authorization: `Bearer ${TEST_TOKEN}` } },
-      fetch: async (url, init) => {
-        const response = await fetch(url, init);
-
-        answers.push(response.headers.get('content-type'));
-
-        return response;
-      },
+      fetch: sendRequest,
     }),
   );
 

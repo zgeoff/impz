@@ -158,9 +158,7 @@ export async function startTestImpd(
   const dataDir = options.dataDir ?? mkdtempSync(`${tmpdir()}/impd-test-`);
 
   if (options.dataDir === undefined) {
-    stack.defer(() => {
-      rmSync(dataDir, { recursive: true, force: true });
-    });
+    stack.defer(() => rmSync(dataDir, { recursive: true, force: true }));
   }
 
   const db = await openDatabase(':memory:');
@@ -458,12 +456,15 @@ export async function startTestImpd(
 
   const current = { impd: await startImpd(host.identity, fake.startGeneration()) };
 
+  // the impd running now, which a restart replaces
+  const sendRequest = (request: Request) => current.impd.api.app.handle(request);
+
   const buildClient = (token: string): ContractRouterClient<ImpContract> =>
     createORPCClient(
       new RPCLink({
         url: 'http://impd.test/rpc',
         headers: { authorization: `Bearer ${token}` },
-        fetch: (request) => current.impd.api.app.handle(request),
+        fetch: sendRequest,
       }),
     );
 

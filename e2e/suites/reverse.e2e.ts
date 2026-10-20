@@ -89,7 +89,7 @@ test('it lets a process in the imp reach a unix socket and a port on this machin
   const page = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: () => new Response('e2e-reverse-ok\n'),
+    routes: { '/*': () => new Response('e2e-reverse-ok\n') },
   });
 
   ctx.stack.defer(() => page.stop(true));
@@ -277,7 +277,7 @@ test('it forwards a port and a unix socket in the imp to this machine with ssh -
   const page = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: () => new Response('e2e-reverse-ok\n'),
+    routes: { '/*': () => new Response('e2e-reverse-ok\n') },
   });
 
   ctx.stack.defer(() => page.stop(true));

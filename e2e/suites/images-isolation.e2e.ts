@@ -55,14 +55,16 @@ test('it lets an isolated build reach the internet but not the host, impd or a p
   const name = `${ctx.prefix}iso`;
   const requests: string[] = [];
 
+  const handleListenerRequest = (request: Request) => {
+    requests.push(request.url);
+
+    return new Response('probe');
+  };
+
   const listener = Bun.serve({
     hostname: '0.0.0.0',
     port: 0,
-    fetch: (request) => {
-      requests.push(request.url);
-
-      return new Response('probe');
-    },
+    fetch: handleListenerRequest,
   });
 
   ctx.stack.defer(() => listener.stop(true));
@@ -122,14 +124,16 @@ test("it lets an isolated build's broker tunnel reach the internet, but not the 
   const name = `${ctx.prefix}broker`;
   const requests: string[] = [];
 
+  const handleListenerRequest = (request: Request) => {
+    requests.push(request.url);
+
+    return new Response('probe');
+  };
+
   const listener = Bun.serve({
     hostname: '0.0.0.0',
     port: 0,
-    fetch: (request) => {
-      requests.push(request.url);
-
-      return new Response('probe');
-    },
+    fetch: handleListenerRequest,
   });
 
   ctx.stack.defer(() => listener.stop(true));

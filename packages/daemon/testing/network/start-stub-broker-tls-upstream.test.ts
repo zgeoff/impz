@@ -22,7 +22,7 @@ test('it answers a client that trusts its CA through its handler', async () => {
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: ctx.directoryPath,
-    fetch: (request) => new Response(`saw ${new URL(request.url).pathname}`),
+    respond: (request: Request) => new Response(`saw ${new URL(request.url).pathname}`),
   });
 
   const response = await fetch(`${upstream.origin}/x`, { tls: { ca: [upstream.caPem] } });
@@ -36,7 +36,7 @@ test('it refuses a client that trusts only another CA', async () => {
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: ctx.directoryPath,
-    fetch: () => new Response('reached'),
+    respond: () => new Response('reached'),
   });
 
   const other = await loadOrCreateBrokerCa(join(ctx.directoryPath, 'other-ca'));
@@ -52,7 +52,7 @@ test('it issues its certificate for the host it is given', async () => {
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: ctx.directoryPath,
     host: 'api.github.com',
-    fetch: () => new Response('reached'),
+    respond: () => new Response('reached'),
   });
 
   expect(fetch(`${upstream.origin}/x`, { tls: { ca: [upstream.caPem] } })).rejects.toMatchObject({
@@ -65,7 +65,7 @@ test('it answers on the port it gives', async () => {
 
   const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: ctx.directoryPath,
-    fetch: () => new Response('reached'),
+    respond: () => new Response('reached'),
   });
 
   const response = await fetch(`https://localhost:${String(upstream.port)}/x`, {

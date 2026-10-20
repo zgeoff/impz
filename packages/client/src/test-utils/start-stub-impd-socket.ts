@@ -9,8 +9,10 @@ export function startStubImpdSocket(frames: readonly string[]) {
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: (request, bunServer) =>
-      bunServer.upgrade(request) ? undefined : new Response('not a socket', { status: 400 }),
+    routes: {
+      '/*': (request: Request, bunServer: Bun.Server<undefined>) =>
+        bunServer.upgrade(request) ? undefined : new Response('not a socket', { status: 400 }),
+    },
     websocket: {
       message: (ws, message) => {
         received.push(String(message));

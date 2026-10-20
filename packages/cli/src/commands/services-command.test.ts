@@ -32,10 +32,12 @@ async function setupTest() {
   // each boot reports an agent with the services API (0.10.0)
   harness.fake.agent.version = '0.10.0';
 
+  const sendClientRequest = (request: Request) => harness.impd.api.app.handle(request);
+
   const client = createImpClient({
     url: 'http://impd.test',
     token: rootToken,
-    fetch: (request) => harness.impd.api.app.handle(request),
+    fetch: sendClientRequest,
   });
 
   // the image a test's imps boot from, with a rootfs where its digest names

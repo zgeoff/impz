@@ -418,20 +418,23 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     return undefined;
   };
 
-  const startListener = (options: ProxyListenOptions): ProxyServer =>
-    Bun.serve<SocketData>({
+  const startListener = (options: ProxyListenOptions): ProxyServer => {
+    const handleRoutedRequest = async (request: Request, server: ProxyServer) => {
+      const route = await options.route(request);
+
+      return handleRequest(request, server, route);
+    };
+
+    return Bun.serve<SocketData>({
       port: options.port,
       ...(options.hostname !== undefined && { hostname: options.hostname }),
       ...(options.tls !== undefined && { tls: options.tls }),
       ...(options.reusePort === true && { reusePort: true }),
       idleTimeout: 0,
-      fetch: async (request, server) => {
-        const route = await options.route(request);
-
-        return handleRequest(request, server, route);
-      },
+      fetch: handleRoutedRequest,
       websocket,
     });
+  };
 
   const hint = `Use http://<imp>.imp.localhost:${String(deps.config.proxyPort)}/.`;
 

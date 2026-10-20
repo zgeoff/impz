@@ -156,14 +156,16 @@ test.each([
   const name = `${ctx.prefix}add-${tag}`;
   const requests: string[] = [];
 
+  const handleListenerRequest = (request: Request) => {
+    requests.push(request.url);
+
+    return new Response('probe');
+  };
+
   const listener = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: (request) => {
-      requests.push(request.url);
-
-      return new Response('probe');
-    },
+    fetch: handleListenerRequest,
   });
 
   ctx.stack.defer(() => listener.stop(true));

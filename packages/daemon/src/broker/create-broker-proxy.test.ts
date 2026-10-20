@@ -53,7 +53,7 @@ async function setupTest() {
   const realHost = await startStubBrokerTlsUpstream(stack, {
     directory: join(dataDir, 'real-host'),
     host: 'api.github.com',
-    fetch: (request) => {
+    respond: (request: Request) => {
       const path = new URL(request.url).pathname;
 
       tunnelled.push({
@@ -79,7 +79,7 @@ async function setupTest() {
 
   const upstream = await startStubBrokerTlsUpstream(stack, {
     directory: join(dataDir, 'upstream'),
-    fetch: async (request) => {
+    respond: async (request: Request) => {
       const body = await request.arrayBuffer();
 
       const path = new URL(request.url).pathname;
@@ -1533,7 +1533,7 @@ test('it refreshes through a token host that the test-upstreams file routes', as
   // the token host over TLS the broker verifies with the file's CA
   const tokenHost = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: join(ctx.dataDir, 'token-host'),
-    fetch: async (request) => {
+    respond: async (request: Request) => {
       const text = await request.text();
 
       const form = new URLSearchParams(text);

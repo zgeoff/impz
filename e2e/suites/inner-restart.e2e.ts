@@ -112,7 +112,7 @@ test('it keeps forwards, reverse forwards and the service port working through a
   const page = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: () => new Response('e2e-inner-reverse\n'),
+    routes: { '/*': () => new Response('e2e-inner-reverse\n') },
   });
 
   ctx.stack.defer(() => page.stop(true));

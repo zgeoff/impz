@@ -16,9 +16,6 @@
       "error",
       {
         "exemptNames": [
-          // the WHATWG fetch signature: Bun.serve's handler and the fetch
-          // option that @impz/client takes
-          "fetch",
           // kysely's DatabaseConnection interface, which the bun:sqlite driver's
           // connection implements
           "executeQuery",

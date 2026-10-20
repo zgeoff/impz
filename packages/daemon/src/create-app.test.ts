@@ -140,11 +140,13 @@ test('it reports cpu limits as not enforced on a host without a cpu controller',
 test('it rejects a request with the wrong token', async () => {
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
 
+  const sendClientRequest = (request: Request) => ctx.impd.api.app.handle(request);
+
   const client: ContractRouterClient<ImpContract> = createORPCClient(
     new RPCLink({
       url: 'http://impd.test/rpc',
       headers: { authorization: 'Bearer wrong' },
-      fetch: (request) => ctx.impd.api.app.handle(request),
+      fetch: sendClientRequest,
     }),
   );
 

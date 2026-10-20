@@ -40,6 +40,17 @@ async function setupTest() {
   // each call a client makes: its procedure and its input as oRPC sends it
   const calls: { readonly path: string; readonly input: unknown }[] = [];
 
+  const sendRecordedRequest = async (request: Request) => {
+    const body: unknown = await request.clone().json();
+
+    calls.push({
+      path: new URL(request.url).pathname.slice('/rpc/'.length),
+      input: RpcBodySchema.parse(body).json,
+    });
+
+    return impd.api.app.handle(request);
+  };
+
   return {
     rootToken,
     now: harness.now,
@@ -58,16 +69,7 @@ async function setupTest() {
       createImpClient({
         url: 'http://impd.test',
         token,
-        fetch: async (request) => {
-          const body: unknown = await request.clone().json();
-
-          calls.push({
-            path: new URL(request.url).pathname.slice('/rpc/'.length),
-            input: RpcBodySchema.parse(body).json,
-          });
-
-          return impd.api.app.handle(request);
-        },
+        fetch: sendRecordedRequest,
       }),
   };
 }
