@@ -248,3 +248,75 @@ func TestNewLimitedTreeFailsWhenItsLimitsCannotBeSet(t *testing.T) {
 	assert.Check(t, cmp.ErrorIs(err, os.ErrPermission))
 	assert.Check(t, cmp.Nil(tree))
 }
+
+// newDelegatedTree makes a delegated tree under a fresh temporary parent.
+func newDelegatedTree(t *testing.T) *Tree {
+	t.Helper()
+	tree, err := NewDelegatedTree(filepath.Join(t.TempDir(), "imp-exec"), "memory")
+	assert.NilError(t, err)
+	return tree
+}
+
+func TestNewDelegatedTreeEnablesTheControllersInItsParent(t *testing.T) {
+	parent := filepath.Join(t.TempDir(), "imp-exec")
+	assert.NilError(t, os.Mkdir(parent, 0o755))
+	control := filepath.Join(parent, "cgroup.subtree_control")
+	assert.NilError(t, os.WriteFile(control, nil, 0o644))
+
+	_, err := NewDelegatedTree(parent, "memory", "pids")
+
+	assert.NilError(t, err)
+	b, err := os.ReadFile(control)
+	assert.NilError(t, err)
+	assert.Equal(t, string(b), "+memory +pids")
+}
+
+// The exec's own cgroup hands the controllers down, so it takes no process:
+// the command starts one level below it.
+func TestDelegatedTreeStartsTheCommandInALeafUnderTheExecsCgroup(t *testing.T) {
+	tree := newDelegatedTree(t)
+
+	g := newLeaf(t, tree)
+
+	fi, err := g.Dir().Stat()
+	assert.NilError(t, err)
+	assert.Check(t, cmp.Equal(fi.Name(), CommandLeaf))
+	assert.Check(t, cmp.Equal(filepath.Base(g.path), "1"))
+	_, err = os.Stat(filepath.Join(g.path, CommandLeaf))
+	assert.Check(t, err)
+}
+
+// A command's own cgroup next to the command leaf, such as a memory cap it
+// made, goes with the exec's cgroup.
+func TestReleaseRemovesAnExecsCgroupWithTheCgroupsUnderIt(t *testing.T) {
+	tree := newDelegatedTree(t)
+	g, err := tree.New()
+	assert.NilError(t, err)
+	assert.NilError(t, os.MkdirAll(filepath.Join(g.path, "capped", "inner"), 0o755))
+
+	tree.Release(g)
+
+	_, err = os.Stat(g.path)
+	assert.Check(t, cmp.ErrorIs(err, fs.ErrNotExist), "cgroup %s left after release", g.path)
+	assert.Check(t, cmp.Equal(countEnded(tree), 0))
+}
+
+func TestNewSweepsAnEndedExecOnceTheCgroupUnderItEmpties(t *testing.T) {
+	tree := newDelegatedTree(t)
+	g, err := tree.New()
+	assert.NilError(t, err)
+	capped := filepath.Join(g.path, "capped")
+	assert.NilError(t, os.Mkdir(capped, 0o755))
+	member := filepath.Join(capped, "member")
+	assert.NilError(t, os.WriteFile(member, nil, 0o600))
+	tree.Release(g)
+	kept := countEnded(tree)
+	assert.NilError(t, os.Remove(member))
+
+	newLeaf(t, tree)
+
+	assert.Check(t, cmp.Equal(kept, 1), "release took a cgroup that still had a member")
+	_, err = os.Stat(g.path)
+	assert.Check(t, cmp.ErrorIs(err, fs.ErrNotExist), "the emptied cgroup outlived the sweep")
+	assert.Check(t, cmp.Equal(countEnded(tree), 0))
+}
