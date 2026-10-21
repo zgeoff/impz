@@ -48,6 +48,33 @@ test('it holds the first select naming it once armed', async () => {
   expect(Bun.peek.status(held)).toBe('pending');
 });
 
+test('it holds the first select naming the name it was armed with', async () => {
+  const testDatabase = await createTestDatabase();
+
+  const gate = buildQueryGate('images');
+
+  gate.arm('ubuntu');
+
+  const passed = await testDatabase.db
+    .withPlugin(gate.plugin)
+    .selectFrom('images')
+    .select('name')
+    .where('name', '=', 'debian')
+    .execute();
+
+  const held = testDatabase.db
+    .withPlugin(gate.plugin)
+    .selectFrom('images')
+    .select('name')
+    .where('name', '=', 'ubuntu')
+    .execute();
+
+  await gate.reached;
+
+  expect(passed).toStrictEqual([]);
+  expect(Bun.peek.status(held)).toBe('pending');
+});
+
 test('it lets the held select finish with its rows after release', async () => {
   const testDatabase = await createTestDatabase();
 

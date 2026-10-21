@@ -20,12 +20,14 @@ import {
 } from '../../../testing/imp-ops/make-stub-move-stream-rewrite';
 import { makeStubOlderMoveTarget } from '../../../testing/imp-ops/make-stub-older-move-target';
 import { makeStubSwitchedStorageTarget } from '../../../testing/imp-ops/make-stub-switched-storage-target';
+import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { TEST_TOKEN } from '../../../testing/test-token';
 import { buildStubZfsStorage } from '../../../testing/vm/build-stub-zfs-storage';
 import { readImageByName } from '../../platform/db/images';
 import type { ImpWrite } from '../../platform/db/imp-write-feed';
 import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../../platform/db/imps';
+import { buildImagePaths } from '../../vm/storage/data-layout';
 import { FileEndSchema, MOVE_FRAMES, MoveFileSchema, readJsonPayload } from './move-frames';
 import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MOVE_PATHS, MoveHeaderSchema } from './move-header';
 import {
@@ -1009,6 +1011,160 @@ test('it files the image a target lacks under the digest of what arrived', async
   const rootfs = readFileSync(join(ctx.target.dataDir, 'images', hex, 'rootfs.ext4'));
 
   expect(rootfs.toString()).toStartWith('rootfs');
+});
+
+test('it keeps an old image the target has by digest when a prune reaches the stream as it picks the image', async () => {
+  const gate = buildQueryGate('sha256:agent-1111111');
+
+  onTestFinished(() => {
+    gate.release();
+  });
+
+  // the offer records a use too, so the image ages again between the offer and the stream
+  const beforeStream = { run: (): Promise<unknown> => Promise.resolve() };
+
+  const ctx = await setupTest({
+    target: { wrapDatabase: gate.wrap, env: { IMP_IMAGE_PRUNE_ROLLBACK: '1' } },
+    hook: async (request, forward) => {
+      if (new URL(request.url).pathname === MOVE_PATHS.receive) {
+        await beforeStream.run();
+
+        gate.arm();
+      }
+
+      return forward();
+    },
+  });
+
+  beforeStream.run = () =>
+    ctx.target.db
+      .updateTable('images')
+      .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+      .where('name', '=', 'agent-1111111')
+      .execute();
+
+  await ctx.source.createTestImage('agent-1111111');
+  await ctx.target.createTestImage('agent-1111111');
+  await ctx.target.createTestImage('agent-2222222');
+
+  writeFileSync(buildImagePaths(ctx.source.dataDir, 'sha256:agent-1111111').config, '{}');
+  writeFileSync(join(ctx.target.dataDir, 'image-keep'), '');
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'agent-1111111' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  const moving = ctx.runMove('dev');
+
+  await gate.reached;
+
+  await ctx.target.images.runImagePrune();
+
+  gate.release();
+
+  const status = await moving;
+  const image = await readImageByName(ctx.target.db, 'agent-1111111');
+  const dev = await readImpByName(ctx.target.db, 'dev');
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(dev?.imageId).toBe(image?.id);
+});
+
+test('it keeps an old image the target has by digest when a prune reaches the move as it offers the image', async () => {
+  const gate = buildQueryGate('sha256:agent-1111111');
+
+  onTestFinished(() => {
+    gate.release();
+  });
+
+  const ctx = await setupTest({
+    target: { wrapDatabase: gate.wrap, env: { IMP_IMAGE_PRUNE_ROLLBACK: '1' } },
+  });
+
+  await ctx.source.createTestImage('agent-1111111');
+  await ctx.target.createTestImage('agent-1111111');
+  await ctx.target.createTestImage('agent-2222222');
+
+  writeFileSync(buildImagePaths(ctx.source.dataDir, 'sha256:agent-1111111').config, '{}');
+  writeFileSync(join(ctx.target.dataDir, 'image-keep'), '');
+
+  await ctx.target.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'agent-1111111')
+    .execute();
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'agent-1111111' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  gate.arm();
+
+  const moving = ctx.runMove('dev');
+
+  await gate.reached;
+
+  await ctx.target.images.runImagePrune();
+
+  gate.release();
+
+  const status = await moving;
+  const image = await readImageByName(ctx.target.db, 'agent-1111111');
+  const dev = await readImpByName(ctx.target.db, 'dev');
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(dev?.imageId).toBe(image?.id);
+});
+
+test('it keeps an old image the target has under the digest of what arrived when a prune reaches the move as it picks the image', async () => {
+  const gate = buildQueryGate('sha256:agent-1111111');
+
+  onTestFinished(() => {
+    gate.release();
+  });
+
+  const ctx = await setupTest({
+    target: { wrapDatabase: gate.wrap, env: { IMP_IMAGE_PRUNE_ROLLBACK: '1' } },
+  });
+
+  await ctx.source.createTestImage('agent-1111111');
+
+  writeFileSync(buildImagePaths(ctx.source.dataDir, 'sha256:agent-1111111').config, '{}');
+  writeFileSync(join(ctx.target.dataDir, 'image-keep'), '');
+
+  await ctx.sourceApp.client.imps.create({ name: 'one', image: 'agent-1111111' });
+  await ctx.sourceApp.client.imps.stop({ name: 'one' });
+  await ctx.runMove('one');
+  await ctx.targetApp.client.imps.destroy({ name: 'one' });
+  await ctx.target.createTestImage('agent-2222222');
+
+  const filed = await readImageByName(ctx.target.db, 'agent-1111111');
+
+  invariant(filed);
+
+  await ctx.target.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'agent-1111111')
+    .execute();
+
+  await ctx.sourceApp.client.imps.create({ name: 'two', image: 'agent-1111111' });
+  await ctx.sourceApp.client.imps.stop({ name: 'two' });
+
+  gate.arm(filed.digest);
+
+  const moving = ctx.runMove('two');
+
+  await gate.reached;
+
+  await ctx.target.images.runImagePrune();
+
+  gate.release();
+
+  const status = await moving;
+  const image = await readImageByName(ctx.target.db, 'agent-1111111');
+  const two = await readImpByName(ctx.target.db, 'two');
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(two?.imageId).toBe(image?.id);
 });
 
 test('it carries only the grants of secrets the target has', async () => {

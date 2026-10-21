@@ -7,7 +7,7 @@ import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
 import type { EgressService } from '../../network/egress/egress-service';
 import type { ApiAudit } from '../../platform/audit/api-audit';
-import { readImageByDigest } from '../../platform/db/images';
+import { readImageByDigest, updateImageUse } from '../../platform/db/images';
 import { listImps, readImpByName, updateImpCommitted } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { listLeases } from '../../platform/db/leases';
@@ -155,6 +155,10 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     const body: unknown = await request.json();
 
     const offer = MoveOfferSchema.parse(body);
+
+    // The use goes in before the read, so an image prune keeps the image this offer says the
+    // target holds until the stream reuses it.
+    await updateImageUse(deps.db, 'digest', [offer.imageDigest], deps.now());
 
     const existing = await readImageByDigest(deps.db, offer.imageDigest);
 
