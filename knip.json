@@ -28,10 +28,9 @@
       "project": ["src/**/*.ts!", "!src/test-utils/**!"]
     },
     "packages/daemon": {
-      // impd and imp-docker-proxy, which host/Dockerfile compiles, the
-      // suites only their own scripts run (test:pebble), the scripts a test
-      // runs in a child Bun, and the schema dump that render:db-schema runs;
-      // a pattern ending in ! is production code for knip --production
+      // impd and imp-docker-proxy, which host/Dockerfile compiles, the pebble suites,
+      // the scripts a test runs in a child Bun, and render:db-schema's dump; a
+      // pattern ending in ! is production code for knip --production
       "entry": [
         "src/main.ts!",
         "src/imps/docker-proxy/main.ts!",
