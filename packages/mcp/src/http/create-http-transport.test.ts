@@ -10,19 +10,13 @@ import { readMcpAnswer } from '../test-utils/read-mcp-answer';
 import { createHttpTransport } from './create-http-transport';
 import type { McpPrincipal } from './create-http-transport';
 
-// A transport whose callers are the principals a test adds, by their
-// Authorization header; its timers tick and its clock moves only by hand.
-
-// The tools reach impd's real app; an armed `gate` holds its next imps read.
 async function setupTest() {
-  // first, so a held read lets go before impd stops
   const gate = buildQueryGate('imps');
 
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the bearer the tools' client sends
   const harness = await startTestImpd(stack, {
     rootToken: 'root-token',
     wrapDatabase: (db) => gate.wrap(db),
@@ -45,17 +39,13 @@ async function setupTest() {
     Promise.resolve(principals.get(request.headers.get('authorization') ?? '') ?? null);
 
   const transport = createHttpTransport({
-    // the server's version, which no test that uses this transport reads
     version: '0.0.0',
     repeat: timer.repeat,
     now: () => clock.now,
     authenticate: readPrincipal,
-
-    // impd decides from Origin and Sec-Fetch-Site; here, a header says so
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // its calls end before impd stops
   stack.defer(() => transport.close());
 
   return { gate, timer, clock, principals, client, readPrincipal, transport, stack };
@@ -71,7 +61,6 @@ test('it opens a session at initialize and answers with its id', async () => {
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
@@ -477,7 +466,6 @@ test('it streams a tool call’s progress and response as server-sent events', a
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
@@ -637,8 +625,8 @@ test('it ends a call only once impd answers, after its stream drops', async () =
 
   await ctx.gate.reached;
 
-  // a full round trip through the same session: any cancel the drop set off
-  // has run by the time it answers
+  // The SDK has run any cancel the drop set off by the time a later request in
+  // the same session answers.
   const ping = await ctx.transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
@@ -677,7 +665,8 @@ test('it knows no call end for a response that carries no tool call', () => {
 test('it sends keepalive comments on the stream of a call still running', async () => {
   const ctx = await setupTest();
 
-  // the SDK's own interval, the shortest that a test waits on
+  // The SDK runs the keepalive timer itself, so the test waits on a short real
+  // interval.
   const transport = createHttpTransport({
     version: '1.2.3',
     keepaliveMs: 20,
@@ -685,7 +674,6 @@ test('it sends keepalive comments on the stream of a call still running', async 
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
@@ -739,7 +727,6 @@ test('it sends keepalive comments on the stream of a call still running', async 
 
   invariant(response.body);
 
-  // the held call writes nothing, so the first frame is a keepalive
   const reader = response.body.getReader();
 
   onTestFinished(() => reader.cancel());
@@ -1131,7 +1118,6 @@ test('it ends a caller’s sessions when what it authenticated with ends', async
 
   ends.abort();
 
-  // a new credential for the same caller, as a token made again under its name
   ctx.principals.set(
     'Bearer alice',
     buildMockMcpPrincipal({ key: 'alice', client: ctx.client, ends: new AbortController().signal }),
@@ -1244,7 +1230,6 @@ test('it evicts the least recently used idle session of a caller at its limit', 
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
@@ -1363,7 +1348,6 @@ test('it evicts an idle session, never a busy one, when the store is full', asyn
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
@@ -1374,7 +1358,6 @@ test('it evicts an idle session, never a busy one, when the store is full', asyn
     buildMockMcpPrincipal({ key: 'reader', scope: 'read', client: ctx.client }),
   );
 
-  // bob's session is the older one, and busy with a call
   const bobOpened = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
@@ -1503,7 +1486,6 @@ test('it frees a session whose tool call the SDK refuses before the tool runs', 
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
@@ -1532,7 +1514,6 @@ test('it frees a session whose tool call the SDK refuses before the tool runs', 
 
   invariant(session !== null);
 
-  // a call with no tool name, which the SDK's schema answers itself
   const refused = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
@@ -1585,7 +1566,6 @@ test('it frees a session whose refused tool call’s stream the client drops unr
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
@@ -1614,7 +1594,6 @@ test('it frees a session whose refused tool call’s stream the client drops unr
 
   invariant(session !== null);
 
-  // a call with no tool name, which the SDK's schema answers itself
   const refused = await transport.respond(
     new Request('http://impd.test/mcp', {
       method: 'POST',
@@ -1752,7 +1731,6 @@ test('it refuses a new session with 429 to a caller whose sessions are all busy'
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
@@ -1846,7 +1824,6 @@ test('it keeps a session used within the idle limit', async () => {
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
@@ -1905,7 +1882,6 @@ test('it ends a session idle past the idle limit', async () => {
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
@@ -1964,7 +1940,6 @@ test('it restarts the idle clock of a session each time it is used', async () =>
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
 
@@ -2075,7 +2050,6 @@ test('it still answers a cancelled create in a session, so the agent learns what
     }),
   );
 
-  // the create waits inside impd while the cancel lands
   await ctx.gate.reached;
 
   const cancel = await ctx.transport.respond(
@@ -2228,7 +2202,6 @@ test('it waits at close for a 2026-07-28 create whose request the client aborted
     isCrossOrigin: (request) => request.headers.has('x-cross-origin'),
   });
 
-  // it closes before impd stops
   ctx.stack.defer(() => transport.close());
   ctx.gate.arm();
   ctx.principals.set('Bearer alice', buildMockMcpPrincipal({ key: 'alice', client: ctx.client }));
@@ -2238,7 +2211,6 @@ test('it waits at close for a 2026-07-28 create whose request the client aborted
     { versionNegotiation: { mode: { pin: '2026-07-28' } } },
   );
 
-  // what drops the connection under every request, as a client gone away
   const abort = new AbortController();
 
   const sendRequest = (url: string | URL, init: RequestInit | undefined) =>
@@ -2255,7 +2227,6 @@ test('it waits at close for a 2026-07-28 create whose request the client aborted
 
   const call = client.callTool({ name: 'imp_create', arguments: { name: 'box' } });
 
-  // the create waits inside impd while its request aborts
   await ctx.gate.reached;
 
   abort.abort();
@@ -2284,7 +2255,6 @@ test('it ends the call behind an aborted 2026-07-28 create’s response only whe
     { versionNegotiation: { mode: { pin: '2026-07-28' } } },
   );
 
-  // what drops the connection under every request, as a client gone away
   const abort = new AbortController();
 
   const responses: Response[] = [];
@@ -2310,7 +2280,6 @@ test('it ends the call behind an aborted 2026-07-28 create’s response only whe
 
   const call = client.callTool({ name: 'imp_create', arguments: { name: 'box' } });
 
-  // the create waits inside impd while its request aborts
   await ctx.gate.reached;
 
   abort.abort();

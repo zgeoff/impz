@@ -1,8 +1,6 @@
 import { expect, test } from 'bun:test';
 import { waitFor } from './wait-for';
 
-// A clock that starts at zero and moves only when the wait waits out an
-// interval, so a deadline passes after a known number of attempts.
 function setupTest() {
   const waits: number[] = [];
   let elapsed = 0;

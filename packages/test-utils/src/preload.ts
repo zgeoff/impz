@@ -7,13 +7,10 @@ import { buildRoutedFetch } from './route-fetch';
 
 const nativeFetch = globalThis.fetch;
 
-// once, before any test: impd settings come from the tests, not the shell
 removeAmbientImpEnv();
 registerRunHooks();
 registerTracing();
 
-// MSW sees only remote fetches: loopback servers the suites start and unix
-// sockets keep the native fetch (buildRoutedFetch)
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });
 

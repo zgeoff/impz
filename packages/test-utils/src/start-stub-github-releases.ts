@@ -1,25 +1,17 @@
 import { onTestFinished } from 'bun:test';
 
 interface StubGithubReleasesOptions {
-  // the tag /latest redirects to, or null for a repo with no release, whose
-  // /latest GitHub sends back to the releases page
+  // null stands for a repo with no release, whose /latest GitHub redirects to
+  // the releases page
   readonly latest: string | null;
-
-  // each asset's body by `<tag>/<file>`, served under /download/
   readonly assets: Readonly<Record<string, string>>;
 }
 
 export interface StubGithubReleases {
-  // what IMP_RELEASES_URL takes in place of github.com/<owner>/<repo>/releases
   readonly url: string;
-
-  // the path of each request, in order
   readonly requests: readonly string[];
 }
 
-// A repo's releases pages on loopback, for a script that fetches with curl:
-// /latest redirects to /tag/<tag>, a tag's page answers, and each asset sits
-// under /download/<tag>/<file>. Anything else is a 404. Stopped at test end.
 export function startStubGithubReleases(options: StubGithubReleasesOptions): StubGithubReleases {
   const requests: string[] = [];
 

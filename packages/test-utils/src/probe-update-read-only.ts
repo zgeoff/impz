@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateReadOnly } from './update-read-only';
 
-// Whether updateReadOnly works on a tree under tmpdir(): root needs chattr +i,
-// which a container without CAP_LINUX_IMMUTABLE or an older tmpfs refuses.
+// Root locks a tree with chattr +i, which a container without
+// CAP_LINUX_IMMUTABLE or an older tmpfs refuses.
 export function probeUpdateReadOnly(): boolean {
   const stack = new DisposableStack();
 

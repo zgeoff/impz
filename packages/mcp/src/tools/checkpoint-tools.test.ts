@@ -6,16 +6,11 @@ import * as z from 'zod';
 import { buildImpGuard } from '../imp-guard';
 import { createMcpServer } from '../test-utils/create-mcp-server';
 
-// impd's real app on stub VMs, a root client for the scenario, `sendToImpd`,
-// which reaches the app without a socket, and an MCP server whose messages
-// land parsed in `sent` through `reply`
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the bearer the root client sends; a frozen clock, so a later read of an
-  // imp matches the answer about it
   const harness = await startTestImpd(stack, {
     rootToken: 'root-token',
     frozenClockMs: Date.UTC(2026, 0, 1),
@@ -23,7 +18,6 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imps.create boots when it names none
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
@@ -31,7 +25,6 @@ async function setupTest() {
   const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
   const mcp = createMcpServer({ version: '1.2.3' });
 
-  // its calls in flight end before impd stops
   stack.defer(() => mcp.close());
 
   const sent: unknown[] = [];
@@ -85,7 +78,6 @@ test.each([
 
   const checkpoints = await ctx.rootClient.checkpoints.list({ name: 'dev' });
 
-  // the checkpoint as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const stored: unknown = JSON.parse(JSON.stringify(checkpoints[0]));
 
@@ -139,7 +131,6 @@ test.each([
 
   const checkpoints = await ctx.rootClient.checkpoints.list({ name: 'dev' });
 
-  // the list as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const stored: unknown = JSON.parse(JSON.stringify(checkpoints));
 
@@ -193,7 +184,6 @@ test.each([
 
   const restored = await ctx.rootClient.imps.get({ name: 'dev' });
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(restored));
   const stored = z.looseObject({ resources: z.looseObject({}) }).parse(json);

@@ -1,11 +1,9 @@
-// Writes stdin to "$1", through a symlink, by a temp file and a rename, so no
-// reader sees half a file. An existing file keeps its mode, a new one gets
-// 0666 less the umask. Each command works in coreutils and BusyBox alike.
+// Each command works in both coreutils and BusyBox.
 export const WRITE_SCRIPT = [
   'set -e',
 
-  // any exit before the content is read still reads it: the writer must not
-  // meet a closed pipe, whose EPIPE would hide this exit and its message
+  // An exit before the content is read still drains stdin, because the writer
+  // would meet a closed pipe whose EPIPE hides this exit and its message.
   "trap 'cat >/dev/null' EXIT",
   'target=$1',
   'if [ -L "$target" ]; then',

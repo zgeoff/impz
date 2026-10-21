@@ -13,18 +13,13 @@ export interface ToolContext {
   readonly client: ToolClient;
   readonly guard: ImpGuard;
 
-  // the tool call's cancel: only imp_exec and the file tools pass it on, to
-  // stop the command in the guest; impd finishes a create, fork or restore
-  // it already started
+  // impd finishes a create, fork or restore it has started, so only a tool
+  // that runs a guest command passes the cancel on.
   readonly signal: Readonly<AbortSignal>;
   readonly killGraceMs: number;
-
-  // the timer behind a command's deadline and its kill grace
   readonly after: After;
 }
 
-// MCP's tool annotations: hints for the client, which may ask the user
-// before a destructive call
 interface ToolAnnotations {
   readonly title: string;
   readonly readOnlyHint: boolean;
@@ -36,22 +31,16 @@ interface ToolAnnotations {
 export interface Tool {
   readonly definition: ToolDefinition;
 
-  // the least token scope the calls behind it need; tools/list hides the
-  // tool from a caller with less, and impd refuses the calls all the same
+  // Hiding a tool from tools/list is not the check: impd refuses a call that
+  // lacks the scope all the same.
   readonly scope: Scope;
 
-  // false for a call impd finishes once started: its result is still sent
-  // after a cancel, so the agent learns the name of what it made
+  // impd finishes some calls once started, so their result still goes out
+  // after a cancel and the agent learns the name of what it made.
   readonly cancellable: boolean;
-
-  // never throws for a failed call: the agent reads the failure as an
-  // isError result; a cancel throws the signal's reason
   readonly call: (args: unknown, context: Readonly<ToolContext>) => Promise<CallToolResult>;
 }
 
-// What a tool's run returns: `data` becomes both the structured content and
-// its JSON text. `failed` reports a call that ran but did not do its job,
-// such as a write whose command exited non-zero.
 interface ToolOutput {
   readonly data: Readonly<Record<string, unknown>>;
   readonly failed?: string;
@@ -67,8 +56,6 @@ interface ToolSpec<Input extends z.ZodObject> {
   readonly run: (input: z.output<Input>, context: Readonly<ToolContext>) => Promise<ToolOutput>;
 }
 
-// One zod schema per tool gives both the JSON Schema clients see and the
-// check of the arguments a call brings.
 export function defineTool<Input extends z.ZodObject>(spec: Readonly<ToolSpec<Input>>): Tool {
   const definition: ToolDefinition = {
     name: spec.name,
@@ -97,8 +84,8 @@ export function defineTool<Input extends z.ZodObject>(spec: Readonly<ToolSpec<In
       try {
         const output = await spec.run(parsed.data, context);
 
-        // the structured content is the text parsed back, so dates are the
-        // same ISO strings in both
+        // Parsing the text back makes each date the same ISO string in the
+        // structured content as in the text.
         const text = JSON.stringify(output.data, null, 2);
         const data = JsonObjectSchema.parse(JSON.parse(text));
 
@@ -127,8 +114,6 @@ function buildErrorResult(text: string): CallToolResult {
   return { content: [{ type: 'text', text }], isError: true };
 }
 
-// impd's codes (NOT_FOUND, INVALID_STATE, RAM_BUDGET_EXCEEDED, …) lead, so
-// the agent can tell what to do next
 function formatErrorText(error: unknown): string {
   if (error instanceof ORPCError) {
     return formatCoded(String(error.code), error.message);

@@ -15,23 +15,15 @@ import type { ImpServerOptions } from '../create-imp-server';
 import { createLegacySessions } from './create-legacy-sessions';
 import type { LegacySession, SessionOwner } from './create-legacy-sessions';
 
-// Who a request comes from, as the host resolved it for this one request:
-// the same `key` for every request of one caller, whose sessions answer only
-// it, and the `ends` that end them
 export type McpPrincipal = SessionOwner;
 
 export interface HttpTransportOptions extends ImpServerOptions {
-  // null for a request with no caller: a 401
   readonly authenticate: (request: Request) => Promise<McpPrincipal | null>;
-
-  // true for a browser's request from a page on another origin: a 403,
-  // before the request is authenticated
   readonly isCrossOrigin: (request: Request) => boolean;
-
-  // the WWW-Authenticate a 401 carries; `Bearer` when left out
   readonly challenge?: string;
 
-  // between SSE comments, so no idle timeout ends a long call's stream
+  // An SSE comment at this interval keeps an idle timeout from ending a long
+  // call's stream.
   readonly keepaliveMs?: number;
   readonly limits?: { readonly perCaller: number; readonly total: number; readonly idleMs: number };
   readonly now?: () => number;
@@ -39,20 +31,16 @@ export interface HttpTransportOptions extends ImpServerOptions {
 
 export interface HttpTransport {
   readonly respond: (request: Request) => Promise<Response>;
-
-  // ends every session and stops what their calls run
   readonly close: () => Promise<void>;
 
-  // when the tool call behind a response ends, which neither a dropped
-  // stream nor an aborted request hastens; null for any other response
+  // Settles when the tool call ends, which neither a dropped stream nor an
+  // aborted request hastens.
   readonly readCallEnd: (response: Response) => Promise<void> | null;
 }
 
 interface Exchange {
   readonly authInfo: AuthInfo;
   readonly ended: Readonly<PromiseWithResolvers<void>> | null;
-
-  // true once the SDK has handed the call to its handler
   started: boolean;
 }
 
@@ -60,22 +48,16 @@ const SESSION_HEADER = 'mcp-session-id';
 const KEEPALIVE_MS = 5000;
 const DEFAULT_LIMITS = { perCaller: 16, total: 256, idleMs: 3_600_000 };
 
-// MCP's streamable HTTP transport at one endpoint, on the SDK: a 2026-07-28
-// request to its sessionless per-request handler, a 2025-era one to the
-// session its `initialize` opened. The rules are in docs/guides/mcp.md#http.
 export function createHttpTransport(options: Readonly<HttpTransportOptions>): HttpTransport {
   const now = options.now ?? Date.now;
   const keepaliveMs = options.keepaliveMs ?? KEEPALIVE_MS;
   const challenge = options.challenge ?? 'Bearer';
 
-  // each tool call's end, by its response
   const callEnds = new WeakMap<Response, Promise<void>>();
-
-  // every tool call in flight, for close
   const running = new Set<Promise<void>>();
 
-  // each session's tool call ids from arrival to end: the SDK keeps one
-  // stream and one abort per id, which a second call would replace
+  // The SDK keeps one stream and one abort per request id, which a second call
+  // with the same id would replace.
   const sessionCallIDs = new WeakMap<LegacySession, Set<RequestId>>();
 
   const sessions = createLegacySessions({
@@ -98,8 +80,6 @@ export function createHttpTransport(options: Readonly<HttpTransportOptions>): Ht
     { legacy: 'reject', keepAliveMs: keepaliveMs },
   );
 
-  // the AuthInfo that carries the caller, and for a tool call the end that
-  // readCallEnd reports and whether its tool started
   const startExchange = (message: unknown, principal: Readonly<McpPrincipal>): Exchange => {
     if (!isJSONRPCRequest(message) || message.method !== 'tools/call') {
       return { authInfo: createCallerAuth(principal), ended: null, started: false };
@@ -129,9 +109,8 @@ export function createHttpTransport(options: Readonly<HttpTransportOptions>): Ht
     return exchange;
   };
 
-  // A call ends when its tool does, even past an aborted request's 499. A
-  // call the SDK has not started once it had its chance, such as one its
-  // schema refuses, never ran and has ended.
+  // A call the SDK has not started once its microtasks have run, such as one
+  // its schema refuses, never runs.
   const waitForExchangeStart = async (
     exchange: Readonly<Exchange>,
     response: Response,
@@ -158,9 +137,6 @@ export function createHttpTransport(options: Readonly<HttpTransportOptions>): Ht
     principal: Readonly<McpPrincipal>,
   ): Promise<Response> => {
     const exchange = startExchange(message, principal);
-
-    // the end of what the caller authenticated with ends its calls, as it
-    // ends a session
     const signals = principal.ends === null ? [request.signal] : [request.signal, principal.ends];
 
     const response = await modern.fetch(
@@ -205,9 +181,8 @@ export function createHttpTransport(options: Readonly<HttpTransportOptions>): Ht
       ids.add(id);
       sessions.track(session, exchange.ended.promise);
 
-      // a cancelled call gets no answer, which would leave its stream open
-      // until the session ends; once the SDK has had its chance to answer,
-      // the stream ends
+      // The SDK sends a cancelled call no answer, which would leave its stream
+      // open until the session ends.
       const ended = exchange.ended.promise;
 
       void (async () => {
@@ -265,7 +240,7 @@ export function createHttpTransport(options: Readonly<HttpTransportOptions>): Ht
       return buildRpcError(400, PARSE_ERROR, 'parse error: not JSON');
     }
 
-    // MCP dropped batches in 2025-06-18
+    // MCP has no JSON-RPC batches from protocol version 2025-06-18 on.
     if (Array.isArray(message)) {
       return buildRpcError(400, INVALID_REQUEST, 'invalid request: send one message per POST');
     }
@@ -277,7 +252,6 @@ export function createHttpTransport(options: Readonly<HttpTransportOptions>): Ht
       : handleModern(request, body, message, principal);
   };
 
-  // the request's session, or the response that refuses it
   const findSession = (
     request: Request,
     principal: Readonly<McpPrincipal>,
@@ -288,7 +262,6 @@ export function createHttpTransport(options: Readonly<HttpTransportOptions>): Ht
       return buildRpcError(400, -32_000, `no ${SESSION_HEADER}: initialize first`);
     }
 
-    // another caller's session is as unknown as an ended one
     return sessions.findOwned(id, principal.key) ?? buildText(404, 'no such MCP session');
   };
 
@@ -338,7 +311,8 @@ export function createHttpTransport(options: Readonly<HttpTransportOptions>): Ht
   };
 }
 
-// every microtask queued so far, and the ones they queue, have run
+// setImmediate fires once every queued microtask, and each one it queues, has
+// run.
 function waitForMicrotasks(): Promise<void> {
   return new Promise((resolve) => {
     setImmediate(resolve);

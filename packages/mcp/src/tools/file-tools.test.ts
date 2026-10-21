@@ -14,32 +14,24 @@ import invariant from 'tiny-invariant';
 import { buildImpGuard } from '../imp-guard';
 import { createMcpServer } from '../test-utils/create-mcp-server';
 
-// impd's real app on a loopback port for an exec's socket, a root client,
-// `stack`, whose releases run before impd stops, and an MCP server whose
-// messages land parsed in `sent` through `reply`
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the bearer the root client sends
   const harness = await startTestImpd(stack, { rootToken: 'root-token' });
 
   const db = harness.db;
   const dataDir = harness.dataDir;
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imps.create boots when it names none
   await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(db, image);
 
   const url = harness.url;
-
-  // a short kill grace, so a stopped command's SIGKILL comes soon
   const mcp = createMcpServer({ version: '1.2.3', killGraceMs: 50 });
 
-  // its calls in flight end before impd's app closes
   stack.defer(() => mcp.close());
 
   const sent: unknown[] = [];
@@ -110,8 +102,6 @@ test('it writes a file with the path as one argument of the write script', async
       argv: [
         '/bin/sh',
         '-c',
-
-        // the script reads the path as "$1"; it never enters the script text
         expect.not.stringContaining('/root/-odd dir/$(x) file.txt'),
         'sh',
         '/root/-odd dir/$(x) file.txt',
@@ -176,7 +166,6 @@ test('it reads a file with head, asking for one byte past maxBytes', async () =>
     },
   ]);
 
-  // the default maxBytes is 256 KiB
   expect(guest.requests).toMatchObject([
     { argv: ['head', '-c', String(256 * 1024 + 1), '/root/-odd dir/$(x) file.txt'] },
   ]);

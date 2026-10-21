@@ -26,8 +26,6 @@ test('it fires only once', async () => {
 
   onTestFinished(cancel);
 
-  // a timer of four times the delay fires after a repeat of the first would
-  // have fired three times
   const later = Promise.withResolvers<void>();
 
   const cancelLater = runAfter(20, () => {
@@ -50,7 +48,6 @@ test('it never fires once cancelled', async () => {
 
   cancel();
 
-  // a later timer of the same delay fires after the cancelled one would have
   const later = Promise.withResolvers<void>();
 
   const cancelLater = runAfter(5, () => {

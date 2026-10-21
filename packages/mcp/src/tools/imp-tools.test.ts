@@ -16,16 +16,11 @@ import * as z from 'zod';
 import { buildImpGuard } from '../imp-guard';
 import { createMcpServer } from '../test-utils/create-mcp-server';
 
-// impd's real app on a loopback port for an exec's socket and through
-// `sendToImpd` without one, a root client, `stack`, whose releases run before
-// impd stops, and an MCP server whose messages land parsed in `sent`
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the bearer the root client sends; a frozen clock, so a later read of an
-  // imp matches the answer about it
   const harness = await startTestImpd(stack, {
     rootToken: 'root-token',
     frozenClockMs: Date.UTC(2026, 0, 1),
@@ -36,7 +31,6 @@ async function setupTest() {
   const impd = harness.impd;
   const newImage = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imps.create boots when it names none
   await Bun.write(buildImagePaths(dataDir, newImage.digest).rootfs, 'rootfs');
 
   const image = await createImage(db, newImage);
@@ -44,7 +38,6 @@ async function setupTest() {
   const url = harness.url;
   const mcp = createMcpServer({ version: '1.2.3' });
 
-  // its calls in flight end before impd's app closes
   stack.defer(() => mcp.close());
 
   const sent: unknown[] = [];
@@ -85,7 +78,6 @@ test('it creates an imp and answers with it as impd stores it', async () => {
 
   const created = await ctx.rootClient.imps.get({ name: 'dev' });
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(created));
   const stored = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -137,7 +129,6 @@ test('it lists the imps with their state', async () => {
   const dev = await ctx.rootClient.imps.get({ name: 'dev' });
   const off = await ctx.rootClient.imps.get({ name: 'off' });
 
-  // the imps as they cross impd's API, their dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify([dev, off]));
 
@@ -227,7 +218,6 @@ test('it hides the imps the guard does not allow from the list', async () => {
 
   const allowed = await ctx.rootClient.imps.get({ name: 'agent-one' });
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(allowed));
   const stored = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -332,7 +322,6 @@ test('it names a nameless create under the prefix', async () => {
 
   const imps = await ctx.rootClient.imps.list();
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(imps));
   const [stored] = z.tuple([z.looseObject({ resources: z.looseObject({}) })]).parse(json);
@@ -413,7 +402,6 @@ test('it creates an imp the allow-list names', async () => {
 
   const created = await ctx.rootClient.imps.get({ name: 'box' });
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(created));
   const stored = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -460,7 +448,6 @@ test('it puts an imp to sleep', async () => {
 
   const slept = await ctx.rootClient.imps.get({ name: 'dev' });
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(slept));
   const stored = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -507,8 +494,6 @@ test("it answers with an imp's URLs", async () => {
     },
   );
 
-  // impd has no domain, public listener or tailnet here, so only the local
-  // URL is set
   expect(ctx.sent).toStrictEqual([
     {
       jsonrpc: '2.0',
@@ -655,7 +640,6 @@ test('it lists the images', async () => {
 
   const images = await ctx.rootClient.images.list();
 
-  // the list as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const stored: unknown = JSON.parse(JSON.stringify(images));
 
@@ -701,7 +685,6 @@ test('it forks a sleeping imp from a checkpoint', async () => {
 
   const forked = await ctx.rootClient.imps.get({ name: 'fork-a' });
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(forked));
   const stored = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -750,7 +733,6 @@ test('it forks a stopped imp as it is now', async () => {
 
   const forked = await ctx.rootClient.imps.get({ name: 'fork-b' });
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(forked));
   const stored = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -783,7 +765,6 @@ test('it names beside the fork the grants a scoped token could not copy', async 
   await ctx.rootClient.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-168' });
   await ctx.rootClient.grants.add({ name: 'dev-a', secret: 'gh' });
 
-  // a token that may grant no secret, so the fork may not copy gh
   const made = await ctx.rootClient.tokens.create({
     name: 'mcp',
     scope: 'manage',
@@ -807,7 +788,6 @@ test('it names beside the fork the grants a scoped token could not copy', async 
 
   const forked = await ctx.rootClient.imps.get({ name: 'dev-b' });
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(forked));
   const stored = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -843,7 +823,6 @@ test('it reports beside the fork each grant it did not get', async () => {
   await ctx.rootClient.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-1' });
   await ctx.rootClient.grants.add({ name: 'dev-a', secret: 'gh' });
 
-  // a token that may grant no secret, so the fork may not copy gh
   const made = await ctx.rootClient.tokens.create({
     name: 'agent',
     scope: 'manage',
@@ -873,8 +852,6 @@ test('it reports beside the fork each grant it did not get', async () => {
 
   const forked = await ctx.rootClient.imps.get({ name: 'dev-b' });
 
-  // the fork as it crosses impd's API, its dates as ISO strings, which a
-  // structuredClone would keep as dates
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(forked));
   const read = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -932,8 +909,6 @@ test('it reports an empty grant report beside a fork that got every grant', asyn
 
   const forked = await ctx.rootClient.imps.get({ name: 'dev-b' });
 
-  // the fork as it crosses impd's API, its dates as ISO strings, which a
-  // structuredClone would keep as dates
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(forked));
   const read = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -967,8 +942,6 @@ test('it reports beside the fork why it got none of the grants', async () => {
   const sent: unknown[] = [];
 
   await ctx.rootClient.imps.create({ name: 'dev-a' });
-
-  // the grant copy's first read fails, as a broken database fails it
   await ctx.db.schema.dropTable('grants').execute();
 
   await mcp.receive(
@@ -994,8 +967,6 @@ test('it reports beside the fork why it got none of the grants', async () => {
 
   const forked = await ctx.rootClient.imps.get({ name: 'dev-b' });
 
-  // the fork as it crosses impd's API, its dates as ISO strings, which a
-  // structuredClone would keep as dates
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(forked));
   const read = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -1047,7 +1018,6 @@ test('it leaves the grant report out of a fork from an impd that sends none', as
         url: 'http://impd.test',
         token: 'root-token',
 
-        // an impd release from before the fork's grant report
         fetch: buildStubImpdReleaseFetch(ctx.sendToImpd, {
           withoutFields: { 'imps/fork': ['grantsNotCopied', 'grantsError'] },
         }).fetch,
@@ -1059,8 +1029,6 @@ test('it leaves the grant report out of a fork from an impd that sends none', as
 
   const forked = await ctx.rootClient.imps.get({ name: 'dev-b' });
 
-  // the fork as it crosses impd's API, its dates as ISO strings, which a
-  // structuredClone would keep as dates
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(forked));
   const read = z.looseObject({ resources: z.looseObject({}) }).parse(json);

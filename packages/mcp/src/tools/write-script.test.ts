@@ -16,8 +16,8 @@ import { join } from 'node:path';
 import { runShellcheck } from '@impz/test-utils/run-shellcheck';
 import { WRITE_SCRIPT } from './write-script';
 
-// The write script runs under this host's /bin/sh, as a guest's runs it; the
-// e2e suite runs it in BusyBox and in impd's default image.
+// This file runs the script under the host's /bin/sh; the end-to-end suite
+// runs it under BusyBox and impd's default image.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-write-'));
 
@@ -124,9 +124,8 @@ test('it refuses a directory and leaves it as it was', async () => {
   expect(readdirSync(path)).toStrictEqual(['keep']);
 });
 
-// Content past a pipe buffer, written as the agent writes it while the script
-// refuses: the script must read it all, or the write fails with EPIPE and the
-// refusal is lost (#185).
+// Content past a pipe buffer: unless the script reads it all, the agent's
+// write fails with EPIPE and the refusal is lost.
 test('it reads all the content of a write it refuses for a directory', async () => {
   const ctx = setupTest();
   const path = join(ctx.directoryPath, 'sub');

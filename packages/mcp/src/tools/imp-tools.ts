@@ -6,8 +6,8 @@ import type { Tool } from './define-tool';
 export const ImpNameInput = NameSchema.describe('The imp name, from imp_list');
 const NameOnly = z.strictObject({ name: ImpNameInput });
 
-// Never the host: no tool takes a host path (images.build's contextDir is
-// one), and every guest path stays in the guest.
+// No tool takes a host path, such as an image build's context directory:
+// every path a tool takes stays in the guest.
 export const IMP_TOOLS: readonly Tool[] = [
   defineTool({
     name: 'imp_list',
@@ -28,8 +28,6 @@ export const IMP_TOOLS: readonly Tool[] = [
     cancellable: false,
     description:
       'Create an imp, a persistent Linux microVM, and boot it. Its disk survives sleeps and restarts until imp_destroy. Without a name, the server picks one inside its guard. Returns the imp. A cancel does not stop the create, and its result still comes back.',
-
-    // imps.create's own fields, so the tool keeps the contract's limits
     input: z.strictObject({
       name: ImpCreateInputSchema.shape.name.describe(
         "The new imp's name: a lowercase letter, then up to 30 lowercase letters, digits or hyphens. Omit to have one picked.",
@@ -162,9 +160,8 @@ export const IMP_TOOLS: readonly Tool[] = [
         ...(input.checkpoint !== undefined && { checkpoint: input.checkpoint }),
       });
 
-      // beside the imp, not in it, so an agent reads them as the fork's
-      // outcome; left out, not empty, from an impd before the report, which
-      // does not say what it skipped
+      // An older impd sends no grant report, so the fields stay out rather
+      // than empty: an empty list would claim nothing was skipped.
       return {
         data: {
           imp,
