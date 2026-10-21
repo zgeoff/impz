@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IMAGE_BUILD_STREAM_TYPE } from '@impz/api';
 import type { ImageBuildProgress } from '@impz/api';
+import { createImpClient } from '@impz/client';
+import { buildStubImpdBeforeBuildStream } from '@impz/client/test-utils/build-stub-impd-before-build-stream';
+import { startStubDockerEngine } from '@impz/client/test-utils/start-stub-docker-engine';
 import { DOCKERFILE_FRONTEND } from '@impz/daemon/src/imps/docker-proxy/dockerfile-frontend';
 import { BUILD_KEEPALIVE_MS } from '@impz/daemon/src/imps/images/build-event-stream';
 import { createStubDockerCli, startTestImpd } from '@impz/daemon/testing';
@@ -12,9 +15,6 @@ import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import { http } from 'msw';
-import { createImpClient } from './create-imp-client';
-import { buildStubImpdBeforeBuildStream } from './test-utils/build-stub-impd-before-build-stream';
-import { startStubDockerEngine } from './test-utils/start-stub-docker-engine';
 
 async function setupTest(options: { readonly keepaliveMs?: number } = {}) {
   const stack = new AsyncDisposableStack();
@@ -412,7 +412,7 @@ test(
     await writeFile(
       join(ctx.workDir, 'build.ts'),
       [
-        `import { createImpClient } from ${JSON.stringify(join(import.meta.dir, 'create-imp-client.ts'))};`,
+        `import { createImpClient } from ${JSON.stringify(Bun.resolveSync('@impz/client', import.meta.dir))};`,
         'const [url, token, contextPath] = process.argv.slice(2);',
         'const client = createImpClient({ url, token });',
         'const onProgress = (event: unknown) => console.log(JSON.stringify(event));',
@@ -520,8 +520,8 @@ test(
     await writeFile(
       join(ctx.workDir, 'build.ts'),
       [
-        `import { createImpClient } from ${JSON.stringify(join(import.meta.dir, 'create-imp-client.ts'))};`,
-        `import { buildStubImpdBeforeBuildStream } from ${JSON.stringify(join(import.meta.dir, 'test-utils', 'build-stub-impd-before-build-stream.ts'))};`,
+        `import { createImpClient } from ${JSON.stringify(Bun.resolveSync('@impz/client', import.meta.dir))};`,
+        `import { buildStubImpdBeforeBuildStream } from ${JSON.stringify(Bun.resolveSync('@impz/client/test-utils/build-stub-impd-before-build-stream', import.meta.dir))};`,
         'const [url, token, contextPath] = process.argv.slice(2);',
         'const client = createImpClient({ url, token, fetch: buildStubImpdBeforeBuildStream(fetch) });',
         'await client.buildImage("web", Bun.file(contextPath)).then(',

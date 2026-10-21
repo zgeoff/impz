@@ -1,0 +1,24 @@
+{
+  "name": "@impz/integration",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The client's and the MCP server's tests against a real impd, kept downstream of the daemon so no package depends on the daemon that depends on it",
+  "type": "module",
+  "devDependencies": {
+    "@faker-js/faker": "catalog:",
+    "@impz/agent-protocol": "workspace:*",
+    "@impz/api": "workspace:*",
+    "@impz/client": "workspace:*",
+    "@impz/daemon": "workspace:*",
+    "@impz/local-tar": "workspace:*",
+    "@impz/mcp": "workspace:*",
+    "@impz/test-utils": "workspace:*",
+    "@modelcontextprotocol/client": "catalog:",
+    "@modelcontextprotocol/server": "catalog:",
+    "@orpc/client": "catalog:",
+    "msw": "catalog:",
+    "tar-stream": "catalog:",
+    "tiny-invariant": "catalog:",
+    "zod": "catalog:"
+  }
+}

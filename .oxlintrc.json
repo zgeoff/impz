@@ -378,6 +378,13 @@
       "rules": { "max-lines": "off" }
     },
     {
+      // the client's and the MCP server's tests against a real impd sit downstream of the
+      // daemon, away from the modules they test, so no package depends on the daemon that
+      // depends on it
+      "files": ["packages/integration/**"],
+      "rules": { "zgeoff/test-beside-module": "off" }
+    },
+    {
       // the cli keeps every error that main.ts maps to an exit code in one module
       "files": ["packages/cli/src/cli/errors.ts"],
       "rules": { "max-classes-per-file": "off" }

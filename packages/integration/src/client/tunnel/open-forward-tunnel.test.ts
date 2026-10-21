@@ -7,6 +7,8 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import { TUNNEL_MAX_FRAME_BYTES, TUNNEL_WINDOW_BYTES } from '@impz/api';
+import { createImpClient, openForwardTunnel } from '@impz/client';
+import type { ForwardTunnelEnd } from '@impz/client';
 import { createImage } from '@impz/daemon/src/platform/db/images';
 import { readVmIdentity, writeVmIdentity } from '@impz/daemon/src/vm/sleep/vm-identity';
 import {
@@ -20,9 +22,6 @@ import {
 } from '@impz/daemon/testing';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { createImpClient } from '../create-imp-client';
-import { openForwardTunnel } from './open-forward-tunnel';
-import type { ForwardTunnelEnd } from './open-forward-tunnel';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

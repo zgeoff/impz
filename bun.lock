@@ -100,15 +100,10 @@
         "zod": "catalog:",
       },
       "devDependencies": {
-        "@bufbuild/protobuf": "catalog:",
-        "@impz/agent-protocol": "workspace:*",
         "@impz/api": "workspace:*",
-        "@impz/daemon": "workspace:*",
-        "@impz/local-tar": "workspace:*",
         "@impz/shared": "workspace:*",
         "@impz/test-utils": "workspace:*",
         "msw": "catalog:",
-        "tar-stream": "catalog:",
         "tiny-invariant": "catalog:",
         "tsdown": "catalog:",
       },
@@ -205,6 +200,27 @@
         "zod": "catalog:",
       },
     },
+    "packages/integration": {
+      "name": "@impz/integration",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@faker-js/faker": "catalog:",
+        "@impz/agent-protocol": "workspace:*",
+        "@impz/api": "workspace:*",
+        "@impz/client": "workspace:*",
+        "@impz/daemon": "workspace:*",
+        "@impz/local-tar": "workspace:*",
+        "@impz/mcp": "workspace:*",
+        "@impz/test-utils": "workspace:*",
+        "@modelcontextprotocol/client": "catalog:",
+        "@modelcontextprotocol/server": "catalog:",
+        "@orpc/client": "catalog:",
+        "msw": "catalog:",
+        "tar-stream": "catalog:",
+        "tiny-invariant": "catalog:",
+        "zod": "catalog:",
+      },
+    },
     "packages/local-tar": {
       "name": "@impz/local-tar",
       "version": "0.0.0",
@@ -229,10 +245,7 @@
       },
       "devDependencies": {
         "@faker-js/faker": "catalog:",
-        "@impz/daemon": "workspace:*",
         "@impz/test-utils": "workspace:*",
-        "@modelcontextprotocol/client": "catalog:",
-        "tiny-invariant": "catalog:",
       },
     },
     "packages/shared": {
@@ -489,6 +502,8 @@
     "@impz/daemon": ["@impz/daemon@workspace:packages/daemon"],
 
     "@impz/dashboard": ["@impz/dashboard@workspace:packages/dashboard"],
+
+    "@impz/integration": ["@impz/integration@workspace:packages/integration"],
 
     "@impz/local-tar": ["@impz/local-tar@workspace:packages/local-tar"],
 

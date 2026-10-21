@@ -1,8 +1,9 @@
 #!/bin/bash
 # Smoke a packed @impz/client (scripts/release/pack-client.sh) as its users run
 # it: under Node, under Bun, and as a compiled Bun binary copied to an empty
-# directory. Each runs packages/client/smoke/smoke.ts against run-stub-impd.ts,
-# impd's own app with a fake agent, which runs from the workspace.
+# directory. Each runs packages/client/smoke/smoke.ts against run-stub-impd.ts
+# from packages/daemon/testing/surface, impd's own app with a fake agent, which
+# runs from the workspace.
 #
 #   scripts/release/check-client-runtimes.sh build/npm/impz-client-X.Y.Z.tgz
 set -euo pipefail
@@ -23,7 +24,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-bun "$root/packages/client/smoke/run-stub-impd.ts" >"$work/impd.json" &
+bun "$root/packages/daemon/testing/surface/run-stub-impd.ts" >"$work/impd.json" &
 impd_pid=$!
 
 for _ in $(seq 100); do

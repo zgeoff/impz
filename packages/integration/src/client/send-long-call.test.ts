@@ -1,8 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { join } from 'node:path';
+import { createImpClient } from '@impz/client';
 import { buildStubClock, startStubSilentOrigin } from '@impz/daemon/testing';
 import invariant from 'tiny-invariant';
-import { createImpClient } from './create-imp-client';
 
 function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -305,7 +304,7 @@ test('#backups.run gets an answer that stays silent past Bun’s idle limit, whe
   const child = Bun.spawn(
     [
       process.execPath,
-      join(import.meta.dir, 'test-utils/run-idle-limited-calls.ts'),
+      Bun.resolveSync('@impz/client/test-utils/run-idle-limited-calls', import.meta.dir),
       JSON.stringify({ url: ctx.origin.origin }),
     ],
     {

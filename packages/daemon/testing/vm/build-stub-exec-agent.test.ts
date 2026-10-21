@@ -3,19 +3,19 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RequestSchema, encodeAgentMessage } from '@impz/agent-protocol';
+import { waitFor } from '@impz/test-utils/wait-for';
 import {
   openAttachStream,
   openExecStream,
   openTapStream,
-} from '@impz/daemon/src/vm/agent-client/exec-stream';
-import { startStubAgent } from '@impz/daemon/testing';
-import { waitFor } from '@impz/test-utils/wait-for';
+} from '../../src/vm/agent-client/exec-stream';
 import {
   STUB_BOOT_ID,
   STUB_FLOOD_BYTES,
   STUB_GENERATION,
   buildStubExecAgent,
 } from './build-stub-exec-agent';
+import { startStubAgent } from './start-stub-agent';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
