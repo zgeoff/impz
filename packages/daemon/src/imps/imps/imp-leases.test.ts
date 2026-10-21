@@ -14,17 +14,13 @@ import { createImage } from '../../platform/db/images';
 import { listLeases, writeLease } from '../../platform/db/leases';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 
-// impd's real app on stub VMs, on a clock the test steps, with every event
-// it emits and a root client that reaches the app in process
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // holds impd's next read of the leases once a test arms it
   const leaseReads = buildQueryGate('imp_leases');
 
-  // the clock leases and holds run on; it moves only when a test moves it
   const harness = await startTestImpd(stack, {
     env: readImpEnv(),
     frozenClockMs: Date.now(),
@@ -41,14 +37,12 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imps.create boots when it names none
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
 
   const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, {
     events,
     leaseReads,
@@ -537,7 +531,6 @@ test('it releases the caller’s hold and a legacy one on hold 0, and keeps the 
 
   const at = ctx.now();
 
-  // a hold from before holds had owners
   await writeLease(
     ctx.db,
     buildMockLeaseRecord({
@@ -567,7 +560,6 @@ test('it gives a new token with a deleted token’s name another principal', asy
   const ctx = await setupTest();
   const first = await ctx.client.tokens.create({ name: 'ci', scope: 'exec' });
 
-  // read while the first token still authenticates
   const firstCaller = ctx.impd.tokens.authenticate(first.secret);
 
   await ctx.client.tokens.delete({ name: 'ci' });
@@ -688,7 +680,6 @@ test('it sleeps a leased imp in the shutdown pass and keeps its lease', async ()
 });
 
 test('it names only the protected imps the caller may read in a RAM refusal', async () => {
-  // 300 MiB per awake imp, 50% of 512 MiB reserved per boot
   updateEnv('IMP_RAM_BUDGET_MIB', '800');
   updateEnv('IMP_DEFAULT_MEMORY_MIB', '512');
 
@@ -727,7 +718,6 @@ test('it names only the protected imps the caller may read in a RAM refusal', as
 });
 
 test('it emits the governor’s refusal with every protected imp counted', async () => {
-  // 300 MiB per awake imp, 50% of 512 MiB reserved per boot
   updateEnv('IMP_RAM_BUDGET_MIB', '800');
   updateEnv('IMP_DEFAULT_MEMORY_MIB', '512');
 
@@ -851,7 +841,6 @@ test('it keeps the leases and emits no release when a forced sleep fails', async
     (error: unknown) => error,
   );
 
-  // a later write's event: every event of the failed sleep came before it
   await ctx.client.imps.hold({ name: 'dev', seconds: 0 });
 
   await waitFor(() => {
@@ -873,8 +862,6 @@ test('it answers a sleep of a leased imp the shutdown pass slept', async () => {
 
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 600 });
-
-  // as after an impd restart: the shutdown pass slept it and kept the lease
   await ctx.impd.imps.sleepAllImps();
 
   const asleep = await ctx.client.imps.sleep({ name: 'dev' });
@@ -890,7 +877,6 @@ test('it answers a stop of a stopped imp another owner leases and keeps the leas
 
   const at = ctx.now();
 
-  // a lease another owner holds on the stopped imp
   await writeLease(
     ctx.db,
     buildMockLeaseRecord({
@@ -928,7 +914,6 @@ test('it emits held on hold 0 even when it releases nothing', async () => {
   expect(held).toMatchObject([{ ev: 'ImpChanged', reason: 'held' }]);
 });
 
-// a second read would see the lease acquired while the first one is held
 test('it names an imp’s lease owners as of the one read that shows the imp', async () => {
   const ctx = await setupTest();
 

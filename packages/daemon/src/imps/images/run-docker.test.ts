@@ -121,6 +121,6 @@ test('#runDocker ends a call when its signal aborts', async () => {
 
   const result = await pulling;
 
-  // 128 + SIGTERM, which an aborted spawn sends
+  // 128 + SIGTERM, the signal Bun sends to an aborted spawn.
   expect(result.exitCode).toBe(143);
 });

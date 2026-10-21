@@ -5,7 +5,6 @@ import { printLog } from '../../platform/process/print-log';
 
 const NO_PROGRESS = { add: () => {} };
 
-// the entries as a tar file at path, which must not exist yet
 export async function writeContextTar(entries: readonly LocalEntry[], path: string): Promise<void> {
   const file = await open(path, 'wx', 0o600);
 

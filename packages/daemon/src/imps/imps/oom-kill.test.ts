@@ -11,7 +11,6 @@ async function setupTest(options: TestImpdOptions = {}) {
 
   const harness = await startTestImpd(stack, options);
 
-  // the image every imp boots from
   await harness.createTestImage('ubuntu');
 
   return harness;
@@ -56,7 +55,6 @@ test('#sleepImp says a sleep the memory limit cut short failed for that reason',
   const ctx = await setupTest({ cgroups: stub.cgroups });
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
-  // kills from before the sleep, which do not count
   stub.oomKills.set(imp.id, 3);
   ctx.fake.queue('sleep', 'die');
 
@@ -115,7 +113,6 @@ test('#wakeImp does not blame a failed wake on an OOM kill from before it', asyn
 
   await ctx.imps.sleepImp('dev');
 
-  // a kill from before the wake
   stub.oomKills.set(imp.id, 1);
   ctx.fake.queue('wake', 'fail');
 
@@ -131,7 +128,6 @@ test('#sleepImp does not blame a lost sleep on an OOM kill from before it', asyn
   const ctx = await setupTest({ cgroups: stub.cgroups });
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
-  // a kill from before the sleep
   stub.oomKills.set(imp.id, 1);
   ctx.fake.queue('sleep', 'die');
 

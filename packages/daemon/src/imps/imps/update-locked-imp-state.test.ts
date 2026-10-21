@@ -16,8 +16,6 @@ async function setupTest() {
   onTestFinished(() => stack.disposeAsync());
 
   const harness = await startTestImpd(stack, {});
-
-  // every imp row names an image
   const image = await harness.createTestImage('ubuntu');
 
   const context = createImpContext({
@@ -25,7 +23,6 @@ async function setupTest() {
     db: harness.db,
     images: harness.images,
 
-    // the lock never brings a tap up, reads a VM or waits
     taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
     vms: harness.fake.startGeneration(),
     storage: harness.storage,

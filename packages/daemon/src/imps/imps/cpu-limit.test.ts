@@ -11,8 +11,6 @@ import { probeSnapshot } from '../../vm/sleep/snapshot-meta';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 import { createCpuCgroups } from '../../vm/vmm/cpu-cgroups';
 
-// impd over the stub VMM with the cgroups and host a test passes, and a
-// client of its API
 async function setupTest(
   options: Pick<TestImpdOptions, 'env' | 'cgroups' | 'hostCpus' | 'frozenClockMs'> = {},
 ) {
@@ -22,7 +20,6 @@ async function setupTest(
 
   const harness = await startTestImpd(stack, options);
 
-  // every create boots an image row; the default image is ubuntu
   await harness.createTestImage('ubuntu');
 
   return harness;
@@ -35,8 +32,6 @@ test('it boots a new imp with the limit and weight it was given', async () => {
   const created = await ctx.client.imps.create({ name: 'dev', cpuLimit: 1.5, cpuWeight: 200 });
 
   expect(created.cpu).toStrictEqual({ limit: 1.5, weight: 200 });
-
-  // the memory limit of a 2 GiB guest comes first
   expect(stub.calls).toStrictEqual([`memory ${created.id} 2048`, `setup ${created.id} 1.5/200`]);
 });
 
@@ -79,8 +74,6 @@ test('it applies new settings to a sleeping imp at its wake', async () => {
   await ctx.client.imps.update({ name: 'dev', cpuLimit: null, cpuWeight: 300 });
   await ctx.client.imps.wake({ name: 'dev' });
 
-  // the create, the sleep and the wake each set the cgroup up, and only the
-  // wake takes the new settings; a sleep keeps the cgroup for the wake
   expect(stub.calls).toStrictEqual([
     `memory ${created.id} 2048`,
     `setup ${created.id} 0.5/100`,
@@ -192,7 +185,6 @@ test('it ends the awake span of a VM found dead at its last activity', async () 
   invariant(awake?.awakeSince);
   invariant(awake.pid !== null);
 
-  // the VM was last active 2 s into its span, then died
   await updateImpActivity(ctx.db, created.id, new Date(awake.awakeSince.getTime() + 2000));
 
   ctx.fake.alive.delete(awake.pid);
@@ -232,7 +224,6 @@ test('it shows RAM but no CPU share from the first sampler pass', async () => {
 
   invariant(first.resources?.sample);
 
-  // startTestImpd's VMs each own 300 MiB while alive, as the governor reads them
   expect(first.ramMib).toBe(300);
   expect(first.resources.sample.cpuPercent).toBeUndefined();
 });
@@ -240,7 +231,6 @@ test('it shows RAM but no CPU share from the first sampler pass', async () => {
 test('it shows the CPU share and the throttled time after a second sampler pass', async () => {
   const stub = buildStubCpuCgroups();
 
-  // a frozen clock: the 5 s between the passes is exactly 5 s
   const ctx = await setupTest({
     cgroups: stub.cgroups,
     frozenClockMs: Date.parse('2026-10-02T12:00:00Z'),
@@ -250,7 +240,6 @@ test('it shows the CPU share and the throttled time after a second sampler pass'
 
   await ctx.client.imps.get({ name: 'dev' });
 
-  // half a core for 5 s from a new cgroup's zero counters, 2 s of it held back
   ctx.advance(5000);
   stub.cpuStats.set(created.id, { usageUsec: 2_500_000, throttledUsec: 2_000_000 });
 
@@ -263,7 +252,6 @@ test('it shows the CPU share and the throttled time after a second sampler pass'
 });
 
 test('it refuses to start a jailed VM without its cgroup, and says why', async () => {
-  // the default cgroups: no controller is delegated
   const ctx = await setupTest({ env: { IMP_JAILER: 'true' } });
 
   expect(ctx.imps.createImp({ name: 'dev' })).rejects.toStrictEqual(
@@ -280,7 +268,6 @@ test('it refuses to start a jailed VM without its cgroup, and says why', async (
 });
 
 test('it leaves a jailed imp asleep, with its memory, when its cgroup cannot be made at the wake', async () => {
-  // a cgroup tree with the cpu controller delegated to imps/
   const cgroupRoot = mkdtempSync(join(tmpdir(), 'imp-cgroups-'));
 
   onTestFinished(() => {
@@ -299,7 +286,6 @@ test('it leaves a jailed imp asleep, with its memory, when its cgroup cannot be 
 
   await ctx.imps.sleepImp('dev');
 
-  // a file where the imp's cgroup directory goes makes its setup fail
   const groupDir = join(cgroupRoot, 'imps', created.id);
 
   rmSync(groupDir, { recursive: true, force: true });
@@ -319,7 +305,6 @@ test('it leaves a jailed imp asleep, with its memory, when its cgroup cannot be 
 });
 
 test('it wakes a jailed imp once its cgroup can be made again', async () => {
-  // a cgroup tree with the cpu controller delegated to imps/
   const cgroupRoot = mkdtempSync(join(tmpdir(), 'imp-cgroups-'));
 
   onTestFinished(() => {

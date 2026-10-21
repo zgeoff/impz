@@ -29,7 +29,6 @@ async function setupTest() {
 
   stack.defer(() => db.destroy());
 
-  // the host's free space, so a build never meets this machine's disk
   const diskBudget = createDiskBudget({
     storage: { readUsage: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }) },
     reserveBytes: null,
@@ -89,8 +88,6 @@ test('#runImageBuild refuses a context path that docker could read as a flag', a
   });
 });
 
-// #173: the docker CLI prints the proxy's message after its own line; impd
-// answers BAD_REQUEST with that message and nothing else of the output
 test('#addImage answers a proxy refusal of the pull as BAD_REQUEST with its message alone', async () => {
   const ctx = await setupTest();
 
@@ -390,8 +387,6 @@ test('#runImageBuild refuses a Dockerfile image that is not an image reference',
   });
 });
 
-// a registry digest with words after it would add words to the FROM line,
-// which the pinned copy's round trip refuses
 test('#runImageBuild answers BAD_REQUEST when the pinned Dockerfile does not parse back', async () => {
   const ctx = await setupTest();
 

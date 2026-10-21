@@ -4,17 +4,10 @@ import { runGuestListener } from '../reverse/run-guest-listener';
 import { formatFailure, runChannelRelay } from './channel-io';
 import type { SshBackend } from './ssh-connection-context';
 
-// open agent channels to the client per SSH connection; a guest that opens
-// more gets its extra clients closed, so it cannot flood the user's laptop
 export const MAX_AGENT_CHANNELS = 16;
 
-// ssh-agent forwarding for one SSH connection (`ssh -A`).
 export interface AgentForwarding {
-  // a session asked for forwarding (`auth-agent-req@openssh.com`)
   readonly enable: () => void;
-
-  // the guest socket for SSH_AUTH_SOCK, made on first use, or null when no
-  // session asked; throws when the imp cannot serve one
   readonly readSocket: () => Promise<string | null>;
   readonly stop: () => void;
 }
@@ -31,22 +24,13 @@ async function stopListenerWhenOpen(listening: Promise<GuestListener>): Promise<
     const listener = await listening;
 
     listener.close();
-  } catch {
-    // it never opened
-  }
+  } catch {}
 }
 
-// As with sshd, forwarding belongs to the connection: once a session asked,
-// every later session gets SSH_AUTH_SOCK, from one listener in the guest.
-// Each client of it becomes an `auth-agent@openssh.com` channel.
 export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwarding {
   const state: {
     listening: Promise<GuestListener> | null;
-
-    // tells a stale listener from the current one
     generation: number;
-
-    // the VM the listener lives in: a wake starts a new one
     pid: number | null;
     channels: number;
     enabled: boolean;
@@ -75,15 +59,12 @@ export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwardin
     deps.log(`impd: ssh: ${deps.impName}: agent forwarding: ${message}`);
   };
 
-  // an accept that impd closes at once: the guest client sees the close
   const stopGuestClient = async (listener: GuestListener, id: number): Promise<void> => {
     try {
       const stream = await deps.backend.openAccept(deps.impName, listener.id, id, 'ssh');
 
       stream.close();
-    } catch {
-      // the client is gone already, or the agent is; either way it is closed
-    }
+    } catch {}
   };
 
   const openClientChannel = (): Promise<ServerChannel> =>
@@ -97,8 +78,8 @@ export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwardin
       });
     });
 
-  // A client that refuses the channel (it has no agent) gets the guest
-  // client closed at once, so `ssh-add` fails fast.
+  // A client with no agent refuses the channel, and closing the guest client at once makes
+  // `ssh-add` fail fast instead of hanging.
   const sendToClientAgent = async (listener: GuestListener, id: number): Promise<void> => {
     let channel: ServerChannel;
 
@@ -133,8 +114,6 @@ export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwardin
     }
   };
 
-  // A listener ends with its agent connection (a forced sleep resets it);
-  // the next session then listens again.
   const runListener = async (listener: GuestListener, generation: number): Promise<void> => {
     try {
       await runGuestListener(listener, {
@@ -166,7 +145,6 @@ export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwardin
       throw error;
     }
 
-    // the connection closed while the guest made the socket
     if (state.stopped) {
       listener.close();
       throw new Error('the SSH connection closed');
@@ -186,15 +164,14 @@ export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwardin
         return null;
       }
 
-      // A forced sleep resets the listener's agent connection, but impd may
-      // see that only after the next session asks; a new VM settles it.
+      // impd may learn that a forced sleep reset the listener's agent connection only after the
+      // next session asks, so a new VM pid restarts the listener.
       const running = await deps.backend.requireRunning(deps.impName);
 
       if (state.listening !== null && state.pid !== running.imp.pid) {
         stopListener();
       }
 
-      // sessions that start together share one listener
       if (state.listening === null) {
         state.generation += 1;
         state.pid = running.imp.pid;

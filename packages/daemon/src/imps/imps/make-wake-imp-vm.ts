@@ -23,11 +23,9 @@ import { OOM_KILL_TRIGGER, startOomWatch } from './oom-kill';
 import { startCounting } from './read-running-imp-usage';
 import { requireNoOopsHold } from './require-no-oops-hold';
 
-// what a wake needs of the rest of the VM operations
 interface WakeDeps {
   readonly context: ImpContext;
 
-  // true once impd puts every imp to sleep to stop
   readonly isStopping: () => boolean;
   readonly updateState: (imp: LockedImp, change: Readonly<ImpStateChange>) => Promise<LockedImp>;
   readonly setupVmCgroup: (imp: LockedImp) => ImpCgroup | null;
@@ -39,7 +37,6 @@ interface WakeDeps {
   readonly growGuestDisk: (imp: LockedImp) => Promise<LockedImp>;
 }
 
-// the wake that ImpVmOps' requireRunningImp runs for a sleeping imp
 export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<LockedImp> {
   const context = deps.context;
   const updateState = deps.updateState;
@@ -47,8 +44,6 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
   const startColdImpVm = deps.startColdImpVm;
   const growGuestDisk = deps.growGuestDisk;
 
-  // resumes from the snapshot, or boots cold when there is none, it does not
-  // match this host, or the load fails: the disk is always the truth
   const wakeImpVm = async (imp: LockedImp): Promise<LockedImp> => {
     if (deps.isStopping()) {
       throw buildStoppingError();
@@ -62,7 +57,6 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     const mismatch =
       meta === null ? 'no snapshot it can load' : readColdBootReason(meta, context.identity);
 
-    // a snapshot with no drive path has a mismatch too: the check narrows it
     if (meta === null || mismatch !== null || meta.systemDrivePath === undefined) {
       context.log(
         `impd: ${imp.name}: cold boot instead of a wake: ${mismatch ?? 'no snapshot it can load'}`,
@@ -71,11 +65,8 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
       return startColdImpVm(imp, 'wake_fallback', mismatch);
     }
 
-    // before the load and the admission: a wake that cannot start keeps the
-    // imp asleep, with its snapshot
     const cgroup = setupVmCgroup(imp);
 
-    // a woken VM faults its pages back in; it grows toward what it owned
     await context.admission?.admit({
       id: imp.id,
       name: imp.name,
@@ -83,7 +74,7 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
       memoryMib: imp.maxMemoryMib,
     });
 
-    // the load restores what the guest held plugged: the host allows it first
+    // The load restores what the guest held plugged, so the host limit allows it first.
     context.memoryLimit.setGuestMib(imp.id, imp.memoryMib + (meta.pluggedMib ?? 0));
 
     if (meta.pluggedMib !== undefined) {
@@ -100,8 +91,8 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
       return startAfterFailedWake(imp, paths, woken);
     }
 
-    // the drive the snapshot reopened is the one the VM booted from, so its
-    // agent answers as it did then; anything else is not that VM
+    // The snapshot reopens the drive the VM booted from, so its agent answers
+    // with the version it had then, and any other version is another VM.
     if (meta.agentVersion !== undefined && woken.agentVersion !== meta.agentVersion) {
       await stopWrongVm(imp, paths, woken.pid);
 
@@ -123,8 +114,6 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     await checkMergeFlag(context, imp, woken.pid);
     await updateImpActivity(context.db, imp.id, new Date());
 
-    // a memory wake keeps the boot; one that slept before impd kept cold
-    // boots has no row for it yet
     if (woken.bootId !== undefined) {
       await writeUnknownBoot(context.db, imp.id, woken.bootId, new Date());
     }
@@ -139,8 +128,6 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
       firecrackerVersion: woken.firecrackerVersion,
     });
 
-    // after the record: impd dying before it leaves a sleeping imp with its
-    // loading record, whose live VM the next reconcile adopts
     removeSnapshotMeta(paths);
 
     const trusted = running.isTrustPending ? await applyPendingTrust(running, paths) : running;
@@ -149,13 +136,9 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
       return trusted;
     }
 
-    // the disk grew while it slept: a failed grow stays pending, the wake stands
     return growGuestDisk(trusted).catch(() => trusted);
   };
 
-  // A warm move's first wake installs this host's broker CA at once: until
-  // then the guest trusts the source's (docs/architecture/storage/moves.md).
-  // A failed install fails no wake; the first exec installs it then.
   const applyPendingTrust = async (imp: LockedImp, paths: ImpPaths): Promise<LockedImp> => {
     try {
       if (!(await claimTrustPending(context.db, imp.id))) {
@@ -170,9 +153,6 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     return toLockedImp(imp, { ...imp, isTrustPending: false });
   };
 
-  // The woken VM, or why the load or the agent failed; the VM is gone then.
-  // The jail binds the drive the snapshot reopens, which after an agent
-  // upgrade is an older one than the host boots.
   const loadSnapshot = async (
     imp: LockedImp,
     paths: ImpPaths,
@@ -182,7 +162,7 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     const hasOomKill = startOomWatch(context.cgroups, imp.id);
 
     try {
-      // a container restart takes the taps with it
+      // A container restart takes the taps with it.
       await context.egress.requireImp(imp.id);
       await context.taps.setupTap(context.findAddress(imp.slot), context.findJailUser(imp));
 
@@ -196,16 +176,14 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(getErrorMessage(error));
 
-      // the first line is the failure the record keeps: the limit, not the API error
       return hasOomKill()
         ? new Error(`wake failed: ${OOM_KILL_TRIGGER}\n${failure.message}`, { cause: failure })
         : failure;
     }
   };
 
-  // A VM that will not stop still has the disk open: a cold boot now would put
-  // two VMs on one disk. The error record keeps its pid, so a start or a
-  // destroy kills it again, as reconcileImps does.
+  // A VM that will not stop still has the disk open, and a cold boot now would
+  // put two VMs on one disk.
   const stopWrongVm = async (imp: LockedImp, paths: ImpPaths, pid: number): Promise<void> => {
     try {
       await context.vms.stopVm(pid, paths, false);
@@ -237,8 +215,8 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     context.log(`impd: ${imp.name}: ${failure}; booting cold`);
     context.admission?.release(imp.id);
 
-    // the load may have run the guest, which can write its disk: the
-    // snapshot no longer matches it, even if the cold boot is turned away
+    // The load may have run the guest, which can write its disk, so the
+    // snapshot no longer matches it even if the cold boot is turned away.
     removeSnapshot(paths);
 
     const stopped = await updateState(imp, {

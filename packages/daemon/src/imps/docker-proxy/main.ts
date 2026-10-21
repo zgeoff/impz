@@ -1,7 +1,3 @@
-// imp-docker-proxy: the Docker socket imp-host sees, served from a container
-// of its own. It closes the Docker socket path only; SYS_ADMIN still lets
-// root out of imp-host (docs/architecture/host.md#the-docker-socket).
-
 import { chmodSync, rmSync } from 'node:fs';
 import { loadOrCreateToken } from '../../identity/token';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
@@ -10,7 +6,6 @@ import { setupLogging } from '../../platform/process/setup-logging';
 import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from '../images/build-image';
 import { createDockerProxy } from './proxy';
 
-// headers and a create body on top of the largest build context
 const BODY_SLACK_BYTES = 1024 ** 2;
 
 function readEnv(name: string, fallback: string): string {
@@ -19,9 +14,8 @@ function readEnv(name: string, fallback: string): string {
   return value === undefined || value === '' ? fallback : value;
 }
 
-// No default: a fallback tag could name another repository than the image the
-// proxy runs from, and the rule that keeps a pull off that repository would
-// guard the wrong one. Every unit and compose file sets it.
+// A default tag could name a repository other than the one the proxy runs from, and the rule that
+// keeps a pull off that repository would then guard the wrong one.
 function requireEnv(name: string): string {
   const value = process.env[name];
 
@@ -32,9 +26,6 @@ function requireEnv(name: string): string {
   return value;
 }
 
-// IMP_BUILD_IMAGE under IMP_BUILD_ISOLATION=imp, which impd sets the same:
-// the only image a pull may fetch then, with no build; null under host
-// isolation
 function readBuilderImage(): string | null {
   const isolation = readEnv('IMP_BUILD_ISOLATION', 'imp');
 
@@ -82,11 +73,10 @@ function main(): void {
     log: printLog,
   });
 
-  // a socket left by the last run would fail the listen
   rmSync(listen, { force: true });
 
-  // Bun's types leave idleTimeout off unix servers, but it applies there
-  // too: 0 lets a build or an export stream for as long as it takes
+  // Bun's types leave idleTimeout off unix servers, but Bun applies it there too, and 0 lets a
+  // build or an export stream for as long as it takes.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
   const serveOptions = {
     unix: listen,

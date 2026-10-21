@@ -2,7 +2,7 @@
 import { ORPCError } from '@orpc/server';
 import type { CpuSettings } from '../../platform/db/imps';
 
-// below this the VMM thread starves and a boot times out
+// Below this limit the VMM thread starves and a boot times out.
 const MIN_CPU_LIMIT = 0.1;
 const DEFAULT_CPU_WEIGHT = 100;
 
@@ -11,8 +11,6 @@ interface CpuInput {
   readonly cpuWeight?: number | undefined;
 }
 
-// `input` over `current` (the defaults for a new imp), checked against the
-// host: a limit past its cores could never bind
 export function resolveCpuSettings(
   input: CpuInput,
   current: CpuSettings | null,

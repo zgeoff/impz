@@ -1,11 +1,7 @@
 import type { ExecSocket } from '@impz/client';
 import type { ExecPeer } from './exec-session';
 
-// what the impd end does with what the client end sends; null refuses the
-// socket before it opens, as a refused upgrade does
 export interface InProcessServer {
-  // a text message parsed as JSON, or a binary message as bytes, as the
-  // `/exec` route hands them to its session
   readonly handleMessage: (message: unknown) => void;
   readonly handleClose: () => void;
 }
@@ -17,9 +13,6 @@ const CLOSED: ReadyState = 3;
 const CLOSE_NORMAL = 1000;
 const CLOSE_REFUSED = 1008;
 
-// The client end of an `/exec` WebSocket whose other end is impd itself, for
-// impd's own MCP endpoint: the messages are the protocol's, in order, with no
-// socket in between. Every delivery waits a microtask, as a socket's would.
 export function createInProcessSocket(
   accept: (peer: ExecPeer) => InProcessServer | null,
 ): ExecSocket {
@@ -31,12 +24,12 @@ export function createInProcessSocket(
   };
 
   const emitEvent = (buildEvent: () => Event): void => {
+    // Every delivery waits a microtask, as a real WebSocket's would.
     queueMicrotask(() => {
       events.dispatchEvent(buildEvent());
     });
   };
 
-  // either end may close; the other end hears of it once
   const stopSocket = (code: number, reason: string): void => {
     if (state.readyState === CLOSED) {
       return;
@@ -52,7 +45,7 @@ export function createInProcessSocket(
       emitEvent(() => new MessageEvent('message', { data: text }));
     },
     sendBinary: (data) => {
-      // a copy now: the sender may reuse its buffer before the delivery
+      // The sender may reuse its buffer before the delivery.
       const copy = Uint8Array.from(data).buffer;
 
       emitEvent(() => new MessageEvent('message', { data: copy }));
@@ -112,7 +105,8 @@ export function createInProcessSocket(
   };
 }
 
-// as Elysia hands a text frame to the `/exec` route: JSON when it parses
+// Elysia hands a WebSocket route a text frame as parsed JSON, or as the raw string when it is not
+// JSON.
 function parseControl(text: string): unknown {
   try {
     return JSON.parse(text);

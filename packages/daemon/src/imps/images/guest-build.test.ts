@@ -28,7 +28,6 @@ async function setupTest() {
 
   const root = join(directory, 'root');
 
-  // where writeGuestTree unpacks the export
   mkdirSync(root);
 
   return { directoryPath: directory, root };
@@ -340,7 +339,6 @@ test('#writeGuestTree counts a sparse file at its full size against the cap', as
 
   Bun.spawnSync(['truncate', '-s', '16M', join(ctx.directoryPath, 'tree', 'holes')]);
 
-  // an archive well inside the cap, of a file that is not
   const builder = buildStubImageBuilder({
     exported: [
       Bun.spawnSync(['tar', '-S', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout,
@@ -372,7 +370,6 @@ test('#writeGuestTree counts a block for each small file against the cap', async
     ),
   );
 
-  // an archive well inside the cap, of files whose blocks are not
   const builder = buildStubImageBuilder({
     exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
@@ -391,7 +388,6 @@ test('#writeGuestTree counts a block for each small file against the cap', async
   );
 });
 
-// one file under 80 directories the archive does not hold, which tar makes
 test('#writeGuestTree counts the directories tar makes for a member as entries', async () => {
   const ctx = await setupTest();
 
@@ -788,7 +784,6 @@ test("#loadGuestImage refuses a ref the registry denies to the builder's engine"
   });
 });
 
-// imp-docker-proxy's 403, as the docker CLI prints an engine refusal
 test('#loadGuestImage refuses a ref whose pull imp-docker-proxy refuses in the builder', () => {
   const builder = buildStubImageBuilder({
     exported: [],

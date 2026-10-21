@@ -1,30 +1,22 @@
-// A Dockerfile split into instructions as the pinned frontend's parser splits
-// it (moby/buildkit v0.25.0, frontend/dockerfile/parser): each rule mirrors
-// the frontend's, down to which bytes count as whitespace.
+// Each rule here mirrors the pinned frontend's parser (moby/buildkit v0.25.0,
+// frontend/dockerfile/parser), down to which bytes count as whitespace.
 
 import { DockerfileError } from './dockerfile-error';
 
 export interface Instruction {
-  // the keyword, lowercased, and as written; only ASCII keywords are read
   readonly keyword: string;
   readonly command: string;
 
-  // the builder flags, such as `--from=build`, and the text they came from
   readonly flags: readonly string[];
   readonly rawFlags: string;
 
-  // what follows the flags, trimmed
   readonly args: string;
 
-  // the arguments: the JSON array's strings, or args split at whitespace
   readonly words: readonly string[];
   readonly isJson: boolean;
 
-  // ONBUILD's own instruction
   readonly trigger: Instruction | null;
 
-  // the 1-based lines the instruction starts and ends on, before any
-  // heredoc's body
   readonly line: number;
   readonly endLine: number;
 }
@@ -34,16 +26,16 @@ export interface ParsedDockerfile {
   readonly instructions: readonly Instruction[];
 }
 
-// Go's unicode.IsSpace, which trims lines and splits commands
+// Go's unicode.IsSpace, which the parser uses to trim lines and split commands.
 const GO_SPACE = String.raw`\t\n\v\f\r \u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000`;
 
 const LEADING_SPACE = new RegExp(`^[${GO_SPACE}]+`, 'v');
 const TRAILING_SPACE = new RegExp(`[${GO_SPACE}]+$`, 'v');
 
-// the parser's reWhitespace, which splits FROM, ADD and COPY arguments
+// The parser's reWhitespace, which splits FROM, ADD and COPY arguments.
 const WORD_SPACE = /[\t\v\f\r ]+/v;
 
-// Go's \s in the directive pattern: no \v
+// Go's \s in the parser's directive pattern excludes \v.
 const DIRECTIVE =
   /^#[\t\n\f\r ]*(?<key>[a-zA-Z][a-zA-Z0-9]*)[\t\n\f\r ]*=[\t\n\f\r ]*(?<value>.+?)[\t\n\f\r ]*$/v;
 
@@ -55,8 +47,7 @@ const HEREDOC_KEYWORDS = new Set(['add', 'copy', 'run']);
 const JSON_KEYWORDS = new Set(['add', 'copy', 'volume']);
 const WORD_KEYWORDS = new Set(['from', 'expose']);
 
-// the bytes extractBuilderFlags reads as spaces: it tests each byte, not
-// each character, with unicode.IsSpace
+// The parser's extractBuilderFlags tests each byte, not each character, with unicode.IsSpace.
 const FLAG_SPACE_BYTES = new Set([0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0x85, 0xa0]);
 
 function stripGoSpace(text: string): string {
@@ -71,8 +62,6 @@ function isComment(line: string): boolean {
   return line.replace(LEADING_SPACE, '').startsWith('#');
 }
 
-// the lines with their endings, as the parser's scanLines gives them,
-// after the byte order mark it drops
 export function splitDockerfileLines(text: string): string[] {
   const lines = text.replace(/^\uFEFF/v, '').match(/[^\n]*\n|[^\n]+$/gv) ?? [];
 
@@ -85,8 +74,6 @@ function buildContinuation(escape: string): RegExp {
   return new RegExp(`([^${token}])${token}[ \\t]*$|^${token}[ \\t]*$`, 'v');
 }
 
-// The parser directives, which come first: the first line that is not one
-// ends them. Holds the escape token they set.
 function buildDirectiveReader() {
   let escape = '\\';
   let continuation = buildContinuation('\\');
@@ -133,7 +120,6 @@ function buildDirectiveReader() {
       }
     },
 
-    // the line with a trailing escape token removed, and whether it ends there
     splitContinuation: (line: string): [string, boolean] => {
       if (continuation.test(line)) {
         return [line.replace(continuation, '$1'), false];
@@ -147,13 +133,10 @@ function buildDirectiveReader() {
 interface SplitFlags {
   readonly flags: string[];
 
-  // the flags as written, before quotes and escapes are applied
   readonly raw: string;
   readonly args: string;
 }
 
-// extractBuilderFlags, byte for byte: the leading `--` words, with quotes and
-// the escape token applied, and the rest of the line
 function splitFlags(rest: string, escape: string): SplitFlags {
   const bytes = new TextEncoder().encode(rest);
 
@@ -251,7 +234,6 @@ function splitFlags(rest: string, escape: string): SplitFlags {
   return splitAt(bytes.length);
 }
 
-// parseJSON: a JSON array of strings, or null when the text is not one
 function parseJsonWords(args: string): string[] | null {
   const text = args.replace(LEADING_SPACE, '');
 
@@ -298,7 +280,6 @@ function parseWords(keyword: string, args: string): { words: string[]; isJson: b
   return { words: [args], isJson: false };
 }
 
-// newNodeFromLine: the keyword, its flags and its arguments
 function parseInstruction(
   text: string,
   escape: string,
@@ -314,8 +295,8 @@ function parseInstruction(
     throw new DockerfileError(`line ${String(line)}: an instruction has no name`);
   }
 
-  // Go lowercases a few non-ASCII letters to ASCII ones, which would make
-  // a keyword impd does not see
+  // Go lowercases a few non-ASCII letters to ASCII ones, which would make a keyword impd does
+  // not see.
   if (!/^[\u0021-\u007E]+$/v.test(command)) {
     throw new DockerfileError(
       `line ${String(line)}: the instruction ${JSON.stringify(command)} is not ASCII`,
@@ -345,10 +326,8 @@ function parseInstruction(
   };
 }
 
-// parseWords, which splits ARG and ENV: words at Go's spaces, outside
-// quotes, with the quotes and escapes kept as written
 export function splitNameWords(text: string, escape: string): string[] {
-  // code points, as Go's range over a string gives runes
+  // Code points, as Go's range over a string gives runes.
   const chars = text.match(/./gsv) ?? [];
   const words: string[] = [];
   let word = '';
@@ -437,9 +416,6 @@ function canHoldHeredoc(instruction: Readonly<Instruction>): boolean {
   return target !== null && HEREDOC_KEYWORDS.has(target.keyword) && !target.isJson;
 }
 
-// One step of the frontend's shell lexer over a heredoc line, enough to
-// find the words: quotes and escapes kept as written, `<<` and the spaces
-// after it kept in the word.
 function splitShellWords(text: string, escape: string, keepQuotes: boolean): string[] | null {
   const words: string[] = [];
   let word = '';
@@ -514,7 +490,6 @@ function splitShellWords(text: string, escape: string, keepQuotes: boolean): str
   return words;
 }
 
-// the index of the quote that closes the one at start, or -1
 function getQuoteEnd(text: string, start: number, escape: string): number {
   const quote = text.charAt(start);
 
@@ -533,7 +508,7 @@ function getQuoteEnd(text: string, start: number, escape: string): number {
   return -1;
 }
 
-// the heredoc lexer's own escape token is always a backslash
+// The frontend's heredoc lexer always escapes with a backslash, whatever the escape directive.
 function removeQuotes(quoted: string): string {
   const inner = quoted.slice(1, -1);
 
@@ -545,9 +520,8 @@ interface Heredoc {
   readonly isStripped: boolean;
 }
 
-// heredocsFromLine: the heredocs the instruction opens, in order
 function collectHeredocs(text: string, line: number): Heredoc[] {
-  // a ${...} expansion can hold spaces, which would move the word breaks
+  // A shell ${...} expansion can hold spaces, which would move the word breaks.
   if (text.includes('${')) {
     throw new DockerfileError(
       `line ${String(line)}: an ambiguous form: \${...} on a line that holds <<`,
@@ -564,8 +538,6 @@ function collectHeredocs(text: string, line: number): Heredoc[] {
       continue;
     }
 
-    // rest is the tail of a word the split above closed every quote of, so
-    // splitting it again never meets an open quote
     const names = splitShellWords(rest, '\\', false) ?? [];
 
     if (names.length === 1) {
@@ -576,14 +548,12 @@ function collectHeredocs(text: string, line: number): Heredoc[] {
   return heredocs;
 }
 
-// Splits the Dockerfile as the frontend's parser.Parse does.
 export function parseDockerfile(text: string): ParsedDockerfile {
   const lines = splitDockerfileLines(text);
   const directives = buildDirectiveReader();
   const instructions: Instruction[] = [];
   let index = 0;
 
-  // the parser's processLine: the line without its ending, and without a comment
   const scanSourceLine = (raw: string, isFirst: boolean): string => {
     const trimmed = isFirst ? stripNewline(raw).replace(LEADING_SPACE, '') : stripNewline(raw);
 

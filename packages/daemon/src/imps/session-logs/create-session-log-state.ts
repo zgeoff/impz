@@ -7,7 +7,6 @@ import { sessionLogMachine } from './session-log-machine';
 import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp, SessionLogLimits } from './session-log-service';
 
-// what the state of the session logs reads of impd
 export interface SessionLogStateDeps {
   readonly limits: SessionLogLimits;
   readonly requireRoom: (bytes: number) => Promise<void>;
@@ -19,14 +18,8 @@ export interface SessionLogStateDeps {
 export type SessionLogState = ReturnType<typeof createSessionLogState>;
 
 const SEGMENTS_PER_LOG = 2;
-
-// an imp's limit is checked at least this often within a segment, so its logs
-// pass it by at most this share of one
 const LIMIT_CHECKS_PER_SEGMENT = 16;
 
-// the live logs, their taps and the imps' lives that createSessionLogs's
-// parts share: sessionLogMachine holds them, and `send` is the one way to
-// change them
 export function createSessionLogState(deps: SessionLogStateDeps) {
   const segmentBytes = Math.max(1, Math.floor(deps.limits.generationMaxBytes / SEGMENTS_PER_LOG));
   const limitCheckBytes = Math.max(1, Math.floor(segmentBytes / LIMIT_CHECKS_PER_SEGMENT));
@@ -47,12 +40,7 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
   const isTapped = (key: string) => getContext().taps.has(key);
   const isDropped = (key: string) => getContext().dropped.has(key);
   const isRecovered = (impId: string) => getContext().recovered.has(impId);
-
-  // whether the entry is still its key's live log: a log from an earlier
-  // life of the imp, or ended, owns neither the key's slot nor its place
   const isCurrent = (entry: LiveLog): boolean => findLive(entry.key) === entry;
-
-  // destroyed and not back yet
   const isDestroyed = (impId: string) => getContext().forgotten.has(impId);
   const getLife = (impId: string) => getContext().lives.get(impId) ?? 0;
 

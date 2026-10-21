@@ -27,12 +27,9 @@ interface NewImpInput {
   readonly moveState?: 'receiving' | undefined;
   readonly kind?: ImpKind | undefined;
 
-  // a warm move's: this slot, or a SlotTakenError
   readonly slot?: number | undefined;
 }
 
-// A `creating` record with id `id` and a free slot, under the requested name or a free
-// `imp-xxxx`.
 export async function createImpRecord(
   context: ImpHost & ImpClock & ImpVms,
   id: string,
@@ -71,8 +68,6 @@ export async function createImpRecord(
       },
     );
 
-  // slot, ip and jail uid come from one transaction, so only the name should
-  // clash; a jail uid clash is a race to retry, not the caller's mistake
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await createRecord();
@@ -94,7 +89,6 @@ export async function createImpRecord(
 
 const NAME_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
 
-// the requested name, else a free `imp-xxxx`
 async function resolveImpName(context: ImpHost, requested: string | undefined): Promise<string> {
   if (requested !== undefined) {
     return requested;

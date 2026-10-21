@@ -47,7 +47,6 @@ import type { KernelOopsWatch } from './kernel-oops-watch';
 import { createResourceSampler } from './resource-sampler';
 import type { ResourceSampler } from './resource-sampler';
 
-// The egress firewall's part in an imp's life (egress/egress-service.ts)
 interface ImpEgress {
   readonly requirePolicy: (policy: EgressPolicy) => void;
   readonly requireImp: (impId: string) => Promise<void>;
@@ -55,7 +54,6 @@ interface ImpEgress {
   readonly releaseSlot: (slot: number) => Promise<void>;
 }
 
-// tests and a host without the firewall: nothing to program
 const NO_EGRESS: ImpEgress = {
   requirePolicy: () => {},
   requireImp: () => Promise.resolve(),
@@ -77,97 +75,64 @@ export interface ImpServiceDeps {
   readonly storage: StorageBackend;
   readonly log?: (message: string) => void;
 
-  // the RAM governor; without one every boot is admitted
   readonly admission?: RamAdmission;
 
-  // what this host boots imps with, which a snapshot must match to load
   readonly identity: HostIdentity;
 
-  // the IPv6 impd resolved at start; null or left out, imps get none
   readonly ipv6?: Ipv6Plan | null;
   readonly readRamMib: (pid: number, apiSocket: string) => number | null;
   readonly readRssMib: (pid: number, apiSocket: string) => number | null;
 
-  // both of the above in one read, as the resource sampler takes them
   readonly readVmMemory: (
     pid: number,
     apiSocket: string,
   ) => { readonly ramMib: number | null; readonly rssMib: number | null };
 
-  // with IMP_KSM: the RAM a sleep records for the wake reserve, and whether
-  // KSM may merge a VM's guest memory (null: unknown)
   readonly readUnsharedRamMib: (pid: number, apiSocket: string) => number | null;
   readonly checkGuestMerge: (pid: number) => Promise<boolean | null>;
 
-  // the host's live tailnet name, null when tailscaled does not answer; the
-  // configured name can be taken by an older node (`imp-1`)
+  // An older tailnet node can hold the configured name, so the live name can
+  // differ from it.
   readonly readTailnetHostname?: () => Promise<string | null>;
 
-  // the imp's own tailnet name as a URL, once impd serves it
   readonly readServiceUrl?: (name: string) => string | null;
 
-  // where lifecycle events go; a bus of its own by default
   readonly events?: EventBus;
 
-  // the clock holds and RAM reservations are judged by; Date.now by default,
-  // so tests can move it
   readonly now?: () => number;
 
-  // the pause between an elastic guest's looks while a sleep shrinks it
   readonly sleep: (durationMs: number) => Promise<void>;
 
-  // the clock a sleep's timings read and the pause of its young-guest wait
   readonly sleepTiming: SleepTiming;
 
-  // `KEY=VALUE` entries every exec in the imp starts with, under the
-  // caller's own: the credential broker's proxy and CA variables, or why
-  // there are none
   readonly readExecEnv?: (imp: ImpRecord, vsockPath: string) => Promise<BrokerExecEnv>;
 
-  // every imp operation joins it under the imp's lock (storage-gate.ts)
   readonly storageGate?: StorageGate;
 
-  // creates, resizes, boots and wakes need room past the reserve; a sleep
-  // holds room for its memory file while it writes
   readonly diskBudget?: DiskBudget;
 
-  // how impd taps a logged session; a test's fake agent stands in
   readonly openTap?: typeof openTapStream;
 
-  // the last usage pass's numbers for an imp (disk-usage-cache.ts)
   readonly readDiskUsage?: (impId: string) => CachedDiskUsage | undefined;
 
-  // grows a disk's filesystem on the host while no VM has it open; false
-  // leaves the grow to the guest's next boot (imp-disk.ts)
   readonly growFilesystem: (disk: string) => Promise<boolean>;
   readonly egress?: ImpEgress;
 
-  // each VM's CPU limit
   readonly cgroups: CpuCgroups;
 
-  // the most a CPU limit may be
   readonly hostCpus: number;
 
-  // the boot templates cold boots restore (docs/architecture/lifecycle/boot-templates.md);
-  // by default made from the deps when IMP_BOOT_TEMPLATES is on
   readonly templates?: BootTemplates | null;
 
-  // the host's limit on each imp's memory, which follows its plugged size
-  // (memory-limit.ts); nothing enforces it by default
   readonly memoryLimit?: MemoryLimit;
 
-  // what each awake elastic guest holds plugged, which the memory controller
-  // writes; a store of its own by default
   readonly pluggedSizes?: PluggedSizes;
 
-  // whether the host's kernel has oopsed (kernel-oops-watch.ts)
   readonly kernelOops: KernelOopsWatch;
 
-  // the threads of a VM's Firecracker, for the oops above
   readonly readThreadIds: (pid: number) => readonly number[] | null;
 }
 
-// the host: its config, its database of imps, its log, and what it boots with
 export interface ImpHost {
   readonly config: Config;
   readonly db: ImpDatabase;
@@ -181,7 +146,6 @@ export interface ImpClock {
   readonly sleepTiming: SleepTiming;
 }
 
-// what boots and runs an imp's VM, and where its files are
 export interface ImpVms {
   readonly images: ImageService;
   readonly taps: TapDevices;
@@ -190,38 +154,32 @@ export interface ImpVms {
   readonly cgroups: CpuCgroups;
   readonly hostCpus: number;
 
-  // null when IMP_BOOT_TEMPLATES is off: every cold boot boots the kernel
   readonly templates: BootTemplates | null;
   readonly findPaths: (impId: string) => ImpPaths;
   readonly findAddress: (slot: number) => SlotAddress;
 
-  // who the imp's Firecracker runs as; null runs it unjailed (IMP_JAILER)
   readonly findJailUser: (imp: Readonly<ImpRecord>) => JailUser | null;
   readonly growFilesystem: (disk: string) => Promise<boolean>;
   readonly kernelOops: KernelOopsWatch;
 }
 
-// what an imp's VM holds of the host's RAM, and what may admit more
 export interface ImpMemory {
   readonly admission: RamAdmission | undefined;
   readonly readRamMib: (pid: number, apiSocket: string) => number | null;
   readonly readRssMib: (pid: number, apiSocket: string) => number | null;
 
-  // what a sleep records as the imp's RAM: its Pss, or with IMP_KSM its
-  // unshared size, since a wake splits what KSM merged
+  // With IMP_KSM a sleep records the unshared size instead of the Pss, since a
+  // wake splits what KSM merged.
   readonly readSleepRamMib: (pid: number, apiSocket: string) => number | null;
   readonly checkGuestMerge: (pid: number) => Promise<boolean | null>;
   readonly mergeFlags: MergeFlags;
   readonly memoryLimit: MemoryLimit;
 
-  // what each awake elastic guest holds plugged, as impd last saw it
   readonly pluggedSizes: PluggedSizes;
 
-  // the latest look at each running VM (resource-sampler.ts)
   readonly resources: ResourceSampler;
 }
 
-// the guest's agent as impd sees it: its sessions, its activity, its execs
 export interface ImpGuest {
   readonly readExecEnv: (imp: ImpRecord, vsockPath: string) => Promise<BrokerExecEnv>;
   readonly tracker: ActivityTracker;
@@ -230,23 +188,18 @@ export interface ImpGuest {
   readonly sessionLogs: SessionLogs;
 }
 
-// the host's disk room, and the gate the storage GC waits on
 export interface ImpDisk {
   readonly storageGate: StorageGate;
   readonly diskBudget: DiskBudget;
   readonly readDiskUsage: (impId: string) => CachedDiskUsage | undefined;
 }
 
-// what an imp reaches, and how the tailnet names it
 interface ImpNetwork {
   readonly egress: ImpEgress;
   readonly readTailnetHostname: (() => Promise<string | null>) | undefined;
   readonly readServiceUrl: (name: string) => string | null;
 }
 
-// What every part of the imp service shares: the deps with their defaults
-// filled in, and the small lookups each part needs, split by concern. A part
-// of the service takes only the parts it reads.
 export type ImpContext = ImpHost & ImpClock & ImpVms & ImpMemory & ImpGuest & ImpDisk & ImpNetwork;
 
 export function createImpContext(deps: ImpServiceDeps): ImpContext {

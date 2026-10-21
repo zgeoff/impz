@@ -1,7 +1,3 @@
-// The Docker API routes imp-docker-proxy lets through: the calls impd and
-// its `docker` CLI make (docs/architecture/host.md#the-docker-socket).
-// No BuildKit /session or /grpc: a build sends its context as the body.
-
 type Route =
   | { readonly kind: 'ping' }
   | { readonly kind: 'version' }
@@ -13,11 +9,8 @@ type Route =
   | { readonly kind: 'remove'; readonly id: string };
 
 export interface RoutedRequest {
-  // `/v1.55`, or '' for a client that sent no version prefix
   readonly versionPrefix: string;
   readonly route: Route;
-
-  // each param's values, in the order the client sent them
   readonly query: ReadonlyMap<string, readonly string[]>;
 }
 
@@ -26,11 +19,7 @@ export type RouteResult =
   | { readonly isAllowed: false; readonly reason: string };
 
 const VERSION_PREFIX = /^\/v1\.\d{1,3}(?=\/)/v;
-
-// an image reference: a name, a tag, a digest
 const IMAGE_NAME = /^[A-Za-z0-9][A-Za-z0-9._\/:@\-]*$/v;
-
-// a container ID or name as the CLI sends it
 const CONTAINER_ID = /^[A-Za-z0-9][A-Za-z0-9_.\-]*$/v;
 
 export function parseQuery(raw: string): ReadonlyMap<string, readonly string[]> {
@@ -43,7 +32,6 @@ export function parseQuery(raw: string): ReadonlyMap<string, readonly string[]> 
   return query;
 }
 
-// `?a=1&b=2`, or '' for no params
 export function formatQuery(query: ReadonlyMap<string, readonly string[]>): string {
   const params = new URLSearchParams();
 
@@ -85,7 +73,6 @@ function findRoute(method: string, path: string): Route | null {
     return null;
   }
 
-  // image names hold slashes: everything between /images/ and /json
   const image = /^\/images\/(?<name>.+)\/json$/v.exec(path)?.groups?.['name'];
 
   if (method === 'GET' && image !== undefined && IMAGE_NAME.test(image)) {
@@ -107,9 +94,7 @@ function findRoute(method: string, path: string): Route | null {
   return null;
 }
 
-// `target` is the path and query, not decoded; Bun's URL has already
-// resolved dot segments and `\`. One left, an escape or an empty segment is
-// refused, so the proxy checks and forwards one spelling.
+// `target` stays undecoded, and Bun's URL parser has already resolved its dot segments and `\`.
 export function getRequestRoute(method: string, target: string): RouteResult {
   const queryStart = target.indexOf('?');
   const rawPath = queryStart === -1 ? target : target.slice(0, queryStart);

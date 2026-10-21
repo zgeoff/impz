@@ -3,8 +3,6 @@ import * as z from 'zod';
 
 const MAX_NAME_LENGTH = 31;
 
-// The repository's last path segment as an imp image name:
-// `ghcr.io/acme/web-app:1.2` → `web-app`, `ubuntu:24.04` → `ubuntu`.
 export function deriveImageName(ref: string): string {
   const withoutDigest = ref.split('@')[0] ?? ref;
   const lastSegment = withoutDigest.split('/').at(-1) ?? withoutDigest;
@@ -38,8 +36,6 @@ export interface ImageRuntimeConfig {
   readonly user: string;
 }
 
-// `docker image inspect` .Config → /etc/imp/image.json
-// (docs/architecture/guest/protocol.md#contract-tests)
 export function buildImageRuntimeConfig(ociConfig: unknown): ImageRuntimeConfig {
   const parsed = OciConfigSchema.parse(ociConfig);
 

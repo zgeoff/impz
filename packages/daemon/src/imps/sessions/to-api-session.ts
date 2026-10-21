@@ -16,8 +16,6 @@ export function toApiSession(session: SeenSession): Session {
     rows: session.rows,
     startedAt: new Date(session.startedUnixMs),
 
-    // an agent from before output offsets leaves the generation, the boot
-    // and the end out
     continuity: hasOffsets ? 'offsets' : 'none',
     ...(hasOffsets && {
       executionGeneration: session.executionGeneration,
@@ -43,7 +41,6 @@ export function toApiSession(session: SeenSession): Session {
   return api;
 }
 
-// impd keeps only the sessions whose state it knows (parseAgentActivity)
 function getSessionState(state: string): Session['state'] {
   if (!isAgentSessionState(state)) {
     throw new Error(`a session in state ${JSON.stringify(state)}`);

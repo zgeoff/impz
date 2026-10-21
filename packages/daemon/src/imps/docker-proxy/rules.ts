@@ -1,6 +1,3 @@
-// What imp-docker-proxy accepts in a query or a body: the values impd and
-// its `docker` CLI send (recorded in the tests), and nothing else.
-
 import { DOCKERFILE_FRONTEND } from './dockerfile-frontend';
 
 export type Check = { readonly isOk: true } | { readonly isOk: false; readonly reason: string };
@@ -11,10 +8,8 @@ function buildFailure(reason: string): Check {
   return { isOk: false, reason };
 }
 
-// a build tag: imp/<name>:latest, with NameSchema's name rule (@impz/api)
 const BUILD_TAG = /^imp\/[a-z0-9][a-z0-9_.\-]{0,62}:latest$/v;
 
-// the one build arg impd sends, at the one value it sends
 const BUILD_ARGS: Readonly<Record<string, string>> = {
   BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND,
 };
@@ -29,8 +24,6 @@ function checkOneOf(allowed: ReadonlySet<string>): (value: string) => string | n
   return (value) => (allowed.has(value) ? null : `is ${JSON.stringify(value)}`);
 }
 
-// every param in `query` has a rule and passes it: each value of a
-// repeatable one, and a single value of any other
 function checkQuery(
   query: ReadonlyMap<string, readonly string[]>,
   rules: Readonly<Record<string, ParamRule>>,
@@ -98,7 +91,7 @@ function checkBuildArgs(value: string): string | null {
     }
   }
 
-  // the pin is what keeps a `# syntax=` line from picking the frontend
+  // BuildKit lets a Dockerfile's `# syntax=` line pick the frontend unless this build arg pins it.
   for (const key of Object.keys(BUILD_ARGS)) {
     if (!Object.hasOwn(parsed, key)) {
       return `does not set ${key}`;
@@ -108,9 +101,6 @@ function checkBuildArgs(value: string): string | null {
   return null;
 }
 
-// POST /build: impd's BuildKit build with no session, the context as the
-// body; one tag, imp's own, so imp-host's cannot move. Every other param
-// (session, remote, outputs, networkmode, ...) is refused.
 const BUILD_RULES: Readonly<Record<string, ParamRule>> = {
   // oxlint-disable-next-line id-length -- `t` is the Docker Engine API's tag param
   t: {
@@ -120,7 +110,7 @@ const BUILD_RULES: Readonly<Record<string, ParamRule>> = {
   },
   dockerfile: { check: checkDockerfilePath },
 
-  // 2 is BuildKit; 1, the classic builder, takes no frontend pin
+  // Version 2 is BuildKit, and version 1, the classic builder, takes no frontend pin.
   version: { isRequired: true, check: checkOneOf(new Set(['2'])) },
   buildargs: { isRequired: true, check: checkBuildArgs },
 };
@@ -129,12 +119,10 @@ export function checkBuildQuery(query: ReadonlyMap<string, readonly string[]>): 
   return checkQuery(query, BUILD_RULES);
 }
 
-// the one Content-Type `docker build` sends: a tar context
 export const BUILD_CONTENT_TYPE = 'application/x-tar';
 
-// A build body is a tar, never a form: the engine reads params from r.Form,
-// where a form body replaces or adds to the query checked above. The proxy
-// sends its own Content-Type either way.
+// The engine reads build params from r.Form, so a form body would replace or add to the checked
+// query.
 export function checkBuildContentType(value: string | null): Check {
   if (value === null || value === BUILD_CONTENT_TYPE) {
     return OK;
@@ -146,15 +134,10 @@ export function checkBuildContentType(value: string | null): Check {
 }
 
 export interface ImageReference {
-  // the registry host, with its port, or docker.io when the name has none
   readonly registry: string;
-
-  // the repository without the registry: library/ubuntu
   readonly path: string;
 }
 
-// The parts of a reference as the engine reads them: the first component is
-// a registry when it has a dot or a colon, or is localhost.
 export function parseImageReference(reference: string): ImageReference {
   const withoutDigest = reference.split('@')[0] ?? '';
   const lastSlash = withoutDigest.lastIndexOf('/');
@@ -176,7 +159,6 @@ export function parseImageReference(reference: string): ImageReference {
 }
 
 function readRegistryHost(registry: string): string {
-  // [::1]:5000 and [fe80::1]
   if (registry.startsWith('[')) {
     return registry.slice(1, registry.indexOf(']'));
   }
@@ -184,8 +166,8 @@ function readRegistryHost(registry: string): string {
   return registry.split(':')[0] ?? '';
 }
 
-// A registry on the host's own loopback or link-local addresses, or any IP
-// literal, is refused: a pull or a create would reach a service there.
+// The engine pulls from the host's network, so a loopback, link-local or IP-literal registry
+// would reach a service on the host.
 function checkRegistry(registry: string): string | null {
   const host = readRegistryHost(registry).toLowerCase();
 
@@ -200,15 +182,10 @@ function checkRegistry(registry: string): string | null {
   return null;
 }
 
-// what is wrong with the registry a reference names, or null; impd checks a
-// ref it builds from, which the engine may reach without a pull
 export function checkReferenceRegistry(reference: string): string | null {
   return checkRegistry(parseImageReference(reference).registry);
 }
 
-// An image the proxy will pull or create from: from a named registry, and
-// never the repository imp-host and the proxy run from, whose tag a pull
-// would move.
 export function checkImageReference(reference: string, hostImage: string): Check {
   if (!/^[A-Za-z0-9][A-Za-z0-9._\/:@\[\]\-]*$/v.test(reference)) {
     return buildFailure(`image ${JSON.stringify(reference)} is not a reference`);
@@ -236,8 +213,8 @@ function checkTag(value: string): string | null {
     : `is ${JSON.stringify(value)}`;
 }
 
-// A pull of `pullOnly`'s repository at its digest, the tag the CLI sends for
-// a digest; the engine pulls fromImage's repository at the tag alone
+// The docker CLI sends a pull by digest with the digest as the tag param, and the engine pulls
+// fromImage's repository at the tag alone.
 function checkPullOnly(fromImage: string, tag: string, pullOnly: string): Check {
   const image = parseImageReference(fromImage);
   const only = parseImageReference(pullOnly);
@@ -252,9 +229,6 @@ function checkPullOnly(fromImage: string, tag: string, pullOnly: string): Check 
   );
 }
 
-// POST /images/create: a pull by fromImage and tag, nothing else (fromSrc
-// imports a tarball, repo and changes rewrite one). With `pullOnly`, the
-// pull must be of that image, by its digest.
 export function checkPullQuery(
   query: ReadonlyMap<string, readonly string[]>,
   hostImage: string,
@@ -263,7 +237,7 @@ export function checkPullQuery(
   const checked = checkQuery(query, {
     fromImage: { isRequired: true, check: () => null },
 
-    // required: a pull with no tag fetches every tag of the repository
+    // The engine pulls every tag of the repository when a pull names no tag.
     tag: { isRequired: true, check: checkTag },
   });
 
@@ -281,18 +255,14 @@ export function checkPullQuery(
   return checkPullOnly(fromImage, query.get('tag')?.[0] ?? '', pullOnly);
 }
 
-// DELETE /containers/{id}: `docker rm -f` sends force only
 export function checkRemoveQuery(query: ReadonlyMap<string, readonly string[]>): Check {
   return checkQuery(query, { force: { check: checkOneOf(new Set(['0', '1', 'true', 'false'])) } });
 }
 
-// no params anywhere else: GET routes and a create take none (no name)
 export function checkNoQuery(query: ReadonlyMap<string, readonly string[]>): Check {
   return checkQuery(query, {});
 }
 
-// Non-empty values the CLI sends in a create body at its defaults; every
-// other key must be empty (null, false, 0, '', [] or {}, all the way down).
 const CREATE_DEFAULTS: Readonly<Record<string, unknown>> = {
   AttachStdout: true,
   AttachStderr: true,
@@ -304,7 +274,7 @@ const HOST_CONFIG_DEFAULTS: Readonly<Record<string, unknown>> = {
   MemorySwappiness: -1,
 };
 
-// maps whose keys are the data: `{"/x": {}}` sets a volume
+// In these Docker API maps the key is the setting, so `{"/x": {}}` declares a volume.
 const MAP_KEYS = new Set([
   'Volumes',
   'Labels',
@@ -357,8 +327,6 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-// A create from `builderImage` by its digest, as impd's `docker create` of
-// IMP_BUILD_IMAGE names it; a create of another image would reach a pull
 function checkCreateOnly(image: string, builderImage: string): Check {
   const named = parseImageReference(image);
   const only = parseImageReference(builderImage);
@@ -377,9 +345,6 @@ function checkCreateOnly(image: string, builderImage: string): Check {
   );
 }
 
-// POST /containers/create: `docker create <image> /bin/true` and nothing
-// more, from `builderImage` alone when it is set. The proxy forwards a body
-// of its own; this decides whether the client may have one.
 export function checkCreateBody(
   body: unknown,
   hostImage: string,

@@ -6,11 +6,10 @@ import { runChecked } from '../../platform/process/run-command';
 
 export const MIB = 1024 * 1024;
 
-// A disk only grows: the guest's ext4 cannot shrink online, and a smaller
-// file would cut it off. Returns the file's size after.
 export function growDiskFile(disk: string, diskBytes: number): number {
   const size = statSync(disk).size;
 
+  // The guest's ext4 cannot shrink online, and a smaller file would cut it off.
   if (diskBytes > size) {
     truncateSync(disk, diskBytes);
 
@@ -20,9 +19,6 @@ export function growDiskFile(disk: string, diskBytes: number): number {
   return size;
 }
 
-// Grows a stopped disk's ext4 on the host, leaving its new inode tables as
-// holes (docs/architecture/storage/disk-space.md#disk-sizes). An unclean filesystem is
-// left for the guest, after its journal replays.
 export async function growFilesystem(disk: string): Promise<boolean> {
   const header = await runChecked(['dumpe2fs', '-h', disk]);
 

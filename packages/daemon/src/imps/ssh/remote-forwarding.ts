@@ -5,7 +5,7 @@ import { MAX_RELAYS_PER_FORWARD, runGuestListener } from '../reverse/run-guest-l
 import { formatFailure, runChannelRelay } from './channel-io';
 import type { SshBackend } from './ssh-connection-context';
 
-// a global request's answer; ssh2 leaves both out when no reply is wanted
+// ssh2 leaves out both callbacks when a global request wants no reply.
 type AcceptRequest = ((chosenPort?: number) => void) | undefined;
 
 type RejectRequest = (() => void) | undefined;
@@ -23,7 +23,6 @@ interface SocketForwardRequest {
 
 export type RemoteForwardRequest = TcpForwardRequest | SocketForwardRequest;
 
-// Remote forwards (`ssh -R`) for one SSH connection.
 export interface RemoteForwarding {
   readonly open: (
     request: RemoteForwardRequest,
@@ -42,8 +41,6 @@ interface RemoteForwardingDeps {
   readonly client: Connection;
   readonly impName: string;
   readonly backend: Pick<SshBackend, 'openListener' | 'openAccept'>;
-
-  // settles once the imp is awake
   readonly awake: Promise<void>;
   readonly log: (message: string) => void;
 }
@@ -54,16 +51,9 @@ interface OpenForward {
   readonly label: string;
 }
 
-// Each forward listens in the guest as the image's user, and each of its
-// clients becomes a forwarded-tcpip or forwarded-streamlocal channel. A
-// forced sleep ends it; the client must then forward again.
 export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwarding {
   const forwards = new Map<string, OpenForward>();
-
-  // keys whose listener is opening, so a second request for one is refused
   const opening = new Set<string>();
-
-  // open relays per forward key
   const relays = new Map<string, number>();
 
   const countRelays = (key: string, change: number): void => {
@@ -81,9 +71,7 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
       const stream = await deps.backend.openAccept(deps.impName, listener.id, id, 'ssh');
 
       stream.close();
-    } catch {
-      // the client is gone already, or the agent is
-    }
+    } catch {}
   };
 
   const openClientChannel = (request: RemoteForwardRequest, port: number): Promise<ServerChannel> =>
@@ -200,7 +188,6 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
         opening.delete(key);
       }
 
-      // the connection closed while the guest listened
       if (state.stopped) {
         listener.close();
 
@@ -212,7 +199,6 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
 
       forwards.set(key, forward);
 
-      // a port 0 request learns the port the guest picked
       if (request.kind === 'tcp' && request.bindPort === 0) {
         accept?.(port);
       } else {
@@ -247,15 +233,11 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
   };
 }
 
-// The bind addresses a remote forward may name. As sshd with GatewayPorts
-// no, every one of them listens on the guest's 127.0.0.1: no other machine
-// reaches a reverse forward.
+// As sshd does with GatewayPorts no, each of these binds listens on the guest's 127.0.0.1.
 const LOOPBACK_BINDS = new Set(['', '*', '0.0.0.0', '::', 'localhost', '127.0.0.1', '::1']);
 
-// impd's own sockets in the guest; the agent resolves the real path too
 const IMP_RUN_DIR = '/run/imp/';
 
-// the listener a request asks for, or null when it is refused
 function resolveRemoteForward(request: RemoteForwardRequest): ListenSpec | null {
   if (request.kind === 'unix') {
     const path = posix.normalize(request.socketPath);
@@ -279,8 +261,6 @@ function resolveRemoteForward(request: RemoteForwardRequest): ListenSpec | null 
   return { network: 'tcp', port };
 }
 
-// what the client names a forward by: its socket path, or its bind address
-// and the port it asked for
 function buildKey(request: RemoteForwardRequest): string {
   return request.kind === 'unix'
     ? `unix:${posix.normalize(request.socketPath)}`

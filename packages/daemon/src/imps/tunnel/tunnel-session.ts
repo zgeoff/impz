@@ -17,15 +17,9 @@ import type { GuestListener, ListenSpec } from '../../vm/agent-client/listener-s
 import type { ReverseForwards } from '../reverse/reverse-forwards';
 import { runGuestListener } from '../reverse/run-guest-listener';
 
-// at most this many tunnels per imp at a time; the next is refused with
-// TUNNEL_LIMIT, so a client in a loop cannot pile up agent connections
 const MAX_TUNNELS_PER_IMP = 256;
-
-// a client that keeps no window: past this many unacked bytes, impd would
-// hold whatever it sends
 const MAX_PENDING_BYTES = TUNNEL_WINDOW_BYTES + TUNNEL_MAX_FRAME_BYTES;
 
-// The two ends a tunnel bridges: the WebSocket peer and the imp service.
 export interface TunnelPeer {
   readonly sendText: (text: string) => void;
   readonly sendBinary: (data: Uint8Array) => void;
@@ -33,37 +27,22 @@ export interface TunnelPeer {
 }
 
 export interface TunnelBackend {
-  // the imp's id, which the limit counts by, so a recreated imp starts at
-  // zero; throws NOT_FOUND, and never wakes the imp
   readonly readImpId: (name: string) => Promise<string>;
-
-  // a connection inside the imp, counted as a tunnel while open
   readonly openDial: (name: string, target: DialTarget) => Promise<DialStream>;
-
-  // a reverse forward's listener, which alone keeps nothing awake, and the
-  // relay for one of its clients, counted as a tunnel while open
   readonly openListener: (name: string, spec: ListenSpec) => Promise<GuestListener>;
   readonly openAccept: (name: string, listener: string, connection: number) => Promise<DialStream>;
-
-  // who the socket's caller is: only it may accept its forward's clients
   readonly owner: string;
 }
 
 export interface TunnelSession {
-  // a text message parsed as JSON, or a binary message as bytes
   readonly handleMessage: (message: unknown) => void;
   readonly handleClose: () => void;
 }
 
 type TunnelListen = Extract<TunnelClientMessage, { type: 'listen' }>;
 
-// open tunnels per imp id, shared by every tunnel socket; each reverse
-// forward relay counts as one
 export interface TunnelLimits {
-  // the most tunnels one imp may hold open
   readonly max: number;
-
-  // a release to call once, or null when the imp is at the limit
   readonly tryOpen: (impId: string) => (() => void) | null;
 }
 
@@ -85,9 +64,6 @@ function buildErrorMessage(error: unknown): TunnelServerMessage {
   return { type: 'error', message: getErrorMessage(error) };
 }
 
-// One `impz proxy` connection: `open` dials 127.0.0.1:<port> in the imp through
-// the agent, so a loopback-only server works; bytes then flow both ways under
-// a window each way (packages/api tunnel-protocol).
 export function createTunnelSession(
   peer: TunnelPeer,
   backend: TunnelBackend,
@@ -99,12 +75,8 @@ export function createTunnelSession(
     stream: DialStream | null;
     listener: GuestListener | null;
     release: () => void;
-
-    // bytes sent to the peer and not acked yet, and a wait for an ack
     unacked: number;
     ackWaiter: (() => void) | null;
-
-    // bytes from the peer written to the guest and not acked yet
     pendingAck: number;
     acking: boolean;
     guestEof: boolean;
@@ -158,7 +130,6 @@ export function createTunnelSession(
     }
   };
 
-  // the guest's bytes to the peer, within the window
   const sendGuestOutput = async (stream: DialStream): Promise<void> => {
     for await (const event of stream.events()) {
       if (event.type === 'eof') {
@@ -179,8 +150,7 @@ export function createTunnelSession(
       state.unacked += event.data.byteLength;
     }
 
-    // the agent ends a relay once both sides sent their eof; any other end
-    // is a lost connection (a forced sleep, a reset)
+    // The agent ends a relay once both sides have sent eof, so any other end is a lost connection.
     const complete = state.guestEof && state.peerEof;
     const code = complete ? TUNNEL_CLOSE_NORMAL : TUNNEL_CLOSE_LOST;
     const reason = complete ? 'done' : 'lost';
@@ -196,7 +166,6 @@ export function createTunnelSession(
     }
   };
 
-  // acks the peer's bytes once the guest connection has taken them
   const sendPeerAcks = async (stream: DialStream): Promise<void> => {
     state.acking = true;
 
@@ -215,7 +184,6 @@ export function createTunnelSession(
     state.acking = false;
   };
 
-  // the imp's id, or null once the session failed or the peer left
   const readOpeningImp = async (name: string): Promise<string | null> => {
     state.phase = 'opening';
 
@@ -235,7 +203,6 @@ export function createTunnelSession(
       message: `${name} has ${String(limits.max)} ${limits.max === 1 ? 'tunnel' : 'tunnels'} open already`,
     });
 
-  // `reserve` counts the tunnel, or throws why it may not open
   const openTunnel = async (
     name: string,
     reserve: (impId: string) => () => void,
@@ -259,7 +226,6 @@ export function createTunnelSession(
       return;
     }
 
-    // the peer went away while the imp woke
     if (state.phase !== 'opening') {
       stream.close();
 
@@ -283,7 +249,6 @@ export function createTunnelSession(
     return release;
   };
 
-  // an accept takes a client of the caller's own forward, within its relays
   const allocateRelay = (name: string, listener: string, impId: string): (() => void) => {
     const relay = forwards.tryAccept(listener, impId, backend.owner);
 
@@ -311,19 +276,14 @@ export function createTunnelSession(
     }
   };
 
-  // a client of the forward that cannot be taken is closed at once
   const stopGuestClient = async (name: string, listener: string, id: number): Promise<void> => {
     try {
       const stream = await backend.openAccept(name, listener, id);
 
       stream.close();
-    } catch {
-      // the client is gone already, or the agent is
-    }
+    } catch {}
   };
 
-  // The forward lives until the peer closes the socket, or the guest
-  // listener ends, as after a forced sleep: the client listens again.
   const runForward = async (name: string, listener: GuestListener): Promise<void> => {
     try {
       await runGuestListener(listener, {
@@ -335,9 +295,7 @@ export function createTunnelSession(
         refuse: (id) => stopGuestClient(name, listener.id, id),
         isFull: () => forwards.isFull(listener.id),
       });
-    } catch {
-      // the agent connection broke; the close below says so
-    }
+    } catch {}
 
     stopTunnel(TUNNEL_CLOSE_LOST, 'lost');
   };
@@ -356,8 +314,6 @@ export function createTunnelSession(
 
     let listener: GuestListener;
 
-    // a listener holds a tunnel of its own, so one caller cannot open them
-    // without limit
     try {
       state.release = allocateTunnel(control.name, impId);
 

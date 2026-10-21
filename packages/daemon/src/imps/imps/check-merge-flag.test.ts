@@ -4,8 +4,6 @@ import type { TestImpdOptions } from '../../../testing/start-test-impd';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 
-// impd over the stub VMM with the KSM readers a test passes, and a client of
-// its API
 async function setupTest(
   options: Pick<
     TestImpdOptions,
@@ -18,7 +16,6 @@ async function setupTest(
 
   const harness = await startTestImpd(stack, options);
 
-  // every create boots an image row; the default image is base
   await harness.createTestImage('base');
 
   return harness;
@@ -53,7 +50,6 @@ test('it records the Pss on a sleep without IMP_KSM', async () => {
 
   const meta = readSnapshotMeta(buildImpPaths(ctx.dataDir, created.id));
 
-  // the stub VMM's VMs measure 300 MiB of Pss
   expect(meta?.ramMib).toBe(300);
 });
 
@@ -129,8 +125,6 @@ test('it logs an adopted VM that keeps the merge flag without IMP_KSM once', asy
   const ctx = await setupTest({ checkGuestMerge: () => Promise.resolve(true) });
 
   await ctx.client.imps.create({ name: 'dev' });
-
-  // an impd with IMP_KSM started the VM; this one adopts it
   await ctx.restartImpd();
 
   expect(ctx.logs.filter((line) => line.includes('keeps the KSM merge flag'))).toStrictEqual([

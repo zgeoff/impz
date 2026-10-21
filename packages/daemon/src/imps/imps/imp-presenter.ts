@@ -13,34 +13,26 @@ import { MIB } from './imp-disk';
 export interface ImpUrls {
   readonly local: string;
 
-  // https://<name>.<domain> when IMP_DOMAIN is set
   readonly https: string | null;
 
-  // the same name from the internet, while the imp is public
   readonly public: string | null;
 
-  // https://<service>.<tailnet> once impd serves the imp's own name
   readonly service: string | null;
   readonly tailnet: string | null;
 }
 
-// the live leases each presented imp was shown with, by the object itself:
-// the router names their owners per caller without a second read
 const presentedLeases = new WeakMap<Imp, readonly LeaseRecord[]>();
 
 export function readPresentedLeases(imp: Imp): readonly LeaseRecord[] | undefined {
   return presentedLeases.get(imp);
 }
 
-// Imp records as the API shows them; the URLs follow
-// docs/architecture/network/ingress.md#the-wake-proxy.
 export interface ImpPresenter {
   readonly readApi: (imp: ImpRecord) => Promise<Imp>;
   readonly readApiList: (imps: readonly ImpRecord[]) => Promise<Imp[]>;
   readonly readUrls: (imp: ImpRecord) => Promise<ImpUrls>;
 }
 
-// `readSilentSince` is the watchdog's: when the imp's agent went silent
 export function createImpPresenter(
   context: ImpContext,
   readSilentSince: (id: string) => Date | null,
@@ -48,8 +40,6 @@ export function createImpPresenter(
   const buildLocalUrl = (name: string): string =>
     `http://${name}.imp.localhost:${String(context.config.proxyPort)}`;
 
-  // `leases` are the imp's live ones, shown as a count: who owns them is
-  // the router's to show, per caller (auth/caller-view.ts)
   const readApiImp = (imp: ImpRecord, imageName: string, leases: readonly LeaseRecord[]): Imp => {
     const api: Imp = {
       id: imp.id,
@@ -85,7 +75,6 @@ export function createImpPresenter(
       api.public = { auth: imp.publicAuth };
     }
 
-    // a hold that ended holds nothing
     if (imp.holdUntil !== null && imp.holdUntil.getTime() > context.now()) {
       api.holdUntil = imp.holdUntil;
     }
@@ -110,14 +99,12 @@ export function createImpPresenter(
 
     api.cpu = imp.cpu;
 
-    // a running imp's current span counts too
     const awakeMs =
       imp.awakeMs +
       (imp.awakeSince === null ? 0 : Math.max(0, context.now() - imp.awakeSince.getTime()));
 
     api.resources = { wakeCount: imp.wakeCount, awakeMs };
 
-    // the sampler's cache: a list does not read smaps for every imp
     if (imp.state === 'running' && imp.pid !== null) {
       const sample = context.resources.readSample({
         impId: imp.id,
@@ -162,7 +149,6 @@ export function createImpPresenter(
       api.agentSilentSince = silentSince;
     }
 
-    // forgotten once the agent stops answering or the VM stops running
     const inner = imp.state === 'running' ? context.inners.read(imp.id) : undefined;
 
     if (inner !== undefined) {
@@ -244,7 +230,7 @@ function buildHttpsUrl(name: string, https: HttpsConfig | null): string | null {
   return `https://${name}.${https.domain}${port}`;
 }
 
-// Docker publishes the public listener as 443, so the URL has no port
+// Docker publishes the public listener as 443, so the URL has no port.
 function buildPublicUrl(imp: ImpRecord, https: HttpsConfig | null): string | null {
   if (imp.publicAuth === null || https === null || https.public === null) {
     return null;

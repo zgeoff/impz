@@ -23,14 +23,9 @@ import type { LockedImp } from './imp-lock';
 import { requireTransition } from './imp-transitions';
 import { OOM_KILL_TRIGGER, startOomWatch } from './oom-kill';
 
-// what a sleep waits under the imp's lock for an elastic guest to unplug
 const SLEEP_SHRINK_LIMIT_MS = 2000;
-
-// how long a sleep waits for the services list it records
 const SERVICES_FOR_SLEEP_MS = 1000;
 
-// How a sleep treats a guest younger than IMP_SLEEP_MIN_GUEST_UPTIME_MS: wait
-// for it, and give way once `isWanted` turns false, or sleep it at once.
 export type YoungGuestWait =
   | { readonly wait: false }
   | { readonly wait: true; readonly isWanted: () => Promise<boolean> };
@@ -40,17 +35,14 @@ const ALWAYS_WAIT: YoungGuestWait = {
   isWanted: () => Promise.resolve(true),
 };
 
-// what a sleep needs of the rest of the VM operations
 interface SleepDeps {
   readonly context: ImpContext;
   readonly updateState: (imp: LockedImp, change: Readonly<ImpStateChange>) => Promise<LockedImp>;
   readonly writeIdentity: (imp: LockedImp, paths: ImpPaths, identity: VmIdentity) => void;
 
-  // runs a snapshot write in one of the host-wide sleep slots
   readonly withSleepSlot: <T>(task: () => Promise<T>) => Promise<T>;
 }
 
-// the sleepImpVm of ImpVmOps
 export function makeSleepImpVm(
   deps: SleepDeps,
 ): (imp: LockedImp, reason: string, youngGuest?: YoungGuestWait) => Promise<LockedImp> {
@@ -58,8 +50,6 @@ export function makeSleepImpVm(
   const updateState = deps.updateState;
   const writeIdentity = deps.writeIdentity;
 
-  // the last look before the pause, under the imp's lock; nothing attaches
-  // in between, since an open exec or attach keeps an imp from sleeping
   const readSessionsForSleep = async (imp: LockedImp, paths: ImpPaths) => {
     const seen = await sendActivity(paths.vsockSocket).then(
       (activity) => toSeenSessions(activity.sessions, new Date()),
@@ -69,9 +59,6 @@ export function makeSleepImpVm(
     return seen.map((session) => setDetached(session));
   };
 
-  // An elastic guest gives back what it can spare before the pause, so the
-  // snapshot writes less (docs/architecture/lifecycle/elastic-memory.md#sleep); returns what it
-  // keeps plugged, null for an imp that does not grow.
   const shrinkForSleep = async (imp: LockedImp, paths: ImpPaths): Promise<number | null> => {
     if (imp.maxMemoryMib <= imp.memoryMib) {
       return null;
@@ -96,8 +83,6 @@ export function makeSleepImpVm(
     }
   };
 
-  // what the guest holds, or will once a plug under way ends, or the most it
-  // can when even that fails: the disk room and the wake's limit cover it
   const readPluggedMib = async (imp: LockedImp, paths: ImpPaths): Promise<number> => {
     if (imp.maxMemoryMib <= imp.memoryMib) {
       return 0;
@@ -131,8 +116,6 @@ export function makeSleepImpVm(
     );
 
     const started = context.sleepTiming.now();
-
-    // what the event stream reports about this sleep
     const slept: { detail: ImpEventDetail } = { detail: { trigger: reason } };
 
     removeSnapshotMeta(paths);
@@ -158,7 +141,6 @@ export function makeSleepImpVm(
         ...(services !== null && { services }),
       });
 
-      // its next wake restores this memory: the cold boot is news no longer
       if (booted !== null && booted.bootReason !== null) {
         writeIdentity(imp, paths, { ...booted, bootReason: null });
       }
@@ -183,7 +165,7 @@ export function makeSleepImpVm(
         throw error;
       }
 
-      // a snapshot's page cache counts against the memory limit
+      // A snapshot's page cache counts against the cgroup's memory limit.
       const isOomKill = hasOomKill();
       const message = getErrorMessage(error);
       const failure = isOomKill ? `${OOM_KILL_TRIGGER} (${message})` : message;
@@ -222,7 +204,6 @@ export function makeSleepImpVm(
   ): Promise<LockedImp> => {
     requireTransition(imp.state, 'sleeping', 'sleep');
 
-    // the slept event's prepareMs counts from here
     const requestedAt = context.sleepTiming.now();
     const paths = context.findPaths(imp.id);
     const pid = imp.pid;
@@ -231,9 +212,8 @@ export function makeSleepImpVm(
       throw new Error(`${imp.name} is running without a firecracker pid`);
     }
 
-    // the memory file is written in full before its holes are dug: first,
-    // so no wait or pause starts unless the disk has room for it. The shrink
-    // before the pause only lowers an elastic guest's plugged size.
+    // The memory file is written in full before its holes are dug, so no wait
+    // or pause starts unless the disk has room for all of it.
     const memFileMib = imp.memoryMib + (await readPluggedMib(imp, paths));
 
     const slept = await context.diskBudget.withRoom(memFileMib * 1024 * 1024, async () => {
@@ -262,12 +242,10 @@ export function makeSleepImpVm(
   return sleepImpVm;
 }
 
-// a sleeping imp has no client attached: the sleep closed every connection
 function setDetached(session: SeenSession): SeenSession {
   return { ...session, attached: false };
 }
 
-// allocated size: the mem file is sparse after --dig-holes
 function readDiskMib(path: string): number {
   try {
     return Math.round((statSync(path).blocks * 512) / 1_048_576);

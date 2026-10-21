@@ -47,8 +47,6 @@ test('#renderPinnedDockerfile renders the same pinned copy from the same Dockerf
   );
 });
 
-// the frontend joins a continuation without its newline, and a heredoc's
-// body is read after the instruction's own lines
 test('#renderPinnedDockerfile joins a pinned instruction onto one line and keeps a heredoc body as it is', () => {
   const dockerfile = [
     'from a:1',
@@ -86,7 +84,6 @@ test('#renderPinnedDockerfile refuses to render a pinned copy for an image that 
   ).toThrowWithMessage(DockerfileError, 'line 1: FROM d:4 has no pin');
 });
 
-// a pin that adds words would change the stage the instruction names
 test('#renderPinnedDockerfile refuses a pinned copy that does not parse back to the same instructions', () => {
   expect(() =>
     renderPinnedDockerfile(
@@ -113,8 +110,6 @@ test('#checkDockerfile lists each FROM image once, past stage names', () => {
   ]);
 });
 
-// the frontend matches a base to a stage as written: `FROM TOOLS` is an
-// image, which then fails as a reference
 test('#checkDockerfile leaves out scratch and earlier stages named as written', () => {
   const dockerfile = [
     'FROM scratch AS empty',
@@ -221,8 +216,6 @@ test.each([
   },
 );
 
-// the escape directive does not hold after the comment: the backtick is
-// no continuation, and FROM a:1 ` is a FROM of three words
 test('#checkDockerfile ends the parser directives at the first other line', () => {
   expect(checkDockerfile('# hello\n# escape=`\nFROM a:1 `\nFROM b:1\n')).toStrictEqual([
     { ref: 'a:1', use: 'FROM' },

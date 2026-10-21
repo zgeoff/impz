@@ -25,9 +25,6 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
   const ops = parts.ops;
   const reconciler = createVmReconciler(context, ops);
 
-  // An elastic guest may hold more than its memory, and a new impd's cgroup
-  // writer knows nothing of it: the limit covers what the guest holds, or the
-  // most it can, before a sleep or a snapshot sets up the cgroup again.
   const setAdoptedMemoryLimit = async (imp: LockedImp, paths: ImpPaths): Promise<void> => {
     if (imp.maxMemoryMib <= imp.memoryMib) {
       return;
@@ -41,9 +38,7 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
     context.memoryLimit.setGuestMib(imp.id, imp.memoryMib + pluggedMib);
   };
 
-  // the lock's liveness check marks an imp whose VM died with impd stopped
   return async () => {
-    // the first read sets what a lost VM's oops is judged against
     const flag = context.kernelOops.readFlag();
 
     if (flag === 'set') {
@@ -58,8 +53,6 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
 
     const imps = await listImps(context.db);
 
-    // a reboot freed the disk of a hold impd finds with the flag clear, which
-    // only a reboot clears, or with another boot's id, whatever the flag reads
     const bootId = context.kernelOops.readCurrentBootId();
 
     await removeStaleOopsHolds(
@@ -71,11 +64,10 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
       ),
     );
 
-    // cgroups of imps destroyed while impd was down, or whose remove failed
     const impIds = new Set(imps.map((imp) => imp.id));
 
-    // the jails first: their sweep kills every process of the uid, a
-    // template build's too, so the cgroups are empty for the rmdir
+    // The jail sweep kills every process of the uid, so the cgroups are empty
+    // for their rmdir.
     for (const impId of await context.vms.removeOrphanJails(impIds)) {
       context.log(`impd: removed the jail of imp ${impId}: no imp has that id`);
     }
@@ -84,7 +76,6 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
       context.log(`impd: removed the cgroup of imp ${impId}: no imp has that id`);
     }
 
-    // a moving imp too, as its move would: the moves recover after this
     await Promise.all(
       imps.map((listed) =>
         lock.withImpId(
@@ -98,7 +89,7 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
 
             const paths = context.findPaths(imp.id);
 
-            // a loaded guest may answer late; killing it would lose its memory
+            // A loaded guest may answer late, and killing it would lose its memory.
             if (imp.state === 'running') {
               const ready = await context.vms.probeAgentReady(paths);
 
@@ -123,7 +114,6 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
                 await writeAdoptedBoot(context, imp);
               }
 
-              // the record does not change; the event stream still hears of it
               await ops.updateState(imp, { reason: 'adopted', state: 'running' });
 
               return;
@@ -140,8 +130,6 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
                 await context.vms.stopVm(imp.pid, paths, false);
               }
             } catch (stopError) {
-              // one stuck VM must not keep impd from starting; the record
-              // keeps its pid, so a start or destroy kills it again
               context.log(`impd: ${imp.name}: could not stop: ${getErrorMessage(stopError)}`);
 
               await ops.updateState(imp, { reason: 'failed', state: 'error', error });
@@ -160,8 +148,6 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
   };
 }
 
-// Clears the hold an oops of an earlier boot left on an imp, so a new oops
-// in another task never holds it again; the imp keeps its state.
 async function removeStaleOopsHolds(context: ImpHost, imps: readonly ImpRecord[]): Promise<void> {
   for (const imp of imps.filter((listed) => listed.hasOopsHold)) {
     await updateImpState(context.db, imp.id, {
@@ -176,8 +162,6 @@ async function removeStaleOopsHolds(context: ImpHost, imps: readonly ImpRecord[]
   }
 }
 
-// A VM booted before impd kept cold boots has none on record: its boot is
-// `unknown`, so a client still learns that it ended earlier generations.
 async function writeAdoptedBoot(context: ImpHost & ImpVms, imp: ImpRecord): Promise<void> {
   try {
     const ping = await sendPing(context.findPaths(imp.id).vsockSocket);

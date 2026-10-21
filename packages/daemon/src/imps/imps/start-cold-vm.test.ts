@@ -11,13 +11,8 @@ import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups'
 import { readImpByName } from '../../platform/db/imps';
 import { buildTemplateKey } from '../../vm/templates/boot-templates';
 
-// Cold boots with IMP_BOOT_TEMPLATES on, over the stub VMM: the first boot
-// of a shape boots the kernel and builds the template beside it; later ones
-// restore it (docs/architecture/lifecycle/boot-templates.md).
-
 async function setupTest(
   config: Readonly<{
-    // every VM runs under the jailer, in a cgroup of its own
     isJailed?: boolean;
   }> = {},
 ) {
@@ -26,11 +21,7 @@ async function setupTest(
   onTestFinished(() => stack.disposeAsync());
 
   const isJailed = config.isJailed ?? false;
-
-  // a cgroup for every VM, as a jailed start needs
   const cgroups = buildStubCpuCgroups();
-
-  // the host's clone and filesystem grow, which a test fails or holds
   const disk = buildStubDiskTools();
 
   const harness = await startTestImpd(stack, {
@@ -43,14 +34,12 @@ async function setupTest(
     growFilesystem: disk.growFilesystem,
   });
 
-  // the image every imp boots from
   await harness.createTestImage('ubuntu');
 
   const templates = harness.imps.bootTemplates;
 
   invariant(templates, 'IMP_BOOT_TEMPLATES is on, but impd has no templates');
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, { templates, disk, stack });
 }
 
@@ -136,13 +125,11 @@ test('it leaves no broken record behind once a restored imp settles', async () =
 
   const broken = await readBrokenInvariants(ctx, false);
 
-  // a fallback to the kernel would leave no restore and a third boot
   expect(ctx.fake.restores.map((restore) => restore.hostname)).toStrictEqual(['second']);
   expect(ctx.fake.boots.map((boot) => boot.hostname)).toStrictEqual(['once', 'first']);
   expect(broken).toBeEmpty();
 });
 
-// a template has no hot-plug region, so it would restore a guest that cannot grow
 test('it boots the kernel for an elastic imp even when its memory has a template', async () => {
   const ctx = await setupTest();
 
@@ -219,7 +206,6 @@ test('it keeps the template through more failed clones than turn a key off', asy
 
   ctx.disk.setCloneFailing(true);
 
-  // more than the restore failures that would turn the key off, one at a time
   const secondFailure = await ctx.client.imps
     .create({ name: 'second', vcpus: 1, memoryMib: 256 })
     .then(
@@ -253,7 +239,6 @@ test('it keeps the template through more failed clones than turn a key off', asy
 
   const key = buildTemplateKey(ctx.readIdentity(), { vcpus: 1, memoryMib: 256 });
 
-  // the API hides a host failure behind a 500
   expect(secondFailure).toStrictEqual(
     new ORPCError('INTERNAL_SERVER_ERROR', { status: 500, message: 'Internal server error' }),
   );
@@ -269,9 +254,6 @@ test('it keeps the template through more failed clones than turn a key off', asy
   expect(second?.error).toBe('clone failed: no space');
   expect(third?.error).toBe('clone failed: no space');
   expect(fourth?.error).toBe('clone failed: no space');
-
-  // no restore and no VM started for them, none booted the kernel, and the
-  // template stays
   expect(plansAfterFailures).toBeEmpty();
   expect(ctx.fake.alive.size).toBe(aliveBefore + 1);
   expect(ctx.fake.boots.map((boot) => boot.hostname)).toStrictEqual(['first']);
@@ -287,11 +269,8 @@ test('it ends the restored VM when the grow after the clone fails, and keeps the
 
   const aliveBefore = ctx.fake.alive.size;
 
-  // a clone that lands no disk fails the grow after it
   ctx.disk.setCloneEmpty(true);
 
-  // more than the restore failures that would turn the key off, one at a
-  // time, as each takes the template's claim
   const secondFailure = await ctx.client.imps
     .create({ name: 'second', vcpus: 1, memoryMib: 256 })
     .then(
@@ -323,7 +302,6 @@ test('it ends the restored VM when the grow after the clone fails, and keeps the
 
   const key = buildTemplateKey(ctx.readIdentity(), { vcpus: 1, memoryMib: 256 });
 
-  // the API hides a host failure behind a 500
   expect(secondFailure).toStrictEqual(
     new ORPCError('INTERNAL_SERVER_ERROR', { status: 500, message: 'Internal server error' }),
   );
@@ -340,7 +318,6 @@ test('it ends the restored VM when the grow after the clone fails, and keeps the
   invariant(third);
   invariant(fourth);
 
-  // the size step after the clone finds no disk
   expect(second.error).toBe(
     `ENOENT: no such file or directory, stat '${join(ctx.dataDir, 'imps', second.id, 'disk.ext4')}'`,
   );
@@ -353,8 +330,6 @@ test('it ends the restored VM when the grow after the clone fails, and keeps the
     `ENOENT: no such file or directory, stat '${join(ctx.dataDir, 'imps', fourth.id, 'disk.ext4')}'`,
   );
 
-  // each restore started, its VM ended, none booted the kernel, and the
-  // template stays
   expect(ctx.fake.restorePlans.map((plan) => plan.claim.hostname)).toStrictEqual([
     'second',
     'third',
@@ -388,7 +363,6 @@ test('it never waits for the template build of a shape with no template yet', as
 
   const held = ctx.fake.hold('template');
 
-  // released before the harness stops its templates, which waits for this build
   ctx.stack.defer(() => {
     held.release();
   });
@@ -418,7 +392,6 @@ test('it runs a jailed restore as the imp, with the template and its drive bound
 
   invariant(typeof second?.jailUid === 'number');
 
-  // a restore that fell back to the kernel would be a boot here
   expect(ctx.fake.boots.map((boot) => boot.hostname)).toStrictEqual(['once', 'first']);
   expect(ctx.fake.restorePlans).toHaveLength(1);
 
@@ -432,9 +405,6 @@ test('it runs a jailed restore as the imp, with the template and its drive bound
   });
 });
 
-// On ZFS the disk is a dataset mounted on imps/<id>/disk. A jail sees only
-// the mounts made before its prepare, so a restore that starts first finds
-// an empty mountpoint (#147). A held clone stands in for that mount.
 test('it starts a jailed restore only once the clone is in place', async () => {
   const ctx = await setupTest({ isJailed: true });
 
@@ -443,7 +413,6 @@ test('it starts a jailed restore only once the clone is in place', async () => {
 
   const clone = ctx.disk.holdClone();
 
-  // a disk past the image's filesystem, which the host grows
   const creating = ctx.client.imps.create({
     name: 'second',
     vcpus: 1,
@@ -471,7 +440,6 @@ test('it overlaps a jailed restore with the grow of its disk', async () => {
 
   const grow = ctx.disk.holdGrow();
 
-  // a disk past the image's filesystem, which the host grows
   const creating = ctx.client.imps.create({
     name: 'second',
     vcpus: 1,
@@ -481,7 +449,6 @@ test('it overlaps a jailed restore with the grow of its disk', async () => {
 
   await grow.reached;
 
-  // a restore that waited for the grow would never start while it is held
   await waitFor(() => {
     expect(ctx.fake.restorePlans).toHaveLength(1);
   });

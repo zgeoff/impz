@@ -28,24 +28,19 @@ async function setupTest() {
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  // the engine a host build sends its context to; it stops after impd
   const engine = startStubDockerEngine({ directoryPath: dataDir });
 
   stack.defer(() => engine.stop());
 
-  // adds and builds run on the host's engine, the stub
   const harness = await startTestImpd(stack, {
     dataDir,
     env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: engine.dockerHost },
 
-    // a sparse copy for a reflink: the temp dir is not XFS, and an imp's
-    // disk is sparse
     cloneDisk: async (source, target) => {
       await runChecked(['cp', '--sparse=always', source, target]);
     },
   });
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, { engine });
 }
 
@@ -139,7 +134,6 @@ test('it repeats the progress at each keepalive while the work is silent', async
   expect(progress.value).toStrictEqual({ type: 'progress', phase: 'pull', elapsedMs: 15_000 });
 });
 
-// 400 s of silent work: past the 360 s Bun's fetch waits for a byte
 test('it sends progress every 15 s through work silent for 400 s', async () => {
   const clock = { now: 0 };
   const keepalive = buildStubRepeat();
@@ -203,7 +197,6 @@ test('it throws the failure through the stream and records what was thrown', () 
   expect(records).toStrictEqual([failure]);
 });
 
-// what oRPC does when the client goes: the stream ends at its yield
 test('it writes no audit row when the client leaves before the work ends', async () => {
   const records: unknown[] = [];
 
@@ -454,7 +447,6 @@ test('it streams the phases of an add, then the image', async () => {
   await mkdir(join(ctx.dataDir, 'tree'));
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
-  // the image is not on the host: the add pulls it, then unpacks its export
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -721,7 +713,6 @@ test('it streams the pack, then the build, of a build from a directory', async (
   await mkdir(contextDir);
   await writeFile(join(contextDir, 'Dockerfile'), 'FROM scratch\n');
 
-  // the Dockerfile frontend is on the host already
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
@@ -729,7 +720,6 @@ test('it streams the pack, then the build, of a build from a directory', async (
 
   updateEnv('PATH', docker.path);
 
-  // the engine holds the build until its client goes
   ctx.engine.setAnswer(async (request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -835,7 +825,6 @@ test('it stops the engine build of a streamed build whose client goes, and audit
 test('it kills the host pull of a streamed add whose client goes, and audits it', async () => {
   const ctx = await setupTest();
 
-  // the image is not on the host, and its pull hangs until it is killed
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -865,7 +854,6 @@ test('it kills the host pull of a streamed add whose client goes, and audits it'
 
   client.abort();
 
-  // the pull sleeps 30 s: only its kill writes the row within the wait
   const outcomes = await waitFor(async () => {
     const rows = await listApiCalls(ctx.db, null, 100, null);
 
@@ -967,7 +955,6 @@ test('it kills the host pull of a plain add whose client goes, and audits it', a
 
   expect(adding).rejects.toThrow();
 
-  // the pull sleeps 30 s: only its kill writes the row within the wait
   const outcomes = await waitFor(async () => {
     const rows = await listApiCalls(ctx.db, null, 100, null);
 

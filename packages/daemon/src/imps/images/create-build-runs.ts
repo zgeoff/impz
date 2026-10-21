@@ -1,7 +1,5 @@
 import type { ImageBuildPhase, ImageBuildRun, ImageBuildSource } from '@impz/api';
 
-// One build as it runs: each setter updates what images.builds shows, and
-// `end` takes the build off the list however it ended
 export interface BuildRun {
   readonly setPhase: (phase: ImageBuildPhase) => void;
   readonly setStep: (step: string) => void;
@@ -12,12 +10,9 @@ export interface BuildRun {
 export interface BuildRuns {
   readonly start: (name: string, source: ImageBuildSource) => BuildRun;
 
-  // the builds running now, the oldest first
   readonly list: () => ImageBuildRun[];
 }
 
-// The builds impd runs now, in memory: a restart ends every build, so none
-// outlives the list. `now` stamps each build's start.
 export function createBuildRuns(now: () => number): BuildRuns {
   const runs = new Set<{ run: ImageBuildRun }>();
 

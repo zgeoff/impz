@@ -137,7 +137,6 @@ test('#createBuildEventStream repeats the progress at each keepalive while the b
   );
 });
 
-// 400 s of a silent build: past the 360 s Bun's fetch waits for a byte
 test('#createBuildEventStream sends progress every 15 s through a build silent for 400 s', async () => {
   const clock = { now: 0 };
   const done = Promise.withResolvers<ImageBuildEvent>();
@@ -249,8 +248,6 @@ test('#runOnInterval ticks a repeat again and again on its interval', async () =
   expect(ticks.slice(0, 2)).toStrictEqual([0, 1]);
 });
 
-// a served stream, as impd's route answers a build: the client goes between
-// two progress lines
 test('#createBuildEventStream sends nothing more and stops its keepalive once a served client leaves mid-stream', async () => {
   const keepalive = buildStubRepeat();
 
@@ -284,7 +281,6 @@ test('#createBuildEventStream sends nothing more and stops its keepalive once a 
     expect(keepalive.countRunning(10_000)).toBe(0);
   });
 
-  // the stopped keepalive's tick, as an interval that fell due as it stopped
   const [tick] = keepalive.listStartedTicks(10_000);
 
   invariant(tick);

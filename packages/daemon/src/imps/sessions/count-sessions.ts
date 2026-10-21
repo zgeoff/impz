@@ -4,9 +4,6 @@ import type { ImpContext } from '../imps/imp-context';
 
 type SessionSources = Pick<ImpContext, 'sessions' | 'findPaths'>;
 
-// The sessions impd last saw, without asking the guest: what the idle loop
-// recorded for an awake imp, the snapshot meta for a sleeping one. undefined
-// when impd has not seen this boot's agent, or the snapshot predates them.
 export function readSeenSessions(context: SessionSources, imp: Readonly<ImpRecord>) {
   if (imp.state === 'running') {
     return context.sessions.read(imp.id);

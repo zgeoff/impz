@@ -37,15 +37,11 @@ import type { ImageStore, Pin, PinInspect } from './image-pin';
 import { runDocker } from './run-docker';
 import { writeContextTar } from './write-context-tar';
 
-// the largest Dockerfile impd reads for its FROM lines
 const DOCKERFILE_MAX_BYTES = 1024 ** 2;
 
 export const HOST_BUILD_WARNING =
   'impd: WARNING: IMP_BUILD_ISOLATION=host: image builds run on the host engine, whose RUN steps can reach the host and its private networks; for a trusted operator only, and gone in the next release (docs/guides/images.md#isolated-builds)';
 
-// what a streamed add or build hears of: `signal` aborts when the client
-// goes, `setPhase` hears each phase as it starts, `output` a build's lines
-// and steps, and `setBuilder` the builder imp an isolated build runs in
 interface ImageOpOptions {
   readonly signal?: AbortSignal;
   readonly setPhase?: (phase: ImageBuildPhase) => void;
@@ -61,8 +57,6 @@ export interface ImageBuilds {
     options?: Readonly<ImageOpOptions>,
   ) => Promise<ImageRecord>;
 
-  // a context the client uploaded, as a tar file; `signal` aborts when the
-  // client goes, and ends the build
   readonly buildImageFromContext: (
     tarPath: string,
     name: string,
@@ -70,11 +64,8 @@ export interface ImageBuilds {
     options: Readonly<ImageOpOptions> & { readonly signal: AbortSignal },
   ) => Promise<ImageRecord>;
 
-  // one of the build slots an upload and an on-host build share;
-  // TOO_MANY_REQUESTS when all are taken
   readonly claimBuildSlot: () => () => void;
 
-  // an upload's entry in images.builds; runImageBuild makes its own
   readonly startBuildRun: BuildRuns['start'];
   readonly listBuildRuns: BuildRuns['list'];
 }
@@ -82,26 +73,18 @@ export interface ImageBuilds {
 interface ImageBuildsDeps {
   readonly config: Config;
 
-  // a build holds room for its context and the rewrite of it
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
 
-  // where an isolated build runs; null until the imps are up
   readonly readBuilders: () => Builders | null;
   readonly log: (message: string) => void;
 
-  // the start time of each build images.builds lists; Date.now by default
   readonly now?: () => number;
 }
 
-// images.build: a Dockerfile's images pinned and the build run in a builder
-// imp, or on the host engine under IMP_BUILD_ISOLATION=host
 export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): ImageBuilds {
   const buildRuns = createBuildRuns(deps.now ?? Date.now);
   const buildSlots = createBuildSlots();
 
-  // Each image the Dockerfile names and the engine lacks is pulled first,
-  // on the engine that builds. Returns the Dockerfile with each image pinned
-  // to its digest.
   const resolvePinnedDockerfile = async (
     dockerfile: string,
     images: readonly ExternalImage[],
@@ -116,9 +99,8 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
     const stores = new Set<ImageStore>();
 
-    // Each image inspected and pinned once, whatever its uses or spellings
-    // (`busybox` is `docker.io/library/busybox:latest`): a tag that moves
-    // between two inspects would give the build two images.
+    // A registry tag can move between two inspects, so each image is inspected once whatever
+    // its spellings (`busybox` is `docker.io/library/busybox:latest`).
     const keys = new Map<string, string>();
 
     for (const image of images) {
@@ -128,7 +110,8 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
         });
       }
 
-      // the host may have it already, and then no pull meets the proxy
+      // The engine may hold the image already, and then no pull passes imp-docker-proxy to
+      // refuse it.
       const registryProblem = checkReferenceRegistry(image.ref);
 
       if (registryProblem !== null) {
@@ -165,9 +148,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
     }
   };
 
-  // The host build (IMP_BUILD_ISOLATION=host): the tag's name and the
-  // Dockerfile's path are all of the client's that reach the engine, checked
-  // again by imp-docker-proxy. Its RUN steps reach what the engine reaches.
   const runHostBuild = (
     tarPath: string,
     tag: string,
@@ -199,12 +179,9 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
     const dockerfilePath = normalizeDockerfilePath(givenDockerfile);
     const rewrittenPath = `${tarPath}.rewritten`;
     const isolation = deps.config.build.isolation;
-
-    // the pins the build used, for a failure the engine reports
     let pins: readonly Pin[] = [];
 
     try {
-      // the rewrite is the context again, with pax headers for long names
       const built = await deps.diskBudget.withRoom(tarBytes, async () => {
         const context = await readBuildContext(
           tarPath,
@@ -219,7 +196,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
         const dockerfile = context.dockerfilePath ?? 'Dockerfile';
 
-        // the input guard (#145): a Dockerfile it refuses boots no builder
         const named = (() => {
           try {
             return checkDockerfile(context.dockerfile);
@@ -228,7 +204,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
           }
         })();
 
-        // the pins, on the engine that builds
         const writePinnedContext = async (engine: BuildEngine): Promise<void> => {
           const pinned = await resolvePinnedDockerfile(context.dockerfile, named, engine, signal);
 
@@ -253,8 +228,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
           signal.throwIfAborted();
 
-          // a prune between this and the build fails it with the engine's
-          // error, and the client can retry
           await engine.loadFrontend(signal);
         };
 
@@ -290,7 +263,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
           const ran = performance.now();
 
-          // the export out of the builder, and its unpack
           options.setPhase?.('unpack');
 
           const image = await writer.writeGuestImage(exec, imageName, tag, signal);
@@ -299,7 +271,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
           const buildMs = Math.round(ran - pinned);
           const imageMs = Math.round(performance.now() - ran);
 
-          // pins: the pulls, cold in each builder; image: the export and its rootfs
           deps.log(
             `impd: image build ${name} (imp): pins=${String(pinsMs)}ms build=${String(buildMs)}ms image=${String(imageMs)}ms`,
           );
@@ -314,12 +285,10 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
         return built;
       }
 
-      // the tag is the engine's now: no pull, only the unpack
       return await writer.createImageOnHost(tag, NameSchema.parse(name), {
         ...(options.setPhase !== undefined && { setPhase: options.setPhase }),
       });
     } catch (error) {
-      // nobody waits for the image: the build was stopped, or its tag is left
       signal.throwIfAborted();
 
       if (error instanceof DockerBuildError) {
@@ -332,8 +301,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
     }
   };
 
-  // packed on the impd host, as the CLI packs an upload; holds a build slot
-  // from the first check to the image
   const createOnHost = async (
     contextDir: string,
     name: string,
@@ -346,17 +313,16 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
       });
     }
 
-    // The CLI sends a path on its own machine. impd sees it only when the
-    // two share a filesystem (the dev container mounts the repo); a host
-    // running the release image does not.
+    // The CLI sends a path on its own machine, which impd sees only when the two share a
+    // filesystem, as in the dev container.
     if (!existsSync(contextDir)) {
       throw new ORPCError('BAD_REQUEST', {
         message: `build context ${contextDir} does not exist on the impd host; build the image there and use \`impz image add\``,
       });
     }
 
-    // packed here as the CLI packs an upload: the engine does not read
-    // .dockerignore from a context sent as the body
+    // Docker reads no .dockerignore from a context sent as the request body, so impd packs the
+    // context itself, as the CLI does.
     const entries = await listContextEntries(contextDir, normalizeDockerfilePath(dockerfile)).catch(
       (error: unknown) => {
         throw error instanceof MissingDockerfileError
@@ -369,7 +335,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
     const maxBytes = deps.config.buildContextMaxBytes;
 
-    // the limit an upload has, and the proxy's
     if (tarBytes > maxBytes) {
       throw new ORPCError('BAD_REQUEST', {
         message: `the build context is ${String(tarBytes)} bytes, over the limit of ${String(Math.floor(maxBytes / 1024 ** 2))} MiB (IMP_BUILD_CONTEXT_MAX_MIB)`,
@@ -387,7 +352,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
         options.setPhase?.('build');
 
-        // images.build has no signal: its call waits for the image
         return await createFromContext(tarPath, name, dockerfile, {
           ...options,
           signal: options.signal ?? new AbortController().signal,
@@ -437,8 +401,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
   };
 }
 
-// one image's every spelling: the engine's registry and path, and the tag
-// (latest when none) and digest
 function toImageKey(ref: string): string {
   const named = parseImageReference(ref);
   const [withoutDigest = '', digest = ''] = ref.split('@');
@@ -449,8 +411,6 @@ function toImageKey(ref: string): string {
   return `${named.registry}/${named.path}:${tag}@${digest}`;
 }
 
-// The pin for one image: its digest ref, once impd has checked the
-// variant the host has, which is the one the build uses.
 function pickPin(
   image: Readonly<ExternalImage>,
   inspect: Readonly<PinInspect>,
@@ -465,15 +425,16 @@ function pickPin(
     });
   }
 
-  // the frontend runs the triggers of every image the build reaches, a
-  // COPY --from or a mount's too, where impd cannot check them
+  // The Dockerfile frontend runs the ONBUILD triggers of every image the build reaches,
+  // including a COPY --from or a mount's, where impd cannot check them.
   if ((inspect.OnBuild ?? []).length > 0) {
     throw new ORPCError('BAD_REQUEST', {
       message: `${image.use} ${ref} has ONBUILD triggers, which impd refuses`,
     });
   }
 
-  // a digest under a registry the pull rule refuses would reach it unpulled
+  // A pin under a refused registry would let the build reach that registry with no pull for
+  // imp-docker-proxy to refuse.
   const repoDigests = inspect.RepoDigests ?? [];
   const allowed = repoDigests.filter((digest) => checkReferenceRegistry(digest) === null);
   const pin = pickRepoDigest(ref, allowed);
@@ -501,16 +462,12 @@ function toBadRequest(error: unknown): unknown {
     : error;
 }
 
-// the host's engine, through imp-docker-proxy
 function runOnHost(argv: readonly string[], signal: AbortSignal): ReturnType<EngineRun> {
   const [command, ...args] = argv;
 
   return command === 'docker' ? runDocker(args, { signal }) : runCommand(argv, { signal });
 }
 
-// The Dockerfile's path in the context in one spelling, `./a//Dockerfile`
-// as `a/Dockerfile`, which the proxy checks; one that leaves the context is
-// refused.
 export function normalizeDockerfilePath(path: string | undefined): string {
   const normalized = posix.normalize(path ?? 'Dockerfile');
 

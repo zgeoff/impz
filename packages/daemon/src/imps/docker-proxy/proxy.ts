@@ -1,7 +1,3 @@
-// imp-docker-proxy's handler: a call impd or its `docker` CLI makes, checked and
-// rebuilt. It closes the Docker socket path only; SYS_ADMIN still lets root
-// out of imp-host (docs/architecture/host.md#the-docker-socket).
-
 import { P, match } from 'ts-pattern';
 import { z } from 'zod';
 import { formatEngineFailure, formatRefusal } from './refusal';
@@ -18,17 +14,10 @@ import {
 } from './rules';
 import type { Check } from './rules';
 
-// the label on every container the proxy creates; export and rm need it
 export const PROXY_LABEL = 'imp.docker-proxy';
-
-// how long any call but a build, a pull or an export may wait for the
-// engine: an inspect, a create or a removal answers in seconds
 const CONTROL_CALL_MS = 120_000;
-
-// a create body from the CLI is about 2 KiB
 const CREATE_BODY_MAX_BYTES = 1024 ** 2;
 
-// response headers the proxy sets itself, or that belong to one connection
 const DROPPED_RESPONSE_HEADERS = new Set([
   'connection',
   'content-length',
@@ -44,22 +33,12 @@ export const ContainerSchema = z.object({
 });
 
 export interface DockerProxyOptions {
-  // the engine's socket
   readonly upstreamSocket: string;
-
-  // the value of PROXY_LABEL on the containers this proxy creates
   readonly token: string;
-
-  // the image imp-host runs from, whose repository a pull may not move
   readonly hostImage: string;
-
-  // under IMP_BUILD_ISOLATION=imp, IMP_BUILD_IMAGE: the one image a pull may
-  // fetch, by its digest, and no build passes; null under host isolation
   readonly builderImage: string | null;
   readonly buildContextMaxBytes: number;
   readonly log: (message: string) => void;
-
-  // CONTROL_CALL_MS, but for tests
   readonly controlCallMs?: number;
 }
 
@@ -71,7 +50,6 @@ function buildJsonResponse(status: number, message: string): Response {
   return Response.json({ message }, { status });
 }
 
-// the body as bytes, or null past maxBytes; a chunked body is counted too
 async function readBodyWithin(request: Request, maxBytes: number): Promise<Uint8Array | null> {
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -93,7 +71,6 @@ async function readBodyWithin(request: Request, maxBytes: number): Promise<Uint8
   return Bun.concatArrayBuffers(chunks, Infinity, true);
 }
 
-// passes a stream through and errors it past maxBytes
 function createByteLimit(maxBytes: number): TransformStream<Uint8Array, Uint8Array> {
   let total = 0;
 
@@ -146,16 +123,12 @@ function toClientResponse(upstream: Response): Response {
 
 interface UpstreamCall {
   readonly method: string;
-
-  // the path after the version prefix, as the proxy built it
   readonly path: string;
   readonly query?: ReadonlyMap<string, readonly string[]>;
   readonly headers?: Readonly<Record<string, string>>;
   readonly body?: string | ReadableStream<Uint8Array> | null;
 
-  // a build, a pull or an export: past Bun's 360 s limit on a silent answer,
-  // which a quiet RUN step outlasts, until the client goes. Any other call
-  // ends at CONTROL_CALL_MS.
+  // Bun's fetch gives up on an answer that stays silent for 360 s, which a quiet RUN step outlasts.
   readonly longRunning?: { readonly signal: AbortSignal };
 }
 
@@ -165,7 +138,6 @@ export function createDockerProxy(
   const sendUpstream = (versionPrefix: string, call: UpstreamCall): Promise<Response> => {
     const search = call.query === undefined ? '' : formatQuery(call.query);
 
-    // the host part is ignored: the request goes to the unix socket
     return fetch(`http://docker${versionPrefix}${call.path}${search}`, {
       method: call.method,
       headers: call.headers ?? {},
@@ -192,7 +164,6 @@ export function createDockerProxy(
     return buildJsonResponse(403, formatRefusal(reason));
   };
 
-  // the container's full ID, when the proxy created it; null otherwise
   const readOwnContainer = async (versionPrefix: string, id: string): Promise<string | null> => {
     const inspected = await sendUpstream(versionPrefix, {
       method: 'GET',
@@ -247,7 +218,6 @@ export function createDockerProxy(
       return buildRefusal(request, path, reason);
     }
 
-    // a body of the proxy's own: no field of the client's reaches the engine
     const created = JSON.stringify({
       Image: checked.image,
       Cmd: ['/bin/true'],
@@ -283,8 +253,6 @@ export function createDockerProxy(
         path: '/build',
         query: routed.query,
 
-        // the proxy's own Content-Type (checkBuildContentType), and no
-        // client header: a build without a session reads no registry auth
         headers: { 'content-type': BUILD_CONTENT_TYPE },
         body,
         longRunning: { signal: request.signal },
@@ -364,7 +332,6 @@ export function createDockerProxy(
   const checkRouteQuery = (routed: RoutedRequest): Check => {
     const kind = routed.route.kind;
 
-    // impd builds in builder imps then, never on this engine
     if (kind === 'build' && options.builderImage !== null) {
       return {
         isOk: false,
@@ -427,7 +394,8 @@ export function createDockerProxy(
       return buildRefusal(request, url.pathname, routed.reason);
     }
 
-    // an Upgrade is a hijacked stream (attach, BuildKit's session): never
+    // The engine hijacks an Upgrade connection into a raw stream, as attach and a BuildKit
+    // session do.
     if (request.headers.has('upgrade')) {
       return buildRefusal(request, url.pathname, 'an Upgrade request is not a call impd makes');
     }

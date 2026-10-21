@@ -2,7 +2,6 @@ import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import type { SessionLogImp } from './session-log-service';
 
-// what the session logs need of an imp: its state, its agent and its logs
 export function findSessionLogImp(
   findPaths: (impId: string) => ImpPaths,
   imp: Readonly<Pick<ImpRecord, 'id' | 'state'>>,

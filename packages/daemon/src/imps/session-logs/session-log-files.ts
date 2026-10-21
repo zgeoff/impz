@@ -15,8 +15,6 @@ import {
 import type { GenerationMeta } from './generation-log';
 import { planLogRead } from './plan-log-read';
 
-// Reading an imp's session logs: what a list, a read and a delete see.
-
 export interface SessionLogReadRequest {
   readonly session: string;
   readonly executionGeneration: string;
@@ -24,7 +22,6 @@ export interface SessionLogReadRequest {
   readonly limit?: number | undefined;
 }
 
-// a live log's meta as its writer holds it, or null to read the file
 export type LiveMetaReader = (generation: string) => GenerationMeta | null;
 
 const GENERATION_PATTERN = /^[0-9a-f]{32}$/u;
@@ -34,9 +31,6 @@ function isGenerationName(name: string): boolean {
   return GENERATION_PATTERN.test(name);
 }
 
-// The directory of one generation's log. The generation came from the
-// guest, so it is checked here too: nothing but a child of the imp's
-// session-logs directory is ever a log.
 export function getGenerationDir(sessionLogsDir: string, generation: string): string {
   const root = resolve(sessionLogsDir);
   const directory = resolve(root, generation);
@@ -48,7 +42,6 @@ export function getGenerationDir(sessionLogsDir: string, generation: string): st
   return directory;
 }
 
-// every log of the imp, live ones as their writers hold them
 export function readImpMetas(sessionLogsDir: string, readLive: LiveMetaReader): GenerationMeta[] {
   if (!existsSync(sessionLogsDir)) {
     return [];
@@ -60,15 +53,11 @@ export function readImpMetas(sessionLogsDir: string, readLive: LiveMetaReader): 
       const meta =
         readLive(generation) ?? readGenerationMeta(getGenerationDir(sessionLogsDir, generation));
 
-      // a meta that names another generation is not this directory's
       return meta?.executionGeneration === generation ? [meta] : [];
     });
 }
 
-// A deleted live generation leaves a tombstone, `.deleted/<generation>`, so
-// no impd taps it again; it goes once the generation is gone.
 function getTombstonePath(sessionLogsDir: string, generation: string): string {
-  // the same check as a log's directory, one level down
   const name = basename(getGenerationDir(sessionLogsDir, generation));
 
   return join(sessionLogsDir, TOMBSTONES, name);
@@ -97,7 +86,6 @@ export function removeTombstone(sessionLogsDir: string, generation: string): voi
   rmSync(getTombstonePath(sessionLogsDir, generation), { force: true });
 }
 
-// what a destroy removed, if a log made it again: each only when empty
 export function removeEmptyDirs(sessionLogsDir: string): void {
   for (const directory of [sessionLogsDir, dirname(sessionLogsDir)]) {
     try {
@@ -116,7 +104,6 @@ export function toApiSessionLog(meta: GenerationMeta): SessionLog {
   const bounds = getGenerationBounds(meta);
   const bytes = countLogBytes(meta);
 
-  // every byte of a generation that ended with an exit impd saw
   const isComplete =
     meta.state === 'ended' && meta.end !== undefined && bounds.logStart === 0 && bytes === meta.end;
 
@@ -182,9 +169,6 @@ function isMissingFile(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
 
-// A byte range with the ring's rules: a gap for lost bytes, INVALID_RESUME
-// past the end. A segment removed between plan and read is planned again
-// once, and then reads as a gap.
 export async function readSessionLogRange(
   sessionLogsDir: string,
   readLive: LiveMetaReader,

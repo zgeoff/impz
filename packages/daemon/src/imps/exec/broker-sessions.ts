@@ -4,13 +4,6 @@ import type { SessionInfo } from '../../vm/agent-client/agent-protocol';
 import type { ExecStream } from '../../vm/agent-client/exec-stream';
 import { buildBrokerNotReadyError } from './exec-require';
 
-// A start that requires the broker and names a session passes to a session
-// that runs only when that session's run started with the requirement
-// (db/broker-sessions.ts).
-
-// Before the open: each run the start would attach to (the running one, an
-// exited one its resumeFrom names) must have started with the requirement.
-// Refused here, the agent never sees it: viewer and output stay as they are.
 export async function checkBrokerAttach(
   db: ImpDatabase,
   impId: string,
@@ -26,7 +19,6 @@ export async function checkBrokerAttach(
   );
 
   for (const session of attached) {
-    // an agent from before output offsets names no generation
     const generation = session.executionGeneration === '' ? undefined : session.executionGeneration;
 
     const refused = await checkCoverage(db, impId, generation, name);
@@ -39,8 +31,6 @@ export async function checkBrokerAttach(
   return null;
 }
 
-// After the open: records a session the start created; an attach to one
-// that started between the list and the open is refused here instead.
 export async function checkOpenedSession(
   db: ImpDatabase,
   impId: string,
@@ -55,10 +45,8 @@ export async function checkOpenedSession(
     return checkCoverage(db, impId, generation, name);
   }
 
-  // an agent from before output offsets names no generation: its sessions
-  // never pass an attach that requires the broker
   if (generation !== undefined) {
-    // an exited run stays listed while a resume can still attach to it
+    // The agent keeps an exited run listed while a resume can still attach to it.
     const listed = sessions.flatMap((session) =>
       session.executionGeneration === '' ? [] : [session.executionGeneration],
     );

@@ -6,7 +6,6 @@ import { getGenerationBounds } from './generation-log';
 import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp } from './session-log-service';
 
-// what a tap's copy reads besides the state
 interface RunTapDeps {
   readonly log: (message: string) => void;
   readonly applyImpLimit: (imp: SessionLogImp, life: number) => Promise<void>;
@@ -26,17 +25,12 @@ export function makeRunTap(
     await entry.log.stop('disk_full');
   };
 
-  // copies the tap into the log until it ends: an exit ends the log; a
-  // detach or a dropped connection leaves it for the next look to tap again
   const runTap = async (
     imp: SessionLogImp,
     entry: LiveLog,
     tap: Readonly<ExecStream>,
     life: number,
   ) => {
-    // each new segment is a new start: a log at its own bound adds one as it
-    // drops one, so its count stays the same; growth within a segment counts
-    // toward the next check too
     let newest = entry.log.readMeta().segments.at(-1)?.start;
 
     try {

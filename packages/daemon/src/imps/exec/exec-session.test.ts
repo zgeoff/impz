@@ -366,7 +366,6 @@ test.each([true, false])(
   },
 );
 
-// a tty's group belongs to its terminal; a session always has one
 test.each([
   ['a plain tty exec', {}],
   ['a session', { session: 'main' }],
@@ -403,8 +402,6 @@ test('it refuses a session without a tty', () => {
   expect(socket.closes).toStrictEqual([1011]);
 });
 
-// A session runs on when impd loses its agent connection (a sleep, a
-// restore): the client gets a clean detach it can attach again after.
 test('it detaches as lost from a session whose stream ends without an exit or a detached', async () => {
   const fake = buildStubAgentExecStream({ session: 'main', created: false });
   const socket = buildStubExecSocket();
@@ -581,7 +578,6 @@ test("it takes a tool's stdin up to the window and a frame past it", async () =>
     expect(socket.sent).toStrictEqual([{ type: 'started', pid: 7 }]);
   });
 
-  // each frame repeats its own letter, so the input shows every frame in order
   for (let index = 0; index < frames; index++) {
     session.handleMessage(
       encodeExecFrame(
@@ -625,7 +621,6 @@ test('it cuts off a tool client that sends stdin past the window', async () => {
     expect(socket.sent).toStrictEqual([{ type: 'started', pid: 7 }]);
   });
 
-  // each frame repeats its own letter, so the input shows every frame in order
   for (let index = 0; index < frames; index++) {
     session.handleMessage(
       encodeExecFrame(
@@ -681,8 +676,6 @@ test("it neither acks nor windows a plain exec's stdin", async () => {
   expect(socket.closes).toStrictEqual([1000]);
 });
 
-// all of the fed output is ready at once, so a session that did not hold
-// would send every frame before the wait reads the count
 test("it holds a tool's stdout once the client has not acked a window of it", async () => {
   const fake = buildStubAgentExecStream();
   const socket = buildStubExecSocket();
@@ -782,7 +775,6 @@ test('it holds the next output while the client has more than 1 MiB queued, unti
   fake.emitEvent({ type: 'stdout', data: new TextEncoder().encode('one') });
   fake.emitEvent({ type: 'stdout', data: new TextEncoder().encode('two') });
 
-  // a read that saw the queue past the mark leaves the session waiting
   await waitFor(() => {
     expect(socket.buffered.reads).toBeGreaterThanOrEqual(1);
   });
@@ -817,8 +809,6 @@ test("it places a session's data in started and gives the offset after it in the
   );
 
   session.handleMessage({ type: 'attach', name: 'dev', session: 'main' });
-
-  // the 3-byte prelude, then the 10 kept bytes, then 5 live ones
   fake.emitEvent({ type: 'stdout', data: new TextEncoder().encode('\u001B[?0123456789') });
   fake.emitEvent({ type: 'stdout', data: new TextEncoder().encode('abcde') });
   fake.emitEvent({ type: 'exit', code: 0, signal: 0 });
@@ -859,8 +849,6 @@ test('it detaches a session that loses the agent at the offset after its last by
   expect(socket.sent.at(-1)).toStrictEqual({ type: 'detached', reason: 'lost', offset: 47 });
 });
 
-// a dropped message would skip bytes: the socket closes, and no later byte
-// goes out
 test('it closes the socket and the stream when the client socket drops output', async () => {
   const fake = buildStubAgentExecStream({ session: 'main', output: buildMockSessionOutput() });
   const socket = buildStubExecSocket({ keeps: 1 });
@@ -880,9 +868,6 @@ test('it closes the socket and the stream when the client socket drops output', 
   });
 
   expect(socket.sent.slice(1)).toStrictEqual([[EXEC_CHANNELS.stdout, 'one']]);
-
-  // the drop closes the stream, and the output pump closes it again as it
-  // ends; no stdin, resize or signal reaches the agent
   expect(fake.input).toStrictEqual(['close', 'close']);
 });
 

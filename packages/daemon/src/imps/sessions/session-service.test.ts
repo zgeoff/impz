@@ -20,12 +20,10 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
-  // the default image, which every create without an image boots
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, { stack });
 }
 

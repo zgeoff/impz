@@ -13,7 +13,6 @@ import {
   parseImageReference,
 } from './rules';
 
-// the query impd sends for a build: one tag, the frontend pinned
 test('#checkBuildQuery passes a build query as impd sends it', () => {
   const buildargs = encodeURIComponent(JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }));
 
@@ -56,7 +55,6 @@ test('#checkBuildQuery refuses a build query without a tag', () => {
   });
 });
 
-// the classic builder, version 1, takes no frontend pin
 test('#checkBuildQuery refuses a build query without version 2', () => {
   const buildargs = encodeURIComponent(JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND }));
 
@@ -160,7 +158,6 @@ test.each([['HTTP_PROXY'], ['BUILDKIT_CONTEXT_KEEP_GIT_DIR'], ['BUILDKIT_INLINE_
   },
 );
 
-// each needs a session, or moves the build off its context, network or tag
 test.each([
   ['session', 'abc'],
   ['remote', 'https://x'],
@@ -208,8 +205,6 @@ test('#checkBuildContentType passes a build with no Content-Type', () => {
   expect(checkBuildContentType(null)).toStrictEqual({ isOk: true });
 });
 
-// a form body the engine would read with the query, a parameterised or
-// padded tar, and any other value
 test.each([
   ['application/x-www-form-urlencoded'],
   ['application/x-www-form-urlencoded; charset=utf-8'],
@@ -227,7 +222,6 @@ test.each([
   });
 });
 
-// docker lowercases the registry, so any case of localhost is the host's
 test.each([
   ['LocalHost/name', "registry LocalHost is the host's own"],
   ['LOCALHOST:5000/x', "registry LOCALHOST:5000 is the host's own"],
@@ -286,8 +280,6 @@ test('#checkImageReference refuses the repository of a host image on Docker Hub'
   });
 });
 
-// the NixOS module pins the host image by digest: the guard still names its
-// repository
 test('#checkImageReference refuses the repository of a host image pinned by digest', () => {
   expect(
     checkImageReference(
@@ -316,8 +308,6 @@ test('#checkPullQuery passes a pull as docker pull sends it', () => {
   ).toStrictEqual({ isOk: true });
 });
 
-// `docker pull <DOCKERFILE_FRONTEND>` sends the digest as the tag; the
-// rule a base image's pull meets, with no exception for it
 test('#checkPullQuery passes a pull of the Dockerfile frontend by its digest', () => {
   const digest = encodeURIComponent(DOCKERFILE_FRONTEND.split('@')[1] ?? '');
 
@@ -349,7 +339,6 @@ test.each([
   });
 });
 
-// `docker pull <repo>:<tag>@<digest>` sends the repository and the digest
 test('#checkPullQuery passes a pull of IMP_BUILD_IMAGE by its digest under imp isolation', () => {
   const digest = `sha256:${'d'.repeat(64)}`;
 
@@ -362,7 +351,6 @@ test('#checkPullQuery passes a pull of IMP_BUILD_IMAGE by its digest under imp i
   ).toStrictEqual({ isOk: true });
 });
 
-// the engine pulls fromImage's repository at the tag, whatever else it names
 test.each([
   ['docker.io/library/busybox', '1.37'],
   ['ghcr.io/zgeoff/imp-base', '0.29.0'],
@@ -420,7 +408,7 @@ test('#checkNoQuery refuses a call with a param', () => {
   });
 });
 
-// the body `docker create busybox /bin/true` 29.8 sends
+// The docker 29.8 CLI sends this body for `docker create busybox /bin/true`.
 test('#checkCreateBody passes a create body as docker create sends it', () => {
   const body = {
     Hostname: '',

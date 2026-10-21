@@ -1,5 +1,3 @@
-// `KEY=VALUE` entries, `over` winning key by key; each key once, in the
-// order it first appears
 export function mergeEnv(base: readonly string[], over: readonly string[]): string[] {
   const merged = new Map<string, string>();
 

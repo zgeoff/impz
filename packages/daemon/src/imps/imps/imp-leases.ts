@@ -17,23 +17,17 @@ import type { ImpLock, LockedImp } from './imp-lock';
 import type { ImpPresenter } from './imp-presenter';
 import type { ImpVmOps } from './imp-vm-ops';
 
-// who a lease belongs to: the caller's principal, and its name for people
 interface LeaseHolder {
   readonly principal: string;
   readonly display: string;
 }
 
-// a lease with its imp's name
 interface NamedLease {
   readonly name: string;
   readonly lease: LeaseRecord;
 }
 
-// Each owner's hold on an imp (docs/guides/leases.md). Every call takes the
-// imp's lock, so a forced sleep or stop never races a write.
 export interface ImpLeases {
-  // wakes or boots the imp, then creates the lease or moves its end later;
-  // a refused boot writes nothing
   readonly acquireLease: (
     name: string,
     holder: LeaseHolder,
@@ -41,7 +35,6 @@ export interface ImpLeases {
     ttlSeconds: number,
   ) => Promise<NamedLease>;
 
-  // moves a live lease's end later; LEASE_NOT_HELD otherwise, waking nothing
   readonly renewLease: (
     name: string,
     holder: LeaseHolder,
@@ -49,25 +42,16 @@ export interface ImpLeases {
     ttlSeconds: number,
   ) => Promise<NamedLease>;
 
-  // whether the holder had the lease
   readonly releaseLease: (name: string, holder: LeaseHolder, label: string) => Promise<boolean>;
 
-  // live leases of every imp, by imp name
   readonly listLeases: () => Promise<NamedLease[]>;
 
-  // live leases by imp id, for the imps the API shows
   readonly readLeases: (impIds: readonly string[]) => Promise<Map<string, LeaseRecord[]>>;
 
-  // the holder's `hold` lease, written before the boot so a refused boot
-  // keeps it; 0 releases it and a legacy hold
   readonly holdImp: (name: string, seconds: number, holder: LeaseHolder) => Promise<Imp>;
 
-  // under the imp's lock, before a user's sleep or stop that changes the
-  // imp's state: LEASED while a lease from leases.* lives, unless `force`
   readonly requireUnleased: (imp: LockedImp, force: boolean) => Promise<void>;
 
-  // after a forced sleep or stop succeeded, under the same lock: ends the
-  // leases from leases.* and emits `released`
   readonly endForcedLeases: (imp: LockedImp) => Promise<LockedImp>;
 }
 
@@ -188,7 +172,6 @@ export function createImpLeases(parts: ImpLeaseParts): ImpLeases {
 
         const live = await readLease(imp.id, holder.principal, HOLD_LABEL, at);
 
-        // a hold sets its end, longer or shorter, as it always did
         const updated = await writeLease(
           context.db,
           {
@@ -240,7 +223,6 @@ export function createImpLeases(parts: ImpLeaseParts): ImpLeases {
   };
 }
 
-// the later of the lease's end and now + ttl: a write never shortens one
 function buildLeaseEnd(
   lease: LeaseRecord | undefined,
   at: number,

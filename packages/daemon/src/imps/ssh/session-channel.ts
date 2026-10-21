@@ -7,15 +7,13 @@ import { findSignalNumber, getSignalName } from '../exec/signal-names';
 import { formatFailure, startChannelInput, writeToChannel } from './channel-io';
 import type { SshConnectionContext } from './ssh-connection-context';
 
-// `imp-agent sftp` from the system drive: SFTP for every image
 const SFTP_ARGV = [SYSTEM_AGENT_PATH, 'sftp'];
 
-// the env a client may set with SendEnv/SetEnv; everything else is refused,
-// as OpenSSH's default AcceptEnv does
+// OpenSSH's default AcceptEnv takes only these variables.
 const ACCEPTED_ENV = /^(?:LANG|LC_[A-Z_]+)$/u;
 
-// ssh2 passes no accept or reject for a request that wants no reply; OpenSSH
-// sends env, window-change and signal that way
+// ssh2 passes no accept or reject for a request that wants no reply, and OpenSSH sends env,
+// window-change and signal that way.
 type Reply = (() => void) | undefined;
 
 interface TerminalSize {
@@ -25,15 +23,10 @@ interface TerminalSize {
 
 interface Program {
   readonly argv: readonly string[];
-
-  // a subsystem runs without a tty or a forwarded agent, even when the
-  // client asked for them
   readonly allowsTty: boolean;
   readonly feature?: AgentFeature;
 }
 
-// One SSH session channel: its pty and env requests, then one shell, exec
-// or subsystem, which runs as an exec in the imp until it exits.
 export function handleSession(session: Session, context: SshConnectionContext): void {
   const state: {
     pty: PseudoTtyInfo | null;
@@ -42,7 +35,6 @@ export function handleSession(session: Session, context: SshConnectionContext): 
     env: Map<string, string>;
   } = { pty: null, started: false, stream: null, env: new Map() };
 
-  // a resize before the stream opens waits in `state.pty`
   session.on('pty', (accept: Reply, reject: Reply, info) => {
     if (state.started) {
       reject?.();
@@ -90,7 +82,7 @@ export function handleSession(session: Session, context: SshConnectionContext): 
     accept?.();
   });
 
-  // OpenSSH asks with no reply wanted, so a failure later shows on stderr
+  // OpenSSH wants no reply to auth-agent, so a later forwarding failure shows on stderr instead.
   session.on('auth-agent', (accept: Reply, reject: Reply) => {
     if (state.started) {
       reject?.();
@@ -101,8 +93,6 @@ export function handleSession(session: Session, context: SshConnectionContext): 
     context.agent.enable();
     accept?.();
   });
-
-  // X11 is out of scope
 
   session.on('x11', (_accept: Reply, reject: Reply) => {
     reject?.();
@@ -128,13 +118,12 @@ export function handleSession(session: Session, context: SshConnectionContext): 
     const tty = program.allowsTty && state.pty !== null;
     const closed = { value: false };
 
-    // the client may close the channel while the imp wakes
     channel.once('close', () => {
       closed.value = true;
       state.stream?.close();
     });
 
-    // without a pty the client's terminal is not raw, and \r would show
+    // Without a pty the client's terminal is not raw, and a \r would show.
     const newline = tty ? '\r\n' : '\n';
     let stream: ExecStream;
     let request: AgentExecRequest;
@@ -168,7 +157,6 @@ export function handleSession(session: Session, context: SshConnectionContext): 
 
     state.stream = stream;
 
-    // the client may have resized while the imp woke
     const size = tty ? findSize() : null;
 
     if (size !== null && (size.cols !== request.cols || size.rows !== request.rows)) {
@@ -190,15 +178,12 @@ export function handleSession(session: Session, context: SshConnectionContext): 
     }
   };
 
-  // the pty's size, unless the client sent none (OpenSSH sends 0x0 when its
-  // own stdin is not a terminal); the agent then uses 80x24
+  // OpenSSH sends a 0x0 pty when its own stdin is not a terminal, and the agent then uses 80x24.
   const findSize = (): TerminalSize | null =>
     state.pty !== null && isTerminalSize(state.pty)
       ? { cols: state.pty.cols, rows: state.pty.rows }
       : null;
 
-  // The forwarded agent's socket, once the connection asked for one. A
-  // command still runs without it, with the reason on stderr.
   const readAgentSocket = async (
     channel: ServerChannel,
     newline: string,
@@ -248,8 +233,8 @@ export function handleSession(session: Session, context: SshConnectionContext): 
     }
   });
 
-  // OpenSSH runs a command with the user's shell; /bin/sh is the one every
-  // image with a shell has
+  // OpenSSH runs a command with the user's shell, and /bin/sh is the shell every image with a
+  // shell has.
   session.on('exec', (accept, reject: Reply, info) => {
     if (!handleRestart(reject)) {
       void start(accept, { argv: ['/bin/sh', '-c', info.command], allowsTty: true });
@@ -275,9 +260,8 @@ function isTerminalSize(size: TerminalSize): boolean {
   return size.cols > 0 && size.rows > 0;
 }
 
-// Output to the client, then the exit status. A stream that ends without an
-// exit lost the agent connection (the imp went to sleep, a vsock reset); the
-// agent sent the process SIGHUP, so the client gets that.
+// A stream that ends without an exit lost the agent connection, and the agent sends the process
+// SIGHUP then, so the client gets HUP.
 async function sendOutput(
   channel: ServerChannel,
   stream: ExecStream,
@@ -302,8 +286,7 @@ async function sendOutput(
   channel.end();
 }
 
-// the signals an SSH exit-signal may name (RFC 4254 6.10); a process that
-// another signal ended reports 128 + its number instead
+// RFC 4254 section 6.10 lists the signals an SSH exit-signal may name.
 const EXIT_SIGNALS = new Set([
   'ABRT',
   'ALRM',

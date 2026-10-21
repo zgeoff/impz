@@ -4,7 +4,6 @@ import { readImpMetas, removeGenerationDir } from './session-log-files';
 import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp, SessionLogLimits } from './session-log-service';
 
-// what an imp's limit reads besides the state
 interface ImpLimitDeps {
   readonly limits: SessionLogLimits;
   readonly log: (message: string) => void;
@@ -24,11 +23,7 @@ export function makeApplyImpLimit(
     await entry.log.stop('imp_limit');
   };
 
-  // ended logs go oldest first; then the largest live log gives up its
-  // oldest segment; when every live log is down to one, the newest still
-  // written stops, and stays as it is until its generation ends
   const applyImpLimit = async (imp: SessionLogImp, life: number): Promise<void> => {
-    // work from an earlier life of the imp: the logs on disk are a later one's
     if (ctx.isForgotten(imp.id, life)) {
       return;
     }
@@ -70,13 +65,11 @@ export function makeApplyImpLimit(
 
       const isRemoved = await largest.log.removeOldestSegment();
 
-      // destroyed meanwhile: the logs listed now are a later life's
       if (ctx.isForgotten(imp.id, life)) {
         return;
       }
 
       if (!isRemoved) {
-        // the newest by start, and of two that started at once the later one
         const newest = ctx
           .listLive(imp.id)
           .filter((entry) => !ctx.isDropped(entry.key))

@@ -125,8 +125,6 @@ test('#getRequestRoute refuses an HTTP/2 preface target as not a plain path', ()
   });
 });
 
-// one spelling is checked and forwarded: an escape, a dot segment or an
-// empty segment is refused, never normalised
 test.each([
   ['/v1.55/containers/x%2F..%2F..%2Fstart/export'],
   ['/v1.55/containers/x/../y/export'],

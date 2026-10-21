@@ -27,7 +27,6 @@ async function setupTest() {
 
   stack.defer(() => rm(root, { recursive: true, force: true }));
 
-  // the agent's tap: each call takes the next answer the test queued
   const taps = buildStubTapOpener();
   const looks = { done: 0 };
 
@@ -481,7 +480,6 @@ test('it leaves a hole for the bytes the ring lost before a tap again', async ()
     expect(first.state.finished).toBe(true);
   });
 
-  // the next look taps from 3; the agent's ring has moved on to 10
   const second = buildStubTapStream(
     buildMockSessionOutput({
       executionGeneration: 'a'.repeat(32),
@@ -585,7 +583,6 @@ test('it ends the log without a final end when its session is no longer listed',
     expect(tap.state.finished).toBe(true);
   });
 
-  // a cold boot: the new boot lists no such generation
   logs.observe(imp, []);
 
   await waitFor(() => {
@@ -1211,8 +1208,6 @@ test('it never sweeps a live log, a young ended log, or the logs of an imp it wa
     logs.forgetImp(imp.id);
   });
 
-  // a live log as old as the rest, an ended one younger than the age, one
-  // past it, and one past it of the other imp
   const planted = await Promise.all(
     [
       { directory: join(imp.sessionLogsDir, 'a'.repeat(32)), generation: 'a'.repeat(32), at: 1000 },
@@ -1264,7 +1259,6 @@ test('it never sweeps a live log, a young ended log, or the logs of an imp it wa
   expect(readdirSync(neighbour.sessionLogsDir)).toStrictEqual(['d'.repeat(32)]);
 });
 
-// both orders of name, so a removal in directory order fails one of them
 test.each([
   ['the later name', 'c'.repeat(32), 'a'.repeat(32)],
   ['the earlier name', 'a'.repeat(32), 'c'.repeat(32)],
@@ -1393,7 +1387,6 @@ test.each([
       expect(ctx.looks.done).toBe(3);
     });
 
-    // 300 + 300 + 600 is past 1000; without the older log it is 900
     second.write('b'.repeat(600));
 
     await waitFor(() => {
@@ -1606,8 +1599,6 @@ test('it taps a live log on from its end after impd restarts', async () => {
     expect(readGenerationMeta(logDir)?.segments).toStrictEqual([{ start: 0, length: 6 }]);
   });
 
-  // a new impd on the same directory; the old one's files close as a
-  // process exit would close them
   logs.forgetImp(imp.id);
 
   const restarted = createSessionLogs({
@@ -1887,7 +1878,6 @@ test('it touches neither the disk nor the agent for a session with a hostile gen
     '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
   ];
 
-  // every place a hostile value could name: none may appear or go
   const targets = generations
     .filter((value) => !value.includes('\0'))
     .flatMap((value) => [
@@ -2592,7 +2582,6 @@ test('it keeps the imp under its limit while its logs roll past their first segm
     sessionLogsDir: ctx.sessionLogsDir,
   };
 
-  // 512-byte segments: a log at its own bound adds one as it drops one
   const logs = createSessionLogs({
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
@@ -2639,8 +2628,6 @@ test('it keeps the imp under its limit while its logs roll past their first segm
     expect(ctx.looks.done).toBe(1);
   });
 
-  // six rounds of a segment to each log: before the fix, a log at its own
-  // bound rolled with no check, and the imp grew to twice its limit
   for (let round = 1; round <= 6; round += 1) {
     for (const feed of feeds) {
       feed.write('x'.repeat(512));
@@ -2674,7 +2661,6 @@ test('it keeps the imp under its limit while a log grows within one segment', as
     sessionLogsDir: ctx.sessionLogsDir,
   };
 
-  // 1024-byte segments: the growth below never starts a new one
   const logs = createSessionLogs({
     limits: { generationMaxBytes: 2048, impMaxBytes: 1000, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
@@ -2742,7 +2728,6 @@ test('it keeps the imp under its limit while a log grows within one segment', as
     }),
   ]);
 
-  // one byte starts the segment; ten pieces of 30 grow it
   growing.write('g');
 
   for (let piece = 0; piece < 10; piece += 1) {
@@ -2851,7 +2836,6 @@ test('it stops the newest live log once only live logs keep the imp past its lim
     expect(ctx.looks.done).toBe(2);
   });
 
-  // segments of 100: each log holds one, and together they pass 150
   second.write('b'.repeat(100));
 
   await waitFor(() => {
@@ -3026,7 +3010,6 @@ test('it leaves no directory behind for a log being made when the imp is destroy
     bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
   });
 
-  // the destroy: forget, then remove the imp's directory
   logs.forgetImp(imp.id);
 
   rmSync(imp.sessionLogsDir, { recursive: true, force: true });
@@ -3075,7 +3058,6 @@ test('it writes nothing for work from before a destroy once the imp is moved hom
 
   ctx.answers.push(() => Promise.resolve(tap.stream));
 
-  // a tap on its way when the imp is destroyed, then moved home at once
   logs.tapNow(imp, {
     name: 'main',
     executionGeneration: 'a'.repeat(32),
@@ -3206,7 +3188,6 @@ test.each([
       logs.forgetImp(imp.id);
     });
 
-    // life 0 asks for a tap that answers only once the imp is back
     const opened = Promise.withResolvers<ExecStream>();
 
     ctx.answers.push(() => opened.promise);
@@ -3230,7 +3211,6 @@ test.each([
 
     logs.admitImp(imp.id);
 
-    // life 1, a warm move home: the same generation
     const current = buildStubTapStream(
       buildMockSessionOutput({
         executionGeneration: 'a'.repeat(32),
@@ -3532,7 +3512,6 @@ test("it frees no slot of the imp's next life for a log made across a destroy an
     logs.forgetImp(imp.id);
   });
 
-  // life 0's log waits to be made across the destroy
   logs.observe(imp, [
     buildMockAgentSession({
       name: 'main',
@@ -3550,7 +3529,6 @@ test("it frees no slot of the imp's next life for a log made across a destroy an
 
   logs.admitImp(imp.id);
 
-  // life 1, a move home under the same id, with the same generation
   const current = buildStubTapStream(
     buildMockSessionOutput({
       executionGeneration: 'a'.repeat(32),
@@ -3609,7 +3587,6 @@ test("it frees no slot of the imp's next life for a log made across a destroy an
 
   const closedBeforeDestroy = current.state.closed;
 
-  // a destroy closes the tap only while the new life still holds its slot
   logs.forgetImp(imp.id);
 
   expect(ctx.calls).toHaveLength(1);
@@ -3667,7 +3644,6 @@ test("it stops no log of the imp's next life for a limit check held across a des
     }),
   ]);
 
-  // past the limit in one segment: the check waits on its removal
   first.write('x'.repeat(200));
 
   await gate.reached;
@@ -3707,7 +3683,6 @@ test("it stops no log of the imp's next life for a limit check held across a des
 
   gate.release();
 
-  // life 0's pump has finished its held check
   await waitFor(() => {
     expect(first.state.finished).toBe(true);
   });
@@ -3737,7 +3712,6 @@ test("it stops no log of the imp's next life for a limit check held across a des
 
   const closedBeforeDestroy = current.state.closed;
 
-  // a destroy closes the tap only while the new life still holds its slot
   logs.forgetImp(imp.id);
 
   expect(ctx.calls).toHaveLength(2);
@@ -3795,7 +3769,6 @@ test("it removes none of the imp's next life's logs for a limit check from befor
     }),
   ]);
 
-  // life 0's second append waits until the imp is back
   first.write('a');
   first.write('x'.repeat(200));
 
@@ -3807,7 +3780,6 @@ test("it removes none of the imp's next life's logs for a limit check from befor
 
   logs.admitImp(imp.id);
 
-  // the next life holds an ended log past the limit, as one moved home with it would
   const planted = await createGenerationLog(
     {
       directory: join(imp.sessionLogsDir, 'b'.repeat(32)),
@@ -3834,7 +3806,6 @@ test("it removes none of the imp's next life's logs for a limit check from befor
 
   gate.release();
 
-  // life 0's pump has finished the append and its limit check
   await waitFor(() => {
     expect(first.state.finished).toBe(true);
   });
@@ -3899,7 +3870,6 @@ test('it closes the tap of a next generation whose log cannot be made', async ()
     expect(first.state.finished).toBe(true);
   });
 
-  // a file where the next generation's log directory goes: making it fails
   writeFileSync(join(imp.sessionLogsDir, 'b'.repeat(32)), '');
 
   const switched = buildStubTapStream(
@@ -4020,7 +3990,6 @@ test('it taps a next generation again at the next look once its log can be made'
     expect(ctx.looks.done).toBe(2);
   });
 
-  // the fault clears: the next look taps the generation again
   rmSync(join(imp.sessionLogsDir, 'b'.repeat(32)));
 
   const retried = buildStubTapStream(

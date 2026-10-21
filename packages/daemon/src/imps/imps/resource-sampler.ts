@@ -1,11 +1,9 @@
 import type { GuestNetBytes } from '../../host-net/net/tap-bytes';
 import type { CpuStat } from '../../vm/vmm/cpu-cgroups';
 
-// USER_HZ: /proc/<pid>/stat counts CPU time in hundredths of a second
+// /proc/<pid>/stat counts CPU time in USER_HZ ticks, hundredths of a second.
 const USEC_PER_TICK = 10_000;
 
-// one look at a running VM, as the API shows it; the counters run from
-// `since`, when the sampler first saw this Firecracker
 interface ResourceSample {
   readonly measuredAt: Date;
   readonly since: Date;
@@ -17,7 +15,6 @@ interface ResourceSample {
   readonly rssMib: number | null;
 }
 
-// what one imp used since the sampler's last look, for the metrics
 export interface ResourceDelta {
   readonly intervalMs: number;
   readonly cpuPercent: number;
@@ -42,15 +39,12 @@ interface SampledVm {
 interface SamplerReaders {
   readonly now: () => number;
 
-  // the cgroup's counters; null without one, and then the pid's own ticks
   readonly readCpuStat: (impId: string) => CpuStat | null;
   readonly readCpuTicks: (pid: number) => number | null;
   readonly readNetBytes: (tap: string) => GuestNetBytes | null;
 
-  // one read of smaps_rollup for both
   readonly readMemory: (pid: number, apiSocket: string) => VmMemory;
 
-  // the pid's threads, from /proc/<pid>/task; null when it is gone
   readonly readThreadIds: (pid: number) => readonly number[] | null;
 }
 
@@ -69,33 +63,24 @@ interface Tracked {
   readonly totals: Counters;
   readonly sample: ResourceSample;
 
-  // every thread this Firecracker had at any look: a thread an oops killed
-  // leaves the task list before the process dies
+  // A thread that an oops killed leaves the task list before the process dies,
+  // so the set keeps every thread seen at any look.
   readonly threadIds: ReadonlySet<number>;
 }
 
 const ZERO: Counters = { cpuUsec: 0, throttledUsec: 0, rx: 0, tx: 0 };
 
-// The latest sample of each running VM, keyed by imp id. A counter that drops
-// (a new cgroup, a new tap) counts as reset: its whole value is new.
 export interface ResourceSampler {
-  // samples one VM; the delta since the last look, null on a first look
   readonly readVmUsage: (vm: SampledVm) => ResourceDelta | null;
 
-  // a new baseline at a spawn or an adopt: the tap outlives its VM, so its
-  // counters hold every earlier boot's traffic
   readonly startCounting: (vm: SampledVm) => void;
 
-  // the cached sample, or a first one now when there is none for this pid
   readonly readSample: (vm: SampledVm) => ResourceSample;
 
-  // when the sampler last saw the imp's VM; null when it never did
   readonly readLastSeenAt: (impId: string) => Date | null;
 
-  // the imps whose Firecracker had this thread at some look; empty when none
   readonly listThreadOwners: (threadId: number) => readonly string[];
 
-  // drops every imp not in `impIds`: its VM stopped or slept
   readonly keepOnly: (impIds: ReadonlySet<string>) => void;
 }
 
@@ -115,8 +100,6 @@ export function createResourceSampler(readers: SamplerReaders): ResourceSampler 
     };
   };
 
-  // samples one VM into `tracked`; the entry it stored and the delta
-  // readVmUsage answers
   const readVmSample = (vm: SampledVm): { entry: Tracked; delta: ResourceDelta | null } => {
     const now = readers.now();
     const counters = readCounters(vm);
@@ -124,7 +107,6 @@ export function createResourceSampler(readers: SamplerReaders): ResourceSampler 
     const threads = readers.readThreadIds(vm.pid) ?? [];
     const previous = tracked.get(vm.impId);
 
-    // a new Firecracker: its counters start here
     if (previous?.pid !== vm.pid) {
       const entry = {
         pid: vm.pid,
@@ -237,7 +219,6 @@ function buildSample(
   };
 }
 
-// a counter that went down was reset; all of its value is new
 function readStep(last: number, current: number): number {
   return current >= last ? current - last : current;
 }

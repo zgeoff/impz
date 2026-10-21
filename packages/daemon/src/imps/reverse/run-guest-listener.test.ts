@@ -14,7 +14,6 @@ test('it delivers clients until the forward is full and refuses the rest', async
   guest.end();
 
   await runGuestListener(guest.listener, {
-    // each relay stays open
     deliver: (id) => {
       delivered.push(id);
 

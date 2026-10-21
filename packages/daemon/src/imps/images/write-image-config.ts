@@ -3,20 +3,19 @@ import { join } from 'node:path';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 
-// Writes /etc/imp/image.json into an unpacked image tree, whose names are
-// the image's own: impd writes as root, so no step may follow a link out of
-// the tree (docs/guides/images.md#what-the-guest-takes-from-the-image)
+// The tree's names are the image's own and impd writes as root, so no step may follow a
+// link out of the tree.
 export function writeImageConfig(root: string, contents: string): void {
   const etc = join(root, 'etc');
   const directory = join(etc, 'imp');
 
-  // no race: the tree is under impd's 0700 directory, and tar has exited
+  // No race: the tree sits under impd's 0700 directory, and tar has exited.
   createDirectory(etc, '/etc');
   createDirectory(directory, '/etc/imp');
 
   const file = join(directory, 'image.json');
 
-  // rmSync looks at the name itself (lstat): a link goes, never its target
+  // rmSync looks at the name itself (lstat), so a link goes and never its target.
   rmSync(file, { recursive: true, force: true });
 
   const fd = openSync(
@@ -32,8 +31,6 @@ export function writeImageConfig(root: string, contents: string): void {
   }
 }
 
-// makes the directory when the name is free; a link or a file there refuses
-// the image
 function createDirectory(path: string, name: string): void {
   const stat = lstatSync(path, { throwIfNoEntry: false });
 

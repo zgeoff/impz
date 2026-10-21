@@ -20,12 +20,9 @@ import { readVmIdentity, writeVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 import { createJails } from '../../vm/vmm/jail';
 
-// `installBundle`: the broker's CA install in the guest, which a test fails
-// or holds
 async function setupTest(
   options: Pick<TestImpdOptions, 'env' | 'frozenClockMs' | 'installBundle'> = {},
 ) {
-  // one stack: an agent a test starts closes before the harness
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -36,8 +33,6 @@ async function setupTest(
     rmSync(chrootBase, { recursive: true, force: true });
   });
 
-  // the real jailer over the host's processes and mounts, so a stopped VM's
-  // jail goes as on a host
   const processes = buildStubUidProcesses();
   const mounts = buildStubMounts();
 
@@ -53,10 +48,8 @@ async function setupTest(
 
   const harness = await startTestImpd(stack, { ...options, jails });
 
-  // every imp boots from an image row
   await harness.createTestImage('ubuntu');
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, { stack, chrootBase, processes });
 }
 
@@ -138,7 +131,6 @@ test('it skips a background sleep of an imp whose lock is taken', async () => {
 
   const gate = Promise.withResolvers<void>();
 
-  // the lock goes back even when the act throws
   onTestFinished(() => {
     gate.resolve();
   });
@@ -159,7 +151,6 @@ test('it skips a background sleep of an imp whose lock is taken', async () => {
 });
 
 test('it waits for a young guest to reach the minimum uptime before it sleeps it', async () => {
-  // a frozen clock: only the wait's own pauses move it
   const ctx = await setupTest({
     env: { IMP_SLEEP_MIN_GUEST_UPTIME_MS: '300' },
     frozenClockMs: Date.parse('2026-10-09T12:00:00Z'),
@@ -167,7 +158,6 @@ test('it waits for a young guest to reach the minimum uptime before it sleeps it
 
   await ctx.imps.createImp({ name: 'dev' });
 
-  // 100 ms old against a 300 ms minimum: the wait lasts 200 ms
   ctx.fake.setGuestUptime(100);
 
   const asleep = await ctx.imps.sleepImp('dev');
@@ -180,8 +170,6 @@ test('it waits for a young guest to reach the minimum uptime before it sleeps it
   expect(waitedMs).toBe('200');
 });
 
-// the guest needs ten minutes more, so only a give-way ends the wait within
-// the 2 s bound
 test('it gives way to a request while an idle sleep waits for a young guest', async () => {
   const ctx = await setupTest({ env: { IMP_SLEEP_MIN_GUEST_UPTIME_MS: '600000' } });
   const imp = await ctx.imps.createImp({ name: 'dev' });
@@ -197,7 +185,6 @@ test('it gives way to a request while an idle sleep waits for a young guest', as
     expect(ctx.imps.isWaitingForYoungGuest(imp.id)).toBeTrue();
   });
 
-  // as the wake proxy does: the connection counts before it waits for the lock
   const opened = { release: () => {} };
 
   onTestFinished(() => {
@@ -219,8 +206,6 @@ test('it gives way to a request while an idle sleep waits for a young guest', as
   expect(ctx.logs).toContain('impd: dev: sleep (idle) gave way: the imp turned busy');
 });
 
-// the guest needs ten minutes more, so only a give-way ends the wait within
-// the 2 s bound
 test('it gives way to a hold while an idle sleep waits for a young guest', async () => {
   const ctx = await setupTest({ env: { IMP_SLEEP_MIN_GUEST_UPTIME_MS: '600000' } });
   const imp = await ctx.imps.createImp({ name: 'dev' });
@@ -253,10 +238,7 @@ test('it gives way to a hold while an idle sleep waits for a young guest', async
   expect(ctx.logs).toContain('impd: dev: sleep (idle) gave way: the imp turned busy');
 });
 
-// the guests need ten minutes more, so a governor that waited for them would
-// not admit the boot within the 2 s bound
 test('it sleeps young guests at once when the governor makes room for a boot', async () => {
-  // three imps own 300 MiB each; a 720 MiB boot needs all three asleep
   const ctx = await setupTest({
     env: {
       IMP_RAM_BUDGET_MIB: '1000',
@@ -396,8 +378,6 @@ test('it refuses a boot once impd is stopping', async () => {
   });
 });
 
-// a pass that hung, or a stop that waited on it forever, reports hung after
-// 10 s; the 30 s test timeout leaves room for both bounded waits
 test('it neither hangs nor wakes anything when a governor pass meets impd stopping', async () => {
   const ctx = await setupTest({
     env: { IMP_RAM_BUDGET_MIB: '500', IMP_DEFAULT_MEMORY_MIB: '256' },
@@ -407,8 +387,6 @@ test('it neither hangs nor wakes anything when a governor pass meets impd stoppi
   await ctx.imps.createImp({ name: 'b' });
 
   const gate = ctx.fake.hold('sleep');
-
-  // 600 MiB awake against a budget of 500: the pass wants one asleep
   const enforcing = ctx.governor.enforce();
   const stopping = ctx.imps.sleepAllImps();
 
@@ -477,8 +455,8 @@ test('it removes a running imp whose VM takes long to exit on the first call', a
   ctx.processes.ownRoot(join(ctx.chrootBase, 'firecracker', imp.id, 'root'), 900_001);
   ctx.processes.start(900_001, 4242);
 
-  // as Firecracker frees many GiB of guest memory: past the scans in which a
-  // process that still runs counts as surviving its kills
+  // Firecracker takes this long to free many GiB of guest memory, past the
+  // scans in which a process that still runs counts as surviving its kills.
   ctx.processes.exitSlowly(4242, 200);
 
   await ctx.imps.destroyImp('dev');
@@ -496,7 +474,6 @@ test('it lists the imps while a removal waits for its VM to exit', async () => {
   ctx.processes.start(900_001, 4242);
   ctx.processes.exitSlowly(4242, 200);
 
-  // past the scans in which a process that still runs counts as surviving
   const pause = ctx.processes.holdPause(100);
   const removing = ctx.imps.destroyImp('dev');
 
@@ -504,7 +481,6 @@ test('it lists the imps while a removal waits for its VM to exit', async () => {
 
   const listed = await ctx.imps.listImps();
 
-  // the removal ends before the harness closes the database under it
   pause.release();
 
   await removing;
@@ -516,7 +492,6 @@ test('it refuses a session exec on an agent from before sessions before it conne
   const ctx = await setupTest();
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
-  // an agent that listens, so a connection the refusal let through shows
   const agent = await startStubAgent(
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket) => {
@@ -589,7 +564,6 @@ test('it refuses an outer exec to an imp with no agent version on record', async
     { stack: ctx.stack },
   );
 
-  // an imp booted before impd recorded versions has no identity file
   rmSync(paths.vmIdentity);
 
   const opening = ctx.imps.openExec('dev', { argv: ['sh'], tty: true, outer: true }, 'outer-exec');
@@ -697,7 +671,6 @@ test('it refuses an exec without CAP_SYS_ADMIN to an imp with no agent version o
     { stack: ctx.stack },
   );
 
-  // an imp booted before impd recorded versions has no identity file
   rmSync(paths.vmIdentity);
 
   expect(
@@ -801,8 +774,6 @@ test("it removes an imp's session logs when the imp is destroyed", async () => {
   invariant(identity);
   writeVmIdentity(paths, { ...identity, agentVersion: '0.18.0' });
 
-  // the start creates the logged session; the tap impd opens gets STARTED for
-  // the session it found, and stays open
   await startStubAgent(
     paths.vsockSocket,
     (socket, request, frames) => {
@@ -859,8 +830,6 @@ test('it logs again for an imp made again under the id of one destroyed, as on a
   invariant(firstIdentity);
   writeVmIdentity(paths, { ...firstIdentity, agentVersion: '0.18.0' });
 
-  // the start creates the logged session; the tap impd opens gets STARTED for
-  // the session it found, and stays open
   const firstAgent = await startStubAgent(
     paths.vsockSocket,
     (socket, request, frames) => {
@@ -911,7 +880,6 @@ test('it logs again for an imp made again under the id of one destroyed, as on a
   invariant(secondIdentity);
   writeVmIdentity(paths, { ...secondIdentity, agentVersion: '0.18.0' });
 
-  // the agent of the imp made again answers as the first did
   await startStubAgent(
     paths.vsockSocket,
     (socket, request, frames) => {
@@ -1017,7 +985,6 @@ test('it shows no inner container from before a sleep once the imp wakes', async
 
   await ctx.imps.readActivity(record);
 
-  // the sleep and the wake ask the agent nothing it answers
   agent.close();
 
   await ctx.imps.sleepImp('dev');
@@ -1193,7 +1160,6 @@ test('it never sends the requirement to the agent', async () => {
 });
 
 test('it runs the CA bundle step before the first exec of a boot, with the broker variables', async () => {
-  // how many execs the agent had got at each CA bundle step
   const sentAtInstall: number[] = [];
   const agentRef: { readExecs: () => readonly unknown[] } = { readExecs: () => [] };
 
@@ -1247,7 +1213,6 @@ test('it runs the CA bundle step again after a reboot', async () => {
 
   first.close();
 
-  // a restore halts the guest and boots it again: a new boot
   await ctx.imps.lockImp('dev', async (locked) => {
     const halted = await ctx.imps.haltImp(locked, false);
 
@@ -1272,8 +1237,6 @@ test('it installs the broker CA within the wake a warm move left it to', async (
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_EXAMPLE' });
   await ctx.broker.addGrant('dev', 'gh');
   await ctx.imps.sleepImp('dev');
-
-  // what a warm move's commit leaves: the CA install waits for the first wake
   await ctx.db.updateTable('imps').set({ trust_pending: 1 }).where('id', '=', imp.id).execute();
   await ctx.imps.wakeImp('dev');
 
@@ -1422,7 +1385,6 @@ test('it runs no lifecycle operation between the CA bundle step and the start', 
 
   await reached;
 
-  // as a restore would: it queues on the lock the exec holds
   const locked = ctx.imps.lockImp('dev', () => {
     order.push('lifecycle');
 
@@ -1463,8 +1425,6 @@ test('it boots the imp again and checks again when a stop takes the lock before 
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_SECRET' });
   await ctx.broker.addGrant('dev', 'gh');
 
-  // the stop holds the lock until the exec queues behind it, so the exec
-  // found the imp running and its bundle step waits for the stop
   const stopGate = Promise.withResolvers<void>();
 
   onTestFinished(() => {

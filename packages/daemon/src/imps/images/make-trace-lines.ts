@@ -7,18 +7,12 @@ interface VertexState {
   readonly number: number;
   done: boolean;
 
-  // the start of a line the next chunk ends, and the vertex's own decoder,
-  // which holds a character split across chunks
   partial: string;
   readonly decoder: TextDecoder;
 }
 
-// the most of a line held for its end; longer output goes out in pieces
 const PARTIAL_MAX_CHARS = IMAGE_BUILD_LOG_MAX_CHARS - 64;
 
-// The lines `docker build --progress=plain` prints, from decoded trace
-// messages: `#3 [2/5] RUN make`, then `#3 <line>` per line written, then
-// `#3 DONE`, `CACHED` or `ERROR: …`; no timings, and each vertex starts once.
 export function makeTraceLines(output: BuildOutput): (trace: BuildTrace) => void {
   const vertexes = new Map<string, VertexState>();
 
@@ -28,7 +22,6 @@ export function makeTraceLines(output: BuildOutput): (trace: BuildTrace) => void
     output.emitLog(`#${String(vertex)} ${text}`.slice(0, IMAGE_BUILD_LOG_MAX_CHARS));
   };
 
-  // a message's starts come before its logs, and its ends after them
   return (trace) => {
     for (const vertex of trace.vertexes) {
       if (!vertexes.has(vertex.digest) && (vertex.started || vertex.cached)) {

@@ -1,6 +1,5 @@
 import { constants } from 'node:os';
 
-// Linux signal names ↔ numbers, for the exec bridge
 export function findSignalNumber(name: string): number | undefined {
   const signals: Readonly<Record<string, number>> = constants.signals;
 

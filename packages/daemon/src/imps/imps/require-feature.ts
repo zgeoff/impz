@@ -7,9 +7,6 @@ import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 
-// fails before an old agent gets a request it cannot serve; an imp booted
-// before impd recorded agent versions has none, and its answer decides
-// unless the feature is strict
 export function requireFeature(paths: ImpPaths, feature: AgentFeature): void {
   const agentVersion = readVmIdentity(paths)?.agentVersion;
 

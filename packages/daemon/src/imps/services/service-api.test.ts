@@ -31,19 +31,16 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
-  // the default image, which every create without an image boots
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, { stack });
 }
 
 test('it sends the agent the service an add names, its env values included', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -74,7 +71,6 @@ test('it sends the agent the service an add names, its env values included', asy
 test('it lists an added service with its command, its source, and only its env keys', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -121,7 +117,6 @@ test('it lists an added service with its command, its source, and only its env k
 test('it refuses an add of a service that exists as CONFLICT', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -141,7 +136,6 @@ test('it refuses an add of a service that exists as CONFLICT', async () => {
 test('it replaces a service that exists when the add replaces', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -165,7 +159,6 @@ test('it replaces a service that exists when the add replaces', async () => {
 test('it returns the agent’s refusal of a command as BAD_REQUEST', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -183,7 +176,6 @@ test('it returns the agent’s refusal of a command as BAD_REQUEST', async () =>
 test('it refuses a remove of a service the agent lacks as NOT_FOUND', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -202,7 +194,6 @@ test('it refuses a remove of a service the agent lacks as NOT_FOUND', async () =
 test('it refuses a restart of a service the agent lacks as NOT_FOUND', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -227,7 +218,6 @@ test.each([
 ])('it refuses the service name %s, with %s, before the agent', async (service) => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -246,7 +236,6 @@ test.each([
 test('it refuses a remove of a service name with a slash before the agent', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -265,7 +254,6 @@ test('it refuses a remove of a service name with a slash before the agent', asyn
 test('it refuses an exec-scope add of a service that runs as root as FORBIDDEN', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -289,7 +277,6 @@ test('it refuses an exec-scope add of a service that runs as root as FORBIDDEN',
 test('it adds, restarts and removes an exec-scope service that runs as the image user', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -310,7 +297,6 @@ test('it adds, restarts and removes an exec-scope service that runs as the image
 
   expect(agent.services.map((service) => service.name)).toStrictEqual(['web']);
 
-  // an exec-scope call first reads which user the service runs as
   expect(agent.requests.map((request) => request.op)).toStrictEqual([
     'services.list',
     'services.add',
@@ -326,7 +312,6 @@ test('it adds, restarts and removes an exec-scope service that runs as the image
 test('it refuses an exec-scope remove of a service that runs as root as FORBIDDEN', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -355,7 +340,6 @@ test('it refuses an exec-scope remove of a service that runs as root as FORBIDDE
 test('it refuses an exec-scope restart of a service that runs as root as FORBIDDEN', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -384,7 +368,6 @@ test('it refuses an exec-scope restart of a service that runs as root as FORBIDD
 test('it refuses an exec-scope replace of a service that runs as root as FORBIDDEN', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -413,7 +396,6 @@ test('it refuses an exec-scope replace of a service that runs as root as FORBIDD
 test('it refuses an exec-scope restart of a service not started yet as FORBIDDEN', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -427,7 +409,6 @@ test('it refuses an exec-scope restart of a service not started yet as FORBIDDEN
 
   const exec = ctx.buildClient(token.secret);
 
-  // not started yet, so its user is unknown
   expect(exec.services.restart({ name: 'dev', service: 'late' })).rejects.toMatchObject({
     code: 'FORBIDDEN',
   });
@@ -436,7 +417,6 @@ test('it refuses an exec-scope restart of a service not started yet as FORBIDDEN
 test('it refuses an add on an agent from before the services API as AGENT_OUTDATED', async () => {
   const ctx = await setupTest();
 
-  // each boot and wake reports it
   ctx.fake.agent.version = '0.9.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -454,7 +434,6 @@ test('it refuses an add on an agent from before the services API as AGENT_OUTDAT
 test('it lists the image’s services as root on an agent from before the services API', async () => {
   const ctx = await setupTest();
 
-  // each boot and wake reports it
   ctx.fake.agent.version = '0.9.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -470,7 +449,6 @@ test('it lists the image’s services as root on an agent from before the servic
 
   const listed = await ctx.client.services.list({ name: 'dev' });
 
-  // the older agent reports no definition, so each of its fields is empty
   expect(listed.services).toStrictEqual([
     {
       name: 'dockerd',
@@ -492,7 +470,6 @@ test('it lists the image’s services as root on an agent from before the servic
 test('it sends one service’s log, 100 lines by default', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -521,7 +498,6 @@ test('it sends one service’s log, 100 lines by default', async () => {
 test('it shares 10 000 lines among every service’s log', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -546,7 +522,6 @@ test('it shares 10 000 lines among every service’s log', async () => {
 test('it merges a follow of every service, and closes each when the reader stops', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -584,7 +559,6 @@ test('it merges a follow of every service, and closes each when the reader stops
 test('it waits out a sleep in a follow without a wake, and goes on from its cursor', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -605,8 +579,6 @@ test('it waits out a sleep in a follow without a wake, and goes on from its curs
 
   const one = await iterator.next();
 
-  // the VM goes to sleep and its connections end; a line the stream had
-  // not sent yet waits in the log
   await ctx.client.imps.sleep({ name: 'dev' });
 
   agent.stopFollows();
@@ -639,12 +611,11 @@ test('it waits out a sleep in a follow without a wake, and goes on from its curs
   expect(resumed?.cursor).toStrictEqual(create(LogCursorSchema, { inode: 7, offset: 4 }));
 });
 
-// oRPC's keepalive is its own setInterval, so fake timers run 400 s of a
-// follow that nothing writes to: past the 360 s Bun's fetch waits for a byte
+// oRPC's keepalive runs on its own setInterval, so fake timers run 400 s of a
+// silent follow, past the 360 s that Bun's fetch waits for a byte.
 test('it sends a keepalive comment every 5 s through a silent follow', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -679,7 +650,6 @@ test('it sends a keepalive comment every 5 s through a silent follow', async () 
 
   const opened = { text: '' };
 
-  // the opening comment, then the sleeping event the follow waits on
   while (!opened.text.includes('"sleeping"')) {
     const chunk = await reader.read();
 
@@ -687,8 +657,6 @@ test('it sends a keepalive comment every 5 s through a silent follow', async () 
   }
 
   jest.advanceTimersByTime(400_000);
-
-  // real timers again: the comments are queued by now
   jest.useRealTimers();
 
   const queued = await readQueuedText(reader, 1000);
@@ -702,7 +670,6 @@ test('it sends a keepalive comment every 5 s through a silent follow', async () 
 test('it leaves a sleeping imp asleep through a follow', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -733,7 +700,6 @@ test('it leaves a sleeping imp asleep through a follow', async () => {
 test('it lists a sleeping imp’s services as its sleep recorded them, and wakes nothing', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -761,7 +727,6 @@ test('it lists a sleeping imp’s services as its sleep recorded them, and wakes
 test('it refuses a list of a stopped imp’s services as INVALID_STATE', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -781,7 +746,6 @@ test('it refuses a list of a stopped imp’s services as INVALID_STATE', async (
 test('it lists no services, and says it recorded none, for a sleep the agent gave no list', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -805,7 +769,6 @@ test('it lists no services, and says it recorded none, for a sleep the agent gav
 test('it keeps a character that a sleep splits whole in a follow', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -817,7 +780,6 @@ test('it keeps a character that a sleep splits whole in a follow', async () => {
 
   await ctx.client.services.add({ name: 'dev', service: { name: 'web', argv: ['httpd'] } });
 
-  // é is 0xc3 0xa9: the sleep falls between its two bytes
   agent.writeLog('web', new Uint8Array([0x61, 0xc3]));
 
   const stream = await ctx.client.services.logs({ name: 'dev', service: 'web', follow: true });
@@ -849,7 +811,6 @@ test('it keeps a character that a sleep splits whole in a follow', async () => {
 test('it looks again after the short retry, not the long recheck, while a lifecycle step holds a running imp', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -863,7 +824,6 @@ test('it looks again after the short retry, not the long recheck, while a lifecy
 
   const timers = buildStubClock();
 
-  // impd's own services API over its runtime, with timers the test fires
   const api = createServiceApi({
     runtime: ctx.impd.imps,
     events: ctx.impd.imps.events,
@@ -874,12 +834,10 @@ test('it looks again after the short retry, not the long recheck, while a lifecy
 
   const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
 
-  // before impd and its database go
   ctx.stack.defer(async () => {
     await stream.return?.();
   });
 
-  // a step such as a checkpoint holds the running imp until released
   const release = Promise.withResolvers<void>();
   const held = ctx.impd.imps.lockImp('dev', () => release.promise);
 
@@ -887,7 +845,6 @@ test('it looks again after the short retry, not the long recheck, while a lifecy
 
   const pausing = stream.next();
 
-  // the dropped connection's retry, then the look that finds the imp held
   await waitFor(() => {
     expect(timers.readPendingMs()).not.toBeEmpty();
   });
@@ -920,7 +877,6 @@ test('it looks again after the short retry, not the long recheck, while a lifecy
 test('it says the imp sleeps when it goes to sleep after a step held it running', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -934,7 +890,6 @@ test('it says the imp sleeps when it goes to sleep after a step held it running'
 
   const timers = buildStubClock();
 
-  // impd's own services API over its runtime, with timers the test fires
   const api = createServiceApi({
     runtime: ctx.impd.imps,
     events: ctx.impd.imps.events,
@@ -945,12 +900,10 @@ test('it says the imp sleeps when it goes to sleep after a step held it running'
 
   const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
 
-  // before impd and its database go
   ctx.stack.defer(async () => {
     await stream.return?.();
   });
 
-  // a step such as a checkpoint holds the running imp until released
   const release = Promise.withResolvers<void>();
   const held = ctx.impd.imps.lockImp('dev', () => release.promise);
 
@@ -958,7 +911,6 @@ test('it says the imp sleeps when it goes to sleep after a step held it running'
 
   const pausing = stream.next();
 
-  // the dropped connection's retry, then the look that finds the imp held
   await waitFor(() => {
     expect(timers.readPendingMs()).not.toBeEmpty();
   });
@@ -990,7 +942,6 @@ test('it says the imp sleeps when it goes to sleep after a step held it running'
 test('it says the imp stopped when it stops after a step held it running', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -1004,7 +955,6 @@ test('it says the imp stopped when it stops after a step held it running', async
 
   const timers = buildStubClock();
 
-  // impd's own services API over its runtime, with timers the test fires
   const api = createServiceApi({
     runtime: ctx.impd.imps,
     events: ctx.impd.imps.events,
@@ -1015,12 +965,10 @@ test('it says the imp stopped when it stops after a step held it running', async
 
   const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
 
-  // before impd and its database go
   ctx.stack.defer(async () => {
     await stream.return?.();
   });
 
-  // a step such as a checkpoint holds the running imp until released
   const release = Promise.withResolvers<void>();
   const held = ctx.impd.imps.lockImp('dev', () => release.promise);
 
@@ -1028,7 +976,6 @@ test('it says the imp stopped when it stops after a step held it running', async
 
   const pausing = stream.next();
 
-  // the dropped connection's retry, then the look that finds the imp held
   await waitFor(() => {
     expect(timers.readPendingMs()).not.toBeEmpty();
   });
@@ -1060,7 +1007,6 @@ test('it says the imp stopped when it stops after a step held it running', async
 test('it goes on with a follow when the wake’s event comes before the wake lets go', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -1072,8 +1018,6 @@ test('it goes on with a follow when the wake’s event comes before the wake let
 
   await ctx.client.services.add({ name: 'dev', service: { name: 'web', argv: ['httpd'] } });
 
-  // a write after each of the imp's writes, the wake's among them: the
-  // wake's event then reaches the follow while the wake still holds the imp
   const unsubscribe = ctx.db.writes.subscribe(() => {
     void updateImpActivity(ctx.db, imp.id, new Date());
   });
@@ -1082,7 +1026,6 @@ test('it goes on with a follow when the wake’s event comes before the wake let
 
   const timers = buildStubClock();
 
-  // impd's own services API over its runtime, with timers the test fires
   const api = createServiceApi({
     runtime: ctx.impd.imps,
     events: ctx.impd.imps.events,
@@ -1093,7 +1036,6 @@ test('it goes on with a follow when the wake’s event comes before the wake let
 
   const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
 
-  // before impd and its database go
   ctx.stack.defer(async () => {
     await stream.return?.();
   });
@@ -1104,7 +1046,6 @@ test('it goes on with a follow when the wake’s event comes before the wake let
 
   const pausing = stream.next();
 
-  // the dropped connection's retry, then the look that finds the imp asleep
   await waitFor(() => {
     expect(timers.readPendingMs()).not.toBeEmpty();
   });
@@ -1131,7 +1072,6 @@ test('it goes on with a follow when the wake’s event comes before the wake let
 test('it ends a follow with the error once its log fails to open five times in a row', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -1147,7 +1087,6 @@ test('it ends a follow with the error once its log fails to open five times in a
 
   const timers = buildStubClock();
 
-  // impd's own services API over its runtime, with timers the test fires
   const api = createServiceApi({
     runtime: ctx.impd.imps,
     events: ctx.impd.imps.events,
@@ -1159,14 +1098,12 @@ test('it ends a follow with the error once its log fails to open five times in a
   const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
   const first = await stream.next();
 
-  // the connection drops while the imp runs, and every open after it fails
   agent.failing.logs = true;
 
   agent.stopFollows();
 
   const reading = readInBackground(stream);
 
-  // each failed open waits the retry; the follow looks again when it fires
   await waitFor(() => {
     timers.firePending();
 
@@ -1186,7 +1123,6 @@ test('it ends a follow with the error once its log fails to open five times in a
 test('it lets a list wait out a step that holds a running imp', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -1202,7 +1138,6 @@ test('it lets a list wait out a step that holds a running imp', async () => {
 
   const timers = buildStubClock();
 
-  // impd's own services API over its runtime, with timers the test fires
   const api = createServiceApi({
     runtime: ctx.impd.imps,
     events: ctx.impd.imps.events,
@@ -1239,8 +1174,6 @@ test('it refuses a list as INVALID_STATE once a step holds a running imp past 10
   const timers = buildStubClock();
   const clock = { durationMs: 0 };
 
-  // impd's own services API over its runtime, with a clock and timers the
-  // test moves
   const api = createServiceApi({
     runtime: ctx.impd.imps,
     events: ctx.impd.imps.events,
@@ -1253,7 +1186,6 @@ test('it refuses a list as INVALID_STATE once a step holds a running imp past 10
   const release = Promise.withResolvers<void>();
   const held = ctx.impd.imps.lockImp('dev', () => release.promise);
 
-  // before impd and its database go
   ctx.stack.defer(async () => {
     release.resolve();
 
@@ -1276,7 +1208,6 @@ test('it refuses a list as INVALID_STATE once a step holds a running imp past 10
 test('it ends a follow when the imp is destroyed', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -1308,7 +1239,6 @@ test('it ends a follow when the imp is destroyed', async () => {
 test('it ends a follow with restarting when impd restarts', async () => {
   const ctx = await setupTest();
 
-  // an agent with the services API, which each boot and wake reports
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });

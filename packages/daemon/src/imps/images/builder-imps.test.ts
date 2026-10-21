@@ -159,7 +159,6 @@ test('it asks the builder engine again, a poll later, until it answers, then run
 
   const infos = { count: 0 };
 
-  // the first `docker info` finds the engine still starting
   const guest = buildStubGuest((run) => {
     if (run.argv[1] !== 'info') {
       return { stdout: 'ok' };
@@ -206,8 +205,6 @@ test('it fails the build when the builder engine does not answer in 60 s, and re
   const ctx = await setupTest();
 
   const guest = buildStubGuest(() => ({ code: 1, stderr: 'Cannot connect to the Docker daemon' }));
-
-  // each poll's wait moves the clock on by its 500 ms
   const clock = buildStubClock();
 
   const builders = createBuilders({
@@ -283,7 +280,6 @@ test('it removes the builders a stopped impd left, and never a user imp', async 
     log: () => {},
   });
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -323,7 +319,6 @@ test('it keeps the build of a builder that survives its removal, and logs the su
     startTimer: timers.startTimer,
   });
 
-  // the builder's Firecracker survives SIGKILL, so its removal fails
   ctx.fake.queue('stop', 'fail');
 
   const built = await builders.withBuilder(new AbortController().signal, () =>
@@ -366,8 +361,6 @@ test('it removes a builder that survived its removal on a later retry', async ()
     startTimer: timers.startTimer,
   });
 
-  // the first removal meets a Firecracker that survives SIGKILL; the
-  // retry's stop goes through
   ctx.fake.queue('stop', 'fail');
 
   await builders.withBuilder(new AbortController().signal, () => Promise.resolve());
@@ -409,7 +402,6 @@ test('it retries the removal of a leftover builder that survives it at start', a
     startTimer: timers.startTimer,
   });
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -419,8 +411,6 @@ test('it retries the removal of a leftover builder that survives it at start', a
 
   await ctx.impd.imps.createImp({ name: 'imp-build-left', image: 'base', kind: 'builder' });
 
-  // the removal at start and the first retry meet a Firecracker that
-  // survives SIGKILL; the second retry's stop goes through
   ctx.fake.queue('stop', 'fail', 'fail');
 
   await builders.removeLeftovers();
@@ -466,7 +456,6 @@ test('it never removes a user imp that took the id of a removed builder on a ret
     startTimer: timers.startTimer,
   });
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -486,12 +475,9 @@ test('it never removes a user imp that took the id of a removed builder on a ret
 
   const id = record.id;
 
-  // the removal at start meets a Firecracker that survives SIGKILL
   ctx.fake.queue('stop', 'fail');
 
   await builders.removeLeftovers();
-
-  // before the retry, the builder goes, and a user imp takes its id
   await ctx.impd.imps.destroyImpId(id);
   await ctx.impd.imps.createImp({ id, name: 'mine', image: 'base' });
 
@@ -527,7 +513,6 @@ test('it ends an export over its file limit and removes its builder, with no cli
     `${parents}/f`,
   ]);
 
-  // the export sends its tar, then stalls without an exit
   const engine = buildStubImageBuilder({
     exported: [deep.stdout],
     repoDigest: `sha256:${'b'.repeat(64)}`,
@@ -581,8 +566,6 @@ test('it ends an export stopped while its exec opens, closes the exec and remove
   });
 
   const timers = buildStubClock();
-
-  // the export's exec opens only once the test lets it
   const exportOpen = Promise.withResolvers<void>();
   const reached = { isExportOpening: false };
 
@@ -622,7 +605,6 @@ test('it ends an export stopped while its exec opens, closes the exec and remove
     expect(reached.isExportOpening).toBeTrue();
   });
 
-  // the idle limit falls due while the exec opens
   timers.firePending();
   exportOpen.resolve();
 
@@ -644,7 +626,6 @@ test('it ends an export stopped while its exec opens, closes the exec and remove
 test('it refuses an exec in a builder', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -671,7 +652,6 @@ test('it leaves the imp that holds a name a builder create fails on', async () =
     imps: {
       ...ctx.impd.imps,
 
-      // a user imp takes the builder's name just before its create
       createImp: async (input) => {
         await ctx.impd.imps.createImp({ name: input.name, image: 'base' });
 
@@ -684,7 +664,6 @@ test('it leaves the imp that holds a name a builder create fails on', async () =
     log: () => {},
   });
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(

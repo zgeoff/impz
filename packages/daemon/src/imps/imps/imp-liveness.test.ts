@@ -16,9 +16,6 @@ async function setupTest(options: TestImpdOptions = {}) {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the host's taint mask, as /proc/sys/kernel/tainted, its boot id, as
-  // /proc/sys/kernel/random/boot_id, its kernel log, as /dev/kmsg, and the
-  // VMs' threads, as /proc/<pid>/task; a test writes them
   const taintDir = mkdtempSync(join(tmpdir(), 'imp-taint-'));
 
   stack.defer(() => {
@@ -31,7 +28,6 @@ async function setupTest(options: TestImpdOptions = {}) {
   const procRoot = join(taintDir, 'proc');
   const pidNamespacePath = join(taintDir, 'pid');
 
-  // impd runs in the host's PID namespace, where the log's thread ids are the sampler's
   symlinkSync('pid:[4026531836]', pidNamespacePath);
 
   const harness = await startTestImpd(stack, {
@@ -40,10 +36,8 @@ async function setupTest(options: TestImpdOptions = {}) {
     ...options,
   });
 
-  // the image every imp boots from
   await harness.createTestImage('ubuntu');
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, { taintPath, bootIdPath, kmsgPath, procRoot });
 }
 
@@ -51,7 +45,6 @@ test('it finds a VM that died after its sleep wrote the snapshot asleep, not sto
   const ctx = await setupTest();
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
-  // impd stopped between the snapshot and the record update
   writeTestSnapshot(
     buildImpPaths(ctx.dataDir, imp.id),
     imp.lastActiveAt.getTime() + 1000,
@@ -69,7 +62,6 @@ test('it wakes an imp found asleep after its VM died from the snapshot', async (
   const ctx = await setupTest();
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
-  // impd stopped between the snapshot and the record update
   writeTestSnapshot(
     buildImpPaths(ctx.dataDir, imp.id),
     imp.lastActiveAt.getTime() + 1000,
@@ -90,7 +82,6 @@ test('it finds a dead VM with a snapshot from before its last activity stopped',
   const ctx = await setupTest();
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
-  // an earlier sleep's snapshot, which the imp ran past
   writeTestSnapshot(
     buildImpPaths(ctx.dataDir, imp.id),
     imp.lastActiveAt.getTime() - 1000,
@@ -138,7 +129,6 @@ test('it finds a VM lost after a kernel oops stopped, and says so', async () => 
 
   writeFileSync(ctx.taintPath, '0\n');
 
-  // impd's start reads the flag clear
   await ctx.imps.reconcileImps();
   await ctx.imps.createImp({ name: 'dev' });
 
@@ -159,7 +149,6 @@ test('it gives the kernel oops as the trigger of the state change', async () => 
 
   writeFileSync(ctx.taintPath, '0\n');
 
-  // impd's start reads the flag clear
   await ctx.imps.reconcileImps();
   await ctx.imps.createImp({ name: 'dev' });
 
@@ -185,7 +174,6 @@ test('it logs that an imp a kernel oops killed stays off its disk until the host
 
   writeFileSync(ctx.taintPath, '0\n');
 
-  // impd's start reads the flag clear
   await ctx.imps.reconcileImps();
   await ctx.imps.createImp({ name: 'dev' });
 
@@ -205,7 +193,6 @@ test('it refuses to start an imp a kernel oops killed until the host reboots', a
 
   writeFileSync(ctx.taintPath, '0\n');
 
-  // impd's start reads the flag clear
   await ctx.imps.reconcileImps();
   await ctx.imps.createImp({ name: 'dev' });
 
@@ -227,7 +214,6 @@ test('it boots no VM on the disk of an imp a kernel oops killed', async () => {
 
   writeFileSync(ctx.taintPath, '0\n');
 
-  // impd's start reads the flag clear
   await ctx.imps.reconcileImps();
   await ctx.imps.createImp({ name: 'dev' });
 
@@ -249,12 +235,10 @@ test('it refuses to wake an imp whose VM a kernel oops killed after its sleep wr
 
   writeFileSync(ctx.taintPath, '0\n');
 
-  // impd's start reads the flag clear
   await ctx.imps.reconcileImps();
 
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
-  // impd stopped between the snapshot and the record update
   writeTestSnapshot(
     buildImpPaths(ctx.dataDir, imp.id),
     imp.lastActiveAt.getTime() + 1000,
@@ -279,7 +263,6 @@ test('it gives no kernel oops trigger to a VM that booted after impd saw the oop
 
   writeFileSync(ctx.taintPath, '0\n');
 
-  // impd's start reads the flag clear, then /health reads it set
   await ctx.imps.reconcileImps();
 
   writeFileSync(ctx.taintPath, '128\n');
@@ -293,7 +276,6 @@ test('it gives no kernel oops trigger to a VM that booted after impd saw the oop
 
   const found = await ctx.imps.readImp('dev');
 
-  // the API leaves out an error the record does not have
   expect(found.state).toBe('stopped');
   expect(found).not.toContainKey('error');
 });
@@ -301,7 +283,6 @@ test('it gives no kernel oops trigger to a VM that booted after impd saw the oop
 test('it gives no kernel oops trigger to a VM lost while the flag stays as impd found it at start', async () => {
   const ctx = await setupTest();
 
-  // the oops came before this impd started, and this VM outlived it
   writeFileSync(ctx.taintPath, '128\n');
 
   await ctx.imps.reconcileImps();
@@ -311,7 +292,6 @@ test('it gives no kernel oops trigger to a VM lost while the flag stays as impd 
 
   const found = await ctx.imps.readImp('dev');
 
-  // the API leaves out an error the record does not have
   expect(found.state).toBe('stopped');
   expect(found).not.toContainKey('error');
 });
@@ -321,7 +301,6 @@ test('it holds only the imp whose Firecracker owned the thread a kernel oops kil
 
   writeFileSync(ctx.taintPath, '0\n');
 
-  // impd's start reads the flag clear
   await ctx.imps.reconcileImps();
   await ctx.imps.createImp({ name: 'hit' });
   await ctx.imps.createImp({ name: 'other' });
@@ -331,8 +310,6 @@ test('it holds only the imp whose Firecracker owned the thread a kernel oops kil
 
   invariant(typeof hit?.pid === 'number');
   invariant(typeof other?.pid === 'number');
-
-  // each Firecracker's main thread and a vCPU thread
   mkdirSync(join(ctx.procRoot, String(hit.pid), 'task', '4242'), { recursive: true });
   mkdirSync(join(ctx.procRoot, String(hit.pid), 'task', String(hit.pid)), { recursive: true });
   mkdirSync(join(ctx.procRoot, String(other.pid), 'task', '5151'), { recursive: true });
@@ -340,7 +317,6 @@ test('it holds only the imp whose Firecracker owned the thread a kernel oops kil
 
   await ctx.imps.sampleResources();
 
-  // the oops hits the first imp's vCPU thread
   writeFileSync(
     ctx.kmsgPath,
     [
@@ -368,7 +344,6 @@ test('it starts an imp whose VM died after a kernel oops killed a thread of anot
 
   writeFileSync(ctx.taintPath, '0\n');
 
-  // impd's start reads the flag clear
   await ctx.imps.reconcileImps();
   await ctx.imps.createImp({ name: 'hit' });
   await ctx.imps.createImp({ name: 'other' });
@@ -394,7 +369,6 @@ test('it starts an imp whose VM died after a kernel oops killed a thread of anot
 
   writeFileSync(ctx.taintPath, '128\n');
 
-  // the hit VM dies and leaves the sampler; the other dies on a later pass
   ctx.fake.alive.delete(hit.pid);
 
   await ctx.imps.readImp('hit');
@@ -414,7 +388,6 @@ test('it holds every imp lost after a kernel oops killed a thread that no VM own
 
   writeFileSync(ctx.taintPath, '0\n');
 
-  // impd's start reads the flag clear
   await ctx.imps.reconcileImps();
   await ctx.imps.createImp({ name: 'first' });
   await ctx.imps.createImp({ name: 'second' });
@@ -429,7 +402,6 @@ test('it holds every imp lost after a kernel oops killed a thread that no VM own
 
   await ctx.imps.sampleResources();
 
-  // the oops hits a thread outside every VM
   writeFileSync(
     ctx.kmsgPath,
     [
@@ -468,7 +440,6 @@ test('it starts an imp a kernel oops killed once the host has rebooted', async (
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops left before the reboot, which cleared the flag
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -492,7 +463,6 @@ test('it starts an imp held by an oops of an earlier boot after a new oops in an
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops left before the reboot, which cleared the flag
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -503,7 +473,6 @@ test('it starts an imp held by an oops of an earlier boot after a new oops in an
 
   writeFileSync(ctx.taintPath, '0\n');
 
-  // impd's start after the reboot reads the flag clear; then another task oopses
   await ctx.imps.reconcileImps();
 
   writeFileSync(ctx.taintPath, '128\n');
@@ -519,7 +488,6 @@ test('it keeps the hold of an imp a kernel oops killed when impd starts with the
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops of this boot left before impd restarted
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -541,7 +509,6 @@ test('it clears the hold of an imp a kernel oops killed when impd starts with fl
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops left before the reboot, which cleared the flag
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -566,7 +533,6 @@ test('it records the boot a kernel oops held the disk of an imp in', async () =>
   writeFileSync(ctx.taintPath, '0\n');
   writeFileSync(ctx.bootIdPath, '0e7c5a91-3d2b-4f86-b1a4-9c8e7d6f5a43\n');
 
-  // impd's start reads the flag clear
   await ctx.imps.reconcileImps();
   await ctx.imps.createImp({ name: 'dev' });
 
@@ -587,7 +553,6 @@ test('it clears the hold of an earlier boot when an oops set flag D before impd 
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops left in the boot before the reboot
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -597,7 +562,6 @@ test('it clears the hold of an earlier boot when an oops set flag D before impd 
     oopsBootId: '0e7c5a91-3d2b-4f86-b1a4-9c8e7d6f5a43',
   });
 
-  // after the reboot, another task oopsed before impd started
   writeFileSync(ctx.taintPath, '128\n');
   writeFileSync(ctx.bootIdPath, 'd24f8b63-5e1a-4c09-87b2-3a6f1e0c9d58\n');
 
@@ -615,7 +579,6 @@ test('it starts an imp held in an earlier boot when an oops set flag D before im
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops left in the boot before the reboot
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -625,7 +588,6 @@ test('it starts an imp held in an earlier boot when an oops set flag D before im
     oopsBootId: '0e7c5a91-3d2b-4f86-b1a4-9c8e7d6f5a43',
   });
 
-  // after the reboot, another task oopsed before impd started
   writeFileSync(ctx.taintPath, '128\n');
   writeFileSync(ctx.bootIdPath, 'd24f8b63-5e1a-4c09-87b2-3a6f1e0c9d58\n');
 
@@ -642,7 +604,6 @@ test('it clears the hold of an earlier boot when impd cannot read the taint flag
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops left in the boot before the reboot
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -668,7 +629,6 @@ test('it keeps the record of a hold of this boot when impd starts again with fla
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops of this boot left before impd restarted
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -694,7 +654,6 @@ test('it refuses to start an imp held in this boot until the host reboots', asyn
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops of this boot left before impd restarted
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -718,7 +677,6 @@ test('it keeps the hold of an earlier boot when impd cannot read the boot id', a
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops left; without this boot's id nothing proves a reboot
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -743,7 +701,6 @@ test('it keeps the record of a hold when impd starts with flag D set', async () 
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops of this boot left before impd restarted
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -769,7 +726,6 @@ test('it keeps every hold when impd starts without the taint file', async () => 
   await ctx.imps.stopImp('dev');
   await ctx.imps.stopImp('build');
 
-  // the records an oops left; nothing proves the host rebooted since
   for (const impId of [first.id, second.id]) {
     await updateImpState(ctx.db, impId, {
       reason: 'repaired',
@@ -799,7 +755,6 @@ test('it keeps the hold when impd starts with a taint file it cannot read', asyn
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops left; nothing proves the host rebooted since
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',
@@ -808,7 +763,6 @@ test('it keeps the hold when impd starts with a taint file it cannot read', asyn
     hasOopsHold: true,
   });
 
-  // a directory where the file should be: the read fails with EISDIR
   mkdirSync(ctx.taintPath);
 
   await ctx.imps.reconcileImps();
@@ -825,7 +779,6 @@ test('it keeps the hold when impd starts with a malformed taint file', async () 
 
   await ctx.imps.stopImp('dev');
 
-  // the record an oops left; nothing proves the host rebooted since
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
     state: 'stopped',

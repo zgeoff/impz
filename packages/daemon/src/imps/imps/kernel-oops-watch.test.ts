@@ -11,9 +11,6 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  // where the test writes the kernel's taint mask, as /proc/sys/kernel/tainted,
-  // its boot id, as /proc/sys/kernel/random/boot_id, its log, as /dev/kmsg,
-  // and impd's PID namespace, as /proc/self/ns/pid
   return {
     taintPath: join(directory, 'tainted'),
     bootIdPath: join(directory, 'boot_id'),
@@ -41,7 +38,7 @@ test('it reads taint flag D as an oops', () => {
 test('it reads flag D among other taint flags as an oops', () => {
   const ctx = setupTest();
 
-  // D with O (an out-of-tree module, as zfs is) and E (unsigned)
+  // Taint flag D with O, an out-of-tree module such as zfs, and E, an unsigned one.
   writeFileSync(ctx.taintPath, `${String(128 + 4096 + 8192)}\n`);
 
   expect(createKernelOopsWatch(ctx.taintPath).isOopsed()).toBeTrue();
@@ -94,7 +91,6 @@ test('it reads the flag unknown from a missing taint file', () => {
 test('it reads the flag unknown from a taint file it cannot read', () => {
   const ctx = setupTest();
 
-  // a directory where the file should be: the read fails with EISDIR
   mkdirSync(ctx.taintPath);
 
   expect(createKernelOopsWatch(ctx.taintPath).readFlag()).toBe('unknown');
@@ -111,7 +107,7 @@ test('it reads the flag unknown from a malformed taint file', () => {
 test('it reads the flag unknown from a taint mask too large to hold its low bits', () => {
   const ctx = setupTest();
 
-  // 2^60 + 128: as a double, the low bits and flag D among them round away
+  // 2^60 + 128: as a double, the low bits, flag D among them, round away.
   writeFileSync(ctx.taintPath, '1152921504606847104\n');
 
   expect(createKernelOopsWatch(ctx.taintPath).readFlag()).toBe('unknown');
@@ -182,7 +178,6 @@ test('it keeps an oops it saw once the file reads clear again', () => {
 
   watch.isOopsed();
 
-  // the kernel never clears D; a read that says so is not a reboot
   writeFileSync(ctx.taintPath, '0\n');
 
   expect(watch.isOopsed()).toBeTrue();
@@ -224,7 +219,6 @@ test('it keeps the first boot id it read', () => {
 
   watch.readCurrentBootId();
 
-  // a boot keeps its id; a read that says otherwise is not a reboot
   writeFileSync(ctx.bootIdPath, 'c47a9e20-1b3d-4f68-a5c2-7e9d0b1f3a54\n');
 
   expect(watch.readCurrentBootId()).toBe('6b1f0c3e-92d4-4a7b-8e5f-0d2c4a6b8e1f');
@@ -387,7 +381,6 @@ test('it finds no owners when it cannot read the kernel log', () => {
 test('it finds no owners when the kernel log has dropped the first oops', () => {
   const ctx = setupTest();
 
-  // the log filled and lost oops #1, which may have hit another VM
   writeFileSync(
     ctx.kmsgPath,
     [
@@ -457,7 +450,6 @@ test('it finds no owners when impd runs outside the host PID namespace', () => {
     ].join('\n'),
   );
 
-  // a container's namespace: the log's 4242 is another thread there
   symlinkSync('pid:[4026532109]', ctx.pidNamespacePath);
 
   const watch = createKernelOopsWatch(ctx.taintPath, Date.now, ctx.bootIdPath, {
@@ -471,11 +463,9 @@ test('it finds no owners when impd runs outside the host PID namespace', () => {
 test('it finds no owners when the kernel overwrote records while impd read the log', () => {
   const ctx = setupTest();
 
-  // the file stands for the log's path; the reads below stand for its records
   writeFileSync(ctx.kmsgPath, '');
   symlinkSync('pid:[4026531836]', ctx.pidNamespacePath);
 
-  // oops #1 reads, then the kernel overwrites what held oops #2, then the end
   const reads = [
     '4,814,90412360,-;Oops: 0000 [#1] PREEMPT SMP NOPTI\n',
     '4,815,90412365,-;CPU: 3 PID: 4242 Comm: fc_vcpu 0 Tainted: P           O       6.8.0-45-generic #45-Ubuntu\n',
@@ -528,7 +518,6 @@ test('it reads the task line arm64 prints after the loaded modules', () => {
 test("it finds no owners when another VM's warning prints inside the oops", () => {
   const ctx = setupTest();
 
-  // VM B's warning on CPU 1 lands between VM A's oops header and its task line
   writeFileSync(
     ctx.kmsgPath,
     [
@@ -587,7 +576,6 @@ test('it finds no owners when a warning that began before the oops prints its ta
 test('it finds no owners when a stack dump without markers prints a second task line in the oops', () => {
   const ctx = setupTest();
 
-  // a hung-task report from CPU 1 prints its task line first, then the oops's own follows
   writeFileSync(
     ctx.kmsgPath,
     [
@@ -619,7 +607,6 @@ test('it finds no owners when a stack dump without markers prints a second task 
 test('it finds no owners when an oops begins while one of two overlapping warnings is open', () => {
   const ctx = setupTest();
 
-  // warning B ends before the oops; warning A, still open, ends inside it
   writeFileSync(
     ctx.kmsgPath,
     [

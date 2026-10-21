@@ -10,9 +10,6 @@ export interface BootStatus {
   readonly outdated?: readonly OutdatedPart[];
 }
 
-// What an upgrade means for an imp: a sleeping one whose snapshot no longer
-// loads boots cold, and why; an awake one, or one whose snapshot still loads,
-// runs parts of the host it predates until its next cold boot.
 export function readBootStatus(
   imp: Readonly<Pick<ImpRecord, 'state'>>,
   paths: Readonly<ImpPaths>,
@@ -21,7 +18,6 @@ export function readBootStatus(
   if (imp.state === 'sleeping') {
     const meta = readSnapshotMeta(paths);
 
-    // its wake finds nothing to load
     if (meta === null) {
       return { coldBootReason: 'no snapshot it can load' };
     }
@@ -39,7 +35,6 @@ export function readBootStatus(
 
   const vm = readVmIdentity(paths);
 
-  // re-adopted from an impd that kept no identity: its sleep cannot name a drive
   if (vm === null) {
     return { outdated: ['impd'] };
   }
@@ -53,8 +48,6 @@ function withOutdated(status: Readonly<BootStatus>, outdated: readonly OutdatedP
   return outdated.length === 0 ? status : { ...status, outdated };
 }
 
-// Counts what readBootStatus says over the running and sleeping imps; no
-// other state has a VM or a snapshot.
 export function countBootStatuses<T extends Pick<ImpRecord, 'state'>>(
   imps: readonly T[],
   read: (imp: T) => BootStatus,
@@ -71,8 +64,8 @@ export function countBootStatuses<T extends Pick<ImpRecord, 'state'>>(
     const status = read(imp);
     const parts = status.outdated ?? [];
 
-    // a running imp's next sleep records what it runs: an older Firecracker,
-    // or no identity at all, which the host then cannot load
+    // A running imp's next sleep records what it runs, and the host cannot load
+    // a snapshot from an older Firecracker or with no identity.
     const bootsCold =
       imp.state === 'sleeping'
         ? status.coldBootReason !== undefined
@@ -91,6 +84,5 @@ export function countBootStatuses<T extends Pick<ImpRecord, 'state'>>(
     }
   }
 
-  // `ipv6` only when some imp lacks it, as an older impd leaves it out
   return { coldBoots, outdated: noIpv6 === 0 ? outdated : { ...outdated, ipv6: noIpv6 } };
 }

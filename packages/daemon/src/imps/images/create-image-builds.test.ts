@@ -54,13 +54,10 @@ async function setupTest() {
 
   stack.defer(() => db.destroy());
 
-  // a host docker that logs every call: an isolated build makes none
   const docker = createStubDockerCli({ directory });
 
   updateEnv('PATH', docker.path);
 
-  // the stub disk's reading, a petabyte free; a test that needs a full disk
-  // lowers it
   const usage = { usedBytes: 0, availableBytes: 1024 ** 5 };
 
   const diskBudget = createDiskBudget({
@@ -69,10 +66,8 @@ async function setupTest() {
     log: () => {},
   });
 
-  // each hold a build's growing export asks for
   const grows: number[] = [];
 
-  // the budget the image service holds disk through, which records each hold
   const recordedBudget = {
     withRoom: diskBudget.withRoom,
     withGrowingRoom: <T>(
@@ -88,7 +83,6 @@ async function setupTest() {
   };
 
   return {
-    // a release deferred here runs before the database closes
     stack,
     directoryPath: directory,
     dataDir,
@@ -162,7 +156,6 @@ test('it pins, builds and exports in its builder, with no host engine call', asy
 
   const saved = await readImageByName(ctx.db, 'web');
 
-  // the digest's own form: no Docker image ID is one
   expect(image as unknown).toStrictEqual({
     id: expect.any(String) as unknown,
     name: 'web',
@@ -294,14 +287,12 @@ test('it holds disk in 256 MiB steps as the export grows, not at the image cap',
     signal: new AbortController().signal,
   });
 
-  // one 256 MiB step, where the cap would hold 16 GiB
   expect(ctx.grows).toStrictEqual([256 * 1024 ** 2]);
 });
 
 test('it refuses with DISK_FULL an export that outgrows the free disk', async () => {
   const ctx = await setupTest();
 
-  // 256 MiB free
   ctx.usage.availableBytes = 256 * 1024 ** 2;
 
   const builder = buildStubImageBuilder({
@@ -373,10 +364,6 @@ test('it stops the export at the step the free disk refuses', async () => {
   await building.catch(() => {});
 
   expect(building).rejects.toMatchObject({ code: 'DISK_FULL' });
-
-  // the first 1 MiB chunk's 256 MiB step, then, once tar lists the 200 MiB file,
-  // twice that and the rootfs's journal in 256 MiB steps, which 600 MiB
-  // refuses; no step after it
   expect(ctx.grows).toStrictEqual([256 * 1024 ** 2, 768 * 1024 ** 2]);
   expect(builder.guest.runs.at(-1)?.closed).toBe(true);
 });
@@ -508,7 +495,6 @@ test('it refuses an export over IMP_BUILD_IMAGE_MAX_FILES', async () => {
 test('it releases the disk hold when the free disk refuses the export', async () => {
   const ctx = await setupTest();
 
-  // 256 MiB free
   ctx.usage.availableBytes = 256 * 1024 ** 2;
 
   const builder = buildStubImageBuilder({
@@ -585,7 +571,6 @@ test('it releases the disk hold when the client goes while the builder holds its
     },
   );
 
-  // the export's output is in, and its exit never comes
   await waitFor(() => {
     expect(ctx.grows).not.toBeEmpty();
   });
@@ -636,7 +621,6 @@ test('it fails the build when the client goes while the builder holds its export
     },
   );
 
-  // the export's output is in, and its exit never comes
   await waitFor(() => {
     expect(ctx.grows).not.toBeEmpty();
   });
@@ -783,7 +767,6 @@ test('it keeps the rootfs another build of the digest is writing when its own ro
     log: () => {},
   });
 
-  // each build reads its own upload
   await Bun.write(
     join(ctx.directoryPath, 'web.tar'),
     createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
@@ -812,7 +795,6 @@ test('it keeps the rootfs another build of the digest is writing when its own ro
     },
   );
 
-  // both exports are in, so both builds wait on the one mkfs.ext4
   await mkfs.waitForStart();
 
   await waitFor(() => {
@@ -840,14 +822,12 @@ test('it keeps the rootfs when an image rm runs while a build of its digest is b
 
   const gate = buildQueryGate('web2');
 
-  // a held select goes before the database closes, however the test ends
   ctx.stack.defer(() => {
     gate.release();
   });
 
   const exports = { count: 0 };
 
-  // the second build's export arms the gate, after its name check
   const builder = buildStubImageBuilder({
     exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
@@ -872,7 +852,6 @@ test('it keeps the rootfs when an image rm runs while a build of its digest is b
     log: () => {},
   });
 
-  // each build reads its own upload
   await Bun.write(
     join(ctx.directoryPath, 'web.tar'),
     createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
@@ -920,14 +899,12 @@ test("it removes that rootfs after all when the build's row then fails", async (
 
   const gate = buildQueryGate('web2');
 
-  // a held select goes before the database closes, however the test ends
   ctx.stack.defer(() => {
     gate.release();
   });
 
   const exports = { count: 0 };
 
-  // the second build's export arms the gate, after its name check
   const builder = buildStubImageBuilder({
     exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
@@ -952,7 +929,6 @@ test("it removes that rootfs after all when the build's row then fails", async (
     log: () => {},
   });
 
-  // each build reads its own upload
   await Bun.write(
     join(ctx.directoryPath, 'web.tar'),
     createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
@@ -985,7 +961,6 @@ test("it removes that rootfs after all when the build's row then fails", async (
 
   await images.removeImage('web');
 
-  // a template takes the build's name while its row waits
   const template = buildMockNewImage({ name: 'web2', source: 'imp', sourceImp: 'dev' });
 
   await createImage(ctx.db, template);
@@ -1012,7 +987,6 @@ test('it removes a rootfs whose write fails after it is published', async () => 
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
 
-    // a mount that fails once the rootfs is in place, as a ZFS dataset's can
     storage: {
       ...ctx.storage,
       createImage: async (digest, write) => {
@@ -1066,7 +1040,6 @@ test('it returns the error of a rootfs write that fails after it is published', 
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
 
-    // a mount that fails once the rootfs is in place, as a ZFS dataset's can
     storage: {
       ...ctx.storage,
       createImage: async (digest, write) => {
@@ -1414,9 +1387,8 @@ test('it writes nothing into the host directory an /etc/imp link names', async (
   expect(existsSync(join(hostDir, 'image.json'))).toBeFalse();
 });
 
-// A build's disk hold against what it takes on a real filesystem: a small
-// one that IMP_TEST_SMALL_FS names (CI mounts a loop XFS for it;
-// docs/architecture/storage/disk-space.md#the-budget). Without it these skip.
+// These need the small real filesystem that IMP_TEST_SMALL_FS names, which CI mounts as a
+// loop XFS, and skip without it.
 test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
   'it takes no more than its hold for a one-file image on a small filesystem',
   async () => {
@@ -1425,8 +1397,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const mount = process.env['IMP_TEST_SMALL_FS'] ?? '';
 
     const sampler = await startDiskSampler(mount);
-
-    // the data dir on the small filesystem, 128 MiB of it held back
     const dataDir = await mkdtemp(join(mount, 'data-'));
 
     onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
@@ -1445,7 +1415,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       writeFileSync(join(tree, 'hello'), 'from the builder\n');
     });
 
-    // in 1 MiB chunks, as a builder streams its export
     const chunks = Array.from({ length: Math.ceil(exported.byteLength / 1024 ** 2) }, (_, index) =>
       exported.subarray(index * 1024 ** 2, (index + 1) * 1024 ** 2),
     );
@@ -1455,8 +1424,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       repoDigest: `sha256:${'a'.repeat(64)}`,
     });
 
-    // each hold is recorded; the sampler reads the disk once each rootfs is
-    // written, while its tree is still on disk
     const images = createImageService({
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
@@ -1504,7 +1471,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
 
-  // tens of thousands of files run past bun's 5 s default
   120_000,
 );
 
@@ -1516,8 +1482,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const mount = process.env['IMP_TEST_SMALL_FS'] ?? '';
 
     const sampler = await startDiskSampler(mount);
-
-    // the data dir on the small filesystem, 128 MiB of it held back
     const dataDir = await mkdtemp(join(mount, 'data-'));
 
     onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
@@ -1542,7 +1506,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       }
     });
 
-    // in 1 MiB chunks, as a builder streams its export
     const chunks = Array.from({ length: Math.ceil(exported.byteLength / 1024 ** 2) }, (_, index) =>
       exported.subarray(index * 1024 ** 2, (index + 1) * 1024 ** 2),
     );
@@ -1552,8 +1515,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       repoDigest: `sha256:${'a'.repeat(64)}`,
     });
 
-    // each hold is recorded; the sampler reads the disk once each rootfs is
-    // written, while its tree is still on disk
     const images = createImageService({
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
@@ -1601,7 +1562,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
 
-  // tens of thousands of files run past bun's 5 s default
   120_000,
 );
 
@@ -1613,8 +1573,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const mount = process.env['IMP_TEST_SMALL_FS'] ?? '';
 
     const sampler = await startDiskSampler(mount);
-
-    // the data dir on the small filesystem, 128 MiB of it held back
     const dataDir = await mkdtemp(join(mount, 'data-'));
 
     onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
@@ -1637,7 +1595,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       }
     });
 
-    // in 1 MiB chunks, as a builder streams its export
     const chunks = Array.from({ length: Math.ceil(exported.byteLength / 1024 ** 2) }, (_, index) =>
       exported.subarray(index * 1024 ** 2, (index + 1) * 1024 ** 2),
     );
@@ -1647,8 +1604,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       repoDigest: `sha256:${'a'.repeat(64)}`,
     });
 
-    // each hold is recorded; the sampler reads the disk once each rootfs is
-    // written, while its tree is still on disk
     const images = createImageService({
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
@@ -1696,7 +1651,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
 
-  // tens of thousands of files run past bun's 5 s default
   120_000,
 );
 
@@ -1708,8 +1662,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const mount = process.env['IMP_TEST_SMALL_FS'] ?? '';
 
     const sampler = await startDiskSampler(mount);
-
-    // the data dir on the small filesystem, 128 MiB of it held back
     const dataDir = await mkdtemp(join(mount, 'data-'));
 
     onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
@@ -1724,7 +1676,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
 
     const grows: number[] = [];
 
-    // as docker export sends it
     const exported = createTreeTar(ctx.directoryPath, (tree) => {
       const file = join(tree, 'sparse');
 
@@ -1733,7 +1684,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       Bun.spawnSync(['truncate', '-s', String(400 * 1024 ** 2), file]);
     });
 
-    // in 1 MiB chunks, as a builder streams its export
     const chunks = Array.from({ length: Math.ceil(exported.byteLength / 1024 ** 2) }, (_, index) =>
       exported.subarray(index * 1024 ** 2, (index + 1) * 1024 ** 2),
     );
@@ -1743,8 +1693,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       repoDigest: `sha256:${'a'.repeat(64)}`,
     });
 
-    // each hold is recorded; the sampler reads the disk once each rootfs is
-    // written, while its tree is still on disk
     const images = createImageService({
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
@@ -1792,7 +1740,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
 
-  // tens of thousands of files run past bun's 5 s default
   120_000,
 );
 
@@ -1804,8 +1751,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const mount = process.env['IMP_TEST_SMALL_FS'] ?? '';
 
     const sampler = await startDiskSampler(mount);
-
-    // the data dir on the small filesystem, 128 MiB of it held back
     const dataDir = await mkdtemp(join(mount, 'data-'));
 
     onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
@@ -1832,7 +1777,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       ['--sparse'],
     );
 
-    // in 1 MiB chunks, as a builder streams its export
     const chunks = Array.from({ length: Math.ceil(exported.byteLength / 1024 ** 2) }, (_, index) =>
       exported.subarray(index * 1024 ** 2, (index + 1) * 1024 ** 2),
     );
@@ -1842,8 +1786,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       repoDigest: `sha256:${'a'.repeat(64)}`,
     });
 
-    // each hold is recorded; the sampler reads the disk once each rootfs is
-    // written, while its tree is still on disk
     const images = createImageService({
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
@@ -1891,7 +1833,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
 
-  // tens of thousands of files run past bun's 5 s default
   120_000,
 );
 
@@ -1903,8 +1844,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const mount = process.env['IMP_TEST_SMALL_FS'] ?? '';
 
     const sampler = await startDiskSampler(mount);
-
-    // the data dir on the small filesystem, 128 MiB of it held back
     const dataDir = await mkdtemp(join(mount, 'data-'));
 
     onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
@@ -1919,7 +1858,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
 
     const grows: number[] = [];
 
-    // random data, which no tool can store as holes
     const exported = createTreeTar(ctx.directoryPath, (tree) => {
       for (let index = 0; index < 3200; index += 1) {
         writeFileSync(
@@ -1929,7 +1867,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       }
     });
 
-    // in 1 MiB chunks, as a builder streams its export
     const chunks = Array.from({ length: Math.ceil(exported.byteLength / 1024 ** 2) }, (_, index) =>
       exported.subarray(index * 1024 ** 2, (index + 1) * 1024 ** 2),
     );
@@ -1939,8 +1876,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       repoDigest: `sha256:${'a'.repeat(64)}`,
     });
 
-    // each hold is recorded; the sampler reads the disk once each rootfs is
-    // written, while its tree is still on disk
     const images = createImageService({
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
@@ -1988,7 +1923,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
 
-  // tens of thousands of files run past bun's 5 s default
   120_000,
 );
 
@@ -2000,8 +1934,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const mount = process.env['IMP_TEST_SMALL_FS'] ?? '';
 
     const sampler = await startDiskSampler(mount);
-
-    // the data dir on the small filesystem, 128 MiB of it held back
     const dataDir = await mkdtemp(join(mount, 'data-'));
 
     onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
@@ -2016,8 +1948,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
 
     const grows: number[] = [];
 
-    // twice the archive just under a 256 MiB step: held at twice the archive
-    // alone, it held 512 MiB and took 536 on XFS
     const exported = createTreeTar(ctx.directoryPath, (tree) => {
       for (let directoryIndex = 0; directoryIndex < 58; directoryIndex += 1) {
         mkdirSync(join(tree, `d${String(directoryIndex)}`));
@@ -2031,7 +1961,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       }
     });
 
-    // in 1 MiB chunks, as a builder streams its export
     const chunks = Array.from({ length: Math.ceil(exported.byteLength / 1024 ** 2) }, (_, index) =>
       exported.subarray(index * 1024 ** 2, (index + 1) * 1024 ** 2),
     );
@@ -2041,8 +1970,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       repoDigest: `sha256:${'a'.repeat(64)}`,
     });
 
-    // each hold is recorded; the sampler reads the disk once each rootfs is
-    // written, while its tree is still on disk
     const images = createImageService({
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
@@ -2075,7 +2002,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
     );
 
-    // the archive is in the window the comment above names
     invariant(2 * exported.byteLength > 500 * 1024 ** 2);
     invariant(2 * exported.byteLength < 512 * 1024 ** 2);
 
@@ -2094,7 +2020,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
 
-  // tens of thousands of files run past bun's 5 s default
   120_000,
 );
 
@@ -2106,8 +2031,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const mount = process.env['IMP_TEST_SMALL_FS'] ?? '';
 
     const sampler = await startDiskSampler(mount);
-
-    // the data dir on the small filesystem, 128 MiB of it held back
     const dataDir = await mkdtemp(join(mount, 'data-'));
 
     onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
@@ -2120,14 +2043,12 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       log: () => {},
     });
 
-    // one file that tar lists in full at once
     const exported = createTreeTar(ctx.directoryPath, (tree) => {
       Bun.spawnSync(['truncate', '-s', String(500 * 1024 ** 2), join(tree, 'big')]);
     });
 
     await sampler.fill(300 * 1024 ** 2, 128 * 1024 ** 2);
 
-    // in 1 MiB chunks, as a builder streams its export
     const chunks = Array.from({ length: Math.ceil(exported.byteLength / 1024 ** 2) }, (_, index) =>
       exported.subarray(index * 1024 ** 2, (index + 1) * 1024 ** 2),
     );
@@ -2137,8 +2058,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       repoDigest: `sha256:${'a'.repeat(64)}`,
     });
 
-    // the sampler reads the disk once each rootfs is written, while its tree
-    // is still on disk
     const images = createImageService({
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
@@ -2172,7 +2091,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
 
-  // tens of thousands of files run past bun's 5 s default
   120_000,
 );
 
@@ -2184,8 +2102,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const mount = process.env['IMP_TEST_SMALL_FS'] ?? '';
 
     const sampler = await startDiskSampler(mount);
-
-    // the data dir on the small filesystem, 128 MiB of it held back
     const dataDir = await mkdtemp(join(mount, 'data-'));
 
     onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
@@ -2198,7 +2114,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       log: () => {},
     });
 
-    // files that tar lists as they come
     const exported = createTreeTar(ctx.directoryPath, (tree) => {
       for (let index = 0; index < 400; index += 1) {
         writeFileSync(
@@ -2210,7 +2125,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
 
     await sampler.fill(300 * 1024 ** 2, 128 * 1024 ** 2);
 
-    // in 1 MiB chunks, as a builder streams its export
     const chunks = Array.from({ length: Math.ceil(exported.byteLength / 1024 ** 2) }, (_, index) =>
       exported.subarray(index * 1024 ** 2, (index + 1) * 1024 ** 2),
     );
@@ -2220,8 +2134,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       repoDigest: `sha256:${'a'.repeat(64)}`,
     });
 
-    // the sampler reads the disk once each rootfs is written, while its tree
-    // is still on disk
     const images = createImageService({
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
@@ -2255,6 +2167,5 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
 
-  // tens of thousands of files run past bun's 5 s default
   120_000,
 );

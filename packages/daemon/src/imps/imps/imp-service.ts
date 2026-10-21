@@ -36,7 +36,6 @@ export type { ImpServiceDeps } from './imp-context';
 
 type ResourceListener = (deltas: readonly ResourceDelta[]) => void;
 
-// The imp API: what the router and the exec and tunnel endpoints call.
 export type ImpService = ImpCommands &
   ImpLeases &
   SessionService &
@@ -52,54 +51,39 @@ export type ImpService = ImpCommands &
     | 'openAccept'
     | 'recordActivity'
   > & {
-    // sessions impd last saw in the imp; undefined when it has not seen any
     readonly countSessions: (imp: ImpRecord) => number | undefined;
     readonly readBootStatus: (imp: ImpRecord) => BootStatus;
 
-    // with IMP_KSM, whether the imp's guest memory lost its merge flag
     readonly isUnmergeable: (id: string) => boolean;
 
-    // every lifecycle event, as each write to the imps lands
     readonly events: EventBus;
 
-    // one pass of the resource sampler, every 5 s from main; each pass goes
-    // to the subscribers, the metrics
     readonly sampleResources: () => Promise<void>;
     readonly subscribeResources: (listener: ResourceListener) => () => void;
     readonly readCpuHost: () => { readonly hostCpus: number; readonly limitsEnforced: boolean };
 
-    // why the host needs a reboot, such as `a kernel oops`; null when it does not
     readonly readRebootReason: () => string | null;
   };
 
-// For checkpoints/checkpoint-service.ts. `lockImp` runs `action` under the
-// imp's lifecycle lock with a fresh record; the other hooks take that record.
 export interface ImpCheckpointHooks {
   readonly createImp: ImpCommands['createImp'];
 
-  // a fork refused part way, whose source changed under it
   readonly destroyImpId: ImpCommands['destroyImpId'];
   readonly lockImp: <T>(name: string, action: (imp: LockedImp) => Promise<T>) => Promise<T>;
 
-  // by id, as the move's own step: a move's commit and abort, which settle
-  // the mark itself
   readonly lockImpId: <T>(
     id: string,
     action: (imp: LockedImp | undefined) => Promise<T>,
   ) => Promise<T>;
 
-  // stops the VM; not `graceful`, it kills it (ImpVmOps.stopImpVm)
   readonly haltImp: (imp: LockedImp, graceful?: boolean) => Promise<LockedImp>;
 
-  // boots a restored imp's disk; the boot records the cause `restore`
   readonly bootImp: (imp: LockedImp) => Promise<LockedImp>;
 
-  // wakes a sleeping imp or boots a stopped one
   readonly requireRunningImp: (imp: LockedImp) => Promise<LockedImp>;
   readonly toApi: (imp: ImpRecord) => Promise<Imp>;
 }
 
-// Every face of the service: impd's main wires each part to the one it needs.
 export type Imps = ImpService &
   ImpRuntime &
   ImpCheckpointHooks & {

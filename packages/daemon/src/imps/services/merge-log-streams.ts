@@ -1,29 +1,23 @@
 import type { ServiceLogChunk, ServiceLogStream } from '../../vm/agent-client/service-requests';
 import type { LogDecoders } from './create-log-decoders';
 
-// one service's open log stream
 export interface NamedStream {
   readonly service: string;
   readonly stream: ServiceLogStream;
 }
 
-// one chunk of the merge, with the service it came from
 export interface MergedChunk {
   readonly service: string;
   readonly chunk: ServiceLogChunk;
 
-  // the data decoded, or '' for a cursor
   readonly text: string;
 }
 
-// a stream's next read, by its index
 interface Pending {
   readonly result: IteratorResult<ServiceLogChunk, void>;
   readonly index: number;
 }
 
-// Each stream's chunks as they come, decoded per service so a character
-// split across chunks stays whole.
 export async function* mergeLogStreams(
   streams: readonly NamedStream[],
   decoders: LogDecoders,

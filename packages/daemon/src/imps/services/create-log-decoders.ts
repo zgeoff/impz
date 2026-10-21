@@ -1,11 +1,10 @@
 import type { ServiceLog } from '@impz/api';
 
-// Each service's UTF-8 decoder, kept across a follow's reconnects: a cursor
-// can fall inside a character, and its rest comes on the next stream.
+// Each decoder outlives a follow's reconnects, because a cursor can fall
+// inside a UTF-8 character whose rest comes on the next stream.
 export interface LogDecoders {
   readonly readText: (service: string, data: Uint8Array) => string;
 
-  // what the decoders still hold, once the log ends for good
   readonly readRest: () => Generator<ServiceLog, void, undefined>;
 }
 

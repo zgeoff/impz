@@ -3,12 +3,11 @@ import type { ImageBuildEvent, ImageBuildPhase } from '@impz/api';
 import type { BuildOutput } from './create-build-steps';
 import { BUILD_LOG_QUEUE_MAX_BYTES, createLogBudget } from './create-log-budget';
 
-// A progress line this often keeps a client's fetch reading: Bun's gives up
-// after 360 s with no byte, undici's after 300 s (its headersTimeout before
-// the headers, its bodyTimeout between two chunks).
+// Bun's fetch gives up after 360 s without a byte and undici's after 300 s (headersTimeout
+// before the headers, bodyTimeout between chunks), so a progress line this often keeps a
+// client reading.
 export const BUILD_KEEPALIVE_MS = 15_000;
 
-// runs tick every ms until the returned stop is called
 export type Repeat = (durationMs: number, tick: () => void) => () => void;
 
 export function runOnInterval(durationMs: number, tick: () => void): () => void {
@@ -23,20 +22,14 @@ export interface BuildEventStreamDeps {
   readonly keepaliveMs: number;
   readonly now: () => number;
 
-  // the keepalive's timer; runOnInterval by default
   readonly repeat?: Repeat;
 }
 
-// what a build tells its stream as it runs: each phase as it starts, and
-// the lines and steps of its output
 export interface BuildReport {
   readonly setPhase: (phase: ImageBuildPhase) => void;
   readonly output: BuildOutput;
 }
 
-// The build's answer, at once: progress lines, at each phase and step too, a
-// log line for each line of output, then the event `run` ends with (it never
-// throws). Its signal aborts when the client goes or cancels the stream.
 export function createBuildEventStream(
   clientSignal: AbortSignal,
   run: (signal: AbortSignal, report: BuildReport) => Promise<ImageBuildEvent>,
@@ -72,8 +65,6 @@ export function createBuildEventStream(
   const body = new ReadableStream<Uint8Array>(
     {
       start: (controller) => {
-        // a client gone mid-write closes the stream under us: then nothing
-        // more is sent, and the build stops through the signal
         const send = (event: ImageBuildEvent): void => {
           if (!state.open) {
             return;
@@ -102,7 +93,6 @@ export function createBuildEventStream(
 
         state.stopKeepalive = repeat(deps.keepaliveMs, sendProgress);
 
-        // nobody reads the progress of a build that stops for its client
         signal.addEventListener('abort', () => {
           state.stopKeepalive();
         });
@@ -114,7 +104,6 @@ export function createBuildEventStream(
             sendProgress();
           },
           output: {
-            // the stream's queue holds what the client has not read yet
             emitLog: (line) => {
               const hasRoom = (controller.desiredSize ?? 0) > 0;
 
@@ -142,12 +131,9 @@ export function createBuildEventStream(
           if (state.open) {
             stop();
 
-            // a client that went as the build ended may have closed it already
             try {
               controller.close();
-            } catch {
-              // nothing is left to send
-            }
+            } catch {}
           }
         };
 

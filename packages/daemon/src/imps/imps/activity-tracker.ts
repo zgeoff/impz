@@ -1,14 +1,8 @@
-// Host-side connections that keep an imp awake: exec sessions, proxied
-// HTTP requests or WebSockets, SSH connections and `impz proxy` tunnels
-// (docs/architecture/lifecycle/sleep-and-wake.md#idle-detection).
-
 const CONNECTION_KINDS = ['exec', 'proxy', 'ssh', 'tunnel'] as const;
 
 export type ConnectionKind = (typeof CONNECTION_KINDS)[number];
 
 export interface ActivityTracker {
-  // counts one connection until the returned function runs (once is enough;
-  // later calls do nothing)
   readonly open: (impId: string, kind: ConnectionKind) => () => void;
   readonly count: (impId: string, kind?: ConnectionKind) => number;
 }

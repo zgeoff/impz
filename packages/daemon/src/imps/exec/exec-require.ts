@@ -7,10 +7,6 @@ import { PROXY_VARIABLE } from '../../network/broker/guest-trust';
 import type { BrokerExecEnv } from '../../network/broker/guest-trust';
 import { readEnvKey } from './merge-env';
 
-// An exec's `require` (docs/guides/connectors.md#requiring-the-broker):
-// `broker` holds when impd set the broker's variables and the CA bundle for
-// this boot of the guest. It says nothing of whether the command honours them.
-
 export function isBrokerRequired(requirements: readonly ExecRequirement[] | undefined): boolean {
   return requirements?.includes('broker') === true;
 }
@@ -22,8 +18,6 @@ export function buildBrokerNotReadyError(detail: string) {
   });
 }
 
-// The refusal for an exec that requires the broker, given the broker's part
-// and the environment the command would start with; null to start it.
 export function checkBrokerReady(
   broker: BrokerExecEnv,
   env: readonly string[],
@@ -42,8 +36,6 @@ export function checkBrokerReady(
     return buildBrokerNotReadyError(`impd built no ${PROXY_VARIABLE} for this exec`);
   }
 
-  // the caller's env wins over the broker's, so an entry it replaced is not
-  // there as impd set it
   const started = new Set(env);
 
   const replaced = broker.env.find((entry) => !started.has(entry));
