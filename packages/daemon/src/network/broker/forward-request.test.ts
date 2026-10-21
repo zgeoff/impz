@@ -8,6 +8,7 @@ import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { buildMockCredential } from '../../../testing/network/build-mock-credential';
 import { startStubBrokerTlsUpstream } from '../../../testing/network/start-stub-broker-tls-upstream';
+import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
 import type { NewAuditEntry } from '../../platform/db/broker-audit';
 import { loadOrCreateBrokerCa } from './broker-ca';
 import { createForwarder } from './forward-request';
@@ -434,6 +435,125 @@ test('it records an audit row with the bytes read when the guest hangs up mid-bo
       reason: null,
     },
   ]);
+});
+
+// Bun prints a response body's unhandled error to the process's stderr, out
+// of reach of the test runner, so the broker runs in a child Bun whose stderr
+// the test reads
+test('it logs one impd.broker line that names the imp, and nothing unhandled, when the upstream closes a stream', async () => {
+  const child = Bun.spawn(
+    [process.execPath, join(import.meta.dir, '../../../testing/network/run-cut-broker-stream.ts')],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+
+  onTestFinished(() => {
+    child.kill();
+  });
+
+  const [stdout, stderr] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+
+  expect(stdout).toBe(
+    'WARNING impd.broker imp=web the upstream closed GET api.example.com/v1/events mid-stream: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()\n' +
+      '{"client":"ECONNRESET"}\n',
+  );
+
+  expect(stderr).toBe('');
+}, 30_000);
+
+test('it warns through its logger, naming the imp, when the upstream closes a stream', async () => {
+  const ctx = await setupTest();
+
+  const upstream = startStubCutStream(ctx.stack, 'data: first\n\n');
+  const warning = mock();
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.example.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({
+          secretName: 'example',
+          header: 'authorization',
+          value: 'Bearer real',
+        }),
+      ),
+    resolveUpstream: () => ({ origin: `http://127.0.0.1:${String(upstream.port)}`, ca: null }),
+    recordAudit: () => {},
+    logger: { warning },
+  });
+
+  const response = await forward(
+    new Request('https://api.example.com/v1/events', { headers: { host: 'api.example.com' } }),
+  );
+
+  invariant(response.body);
+
+  const reader = response.body.getReader();
+
+  await reader.read();
+
+  upstream.cut();
+
+  await Promise.allSettled([reader.read()]);
+
+  expect(warning).toHaveBeenCalledExactlyOnceWith(
+    'the upstream closed {method} {host}{path} mid-stream: {reason}',
+    {
+      imp: 'dev',
+      method: 'GET',
+      host: 'api.example.com',
+      path: '/v1/events',
+      reason: expect.toStartWith('The socket connection was closed unexpectedly.'),
+    },
+  );
+});
+
+test('it warns nothing when the guest hangs up mid-body', async () => {
+  const warning = mock();
+
+  server.use(
+    http.get(
+      'https://api.github.com/slow',
+      () =>
+        new HttpResponse(
+          new ReadableStream<Uint8Array>({
+            pull: (controller) => {
+              controller.enqueue(new TextEncoder().encode('first'));
+            },
+          }),
+        ),
+    ),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+    logger: { warning },
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/slow', { headers: { host: 'api.github.com' } }),
+  );
+
+  invariant(response.body);
+
+  const reader = response.body.getReader();
+
+  await reader.read();
+
+  void reader.cancel();
+  expect(warning).not.toHaveBeenCalled();
 });
 
 test('it refuses a Host header for another name with 421', async () => {

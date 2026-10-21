@@ -1,4 +1,12 @@
-export function startStubCutStream(stack: Readonly<AsyncDisposableStack>, firstLine: string) {
+interface CutStreamOptions {
+  readonly unix?: string;
+}
+
+export function startStubCutStream(
+  stack: Readonly<AsyncDisposableStack>,
+  firstLine: string,
+  options: Readonly<CutStreamOptions> = {},
+) {
   const open = new Set<ReadableStreamDefaultController<Uint8Array>>();
 
   const handleRequest = () => {
@@ -12,12 +20,10 @@ export function startStubCutStream(stack: Readonly<AsyncDisposableStack>, firstL
     return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
   };
 
-  const server = Bun.serve({
-    port: 0,
-    hostname: '127.0.0.1',
-    idleTimeout: 0,
-    fetch: handleRequest,
-  });
+  const server =
+    options.unix === undefined
+      ? Bun.serve({ port: 0, hostname: '127.0.0.1', idleTimeout: 0, fetch: handleRequest })
+      : Bun.serve({ unix: options.unix, fetch: handleRequest });
 
   stack.defer(() => server.stop(true));
 

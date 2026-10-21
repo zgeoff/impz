@@ -1,7 +1,11 @@
 import type { AuditRefusal, GrantFilter } from '@impz/api';
+import type { Logger } from '@logtape/logtape';
 import type { NewAuditEntry } from '../../platform/db/broker-audit';
 import { sendWithCA } from '../../platform/http/send-with-ca';
+import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { tapStream } from '../../platform/process/tap-stream';
+import type { StreamEnd } from '../../platform/process/tap-stream';
 import { isRequestInFilter } from './is-request-in-filter';
 
 export interface Credential {
@@ -42,6 +46,9 @@ export interface ForwardDeps {
   readonly recordAudit: (entry: NewAuditEntry) => void;
   readonly fetch?: UpstreamFetch;
 
+  // impd.broker by default
+  readonly logger?: Pick<Logger, 'warning'>;
+
   readonly refreshAfterRejection?: (
     secretName: string,
     refreshedAt: number | null,
@@ -56,6 +63,7 @@ const MAX_AUDIT_PATH = 512;
 
 export function createForwarder(deps: ForwardDeps): (request: Request) => Promise<Response> {
   const fetchUpstream = deps.fetch ?? sendWithCA;
+  const logger = deps.logger ?? getImpdLogger('broker');
 
   return async (request) => {
     const started = performance.now();
@@ -178,10 +186,20 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
       const responseBody =
         response.body === null
           ? null
-          : countBytes(response.body, (bytes) => {
+          : countBytes(response.body, (bytes, end) => {
               counts.responseBytes = bytes;
 
               sendAudit(response.status);
+
+              if (end.kind === 'error') {
+                logger.warning('the upstream closed {method} {host}{path} mid-stream: {reason}', {
+                  imp: deps.impName,
+                  method: request.method,
+                  host: deps.host,
+                  path: url.pathname,
+                  reason: getErrorMessage(end.error),
+                });
+              }
             });
 
       if (responseBody === null) {
@@ -288,7 +306,7 @@ function buildEndToEndHeaders(source: Headers): Headers {
 
 function countBytes(
   body: ReadableStream<Uint8Array>,
-  onEnd: (bytes: number) => void,
+  onEnd: (bytes: number, end: StreamEnd) => void,
 ): ReadableStream<Uint8Array> {
   const state = { bytes: 0 };
 
@@ -296,8 +314,8 @@ function countBytes(
     onChunk: (chunk) => {
       state.bytes += chunk.byteLength;
     },
-    onEnd: () => {
-      onEnd(state.bytes);
+    onEnd: (end) => {
+      onEnd(state.bytes, end);
     },
   });
 }
