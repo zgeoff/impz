@@ -7,7 +7,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
@@ -420,6 +420,7 @@ test('it removes the oldest unused agent images once a build leaves more than th
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
+    readImageKeepFile: (path) => readFile(path, 'utf8'),
     log: (message) => {
       logged.push(message);
     },
@@ -501,6 +502,7 @@ test('it keeps every agent image after a build while the prune cannot read which
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
+    readImageKeepFile: (path) => readFile(path, 'utf8'),
     log: () => {},
   });
 
@@ -545,6 +547,7 @@ test('it keeps an old agent image that a build of the same digest rebuilds', asy
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
+    readImageKeepFile: (path) => readFile(path, 'utf8'),
     log: () => {},
   });
 

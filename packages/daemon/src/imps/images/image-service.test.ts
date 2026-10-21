@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
@@ -453,6 +453,39 @@ test('#resolveImage records the lookup as a use of the image', async () => {
   expect(uses[0]?.lastUsedAt).toBe(Date.parse('2030-01-01T00:00:00Z'));
 });
 
+test('#runImagePrune keeps every image when impd was given no keep file reader', async () => {
+  const ctx = await setupTest();
+
+  const logged: string[] = [];
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: (message) => {
+      logged.push(message);
+    },
+  });
+
+  await writeFile(join(ctx.dataDir, 'image-keep'), '');
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-1111111' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+  await images.runImagePrune();
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(uses.map((use) => use.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
+
+  expect(logged).toStrictEqual([
+    `impd: image prune: kept every image: ${join(ctx.dataDir, 'image-keep')}: cannot read the names of the images that configs outside impd use: this impd was given no keep file reader`,
+  ]);
+});
+
 test('#resolveImage keeps an old image that a prune reaches while the lookup reads it', async () => {
   const ctx = await setupTest();
 
@@ -465,6 +498,7 @@ test('#resolveImage keeps an old image that a prune reaches while the lookup rea
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
+    readImageKeepFile: (path) => readFile(path, 'utf8'),
     log: () => {},
   });
 

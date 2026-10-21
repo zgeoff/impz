@@ -1,5 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
@@ -34,6 +34,7 @@ test('it keeps every image, and says why once, while the keep file is missing', 
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleRootfs: ctx.removeIdleRootfs,
+    readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
   });
@@ -67,6 +68,7 @@ test('it keeps every image while the keep file holds a line that is no image nam
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleRootfs: ctx.removeIdleRootfs,
+    readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
   });
@@ -97,6 +99,7 @@ test('it removes the unused agent images past the rollback count, and logs each'
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleRootfs: ctx.removeIdleRootfs,
+    readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
   });
@@ -146,6 +149,7 @@ test('it never removes an image an imp uses, a kept name holds, or impd boots by
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleRootfs: ctx.removeIdleRootfs,
+    readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
   });
@@ -180,6 +184,7 @@ test('it records the prune as the last use of each image in use', async () => {
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleRootfs: ctx.removeIdleRootfs,
+    readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2030-01-01T00:00:00Z'),
   });
@@ -216,6 +221,7 @@ test('it prunes only the images whose name starts with IMP_IMAGE_PRUNE_PREFIX', 
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleRootfs: ctx.removeIdleRootfs,
+    readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
   });

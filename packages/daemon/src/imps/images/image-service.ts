@@ -49,6 +49,8 @@ export interface ImageServiceDeps {
 
   readonly seedRef?: string | null;
 
+  readonly readImageKeepFile?: (path: string) => Promise<string>;
+
   readonly now?: () => number;
 }
 
@@ -62,6 +64,9 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
     db: deps.db,
     storageGate: deps.storageGate,
     removeIdleRootfs: writer.removeIdleRootfs,
+    readKeepFile:
+      deps.readImageKeepFile ??
+      (() => Promise.reject(new Error('this impd was given no keep file reader'))),
     log: deps.log,
     now,
   });

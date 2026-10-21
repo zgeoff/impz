@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { formatBytes } from '@impz/shared';
 import type { Config } from '../../config';
 import { listImageUses, removeUnusedImage, updateImageUse } from '../../platform/db/images';
@@ -21,6 +20,7 @@ export interface ImagePruneDeps {
   readonly db: ImpDatabase;
   readonly storageGate: Pick<StorageGate, 'join'>;
   readonly removeIdleRootfs: (digest: string) => Promise<void>;
+  readonly readKeepFile: (path: string) => Promise<string>;
   readonly log: (message: string) => void;
   readonly now?: () => number;
 }
@@ -54,7 +54,7 @@ export function createImagePrune(deps: ImagePruneDeps): ImagePrune {
   };
 
   const runOnce = async (): Promise<void> => {
-    const keepFile = await readImageKeepFile(rule.keepFile);
+    const keepFile = await readImageKeepFile(deps.readKeepFile, rule.keepFile);
 
     if (!keepFile.isOk) {
       if (keepFile.reason !== state.lastKeptAll) {
@@ -92,9 +92,12 @@ export function createImagePrune(deps: ImagePruneDeps): ImagePrune {
   };
 }
 
-async function readImageKeepFile(path: string): Promise<ImageKeepFile> {
+async function readImageKeepFile(
+  readKeepFile: ImagePruneDeps['readKeepFile'],
+  path: string,
+): Promise<ImageKeepFile> {
   try {
-    const text = await readFile(path, 'utf8');
+    const text = await readKeepFile(path);
 
     return parseImageKeepFile(text);
   } catch (error) {
