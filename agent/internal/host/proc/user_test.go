@@ -107,20 +107,23 @@ func TestLookupUserInFailsForASpecItCannotResolve(t *testing.T) {
 	}
 }
 
-// setresuid and setresgid read (uid_t)-1 as "leave unchanged", so an id
-// outside 0 to 2^32-2 would keep the agent's root.
-func TestLookupUserInRejectsAnIDOutsideTheKernelsRange(t *testing.T) {
+// The library reads a missing or malformed id as 0, and setresuid and
+// setresgid read (uid_t)-1 as "leave unchanged": either would keep the
+// agent's root, so a line with such an id is no entry at all.
+func TestLookupUserInSkipsAnAccountLineWithAnIDTheKernelRefuses(t *testing.T) {
 	for _, tc := range []struct {
 		name, passwd, group, spec, want string
 	}{
-		{name: "negative uid", passwd: "neg:x:-1:1000::/:/bin/sh\n", group: "", spec: "neg",
-			want: `user "neg": id -1 is out of range`},
-		{name: "negative gid", passwd: "neg:x:1000:-1::/:/bin/sh\n", group: "", spec: "neg",
-			want: `user "neg": id -1 is out of range`},
-		{name: "negative supplementary gid", passwd: "imp:x:1000:1000::/home/imp:/bin/bash\n", group: "odd:x:-5:imp\n", spec: "imp",
-			want: `user "imp": id -5 is out of range`},
-		{name: "the no-change gid", passwd: "big:x:1000:4294967295::/:/bin/sh\n", group: "", spec: "big",
-			want: `user "big": id 4294967295 is out of range`},
+		{name: "malformed uid", passwd: "bad:x:abc:1000::/:/bin/sh\n", spec: "bad",
+			want: `user "bad": unable to find user bad: no matching entries in passwd file`},
+		{name: "missing uid", passwd: "bad:x\n", spec: "bad",
+			want: `user "bad": unable to find user bad: no matching entries in passwd file`},
+		{name: "negative gid", passwd: "bad:x:1000:-1::/:/bin/sh\n", spec: "bad",
+			want: `user "bad": unable to find user bad: no matching entries in passwd file`},
+		{name: "the no-change gid", passwd: "bad:x:1000:4294967295::/:/bin/sh\n", spec: "bad",
+			want: `user "bad": unable to find user bad: no matching entries in passwd file`},
+		{name: "malformed group id", passwd: "imp:x:1000:1000::/home/imp:/bin/bash\n", group: "odd:x:zz:\n", spec: "imp:odd",
+			want: `user "imp:odd": unable to find group odd: no matching entries in group file`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fsys := useAccounts(t, tc.passwd, tc.group)
@@ -130,6 +133,37 @@ func TestLookupUserInRejectsAnIDOutsideTheKernelsRange(t *testing.T) {
 			assert.Check(t, cmp.Error(err, tc.want))
 			assert.Check(t, cmp.Nil(cred))
 			assert.Check(t, cmp.Equal(home, ""))
+		})
+	}
+}
+
+func TestLookupUserInLeavesOutAGroupLineWithAMalformedID(t *testing.T) {
+	fsys := useAccounts(t, "imp:x:1000:1000::/home/imp:/bin/bash\n", "odd:x:zz:imp\nbroken\nneg:x:-5:imp\ndocker:x:999:imp\n")
+
+	cred, _, err := LookupUserIn(fsys, "imp")
+
+	assert.NilError(t, err)
+	assert.DeepEqual(t, cred.Groups, []uint32{999, 1000})
+}
+
+func TestLookupUserInTakesAHighIDFromTheAccountFiles(t *testing.T) {
+	fsys := useAccounts(t, "high:x:3000000000:3000000000::/:/bin/sh\n", "")
+
+	cred, _, err := LookupUserIn(fsys, "high")
+
+	assert.NilError(t, err)
+	assert.DeepEqual(t, cred, &syscall.Credential{Uid: 3000000000, Gid: 3000000000, Groups: []uint32{3000000000}})
+}
+
+func TestLookupUserInRefusesANumericSpecOutsideTheKernelsRange(t *testing.T) {
+	for _, spec := range []string{"-1", "4294967295", "imp:-1", "imp:4294967295"} {
+		t.Run(spec, func(t *testing.T) {
+			fsys := useAccounts(t, "imp:x:1000:1000::/home/imp:/bin/bash\n", "")
+
+			cred, _, err := LookupUserIn(fsys, spec)
+
+			assert.Check(t, err != nil)
+			assert.Check(t, cmp.Nil(cred))
 		})
 	}
 }

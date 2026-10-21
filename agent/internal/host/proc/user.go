@@ -1,6 +1,7 @@
 package proc
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -47,16 +48,14 @@ func LookupUserIn(fsys fsroot.FS, spec string) (*syscall.Credential, string, err
 		return nil, "", fmt.Errorf("user %q: empty user or group", spec)
 	}
 
-	passwd, closePasswd, err := openAccounts(fsys, passwdPath)
+	passwd, err := readAccounts(fsys, passwdPath, 2, 3)
 	if err != nil {
 		return nil, "", err
 	}
-	defer closePasswd()
-	group, closeGroup, err := openAccounts(fsys, groupPath)
+	group, err := readAccounts(fsys, groupPath, 2)
 	if err != nil {
 		return nil, "", err
 	}
-	defer closeGroup()
 
 	// A uid with no passwd entry gets its own number as its gid, never the
 	// library's 0.
@@ -67,13 +66,6 @@ func LookupUserIn(fsys fsroot.FS, spec string) (*syscall.Credential, string, err
 	u, err := user.GetExecUser(spec, defaults, passwd, group)
 	if err != nil {
 		return nil, "", fmt.Errorf("user %q: %w", spec, err)
-	}
-
-	// The library reads a negative id as it is, and setresuid and setresgid
-	// take (uid_t)-1 as "leave unchanged", which would keep the agent's root.
-	ids := append([]int{u.Uid, u.Gid}, u.Sgids...)
-	if i := slices.IndexFunc(ids, func(id int) bool { return id < 0 || id >= math.MaxUint32 }); i >= 0 {
-		return nil, "", fmt.Errorf("user %q: id %d is out of range", spec, ids[i])
 	}
 
 	groups := []uint32{}
@@ -88,16 +80,39 @@ func LookupUserIn(fsys fsroot.FS, spec string) (*syscall.Credential, string, err
 	return &syscall.Credential{Uid: uint32(u.Uid), Gid: uint32(u.Gid), Groups: groups}, u.Home, nil
 }
 
-// openAccounts opens an account file of fsys. A missing file is a nil
-// reader, which the library reads as no entries; a nil *os.File inside the
-// interface would fail the read instead.
-func openAccounts(fsys fsroot.FS, path string) (io.Reader, func(), error) {
+// readAccounts reads an account file of fsys and keeps only the lines whose
+// fields at idFields are ids the kernel takes. The library reads a missing or
+// malformed id as 0, which is root, and setresuid and setresgid read
+// (uid_t)-1 as "leave unchanged", which keeps the agent's root. A missing file
+// is a nil reader, which the library reads as no entries.
+func readAccounts(fsys fsroot.FS, path string, idFields ...int) (io.Reader, error) {
 	f, err := fsys.OpenFile(path, os.O_RDONLY, 0)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, func() {}, nil
+		return nil, nil
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return f, func() { f.Close() }, nil
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	var kept bytes.Buffer
+	for line := range bytes.Lines(data) {
+		line = bytes.TrimSpace(line)
+		fields := strings.Split(string(line), ":")
+		if slices.ContainsFunc(idFields, func(i int) bool { return i >= len(fields) || !isKernelID(fields[i]) }) {
+			continue
+		}
+		kept.Write(line)
+		kept.WriteByte('\n')
+	}
+	return &kept, nil
+}
+
+func isKernelID(field string) bool {
+	id, err := strconv.ParseUint(field, 10, 32)
+	return err == nil && id != math.MaxUint32
 }
