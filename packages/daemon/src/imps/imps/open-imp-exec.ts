@@ -1,7 +1,7 @@
+import type { SessionInfo } from '@impz/agent-protocol';
 import { readImpById } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
-import type { SessionInfo } from '../../vm/agent-client/agent-protocol';
 import { sendActivity } from '../../vm/agent-client/agent-requests';
 import { openExecStream } from '../../vm/agent-client/exec-stream';
 import type { AgentExecRequest, ExecStream } from '../../vm/agent-client/exec-stream';

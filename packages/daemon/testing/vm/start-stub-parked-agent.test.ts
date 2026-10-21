@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
-import { BootStepSchema, PingSchema } from '../../src/vm/agent-client/agent-protocol';
+import { BootStepSchema, PingSchema } from '@impz/agent-protocol';
 import { sendClaim, sendPing } from '../../src/vm/agent-client/agent-requests';
 import { startStubParkedAgent } from './start-stub-parked-agent';
 

@@ -3,9 +3,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
+import { ErrorDataSchema, RequestSchema } from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { ErrorDataSchema, RequestSchema } from '../../src/vm/agent-client/agent-protocol';
 import {
   sendActivity,
   sendAgentRequest,

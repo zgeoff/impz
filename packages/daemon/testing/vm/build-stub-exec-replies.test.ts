@@ -3,14 +3,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { FRAME_TYPES, buildFrameDecoder, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import type { AgentFrame } from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
-import {
-  FRAME_TYPES,
-  buildFrameDecoder,
-  encodeFrame,
-  encodeJsonFrame,
-} from '../../src/vm/agent-client/frame-codec';
-import type { AgentFrame } from '../../src/vm/agent-client/frame-codec';
 import { buildStubExecReplies } from './build-stub-exec-replies';
 import { startStubAgent } from './start-stub-agent';
 

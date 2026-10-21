@@ -1,12 +1,13 @@
 import { create, toJson } from '@bufbuild/protobuf';
 import type { MessageInitShape } from '@bufbuild/protobuf';
-import { InnerStatusSchema, RequestSchema } from '../../src/vm/agent-client/agent-protocol';
-import { decodeAgentMessage } from '../../src/vm/agent-client/decode-agent-message';
 import {
   FRAME_TYPES,
+  InnerStatusSchema,
+  RequestSchema,
+  decodeAgentMessage,
   decodeJsonPayload,
   encodeJsonFrame,
-} from '../../src/vm/agent-client/frame-codec';
+} from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
 interface StubInnerAgentOptions {

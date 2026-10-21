@@ -2,16 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { faker } from '@faker-js/faker';
+import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
 import { EXEC_CHANNELS } from '@impz/api';
 import { createImpClient } from '@impz/client';
 import { buildStubExecPeer } from '@impz/client/test-utils/build-stub-exec-peer';
 import { createImage } from '@impz/daemon/src/platform/db/images';
-import {
-  FRAME_TYPES,
-  decodeJsonPayload,
-  encodeFrame,
-  encodeJsonFrame,
-} from '@impz/daemon/src/vm/agent-client/frame-codec';
 import {
   buildImagePaths,
   buildImpPaths,

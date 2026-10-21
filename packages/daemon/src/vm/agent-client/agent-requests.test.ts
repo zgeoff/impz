@@ -3,10 +3,18 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
+import {
+  ErrorDataSchema,
+  FRAME_TYPES,
+  PingSchema,
+  SessionInfoSchema,
+  decodeJsonPayload,
+  encodeFrame,
+  encodeJsonFrame,
+} from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
 import { startStubAgent } from '../../../testing/vm/start-stub-agent';
 import { openAgentConnection } from './agent-connection';
-import { ErrorDataSchema, PingSchema, SessionInfoSchema } from './agent-protocol';
 import {
   readFrameWithin,
   sendActivity,
@@ -15,7 +23,6 @@ import {
   sendPing,
   sendSessionKill,
 } from './agent-requests';
-import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from './frame-codec';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-vsock-'));

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { connect, createServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { faker } from '@faker-js/faker';
+import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
 import {
   TUNNEL_CLOSE_LOST,
   TUNNEL_CLOSE_PROTOCOL,
@@ -11,12 +12,6 @@ import {
   TUNNEL_WINDOW_BYTES,
 } from '@impz/api';
 import { createImage } from '@impz/daemon/src/platform/db/images';
-import {
-  FRAME_TYPES,
-  decodeJsonPayload,
-  encodeFrame,
-  encodeJsonFrame,
-} from '@impz/daemon/src/vm/agent-client/frame-codec';
 import {
   buildImagePaths,
   buildImpPaths,

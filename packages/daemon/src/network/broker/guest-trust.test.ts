@@ -4,15 +4,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rootCertificates } from 'node:tls';
+import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
 import { buildStubExecReplies } from '../../../testing/vm/build-stub-exec-replies';
 import { startStubAgent } from '../../../testing/vm/start-stub-agent';
-import {
-  FRAME_TYPES,
-  decodeJsonPayload,
-  encodeFrame,
-  encodeJsonFrame,
-} from '../../vm/agent-client/frame-codec';
 import {
   buildBrokerEnv,
   buildInstallArgv,

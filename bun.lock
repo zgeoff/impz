@@ -36,6 +36,19 @@
         "zod": "catalog:",
       },
     },
+    "packages/agent-protocol": {
+      "name": "@impz/agent-protocol",
+      "version": "0.0.0",
+      "dependencies": {
+        "@bufbuild/protobuf": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@impz/api": "workspace:*",
+        "@impz/test-utils": "workspace:*",
+        "tiny-invariant": "catalog:",
+      },
+    },
     "packages/api": {
       "name": "@impz/api",
       "version": "2.9.0",
@@ -68,6 +81,7 @@
       },
       "devDependencies": {
         "@faker-js/faker": "catalog:",
+        "@impz/agent-protocol": "workspace:*",
         "@impz/daemon": "workspace:*",
         "@impz/test-utils": "workspace:*",
         "msw": "catalog:",
@@ -85,6 +99,7 @@
         "zod": "catalog:",
       },
       "devDependencies": {
+        "@impz/agent-protocol": "workspace:*",
         "@impz/api": "workspace:*",
         "@impz/daemon": "workspace:*",
         "@impz/local-tar": "workspace:*",
@@ -109,6 +124,7 @@
         "@better-auth/mcp": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
         "@bufbuild/protobuf": "catalog:",
+        "@impz/agent-protocol": "workspace:*",
         "@impz/api": "workspace:*",
         "@impz/client": "workspace:*",
         "@impz/local-tar": "workspace:*",
@@ -458,6 +474,8 @@
     "@humanwhocodes/module-importer": ["@humanwhocodes/module-importer@1.0.1", "", {}, "sha512-bxveV4V8v5Yb4ncFTT3rPSgZBOpCkjfK0y4oVVVJwIuDVBRMDXrPyXRL988i5ap9m9bnyEEjWfm5WkBmtffLfA=="],
 
     "@humanwhocodes/retry": ["@humanwhocodes/retry@0.4.3", "", {}, "sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ=="],
+
+    "@impz/agent-protocol": ["@impz/agent-protocol@workspace:packages/agent-protocol"],
 
     "@impz/api": ["@impz/api@workspace:packages/api"],
 

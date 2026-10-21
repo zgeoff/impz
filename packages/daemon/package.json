@@ -18,6 +18,7 @@
     "@better-auth/mcp": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
     "@bufbuild/protobuf": "catalog:",
+    "@impz/agent-protocol": "workspace:*",
     "@impz/api": "workspace:*",
     "@impz/client": "workspace:*",
     "@impz/local-tar": "workspace:*",

@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { FRAME_TYPES, decodeJsonPayload, encodeJsonFrame } from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
@@ -15,7 +16,6 @@ import { startStubInnerAgent } from '../../../testing/vm/start-stub-inner-agent'
 import { startStubSessionAgent } from '../../../testing/vm/start-stub-session-agent';
 import { readImpByName, updateImpActivity } from '../../platform/db/imps';
 import { writeLease } from '../../platform/db/leases';
-import { FRAME_TYPES, decodeJsonPayload, encodeJsonFrame } from '../../vm/agent-client/frame-codec';
 import { readVmIdentity, writeVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 import { createJails } from '../../vm/vmm/jail';

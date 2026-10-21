@@ -1,19 +1,19 @@
 import type { Socket } from 'node:net';
-import { RequestSchema, SignalSchema } from '../../src/vm/agent-client/agent-protocol';
-import type { Request } from '../../src/vm/agent-client/agent-protocol';
-import { decodeAgentMessage } from '../../src/vm/agent-client/decode-agent-message';
+import {
+  FRAME_TYPES,
+  RequestSchema,
+  SignalSchema,
+  decodeAgentMessage,
+  decodeJsonPayload,
+  encodeFrame,
+  encodeJsonFrame,
+} from '@impz/agent-protocol';
+import type { AgentFrame, Request } from '@impz/agent-protocol';
 import type {
   AgentExecRequest,
   ExecEvent,
   ExecStream,
 } from '../../src/vm/agent-client/exec-stream';
-import {
-  FRAME_TYPES,
-  decodeJsonPayload,
-  encodeFrame,
-  encodeJsonFrame,
-} from '../../src/vm/agent-client/frame-codec';
-import type { AgentFrame } from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
 interface StubExecTarget {

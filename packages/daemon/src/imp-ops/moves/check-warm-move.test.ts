@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
+import { ServicesListSchema } from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
@@ -16,7 +17,6 @@ import { listColdBoots, writeUnknownBoot } from '../../platform/db/cold-boots';
 import { JAIL_UIDS, readImpByName, updateImpDisk } from '../../platform/db/imps';
 import { writeMember, writeNetwork } from '../../platform/db/networks';
 import { probeSlotFree } from '../../platform/db/probe-slot-free';
-import { ServicesListSchema } from '../../vm/agent-client/agent-protocol';
 import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { VmIdentitySchema } from '../../vm/sleep/vm-identity';
 import { MOVE_FRAMES, readJsonPayload } from './move-frames';

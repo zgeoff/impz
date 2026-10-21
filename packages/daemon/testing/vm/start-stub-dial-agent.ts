@@ -1,4 +1,4 @@
-import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '../../src/vm/agent-client/frame-codec';
+import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
 export function startStubDialAgent(

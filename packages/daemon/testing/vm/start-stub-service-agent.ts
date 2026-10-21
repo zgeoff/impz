@@ -1,15 +1,16 @@
 import type { Socket } from 'node:net';
 import { create, toJson } from '@bufbuild/protobuf';
 import type { JsonValue } from '@bufbuild/protobuf';
-import { RequestSchema, ServiceStatusSchema } from '../../src/vm/agent-client/agent-protocol';
-import type { Request, ServiceDef, ServiceStatus } from '../../src/vm/agent-client/agent-protocol';
-import { decodeAgentMessage } from '../../src/vm/agent-client/decode-agent-message';
 import {
   FRAME_TYPES,
+  RequestSchema,
+  ServiceStatusSchema,
+  decodeAgentMessage,
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
-} from '../../src/vm/agent-client/frame-codec';
+} from '@impz/agent-protocol';
+import type { Request, ServiceDef, ServiceStatus } from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
 const IMAGE_USER = 'dev';

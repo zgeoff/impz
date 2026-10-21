@@ -1,10 +1,10 @@
-import { RequestSchema } from '../../src/vm/agent-client/agent-protocol';
-import { decodeAgentMessage } from '../../src/vm/agent-client/decode-agent-message';
 import {
   FRAME_TYPES,
+  RequestSchema,
+  decodeAgentMessage,
   decodeJsonPayload,
   encodeJsonFrame,
-} from '../../src/vm/agent-client/frame-codec';
+} from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
 interface StubAttachReply {

@@ -35,7 +35,9 @@ length prefix and the size cap stay hand-written in each side's frame codec, and
 and error codes, which the schema lists in its comments. `bun run gen:proto` lints the schema and
 writes the Go types, impd's TypeScript types and the
 [protocol reference](../../reference/agent-protocol.md), and CI fails when the committed output
-differs from what the schema generates.
+differs from what the schema generates. The TypeScript types sit beside impd's frame codec in one
+workspace package, so impd and every stand-in agent in the tests encode and decode the bodies
+through the same schema.
 
 Two rules keep the JSON that every agent version sends and reads, so an older agent works with a
 newer impd. A 64-bit count, such as a byte offset, a disk size or a time in Unix milliseconds, is a

@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rmSync } from 'node:fs';
+import { FRAME_TYPES, encodeJsonFrame } from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubBootId } from '../../../testing/vm/build-stub-vmm';
 import { startStubAttachAgent } from '../../../testing/vm/start-stub-attach-agent';
-import { FRAME_TYPES, encodeJsonFrame } from '../../vm/agent-client/frame-codec';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 import { listColdBoots, writeColdBoot } from './cold-boots';
 import { createImage } from './images';

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { create } from '@bufbuild/protobuf';
-import { ActivitySchema, SessionInfoSchema, StartedSchema } from './agent-protocol';
+import { ActivitySchema, SessionInfoSchema, StartedSchema } from '@impz/agent-protocol';
 import { hasAgentNameForms } from './has-agent-name-forms';
 
 test('it accepts a session whose names have the agent’s form', () => {

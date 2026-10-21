@@ -1,14 +1,14 @@
 import type { Socket } from 'node:net';
 import type { JsonValue } from '@bufbuild/protobuf';
-import { FILE_DATA_MAX_BYTES, FILE_SEGMENT_PATTERN } from '@impz/api';
-import { RequestSchema } from '../../src/vm/agent-client/agent-protocol';
-import type { Request } from '../../src/vm/agent-client/agent-protocol';
-import { decodeAgentMessage } from '../../src/vm/agent-client/decode-agent-message';
 import {
   FRAME_TYPES,
+  RequestSchema,
+  decodeAgentMessage,
   decodeJsonPayload,
   encodeJsonFrame,
-} from '../../src/vm/agent-client/frame-codec';
+} from '@impz/agent-protocol';
+import type { Request } from '@impz/agent-protocol';
+import { FILE_DATA_MAX_BYTES, FILE_SEGMENT_PATTERN } from '@impz/api';
 import { startStubAgent } from './start-stub-agent';
 
 interface StubFilesAgentOptions {

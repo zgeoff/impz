@@ -33,11 +33,16 @@
       // test runs in a child Bun
       "entry": ["src/imps/docker-proxy/main.ts", "src/**/*.pebble.ts", "testing/*/run-*.ts"],
       "project": ["src/**/*.ts", "testing/**/*.ts"],
-      // kysely-codegen and protoc-gen-es write every table and message,
-      // used or not
+      // kysely-codegen writes every table, used or not
       "ignoreIssues": {
-        "src/platform/db/schema.ts": ["types"],
-        "src/vm/agent-client/gen/**": ["exports", "types"]
+        "src/platform/db/schema.ts": ["types"]
+      }
+    },
+    "packages/agent-protocol": {
+      "project": ["src/**/*.ts"],
+      // protoc-gen-es writes every message, used or not
+      "ignoreIssues": {
+        "src/gen/**": ["exports", "types"]
       }
     },
     "packages/dashboard": {

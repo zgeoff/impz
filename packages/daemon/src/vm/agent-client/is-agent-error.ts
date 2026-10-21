@@ -1,5 +1,5 @@
+import type { AgentErrorCode } from '@impz/agent-protocol';
 import { AgentError } from './agent-connection';
-import type { AgentErrorCode } from './agent-error-codes';
 
 export function isAgentError(
   error: unknown,

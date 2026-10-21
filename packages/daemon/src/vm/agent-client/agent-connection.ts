@@ -1,9 +1,9 @@
 import { createConnection } from 'node:net';
 import type { Socket } from 'node:net';
 import type { JsonValue } from '@bufbuild/protobuf';
+import { buildFrameDecoder, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import type { AgentFrame, FrameType } from '@impz/agent-protocol';
 import { requireSocket } from '../vmm/vm-files';
-import { buildFrameDecoder, encodeFrame, encodeJsonFrame } from './frame-codec';
-import type { AgentFrame, FrameType } from './frame-codec';
 
 const AGENT_PORT = 1024;
 

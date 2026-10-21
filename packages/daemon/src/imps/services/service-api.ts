@@ -1,3 +1,4 @@
+import type { LogCursor, ServiceStatus, ServicesList } from '@impz/agent-protocol';
 import { ServiceRestartSchema, ServiceStateSchema } from '@impz/api';
 import type { Service, ServiceDef, ServiceList, ServiceLog } from '@impz/api';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
@@ -14,7 +15,6 @@ import {
   buildInvalidStateError,
   buildNotFoundError,
 } from '../../surface/api-errors';
-import type { LogCursor, ServiceStatus, ServicesList } from '../../vm/agent-client/agent-protocol';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
 import {
   openServiceLogStream,

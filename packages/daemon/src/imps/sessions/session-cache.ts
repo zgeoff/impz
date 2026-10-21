@@ -1,4 +1,4 @@
-import type { SessionInfo } from '../../vm/agent-client/agent-protocol';
+import type { SessionInfo } from '@impz/agent-protocol';
 
 export type SeenSession = SessionInfo & { readonly observedUnixMs?: number };
 

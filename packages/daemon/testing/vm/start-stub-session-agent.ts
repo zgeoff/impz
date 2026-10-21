@@ -1,15 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import type { Socket } from 'node:net';
 import type { JsonValue } from '@bufbuild/protobuf';
-import { RequestSchema } from '../../src/vm/agent-client/agent-protocol';
-import type { Request, ResumeFrom } from '../../src/vm/agent-client/agent-protocol';
-import { decodeAgentMessage } from '../../src/vm/agent-client/decode-agent-message';
 import {
   FRAME_TYPES,
+  RequestSchema,
+  decodeAgentMessage,
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
-} from '../../src/vm/agent-client/frame-codec';
+} from '@impz/agent-protocol';
+import type { Request, ResumeFrom } from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
 type StubStart = Readonly<{

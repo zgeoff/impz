@@ -24,6 +24,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@impz/agent-protocol": "workspace:*",
     "@impz/api": "workspace:*",
     "@impz/daemon": "workspace:*",
     "@impz/local-tar": "workspace:*",

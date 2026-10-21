@@ -1,4 +1,4 @@
-import type { InnerStatus } from '../../vm/agent-client/agent-protocol';
+import type { InnerStatus } from '@impz/agent-protocol';
 
 export interface InnerCache {
   readonly record: (impId: string, inner: InnerStatus) => void;

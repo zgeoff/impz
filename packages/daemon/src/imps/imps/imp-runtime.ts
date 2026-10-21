@@ -1,3 +1,4 @@
+import type { Activity, InnerStatus } from '@impz/agent-protocol';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import { listColdBoots } from '../../platform/db/cold-boots';
@@ -12,7 +13,6 @@ import {
   isMovingError,
 } from '../../surface/api-errors';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
-import type { Activity, InnerStatus } from '../../vm/agent-client/agent-protocol';
 import { sendActivity, sendPing } from '../../vm/agent-client/agent-requests';
 import { openDialStream } from '../../vm/agent-client/dial-stream';
 import type { DialStream, DialTarget } from '../../vm/agent-client/dial-stream';

@@ -1,13 +1,17 @@
+import {
+  ConnectionSchema,
+  FRAME_TYPES,
+  ListeningSchema,
+  decodeAgentMessage,
+  decodeJsonPayload,
+} from '@impz/agent-protocol';
 import { openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
 import { handleUnknownOp } from './agent-outdated';
-import { ConnectionSchema, ListeningSchema } from './agent-protocol';
 import { readFrameWithin, requireNoAgentError, sendRequestFrame } from './agent-requests';
 import type { AgentRequest } from './agent-requests';
-import { decodeAgentMessage } from './decode-agent-message';
 import { openRelayStream } from './dial-stream';
 import type { DialStream } from './dial-stream';
-import { FRAME_TYPES, decodeJsonPayload } from './frame-codec';
 
 const ANSWER_TIMEOUT_MS = 10_000;
 

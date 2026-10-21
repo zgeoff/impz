@@ -1,11 +1,6 @@
 import type { Socket } from 'node:net';
-import {
-  FRAME_TYPES,
-  decodeJsonPayload,
-  encodeFrame,
-  encodeJsonFrame,
-} from '@impz/daemon/src/vm/agent-client/frame-codec';
-import type { AgentFrame } from '@impz/daemon/src/vm/agent-client/frame-codec';
+import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import type { AgentFrame } from '@impz/agent-protocol';
 import type { StubAgentHandler } from '@impz/daemon/testing';
 import * as z from 'zod';
 
