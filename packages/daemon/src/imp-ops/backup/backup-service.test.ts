@@ -678,6 +678,7 @@ test('#runBackup records templates with their source imp and an identity reset s
     storage: ctx.storage,
     storageGate: ctx.storageGate,
     diskBudget: ctx.diskBudget,
+    runImageEviction: ctx.images.runImageEviction,
     log: () => {},
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -723,6 +724,7 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
     storage: ctx.storage,
     storageGate: ctx.storageGate,
     diskBudget: ctx.diskBudget,
+    runImageEviction: ctx.images.runImageEviction,
     log: () => {},
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });

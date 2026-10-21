@@ -412,6 +412,33 @@ test('it makes an old template again when an eviction runs during the clone', as
   expect(stored?.digest).toBe(second.digest);
 });
 
+test('it evicts an old unused image after it makes a template while storage is full', async () => {
+  const ctx = await setupTest({ isStorageFull: true });
+
+  const baseImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+  const oldImage = buildMockNewImage({ name: 'web-2222222', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, baseImage.digest).rootfs, 'rootfs');
+  await Bun.write(buildImagePaths(ctx.dataDir, oldImage.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, baseImage);
+  await createImage(ctx.db, oldImage);
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'web-2222222')
+    .execute();
+
+  await ctx.impd.templates.createTemplate('dev', 'tools');
+
+  const old = await readImageByName(ctx.db, 'web-2222222');
+
+  expect(old).toBeUndefined();
+});
+
 test('it gives imps made after a template is made again its new disk, and older imps keep theirs', async () => {
   const ctx = await setupTest();
 
