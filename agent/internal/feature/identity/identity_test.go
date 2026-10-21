@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"golang.org/x/sys/unix"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 
@@ -209,6 +210,19 @@ func TestLookPathInFindsTheFirstExecutableOnThePath(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{"usr/bin/ssh-keygen": "#!/bin/sh\n", "bin/ssh-keygen": "#!/bin/sh\n"})
 	assert.NilError(t, os.Chmod(filepath.Join(root, "usr/bin/ssh-keygen"), 0o755))
+
+	got, err := lookPathIn(openRoot(t, root), "ssh-keygen", []string{"PATH=/bin:/usr/bin"})
+
+	assert.NilError(t, err)
+	assert.Equal(t, got, "/usr/bin/ssh-keygen")
+}
+
+func TestLookPathInSkipsAnExecutableThatIsNoRegularFile(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{"usr/bin/ssh-keygen": "#!/bin/sh\n"})
+	assert.NilError(t, os.Chmod(filepath.Join(root, "usr/bin/ssh-keygen"), 0o755))
+	assert.NilError(t, os.MkdirAll(filepath.Join(root, "bin"), 0o755))
+	assert.NilError(t, unix.Mkfifo(filepath.Join(root, "bin/ssh-keygen"), 0o755))
 
 	got, err := lookPathIn(openRoot(t, root), "ssh-keygen", []string{"PATH=/bin:/usr/bin"})
 

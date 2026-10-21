@@ -167,14 +167,19 @@ func removeStaleStages(root fsroot.FS, dir string) {
 	}
 }
 
-// lookPathIn finds file in the PATH of env, as the container sees it. A
-// relative dir names nothing inside the container's root.
+// lookPathIn finds file in the PATH of env, as the container sees it: only a
+// regular file counts, and a relative dir names nothing inside the
+// container's root.
 func lookPathIn(root fsroot.FS, file string, env []string) (string, error) {
 	return sysutil.FindInPath(file, proc.Get(env, "PATH"), func(p string) (fs.FileInfo, error) {
 		if !filepath.IsAbs(p) {
 			return nil, fs.ErrNotExist
 		}
-		return root.Stat(p)
+		fi, err := root.Stat(p)
+		if err == nil && !fi.Mode().IsRegular() {
+			return nil, fmt.Errorf("%s: not a regular file", p)
+		}
+		return fi, err
 	})
 }
 
