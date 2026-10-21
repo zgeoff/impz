@@ -14,15 +14,8 @@ import type { Caller } from '../auth/caller';
 import { ROOT_TOKEN_ID } from '../auth/token-store';
 import { isGrantPattern, isPatternsWithin } from './grant-limits';
 
-// The sign-ins that wait on the public MCP route's login page until a named
-// imp token approves their code (docs/guides/mcp.md#public-route). They live
-// in memory, so a restart ends the ones in progress.
-
 const MINUTE_MS = 60_000;
 const SIGN_IN_MS = 10 * MINUTE_MS;
-
-// sign-ins waiting at once, per client and in all. A new one drops the
-// oldest of its own client's; one past the total waits for room.
 const MAX_PENDING = 16;
 const MAX_PENDING_PER_CLIENT = 3;
 
@@ -33,7 +26,6 @@ const START_BUCKET = { size: 10, refillMs: 6000 };
 // approvals per token that match no sign-in, so codes cannot be tried fast
 const APPROVE_FAILURE_BUCKET = { size: 20, refillMs: 3000 };
 
-// what the approver gave
 export interface Approval {
   readonly tokenID: string;
   readonly tokenName: string;
@@ -41,15 +33,12 @@ export interface Approval {
   readonly imps: readonly string[] | null;
 }
 
-// one sign-in: everything but its approval is fixed when it starts
 interface SignIn {
-  // the signed authorization query better-auth sent to the login page
   readonly key: string;
   readonly clientID: string;
   readonly clientName: string;
   readonly redirectURI: string;
 
-  // the highest scope the client asked for; an approval may give less
   readonly requestedScope: Scope;
   readonly approvalCode: string;
   readonly createdAt: number;
@@ -59,7 +48,6 @@ interface SignIn {
 
 type SignInState = 'waiting' | 'approved';
 
-// a sign-in's states and its one move; `approve` is the only write
 const SIGN_IN_MOVES: Readonly<Record<SignInState, readonly SignInState[]>> = {
   waiting: ['approved'],
   approved: [],
@@ -74,7 +62,6 @@ export interface SignIns {
     entry: Readonly<Omit<SignIn, 'approvalCode' | 'createdAt' | 'expiresAt' | 'approval'>>,
   ) => StartOutcome;
 
-  // the live sign-in its signed query names; null once it ended
   readonly find: (key: string) => SignIn | null;
   readonly remove: (key: string) => void;
   readonly removeClient: (clientID: string) => void;
@@ -113,8 +100,6 @@ export function createSignIns(deps: Readonly<SignInsDeps>): SignIns {
     }
   };
 
-  // the sign-in an approver names by its code; a miss counts against the
-  // token's burst
   const requirePending = (code: string, approver: Readonly<Caller>): SignIn => {
     const tokenID = requireNamedToken(approver);
 
@@ -144,8 +129,6 @@ export function createSignIns(deps: Readonly<SignInsDeps>): SignIns {
         return { kind: 'too-many', retryS: START_BUCKET.refillMs / 1000 };
       }
 
-      // a new sign-in makes room by dropping the oldest unapproved one of
-      // its own client's, so a flood under other clients drops none of it
       const ofClient = [...pending.values()].filter((other) => other.clientID === entry.clientID);
 
       if (ofClient.length >= MAX_PENDING_PER_CLIENT) {
@@ -272,7 +255,6 @@ export function formatApprovalCode(code: string): string {
 
 // Only a named token approves: root and tailnet identities cannot be removed
 // one by one, so a grant from them could not be ended with its approver.
-// Returns the token's id.
 function requireNamedToken(approver: Readonly<Caller>): string {
   const isNamedKind = approver.kind === 'token' || approver.kind === 'dashboard';
 

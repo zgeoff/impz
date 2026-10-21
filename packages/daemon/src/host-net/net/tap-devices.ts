@@ -4,15 +4,9 @@ import type { CommandRunner } from '../../platform/process/run-command';
 import type { SlotAddress } from './addressing';
 import { GATEWAY_IP6 } from './addressing6';
 
-// Tap devices for imp slots (docs/architecture/network/networking.md#addressing). An
-// interface, so tests fake it.
 export interface TapDevices {
-  // creates `imp<slot>` with the host end of the /30 and brings it up. With
-  // IPv6, the tap also gets the gateway fe80::1 and a route to the imp's
-  // /128. A jailed Firecracker owns its tap (docs/architecture/isolation.md#the-jailer).
   readonly setupTap: (address: SlotAddress, owner?: TapOwner | null) => Promise<void>;
 
-  // succeeds when it is already gone
   readonly removeTap: (tap: string) => Promise<void>;
 }
 
@@ -21,7 +15,6 @@ interface TapOwner {
   readonly gid: number;
 }
 
-// the MAC a tap has now, or null when there is no such tap
 export function readTapMac(tap: string): string | null {
   try {
     return readFileSync(`/sys/class/net/${tap}/address`, 'utf8').trim();
@@ -30,15 +23,12 @@ export function readTapMac(tap: string): string | null {
   }
 }
 
-// a tap's owner and group from sysfs, -1 for none; null when it is not there
 type ReadOwner = (tap: string) => TapOwner | null;
 
 export function createTapDevices(
   run: CommandRunner = runCommand,
   readOwner: ReadOwner = readTapOwner,
 ): TapDevices {
-  // `tolerated`: stderr fragments that mean the change is already in place;
-  // false then, true when this call made it
   const runIp = async (args: readonly string[], tolerated: readonly string[]): Promise<boolean> => {
     const result = await run(['ip', ...args]);
 
@@ -51,9 +41,8 @@ export function createTapDevices(
     return result.exitCode === 0;
   };
 
-  // A kernel with IPv6 disabled has no keys for it; the tap then has no
-  // IPv6 to guard. A key that already holds its value (a tap takes the
-  // container's defaults) is not written, so a read-only /proc/sys works.
+  // A kernel with IPv6 disabled has no keys for it. A key that already holds its
+  // value is not written, so a read-only /proc/sys works.
   const runSysctls = async (tap: string, values: Readonly<Record<string, string>>) => {
     for (const [key, value] of Object.entries(values)) {
       const name = `net.ipv6.conf.${tap}.${key}`;
@@ -94,17 +83,15 @@ export function createTapDevices(
         ['exists', 'busy'],
       );
 
-      // the slot's MAC, not a random one, so a guest woken on another host
-      // still knows its gateway (docs/architecture/network/networking.md#addressing);
-      // a tap that exists keeps its own, as its guest knows it
+      // the slot's MAC, not a random one, so a guest woken on another host still
+      // knows its gateway; a tap that exists keeps its own, as its guest knows it
       if (isNew) {
         await runIp(['link', 'set', address.tap, 'address', address.hostMac], []);
       }
 
       await runIp(['addr', 'add', cidr, 'dev', address.tap], ['exists', 'already assigned']);
 
-      // before the link is up: a guest never sets the host's routes, with
-      // or without IPv6 (docs/architecture/network/networking.md#ipv6)
+      // before the link is up, so a guest never sets the host's routes
       await runSysctls(address.tap, {
         accept_ra: '0',
         accept_redirects: '0',

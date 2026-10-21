@@ -1,10 +1,6 @@
 import { deriveGuestIp6 } from './addressing6';
 import type { Prefix64 } from './addressing6';
 
-// Routed, not bridged (docs/architecture/network/networking.md#addressing): slot n owns
-// the /30 at offset 4n of the subnet, with the host end at 4n+1 and the guest
-// at 4n+2.
-
 const SLOT_SIZE = 4;
 const SLOT_PREFIX_LENGTH = 30;
 
@@ -22,15 +18,10 @@ export interface SlotAddress {
   readonly netmask: string;
   readonly guestMac: string;
 
-  // the tap's: as the guest's, from the host IP
   readonly hostMac: string;
 
-  // the imp's IPv6 /128, or null when imps get no IPv6
-  // (docs/architecture/network/networking.md#ipv6)
   readonly guestIp6: string | null;
 
-  // the imp's own port on the host (docs/architecture/network/ingress.md#the-wake-proxy), for
-  // the tailnet
   readonly tailnetPort: number;
 }
 
@@ -104,8 +95,8 @@ export function deriveSlotAddress(slot: number, plan: SlotPlan): SlotAddress {
     prefixLength: SLOT_PREFIX_LENGTH,
     netmask: '255.255.255.252',
 
-    // locally administered unicast, then the guest IP: unique per slot and
-    // readable in a packet capture
+    // 06 is a locally administered unicast prefix, then the guest IP: unique per
+    // slot and readable in a packet capture
     guestMac: ['06', '00', ...splitOctets(guest).map((octet) => toHexByte(octet))].join(':'),
     hostMac: ['06', '01', ...splitOctets(base + 1).map((octet) => toHexByte(octet))].join(':'),
     guestIp6:
@@ -116,10 +107,8 @@ export function deriveSlotAddress(slot: number, plan: SlotPlan): SlotAddress {
   };
 }
 
-// A dotted IPv4 address as a number, or null for anything else (IPv6
-// included). Node writes an IPv4 peer of a dual-stack socket as
-// ::ffff:a.b.c.d; pass `allowMapped` to read that form as IPv4.
 export function parseIpv4(text: string, allowMapped = false): number | null {
+  // Node writes an IPv4 peer of a dual-stack socket as ::ffff:a.b.c.d
   const plain = allowMapped && text.startsWith('::ffff:') ? text.slice('::ffff:'.length) : text;
   const parts = plain.split('.');
 
@@ -136,9 +125,6 @@ export function parseIpv4(text: string, allowMapped = false): number | null {
   return octets.reduce((acc, octet) => acc * 256 + octet, 0);
 }
 
-// The slot whose /30 holds both ends of a connection: the guest end as the
-// peer and the host end as the local address. Null when they are not one
-// slot's pair, as when a guest dials another slot's gateway.
 export function findPeerSlot(peer: string, local: string, subnet: Subnet): number | null {
   const peerIp = parseIpv4(peer, true);
   const localIp = parseIpv4(local, true);
@@ -156,8 +142,6 @@ export function findPeerSlot(peer: string, local: string, subnet: Subnet): numbe
   return localIp === peerIp - 1 ? (offset - 2) / SLOT_SIZE : null;
 }
 
-// The slot whose guest address this is; null for any other address, the
-// other addresses of a slot's /30 included.
 export function findGuestSlot(address: string, subnet: Subnet): number | null {
   const ip = parseIpv4(address, true);
   const offset = ip === null ? -1 : ip - subnet.network;
@@ -173,9 +157,6 @@ export function formatSubnet(subnet: Subnet): string {
   return `${formatIpv4(subnet.network)}/${String(subnet.prefixLength)}`;
 }
 
-// `a.b.c.d` or `a.b.c.d/n` as its network, host bits cleared
-// (`172.17.0.2/16` is `172.17.0.0/16`); an address alone is a /32. Null for
-// anything else.
 export function formatCidr4(text: string): string | null {
   const [address = '', prefixText = '32', ...rest] = text.split('/');
   const ip = parseIpv4(address);

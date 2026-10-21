@@ -1,10 +1,6 @@
 import { GrantPatternSchema, ScopeSchema, hasScope } from '@impz/api';
 import type { Scope } from '@impz/api';
 
-// A grant never outgrows the token that approved it
-// (docs/guides/mcp.md#public-route); its narrow pattern grammar makes
-// "within" exact.
-
 export function isGrantPattern(pattern: string): boolean {
   return GrantPatternSchema.safeParse(pattern).success;
 }
@@ -29,8 +25,6 @@ function isPatternWithin(pattern: string, own: string): boolean {
     return true;
   }
 
-  // a token pattern with `*` only at its end covers every name or prefix
-  // that starts with what comes before it
   const star = own.indexOf('*');
 
   return star === own.length - 1 && pattern.startsWith(own.slice(0, -1));
@@ -40,7 +34,6 @@ export function readLowerScope(left: Scope, right: Scope): Scope {
   return hasScope(left, right) ? right : left;
 }
 
-// the scopes a granted one holds, as an OAuth `scope` lists them
 export function formatScopeList(scope: Scope): string {
   const nested: Record<Scope, string> = {
     read: 'read',
@@ -51,7 +44,6 @@ export function formatScopeList(scope: Scope): string {
   return nested[scope];
 }
 
-// the highest of imp's scopes a list holds; read when it holds none
 export function pickGrantScope(scopes: readonly string[]): Scope {
   return ScopeSchema.options.reduce<Scope>(
     (highest, scope) => (scopes.includes(scope) && hasScope(scope, highest) ? scope : highest),

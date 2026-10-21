@@ -7,13 +7,9 @@ const MAX_DELAY_MS = 2 ** 31 - 1;
 interface TimerAtOptions {
   readonly now: () => number;
 
-  // setTimeout by default; a test passes a fake clock's
   readonly startTimer?: StartTimer;
 }
 
-// Calls `fire` once at `at`, however far off: a delay past setTimeout's limit
-// waits the limit, then checks the clock again. An `at` that is not a finite
-// time fires at once. Returns the cancel.
 export function startTimerAt(
   fire: () => void,
   at: number,
@@ -41,5 +37,4 @@ export function startTimerAt(
   };
 }
 
-// the cancel before the first step starts
 function stopNothing(): void {}

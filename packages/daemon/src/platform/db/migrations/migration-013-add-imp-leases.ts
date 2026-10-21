@@ -1,7 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { Migration } from 'kysely/migration';
 
-// 013 copies each imp's hold into a lease of its own
 interface ImpLeasesSnapshot {
   imps: { id: string; hold_until: number | null };
   imp_leases: {
@@ -14,12 +13,8 @@ interface ImpLeasesSnapshot {
   };
 }
 
-// leases (#96): each owner's own hold on an imp. A hold still live moves to
-// the owner `legacy`; hold_until stays, as the latest lease's end.
 export const MIGRATION_013_ADD_IMP_LEASES: Migration = {
   async up(db: Kysely<ImpLeasesSnapshot>) {
-    // one owner's hold on an imp (docs/guides/leases.md): the principal impd
-    // derived for the caller, and a label the caller picked
     await db.schema
       .createTable('imp_leases')
       .addColumn('imp_id', 'text', (column) =>
@@ -28,10 +23,8 @@ export const MIGRATION_013_ADD_IMP_LEASES: Migration = {
       .addColumn('principal', 'text', (column) => column.notNull())
       .addColumn('label', 'text', (column) => column.notNull())
 
-      // the owner as a person reads it, when the lease was written
       .addColumn('display', 'text', (column) => column.notNull())
 
-      // null holds with no end
       .addColumn('until', 'integer')
       .addColumn('created_at', 'integer', (column) => column.notNull())
       .addPrimaryKeyConstraint('imp_leases_pk', ['imp_id', 'principal', 'label'])

@@ -1,7 +1,6 @@
 import type { Access } from './access-policy';
 import { findField } from './access-policy';
 
-// the host-wide calls that change an imp, and the fields that name it
 const HOST_IMP_FIELDS: Readonly<Record<string, readonly string[]>> = {
   'imps.expose': ['name'],
   'imps.unexpose': ['name'],
@@ -11,8 +10,6 @@ const HOST_IMP_FIELDS: Readonly<Record<string, readonly string[]>> = {
   'moves.reissue': ['name'],
 };
 
-// The imps a call changes, which an image builder refuses but for rm
-// (docs/guides/images.md#isolated-builds). A read changes nothing.
 export function readChangedImps(
   procedure: string,
   access: Readonly<Access> | null,

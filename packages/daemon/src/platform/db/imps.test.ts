@@ -525,7 +525,6 @@ test('#updateImpCommitted leaves a warm move’s imp asleep on its memory, trust
     buildMockNewImp({ imageId: image.id, moveState: 'receiving' }),
   );
 
-  // a received copy is stopped once its disk is ready
   await updateImpState(ctx.db, imp.id, { reason: 'stopped', state: 'stopped' });
 
   const committed = await updateImpCommitted(ctx.db, imp.id, 1_800_000_000_000, true);

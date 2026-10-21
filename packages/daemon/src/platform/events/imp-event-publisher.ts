@@ -17,9 +17,6 @@ interface PublisherDeps {
   readonly log: (message: string) => void;
 }
 
-// Turns each write the database reports into an event in the API's shape.
-// The shape takes a lookup, so one loop drains the writes: events leave in
-// the order the writes landed. Returns the stop.
 export function startImpEventPublisher(deps: PublisherDeps): () => void {
   const pending: ImpWrite[] = [];
   const state = { draining: false };

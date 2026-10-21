@@ -547,8 +547,6 @@ test.each([['imps.fork'], ['moves.prepare'], ['moves.send'], ['moves.resume']])(
   },
 );
 
-// A conformance check over every procedure, but the grants of secrets: an
-// OAuth grant gets the answer its token would, for each scope and patterns
 test.each([
   ['read', null, []],
   ['read', ['dev-*'], []],

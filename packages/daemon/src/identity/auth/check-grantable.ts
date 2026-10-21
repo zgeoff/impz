@@ -3,9 +3,6 @@ import type { ReadSecretGeneration, Refusal } from './access-policy';
 import { formatCaller } from './caller';
 import type { Caller } from './caller';
 
-// The secret must be on the caller's list, and the secret by that name now
-// must be the one it was given. A missing secret reads as a stale entry, so
-// the refusal is the same whether it exists or not.
 export async function checkGrantable(
   caller: Readonly<Caller>,
   secret: string | null,

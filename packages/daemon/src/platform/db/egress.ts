@@ -2,7 +2,6 @@ import { EgressPolicySchema } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
 import type { ImpDatabase } from './open-database';
 
-// An imp as the egress firewall and resolver see it
 export interface EgressSlot {
   readonly impId: string;
   readonly name: string;

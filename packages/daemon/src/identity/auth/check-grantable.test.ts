@@ -17,12 +17,6 @@ import { generateEd25519Key } from '../../surface/ssh/host-key';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { checkAccess, findAccess } from './access-policy';
 
-// Scoped tokens that may grant selected secrets (docs/guides/tokens.md#granting-secrets),
-// through the API as a client calls it.
-
-// impd's real app on stub VMs with its log lines and RPC failures; `gap.once`
-// runs in the next grant write or fork copy, between the access check and
-// the transaction
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -33,7 +27,6 @@ async function setupTest() {
   const harness = await startTestImpd(stack, {
     boundaries: {
       broker: {
-        // the race window: what a test sets runs once, then writes run on
         beforeGrantWrite: () => {
           const run = gap.once;
 
@@ -47,12 +40,10 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
-  // the default image, which every imps.create boots when it names none
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
 
-  // the impd that runs now, through a restart too
   const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
 
   return Object.assign(harness, { stack, sendToImpd, gap });
@@ -165,8 +156,6 @@ test.each([
     await ctx.client.imps.create({ name: 'prod' });
     await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
     await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
-
-    // the root token grants everything, so each revoke finds a grant
     await ctx.client.grants.add({ name, secret });
 
     const made = await ctx.client.tokens.create({
@@ -224,7 +213,6 @@ test('it lets a token list every grant on its imp, listed or not', async () => {
   expect(listed).toStrictEqual(['gh', 'npm']);
 });
 
-// checked before any lookup: an unknown secret is refused, not missing
 test.each([
   [
     'a token without manage',
@@ -453,7 +441,6 @@ test('it lets the token’s dashboard session grant a listed secret on its imps'
     grantable: ['gh'],
   });
 
-  // the token's session, as a browser on impd's page sends it
   const login = await ctx.sendToImpd(
     new Request('http://impd.test/auth/login', {
       method: 'POST',
@@ -501,7 +488,6 @@ test.each([
       grantable: ['gh'],
     });
 
-    // the token's session, as a browser on impd's page sends it
     const login = await ctx.sendToImpd(
       new Request('http://impd.test/auth/login', {
         method: 'POST',
@@ -542,7 +528,6 @@ test('it refuses the token’s dashboard session a fork', async () => {
     grantable: ['gh'],
   });
 
-  // the token's session, as a browser on impd's page sends it
   const login = await ctx.sendToImpd(
     new Request('http://impd.test/auth/login', {
       method: 'POST',
@@ -581,7 +566,6 @@ test('it names the token’s list to its dashboard session', async () => {
     grantable: ['gh'],
   });
 
-  // the token's session, as a browser on impd's page sends it
   const login = await ctx.sendToImpd(
     new Request('http://impd.test/auth/login', {
       method: 'POST',
@@ -781,7 +765,6 @@ test('it refuses a grant of a listed secret that was deleted', async () => {
   });
 });
 
-// made again under the name, by the host: another secret
 test('it refuses a grant of a listed secret that was deleted and made again', async () => {
   const ctx = await setupTest();
 
@@ -825,8 +808,6 @@ test('it refuses the dashboard session a grant of a listed secret deleted and ma
     grantable: ['gh'],
   });
 
-  // the token's session, as a browser on impd's page sends it, made before
-  // the secret goes
   const login = await ctx.sendToImpd(
     new Request('http://impd.test/auth/login', {
       method: 'POST',
@@ -1025,7 +1006,6 @@ test('it keeps a token’s grants through a wake', async () => {
   expect(listed).toStrictEqual(['gh', 'npm']);
 });
 
-// a restore brings back the disk, not the grants of that time
 test('it keeps a token’s grants as they are now through a checkpoint restore', async () => {
   const ctx = await setupTest();
 
@@ -1184,7 +1164,6 @@ test('it puts no secret value in an answer, error, log line or audit row', async
     }),
   );
 
-  // gh first, so gh-api clashes with it on api.github.com
   const granted = await Promise.allSettled([agent.grants.add({ name: 'dev-a', secret: 'gh' })]);
 
   const answers = await Promise.allSettled([
@@ -1222,7 +1201,6 @@ test('it puts no secret value in an answer, error, log line or audit row', async
     brokerRows,
   ]);
 
-  // the refusals and the clash are there, by name
   expect(calls.map((call) => call.outcome)).toContain('FORBIDDEN');
   expect(calls.map((call) => call.outcome)).toContain('CONFLICT');
   expect(everything).toContain('gh-api');
@@ -1413,7 +1391,6 @@ test('it refuses a revoke by a list entry from before a rebind', async () => {
     rebind: true,
   });
 
-  // granted again at the new generation, so a revoke finds a grant
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
 
   const agent: ContractRouterClient<ImpContract> = createORPCClient(
@@ -1555,7 +1532,6 @@ test.each([['imps.fork'], ['moves.prepare'], ['moves.send'], ['moves.resume']])(
       sshKeys: [key],
     });
 
-    // every entry stale
     await ctx.client.secrets.delete({ name: 'gh' });
 
     const caller = ctx.impd.tokens.findSshKey(parsed.getPublicSSH())?.caller;
@@ -1587,10 +1563,8 @@ test('it refuses a move prepare to the dashboard session of a token whose entrie
     grantable: ['gh'],
   });
 
-  // every entry stale
   await ctx.client.secrets.delete({ name: 'gh' });
 
-  // the token's session, as a browser on impd's page sends it
   const login = await ctx.sendToImpd(
     new Request('http://impd.test/auth/login', {
       method: 'POST',
@@ -1630,10 +1604,8 @@ test('it refuses a fork to the dashboard session of a token whose entries are al
     grantable: ['gh'],
   });
 
-  // every entry stale
   await ctx.client.secrets.delete({ name: 'gh' });
 
-  // the token's session, as a browser on impd's page sends it
   const login = await ctx.sendToImpd(
     new Request('http://impd.test/auth/login', {
       method: 'POST',
@@ -1659,10 +1631,6 @@ test('it refuses a fork to the dashboard session of a token whose entries are al
     data: undefined,
   });
 });
-
-// A fork copies its source's grants only as far as the caller could make
-// them (docs/guides/connectors.md#secrets-and-grants): every one for a
-// host-wide caller, none it could not grant for a caller with patterns.
 
 test.each([
   ['live', { source: 'dev-a', name: 'dev-b' }],
@@ -1774,7 +1742,6 @@ test('it names a grant made on the fork before the copy as a clash', async () =>
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'npm' });
 
-  // the fork exists by then, so a host-wide grant on it lands first
   ctx.gap.once = async () => {
     await ctx.client.grants.add({ name: 'dev-b', secret: 'gh-api' });
   };
@@ -1801,7 +1768,6 @@ test('it copies the grants a rebind between the fork and the copy left', async (
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'npm' });
 
-  // the rebind drops every grant of gh, the source's too
   ctx.gap.once = async () => {
     await ctx.client.secrets.add({
       name: 'gh',
@@ -1830,7 +1796,6 @@ test('it lends the fork nothing from a source destroyed and made again before th
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
 
-  // the new dev-a holds npm: a copy by name would hand it to the fork
   ctx.gap.once = async () => {
     await ctx.client.imps.destroy({ name: 'dev-a' });
     await ctx.client.imps.create({ name: 'dev-a' });
@@ -1878,7 +1843,6 @@ test('it returns a fork whose copy fails as a whole, with the error and no grant
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'npm' });
 
-  // the copy writes gh, then fails to read npm: the transaction takes gh back
   await ctx.db
     .updateTable('secrets')
     .set({ rules: 'not json' })
@@ -1919,16 +1883,11 @@ test('it lets an older client read a fork answer with the new fields', async () 
 
   const fork = await scoped.imps.fork({ source: 'dev-a', name: 'dev-b' });
 
-  // the output schema before the report: a plain object drops the fields
   const parsed = ImpSchema.parse(fork);
 
   expect(parsed.name).toBe('dev-b');
   expect(parsed).not.toHaveProperty('grantsNotCopied');
 });
-
-// The copy's own checks, for a caller whose list is not empty: no such
-// caller reaches imps.fork today (it is refused first), so these call the
-// copy as the handler would, with the authority read at the access check.
 
 test('it copies to a listed caller’s fork the secrets on its list, and names the rest', async () => {
   const ctx = await setupTest();
@@ -1987,12 +1946,10 @@ test('it copies nothing of a secret whose list entry is from before a rebind', a
     grantable: ['gh'],
   });
 
-  // the authority read at the access check
   const [token] = await listTokenRecords(ctx.db);
 
   invariant(token);
 
-  // rebound after the access check, and granted again at its new generation
   await ctx.client.secrets.add({
     name: 'gh',
     kind: 'custom',
@@ -2043,7 +2000,6 @@ test('it copies no grant for a token removed after the access check', async () =
     grantable: ['gh'],
   });
 
-  // the authority read at the access check
   const [token] = await listTokenRecords(ctx.db);
 
   invariant(token);
@@ -2085,12 +2041,10 @@ test('it copies nothing of a secret taken off the list after the access check', 
     grantable: ['gh'],
   });
 
-  // the authority read at the access check
   const [token] = await listTokenRecords(ctx.db);
 
   invariant(token);
 
-  // the update drops gh from dev-a; the root token grants it again
   await ctx.client.tokens.update({ name: 'agent', grantable: ['npm'] });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
 

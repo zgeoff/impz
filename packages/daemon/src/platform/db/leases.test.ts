@@ -551,7 +551,6 @@ test('#runMigrations moves a live hold to a legacy lease in the lease migration'
 
   await runMigrationsTo(db, '012_add_networks');
 
-  // rows as an impd at 012 wrote them, which no current factory builds
   await db
     .insertInto('images')
     .values({ id: 'i', name: 'base', ref: 'r', digest: 'd', size_bytes: 1, created_at: 0 })
@@ -603,7 +602,6 @@ test('#runMigrations clears every hold but a live one in the lease migration', a
 
   await runMigrationsTo(db, '012_add_networks');
 
-  // rows as an impd at 012 wrote them, which no current factory builds
   await db
     .insertInto('images')
     .values({ id: 'i', name: 'base', ref: 'r', digest: 'd', size_bytes: 1, created_at: 0 })

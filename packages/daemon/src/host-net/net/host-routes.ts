@@ -2,11 +2,6 @@ import { existsSync } from 'node:fs';
 import { runChecked } from '../../platform/process/run-command';
 import { formatCidr4 } from './addressing';
 
-// The host container's IPv4 networks and default-route interfaces, for the
-// public egress chain; read at each table build, as a Docker network or
-// tailscaled can add a route after impd starts. A failed read throws.
-
-// route types that carry no traffic to a host on the link
 const NON_UNICAST = new Set([
   'local',
   'broadcast',
@@ -19,7 +14,6 @@ const NON_UNICAST = new Set([
   'nat',
 ]);
 
-// `run` runs each command and throws on a failure, runChecked by default.
 type RunChecked = (argv: readonly string[]) => Promise<string>;
 
 export async function readConnectedPrefixes4(
@@ -31,9 +25,6 @@ export async function readConnectedPrefixes4(
   return parseConnectedPrefixes4(routes, addresses);
 }
 
-// On-link routes of any origin, and every address off the taps, with its
-// prefix and as a /32, which no narrower route can uncover; canonical, with
-// no repeats.
 export function parseConnectedPrefixes4(routes: string, addresses: string): readonly string[] {
   const found = [
     ...routes.split('\n').flatMap((line) => {
@@ -65,15 +56,11 @@ export function parseConnectedPrefixes4(routes: string, addresses: string): read
   return [...prefixes];
 }
 
-// The interfaces of the default routes, by family: the only ones a public
-// imp's traffic may leave by. A kernel without IPv6 has none for it.
 export interface Uplinks {
   readonly ipv4: readonly string[];
   readonly ipv6: readonly string[];
 }
 
-// `procNet` is where the kernel shows its IPv6 settings; with no such
-// directory, it has no IPv6.
 export async function readUplinks(
   procNet = '/proc/sys/net/ipv6',
   run: RunChecked = runChecked,
@@ -85,12 +72,12 @@ export async function readUplinks(
   return { ipv4: parseUplinks(ipv4), ipv6: parseUplinks(ipv6) };
 }
 
-// A multipath route names its interfaces on the indented `nexthop` lines
-// under it, not on its own line.
 export function parseUplinks(routes: string): readonly string[] {
   let isDefault = false;
 
   const devs = routes.split('\n').flatMap((line) => {
+    // ip names a multipath route's interfaces on the indented `nexthop` lines
+    // under it, not on its own line
     if (!/^\s/v.test(line)) {
       isDefault = line.startsWith('default');
     }
@@ -103,9 +90,6 @@ export function parseUplinks(routes: string): readonly string[] {
   return [...new Set(devs)];
 }
 
-// The interface the host container would send to `address` by, as `ip
-// route get` reads every rule and table; the broker dials from the same
-// namespace, so this is the route its tunnel takes.
 export async function readRouteDevice(
   address: string,
   run: RunChecked = runChecked,

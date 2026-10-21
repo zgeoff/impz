@@ -21,12 +21,9 @@ import { PROCEDURE_ACCESS } from './access-policy';
 import { runWhois } from './tailnet-identity';
 
 interface SetupOptions {
-  // the `tailscale` CLI that impd's whois runs; its peers are the test's
   readonly tailscale: Pick<ReturnType<typeof buildStubTailscale>, 'run'>;
 }
 
-// impd's real app on stub VMs, reached in process and on a loopback port
-// for its sockets, with a root client for the scenario
 async function setupTest(options: SetupOptions) {
   const stack = new AsyncDisposableStack();
 
@@ -37,7 +34,6 @@ async function setupTest(options: SetupOptions) {
     boundaries: { whois: (address) => runWhois(address, options.tailscale.run) },
   });
 
-  // the image every imps.create boots when it names none
   await harness.createTestImage('ubuntu');
 
   const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
@@ -53,8 +49,6 @@ async function setupTest(options: SetupOptions) {
   };
 }
 
-// The access check runs before input validation, so each procedure is called
-// with an empty input and a refusal is FORBIDDEN, not BAD_REQUEST.
 test('it refuses every procedure to a token whose scope is below what it needs', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
 
@@ -72,7 +66,6 @@ test('it refuses every procedure to a token whose scope is below what it needs',
     }),
   );
 
-  // each procedure with each scope below the one it needs
   const cases = Object.entries(PROCEDURE_ACCESS).flatMap(([path, access]) =>
     scopes.slice(0, scopes.indexOf(access.scope)).map((scope) => ({ path, scope })),
   );
@@ -456,8 +449,6 @@ test('it lists a token limited to dev-* only the API calls on its imps', async (
 
   await dev.imps.stop({ name: 'dev-a' });
 
-  // each audit row lands after its answer; root's calls include host-wide
-  // ones, on no imp
   const calls = await waitFor(async () => {
     const listed = await listApiCalls(ctx.db, null, 100, null);
 
@@ -526,7 +517,6 @@ test('it names in each template’s audit row the imp whose disk it copied', asy
   await ctx.client.images.add({ imp: 'prod', name: 'prod-tpl' });
   await ctx.client.images.add({ imp: 'dev-src', name: 'dev-tpl' });
 
-  // each audit row lands after its answer
   const adds = await waitFor(async () => {
     const calls = await listApiCalls(ctx.db, null, 100, null);
 
@@ -564,7 +554,6 @@ test('it streams a limited token the events of its imps only', async () => {
 
   const seen: ImpEvent[] = [];
 
-  // reads until the stream ends, when the test aborts it
   const reading = Array.fromAsync(stream, (event) => {
     seen.push(event);
 
@@ -574,7 +563,6 @@ test('it streams a limited token the events of its imps only', async () => {
   await ctx.client.imps.stop({ name: 'prod' });
   await ctx.client.imps.stop({ name: 'dev-a' });
 
-  // the stream's last event for this test: dev-a's stop, after prod's
   await waitFor(() => {
     expect(seen).toSatisfyAny(
       (event: Readonly<ImpEvent>) =>
@@ -723,8 +711,6 @@ test('it closes a token’s open sockets when the token is removed', async () =>
   expect(event.code).toBe(1008);
 });
 
-// A removal that lands after the token passed its check but before the
-// socket opened: the socket must close all the same.
 test('it closes at once a socket that opens after its token is revoked', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
   const made = await ctx.client.tokens.create({ name: 'ci', scope: 'exec' });
@@ -749,7 +735,6 @@ test('it closes at once a socket that opens after its token is revoked', async (
 
   const event = await closed.promise;
 
-  // policy violation
   expect(event.code).toBe(1008);
 });
 
@@ -762,12 +747,10 @@ test('it refuses a token limited to no imps at all', async () => {
 });
 
 test('it refuses a loopback client that names a tailnet address itself', async () => {
-  // alice's laptop is the one tailnet peer
   const tailscale = buildStubTailscale();
 
   tailscale.registerPeer('100.101.102.103', { node: 'laptop', login: 'alice@example.com' });
 
-  // alice may exec on dev-* imps
   updateEnv(
     'IMP_TAILNET_IDENTITIES',
     '[{"match":"user:alice@example.com","scope":"exec","imps":["dev-*"]}]',
@@ -790,12 +773,10 @@ test('it refuses a loopback client that names a tailnet address itself', async (
 });
 
 test('it serves a tailnet identity through a peer handle the wake proxy registered', async () => {
-  // alice's laptop is the one tailnet peer
   const tailscale = buildStubTailscale();
 
   tailscale.registerPeer('100.101.102.103', { node: 'laptop', login: 'alice@example.com' });
 
-  // alice may exec on dev-* imps
   updateEnv(
     'IMP_TAILNET_IDENTITIES',
     '[{"match":"user:alice@example.com","scope":"exec","imps":["dev-*"]}]',
@@ -823,12 +804,10 @@ test('it serves a tailnet identity through a peer handle the wake proxy register
 });
 
 test('it refuses a tailnet identity an exec socket from a page on an imp’s port', async () => {
-  // alice's laptop is the one tailnet peer
   const tailscale = buildStubTailscale();
 
   tailscale.registerPeer('100.101.102.103', { node: 'laptop', login: 'alice@example.com' });
 
-  // alice may exec on dev-* imps
   updateEnv(
     'IMP_TAILNET_IDENTITIES',
     '[{"match":"user:alice@example.com","scope":"exec","imps":["dev-*"]}]',
@@ -849,12 +828,10 @@ test('it refuses a tailnet identity an exec socket from a page on an imp’s por
 });
 
 test('it refuses a tailnet identity a tunnel from a page on an imp’s port', async () => {
-  // alice's laptop is the one tailnet peer
   const tailscale = buildStubTailscale();
 
   tailscale.registerPeer('100.101.102.103', { node: 'laptop', login: 'alice@example.com' });
 
-  // alice may exec on dev-* imps
   updateEnv(
     'IMP_TAILNET_IDENTITIES',
     '[{"match":"user:alice@example.com","scope":"exec","imps":["dev-*"]}]',
@@ -880,12 +857,10 @@ test('it refuses a tailnet identity a tunnel from a page on an imp’s port', as
 });
 
 test('it opens an exec socket for a tailnet identity from impd’s own page', async () => {
-  // alice's laptop is the one tailnet peer
   const tailscale = buildStubTailscale();
 
   tailscale.registerPeer('100.101.102.103', { node: 'laptop', login: 'alice@example.com' });
 
-  // alice may exec on dev-* imps
   updateEnv(
     'IMP_TAILNET_IDENTITIES',
     '[{"match":"user:alice@example.com","scope":"exec","imps":["dev-*"]}]',
@@ -897,7 +872,6 @@ test('it opens an exec socket for a tailnet identity from impd’s own page', as
 
   const created = await ctx.client.imps.create({ name: 'dev-a' });
 
-  // the imp's agent, which runs the exec; it closes before impd stops
   const agent = await startStubExecAgent(
     buildImpPaths(ctx.dataDir, created.id).vsockSocket,
     buildStubExecGuest(),

@@ -39,7 +39,6 @@ async function setupTest() {
     auth,
     log,
 
-    // the route's OAuth paths, with impd's 404 for any other
     respond: async (request: Request) => {
       const answered = await auth.handle(request);
 
@@ -111,7 +110,6 @@ test('it refuses an access token past its expiry', async () => {
     },
   );
 
-  // the token's 15 minutes ran out a second ago
   await ctx.db
     .updateTable('oauthAccessToken')
     .set({ expiresAt: new Date(Date.now() - 1000).toISOString() })
@@ -245,7 +243,6 @@ test('it ends a grant whose approving token no longer holds its scope', async ()
     },
   );
 
-  // the token's row as an older approval left it: read scope now
   await ctx.db.updateTable('tokens').set({ scope: 'read' }).execute();
 
   const reloaded = await loadTokenStore({
@@ -617,7 +614,6 @@ test('#removeExpired removes a grant whose refresh token expired', async () => {
     },
   );
 
-  // a sign-in two hours old whose refresh token ran out
   await ctx.db
     .updateTable('oauthRefreshToken')
     .set({ expiresAt: new Date(Date.now() - 1000).toISOString() })
@@ -671,7 +667,6 @@ test('#removeExpired removes the expired tokens of a grant that keeps refreshing
 
   invariant(refreshed.status === 200);
 
-  // the first sign-in's refresh token and every access token ran out
   const past = new Date(Date.now() - 1000).toISOString();
 
   await ctx.db.updateTable('oauthAccessToken').set({ expiresAt: past }).execute();

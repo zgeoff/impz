@@ -2,11 +2,8 @@ import type { Kysely } from 'kysely';
 import type { Migration } from 'kysely/migration';
 import type { NoTables } from './no-tables';
 
-// private networks between imps (#31); a destroyed imp or network takes
-// its memberships with it
 export const MIGRATION_012_ADD_NETWORKS: Migration = {
   async up(db: Kysely<NoTables>) {
-    // a private network between imps (docs/guides/networks.md)
     await db.schema
       .createTable('networks')
       .addColumn('id', 'text', (column) => column.primaryKey())

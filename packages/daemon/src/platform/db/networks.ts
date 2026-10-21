@@ -1,18 +1,13 @@
 import type { ImpDatabase } from './open-database';
 
-// Private networks between imps (docs/guides/networks.md): the networks,
-// and which imps are on each.
-
 export interface NetworkRecord {
   readonly id: string;
   readonly name: string;
   readonly createdAt: Date;
 
-  // its members' names, sorted
   readonly imps: readonly string[];
 }
 
-// one imp on one network, as the firewall and the resolver see it
 export interface NetworkMember {
   readonly network: string;
   readonly impId: string;
@@ -21,7 +16,6 @@ export interface NetworkMember {
   readonly guestIp: string;
 }
 
-// null when a network by that name exists
 export async function writeNetwork(db: ImpDatabase, name: string): Promise<NetworkRecord | null> {
   const row = await db
     .insertInto('networks')
@@ -62,12 +56,10 @@ export async function listNetworks(db: ImpDatabase): Promise<NetworkRecord[]> {
   }));
 }
 
-// its memberships go with it
 export async function removeNetwork(db: ImpDatabase, id: string): Promise<void> {
   await db.deleteFrom('networks').where('id', '=', id).execute();
 }
 
-// a removed network back as it was, members and all
 export async function writeNetworkWithMembers(
   db: ImpDatabase,
   network: Readonly<NetworkRecord>,
@@ -88,7 +80,6 @@ export async function writeNetworkWithMembers(
   });
 }
 
-// false when the imp is on the network already
 export async function writeMember(
   db: ImpDatabase,
   networkId: string,
@@ -103,7 +94,6 @@ export async function writeMember(
   return result.numInsertedOrUpdatedRows === 1n;
 }
 
-// false when the imp is not on the network
 export async function removeMember(
   db: ImpDatabase,
   networkId: string,

@@ -3,9 +3,9 @@ import type { Kysely } from 'kysely';
 import type { Migration } from 'kysely/migration';
 import type { NoTables } from './no-tables';
 
-// a grant's delete takes its OAuth tokens with it. SQLite cannot add ON
-// DELETE CASCADE in place, so a copy of the table replaces it, in its own
-// transaction: Kysely runs a SQLite migration outside one.
+// SQLite cannot add ON DELETE CASCADE in place, so a copy of the table
+// replaces it, in its own transaction: Kysely runs a SQLite migration outside
+// one.
 export const MIGRATION_028_CASCADE_OAUTH_TOKENS: Migration = {
   async up(db: Kysely<NoTables>) {
     await db.transaction().execute(async (trx) => {

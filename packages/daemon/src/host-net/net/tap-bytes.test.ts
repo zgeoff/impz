@@ -17,7 +17,6 @@ test('it reads what the host receives on the tap as what the guest sent', async 
 
   const statistics = join(ctx.sys, 'class', 'net', 'imp3', 'statistics');
 
-  // the guest uploaded 5000 bytes and downloaded 70
   await mkdir(statistics, { recursive: true });
   await writeFile(join(statistics, 'rx_bytes'), '5000\n');
   await writeFile(join(statistics, 'tx_bytes'), '70\n');

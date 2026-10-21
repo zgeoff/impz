@@ -3,8 +3,6 @@ import type { ImpDatabase, ImpQueries } from './open-database';
 import { probeSlotFree } from './probe-slot-free';
 import type { DB } from './schema';
 
-// The target's side of a move: one receive ticket, kept by the sha256 of its
-// secret (docs/architecture/storage/moves.md#the-steps)
 export type MoveTicketRow = Selectable<DB['move_tickets']>;
 
 export type NewMoveTicketRow = Insertable<DB['move_tickets']>;
@@ -13,7 +11,6 @@ export function readMoveTicket(db: ImpQueries, id: string): Promise<MoveTicketRo
   return db.selectFrom('move_tickets').selectAll().where('id', '=', id).executeTakeFirst();
 }
 
-// the ticket of an imp staged here that waits for its commit
 export function readStagedMoveTicket(
   db: ImpQueries,
   impId: string,
@@ -34,9 +31,6 @@ export async function writeMoveTicket(db: ImpQueries, row: NewMoveTicketRow): Pr
   await db.insertInto('move_tickets').values(row).execute();
 }
 
-// A warm move's ticket, which keeps `row.slot` for the imp it brings: the
-// check and the insert share one transaction, so two tickets never keep the
-// same slot. False when an imp or another ticket holds the slot.
 export function createMoveTicketInFreeSlot(
   db: ImpDatabase,
   row: NewMoveTicketRow & { readonly slot: number },
@@ -61,8 +55,6 @@ export async function updateMoveTicket(
   await db.updateTable('move_tickets').set(fields).where('id', '=', id).execute();
 }
 
-// Marks the ticket's stream started, once: false when a stream used it
-// already
 export async function claimMoveTicketStream(
   db: ImpQueries,
   id: string,
@@ -78,7 +70,6 @@ export async function claimMoveTicketStream(
   return marked.numUpdatedRows > 0n;
 }
 
-// the ticket, and with an imp every other ticket for that imp
 export async function removeMoveTickets(
   db: ImpQueries,
   id: string,

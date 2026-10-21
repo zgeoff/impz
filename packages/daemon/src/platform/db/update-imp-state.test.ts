@@ -139,7 +139,6 @@ test('#updateImpState keeps the awake span of a running imp marked running again
 
   const awakeSince = Date.now() - 3_600_000;
 
-  // impd stopped while the imp ran, awake an hour: the row still says running
   await ctx.db
     .updateTable('imps')
     .set({ state: 'running', awake_since: awakeSince })

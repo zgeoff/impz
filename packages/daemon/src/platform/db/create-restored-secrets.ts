@@ -1,9 +1,6 @@
 import type { ImpDatabase } from './open-database';
 import type { SecretRow } from './secrets';
 
-// A backup's secret rows with their generation and value file, so grantable
-// lists still name them and a replace keeps both. A name this host has keeps
-// its own row. Returns the names written.
 export function createRestoredSecrets(
   db: ImpDatabase,
   rows: readonly SecretRow[],

@@ -18,10 +18,8 @@ export interface NewCheckpoint {
   readonly label: string | null;
   readonly sizeBytes: number | null;
 
-  // 32 GiB when left out
   readonly diskBytes?: number;
 
-  // now by default; a restore from backup keeps the original time
   readonly createdAt?: Date;
 }
 
@@ -49,7 +47,6 @@ export async function createCheckpoint(
   return created;
 }
 
-// newest first
 export async function listCheckpoints(db: ImpDatabase, impId: string): Promise<CheckpointRecord[]> {
   const rows = await db
     .selectFrom('checkpoints')
@@ -62,7 +59,6 @@ export async function listCheckpoints(db: ImpDatabase, impId: string): Promise<C
   return rows.map((row) => toCheckpointRecord(row));
 }
 
-// `ref` is a checkpoint id or label, scoped to one imp
 export async function readCheckpoint(
   db: ImpDatabase,
   impId: string,

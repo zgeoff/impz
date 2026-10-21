@@ -6,12 +6,6 @@ import { updateEnv } from '@impz/test-utils/update-env';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
 import { startTestImpd } from '../../../testing/start-test-impd';
 
-// A token limited to some imps that adds images under its own names from
-// the registry path it was given (docs/guides/tokens.md#adding-images),
-// through the API as a client calls it.
-
-// impd's real app on stub VMs, a root client, `buildClient` for a client that
-// sends a token's secret, and `tree`, a directory a stub docker exports
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -19,7 +13,6 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, { env: readImpEnv() });
 
-  // the files an image's export holds, which a stub docker tars up
   const tree = join(harness.dataDir, 'tree');
 
   await mkdir(tree);
@@ -110,7 +103,6 @@ test('it lets a nixie-* token stream the add of nixie-x from a pinned ref under 
   expect(events.at(-1)).toMatchObject({ type: 'image', image: { name: 'nixie-x', ref } });
 });
 
-// each refused before impd pulls anything, so no stub docker is on the PATH
 test.each([
   [
     'another name',
@@ -218,8 +210,6 @@ test('it refuses a nixie-* token a template input that also holds a ref under it
     imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
   });
 
-  // the ref fails its schema, so without the check the input would parse as
-  // a template copy of the imp it names
   const added = ctx.buildClient(made.secret).images.add({
     imp: 'victim',
     ref: `ghcr.io/zgeoff/nixie-@@sha256:${'e'.repeat(64)}`,

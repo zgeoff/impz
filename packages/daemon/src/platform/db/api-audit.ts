@@ -5,7 +5,6 @@ import { toLikePattern } from '../../identity/auth/imp-patterns';
 import type { ImpDatabase } from './open-database';
 import type { ApiAudit } from './schema';
 
-// rows the API audit log keeps across every imp; older ones go as new ones come
 export const API_AUDIT_ROWS = 10_000;
 
 export interface NewApiCall {
@@ -19,8 +18,6 @@ export interface NewApiCall {
   readonly detail: string | null;
 }
 
-// One insert, then the rows past the cap by id: ids only grow, so the cut is
-// one indexed delete, not a count.
 export async function writeApiCall(db: ImpDatabase, call: NewApiCall): Promise<void> {
   const row = await db
     .insertInto('api_audit')
@@ -45,8 +42,6 @@ export async function writeApiCall(db: ImpDatabase, call: NewApiCall): Promise<v
   }
 }
 
-// newest first; the calls that named one imp when impName is set, and only
-// those that named an imp within the patterns when there are any
 export async function listApiCalls(
   db: ImpDatabase,
   impName: string | null,

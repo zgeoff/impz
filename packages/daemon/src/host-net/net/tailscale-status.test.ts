@@ -3,7 +3,6 @@ import { buildStubTailscale } from '../../../testing/network/build-stub-tailscal
 import { createStatusCache, parseTailscaleStatus, readTailscaleStatus } from './tailscale-status';
 
 test('#parseTailscaleStatus reads state, the MagicDNS name and the IPv4 address', () => {
-  // an offline node still holds `imp`, so this one got `imp-1`
   const json = JSON.stringify({
     BackendState: 'Running',
     Self: {

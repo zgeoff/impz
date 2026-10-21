@@ -5,15 +5,11 @@ export interface CommandResult {
 }
 
 export interface CommandOptions {
-  // the whole environment of the child; impd's own by default
   readonly env?: Readonly<Record<string, string>>;
 
-  // kills the child when it aborts
   readonly signal?: AbortSignal;
 }
 
-// Runs argv to completion and captures its output; never throws on a
-// non-zero exit.
 export async function runCommand(
   argv: readonly string[],
   options: CommandOptions = {},
@@ -37,14 +33,11 @@ export async function runCommand(
   return { exitCode, stdout, stderr };
 }
 
-// what runs a command: runCommand, or a stand-in in tests
 export type CommandRunner = (
   argv: readonly string[],
   options?: CommandOptions,
 ) => Promise<CommandResult>;
 
-// Like runCommand, but throws buildExitError's error on a non-zero exit.
-// `run` runs the command, runCommand by default.
 export async function runChecked(
   argv: readonly string[],
   options: CommandOptions = {},
@@ -59,7 +52,6 @@ export async function runChecked(
   return result.stdout;
 }
 
-// "<argv> exited <code>: <stderr>", or stdout when stderr is empty
 export function buildExitError(
   argv: readonly string[],
   result: Readonly<

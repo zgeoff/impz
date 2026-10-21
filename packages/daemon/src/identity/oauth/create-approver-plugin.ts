@@ -6,8 +6,8 @@ import { setSessionCookie } from 'better-auth/cookies';
 import { generateRandomString } from 'better-auth/crypto';
 import * as z from 'zod';
 
-// every scope a client may ask for: imp's three, and offline_access, which
-// every authorization adds so each grant gets a refresh token
+// offline_access, which every authorization adds, gives each grant a refresh
+// token
 export const CLIENT_SCOPES = [...ScopeSchema.options, 'offline_access'];
 
 // better-auth needs an email for every user; no mail ever reaches this one
@@ -25,8 +25,6 @@ const FixedClientBodySchema = z.object({
   redirectURIs: z.array(z.string()).min(1),
 });
 
-// The plugin that makes each approved sign-in one better-auth user. Its
-// endpoints are server-only, so only impd's own routes reach them.
 export function createApproverPlugin() {
   return {
     id: 'imp-approver',

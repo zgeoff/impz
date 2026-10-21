@@ -3,9 +3,7 @@ import type { Kysely } from 'kysely';
 import type { Migration } from 'kysely/migration';
 import type { NoTables } from './no-tables';
 
-// A destroyed imp's broker audit rows stay under its name, as its API audit
-// rows do, and a request that ends after the imp still gets its row. SQLite
-// cannot drop a foreign key in place, so a table copy replaces it, as in 030.
+// SQLite cannot drop a foreign key in place, so a table copy replaces it.
 export const MIGRATION_036_KEEP_BROKER_AUDIT_OF_DESTROYED_IMPS: Migration = {
   async up(db: Kysely<NoTables>) {
     await db.transaction().execute(async (trx) => {
@@ -26,8 +24,6 @@ export const MIGRATION_036_KEEP_BROKER_AUDIT_OF_DESTROYED_IMPS: Migration = {
         .addColumn('reason', 'text')
         .execute();
 
-      // the foreign key kept every row's imp, so each finds its name; a row
-      // that outlived its imp with the keys off takes its imp id as its name
       await sql`
         INSERT INTO broker_audit_kept
           (id, imp_id, imp_name, secret_name, at, method, host, path, status, request_bytes,

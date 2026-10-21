@@ -12,12 +12,6 @@ import { listColdBoots, writeColdBoot } from './cold-boots';
 import { createImage } from './images';
 import { createImp, readImpByName } from './imps';
 
-// Each cold boot records its cause, and an attach to a session names them
-// (docs/architecture/guest/sessions.md#generations-boots-and-offsets).
-
-// impd over the stub VMM with its migrated database, a client of its API,
-// and `stack`, whose releases (the agents a test starts) run before the
-// harness's
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -25,7 +19,6 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack);
 
-  // every create boots an image row; the default image is ubuntu
   await harness.createTestImage('ubuntu');
 
   // assigned, not spread: the harness's parts follow a restarted impd
@@ -149,7 +142,6 @@ test('it records the boot after impd found the VM gone as recovery, and only tha
 
   invariant(typeof running?.pid === 'number');
 
-  // the guest crashed without impd seeing it
   ctx.fake.alive.delete(running.pid);
 
   const found = await ctx.client.imps.get({ name: 'dev' });
@@ -164,8 +156,6 @@ test('it records the boot after impd found the VM gone as recovery, and only tha
   expect(boots.map((boot) => boot.cause)).toStrictEqual(['start', 'recovery', 'start']);
 });
 
-// the attach boots the stopped imp: its boot comes first, and the recovery
-// that ended the client's generation stays in the list
 test('it answers an attach that boots a crashed imp with NO_SESSION and its cold boots', async () => {
   const ctx = await setupTest();
   const created = await ctx.client.imps.create({ name: 'dev' });
@@ -197,7 +187,6 @@ test('it answers an attach that boots a crashed imp with NO_SESSION and its cold
     stack: ctx.stack,
   });
 
-  // the guest crashed without impd seeing it, and a read found it gone
   ctx.fake.alive.delete(running.pid);
 
   await ctx.client.imps.get({ name: 'dev' });
@@ -231,8 +220,6 @@ test('it boots nothing for an attach without wake to a stopped imp', async () =>
   await ctx.client.imps.stop({ name: 'dev' });
 
   expect(ctx.imps.openAttach('dev', { session: 'main', wake: false })).rejects.toThrow();
-
-  // the create's boot alone
   expect(ctx.fake.boots).toHaveLength(1);
 });
 
@@ -295,8 +282,6 @@ test('it names the cold boots in a session’s started output', async () => {
 
   invariant(typeof imp?.pid === 'number');
 
-  // the cold boot's id is the stub guest's for the VM's pid, and its time the
-  // clock's while the create ran (below)
   expect(stream.output).toStrictEqual({
     continuity: 'offsets',
     bootId: '22222222-2222-4222-8222-222222222222',
@@ -370,8 +355,6 @@ test('it records a VM impd adopts with a boot it has no record of as unknown', a
   expect(boots[0]?.bootId).toBe('boot-before');
 });
 
-// an imp that went to sleep before impd kept cold boots wakes from memory
-// into a boot it has no row for
 test('it records a memory wake into a boot impd has no record of as unknown', async () => {
   const ctx = await setupTest();
   const created = await ctx.client.imps.create({ name: 'dev' });
@@ -389,7 +372,6 @@ test('it records a memory wake into a boot impd has no record of as unknown', as
   expect(boots[0]?.bootId).toBe(booted.bootId);
 });
 
-// a lost snapshot fails the wake that would use it, whoever finds it first
 test('it records the next boot of a sleeping imp whose snapshot is gone as wake_fallback', async () => {
   const ctx = await setupTest();
   const created = await ctx.client.imps.create({ name: 'dev' });
@@ -415,7 +397,6 @@ test('it spends the pending cause on a boot without a boot_id, so a later boot d
 
   invariant(typeof running?.pid === 'number');
 
-  // the guest crashed without impd seeing it, and a read found it gone
   ctx.fake.alive.delete(running.pid);
 
   await ctx.client.imps.get({ name: 'dev' });

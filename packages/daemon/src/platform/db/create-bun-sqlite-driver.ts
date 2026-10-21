@@ -2,8 +2,8 @@ import type { Database, SQLQueryBindings } from 'bun:sqlite';
 import { CompiledQuery } from 'kysely';
 import type { DatabaseConnection, Driver, QueryResult } from 'kysely';
 
-// SQLite has one connection, so a promise-chain mutex hands it to one caller
-// at a time; every transaction relies on that ordering.
+// One SQLite connection serves every caller, so a promise-chain mutex hands
+// it to one at a time; every transaction relies on that ordering.
 export function createBunSqliteDriver(sqlite: Database) {
   const connection = buildConnection(sqlite);
   let turn: Promise<void> = Promise.resolve();
@@ -46,8 +46,6 @@ export function createBunSqliteDriver(sqlite: Database) {
     },
     releaseConnection,
 
-    // Waits out whatever turn is already queued before closing, so the handle
-    // never closes out from under a write still in flight.
     destroy: async () => {
       await acquireConnection();
 

@@ -4,17 +4,14 @@ import type { CommandRunner } from '../../platform/process/run-command';
 import { createTtlCache } from '../../platform/process/ttl-cache';
 
 export interface TailscaleStatus {
-  // tailscaled's BackendState: `Running` once the node is up
   readonly state: string | null;
 
-  // the node's MagicDNS name, which members resolve: the configured hostname,
-  // or `imp-1` and so on while an older node still holds that name
+  // MagicDNS gives `imp-1` and so on while an older node still holds the
+  // configured hostname.
   readonly hostname: string | null;
 
-  // the full MagicDNS name, without the trailing dot
   readonly dnsName: string | null;
 
-  // the IPv4 address, else the IPv6 one; ips holds every one
   readonly ip: string | null;
   readonly ips: readonly string[];
 }
@@ -29,12 +26,8 @@ const StatusSchema = z.object({
 });
 
 const UNKNOWN: TailscaleStatus = { state: null, hostname: null, dnsName: null, ip: null, ips: [] };
-
-// how long a status read by createStatusCache counts
 const STATUS_TTL_MS = 30_000;
 
-// `tailscale status --json` in the host container; all null when no node is
-// configured or tailscaled does not answer
 export function parseTailscaleStatus(json: string): TailscaleStatus {
   try {
     const status = StatusSchema.parse(JSON.parse(json));
@@ -54,8 +47,6 @@ export function parseTailscaleStatus(json: string): TailscaleStatus {
   }
 }
 
-// The node's status, or all null when tailscale is off, fails or is missing.
-// `run` runs the command, runCommand by default.
 export async function readTailscaleStatus(
   configured: boolean,
   run: CommandRunner = runCommand,
@@ -73,13 +64,12 @@ export async function readTailscaleStatus(
   }
 }
 
-// `tailscale status` at most every 30 s, for callers on every request
 export function createStatusCache(
   read: () => Promise<TailscaleStatus>,
   now: () => number,
 ): () => Promise<TailscaleStatus> {
-  // read again at 30 s, where lru-cache keeps an entry until its age passes
-  // the ttl, hence one ms less
+  // lru-cache keeps an entry until its age passes the ttl, so one ms less reads
+  // again at 30 s
   const cache = createTtlCache<'status', Promise<TailscaleStatus>>({
     max: 1,
     ttlMs: STATUS_TTL_MS - 1,

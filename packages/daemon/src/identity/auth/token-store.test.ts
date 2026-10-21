@@ -18,7 +18,6 @@ async function setupTest() {
 
   const removed: string[] = [];
 
-  // the blobs authorized_keys lists, in base64
   const fileKeys = new Set<string>();
 
   return {
@@ -26,7 +25,6 @@ async function setupTest() {
     removed,
     fileKeys,
 
-    // the store over this database, as impd loads it at each start
     load: (rootToken: string, now: () => number = Date.now) =>
       loadTokenStore({
         db: database.db,
@@ -507,7 +505,6 @@ test('#addKey refuses a key that a group-writable authorized_keys lists', async 
   writeFileSync(keysPath, `${key.public}\n`);
   chmodSync(keysPath, 0o666);
 
-  // the file grants no login at this mode, but still lists the key
   const tokens = await loadTokenStore({
     db: ctx.db,
     rootToken: 'root-secret',
@@ -769,8 +766,6 @@ test('#removeKey refuses a name no token has', async () => {
   });
 });
 
-// An ssh login checks its token once (ssh-gateway.ts checkLogin), so a
-// change to scope or imps would have to end live connections, as delete does
 test('#loadTokenStore offers no change to a token’s scope or imps in place', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');

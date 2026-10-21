@@ -1,15 +1,11 @@
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { deriveTokenHash } from './derive-token-hash';
 
-// what a replay's check reads, and how its grant goes
 interface ReplayDeps {
   readonly db: ImpDatabase;
   readonly removeGrantRows: (ids: readonly string[], why: string) => Promise<void>;
 }
 
-// A refused refresh of a spent token is a replay, even one racing the
-// refresh that spent it, which better-auth refuses without revoking
-// anything: the grant goes, with what the winner got.
 export async function removeReplayedGrant(
   deps: ReplayDeps,
   form: Readonly<URLSearchParams>,
@@ -31,6 +27,8 @@ export async function removeReplayedGrant(
     .executeTakeFirst();
 
   if (spent !== undefined) {
+    // better-auth refuses a refresh of a spent token without revoking
+    // anything, even one racing the refresh that spent it
     await deps.removeGrantRows([spent.userId], 'a spent refresh token came again');
   }
 }

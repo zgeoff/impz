@@ -6,13 +6,8 @@ import type { CommandRunner } from '../../platform/process/run-command';
 import { createTtlCache } from '../../platform/process/ttl-cache';
 import type { Caller } from './caller';
 
-// Tailnet identity (docs/guides/tokens.md#tailnet-identity): a connection
-// from a tailnet address is asked about with `tailscale whois`, and the
-// first rule that matches the peer gives it a scope. No rule, no access.
-
 const TailnetRuleSchema = z
   .object({
-    // `user:<login>`, `tag:<tag>`, or `*` for any peer
     match: z
       .string()
       .regex(/^(?:user:\S+|tag:[\w-]+|\*)$/u, 'must be user:<login>, tag:<tag> or *'),
@@ -25,17 +20,12 @@ export type TailnetRule = z.infer<typeof TailnetRuleSchema>;
 
 export const TailnetRulesSchema = z.array(TailnetRuleSchema).min(1).readonly();
 
-// who `tailscale whois` says is behind an address
 export interface TailnetPeer {
-  // the user's login; null for a tagged node, which has no user
   readonly login: string | null;
   readonly tags: readonly string[];
 
-  // the node's MagicDNS name, without the tailnet
   readonly node: string;
 
-  // the node's stable ID, which outlives a rename; null from a tailscale
-  // whose whois leaves it out or sends it empty
   readonly stableId: string | null;
 }
 
@@ -46,12 +36,10 @@ const WhoisSchema = z.object({
   UserProfile: z.object({ LoginName: z.string() }),
 });
 
-// how long an answer counts, either way, and how many are kept
 const WHOIS_TTL_MS = 60_000;
 const MAX_CACHED = 256;
 
 export interface TailnetIdentities {
-  // the caller behind a tailnet peer address, or null
   readonly resolve: (address: string) => Promise<Caller | null>;
 }
 
@@ -59,15 +47,13 @@ interface TailnetIdentitiesDeps {
   readonly rules: readonly TailnetRule[];
   readonly whois: (address: string) => Promise<TailnetPeer | null>;
 
-  // the node's status, read at most every 30 s (createStatusCache)
   readonly readTailscale: () => Promise<TailscaleStatus>;
   readonly now: () => number;
 }
 
 export function createTailnetIdentities(deps: Readonly<TailnetIdentitiesDeps>): TailnetIdentities {
-  // An answer is stale at 60 s, where lru-cache keeps an entry until its
-  // age passes the ttl, hence one ms less. A hit peeks, so a set past
-  // MAX_CACHED evicts the oldest answer, not the least used.
+  // lru-cache keeps an entry until its age passes the ttl, hence one ms less. A
+  // hit peeks, so a set past the cap evicts the oldest answer, not the least used.
   const cache = createTtlCache<string, Promise<TailnetPeer | null>>({
     max: MAX_CACHED,
     ttlMs: WHOIS_TTL_MS - 1,
@@ -111,8 +97,6 @@ export function createTailnetIdentities(deps: Readonly<TailnetIdentitiesDeps>): 
   };
 }
 
-// The first rule that matches the peer, as a caller. A tagged node matches
-// by its tags only: its whois user is the placeholder `tagged-devices`.
 export function findTailnetCaller(
   rules: readonly TailnetRule[],
   peer: Readonly<TailnetPeer>,
@@ -149,13 +133,13 @@ function findTailnetPrincipal(peer: Readonly<TailnetPeer>): string | null {
   return peer.stableId === null ? null : `tailnet:${peer.stableId}`;
 }
 
-// `tailscale whois --json <address>`; null when the address is no peer's
 export function parseWhois(json: string): TailnetPeer | null {
   try {
     const whois = WhoisSchema.parse(JSON.parse(json));
     const tags = whois.Node.Tags ?? [];
 
     return {
+      // whois names a tagged node's user as the placeholder `tagged-devices`
       login: tags.length > 0 ? null : whois.UserProfile.LoginName,
       tags,
       node: whois.Node.Name.split('.')[0] ?? whois.Node.Name,
@@ -169,7 +153,6 @@ export function parseWhois(json: string): TailnetPeer | null {
   }
 }
 
-// `run` is the command runner, the host's by default
 export async function runWhois(
   address: string,
   run: CommandRunner = runCommand,
@@ -179,7 +162,6 @@ export async function runWhois(
   return result.exitCode === 0 ? parseWhois(result.stdout) : null;
 }
 
-// a whois that fails, such as with tailscaled down, names nobody
 async function readWhois(
   whois: TailnetIdentitiesDeps['whois'],
   address: string,
@@ -202,9 +184,8 @@ async function probeOwnAddress(
   return status.ips.some((ip) => ip.toLowerCase() === wanted);
 }
 
-// Tailscale's ranges: 100.64.0.0/10 and fd7a:115c:a1e0::/48. tailscaled
-// drops packets from them that do not come in on tailscale0, and so does
-// setup-net.sh, so the source address is the peer's.
+// tailscaled drops packets from Tailscale's ranges that do not come in on
+// tailscale0, and so does setup-net.sh, so the source address is the peer's.
 export function isTailnetAddress(address: string): boolean {
   const plain = normalizeAddress(address);
   const octets = plain.split('.');

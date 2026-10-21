@@ -6,8 +6,6 @@ import { ImpsSchema } from './imps-schema';
 import type { ImpDatabase, ImpQueries } from './open-database';
 import type { TokenSshKeys, Tokens } from './schema';
 
-// a secret a token may grant: its name, and its generation when the token
-// was made; a secret deleted and made again under the name is another one
 export interface GrantableSecret {
   readonly name: string;
   readonly generation: string;
@@ -21,25 +19,20 @@ export interface TokenRecord {
   readonly imps: readonly string[] | null;
   readonly grantable: readonly GrantableSecret[];
 
-  // the start every image ref it adds must have; null when it adds none
   readonly imageRefPrefix: string | null;
   readonly createdAt: Date;
 }
 
-// what a tokens.update changes; a field left out stays as it is
 export interface TokenChange {
-  // builds the new grantable list in the write
   readonly readGrantable?: (trx: ImpQueries) => Promise<GrantableSecret[]>;
   readonly imageRefPrefix?: string | null;
 }
 
-// an SSH key bound to a token
 export interface TokenSshKeyRecord {
   readonly id: string;
   readonly tokenId: string;
   readonly fingerprint: string;
 
-  // `<type> <base64>`
   readonly publicKey: string;
   readonly comment: string;
   readonly createdAt: Date;
@@ -59,7 +52,6 @@ export async function listTokenSshKeyRecords(db: ImpDatabase): Promise<TokenSshK
   return rows.map((row) => toTokenSshKeyRecord(row));
 }
 
-// the token and its keys, together or not at all
 export async function writeTokenRecord(
   db: ImpDatabase,
   token: Readonly<TokenRecord>,
@@ -86,9 +78,6 @@ export async function writeTokenRecord(
   });
 }
 
-// The change in one write, so a new list's generations are one snapshot; a
-// secret left off loses its grants on the token's imps, whoever made them,
-// as a rebind drops them. Null for no such token.
 export function updateTokenRecord(
   db: ImpDatabase,
   id: string,
@@ -127,7 +116,6 @@ export function updateTokenRecord(
     const imps: unknown = row.imps === null ? null : JSON.parse(row.imps);
     const patterns = ImpsSchema.parse(imps);
 
-    // a host-wide token holds no list, so it has nothing to drop
     if (removed.length === 0 || patterns === null) {
       return { grantable, imageRefPrefix, dropped: 0 };
     }
@@ -150,8 +138,6 @@ export function updateTokenRecord(
   });
 }
 
-// the token's grantable list as the database holds it now, read in the
-// caller's transaction; null for no such token
 export async function readTokenGrantable(
   db: ImpQueries,
   id: string,
@@ -165,9 +151,6 @@ export async function readTokenGrantable(
   return row === undefined ? null : GrantableSchema.parse(JSON.parse(row.grantable));
 }
 
-// the token, its keys, and the OAuth grants it approved: each one
-// better-auth user, whose tokens and consents go with it. Returns the
-// grants' ids, for their revocation.
 export function removeTokenRecord(db: ImpDatabase, id: string): Promise<string[]> {
   return db.transaction().execute(async (trx) => {
     await trx.deleteFrom('token_ssh_keys').where('token_id', '=', id).execute();

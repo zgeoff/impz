@@ -1,12 +1,11 @@
 import { BlockList } from 'node:net';
 
-// True for an address in one of the CIDRs of its family. A list per family:
-// one BlockList matches IPv4 against ::ffff:0:0/96, so BLOCKED_RANGES6 would
-// take every IPv4 address.
 export function createRangeChecker(
   ranges4: readonly string[],
   ranges6: readonly string[],
 ): (address: string) => boolean {
+  // one BlockList matches IPv4 against ::ffff:0:0/96, so a shared list holding
+  // the IPv6 ranges would take every IPv4 address
   const lists = { ipv4: new BlockList(), ipv6: new BlockList() };
 
   for (const [ranges, family] of [

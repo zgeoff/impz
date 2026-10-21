@@ -25,29 +25,18 @@ import { removeReplayedGrant } from './remove-replayed-grant';
 import { removeTokenSessions } from './remove-token-sessions';
 import { stripDpopProof } from './strip-dpop-proof';
 
-// The public route's OAuth paths (docs/guides/mcp.md#public-route): better-auth
-// runs the protocol, and impd serves the two pages it sends a browser to,
-// /login for the approval code and /consent for what the approval gave.
-
 const MINUTE_MS = 60_000;
-
-// a signed-in approval waits this long for its consent
 const CONSENT_MS = 10 * MINUTE_MS;
-
-// a form a page or a client posts; any of them is a few hundred bytes
 const MAX_FORM_BYTES = 16 * 1024;
 
-// the paths that serve the protected resource metadata for `<origin>/mcp`
 const RESOURCE_METADATA_PATHS: ReadonlySet<string> = new Set([
   '/.well-known/oauth-protected-resource',
   '/.well-known/oauth-protected-resource/mcp',
 ]);
 
-// what better-auth needs of the instance, as create-mcp-auth.ts wraps it
 export interface AuthServer {
   readonly handler: (request: Request) => Promise<Response>;
 
-  // makes the approval's user and session, and resumes the authorization
   readonly signIn: (oauthQuery: string, approval: Readonly<Approval>) => Promise<Response>;
   readonly readSessionID: (cookie: string) => Promise<string | null>;
   readonly readSecret: () => Promise<string>;
@@ -61,7 +50,6 @@ interface OAuthRouterDeps {
   readonly origin: string;
   readonly resource: string;
 
-  // false while the route is off: every path then answers null
   readonly isOn: boolean;
   readonly now: () => number;
   readonly log: (message: string) => void;
@@ -73,13 +61,11 @@ interface OAuthRouterDeps {
   readonly removeGrantRows: (ids: readonly string[], why: string) => Promise<void>;
 }
 
-// the parts of a request's URL a route reads
 interface RequestTarget {
   readonly pathname: string;
   readonly search: string;
 }
 
-// one approval between its sign-in and its consent
 interface SignedIn {
   readonly binding: string;
   readonly approval: Approval;
@@ -91,8 +77,6 @@ export function makeOAuthRouter(
   deps: Readonly<OAuthRouterDeps>,
 ): (request: Request) => Promise<Response | null> {
   const host = new URL(deps.origin).host;
-
-  // by session id: what each signed-in approval may consent to
   const signedIn = new Map<string, SignedIn>();
 
   const findSignedIn = (sessionID: string): SignedIn | null => {
@@ -107,8 +91,6 @@ export function makeOAuthRouter(
     return entry;
   };
 
-  // an approval whose consent never came goes once its time is up, though
-  // its session, and with it any lookup, may be gone first
   const removeExpiredSignedIn = (): void => {
     const now = deps.now();
 
@@ -122,7 +104,6 @@ export function makeOAuthRouter(
   const toPublicRequest = (request: Request, url: Readonly<RequestTarget>): Request =>
     new Request(`${deps.origin}${url.pathname}${url.search}`, request);
 
-  // the request again for better-auth, with the body it read
   const toPublicFormRequest = (
     request: Request,
     url: Readonly<RequestTarget>,
@@ -134,9 +115,6 @@ export function makeOAuthRouter(
       body,
     });
 
-  // The metadata advertises only what imp's clients can use: public clients
-  // with no client authentication, no introspection, and Bearer tokens
-  // alone, so nothing about DPoP.
   const readMetadata = async (
     request: Request,
     url: Readonly<RequestTarget>,
@@ -173,9 +151,6 @@ export function makeOAuthRouter(
     );
   };
 
-  // A fresh login and consent each time, each scope with the lower ones it
-  // holds and offline_access, so an approval may give less than asked, and
-  // the one resource when the client named none
   const runAuthorize = async (url: Readonly<RequestTarget>): Promise<Response> => {
     const params = new URLSearchParams(url.search);
 
@@ -228,9 +203,6 @@ export function makeOAuthRouter(
     return response;
   };
 
-  // The login page, for a sign-in better-auth sent here. Continue, once the
-  // sign-in is approved, makes its user and carries the authorization on to
-  // consent; deny returns to the client.
   const runLogin = async (request: Request, url: Readonly<RequestTarget>): Promise<Response> => {
     const form = request.method === 'POST' ? await readForm(request, MAX_FORM_BYTES) : null;
 
@@ -276,7 +248,6 @@ export function makeOAuthRouter(
       return buildErrorPage('bad_request');
     }
 
-    // spent here, so one approval signs in once
     deps.signIns.remove(oauthQuery);
 
     if (deps.readApprover(approval.tokenID, approval.scope, approval.imps) === null) {
@@ -316,9 +287,6 @@ export function makeOAuthRouter(
     return new Response(null, { status: 302, headers });
   };
 
-  // The consent page, for the session a sign-in started and the request it
-  // signed in for; either answer returns to the client with the session
-  // cookie cleared
   const runConsent = async (request: Request, url: Readonly<RequestTarget>): Promise<Response> => {
     const form = request.method === 'POST' ? await readForm(request, MAX_FORM_BYTES) : null;
 
@@ -367,7 +335,6 @@ export function makeOAuthRouter(
       return buildErrorPage('bad_request');
     }
 
-    // one sign-in answers one consent
     signedIn.delete(sessionID);
 
     const accept = action === 'allow';
@@ -458,8 +425,6 @@ export function makeOAuthRouter(
     return response;
   };
 
-  // RFC 7009 through better-auth; a token it revoked for its own client
-  // takes its whole grant with it, as imp's grants always went
   const runRevoke = async (request: Request, url: Readonly<RequestTarget>): Promise<Response> => {
     const body = await readBodyText(request, MAX_FORM_BYTES);
 
@@ -506,8 +471,8 @@ export function makeOAuthRouter(
     return response;
   };
 
-  // a denial back to the client's redirect URI, with the issuer (RFC 9207);
-  // the query is one better-auth signed, so its redirect URI is the client's
+  // the issuer goes with the denial (RFC 9207); better-auth signed the query, so
+  // its redirect URI is the client's
   const buildDenial = (oauthQuery: string): Response => {
     const params = new URLSearchParams(oauthQuery);
     const target = new URL(params.get('redirect_uri') ?? '');

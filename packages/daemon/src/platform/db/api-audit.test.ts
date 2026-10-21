@@ -72,7 +72,6 @@ test('#listApiCalls lists the calls that named one imp', async () => {
 test('#listApiCalls leaves out the actor name and imp of an older row that named neither', async () => {
   const ctx = await createTestDatabase();
 
-  // a row from before named tokens has no actor name
   await ctx.db
     .insertInto('api_audit')
     .values({ at: 1, procedure: 'images.add', actor: 'token', outcome: 'ok', duration_ms: 3 })

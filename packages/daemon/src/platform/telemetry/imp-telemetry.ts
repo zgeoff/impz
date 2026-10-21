@@ -7,10 +7,9 @@ import type { ResourceDelta } from '../../imps/imps/resource-sampler';
 import type { EventBus } from '../events/event-bus';
 import { SCOPE } from './scope';
 
-// impd's instruments (docs/guides/events.md). Every attribute comes from a
-// closed set, never an imp's name, so a series count stays bounded.
+// Every attribute comes from a closed set, never an imp's name, so the series
+// count stays bounded.
 
-// the timed transitions, as the span each one becomes
 const SPAN_NAMES: Readonly<Partial<Record<string, string>>> = {
   booted: 'imp.boot',
   woke: 'imp.wake',
@@ -28,21 +27,15 @@ interface TelemetryDeps {
   readonly readStateCounts: () => Promise<ReadonlyMap<ImpState, number>>;
   readonly readRam: () => Promise<RamReading>;
 
-  // the disk-usage pass's exclusive bytes, together; none in a test without
   readonly readDiskUsedBytes?: () => number;
 
-  // why the host needs a reboot, null when it does not; none in a test without
   readonly readRebootReason?: () => string | null;
 
-  // each pass of the resource sampler; none in a test that has no sampler
   readonly subscribeResources?: (
     listener: (deltas: readonly ResourceDelta[]) => void,
   ) => () => void;
 }
 
-// Records from the event bus and two readers. With no SDK registered (no
-// OTEL_EXPORTER_OTLP_ENDPOINT), the API's no-op meter and tracer take it all.
-// Returns the stop.
 export function startImpTelemetry(deps: TelemetryDeps): () => void {
   const meter = metrics.getMeter(SCOPE);
   const tracer = trace.getTracer(SCOPE);
@@ -107,7 +100,6 @@ export function startImpTelemetry(deps: TelemetryDeps): () => void {
     unit: 's',
   });
 
-  // the last pass's total, for the gauge
   const lastPass = { cores: 0 };
 
   const handlePass = (deltas: readonly ResourceDelta[]): void => {
@@ -182,8 +174,6 @@ export function startImpTelemetry(deps: TelemetryDeps): () => void {
 
     durations.record(durationMs, { reason: event.reason });
 
-    // the operation ended as the event was sent; its steps ran one after
-    // another from its start
     const endMs = event.at.getTime();
     const startMs = endMs - durationMs;
 

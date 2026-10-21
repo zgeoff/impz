@@ -1,6 +1,3 @@
-// `bun run render:db-schema`: the migrated database's tables into schema.ts,
-// through kysely-codegen. `--check` writes nothing and fails on a difference,
-// as dump-schema.test.ts does under `bun test`.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sql } from 'kysely';
@@ -18,8 +15,6 @@ import { openDatabase } from './open-database';
 
 const SCHEMA_FILE = join(import.meta.dir, 'schema.ts');
 
-// the API's own types for the columns that hold one of its values; a column
-// with a default keeps Generated
 const CUSTOM_IMPORTS = {
   ApiActor: '@impz/api',
   AuditRefusal: '@impz/api',
@@ -32,8 +27,7 @@ const CUSTOM_IMPORTS = {
 };
 
 // AST nodes, not strings: kysely-codegen parses a string override with the
-// TypeScript 5 API, which TypeScript 7 does not ship. A nullable column gets
-// `| null` added.
+// TypeScript 5 API, which TypeScript 7 does not ship.
 const COLUMN_OVERRIDES = {
   'api_audit.actor': new IdentifierNode('ApiActor'),
   'broker_audit.reason': new IdentifierNode('AuditRefusal'),
@@ -88,7 +82,6 @@ async function normalizePrimaryKeys(
 
       const names = new Set(keys.rows.map((row) => row.name));
 
-      // SQLite has no schemas, so neither schema field carries over
       return {
         name: table.name,
         isPartition: table.isPartition,

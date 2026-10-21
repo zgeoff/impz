@@ -1,13 +1,8 @@
-// A count per key with a ceiling: a claim past `max` is refused, and each
-// granted claim hands back its release.
 export interface CountedLimit {
   readonly max: number;
 
-  // a release to call once the claim ends, or null when `key` holds `max`;
-  // a second call of the same release does nothing
   readonly tryClaim: (key: string) => (() => void) | null;
 
-  // the claims `key` holds now
   readonly countHeld: (key: string) => number;
   readonly isFull: (key: string) => boolean;
 }

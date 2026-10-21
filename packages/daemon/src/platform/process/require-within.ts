@@ -1,9 +1,6 @@
 import type { StartTimer } from './clock';
 import { startRealTimer } from './start-real-timer';
 
-// `promise`'s value when it settles within `ms`; otherwise throws the error
-// `buildError` makes, and leaves `promise` running. A rejection passes
-// through. `startTimer` is setTimeout's by default.
 export async function requireWithin<T>(
   promise: Promise<T>,
   durationMs: number,

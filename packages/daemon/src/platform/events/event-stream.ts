@@ -3,32 +3,23 @@ import type { StartTimer } from '../process/clock';
 import { startTimerAt } from '../process/start-timer-at';
 import type { EventBus } from './event-bus';
 
-// events one subscriber may fall behind by before its stream ends
 const QUEUE_LIMIT = 1000;
 
 interface EventStreamOptions {
   readonly bus: EventBus;
 
-  // every imp as `ImpAdded`, read from the database
   readonly readSnapshot: () => Promise<readonly ImpEvent[]>;
   readonly signal?: AbortSignal | undefined;
 
-  // when the stream must end, such as a dashboard session's expiry; null for
-  // never
   readonly endsAt: number | null;
   readonly now: () => number;
 
-  // starts the end's timer and returns its cancel; setTimeout by default
   readonly startTimer?: StartTimer;
   readonly queueLimit?: number;
 
-  // the events this subscriber may see, such as those of a token's imps;
-  // the snapshot is filtered by its reader
   readonly accepts?: (event: ImpEvent) => boolean;
 }
 
-// The snapshot, then every event behind it (docs/guides/events.md). It
-// subscribes before the snapshot read, so no event falls between the two.
 export async function* openEventStream(options: EventStreamOptions): AsyncGenerator<ImpEvent> {
   const limit = options.queueLimit ?? QUEUE_LIMIT;
   const queue: ImpEvent[] = [];
@@ -57,7 +48,6 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
 
   options.signal?.addEventListener('abort', stopStream);
 
-  // a dashboard session's stream ends with it, 30 days on
   const cancelTimer =
     options.endsAt === null
       ? null

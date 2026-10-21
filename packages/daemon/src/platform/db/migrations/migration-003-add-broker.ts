@@ -2,25 +2,19 @@ import type { Kysely } from 'kysely';
 import type { Migration } from 'kysely/migration';
 import type { NoTables } from './no-tables';
 
-// the credential broker: secrets, grants, the audit log, and the egress
-// policy for hosts no grant covers
 export const MIGRATION_003_ADD_BROKER: Migration = {
   async up(db: Kysely<NoTables>) {
     await db.schema
       .alterTable('imps')
 
-      // the egress mode, `open`, `box` or `none` (docs/architecture/network/egress.md),
-      // and a box's allow-list as a JSON array
       .addColumn('egress_policy', 'text', (column) => column.notNull().defaultTo('open'))
       .execute();
 
-    // A secret's metadata. Its value is a file in <dataDir>/secrets, never a row.
     await db.schema
       .createTable('secrets')
       .addColumn('name', 'text', (column) => column.primaryKey())
       .addColumn('kind', 'text', (column) => column.notNull())
 
-      // BrokerRule[] as JSON
       .addColumn('rules', 'text', (column) => column.notNull())
       .addColumn('created_at', 'integer', (column) => column.notNull())
       .execute();

@@ -3,10 +3,6 @@ import type { Transaction } from 'kysely';
 import type { ImpDatabase } from './open-database';
 import type { DB } from './schema';
 
-// An imp's last cold boots (docs/architecture/guest/sessions.md#generations-boots-and-offsets): each
-// one ended every session generation before it, so a client that reconnects
-// learns why its output is gone.
-
 const KEPT_BOOTS = 4;
 
 interface BootRecord {
@@ -15,8 +11,6 @@ interface BootRecord {
   readonly at: Date;
 }
 
-// The boot a booted guest's agent reported. A cause impd learned before the
-// boot (`recovery`, `restore`) wins over a plain `start`, and is spent.
 export async function writeColdBoot(
   db: ImpDatabase,
   impId: string,
@@ -40,8 +34,6 @@ export async function writeColdBoot(
   });
 }
 
-// A boot impd has no record of, as when it adopts a VM booted before cold
-// boots were kept: `unknown`, unless a row for it exists.
 export async function writeUnknownBoot(
   db: ImpDatabase,
   impId: string,
@@ -53,9 +45,6 @@ export async function writeUnknownBoot(
   });
 }
 
-// A moved imp's boots, newest first as its source listed them: written
-// oldest first, so they keep their order here. A time past `now` (the source's
-// clock ahead of this one) is clamped to it.
 export async function writeMovedBoots(
   db: ImpDatabase,
   impId: string,
@@ -71,7 +60,6 @@ export async function writeMovedBoots(
   });
 }
 
-// the cause the imp's next cold boot records, whichever path boots it
 export async function writeNextBootCause(
   db: ImpDatabase,
   impId: string,
@@ -80,14 +68,10 @@ export async function writeNextBootCause(
   await db.updateTable('imps').set({ next_boot_cause: cause }).where('id', '=', impId).execute();
 }
 
-// A boot with no boot_id (an agent that could not read it) records no row,
-// but it still spends the cause pending for it: a later boot must not
-// inherit it.
 export async function removeNextBootCause(db: ImpDatabase, impId: string): Promise<void> {
   await db.updateTable('imps').set({ next_boot_cause: null }).where('id', '=', impId).execute();
 }
 
-// newest first
 export async function listColdBoots(db: ImpDatabase, impId: string): Promise<ColdBoot[]> {
   const rows = await db
     .selectFrom('imp_cold_boots')

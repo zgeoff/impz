@@ -8,17 +8,10 @@ import { buildForbiddenError, findCallerData } from '../../surface/api-errors';
 import { formatCaller, isCallerAllowed } from './caller';
 import type { Caller } from './caller';
 
-// What a caller may see of other callers' leases and of the imps a refusal
-// names (docs/guides/leases.md#owners). A null caller is an event's reader,
-// who sees counts only.
-
-// a caller with host-wide manage sees every owner; any other its own
 function canSeeEveryOwner(caller: Readonly<Caller>): boolean {
   return caller.imps === null && hasScope(caller.scope, 'manage');
 }
 
-// who the caller's leases belong to; FORBIDDEN for a caller impd cannot
-// name for good, such as a tagged node whose whois has no stable ID
 export function requireLeaseHolder(caller: Readonly<Caller>): {
   readonly principal: string;
   readonly display: string;
@@ -57,8 +50,6 @@ export function isLeaseVisible(caller: Readonly<Caller> | null, lease: Readonly<
   return caller !== null && (canSeeEveryOwner(caller) || lease.principal === caller.principal);
 }
 
-// The error as the caller may see it: LEASED with the caller's own leases,
-// RAM_BUDGET_EXCEEDED with the imps it may read. Any other error is as it was.
 export function toCallerError(error: unknown, caller: Readonly<Caller> | null): unknown {
   const hidden = findCallerData(error);
 

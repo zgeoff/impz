@@ -3,8 +3,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { dumpSchema } from './dump-schema';
 
-// A migration without `bun run render:db-schema` fails here, so CI's
-// `bun test` holds schema.ts to the migrations.
 test('it matches the committed schema.ts', async () => {
   const committed = readFileSync(join(import.meta.dir, 'schema.ts'), 'utf8');
 

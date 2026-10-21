@@ -1,23 +1,15 @@
-// IPv6 for imps (docs/architecture/network/networking.md#ipv6): one /64 per host,
-// and one /128 per imp in it. The interface ID is the imp's IPv4 address, so
-// a packet capture reads the same imp in both families.
-
 const GROUPS = 8;
 const GROUP_BITS = 16n;
 const PREFIX_LENGTH = 64;
 
-// every imp's gateway: the same link-local address on every tap
 export const GATEWAY_IP6 = 'fe80::1';
 
 export interface Prefix64 {
   readonly network: bigint;
 
-  // the prefix as impd writes it: `fd12:3456:789a::/64`
   readonly text: string;
 }
 
-// A textual IPv6 address as a number, or null for anything else. An
-// embedded IPv4 tail (`::ffff:1.2.3.4`) is read too.
 export function parseIpv6(text: string): bigint | null {
   if (!text.includes(':') || text.includes('%') || text.includes('[')) {
     return null;
@@ -54,8 +46,6 @@ export function formatIpv6(address: bigint): string {
   return new URL(`http://[${groups.join(':')}]/`).hostname.slice(1, -1);
 }
 
-// A CIDR in canonical form with its host bits cleared (`2001:DB8::0001/64`
-// is `2001:db8::/64`); an address alone is a /128. Null for anything else.
 export function formatCidr6(text: string): string | null {
   const [address = '', prefixText = '128', ...rest] = text.split('/');
   const parsed = parseIpv6(address);
@@ -76,7 +66,6 @@ export function formatCidr6(text: string): string | null {
   return `${formatIpv6((parsed >> hostBits) << hostBits)}/${String(prefix)}`;
 }
 
-// IMP_SUBNET6 as a routed /64, or null when it is not one
 export function parsePrefix64(cidr: string): Prefix64 | null {
   const [address = '', prefixText, ...rest] = cidr.split('/');
   const network = parseIpv6(address);
@@ -92,7 +81,6 @@ export function parsePrefix64(cidr: string): Prefix64 | null {
   return { network, text: `${formatIpv6(network)}/${String(PREFIX_LENGTH)}` };
 }
 
-// A unique local /64 (RFC 4193): fd, a random 40-bit global ID, subnet 0.
 export function buildUlaPrefix(random: Uint8Array): Prefix64 {
   if (random.length < 5) {
     throw new Error('a ULA global ID needs 5 random bytes');
@@ -104,7 +92,6 @@ export function buildUlaPrefix(random: Uint8Array): Prefix64 {
   return { network, text: `${formatIpv6(network)}/${String(PREFIX_LENGTH)}` };
 }
 
-// An imp's /128: the prefix, then its IPv4 address as the interface ID.
 export function deriveGuestIp6(prefix: Readonly<Prefix64>, guestIpv4: number): string {
   return formatIpv6(prefix.network + BigInt(guestIpv4));
 }

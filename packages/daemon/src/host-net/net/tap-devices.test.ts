@@ -31,7 +31,6 @@ test('it creates the tap with the host end of the slot /30', async () => {
 });
 
 test('it gives an IPv6 tap fe80::1 without DAD and a route to the /128, with RAs off first', async () => {
-  // a container that starts its taps with IPv6 off
   const ip = buildStubIpCommand({
     sysctls: {
       'net.ipv6.conf.imp1.accept_ra': '1',
@@ -111,7 +110,6 @@ test('it fails on a sysctl key it cannot write', () => {
   );
 });
 
-// the stub has no sysctl keys, as a kernel without IPv6
 test('it skips a sysctl key a kernel without IPv6 does not have', async () => {
   const ip = buildStubIpCommand();
   const address = deriveSlotAddress(1, { subnet: parseSubnet('10.66.0.0/16'), portBase: 20_000 });

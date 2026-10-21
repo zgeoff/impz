@@ -16,7 +16,6 @@ test('#removeTokenRecord removes the grants the token approved, with their token
 
   await writeTokenRecord(ctx.db, token, []);
 
-  // a grant as better-auth writes one: its user, its client and a refresh token
   await ctx.db
     .insertInto('user')
     .values({

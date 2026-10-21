@@ -28,8 +28,6 @@ export const MIGRATION_001_CREATE_INITIAL_SCHEMA: Migration = {
       .addColumn('last_active_at', 'integer', (column) => column.notNull())
       .addColumn('slept_at', 'integer')
 
-      // the latest end of the imp's leases, kept with each lease write
-      // (db/leases.ts); null while it has none
       .addColumn('hold_until', 'integer')
       .addColumn('error', 'text')
       .addColumn('pid', 'integer')

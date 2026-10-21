@@ -1,20 +1,15 @@
 import * as z from 'zod';
 
-// The public MCP route (docs/guides/mcp.md#public-route): off unless
-// IMP_MCP_PUBLIC_URL names the origin the operator's TLS front serves
 export const PublicMcpEnvSchema = z.object({
   IMP_MCP_PUBLIC_URL: z.string().optional(),
   IMP_MCP_PUBLIC_PORT: z.coerce.number().pipe(z.int().min(1).max(65_535)).default(7071),
 });
 
 export interface PublicMcpConfig {
-  // the bare origin: the OAuth issuer, and `<origin>/mcp` the one resource
   readonly origin: string;
 
-  // its host and port as a request's Host names them
   readonly host: string;
 
-  // plain HTTP, for the TLS front alone to reach
   readonly port: number;
 }
 
@@ -51,7 +46,6 @@ export function parsePublicMcpConfig(
   return { origin: origin.origin, host: origin.host, port };
 }
 
-// an origin with no path, query or credentials: the issuer must be exactly it
 function parseOrigin(text: string): URL {
   let url: URL;
 

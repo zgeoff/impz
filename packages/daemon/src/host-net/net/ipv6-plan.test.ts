@@ -314,7 +314,6 @@ test('#checkHostRules6 names the missing raw rule once the filter rules are in p
         '-A FORWARD -i imp+ -j DROP',
       ].join('\n'),
 
-      // a raw table with only its default policies
       'ip6tables -w -t raw -S': '-P PREROUTING ACCEPT\n-P OUTPUT ACCEPT\n',
     },
   });

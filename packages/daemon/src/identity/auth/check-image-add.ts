@@ -3,21 +3,16 @@ import type { Refusal } from './access-policy';
 import { formatCaller } from './caller';
 import type { Caller } from './caller';
 
-// the fields of an image add's input the check reads; the input is not
-// checked yet, so a field that is not a string reads as null
 interface ImageAddFields {
   readonly ref: string | null;
   readonly name: string | null;
 
-  // the input holds an `imp`, as a template copy does
   readonly hasImp: boolean;
 }
 
 // a ref pinned by digest, which names one image for good; a tag can move
 const PINNED_REF = /@sha256:[0-9a-f]{64}$/u;
 
-// The caller's prefix, a ref that starts with it and is pinned, and a name
-// within the caller's patterns.
 export function checkImageAdd(
   caller: Readonly<Caller>,
   patterns: readonly string[],

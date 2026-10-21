@@ -1,5 +1,4 @@
 export interface Semaphore {
-  // runs `task` once fewer than the limit run
   readonly run: <T>(task: () => Promise<T>) => Promise<T>;
 }
 
@@ -24,7 +23,6 @@ export function createSemaphore(limit: number): Semaphore {
       } finally {
         const next = waiters.shift();
 
-        // a waiter takes over this slot, so `active` stays the same
         if (next === undefined) {
           active -= 1;
         } else {

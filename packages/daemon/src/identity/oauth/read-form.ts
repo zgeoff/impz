@@ -1,6 +1,5 @@
 import { readBodyText } from './read-body-text';
 
-// a urlencoded form of at most `maxBytes`; null for anything else
 export async function readForm(
   request: Request,
   maxBytes: number,

@@ -7,32 +7,22 @@ import type { Caller } from './caller';
 import { checkGrantable } from './check-grantable';
 import { checkImageAdd } from './check-image-add';
 
-// host-wide: only a caller with no imp patterns
 interface HostAccess {
   readonly scope: Scope;
   readonly on: 'host';
 
-  // 'refusals': the router audits only a refusal, and the handler the call
-  // itself, as its work ends
   readonly audit?: false | 'refusals';
 }
 
-// the imps these input fields name, each within the caller's patterns; a
-// caller with patterns must name them
 interface ImpAccess {
   readonly scope: Scope;
   readonly on: 'imp';
   readonly fields: readonly string[];
 
-  // refused to a token made able to grant secrets: a move carries grants it
-  // may not make, and v1 keeps forks refused with it (#168)
   readonly noGrantable?: true;
   readonly audit?: false;
 }
 
-// a grant or a revoke (docs/guides/tokens.md#granting-secrets): host-wide,
-// or the imp within the caller's patterns and the secret one its grantable
-// list names, the same secret now as when the token was made
 interface GrantAccess {
   readonly scope: Scope;
   readonly on: 'grant';
@@ -41,38 +31,27 @@ interface GrantAccess {
   readonly audit?: false;
 }
 
-// an image add from a ref: host-wide, or for a caller with an image ref
-// prefix, a ref that starts with it and is pinned by digest, under a name
-// within its patterns (docs/guides/tokens.md#adding-images)
 interface ImageAccess {
   readonly scope: Scope;
   readonly on: 'image';
   readonly audit?: false | 'refusals';
 }
 
-// any caller with the scope; the handler shows only the caller's imps
 interface AnyAccess {
   readonly scope: Scope;
   readonly on: 'any';
   readonly audit?: false;
 }
 
-// What each procedure needs (docs/guides/tokens.md#scopes). The map covers
-// every contract path, so a procedure without an entry fails the typecheck;
-// a path missing at run time is refused all the same.
 export type Access = HostAccess | ImpAccess | GrantAccess | ImageAccess | AnyAccess;
 
-// why the caller may not make the call; a reason when it is one a client
-// can act on
 export interface Refusal {
   readonly message: string;
   readonly reason: ForbiddenReason | null;
 }
 
-// the secret's generation now, or null when there is no such secret
 export type ReadSecretGeneration = (name: string) => Promise<string | null>;
 
-// `imps.create`, `audit.calls` and so on
 type ProcedurePath<T, Prefix extends string = ''> = {
   [K in keyof T & string]: T[K] extends { readonly '~orpc': unknown }
     ? `${Prefix}${K}`
@@ -102,7 +81,6 @@ export const PROCEDURE_ACCESS: Readonly<Record<ImpProcedurePath, Access>> = {
   'imps.hold': execImp,
   'imps.url': readImp,
 
-  // what the imp may reach: a change is the imp's to manage
   'imps.policy': readImp,
   'imps.setPolicy': manageImp,
 
@@ -119,16 +97,13 @@ export const PROCEDURE_ACCESS: Readonly<Record<ImpProcedurePath, Access>> = {
   'imps.update': manageImp,
   'imps.fork': { scope: 'manage', on: 'imp', fields: ['source', 'name'], noGrantable: true },
 
-  // as imps.hold: a lease keeps the imp awake, and each caller touches only
-  // its own; list may leave out the imp and shows the caller's imps only
   'leases.acquire': execImp,
   'leases.renew': execImp,
   'leases.release': execImp,
   'leases.list': { scope: 'exec', on: 'any', audit: false },
 
   // a move hands the whole imp, its disk and checkpoints, to another host;
-  // on the target a ticket takes in an image and grants, which are
-  // host-wide. A token that may grant moves nothing, as it forks nothing.
+  // on the target a ticket takes in an image and grants, which are host-wide
   'moves.prepare': manageImpNoGrantable,
   'moves.facts': manageHost,
   'moves.receive': manageHost,
@@ -157,7 +132,6 @@ export const PROCEDURE_ACCESS: Readonly<Record<ImpProcedurePath, Access>> = {
   'images.add': { scope: 'manage', on: 'image' },
   'images.build': manageHost,
 
-  // audited as the work ends, with its outcome (create-image-routes.ts)
   'images.addStream': { scope: 'manage', on: 'image', audit: 'refusals' },
   'images.buildStream': { scope: 'manage', on: 'host', audit: 'refusals' },
   'images.delete': manageHost,
@@ -165,7 +139,6 @@ export const PROCEDURE_ACCESS: Readonly<Record<ImpProcedurePath, Access>> = {
   // a running build's steps show its Dockerfile's commands: host-wide
   'images.builds': { scope: 'read', on: 'host' },
 
-  // the exec it is for is audited as the socket opens
   'exec.ticket': { ...execImp, audit: false },
 
   'sessions.list': readImp,
@@ -205,7 +178,6 @@ export const PROCEDURE_ACCESS: Readonly<Record<ImpProcedurePath, Access>> = {
   'networks.leave': manageHost,
   'networks.warnings': readImp,
 
-  // a token for some imps grants only the secrets its list names
   'grants.add': manageGrant,
   'grants.delete': manageGrant,
   'grants.list': readImp,
@@ -218,11 +190,8 @@ export const PROCEDURE_ACCESS: Readonly<Record<ImpProcedurePath, Access>> = {
   'system.info': readAny,
   'system.features': readAny,
 
-  // gc removes what a crash left and, with orphans, every disk no row names
   'system.gc': manageHost,
 
-  // the approver's own checks are the handler's: a named token, never
-  // wider than itself (docs/guides/mcp.md#public-route)
   'oauth.clients.list': manageHost,
   'oauth.clients.add': manageHost,
   'oauth.clients.update': manageHost,
@@ -246,26 +215,20 @@ export const PROCEDURE_ACCESS: Readonly<Record<ImpProcedurePath, Access>> = {
 
 const ACCESS_BY_PATH: ReadonlyMap<string, Access> = new Map(Object.entries(PROCEDURE_ACCESS));
 
-// null for a path the map does not have, which no caller may call
 export function findAccess(procedure: string): Access | null {
   return ACCESS_BY_PATH.get(procedure) ?? null;
 }
 
-// calls that change something leave an audit row; an unknown one does too
 export function isAuditedProcedure(procedure: string): boolean {
   const access = findAccess(procedure);
 
   return access === null || (access.scope !== 'read' && access.audit === undefined);
 }
 
-// a call that audits itself as it ends, whose refusal the router audits
 export function isRefusalAudited(procedure: string): boolean {
   return findAccess(procedure)?.audit === 'refusals';
 }
 
-// Why the caller may not make the call, or null when it may. The checks
-// run before the handler, so a refusal leaves nothing behind, and a grant
-// refused for its secret never says whether the secret exists.
 export async function checkAccess(
   access: Readonly<Access> | null,
   caller: Readonly<Caller>,
@@ -283,8 +246,6 @@ export async function checkAccess(
     };
   }
 
-  // an OAuth grant carries its token's list for the refusals above it, and
-  // grants or revokes no secret itself (docs/guides/mcp.md#public-route)
   if (access.on === 'grant' && caller.kind === 'oauth') {
     return { message: `${formatCaller(caller)} may not grant or revoke secrets`, reason: null };
   }
@@ -330,9 +291,6 @@ export async function checkAccess(
   return refusal;
 }
 
-// What a grant or a revoke checks again in its transaction: null for a
-// host-wide caller, which grants any secret; else the token and the secret's
-// generation its list names
 export function findGrantAuthority(
   caller: Readonly<Caller>,
   secret: string,
@@ -343,7 +301,6 @@ export function findGrantAuthority(
 
   const entry = caller.grantable.find((each) => each.name === secret);
 
-  // the access check refused the call before it got here
   if (entry === undefined || caller.tokenId === null) {
     throw new Error(`${formatCaller(caller)} reached a grant of ${secret} it may not make`);
   }
@@ -351,9 +308,6 @@ export function findGrantAuthority(
   return { tokenId: caller.tokenId, generation: entry.generation };
 }
 
-// What a fork's copy of its source's grants checks in its transaction: null
-// for a host-wide caller, whose fork gets every grant; else the token and
-// its grantable list, so the fork gets only grants the caller could make
 export function findForkAuthority(caller: Readonly<Caller>): ForkAuthority | null {
   return caller.imps === null ? null : { tokenId: caller.tokenId, grantable: caller.grantable };
 }

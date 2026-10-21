@@ -6,12 +6,11 @@ const ServeStatusSchema = z.object({
   TCP: z.record(z.string(), z.unknown()).optional(),
 });
 
-// The tailnet ports `tailscale serve` holds, from `tailscale serve status
-// --json`. tailscaled takes such a port on the tailnet IP itself, so a
-// listener of impd's on it never sees the traffic. Empty for no config.
+// tailscaled takes a serve port on the tailnet IP itself, so an impd listener
+// on it never sees the traffic.
 export function parseServePorts(json: string): readonly number[] {
   try {
-    // no serve config prints nothing
+    // tailscale prints nothing when there is no serve config
     const text = json.trim() === '' ? '{}' : json;
     const status = ServeStatusSchema.parse(JSON.parse(text));
 
@@ -23,8 +22,6 @@ export function parseServePorts(json: string): readonly number[] {
   }
 }
 
-// The ports `tailscale serve` holds now; none when tailscale fails or is
-// missing. `run` runs the command, runCommand by default.
 export async function readServePorts(run: CommandRunner = runCommand): Promise<readonly number[]> {
   try {
     const result = await run(['tailscale', 'serve', 'status', '--json']);

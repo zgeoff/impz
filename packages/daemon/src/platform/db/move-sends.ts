@@ -2,8 +2,6 @@ import type { Insertable, Selectable, Updateable } from 'kysely';
 import type { ImpQueries } from './open-database';
 import type { DB } from './schema';
 
-// The source's side of a move: the target's URL and ticket, kept so a restart
-// can finish the commit, and the receipt once it came
 type MoveSendRow = Selectable<DB['move_sends']>;
 
 export function readMoveSend(db: ImpQueries, impId: string): Promise<MoveSendRow | undefined> {
