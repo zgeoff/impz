@@ -11,11 +11,11 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/zgeoff/impz/agent/internal/cgroup"
-	"github.com/zgeoff/impz/agent/internal/disk"
-	"github.com/zgeoff/impz/agent/internal/files"
-	"github.com/zgeoff/impz/agent/internal/inner"
-	"github.com/zgeoff/impz/agent/internal/memory"
+	"github.com/zgeoff/impz/agent/internal/feature/files"
+	"github.com/zgeoff/impz/agent/internal/feature/inner"
+	"github.com/zgeoff/impz/agent/internal/feature/memory"
+	"github.com/zgeoff/impz/agent/internal/host/cgroup"
+	"github.com/zgeoff/impz/agent/internal/host/disk"
 )
 
 const (

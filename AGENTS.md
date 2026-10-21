@@ -66,6 +66,11 @@ docs/
   entries of `zgeoff/import-zones` give the order: a layer imports only itself and the layers below
   it. The composition root's files sit at the top of `src/`, above every layer. A known upward
   import carries a disable comment that holds the issue that removes it.
+- The agent's packages in `agent/internal/` sit in one folder per layer, and the `layer-*` depguard
+  rules in [`agent/.golangci.yml`](agent/.golangci.yml) give the order and deny each upward import.
+  A new package goes in its layer's folder and takes that layer's rule. Two packages sit outside the
+  folders: `proto`, whose path the generated Go code fixes, belongs to the bottom layer, and
+  `contract` holds the golden tests whose fixtures impd's tests read by path.
 
 ## Commands
 

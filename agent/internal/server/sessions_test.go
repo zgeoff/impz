@@ -10,12 +10,12 @@ import (
 	"gotest.tools/v3/assert/cmp"
 	"gotest.tools/v3/poll"
 
-	"github.com/zgeoff/impz/agent/internal/exec"
-	"github.com/zgeoff/impz/agent/internal/imagecfg"
-	"github.com/zgeoff/impz/agent/internal/launch"
-	"github.com/zgeoff/impz/agent/internal/proc"
+	"github.com/zgeoff/impz/agent/internal/feature/exec"
+	"github.com/zgeoff/impz/agent/internal/feature/launch"
+	"github.com/zgeoff/impz/agent/internal/feature/session"
+	"github.com/zgeoff/impz/agent/internal/host/imagecfg"
+	"github.com/zgeoff/impz/agent/internal/host/proc"
 	"github.com/zgeoff/impz/agent/internal/proto"
-	"github.com/zgeoff/impz/agent/internal/session"
 )
 
 // request opens a connection to s, sends req and returns the first reply

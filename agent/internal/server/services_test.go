@@ -5,11 +5,11 @@ import (
 
 	"gotest.tools/v3/assert"
 
-	"github.com/zgeoff/impz/agent/internal/fsroot"
-	"github.com/zgeoff/impz/agent/internal/imagecfg"
-	"github.com/zgeoff/impz/agent/internal/proc"
+	"github.com/zgeoff/impz/agent/internal/feature/services"
+	"github.com/zgeoff/impz/agent/internal/host/fsroot"
+	"github.com/zgeoff/impz/agent/internal/host/imagecfg"
+	"github.com/zgeoff/impz/agent/internal/host/proc"
 	"github.com/zgeoff/impz/agent/internal/proto"
-	"github.com/zgeoff/impz/agent/internal/services"
 )
 
 // The services ops reach the supervisor; names it does not have come back

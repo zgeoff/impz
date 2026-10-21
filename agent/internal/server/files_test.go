@@ -8,7 +8,7 @@ import (
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 
-	"github.com/zgeoff/impz/agent/internal/files"
+	"github.com/zgeoff/impz/agent/internal/feature/files"
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 

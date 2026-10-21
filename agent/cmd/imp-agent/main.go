@@ -18,13 +18,13 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/zgeoff/impz/agent/internal/boot"
-	"github.com/zgeoff/impz/agent/internal/dial"
-	"github.com/zgeoff/impz/agent/internal/dropcaps"
-	"github.com/zgeoff/impz/agent/internal/inner"
-	"github.com/zgeoff/impz/agent/internal/outer"
+	"github.com/zgeoff/impz/agent/internal/feature/dial"
+	"github.com/zgeoff/impz/agent/internal/feature/inner"
+	"github.com/zgeoff/impz/agent/internal/feature/outer"
+	"github.com/zgeoff/impz/agent/internal/feature/sftpserver"
+	"github.com/zgeoff/impz/agent/internal/feature/tartool"
+	"github.com/zgeoff/impz/agent/internal/host/dropcaps"
 	"github.com/zgeoff/impz/agent/internal/proto"
-	"github.com/zgeoff/impz/agent/internal/sftpserver"
-	"github.com/zgeoff/impz/agent/internal/tartool"
 )
 
 func main() {

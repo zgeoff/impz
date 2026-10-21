@@ -12,14 +12,14 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	"github.com/zgeoff/impz/agent/internal/dial"
-	"github.com/zgeoff/impz/agent/internal/exec"
-	"github.com/zgeoff/impz/agent/internal/files"
-	"github.com/zgeoff/impz/agent/internal/listen"
+	"github.com/zgeoff/impz/agent/internal/base/safe"
+	"github.com/zgeoff/impz/agent/internal/feature/dial"
+	"github.com/zgeoff/impz/agent/internal/feature/exec"
+	"github.com/zgeoff/impz/agent/internal/feature/files"
+	"github.com/zgeoff/impz/agent/internal/feature/listen"
+	"github.com/zgeoff/impz/agent/internal/feature/services"
+	"github.com/zgeoff/impz/agent/internal/feature/session"
 	"github.com/zgeoff/impz/agent/internal/proto"
-	"github.com/zgeoff/impz/agent/internal/safe"
-	"github.com/zgeoff/impz/agent/internal/services"
-	"github.com/zgeoff/impz/agent/internal/session"
 )
 
 // Port is the vsock port the agent listens on.
