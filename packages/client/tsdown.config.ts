@@ -8,6 +8,12 @@ export default defineConfig({
   platform: 'neutral',
   target: 'es2022',
   outDir: 'dist',
-  dts: { tsconfig: '../tsconfig.client-dts.json' },
+  dts: {
+    tsconfig: '../tsconfig.client-dts.json',
+    generator: 'tsgo',
+    tsgo: {
+      path: decodeURIComponent(new URL('../../node_modules/.bin/tsrs', import.meta.url).pathname),
+    },
+  },
   deps: { alwaysBundle: ['@impz/api', '@impz/shared'] },
 });
