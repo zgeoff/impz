@@ -1,6 +1,3 @@
-// A child Bun's builds through imp-docker-proxy, under the idle limit its
-// BUN_CONFIG_HTTP_IDLE_TIMEOUT sets, beside an unprotected fetch that starts
-// on a `control` line of stdin; a `cancel` line ends the second build.
 import { join } from 'node:path';
 import { z } from 'zod';
 import { createDockerProxy } from '../../src/imps/docker-proxy/proxy';
@@ -32,7 +29,7 @@ function startProxy(name: string, upstreamSocket: string): string {
       token: 'test-token',
       hostImage: 'ghcr.io/zgeoff/imp-host:latest',
 
-      // host isolation: the proxy lets builds through
+      // no builder image puts the proxy in host isolation, which lets builds through
       builderImage: null,
       buildContextMaxBytes: 1024 ** 2,
       log: () => {},
@@ -46,7 +43,6 @@ function print(line: unknown): void {
   process.stdout.write(`${JSON.stringify(line)}\n`);
 }
 
-// a failure by its name and, for a DOMException, its legacy code
 function readError(error: unknown): { name: string; code: number | null } {
   if (error instanceof DOMException) {
     // the legacy code tells a timeout (23) from an abort (20) by number

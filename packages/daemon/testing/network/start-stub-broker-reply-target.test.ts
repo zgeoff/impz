@@ -60,7 +60,6 @@ test('it records a request head that arrives in pieces as one', async () => {
 
   socket.write('GET / HTTP/1.1\r\n');
 
-  // the second piece goes only once the first has left
   await new Promise<void>((resolve) => {
     socket.write('Host: plain.test\r\n\r\n', () => {
       resolve();
@@ -93,8 +92,6 @@ test('it answers nothing before the request head ends', async () => {
     closed.resolve();
   });
 
-  // the client ends its side mid-head; a target that answered on connect or
-  // on any bytes would still have sent its reply
   socket.end('GET / HTTP/1.1\r\n');
 
   await closed.promise;

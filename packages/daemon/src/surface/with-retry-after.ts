@@ -1,8 +1,6 @@
 import * as z from 'zod';
 import { MOVING_RETRY_AFTER_S } from './api-errors';
 
-// A MOVING error says when to ask again in its data and, for a client that
-// reads only HTTP, in Retry-After
 export async function withRetryAfter(response: Response): Promise<Response> {
   if (response.status !== 409) {
     return response;

@@ -70,7 +70,6 @@ interface ReceiveStreamDeps {
   readonly log: (message: string) => void;
 }
 
-// a response's status and JSON body, which more than one request may send
 export interface Reply {
   readonly status: number;
   readonly body: unknown;
@@ -78,8 +77,6 @@ export interface Reply {
 
 type ReceivedFile = ReceiptBody['files'][number];
 
-// The stream after its ticket: the header, the image, the disk and the
-// memory, then the receipt; a failure removes the staged imp
 export async function readMoveStream(
   deps: ReceiveStreamDeps,
   tempDir: string,
@@ -96,9 +93,6 @@ export async function readMoveStream(
   }
 
   const header = MoveHeaderSchema.parse(readJsonPayload(first.payload));
-
-  // each lease ends this long after now: the time it had left when the
-  // source built the header, however long the disk then takes
   const headerAt = deps.now();
 
   requireTicketedName(row.name, header.imp.name);
@@ -107,7 +101,6 @@ export async function readMoveStream(
     throw new MoveRequestError(409, `this host has an imp with id ${header.imp.id}`);
   }
 
-  // the ticket's checks again, on what the stream itself says
   if (header.warm !== null) {
     requireWarmMove(deps, header.warm.move);
     requireOwnDrivePath(deps, header.warm);
@@ -168,9 +161,6 @@ export async function readMoveStream(
   };
 
   try {
-    // files take twice the data: each sits in the temp file, then on the
-    // disk; streams go straight into `zfs recv`, and only the image's files
-    // pass through a temp file
     const imageBytes = header.image.isIncluded ? header.image.sizeBytes : 0;
     const room = header.streams === null ? 2 * row.bytes : row.bytes + imageBytes;
 
@@ -200,7 +190,6 @@ export async function readMoveStream(
         prepareDisk: writeDisk,
       });
 
-      // the staged imp's own rows: they go with it if the stream fails
       await writeMovedBoots(deps.db, header.imp.id, header.imp.coldBoots, deps.now());
       await writeReceivedLeases(deps, header, headerAt);
 
@@ -249,8 +238,6 @@ export async function readMoveStream(
   return { status: 200, body: receipt };
 }
 
-// Each file into a sparse temp file, then over the disk block by block, so
-// the checkpoints share every block they did on the source
 async function readFileInto(
   reader: FrameReader,
   expected: MoveFile['kind'],
@@ -339,8 +326,6 @@ async function createCheckpointDisk(deps: ReceiveStreamDeps, impId: string) {
   }
 }
 
-// The image by the source's digest when this host has it, else from the
-// stream under the digest of what arrived (docs/guides/hosts.md#moves)
 async function requireImage(
   deps: ReceiveStreamDeps,
   reader: FrameReader,
@@ -410,15 +395,12 @@ async function requireImage(
   }
 }
 
-// the sha256 of a whole file, as content-addressed paths name it
-// a received image's digest: its two files' stream sums, as they arrived
 function buildReceivedDigest(rootfsSha256: string, configSha256: string): string {
   const hash = createHash('sha256').update(`rootfs ${rootfsSha256}\nconfig ${configSha256}\n`);
 
   return `sha256:${hash.digest('hex')}`;
 }
 
-// a policy this impd cannot read comes as none, never more open
 function resolvePolicy(header: MoveHeader, log: (message: string) => void): EgressPolicy {
   const parsed = EgressPolicySchema.safeParse(header.imp.egress);
 
@@ -431,8 +413,6 @@ function resolvePolicy(header: MoveHeader, log: (message: string) => void): Egre
   return { mode: 'none', allow: [] };
 }
 
-// Only a grant of a secret this host has by that name; the rest are
-// logged, never made
 async function createGrants(deps: ReceiveStreamDeps, header: MoveHeader): Promise<void> {
   const secrets = await deps.grants.listSecrets();
 

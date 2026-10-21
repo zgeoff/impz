@@ -14,19 +14,15 @@ interface IdleLoopDeps {
   readonly db: ImpDatabase;
   readonly imps: Pick<Imps, 'isImpBusy' | 'readActivity' | 'tracker' | 'trySleepImp' | 'watchdog'>;
   readonly log: (message: string) => void;
-
-  // the clock and a Firecracker's CPU time; the wall clock and /proc by default
   readonly now?: () => number;
   readonly readCpuTicks?: (pid: number) => number | null;
 }
 
 export interface IdleLoop {
-  // one pass over the running imps: record activity, sleep the idle ones
   readonly runCheck: () => Promise<void>;
 }
 
 export function createIdleLoop(deps: IdleLoopDeps): IdleLoop {
-  // per imp: the last CPU sample of its Firecracker
   const samples = new Map<string, { pid: number; ticks: number; at: number }>();
 
   const readNow = deps.now ?? Date.now;
@@ -65,8 +61,6 @@ export function createIdleLoop(deps: IdleLoopDeps): IdleLoop {
     const now = readNow();
     const cpuPercent = readCpuPercent(imp, pid, now);
 
-    // a busy or wedged agent: the other signals decide; a detached session
-    // keeps the imp awake only through its CPU or TCP
     const activity = await deps.imps.readActivity(imp);
 
     deps.imps.watchdog.observe(imp, activity !== null);

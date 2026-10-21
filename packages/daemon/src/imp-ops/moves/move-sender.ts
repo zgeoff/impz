@@ -35,13 +35,8 @@ import { sendToPeer } from './send-to-peer';
 
 interface PrepareOptions {
   readonly stop: boolean;
-
-  // a stop of a leased imp ends its leases from leases.* rather than fail
-  // with LEASED, as `imps.stop` does
   readonly force: boolean;
   readonly targetStorage: 'xfs' | 'zfs';
-
-  // the target's facts, for a warm move; null from an older CLI or target
   readonly target: WarmHost | null;
 }
 
@@ -51,12 +46,7 @@ export interface MoveSender {
   readonly readStatus: (name: string) => Promise<MoveStatus>;
   readonly resume: (name: string, ticket: string | undefined) => Promise<MoveStatus>;
   readonly abort: (name: string) => Promise<MoveStatus>;
-
-  // at start: a send a crash cut short aborts; a verified copy commits
   readonly recover: () => Promise<void>;
-
-  // settles once the recovery that `recover` last started has run, at once
-  // when none has; it never rejects, as the recovery logs its own failure
   readonly waitForRecovery: () => Promise<void>;
 }
 
@@ -78,27 +68,16 @@ export interface MoveSenderDeps {
   readonly grants: Pick<Broker, 'listGrantDetails'>;
   readonly egress: Pick<EgressService, 'readPolicy' | 'readAnswers'>;
   readonly ranges: PeerRanges;
-
-  // this host's facts, as a target of a warm move would read them
   readonly readWarmHost: () => WarmHost;
-
-  // a tap's MAC now, or null for no tap; /sys by default
   readonly readTapMac?: (tap: string) => string | null;
-
-  // after the receipt: the tailnet-names pass, which drops this host's name
   readonly releaseName: () => Promise<void>;
   readonly fetch?: (request: Request) => Promise<Response>;
-
-  // the timer of each request's deadline to the target; setTimeout by default
   readonly startPeerDeadline?: StartTimer;
-
-  // the most a part carries; MOVE_PART_BYTES, but small in tests
   readonly partBytes?: number;
   readonly now: () => number;
   readonly log: (message: string) => void;
 }
 
-// A send running here: its bytes so far, and how it ended
 interface SendTask {
   readonly abort: AbortController;
   done: Promise<void>;
@@ -110,12 +89,7 @@ interface SendTask {
 
 export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   const tasks = new Map<string, SendTask>();
-
-  // the last result per imp id, once its task and its row are gone
   const finished = new Map<string, { readonly error: string | null; readonly isDone: boolean }>();
-
-  // imps the prepare stopped while they ran; a refusal before any byte went
-  // starts them again
   const halted = new Set<string>();
 
   const requireImp = async (name: string): Promise<ImpRecord> => {
@@ -128,8 +102,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     return imp;
   };
 
-  // The commit, then the source's copy goes: whenever the target says the
-  // imp is live there, whether on this call or one before a crash
   const runCommit = async (imp: ImpRecord, peer: string, ticket: string): Promise<void> => {
     await deps.releaseName().catch((error: unknown) => {
       deps.log(`impd: move: ${imp.name}: tailnet name not released yet: ${getErrorMessage(error)}`);
@@ -144,7 +116,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       throw new Error('commit: the target did not commit');
     }
 
-    // a resume and an abort at once can both reach here; one destroys it
     try {
       await deps.imps.destroyImp(imp.name, { isMove: true });
     } catch (error) {
@@ -158,7 +129,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     deps.log(`impd: move: ${imp.name}: committed on ${peer}; the copy here is gone`);
   };
 
-  // in the background, so a target that is down never holds up impd's start
   const runCommitAfterRestart = async (imp: ImpRecord, peer: string, ticket: string) => {
     try {
       await runCommit(imp, peer, ticket);
@@ -172,9 +142,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     await removeMoveSend(deps.db, imp.id);
   };
 
-  // Before a receipt, a failure undoes the move on both hosts. The mark and
-  // the row stay until the target confirms, so no staged copy is left
-  // behind with nothing here to end it; `impz move --abort` asks again.
   const resetSend = async (
     imp: ImpRecord,
     peer: string | null,
@@ -247,14 +214,10 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
           await resetSend(imp, peer, ticket);
         }
 
-        // the offer came after the prepare's halt: nothing went, so the imp
-        // runs again as it did before the move
         if (error instanceof OfferRefusalError && halted.has(imp.id)) {
           await startHaltedAgain(imp);
         }
 
-        // only now: a caller that sees the error sees the mark as the
-        // reset left it
         task.error = message;
       } finally {
         halted.delete(imp.id);
@@ -287,8 +250,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     };
   };
 
-  // What prepare writes once the imp is stopped or asleep: the send's row
-  // and the mark, after which no call but the move's own reaches the imp
   const writeSendMark = async (
     imp: LockedImp,
     options: PrepareOptions,
@@ -315,7 +276,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
     const marked = await updateImpMove(deps.db, imp.id, 'sending');
 
-    // an expose that landed before the mark; none lands after it
     if (marked.publicAuth !== null) {
       await removeMark(imp);
 
@@ -329,9 +289,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     return { bytes, checkpoints: checkpoints.length, warm };
   };
 
-  // A cold move's mark on the imp its prepare halted. A forced stop ends
-  // the leases only once the mark is on; a failure before that keeps them,
-  // and a running imp runs again.
   const writeHaltedMark = async (
     imp: LockedImp,
     stopped: LockedImp,
@@ -346,10 +303,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
       return plan;
     } catch (error) {
-      // the mark is this prepare's own: the lock refused a marked imp
       await removeMark(imp);
-
-      // only a running imp runs again; a sleeping one's memory is gone
 
       if (halted.delete(imp.id)) {
         await deps.imps.requireRunningImp(stopped).catch((startError: unknown) => {
@@ -375,7 +329,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     return to;
   };
 
-  // the background recovery recover last started
   const recovery: { last: Promise<void> } = { last: Promise.resolve() };
 
   const runRecover = async (): Promise<void> => {
@@ -414,7 +367,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
         const isWarm = imp.state === 'sleeping' && !options.stop;
 
-        // the snapshot is read here, under the lock, and again at the send
         if (isWarm || imp.state === 'stopped') {
           return writeSendMark(imp, options, isWarm);
         }
@@ -427,7 +379,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
           throw buildInvalidStateError(imp.state, ['stopped', 'sleeping'], 'move');
         }
 
-        // LEASED first, as imps.stop checks, then the halt
         await deps.imps.requireUnleased(imp, options.force);
 
         const stopped = await deps.imps.haltImp(imp);
@@ -499,7 +450,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
         };
       }
 
-      // a send a crash cut short starts over, with a new ticket
       if (imp.moveState === 'sending' && !tasks.has(imp.id) && ticket !== undefined) {
         startSend(
           imp,
@@ -537,7 +487,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       if (isMarked && peer !== null && ticket !== null) {
         const outcome = await withPeerError(() => sendMoveAbort(deps, imp, peer, ticket));
 
-        // the target committed: the copy here is the one to go
         if (outcome === 'committed') {
           await withPeerError(() => runCommit(imp, peer, ticket));
 
@@ -554,8 +503,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       return readStatusOf(after ?? imp);
     },
 
-    // in the background, so impd listens at once; a target that is down
-    // leaves its imp marked, with the error in its status
     recover: () => {
       recovery.last = runRecover();
 
@@ -565,14 +512,12 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   };
 }
 
-// a public imp's credential and DNS record belong to this host's domain
 function buildPublicError(name: string) {
   return new ORPCError('PRECONDITION_FAILED', {
     message: `${name} is public: run impz unexpose ${name} first, and impz expose on the target after the move`,
   });
 }
 
-// what the target or the network said, as the caller's error: never a bare 500
 async function withPeerError<T>(call: () => Promise<T>): Promise<T> {
   try {
     return await call();

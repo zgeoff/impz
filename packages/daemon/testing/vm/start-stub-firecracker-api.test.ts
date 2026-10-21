@@ -95,7 +95,6 @@ test('it never answers when wedged', async () => {
   const api = startStubFirecrackerApi(ctx.socket, { isWedged: true });
   const response = fetch('http://localhost/vm', { method: 'PATCH', unix: ctx.socket });
 
-  // runs after the stand-in's own stop, which cuts the request it still holds
   onTestFinished(() => {
     expect(response).rejects.toMatchObject({ code: 'ECONNRESET' });
   });
@@ -114,7 +113,6 @@ test('it stops when the test ends', () => {
 
   startStubFirecrackerApi(socket);
 
-  // runs after the stand-in's own stop
   onTestFinished(() => {
     expect(fetch('http://localhost/version', { unix: socket })).rejects.toMatchObject({
       code: 'FailedToOpenSocket',

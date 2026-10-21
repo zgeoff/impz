@@ -30,9 +30,6 @@ import { createLoginKeys } from './login-keys';
 import { DEFAULT_LIMITS, startSshGateway } from './ssh-gateway';
 import type { SshGatewayDeps } from './ssh-gateway';
 
-// The gateway on loopback over a stub impd and a real token store, with
-// authorized_keys in an owner-only temp dir. A test that sets its own limits
-// or login keys starts another gateway from `deps`.
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'imp-ssh-'));
 
@@ -55,8 +52,6 @@ async function setupTest() {
 
   const tokens = await loadTokenStore({
     db: database.db,
-
-    // the store needs a root secret to load
     rootToken: 'root-secret',
     now: Date.now,
     onRemove: revocations.revoke,
@@ -64,7 +59,6 @@ async function setupTest() {
   });
 
   const deps: SshGatewayDeps = {
-    // the gateway cannot start without a host key
     hostKey: generateEd25519Key().private,
     keys: createLoginKeys({
       findBound: tokens.findSshKey,
@@ -338,7 +332,6 @@ test('it refuses a password login', async () => {
   expect(login).rejects.toThrowWithMessage(Error, 'All configured authentication methods failed');
 });
 
-// the client offers a listed public key but signs with another private key
 test('it refuses a listed key whose signature does not verify', async () => {
   const ctx = await setupTest();
 
@@ -356,7 +349,7 @@ test('it refuses a listed key whose signature does not verify', async () => {
     throw new TypeError('a generated key did not parse');
   }
 
-  // ssh2 signs with the signer's private key and sends the listed blob
+  // ssh2 signs with the signer's private key and sends the listed blob.
   const forged = new Proxy(signer, {
     get: (target, property, receiver): unknown =>
       property === 'getPublicSSH'
@@ -422,7 +415,6 @@ test('it drops a connection at once past 32 pending logins by default', async ()
         socket.destroy();
       });
 
-      // the server's ident line shows the connection is pending
       socket.once('data', () => {
         greeted.resolve();
       });
@@ -477,8 +469,6 @@ test('it drops a client that does not log in within the auth timeout', async () 
 
   socket.on('error', () => {});
   socket.once('close', closed.resolve);
-
-  // reads the server's ident line, so the server's close reaches the socket
   socket.resume();
 
   await waitFor(() => {
@@ -527,7 +517,6 @@ test('it keeps a client that has not logged in while its auth timeout is pending
   expect(socket.destroyed).toBeFalse();
 });
 
-// every auth timeout pending fires, the second connection's included
 test('it frees the pending slot of a client that logs in, and keeps it past the auth timeout', async () => {
   const ctx = await setupTest();
 
@@ -612,7 +601,6 @@ test('it drops a connection at once while the pending logins are at the cap', as
     first.destroy();
   });
 
-  // the server's ident line shows the first connection is pending
   first.once('data', () => {
     greeted.resolve();
   });
@@ -654,8 +642,6 @@ test('it drops a connection after the cap of rejected logins', async () => {
 
   const key = generateEd25519Key();
   const closed = Promise.withResolvers<void>();
-
-  // each attempt the client would make, sent only when the test says so
   const attempts: (() => void)[] = [];
 
   const client = new Client();
@@ -669,8 +655,6 @@ test('it drops a connection after the cap of rejected logins', async () => {
   client.on('error', () => {});
   client.once('close', closed.resolve);
 
-  // a listed key for an imp that does not exist: each signed attempt costs
-  // the gateway one imp lookup, and is refused
   client.connect({
     host: '127.0.0.1',
     port: gateway.port,
@@ -746,12 +730,9 @@ test('it drops a logged-in client that stops answering keepalives', async () => 
     expect(ctx.ssh.tracker.count(imp.id, 'ssh')).toBe(0);
   });
 
-  // the client's keepalive answers went nowhere
   expect(proxy.readDropped()).toBeGreaterThan(0);
 });
 
-// the control for the drop above: the same keepalive limits, with a client
-// whose answers reach the gateway
 test('it keeps a logged-in client that answers keepalives', async () => {
   const ctx = await setupTest();
 
@@ -789,8 +770,6 @@ test('it keeps a logged-in client that answers keepalives', async () => {
 
   const loggedIn = proxy.readPassedChunks();
 
-  // a client that opens no channel sends only its keepalive answers; twice
-  // keepaliveCountMax answers outlast the drop above
   await waitFor(() => {
     expect(proxy.readPassedChunks() - loggedIn).toBeGreaterThanOrEqual(4);
   });
@@ -816,7 +795,6 @@ test('it wakes the imp once for a login that opens no channel', async () => {
     privateKey: key.private,
   });
 
-  // the client's end reaches the gateway after any wake the login started
   client.end();
 
   await waitFor(() => {
@@ -880,7 +858,6 @@ test('it records activity on the imp once a login woke it', async () => {
   expect(ctx.ssh.activity).toStrictEqual(['box']);
 });
 
-// the idle timeout counts from the end of the connection
 test('it records activity on the imp again when the client leaves', async () => {
   const ctx = await setupTest();
 
@@ -898,7 +875,6 @@ test('it records activity on the imp again when the client leaves', async () => 
     privateKey: key.private,
   });
 
-  // the wake's own record
   await waitFor(() => {
     expect(ctx.ssh.activity).toHaveLength(1);
   });
@@ -1081,8 +1057,6 @@ test('it passes a shell’s window change to the program', async () => {
   });
 });
 
-// a window change sent after the input reaches the gateway after it, so the
-// resize shows the gateway has read the held input
 test('it holds a shell’s input until the program drained what came before', async () => {
   const ctx = await setupTest();
 
@@ -1173,14 +1147,14 @@ test('it passes a shell’s signal to the program and its signal exit back', asy
 
   run.emit({ type: 'exit', code: 130, signal: 2 });
 
-  // the wire says INT; ssh2's client adds the SIG
+  // The wire says INT, and ssh2's client adds the SIG.
   const result = await opened.result;
 
   expect(result.signal).toBe('SIGINT');
 });
 
-// OpenSSH sends 0x0 when its own stdin is not a terminal (`ssh -tt` in a
-// script); the agent then picks its default size
+// OpenSSH sends 0x0 when its own stdin is not a terminal, as with `ssh -tt`
+// in a script.
 test('it leaves the size of a pty with no size to the agent', async () => {
   const ctx = await setupTest();
 
@@ -1215,8 +1189,8 @@ test('it leaves the size of a pty with no size to the agent', async () => {
   expect(run.request.rows).toBeUndefined();
 });
 
-// ssh2's client fails the exec on a refused env request, so a refused name
-// is in the e2e suite, where OpenSSH ignores the refusal as it should
+// ssh2's client fails the exec on a refused env request, so a refused name is
+// tested end to end, where OpenSSH ignores the refusal as it should.
 test('it passes LANG and LC_* to the program’s env', async () => {
   const ctx = await setupTest();
 
@@ -1343,7 +1317,6 @@ test('it carries several channels on one connection at once', async () => {
     expect(ctx.ssh.execs).toHaveLength(3);
   });
 
-  // each program prints its own command, once all three run
   for (const run of ctx.ssh.execs) {
     run.emit({ type: 'stdout', data: new TextEncoder().encode(run.request.argv[2] ?? '') });
     run.emit({ type: 'exit', code: 0, signal: 0 });
@@ -1409,7 +1382,6 @@ test('it relays a forward both ways, with a half-close from each side', async ()
     client.forwardOut('127.0.0.1', 50_000, 'localhost', 8080, done);
   });
 
-  // the stub dial answers only after the client's half-close
   opened.channel.end('request');
 
   const result = await opened.result;
@@ -1438,7 +1410,7 @@ test('it prohibits a forward to a host other than the guest’s loopback', async
     client.forwardOut('127.0.0.1', 50_000, imp.ip, 22, done);
   });
 
-  // RFC 4254 5.1: administratively prohibited
+  // RFC 4254 5.1: administratively prohibited.
   expect(forward).rejects.toMatchObject({ reason: 1 });
   expect(ctx.ssh.dials).toStrictEqual([]);
 });
@@ -1466,7 +1438,7 @@ test('it fails the open of a forward whose dial is refused as connect failed', a
     client.forwardOut('127.0.0.1', 50_000, 'localhost', 9, done);
   });
 
-  // RFC 4254 5.1: connect failed
+  // RFC 4254 5.1: connect failed.
   expect(forward).rejects.toMatchObject({ reason: 2 });
 });
 
@@ -1573,7 +1545,7 @@ test('it logs in a key added to authorized_keys on the next login, without a res
     }),
   ]);
 
-  // an explicit new mtime, whatever the filesystem's clock granularity
+  // An explicit new mtime, whatever the filesystem's clock granularity.
   const later = new Date(Date.now() + 60_000);
 
   writeFileSync(ctx.keysPath, `${key.public}\n`, { mode: 0o600 });
@@ -1994,7 +1966,6 @@ test('it gives a session in a new VM, after a wake, a new agent socket at once',
 
   await first.result;
 
-  // a new VM; the old listener has not ended yet, as when impd learns of it late
   ctx.ssh.putImp({ ...imp, pid: (imp.pid ?? 0) + 1 });
 
   const second = await openSshChannel((done) => {
@@ -2010,7 +1981,7 @@ test('it gives a session in a new VM, after a wake, a new agent socket at once',
   );
 });
 
-// ssh2 refuses the agent channel when it cannot reach its agent
+// ssh2 refuses the agent channel when it cannot reach its agent.
 test('it closes a guest agent client at once when the client refuses the agent channel', async () => {
   const ctx = await setupTest();
 
@@ -2089,7 +2060,6 @@ test('it closes the guest agent clients past the cap of agent channels', async (
 
   invariant(listener);
 
-  // fills the cap with held channels, then one more
   for (let id = 1; id <= MAX_AGENT_CHANNELS; id += 1) {
     listener.connect(id);
   }
@@ -2235,8 +2205,6 @@ test('it tries the agent socket again for the next session after any failure', a
   expect(result.stderr).toBe('imp: no agent forwarding: INTERNAL: unknown user "dev"\n');
 });
 
-// keys bound to tokens (docs/guides/ssh.md#keys-bound-to-tokens)
-
 test('it logs a key bound to a token in to its imps, as the token', async () => {
   const ctx = await setupTest();
 
@@ -2356,7 +2324,6 @@ test('it refuses a key once its binding is removed after its file line was', asy
 
   await ctx.tokens.create({ name: 'dev', scope: 'exec', imps: ['dev-*'] });
 
-  // the file held the key once; the binding comes after its line goes
   const removed = new Date(Date.now() + 60_000);
 
   writeFileSync(ctx.keysPath, '', { mode: 0o600 });
@@ -2364,7 +2331,6 @@ test('it refuses a key once its binding is removed after its file line was', asy
 
   const added = await ctx.tokens.addKey('dev', key.public);
 
-  // the binding alone logs the key in to its imp
   const bound = await openSshClient({
     host: '127.0.0.1',
     port: ctx.gateway.port,
@@ -2422,7 +2388,6 @@ test('it refuses a key whose binding was removed', async () => {
 test('it refuses a key from authorized_keys when the file is off', async () => {
   const ctx = await setupTest();
 
-  // as IMP_SSH_AUTHORIZED_KEYS=false
   const gateway = await startSshGateway(
     { ...ctx.deps, keys: createLoginKeys({ findBound: ctx.tokens.findSshKey, file: null }) },
     0,
@@ -2451,7 +2416,6 @@ test('it refuses a key from authorized_keys when the file is off', async () => {
 test('it logs a bound key in while authorized_keys is off', async () => {
   const ctx = await setupTest();
 
-  // as IMP_SSH_AUTHORIZED_KEYS=false
   const gateway = await startSshGateway(
     { ...ctx.deps, keys: createLoginKeys({ findBound: ctx.tokens.findSshKey, file: null }) },
     0,
@@ -2569,8 +2533,6 @@ test('it ends a live ssh connection when its bound key is removed', async () => 
   expect(closed.promise).resolves.toBeUndefined();
 });
 
-// the removal lands after the key was found, before the connection watches
-// for it
 test('it ends at once a login whose key was removed as it logged in', async () => {
   const ctx = await setupTest();
 
@@ -2631,11 +2593,7 @@ test('it listens for ssh -R 0 on the guest loopback at the port the agent picks'
   });
 
   expect(ctx.ssh.listeners[0]?.spec).toStrictEqual({ network: 'tcp', port: 0 });
-
-  // a remote forward's listener keeps no imp awake on its own
   expect(ctx.ssh.listeners[0]?.kind).toBeNull();
-
-  // the stub agent picks 40000 plus its listener count
   expect(bound).toBe(40_001);
 });
 
@@ -2688,7 +2646,7 @@ test('it relays each guest client of ssh -R back to the client', async () => {
     expect(accept.input.join('')).toBe('back:hello');
   });
 
-  // the client matches the channel to its forward by the address it asked
+  // The client matches the channel to its forward by the address it asked for.
   expect(reached).toStrictEqual([':40001']);
 });
 

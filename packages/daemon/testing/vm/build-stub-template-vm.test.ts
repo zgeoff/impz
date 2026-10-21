@@ -11,7 +11,6 @@ async function setupTest() {
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  // a host with 1 TiB free, so no build meets this machine's disk
   const diskBudget = createDiskBudget({
     storage: { readUsage: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }) },
     reserveBytes: null,

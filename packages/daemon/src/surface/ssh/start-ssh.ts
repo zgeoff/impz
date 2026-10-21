@@ -16,8 +16,6 @@ import type { SshGateway } from './ssh-gateway';
 interface StartSshDeps {
   readonly config: Pick<Config, 'dataDir' | 'sshPort' | 'sshAuthorizedKeys'>;
   readonly db: ImpDatabase;
-
-  // <data>/ssh/authorized_keys (createAuthorizedKeys)
   readonly authorizedKeys: AuthorizedKeys;
   readonly tokens: Pick<TokenStore, 'findSshKey'>;
   readonly revocations: Pick<Revocations, 'readSignal'>;
@@ -36,13 +34,10 @@ interface StartSshDeps {
   readonly now: () => number;
 }
 
-// every interface of the container's own network namespace: the tailnet
-// (tailscale0) and the published port for local use. IPv4 only, see
-// startSshGateway.
+// Every interface of the container's own network namespace, so both the
+// tailnet (tailscale0) and the published port for local use reach the gateway.
 const LISTEN_HOST = '0.0.0.0';
 
-// The SSH gateway, unless IMP_SSH_PORT=0 turns it off. A gateway that cannot
-// start is logged, not fatal: the API and the proxy still serve.
 export async function startSsh(deps: StartSshDeps): Promise<SshGateway | null> {
   const port = deps.config.sshPort;
 
@@ -67,9 +62,6 @@ export async function startSsh(deps: StartSshDeps): Promise<SshGateway | null> {
         backend: {
           requireRunning: imps.requireRunning,
           tracker: imps.tracker,
-
-          // each shell, command or sftp an ssh login opens is audited,
-          // as who logged in
           openExec: (name, request, feature, actor) =>
             withAuditedOpen(
               deps.audit,

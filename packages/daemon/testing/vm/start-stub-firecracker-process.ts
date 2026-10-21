@@ -2,8 +2,6 @@ import { onTestFinished } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { waitFor } from '@impz/test-utils/wait-for';
 
-// A process whose /proc cmdline reads `firecracker ... --api-sock <socket>`,
-// as a real one's does; it serves nothing. It is killed when the test ends.
 export async function startStubFirecrackerProcess(apiSocket: string) {
   const child = Bun.spawn([
     'bash',

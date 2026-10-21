@@ -1,11 +1,7 @@
 import type { StubEngineAnswer } from './start-stub-docker-engine';
 
 export interface StubTracedBuildOptions {
-  // the ID the build ends with
   readonly imageId: string;
-
-  // the build holds after its trace until this settles; it ends at once
-  // without one
   readonly hold?: Promise<void>;
 }
 
@@ -17,9 +13,6 @@ const RECORDED_TRACE = [
   'GngKR3NoYTI1NjozOGJkY2I5ZWM3MjViMDkwMWI2ZTllZGU5ZTE2ZjFjMjYwMWIyZjg1M2MxYzc3NDkwZDRhMzY5YWU2Mjk0Njg4EgwIkOvA1gYQ0uirpQIYASIdY29tcGlsaW5nIHdpZGdldApzZWNvbmQgbGluZQo=',
 ];
 
-// The engine's answer to POST /build as a real build streams it: the
-// recorded trace of a RUN step, then the image ID. Any other request goes
-// to the stub engine's defaults.
 export function buildStubTracedBuild(options: Readonly<StubTracedBuildOptions>): StubEngineAnswer {
   const encoder = new TextEncoder();
 

@@ -138,7 +138,6 @@ test('it prints the inspect of each of many parallel calls for one image', async
     images: [{ refs: ['shared:1', 'shared:2'], inspects: [{ Id: 'sha256:1' }] }],
   });
 
-  // parallel builds inspect one image at once, through either of its refs
   const results = await Promise.all(
     Array.from({ length: 100 }, (_, call) =>
       runCommand(

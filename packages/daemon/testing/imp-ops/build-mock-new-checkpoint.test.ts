@@ -2,7 +2,6 @@ import { expect, test } from 'bun:test';
 import { buildMockNewCheckpoint } from './build-mock-new-checkpoint';
 
 test('it builds a default new checkpoint', () => {
-  // no diskBytes or createdAt, so createCheckpoint's own defaults apply
   expect(buildMockNewCheckpoint()).toStrictEqual({
     id: expect.toSatisfy((id: string) => /^[a-z0-9]{12}$/v.test(id)),
     impId: expect.toBeString(),

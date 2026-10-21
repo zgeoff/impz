@@ -36,21 +36,15 @@ const EnvSchema = z.object({
   IMP_API_PORT: PortSchema.default(7070),
   IMP_PROXY_PORT: PortSchema.default(7080),
   IMP_PORT_BASE: PortSchema.default(20_000),
-
-  // 0 turns the SSH gateway off
   IMP_SSH_PORT: z.coerce.number().pipe(z.int().min(0).max(65_535)).default(22),
-
-  // false: <data>/ssh/authorized_keys logs nobody in; only keys bound to
-  // tokens do
   IMP_SSH_AUTHORIZED_KEYS: z.enum(['true', 'false']).default('true'),
   IMP_BROKER_PORT: PortSchema.default(7081),
   IMP_BROKER_TEST_UPSTREAMS: z.string().optional(),
   IMP_EGRESS_DNS_PORT: PortSchema.default(7053),
-
-  // more ranges no public imp reaches. The unit and the NixOS module fill
-  // IMP_HOST_ADDRESSES at each start from `ip -o addr`, prefixes kept: the
-  // Docker host's networks, which impd cannot see from its container.
   IMP_EGRESS_DENY: z.string().default(''),
+
+  // The unit and the NixOS module fill this at each start from `ip -o addr`, because the
+  // Docker host's networks are invisible from impd's container.
   IMP_HOST_ADDRESSES: z.string().default(''),
   IMP_RAM_BUDGET_MIB: CountSchema.default(16_384),
   IMP_IDLE_TIMEOUT_S: CountSchema.default(60),
@@ -58,8 +52,6 @@ const EnvSchema = z.object({
   IMP_BOOT_RESERVE_PERCENT: CountSchema.pipe(z.int().max(100)).default(50),
   IMP_WAKE_RESERVE_MIB: CountSchema.default(256),
   IMP_SLEEP_MIN_GUEST_UPTIME_MS: z.coerce.number().pipe(z.int().nonnegative()).default(1500),
-
-  // false: every create boots cold, with no boot template
   IMP_BOOT_TEMPLATES: z.enum(['true', 'false']).default('true'),
   IMP_WATCHDOG_TIMEOUT_S: CountSchema.default(60),
   IMP_WATCHDOG_ACTION: z.enum(['report', 'restart', 'snapshot']).default('report'),
@@ -68,9 +60,6 @@ const EnvSchema = z.object({
   IMP_DEFAULT_DISK_GIB: CountSchema.default(32),
   IMP_DISK_RESERVE_GIB: CountSchema.optional(),
   IMP_BUILD_CONTEXT_MAX_MIB: CountSchema.default(1024),
-
-  // where an image build runs (docs/guides/images.md#isolated-builds): in a
-  // builder imp, or on the host's engine, for one release only
   IMP_BUILD_ISOLATION: z.enum(['imp', 'host']).default('imp'),
   IMP_BUILD_MEMORY_MIB: CountSchema.default(2048),
   IMP_BUILD_DISK_GIB: CountSchema.default(20),
@@ -80,27 +69,18 @@ const EnvSchema = z.object({
     .string()
     .regex(BUILD_IMAGE_PATTERN, 'must name an image by digest, <ref>@sha256:<hex>')
     .default(DEFAULT_BUILD_IMAGE),
-
-  // session logs (docs/guides/session-logs.md): per generation, per imp,
-  // and how long an ended generation's log stays
   IMP_SESSION_LOG_MAX_MIB: CountSchema.default(16),
   IMP_SESSION_LOG_IMP_MAX_MIB: CountSchema.default(64),
   IMP_SESSION_LOG_IMP_MAX_LIVE: CountSchema.default(8),
   IMP_SESSION_LOG_MAX_AGE_DAYS: CountSchema.default(7),
-
-  // the engine, as the docker CLI reads it; impd's own builds go there too
   DOCKER_HOST: z.string().optional(),
   IMP_KSM: z.enum(['0', '1']).default('0'),
   IMP_KSM_EXEC: z.string().default('ksm-exec'),
-
-  // read only with IMP_KSM=1
   IMP_KSM_HEADROOM_PERCENT: z.string().default('100'),
   IMP_DNS: z.string().default('1.1.1.1,8.8.8.8').transform(splitList).pipe(DnsServersSchema),
   IMP_SUBNET: z.cidrv4().default('10.66.0.0/16'),
   IMP_SUBNET6: z.string().default('auto'),
   IMP_FIRECRACKER_BIN: z.string().default('firecracker'),
-
-  // false runs Firecracker without the jailer, as root in the host container
   IMP_JAILER: z.enum(['true', 'false']).default('true'),
   IMP_JAILER_BIN: z.string().default('jailer'),
   IMP_KERNEL: z.string().optional(),
@@ -108,17 +88,12 @@ const EnvSchema = z.object({
   IMP_DEFAULT_IMAGE: z.string().default('base'),
   IMP_STORAGE_BACKEND: z.enum(['xfs', 'zfs']).default('xfs'),
   IMP_ZFS_ROOT: z.string().optional(),
-
-  // 1 starts on a zfs module with the zfs_uiomove bug (docs/architecture/host.md)
   IMP_ZFS_ALLOW_UIOMOVE_BUG: z.enum(['0', '1']).default('0'),
   TAILSCALE_AUTHKEY: z.string().optional(),
   IMP_TAILSCALE_NODE: z.literal('1').optional(),
   IMP_TAILSCALE_HOSTNAME: z.string().default('imp'),
   IMP_DASHBOARD_DIR: z.string().optional(),
   IMP_TAILNET_IDENTITIES: z.string().optional(),
-
-  // moves between hosts (docs/guides/hosts.md#moves): the URL a source
-  // reaches this host's API at, and an e2e host's extra range off the tailnet
   IMP_PEER_URL: z.url().optional(),
   IMP_MOVE_TEST_CIDR: z.cidrv4().optional(),
   ...HttpsEnvSchema.shape,
@@ -126,30 +101,20 @@ const EnvSchema = z.object({
   ...PublicMcpEnvSchema.shape,
 });
 
-// the settings the host container's network setup reads, with impd's defaults; `impd
-// --network-env` parses only these, since the rest may need the tailnet it has not joined yet
+// `impd --network-env` runs before the host joins the tailnet, so it parses only these
+// settings: the rest may need the tailnet.
 export const NetworkEnvSchema = EnvSchema.pick({
   IMP_SUBNET: true,
   IMP_BROKER_PORT: true,
   IMP_EGRESS_DNS_PORT: true,
 });
 
-// image builds (docs/guides/images.md#isolated-builds)
 interface BuildConfig {
-  // `host` builds on the host's engine, which the build can reach the
-  // host from; impd warns at start and at each build
   readonly isolation: 'imp' | 'host';
-
-  // each builder imp's memory and disk
   readonly memoryMib: number;
   readonly diskBytes: number;
-
-  // the largest filesystem a build's export may stream out, and the most
-  // entries it may hold
   readonly imageMaxBytes: number;
   readonly imageMaxFiles: number;
-
-  // the builders' image, by digest
   readonly image: string;
 }
 
@@ -158,157 +123,70 @@ export interface Config {
   readonly apiPort: number;
   readonly proxyPort: number;
   readonly portBase: number;
-
-  // the SSH gateway's port, or null when it is off
   readonly sshPort: number | null;
-
-  // whether a key in <data>/ssh/authorized_keys logs in
   readonly sshAuthorizedKeys: boolean;
-
-  // the credential broker's port on every guest's gateway address
   readonly brokerPort: number;
-
-  // the egress resolver's port on every guest's gateway address; box and
-  // none imps reach it through a redirect of port 53
   readonly egressDnsPort: number;
-
-  // what a public imp never reaches besides the private ranges and the host
-  // container's networks: IMP_EGRESS_DENY, IMP_HOST_ADDRESSES and
-  // IMP_PUBLIC_IP, canonical CIDRs of both families
   readonly egressDeny: readonly string[];
-
-  // IMP_HOST_ADDRESSES's networks alone, empty where nothing filled it
   readonly hostAddresses: readonly string[];
-
-  // tests only: a file of fake upstreams for granted hosts
-  // (broker/create-upstream-resolver.ts)
   readonly brokerTestUpstreams: string | null;
   readonly ramBudgetMib: number;
   readonly idleTimeoutS: number;
 
-  // Firecracker CPU (percent of one core) above which an imp counts as busy
+  // percent of one core, so a VM with several vCPUs can exceed 100
   readonly idleCpuPercent: number;
-
-  // the RAM the governor reserves before a cold boot, as a percentage of the
-  // imp's memory, and the least it reserves before a wake
-  // (docs/architecture/lifecycle/ram-governor.md#admission)
   readonly bootReservePercent: number;
   readonly wakeReserveMib: number;
 
-  // a sleep waits until the guest has been up this long, so the next wake
-  // gets its clock back (docs/architecture/lifecycle/sleep-and-wake.md#young-guests);
-  // 0 turns the wait off
+  // a guest slept too young loses its clock on the next wake
   readonly sleepMinGuestUptimeMs: number;
-
-  // a cold boot restores a boot template of its shape when there is one
-  // (docs/architecture/lifecycle/boot-templates.md)
   readonly bootTemplates: boolean;
-
-  // how long an agent may stay silent before the watchdog acts, and what it
-  // does then (docs/architecture/lifecycle/lifecycle.md#the-watchdog)
   readonly watchdogTimeoutS: number;
   readonly watchdogAction: WatchdogAction;
   readonly defaultVcpus: number;
   readonly defaultMemoryMib: number;
-
-  // the disk an imp gets when `imps.create` names no size
   readonly defaultDiskBytes: number;
-
-  // free space no write may take; null is max(5 GiB, 5 % of the filesystem)
   readonly diskReserveBytes: number | null;
-
-  // the largest build context a client may upload to IMAGE_BUILD_PATH
   readonly buildContextMaxBytes: number;
   readonly build: BuildConfig;
-
-  // the bounds of session logs (docs/guides/session-logs.md)
   readonly sessionLog: SessionLogLimits;
-
-  // DOCKER_HOST, where impd sends its image builds: imp-docker-proxy's
-  // socket on imp-host (docs/architecture/host.md#the-docker-socket)
   readonly dockerHost: string | null;
   readonly dns: readonly string[];
   readonly subnet: Subnet;
-
-  // IPv6 for imps (docs/architecture/network/networking.md#ipv6); impd resolves
-  // `auto` at start
   readonly ipv6: Ipv6Setting;
   readonly firecrackerBin: string;
-
-  // the jailer (docs/architecture/isolation.md#the-jailer); null with
-  // IMP_JAILER=false
   readonly jailerBin: string | null;
-
-  // <dataDir>/jail, where the jailer makes firecracker/<id>/root; impd
-  // cleans it up after a jailed VM even with the jailer off
   readonly jailDir: string;
-
-  // KSM merges identical guest pages (docs/architecture/lifecycle/ram-governor.md#ksm);
-  // null when IMP_KSM is off. Firecracker starts through `execBin`, and the
-  // governor keeps `headroomPercent` of KSM's saving free.
   readonly ksm: { readonly execBin: string; readonly headroomPercent: number } | null;
   readonly kernelPath: string;
 
-  // where impd copies the kernel and the system drive from on start, so a
-  // rebuild never changes a file a running VM has open; without
-  // IMP_SYSTEM_DRIVE, the drive is the one in <dataDir>/system
+  // impd copies the kernel and system drive in on start, so a rebuild never changes a
+  // file that a running VM has open
   readonly kernelSource: string | null;
   readonly systemDriveSource: string;
-
-  // the image `imps.create` uses when none is named; `ubuntu` stands in until
-  // one by this name exists
   readonly defaultImage: string;
-
-  // where disks live (docs/architecture/storage/storage.md); with zfs, zfsRoot is the
-  // dataset mounted on dataDir, such as tank/imp
   readonly storageBackend: StorageBackendKind;
   readonly zfsRoot: string | null;
-
-  // with zfs, start on a module with the zfs_uiomove bug instead of refusing it
   readonly isUiomoveBugAllowed: boolean;
 
-  // the host container is a tailnet node: it has a key, or the entrypoint
-  // started tailscaled from saved node state (IMP_TAILSCALE_NODE=1) after
-  // deploy/bootstrap.sh blanked the spent key
+  // a node with no key is still on the tailnet when the entrypoint started tailscaled from
+  // saved node state after bootstrap blanked the spent key
   readonly tailscaleEnabled: boolean;
 
-  // the tailnet hostname impd asks for; per-imp URLs use the name the node
-  // got (http://<name>:<tailnetPort>), which differs while an older node holds it
+  // Tailscale gives the node another name while an older node holds this one
   readonly tailscaleHostname: string;
-
-  // rules that give tailnet peers a scope (docs/guides/tokens.md); null
-  // when IMP_TAILNET_IDENTITIES is unset, and a peer then needs a token
   readonly tailnetRules: readonly TailnetRule[] | null;
-
-  // the web dashboard's built files (packages/dashboard/dist), served at /;
-  // null serves a note that this impd has none
   readonly dashboardDir: string | null;
-
-  // off-host backups with restic; null when IMP_BACKUP_REPOSITORY is unset
   readonly backup: BackupConfig | null;
-
-  // imps at https://<name>.<domain> (docs/guides/https.md); null without
-  // IMP_DOMAIN
   readonly https: HttpsConfig | null;
-
-  // the public MCP route behind OAuth; null when it is off
   readonly publicMcp: PublicMcpConfig | null;
-
-  // each imp's own name on the tailnet, as a Tailscale Service
-  // (docs/guides/tailscale.md#per-imp-names); null unless IMP_TAILNET_NAMES=1
   readonly tailnetNames: TailnetNamesConfig | null;
-
-  // moves between hosts: null peerUrl uses the tailnet IP and the API port;
-  // testCidr, only on an e2e host, opens moves to one range off the tailnet
   readonly moves: { readonly peerUrl: string | null; readonly testCidr: string | null };
-
-  // settings that start impd but are likely a mistake; main logs them
   readonly warnings: readonly string[];
 }
 
-// IPv4 and IPv6 addresses and CIDRs, each as its canonical CIDR. A host
-// address keeps its prefix: the host's LAN (a global /64, a VPS's public
-// subnet) is in none of imp-host's own netns's connected prefixes.
+// A host address keeps its prefix: the host's LAN (a global /64, a VPS's public subnet)
+// is in none of imp-host's own netns's connected prefixes.
 function parseCidrList(value: string): string[] {
   return splitList(value)
     .filter((entry) => entry !== '')
@@ -329,16 +207,14 @@ function splitList(value: string): string[] {
   return value.split(',').map((item) => item.trim());
 }
 
-// RFC 1918: a test range never opens moves to the internet
 const PRIVATE_V4 = new BlockList();
 
 PRIVATE_V4.addSubnet('10.0.0.0', 8, 'ipv4');
 PRIVATE_V4.addSubnet('172.16.0.0', 12, 'ipv4');
 PRIVATE_V4.addSubnet('192.168.0.0', 16, 'ipv4');
 
-// Neither setting may open moves off the tailnet outside an e2e host: the
-// test range needs IMP_E2E=1, and the peer URL names a literal address in
-// the ranges a source sends to, so a source never refuses it late.
+// The peer URL is checked against the ranges a source sends to here, so a source never
+// refuses it late.
 function checkMoveSettings(
   testCidr: string | undefined,
   peerUrl: string | undefined,

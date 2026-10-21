@@ -13,8 +13,6 @@ import type { MemoryController } from './vm/memory/memory-controller';
 import type { DiskUsageCache } from './vm/storage/disk-usage-cache';
 import type { StorageGcService } from './vm/storage/storage-gc';
 
-// What impd runs on a timer, each part as createImpd started it; null for a
-// part the config leaves off
 export interface ImpdTickerParts {
   readonly idle: Pick<IdleLoop, 'runCheck'>;
   readonly oauth: { readonly removeExpired: () => Promise<void> };
@@ -29,8 +27,6 @@ export interface ImpdTickerParts {
   readonly backups: Pick<BackupService, 'runScheduled'> | null;
 }
 
-// Every ticker impd runs, each labelled for the timer that steps it, and
-// the first disk usage pass soon after start, not a ticker interval later
 export function startImpdTickers(
   config: Config,
   parts: Readonly<ImpdTickerParts>,
@@ -47,25 +43,15 @@ export function startImpdTickers(
     start('governor', ENFORCE_INTERVAL_MS, parts.governor.enforce),
     start('resources', 5000, parts.imps.sampleResources),
     start('session-logs', 60_000, parts.imps.sweepSessionLogs),
-
-    // elastic guests grow within a second of running low
     start('memory', 500, parts.memory.runTick),
-
-    // listeners follow creates and destroys; this catches anything missed
     start('proxy', 30_000, parts.proxy.syncListeners),
-
-    // names follow creates and destroys; this repairs what failed
     ...(parts.tailnetNames === null
       ? []
       : [start('tailnet-names', 600_000, parts.tailnetNames.runSync)]),
-
-    // terminators follow grants; this also renews leaves near their end
     start('broker', 60_000, parts.broker.applyGrants),
-
-    // what a crash or a failed removal left; start sweeps the same way
     start('gc', 3_600_000, parts.gc.runScheduled),
 
-    // FIEMAP over every file on XFS: often enough for `impz ls`
+    // a pass runs FIEMAP over every file on XFS, so it runs rarely
     start('disk-usage', 300_000, parts.diskUsage.runPass),
     ...(parts.backups === null
       ? []
@@ -73,8 +59,8 @@ export function startImpdTickers(
           start(
             'backup',
 
-            // a run is due by the time since the last one, so a restart
-            // never puts it off by a whole interval
+            // a run falls due by the time since the last one, so a short tick keeps a restart
+            // from putting it off by a whole interval
             Math.min(config.backup?.intervalS ?? 0, 300) * 1000,
             parts.backups.runScheduled,
           ),

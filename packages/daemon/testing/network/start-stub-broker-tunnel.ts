@@ -2,17 +2,10 @@ import { createConnection } from 'node:net';
 
 interface StubTunnelOptions {
   readonly proxyPort: number;
-
-  // the guest's own address: a loopback one stands for a slot's guest
   readonly address: string;
-
-  // host:port, as the CONNECT line names it
   readonly target: string;
 }
 
-// A guest's CONNECT through the front port, open until the caller's stack
-// releases it: the head waits for `sendHead`, `established` settles on the broker's
-// answer (200 or not), and `closed` resolves when either end ends it.
 export async function startStubBrokerTunnel(
   stack: Readonly<AsyncDisposableStack>,
   options: Readonly<StubTunnelOptions>,

@@ -1,9 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// The ksm-exec merge wrapper as an executable in `dir`: it records the
-// command it was asked to exec, one argument a line, then fails as an exec
-// that never started would.
 export function createStubKsmExec(directory: string) {
   const path = join(directory, 'ksm-exec');
   const recorded = join(directory, 'ksm-exec.argv');

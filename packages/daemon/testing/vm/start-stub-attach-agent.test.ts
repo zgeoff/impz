@@ -9,8 +9,6 @@ import { openAttachStream } from '../../src/vm/agent-client/exec-stream';
 import { FRAME_TYPES, encodeJsonFrame } from '../../src/vm/agent-client/frame-codec';
 import { startStubAttachAgent } from './start-stub-attach-agent';
 
-// a temp dir for the agent's socket, and `stack`, whose releases (the
-// agent's and the streams') run before the dir goes
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 

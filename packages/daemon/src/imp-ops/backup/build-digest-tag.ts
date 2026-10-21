@@ -1,9 +1,8 @@
 import { toDigestHex } from '../../vm/storage/data-layout';
 
-// Eight characters that tell images apart: a docker ID's first, a template's
-// last, since its uuidv7 starts with the time (docs/guides/templates.md)
 export function buildDigestTag(digest: string): string {
   if (digest.startsWith('imp-')) {
+    // A uuidv7 starts with the time, so its last characters tell templates apart.
     return digest.replaceAll('-', '').slice(-8);
   }
 

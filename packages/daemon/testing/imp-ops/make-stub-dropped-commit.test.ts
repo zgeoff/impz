@@ -3,7 +3,6 @@ import { MOVE_PATHS } from '../../src/imp-ops/moves/move-header';
 import { TARGET_URL, setupMoveHosts } from './create-move-hosts';
 import { makeStubDroppedCommit } from './make-stub-dropped-commit';
 
-// the hosts a hook is handed; the stub reads none of them
 function setupTest() {
   return setupMoveHosts();
 }

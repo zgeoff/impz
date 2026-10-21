@@ -36,7 +36,6 @@ test('#readWarmHost reports the identity, the config and the storage a warm move
     storage: 'zfs',
     subnet: '10.66.0.0/24',
 
-    // a /24 holds 256 addresses, four to a slot
     slotCount: 64,
     brokerPort: 7081,
     dns: ['1.1.1.1', '8.8.8.8'],

@@ -4,13 +4,9 @@ import { createZfsBackend } from '../../src/vm/storage/zfs/zfs-backend';
 import { buildStubZfs } from './build-stub-zfs';
 import type { StubZfs } from './build-stub-zfs';
 
-// An impd's ZFS storage on buildStubZfs's pool under `root`, with the kernel
-// module at `moduleVersion`. The stub pool keeps no file data, so the backend
-// writes a disk file wherever a clone or a received stream would have left one.
 export function buildStubZfsStorage(
   root: string,
 
-  // isUiomoveBugAllowed sets IMP_ZFS_ALLOW_UIOMOVE_BUG=1
   options: Readonly<{ moduleVersion?: string; isUiomoveBugAllowed?: boolean }> = {},
 ) {
   const moduleVersion = options.moduleVersion ?? '2.4.4';
@@ -57,7 +53,6 @@ export function buildStubZfsStorage(
     };
   };
 
-  // the pool, once the harness made the storage
   const readPool = (): StubZfs => {
     if (made.pool === null) {
       throw new Error('no pool: the storage was never made');

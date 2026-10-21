@@ -20,7 +20,6 @@ test('it answers no for a command that does not exist', () => {
   expect(probeUnshare(['imp-no-such-command'])).toBeFalse();
 });
 
-// the namespace this machine allows, asked of unshare directly
 test.skipIf(Bun.spawnSync(['unshare', '-rn', 'true']).exitCode !== 0)(
   'it answers yes for a command that succeeds in the namespace',
   () => {

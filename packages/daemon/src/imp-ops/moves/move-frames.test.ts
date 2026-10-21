@@ -229,7 +229,6 @@ test('#encodeCommand stops the command when the stream is given up after its out
   await frames.next();
   await frames.return();
 
-  // `yes` never ends by itself: done settles only because the stop killed it
   await expect(command.done).toResolve();
 });
 

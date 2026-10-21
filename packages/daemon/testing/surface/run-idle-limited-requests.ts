@@ -1,6 +1,3 @@
-// A child Bun's calls under its BUN_CONFIG_HTTP_IDLE_TIMEOUT: `/control` by
-// plain fetch, the rest by `via` (sendLongRequest, impd's wake proxy, or
-// imp-docker-proxy's pull and export). Each outcome is a JSON line.
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +10,6 @@ import { startWakeProxy } from '../../src/network/proxy/wake-proxy';
 import { openDatabase } from '../../src/platform/db/open-database';
 import { sendLongRequest } from '../../src/platform/process/send-long-request';
 
-// an HTTP origin, or the engine's unix socket for imp-docker-proxy
 const ArgsSchema = z.discriminatedUnion('via', [
   z.object({ via: z.enum(['long-request', 'wake-proxy']), origin: z.url() }),
   z.object({ via: z.literal('docker-proxy'), socket: z.string() }),
@@ -41,7 +37,6 @@ async function runCall(kind: string, send: () => Promise<Response>): Promise<voi
   }
 }
 
-// the wake proxy's own listener, its route impd's API at `origin`
 async function startProxy(stack: Readonly<AsyncDisposableStack>, origin: string): Promise<string> {
   const dataDir = await mkdtemp(join(tmpdir(), 'idle-limited-proxy-'));
 
@@ -84,14 +79,13 @@ async function startProxy(stack: Readonly<AsyncDisposableStack>, origin: string)
   return `http://127.0.0.1:${String(listener.port)}`;
 }
 
-// imp-docker-proxy's pull and export, to the engine at `socket`
 function makeDockerProxyCalls(socket: string): [string, () => Promise<Response>][] {
   const proxy = createDockerProxy({
     upstreamSocket: socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
 
-    // host isolation: the proxy lets pulls through
+    // no builder image puts the proxy in host isolation, which lets pulls through
     builderImage: null,
     buildContextMaxBytes: 1024 ** 2,
     log: () => {},

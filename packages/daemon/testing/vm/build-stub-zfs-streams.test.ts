@@ -196,7 +196,6 @@ test('#buildStubZfs receives nothing from a stream that ends before its end reco
 test('#buildStubZfs commits a receive once the end record is in, though the input fails after', () => {
   const target = buildStubZfs({ root: 'cold/imp', rootDir: '/mnt/cold' });
 
-  // the end record is in the first chunk; the next read fails
   const input = new ReadableStream<Uint8Array>({
     start: (controller) => {
       controller.enqueue(new TextEncoder().encode('{"guid":"0199a","baseGuid":null}'));

@@ -3,9 +3,6 @@ import type { CpuSettings, ImpRecord } from '../../src/platform/db/imps';
 
 type ImpRecordOverrides = Partial<Omit<ImpRecord, 'cpu'>> & { readonly cpu?: Partial<CpuSettings> };
 
-// An imp as the imps table reads it: a running user imp with no lease, no
-// move and no pending work; its names, sizes and times arbitrary. It grows to
-// its own memory unless maxMemoryMib says otherwise.
 export function buildMockImpRecord(overrides: ImpRecordOverrides = {}): ImpRecord {
   const { cpu, ...rest } = overrides;
   const memoryMib = rest.memoryMib ?? faker.number.int({ min: 256, max: 8192 });

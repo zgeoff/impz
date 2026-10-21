@@ -4,9 +4,6 @@ import type { DB } from '../../src/platform/db/schema';
 
 type MoveTicketRow = Selectable<DB['move_tickets']>;
 
-// A move_tickets row as a target issues one: its stream not started, no
-// receipt, no commit and no warm slot; its stream window opens after its
-// issue, overridden or not, and the rest is arbitrary.
 export function buildMockMoveTicketRow(overrides: Partial<MoveTicketRow> = {}): MoveTicketRow {
   const issuedAt = overrides.issued_at ?? faker.date.recent().getTime();
 

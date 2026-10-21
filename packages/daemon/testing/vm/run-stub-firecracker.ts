@@ -1,6 +1,3 @@
-// Firecracker's API on the socket its argv names, in a process of its own;
-// start-stub-firecracker.ts builds the argv. GET / answers the VM's state,
-// which PATCH /vm sets, and a guest memory gets snapshots and a machine config.
 import {
   appendFileSync,
   closeSync,
@@ -82,9 +79,9 @@ Bun.serve({
   fetch: handleRequest,
 });
 
-// As Firecracker's snapshot_memory_to_file: the mem file is opened without a
-// truncate, emptied only when its size is not the guest's, and a Diff of a VM
-// that tracks its pages writes only the dirty ones, each in its place.
+// Firecracker's snapshot_memory_to_file opens the mem file without truncating
+// it and empties it only when its size is not the guest's; a Diff of a VM that
+// tracks dirty pages writes only those pages, each in its place.
 function writeSnapshot(
   guest: Readonly<StubGuestMemory>,
   params: Readonly<z.infer<typeof SnapshotCreateSchema>>,

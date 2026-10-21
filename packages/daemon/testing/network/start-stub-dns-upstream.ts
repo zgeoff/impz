@@ -2,25 +2,16 @@ import { onTestFinished } from 'bun:test';
 import { buildMockDnsReply } from './build-mock-dns-reply';
 import type { MockDnsRecord } from './build-mock-dns-reply';
 
-// What the UDP side does with a query: answer it, answer with TC set and no
-// records (the client must ask again over TCP), say nothing, or answer with
-// an id one past the query's
 export type StubDnsUdpMode = 'answer' | 'truncate' | 'drop' | 'wrong-id';
 
-// What the TCP side does with a whole query: answer it, hold the
-// connection open and say nothing, close it at once, or answer with the
-// wrong id
 export type StubDnsTcpMode = 'answer' | 'drop' | 'hang-up' | 'wrong-id';
 
 interface StubDnsUpstreamOptions {
-  // UDP and TCP on this one number: pick a free one (claimFreePorts), since a
-  // UDP bind to 0 and then TCP on its number can meet a TCP socket there
+  // A UDP bind to port 0 can pick a number a TCP socket already holds, so the
+  // caller passes a port that is free for both.
   readonly port: number;
 
-  // the loopback address it listens on; 127.0.0.1 by default
   readonly hostname?: string;
-
-  // the records every answer carries
   readonly answers?: readonly MockDnsRecord[];
   readonly udp?: StubDnsUdpMode;
   readonly tcp?: StubDnsTcpMode;
@@ -31,9 +22,6 @@ interface StubDnsQueryRecord {
   readonly id: number;
 }
 
-// An upstream DNS server on loopback, over UDP and TCP (RFC 1035 framing).
-// `queries` holds each query it read, in order; a test picks each side's
-// behaviour. Its sockets close when the test finishes.
 export async function startStubDnsUpstream(options: Readonly<StubDnsUpstreamOptions>) {
   const queries: StubDnsQueryRecord[] = [];
   const answers = options.answers ?? [];
@@ -54,7 +42,6 @@ export async function startStubDnsUpstream(options: Readonly<StubDnsUpstreamOpti
       data: (socket, data, port, address) => {
         const query = new Uint8Array(data);
 
-        // the reply goes before the query shows in `queries`
         if (udpMode !== 'drop') {
           socket.send(buildReply(query, udpMode), port, address);
         }
@@ -78,7 +65,7 @@ export async function startStubDnsUpstream(options: Readonly<StubDnsUpstreamOpti
       data: (socket, chunk) => {
         socket.data.buffered = Buffer.concat([socket.data.buffered, chunk]);
 
-        // each whole message in what has come, as several may share a chunk
+        // One TCP chunk can hold several length-prefixed DNS messages.
         for (;;) {
           const buffered = socket.data.buffered;
           const length = buffered.byteLength >= 2 ? buffered.readUInt16BE(0) : -1;

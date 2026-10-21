@@ -1,12 +1,8 @@
 import { statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 
-// where impd serves the dashboard; packages/dashboard builds for this base
 export const DASHBOARD_PATH = '/ui/';
 
-// The dashboard's built files. A path with no file is an app route and gets
-// the shell; an /assets/ path never does, so a stale chunk 404s instead of
-// loading HTML as a script.
 export function createDashboardFiles(directory: string | null) {
   const root = directory === null ? null : resolve(directory);
 
@@ -26,7 +22,6 @@ export function createDashboardFiles(directory: string | null) {
 
       const file = resolve(root, `.${path}`);
 
-      // decodePath already refuses `..`; this holds the line if it ever stops
       if (relative(root, file).startsWith('..') || !`${file}${sep}`.startsWith(`${root}${sep}`)) {
         return new Response('bad path\n', { status: 400 });
       }
@@ -35,6 +30,7 @@ export function createDashboardFiles(directory: string | null) {
         return readFileResponse(file, path.startsWith('/assets/'));
       }
 
+      // A stale chunk 404s instead of loading the shell's HTML as a script.
       if (path.startsWith('/assets/')) {
         return new Response('not found\n', { status: 404 });
       }
@@ -44,8 +40,8 @@ export function createDashboardFiles(directory: string | null) {
   };
 }
 
-// Vite names every asset by its content hash, so it never changes; the shell
-// and anything else must be checked each time, or a new build is not seen
+// Vite names every asset by its content hash, so an asset never changes; the
+// shell and anything else must be checked each time, or a new build is not seen.
 function readFileResponse(file: string, immutable: boolean): Response {
   const headers: Record<string, string> = {
     'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
@@ -59,14 +55,15 @@ function readFileResponse(file: string, immutable: boolean): Response {
   return new Response(Bun.file(file), { headers });
 }
 
-// the page talks only to impd; imps' pages on other ports must not frame it
+// The page talks only to impd, and imps' pages on other ports of this host
+// must not frame it.
 const HTML_HEADERS = {
   'content-security-policy': [
     "default-src 'self'",
     "connect-src 'self'",
     "img-src 'self' data:",
 
-    // xterm.js and the UI kit set inline styles
+    // xterm.js and the UI kit set inline styles.
     "style-src 'self' 'unsafe-inline'",
     "frame-ancestors 'none'",
     "base-uri 'none'",
@@ -75,7 +72,6 @@ const HTML_HEADERS = {
   'referrer-policy': 'same-origin',
 };
 
-// the decoded path, or null when it is malformed or climbs out with `..`
 function decodePath(pathname: string): string | null {
   try {
     const path = decodeURIComponent(pathname);

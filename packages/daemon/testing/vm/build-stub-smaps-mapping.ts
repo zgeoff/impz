@@ -1,21 +1,16 @@
 interface SmapsMappingOptions {
-  // the mapping's start address and size
   readonly start: number;
   readonly mib: number;
 
-  // as smaps prints them, such as `rw-p`
   readonly perms: string;
 
-  // VmFlags past those the permissions give, such as `mg`
   readonly flags: string;
 
-  // the file or the pseudo-file it maps; none for anonymous memory
   readonly backing?: string;
 }
 
-// One mapping of /proc/<pid>/smaps as the kernel prints it: its header, an
-// Rss line and VmFlags. The flags follow the permissions, as show_smap_vma_flags
-// prints them: rd, wr, ex, sh, then may-read/write/exec; ac for private writes.
+// The kernel's show_smap_vma_flags prints VmFlags in permission order: rd, wr,
+// ex, sh, then mr, mw, me; ac marks a private writable mapping.
 export function buildStubSmapsMapping(options: Readonly<SmapsMappingOptions>): string {
   const end = options.start + options.mib * 1024 ** 2;
   const header = `${options.start.toString(16)}-${end.toString(16)} ${options.perms} 00000000 00:00 0 ${options.backing ?? ''}`;

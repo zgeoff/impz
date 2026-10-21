@@ -13,7 +13,6 @@ import type {
 } from '../../src/vm/agent-client/exec-stream';
 import type { GuestListener, ListenSpec } from '../../src/vm/agent-client/listener-stream';
 
-// a program the gateway started; the test feeds its output
 interface StubExec {
   readonly request: AgentExecRequest;
   readonly feature: string | undefined;
@@ -23,50 +22,34 @@ interface StubExec {
   readonly emit: (event: ExecEvent | null) => void;
 }
 
-// a dial the gateway opened; it answers `got <input>` once the client
-// half-closes, as an HTTP server answers a whole request
 interface StubDial {
   readonly target: DialTarget;
   readonly kind: ConnectionKind;
   readonly input: readonly string[];
 }
 
-// a guest socket the gateway opened (ssh-agent or a remote forward); the
-// test connects guest clients to it
 interface StubListener {
   readonly id: string;
   readonly spec: ListenSpec;
   readonly kind: ConnectionKind | null;
   readonly connect: (id: number) => void;
-
-  // the agent connection ended, as after a forced sleep
   readonly end: () => void;
   readonly state: { closed: boolean };
 }
 
-// the relay for one guest client; the test sends what the client asks. The
-// gateway's half-close lands in `input` as `<eof>`; the relay ends once both
-// sides have closed, as the agent ends it
 interface StubAccept {
   readonly listener: string;
   readonly id: number;
   readonly kind: ConnectionKind;
   readonly input: readonly string[];
   readonly send: (data: string) => void;
-
-  // the guest client closed its side
   readonly sendEof: () => void;
-
-  // ended: the relay sent its last event, as the agent ends it
   readonly state: { closed: boolean; ended: boolean };
 }
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 
-// impd's side of the SSH gateway in memory. Like openStream, a stream needs
-// an imp the stub holds and counts on the tracker under its kind until it
-// closes. A TCP listen on port 0 gets 40000 plus its count.
 export function buildStubSshBackend() {
   const imps = new Map<string, ImpRecord>();
 
@@ -75,36 +58,20 @@ export function buildStubSshBackend() {
   const listeners: StubListener[] = [];
   const accepts: StubAccept[] = [];
   const tracker = buildActivityTracker();
-
-  // who each exec ran as, for the audit
   const actors: AuditActor[] = [];
-
-  // the imp names recordActivity was called with, in order
   const activity: string[] = [];
 
   const stub: {
     wakes: number;
-
-    // imp lookups by name, as a login makes them
     lookups: number;
     findError: Error | null;
     wakeError: Error | null;
     execError: Error | null;
     dialError: Error | null;
     listenError: Error | null;
-
-    // how long a wake took, as requireRunning reports it; null for an imp
-    // that was running already
     wokeMs: number | null;
-
-    // listens asked for, counted before a held one opens
     listenCalls: number;
-
-    // while set, each listen waits for it before it opens, as a slow guest
     listenGate: Promise<void> | null;
-
-    // while set, an exec's stdinDrained waits for it, as a guest that reads
-    // its stdin slowly
     stdinGate: Promise<void> | null;
     onExec: ((exec: StubExec) => void) | null;
   } = {
@@ -122,7 +89,6 @@ export function buildStubSshBackend() {
     onExec: null,
   };
 
-  // counts a stream of `name`'s imp under `kind`, and returns its release
   const countStream = (name: string, kind: ConnectionKind | null): (() => void) => {
     const imp = imps.get(name);
 
@@ -133,7 +99,6 @@ export function buildStubSshBackend() {
     return kind === null ? () => {} : tracker.open(imp.id, kind);
   };
 
-  // the gateway's shape, and the runtime's (no actor) for startSsh's imps
   const openExec = async (
     name: string,
     request: AgentExecRequest,
@@ -271,7 +236,7 @@ export function buildStubSshBackend() {
     const state = { closed: false, ended: false };
     const halves = { isClientDone: false, isGuestDone: false };
 
-    // the agent ends the relay once neither side will send more
+    // the agent ends a relay once neither side will send more
     const stopWhenDone = (): void => {
       if (halves.isClientDone && halves.isGuestDone) {
         state.ended = true;
@@ -304,7 +269,6 @@ export function buildStubSshBackend() {
       },
       drained: () => Promise.resolve(),
 
-      // stdinEof to the guest client; its answer still flows back
       end: () => {
         halves.isClientDone = true;
 
@@ -339,8 +303,6 @@ export function buildStubSshBackend() {
       return Promise.resolve(imps.get(name));
     },
 
-    // an imp it holds is running already; a put with a new pid stands for a
-    // wake into a new VM
     requireRunning: (name) => {
       stub.wakes += 1;
 
@@ -379,14 +341,12 @@ export function buildStubSshBackend() {
     accepts,
     tracker,
 
-    // adds the imp, or replaces the one of its name
     putImp: (imp: ImpRecord): void => {
       imps.set(imp.name, imp);
     },
   };
 }
 
-// events a stub stream yields, in order; null ends the stream
 interface EventQueue<T> {
   readonly emit: (event: T | null) => void;
   readonly next: () => Promise<T | null>;
@@ -425,8 +385,6 @@ async function* readEvents<T>(next: () => Promise<T | null>): AsyncGenerator<T, 
   }
 }
 
-// where a stub listener's socket is, as the agent picks it: an ssh-agent's,
-// the path asked for, or none for a port
 function readStubPath(spec: ListenSpec, id: string): string | null {
   if (spec.network === 'ssh-agent') {
     return `/run/imp/ssh-agent/${id}/agent.sock`;

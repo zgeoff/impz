@@ -1,8 +1,5 @@
 import type { StorageBackend } from '../../src/vm/storage/storage-backend';
 
-// A storage backend's faults, as a disk that cannot be read for a move: the
-// wrapped backend answers every call, except that the next openMoveSource
-// after failOnce rejects with the given error, without reaching it.
 export function buildStubStorageFaults() {
   const pending: { openMoveSource: Error | null } = { openMoveSource: null };
 

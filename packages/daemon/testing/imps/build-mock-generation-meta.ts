@@ -1,9 +1,6 @@
 import { faker } from '@faker-js/faker';
 import type { GenerationMeta } from '../../src/imps/session-logs/generation-log';
 
-// One generation's log meta as impd writes it for a live log that holds no
-// segment yet. The session, generation, boot and start are arbitrary; the
-// end, exit and stop are absent until an override sets them.
 export function buildMockGenerationMeta(overrides: Partial<GenerationMeta> = {}): GenerationMeta {
   return {
     version: 1,

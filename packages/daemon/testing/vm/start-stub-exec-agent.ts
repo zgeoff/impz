@@ -16,14 +16,10 @@ import {
 import type { AgentFrame } from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
-// what runs the commands: buildStubExecGuest's openExec
 interface StubExecTarget {
   readonly openExec: (name: string, request: Readonly<AgentExecRequest>) => Promise<ExecStream>;
 }
 
-// An imp's guest agent at `path` for exec: each `exec` request becomes an
-// openExec on `guest`, its events go back as frames and stdin and signals
-// reach the stream; a dropped connection closes it, other ops get UNKNOWN_OP.
 export function startStubExecAgent(path: string, guest: StubExecTarget) {
   const streams = new WeakMap<Socket, Promise<ExecStream>>();
 
@@ -34,8 +30,6 @@ export function startStubExecAgent(path: string, guest: StubExecTarget) {
   ): Promise<void> => {
     const stream = await pending;
 
-    // as the agent's STARTED: the clamped grace of a guest that kills the
-    // group, and a session's name, with `created` only when true
     socket.write(
       encodeJsonFrame(FRAME_TYPES.started, {
         pid: stream.pid,
@@ -110,7 +104,6 @@ function encodeEventFrame(event: Readonly<ExecEvent>): Uint8Array {
   return encodeFrame(type, event.data);
 }
 
-// stdin, its end and signals reach the stream
 async function sendInput(pending: Promise<ExecStream>, frame: AgentFrame): Promise<void> {
   const stream = await pending;
 
@@ -129,11 +122,8 @@ async function stopStream(pending: Promise<ExecStream>): Promise<void> {
   stream.close();
 }
 
-// the agent's maxKillGrace, as the host's API caps it too
 const MAX_KILL_GRACE_MS = 60_000;
 
-// the agent's killGrace (agent/internal/exec/group.go): off for a tty exec
-// or none asked, else capped at a minute
 function readKillGraceMs(request: Request) {
   if (request.tty === true || request.killGraceMs === undefined || request.killGraceMs <= 0) {
     return 0;

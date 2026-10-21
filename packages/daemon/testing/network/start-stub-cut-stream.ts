@@ -1,6 +1,3 @@
-// An imp's streaming HTTP server: each answer sends its first line and holds
-// until cut() resets every answer still open, as a server that exits does.
-// An answer that starts after a cut holds until the next one.
 export function startStubCutStream(stack: Readonly<AsyncDisposableStack>, firstLine: string) {
   const open = new Set<ReadableStreamDefaultController<Uint8Array>>();
 
@@ -28,7 +25,7 @@ export function startStubCutStream(stack: Readonly<AsyncDisposableStack>, firstL
     port: server.port ?? 0,
     cut: () => {
       for (const controller of open) {
-        // with no reason, Bun resets the connection and prints nothing
+        // Given no reason, Bun resets the connection and prints nothing.
         controller.error();
       }
 

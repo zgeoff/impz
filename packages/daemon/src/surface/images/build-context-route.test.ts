@@ -38,29 +38,23 @@ async function setupTest() {
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  // the engine a host build sends its context to; it stops after impd
   const engine = startStubDockerEngine({ directoryPath: dataDir });
 
   stack.defer(() => engine.stop());
 
-  // impd boots with a root bearer; each test reads it back to send it
   const rootToken = faker.string.alphanumeric(32);
 
-  // adds and builds run on the host's engine, the stub
   const harness = await startTestImpd(stack, {
     dataDir,
     rootToken,
     env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: engine.dockerHost },
 
-    // a sparse copy for a reflink: the temp dir is not XFS
+    // A sparse copy stands in for a reflink, because the temp dir is not XFS.
     cloneDisk: async (source, target) => {
       await runChecked(['cp', '--sparse=always', source, target]);
     },
   });
 
-  // assigned, not spread: a spread reads the harness's parts once. A
-  // release deferred on `stack` runs before impd stops and its database
-  // closes
   return Object.assign(harness, { stack, rootToken, engine });
 }
 
@@ -72,7 +66,6 @@ test('it builds an uploaded context and answers the image', async () => {
   await mkdir(join(ctx.dataDir, 'tree'));
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
-  // the frontend is on the host, and the engine tags what it builds
   const exportTar = Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout;
 
   const docker = createStubDockerCli({
@@ -204,10 +197,8 @@ test('it answers a streamed build with its headers while the build still runs', 
 
   updateEnv('PATH', docker.path);
 
-  // the engine holds the build until the test ends
   const held = Promise.withResolvers<void>();
 
-  // a failed build, once the test lets it go
   ctx.engine.setAnswer(async (_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -228,8 +219,6 @@ test('it answers a streamed build with its headers while the build still runs', 
     }),
   );
 
-  // let go, and read the stream to its end, before the engine stops
-  // released before impd stops, so the held builds settle first
   ctx.stack.defer(async () => {
     held.resolve();
 
@@ -269,7 +258,6 @@ test('it streams progress lines while the build runs, then the image', async () 
 
   updateEnv('PATH', docker.path);
 
-  // the engine holds the build until the client has read three keepalives
   const gate = Promise.withResolvers<void>();
 
   ctx.engine.setAnswer(async (_request, seen) => {
@@ -282,7 +270,6 @@ test('it streams progress lines while the build runs, then the image', async () 
     return null;
   });
 
-  // a keepalive every 10 ms, so a held build sends lines
   const route = createBuildContextRoute({
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
@@ -354,7 +341,6 @@ test('it streams the step and output of a running build, and lists it in images.
 
   updateEnv('PATH', docker.path);
 
-  // the engine reports a RUN step and its output, then holds the build
   const gate = Promise.withResolvers<void>();
 
   ctx.engine.setAnswer(
@@ -427,8 +413,6 @@ test('it streams the step and output of a running build, and lists it in images.
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-// impd on a real socket behind the wake proxy, as a build over HTTPS reaches
-// it: the first line comes back while the upload still holds its rest
 test('it sends a progress line through the proxy before the upload ends', async () => {
   const ctx = await setupTest();
 
@@ -456,7 +440,6 @@ test('it sends a progress line through the proxy before the upload ends', async 
 
   const apiPort = Number(new URL(ctx.url).port);
 
-  // the proxy forwards the API to the port the app took
   const proxy = startWakeProxy({
     config: { ...ctx.config, apiPort },
     db: ctx.db,
@@ -673,7 +656,6 @@ test('it frees the build slot of a context refused for its Content-Length', asyn
     keepaliveMs: 10_000,
   });
 
-  // four refusals, one for each build slot
   for (let attempt = 0; attempt < 4; attempt += 1) {
     await route.respond(
       new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
@@ -712,7 +694,6 @@ test('it refuses with 413 a context whose bytes run over the limit, and removes 
     keepaliveMs: 10_000,
   });
 
-  // a body with no Content-Length, one byte over the limit
   const context = new Blob([new Uint8Array(1024 ** 2 + 1)]).stream();
 
   const response = await route.respond(
@@ -764,7 +745,6 @@ test('it refuses with 413 a streamed build whose Content-Length is over the limi
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-// bytes past the limit come after the stream's 200, so its last line says so
 test('it ends a streamed build whose bytes run over the limit with a too-large error', async () => {
   const ctx = await setupTest();
 
@@ -806,7 +786,6 @@ test('it ends a streamed build whose bytes run over the limit with a too-large e
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-// an empty tar, as long as the limit: the build reads it, and finds no Dockerfile
 test('it hands a context of exactly the limit to the build', async () => {
   const ctx = await setupTest();
 
@@ -950,10 +929,8 @@ test('it refuses a fifth build with 429 while four run', async () => {
 
   updateEnv('PATH', docker.path);
 
-  // the engine holds every build until the test ends
   const held = Promise.withResolvers<void>();
 
-  // a failed build, once the test lets it go
   ctx.engine.setAnswer(async (_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -976,8 +953,6 @@ test('it refuses a fifth build with 429 while four run', async () => {
     ),
   );
 
-  // let go before the engine stops
-  // released before impd stops, so the held builds settle first
   ctx.stack.defer(async () => {
     held.resolve();
 
@@ -1017,7 +992,6 @@ test('it refuses a fifth streamed build with 429, before its stream, while four 
 
   const held = Promise.withResolvers<void>();
 
-  // a failed build, once the test lets it go
   ctx.engine.setAnswer(async (_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -1040,8 +1014,6 @@ test('it refuses a fifth streamed build with 429, before its stream, while four 
     ),
   );
 
-  // let go before the engine stops
-  // released before impd stops, so the held builds settle first
   ctx.stack.defer(async () => {
     held.resolve();
 
@@ -1097,7 +1069,6 @@ test('it frees each build slot once its build ends', async () => {
 
   updateEnv('PATH', docker.path);
 
-  // the engine holds the first four builds until all four have come
   const gate = Promise.withResolvers<void>();
 
   ctx.engine.setAnswer(async (_request, seen) => {
@@ -1132,7 +1103,6 @@ test('it frees each build slot once its build ends', async () => {
 
   const responses = await Promise.all(running);
 
-  // the four builds ended, each built, so each slot came free at its end
   invariant(responses.every((built) => built.status === 200));
 
   const fifth = await ctx.impd.api.app.handle(
@@ -1165,7 +1135,6 @@ test.each([
 
     updateEnv('PATH', docker.path);
 
-    // the engine holds each build until its client goes
     const builds = { started: 0, stopped: 0 };
 
     ctx.engine.setAnswer(async (request, seen) => {
@@ -1215,8 +1184,6 @@ test.each([
 
     await Promise.allSettled(sent);
 
-    // a stream answered before its build ended: the build's audit row comes
-    // after its file is gone; the engine hears each close in its own time
     const stopped = await waitFor(async () => {
       const rows = await listApiCalls(ctx.db, null, 100, null);
 
@@ -1299,7 +1266,6 @@ test.each([
     expect(rows.filter((row) => row.procedure === 'images.build').length).toBeGreaterThanOrEqual(4);
   });
 
-  // not a tar: refused by the build, not for want of a slot
   const next = await ctx.impd.api.app.handle(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
@@ -1322,7 +1288,6 @@ test('it kills the base image pulls of clients that go, and starts no other pull
     'FROM first.test/a:1\nFROM second.test/b:1\n',
   );
 
-  // neither image is on the host, and a pull hangs until it is killed
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -1367,7 +1332,6 @@ test('it kills the base image pulls of clients that go, and starts no other pull
     client.abort();
   }
 
-  // the pulls sleep 30 s: only their kill settles the builds within the wait
   await waitFor(async () => {
     const rows = await listApiCalls(ctx.db, null, 100, null);
 
@@ -1441,7 +1405,6 @@ test('it frees the build slots of clients that go during a base image pull', asy
 
   await Promise.allSettled(sent);
 
-  // not a tar: refused by the build, not for want of a slot
   const next = await ctx.impd.api.app.handle(
     new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
       method: 'POST',
@@ -1464,7 +1427,6 @@ test('it refuses a base image with ONBUILD triggers once the host has it', async
     'FROM base.test/onbuild:1\nRUN true\n',
   );
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -1483,7 +1445,6 @@ test('it refuses a base image with ONBUILD triggers once the host has it', async
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -1506,7 +1467,6 @@ test('it refuses a base image with ONBUILD triggers once the host has it', async
 
   const calls = docker.readCalls().map((call) => call.replace(PIN_INSPECT_FORMAT, 'PIN'));
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -1543,7 +1503,6 @@ test('it pulls COPY --from and RUN --mount images first, like a FROM, by tag or 
     `FROM base.test/a:1 AS build\nCOPY --from=tools.test/b@sha256:${'b'.repeat(64)} /x /x\nCOPY --from=build /x /y\nRUN --mount=type=bind,from=mnt.test/c:3,target=/m true`,
   );
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -1584,7 +1543,6 @@ test('it pulls COPY --from and RUN --mount images first, like a FROM, by tag or 
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -1635,7 +1593,6 @@ test('it sends the engine the Dockerfile with each image pinned and the platform
     'FROM --platform=$BUILDPLATFORM base.test/a:1 AS build\nCOPY --from=pulled.test/p:2 /x /x\nFROM base.test/retag:1\nRUN --mount=from=build,target=/b --mount=from=base.test/a:1,target=/a true\n',
   );
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -1679,7 +1636,6 @@ test('it sends the engine the Dockerfile with each image pinned and the platform
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -1700,7 +1656,6 @@ test('it sends the engine the Dockerfile with each image pinned and the platform
 
   const body: unknown = await response.json();
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -1739,7 +1694,6 @@ test('it refuses a COPY --from image with ONBUILD triggers, which the frontend w
     'FROM scratch\nCOPY --from=base.test/onbuild:1 / /\n',
   );
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -1758,7 +1712,6 @@ test('it refuses a COPY --from image with ONBUILD triggers, which the frontend w
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -1779,7 +1732,6 @@ test('it refuses a COPY --from image with ONBUILD triggers, which the frontend w
 
   const body: unknown = await response.json();
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -1809,7 +1761,6 @@ test('it refuses a RUN --mount image with ONBUILD triggers, which the frontend w
     'FROM base.test/a:1\nRUN --mount=from=base.test/onbuild:1,target=/m true\n',
   );
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -1841,7 +1792,6 @@ test('it refuses a RUN --mount image with ONBUILD triggers, which the frontend w
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -1862,7 +1812,6 @@ test('it refuses a RUN --mount image with ONBUILD triggers, which the frontend w
 
   const body: unknown = await response.json();
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -1892,7 +1841,6 @@ test('it inspects and pins a ref the build names twice once, so a moving tag giv
     'FROM base.test/moving:1\nCOPY --from=base.test/moving:1 /x /x\nRUN --mount=from=base.test/moving:1,target=/m true\n',
   );
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -1917,7 +1865,6 @@ test('it inspects and pins a ref the build names twice once, so a moving tag giv
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -1938,7 +1885,6 @@ test('it inspects and pins a ref the build names twice once, so a moving tag giv
 
   const calls = docker.readCalls().map((call) => call.replace(PIN_INSPECT_FORMAT, 'PIN'));
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -1975,7 +1921,6 @@ test('it inspects and pins the spellings of one image once', async () => {
     'FROM moving:1\nCOPY --from=docker.io/library/moving:1 /x /x\nRUN --mount=from=index.docker.io/library/moving,target=/m true\n',
   );
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2000,7 +1945,6 @@ test('it inspects and pins the spellings of one image once', async () => {
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2021,7 +1965,6 @@ test('it inspects and pins the spellings of one image once', async () => {
 
   const calls = docker.readCalls().map((call) => call.replace(PIN_INSPECT_FORMAT, 'PIN'));
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -2032,7 +1975,6 @@ test('it inspects and pins the spellings of one image once', async () => {
       return new TextDecoder().decode(extracted.stdout);
     });
 
-  // moving and moving:1 differ: no tag is latest
   expect(calls.filter((call) => call.startsWith('image inspect --format PIN'))).toStrictEqual([
     'image inspect --format PIN moving:1',
     'image inspect --format PIN index.docker.io/library/moving',
@@ -2056,7 +1998,6 @@ test('it says how impd pinned a build the registry denies, and what to build fro
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM base.test/retag:1\n');
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2076,7 +2017,6 @@ test('it says how impd pinned a build the registry denies, and what to build fro
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2113,7 +2053,6 @@ test('it refuses a FROM image with no registry digest before the build', async (
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM base.test/local:1\n');
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2128,7 +2067,6 @@ test('it refuses a FROM image with no registry digest before the build', async (
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2149,7 +2087,6 @@ test('it refuses a FROM image with no registry digest before the build', async (
 
   const body: unknown = await response.json();
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -2180,7 +2117,6 @@ test('it refuses a COPY --from image with no registry digest before the build', 
     'FROM scratch\nCOPY --from=base.test/local:1 / /\n',
   );
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2195,7 +2131,6 @@ test('it refuses a COPY --from image with no registry digest before the build', 
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2216,7 +2151,6 @@ test('it refuses a COPY --from image with no registry digest before the build', 
 
   const body: unknown = await response.json();
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -2243,7 +2177,6 @@ test('it refuses an arm64 image on an amd64 host before the build', async () => 
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM base.test/arm:1\n');
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2263,7 +2196,6 @@ test('it refuses an arm64 image on an amd64 host before the build', async () => 
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2284,7 +2216,6 @@ test('it refuses an arm64 image on an amd64 host before the build', async () => 
 
   const body: unknown = await response.json();
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -2311,7 +2242,6 @@ test('it refuses a 32-bit arm image on an amd64 host before the build', async ()
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM base.test/arm32:1\n');
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2331,7 +2261,6 @@ test('it refuses a 32-bit arm image on an amd64 host before the build', async ()
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2352,7 +2281,6 @@ test('it refuses a 32-bit arm image on an amd64 host before the build', async ()
 
   const body: unknown = await response.json();
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -2379,7 +2307,6 @@ test('it refuses an image whose registry digests name only registries impd refus
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM base.test/private:1\n');
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2401,7 +2328,6 @@ test('it refuses an image whose registry digests name only registries impd refus
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2422,7 +2348,6 @@ test('it refuses an image whose registry digests name only registries impd refus
 
   const body: unknown = await response.json();
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -2442,14 +2367,12 @@ test('it refuses an image whose registry digests name only registries impd refus
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-// with the image on the host already, no pull would meet the proxy's rule
 test('it refuses an image under an IP address registry before any call', async () => {
   const ctx = await setupTest();
 
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM 127.0.0.1:5000/x:1\n');
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2468,7 +2391,6 @@ test('it refuses an image under an IP address registry before any call', async (
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2491,7 +2413,6 @@ test('it refuses an image under an IP address registry before any call', async (
 
   const calls = docker.readCalls().map((call) => call.replace(PIN_INSPECT_FORMAT, 'PIN'));
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -2512,14 +2433,13 @@ test('it refuses an image under an IP address registry before any call', async (
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-// docker reads the label as localhost in any case
+// Docker reads the label as localhost in any case.
 test("it refuses an image under the host's own registry, in any case, before any call", async () => {
   const ctx = await setupTest();
 
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM LocalHost/name:1\n');
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2538,7 +2458,6 @@ test("it refuses an image under the host's own registry, in any case, before any
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2561,7 +2480,6 @@ test("it refuses an image under the host's own registry, in any case, before any
 
   const calls = docker.readCalls().map((call) => call.replace(PIN_INSPECT_FORMAT, 'PIN'));
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -2592,7 +2510,6 @@ test('it refuses a global ARG that sets the build platform before any call', asy
     'ARG BUILDPLATFORM=linux/arm64\nFROM --platform=$BUILDPLATFORM base.test/a:1\n',
   );
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2611,7 +2528,6 @@ test('it refuses a global ARG that sets the build platform before any call', asy
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2653,7 +2569,6 @@ test('it refuses a stage ARG that sets the target platform before any call', asy
     'FROM base.test/a:1\nARG TARGETPLATFORM\n',
   );
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2672,7 +2587,6 @@ test('it refuses a stage ARG that sets the target platform before any call', asy
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2714,7 +2628,6 @@ test('it refuses a braced platform variable before any call', async () => {
     ['FROM --platform=$', '{BUILDPLATFORM} base.test/a:1\n'].join(''),
   );
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2733,7 +2646,6 @@ test('it refuses a braced platform variable before any call', async () => {
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2773,7 +2685,6 @@ test('it pulls a missing Dockerfile frontend by digest once, before the build', 
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM base.test/a:1\n');
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2799,7 +2710,6 @@ test('it pulls a missing Dockerfile frontend by digest once, before the build', 
 
   const callsAtBuild: string[][] = [];
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2843,7 +2753,6 @@ test('it pulls no Dockerfile frontend the engine has, and checks it before the b
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM base.test/a:1\n');
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2865,7 +2774,6 @@ test('it pulls no Dockerfile frontend the engine has, and checks it before the b
 
   const callsAtBuild: string[][] = [];
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2902,7 +2810,6 @@ test('it fails a build with 502 before the engine gets it when the frontend pull
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM base.test/a:1\n');
 
-  // an amd64 host engine with these images
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -2927,7 +2834,6 @@ test('it fails a build with 502 before the engine gets it when the frontend pull
 
   updateEnv('PATH', docker.path);
 
-  // the engine fails every build, after it has the context
   ctx.engine.setAnswer((_request, seen) => {
     if (!seen.target.startsWith('/build')) {
       return null;
@@ -2948,7 +2854,6 @@ test('it fails a build with 502 before the engine gets it when the frontend pull
 
   const body: unknown = await response.json();
 
-  // the Dockerfile in each context the engine got
   const built = ctx.engine.seen
     .filter((request) => request.target.startsWith('/build'))
     .map((request) => {
@@ -2976,7 +2881,6 @@ test('it answers a build that fails after the engine built it with its error, an
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
 
-  // the engine builds the image; the unpack's create finds no room
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -3131,7 +3035,6 @@ test('it reports the unpack of an on-host build after the engine built the image
   await mkdir(join(ctx.dataDir, 'context'));
   await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
 
-  // the frontend and the built tag are on the host; the unpack's create fails
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [

@@ -2,15 +2,12 @@ import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 
-// An `mkfs.ext4` in `<dir>/bin` that holds each rootfs write until `release`
-// (the real one runs) or `fail` (that stderr), so a test acts while impd
-// writes a rootfs; it gives up once `dir` is gone.
 export function createStubImageMkfs(directory: string) {
   const bin = join(directory, 'bin');
   const started = join(directory, 'mkfs-started');
   const released = join(directory, 'mkfs-released');
 
-  // the real mkfs.ext4, which sits in sbin on most hosts
+  // the real mkfs.ext4 sits in sbin on most hosts
   const real =
     Bun.which('mkfs.ext4', { PATH: `${process.env['PATH'] ?? ''}:/usr/sbin:/sbin` }) ?? 'mkfs.ext4';
 
@@ -30,7 +27,6 @@ export function createStubImageMkfs(directory: string) {
   return {
     bin,
 
-    // resolves once a rootfs write has started
     waitForStart: () =>
       waitFor(() => {
         if (!existsSync(started)) {

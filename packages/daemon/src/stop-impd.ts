@@ -3,25 +3,19 @@ import { getErrorMessage } from './platform/process/get-error-message';
 import type { Ticker } from './platform/process/ticker';
 import { waitWithin } from './platform/process/wait-within';
 
-// the whole stop, within the 120 s that scripts/dev/dev.sh gives `docker stop`
+// within the 120 s that scripts/dev/dev.sh gives `docker stop`
 const STOP_DEADLINE_MS = 100_000;
-
-// at most per step before the sleep pass, which gets whatever is left
 const STOP_STEP_MAX_MS = 10_000;
 
-// the broker's stop waits for a token exchange under way (30 s at most) and
-// its write, so a rotated refresh token is stored before the database closes
+// a token exchange under way takes up to 30 s, and its rotated refresh token must be
+// stored before the database closes
 const STOP_BROKER_MAX_MS = 40_000;
 
 interface Stoppable {
   readonly stop: () => Promise<void>;
 }
 
-// What impd takes out of service: createImpd sets each part as its startup
-// step acquires it, so a startup that fails stops what it has. A part not
-// acquired yet, or null as the config leaves it off, is skipped.
 export interface ImpdStopParts {
-  // the database writes impd follows, and the work a write started
   dbWrites?: Stoppable;
   diskUsage?: { readonly stop: () => void };
   tickers?: readonly Ticker[];
@@ -37,17 +31,13 @@ export interface ImpdStopParts {
   storage?: Stoppable;
   stopTelemetry?: (() => Promise<void>) | null;
 
-  // the database createImpd opened; null leaves a caller's database open
+  // null leaves a caller's database open
   db?: { readonly destroy: () => Promise<void> } | null;
   readonly log: (message: string) => void;
 }
 
 export interface ImpdStopOptions {
-  // SIGTERM and SIGINT sleep every running imp; SIGHUP leaves the VMs running
-  // for the next impd to adopt
   readonly sleepImps: boolean;
-
-  // the limits above by default
   readonly deadlineMs?: number;
   readonly stepMaxMs?: number;
 }
@@ -59,9 +49,6 @@ export interface ImpdStopStep {
   readonly outcome: ImpdStopOutcome;
 }
 
-// Takes impd out of service in order, each step bounded, a failure logged:
-// the stop always reaches its end. Returns each step it ran, in order. The
-// sleep pass gets what is left of the deadline.
 export async function stopImpd(
   parts: Readonly<ImpdStopParts>,
   options: Readonly<ImpdStopOptions>,
@@ -73,8 +60,6 @@ export async function stopImpd(
   const readStepMs = () => Math.min(stepMaxMs, readLeftMs());
   const steps: ImpdStopStep[] = [];
 
-  // Bounded, and a failure is logged. True when the step finished in time.
-  // A ticker stop waits for a pass under way.
   const runStep = async (
     step: string,
     durationMs: number,
@@ -98,7 +83,7 @@ export async function stopImpd(
     }
   };
 
-  // first: a write after this point starts no proxy, grant or name sync
+  // first, so a later write starts no proxy, grant or name sync
   const dbWrites = parts.dbWrites;
 
   if (dbWrites !== undefined) {
@@ -147,8 +132,8 @@ export async function stopImpd(
     });
   }
 
-  // before the sleep pass, as exec sessions are: a client sees its
-  // connection end instead of hanging while its imp sleeps
+  // before the sleep pass, so a client sees its connection end instead of hanging while
+  // its imp sleeps
   const ssh = parts.ssh;
 
   if (ssh !== undefined && ssh !== null) {
@@ -175,8 +160,7 @@ export async function stopImpd(
     await runStep('api', readStepMs(), () => api.stop(true));
   }
 
-  // either way, a wake or boot under way finishes first: one cut short
-  // leaves a Firecracker that no record knows
+  // a wake or boot cut short leaves a Firecracker that no record knows
   const imps = parts.imps;
   const state = { settled: true };
 
@@ -185,7 +169,6 @@ export async function stopImpd(
       ? await runStep('sleep', readLeftMs(), () => imps.sleepAllImps())
       : await runStep('lifecycle', readLeftMs(), () => imps.waitForLifecycle());
 
-    // a build cut short leaves a Firecracker no record knows
     await runStep('templates', readStepMs(), () => imps.bootTemplates?.stop());
 
     if (options.sleepImps) {
@@ -202,15 +185,15 @@ export async function stopImpd(
     await runStep('storage', readStepMs(), () => storage.stop());
   }
 
-  // sends what the sleep pass recorded; its gauges still read the database
+  // before the database closes, because its gauges read the database
   const stopTelemetry = parts.stopTelemetry;
 
   if (stopTelemetry !== undefined && stopTelemetry !== null) {
     await runStep('telemetry', readStepMs(), stopTelemetry);
   }
 
-  // a sleep still running writes its record later: closing the database
-  // under it would fail that write. The next start finds its snapshot.
+  // a sleep still running writes its record later, and closing the database would fail
+  // that write; the next start finds its snapshot
   const db = parts.db;
 
   if (state.settled && db !== undefined && db !== null) {

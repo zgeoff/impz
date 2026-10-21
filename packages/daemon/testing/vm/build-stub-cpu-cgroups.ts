@@ -7,19 +7,14 @@ interface StubCgroup {
   guestMib: number | null;
   readonly pids: number[];
 
-  // the OOM kill count when its VM started, for probeOomKillSinceStart
   oomKillsAtStart: number;
 }
 
 interface StubCpuCgroupsOptions {
-  // false: a host without a delegated cpu controller, where setup makes none
   readonly isEnforced?: boolean;
   readonly isMemoryEnforced?: boolean;
 }
 
-// The cgroup tree under /sys/fs/cgroup/imps in memory. `calls` records each
-// change as `verb impId [detail]`; a test sets an imp's OOM kill count and
-// cpu.stat through `oomKills` and `cpuStats`.
 export function buildStubCpuCgroups(options: StubCpuCgroupsOptions = {}) {
   const isEnforced = options.isEnforced ?? true;
 
@@ -107,7 +102,6 @@ export function buildStubCpuCgroups(options: StubCpuCgroupsOptions = {}) {
       return orphans;
     },
 
-    // a new cgroup's cpu.stat counts from zero, as the kernel's does
     readCpuStat: (impId) =>
       groups.has(impId) ? (cpuStats.get(impId) ?? { usageUsec: 0, throttledUsec: 0 }) : null,
     readOomKills: (impId) => (groups.has(impId) ? (oomKills.get(impId) ?? 0) : null),
@@ -127,10 +121,8 @@ export function buildStubCpuCgroups(options: StubCpuCgroupsOptions = {}) {
     oomKills,
     cpuStats,
 
-    // the imps that have a cgroup now
     listGroups: (): string[] => [...groups.keys()].toSorted(),
 
-    // what an imp's cgroup holds, or null without one
     readGroup: (impId: string) => {
       const group = groups.get(impId);
 

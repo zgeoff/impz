@@ -4,52 +4,27 @@ import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';
 import { buildStubGuest } from '../vm/build-stub-guest';
 import type { StubAnswer, StubRun } from '../vm/build-stub-guest';
 
-// the engine steps a test can fail: the pin inspect of a pulled image,
-// its tag, and the built tag's config inspect, create and export
 type StubBuilderStep = 'pin' | 'tag' | 'config' | 'create' | 'export';
 
 export interface StubImageBuilderOptions {
-  // the chunks `docker export` streams, as a builder sends its tree: a list,
-  // or a stream such as a running tar's output, which one export reads
   readonly exported: readonly Uint8Array[] | AsyncIterable<Uint8Array>;
-
-  // the registry digest every image the engine inspects reports
   readonly repoDigest: string;
-
-  // what the engine answers a pull; a pull succeeds by default
   readonly onPull?: (run: StubRun) => Promise<StubAnswer> | StubAnswer;
-
-  // runs as an export starts, before its output
   readonly onExport?: () => Promise<void>;
-
-  // after its output, the export stays open until impd closes it
   readonly isExportStalled?: boolean;
-
-  // what the config inspect of the built tag prints; BUILT_CONFIG by default
   readonly config?: string;
-
-  // the architecture docker reports for a pulled image; amd64 by default
   readonly architecture?: string;
-
-  // a step that fails in the engine with this stderr and exit 1
   readonly failures?: Readonly<Partial<Record<StubBuilderStep, string>>>;
-
-  // the plain progress a build writes to stderr; `#1 DONE` by default
   readonly buildLog?: string;
 }
 
-// what `docker image inspect --format {{json .Config}}` prints for the built tag
 const BUILT_CONFIG = '{"Cmd":["/bin/sh"],"Env":["PATH=/bin"]}';
 
-// the container `docker create` makes in the builder
 export const STUB_BUILDER_CONTAINER = 'e'.repeat(64);
 
-// the builder imp's name, as a real builder's `imp-build-<8 letters>`
+// a real builder imp's name is `imp-build-` and 8 letters
 const STUB_BUILDER_NAME = 'imp-build-stubstub';
 
-// A builder's engine on linux/amd64 behind its agent: it pulls and pins
-// any image, builds what it gets and exports `exported`. `builders` runs
-// builds on it with no builder imp; the real lifecycle takes `guest.open`.
 export function buildStubImageBuilder(options: Readonly<StubImageBuilderOptions>) {
   const builtDockerfiles: string[] = [];
   const counts = { boots: 0, live: 0 };
@@ -135,7 +110,6 @@ export function buildStubImageBuilder(options: Readonly<StubImageBuilderOptions>
       counts.boots += 1;
       counts.live += 1;
 
-      // the builder goes however the build ends
       return Promise.try(run, createGuestExec(guest.open), STUB_BUILDER_NAME).finally(() => {
         counts.live -= 1;
       });
@@ -148,13 +122,11 @@ export function buildStubImageBuilder(options: Readonly<StubImageBuilderOptions>
     builders,
     builtDockerfiles,
 
-    // builders booted, and builders still up
     readBoots: () => counts.boots,
     readLive: () => counts.live,
   };
 }
 
-// the step a builder's docker call is, when a test can fail it
 function readStep(argv: string, ref: string): StubBuilderStep | null {
   const steps: Readonly<Record<string, StubBuilderStep>> = {
     [`image inspect --format ${PIN_INSPECT_FORMAT} ${ref}`]: 'pin',

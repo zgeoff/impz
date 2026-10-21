@@ -1,12 +1,10 @@
 import { MOVE_PATHS, MoveOfferReplySchema } from '../../src/imp-ops/moves/move-header';
 import type { FetchHook } from './create-move-hosts';
 
-// the offer reply fields a target added over time; an older target leaves
-// each out, and the source reads it as false
+// an older target leaves each of these out of its offer reply, and the source reads a
+// missing one as false
 type OfferField = 'keepsMaxMemory' | 'keepsLeases' | 'keepsPublicEgress' | 'keepsBackupOff';
 
-// A target from before `field`: its offer reply leaves the field out, as
-// that release's impd answered it. Every other request reaches the target.
 export function makeStubOlderMoveTarget(field: OfferField): FetchHook {
   return async (request, forward) => {
     const response = await forward();

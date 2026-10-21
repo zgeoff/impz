@@ -10,7 +10,6 @@ test('it builds a default certificate', async () => {
     chainPem: expect.toStartWith('-----BEGIN CERTIFICATE-----'),
   });
 
-  // the key is the certificate's own
   expect(
     new X509Certificate(certificate.chainPem).checkPrivateKey(createPrivateKey(certificate.keyPem)),
   ).toBeTrue();

@@ -9,12 +9,6 @@ import { readImpByName } from '../platform/db/imps';
 import { readSecret } from '../platform/db/secrets';
 import { listTokenRecords } from '../platform/db/tokens';
 
-// tokens.update: a token's grantable list changed in place
-// (docs/guides/tokens.md#change-the-list), through the API as a client calls it.
-
-// impd's real app on stub VMs, a root client, `sendToImpd` for the clients a
-// test makes, and `gap`: its `once` runs in the next grant write, between the
-// access check and the transaction, and then resets
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -25,7 +19,6 @@ async function setupTest() {
   const harness = await startTestImpd(stack, {
     boundaries: {
       broker: {
-        // the race window: what a test sets runs once, then writes run on
         beforeGrantWrite: () => {
           const run = gap.once;
 
@@ -37,10 +30,8 @@ async function setupTest() {
     },
   });
 
-  // the default image, which every imps.create boots when it names none
   await harness.createTestImage('base');
 
-  // the impd that runs now, through a restart too
   const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
 
   return Object.assign(harness, { sendToImpd, gap });
@@ -118,7 +109,6 @@ test.each([
   );
 });
 
-// the same rule as a list change: a grant on an imp outside every pattern
 test('it lets a host-wide manage token grant on any imp', async () => {
   const ctx = await setupTest();
 
@@ -231,8 +221,6 @@ test('it revokes a secret taken off the list on the token’s imps only', async 
     }),
   );
 
-  // made through the token, by the root token on one of its imps, and on an
-  // imp outside its patterns
   await agent.grants.add({ name: 'dev-a', secret: 'gh' });
   await agent.grants.add({ name: 'dev-a', secret: 'npm' });
   await ctx.client.grants.add({ name: 'dev-b', secret: 'gh' });
@@ -306,7 +294,6 @@ test('it refuses a list entry a rebind left stale', async () => {
     grantable: ['gh'],
   });
 
-  // a rebind gives gh another generation, so the list no longer covers it
   await ctx.client.secrets.add({
     name: 'gh',
     kind: 'custom',
@@ -343,7 +330,6 @@ test('it binds each entry to its secret’s generation at the update', async () 
     grantable: ['gh'],
   });
 
-  // a rebind gives gh another generation than the list holds
   await ctx.client.secrets.add({
     name: 'gh',
     kind: 'custom',
@@ -480,7 +466,6 @@ test('it records each change in the API audit log, refused or made', async () =>
 
   await expect(caller.tokens.update({ name: 'agent', grantable: [] })).toReject();
 
-  // what `impz audit --kind api` reads
   const calls = await ctx.client.audit.calls({});
 
   expect(

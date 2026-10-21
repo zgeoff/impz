@@ -19,9 +19,6 @@ type ResourceKind =
   | 'oauth-approval'
   | 'database-copy';
 
-// Errors from the contract's IMP_ERRORS, built where the services detect
-// them; oRPC passes them to the client unchanged.
-
 export function buildNotFoundError(kind: ResourceKind, name: string) {
   return new ORPCError('NOT_FOUND', {
     message: `${kind} ${name} not found`,
@@ -36,20 +33,14 @@ export function buildConflictError(kind: ResourceKind, name: string, message?: s
   });
 }
 
-// an imp created with backup off: no backup holds it, and nothing may copy
-// its disk into one (docs/architecture/storage/backups.md#imps-left-out)
 export const NOT_BACKED_UP_REASON = 'created with backup off';
 
-// PRECONDITION_FAILED for a call that would put a left-out imp's disk in a
-// backup, or bring one back from it
 export function buildNotBackedUpError(name: string, refusal: string) {
   return new ORPCError('PRECONDITION_FAILED', {
     message: `imp ${name} is left out of backups (${NOT_BACKED_UP_REASON}): ${refusal}`,
   });
 }
 
-// the caller's scope or imp patterns do not cover the call; a reason when
-// the client can act on it
 export function buildForbiddenError(message: string, reason: ForbiddenReason | null = null) {
   return reason === null
     ? new ORPCError('FORBIDDEN', { message })
@@ -72,10 +63,8 @@ export function buildAgentOutdatedApiError(message: string) {
   return new ORPCError('AGENT_OUTDATED', { status: 409, message });
 }
 
-// how long a caller waits before it asks again about a moving imp
 export const MOVING_RETRY_AFTER_S = 30;
 
-// a move holds no lock while it sends: every other change fails at once
 export function buildMovingError(name: string) {
   return new ORPCError('MOVING', {
     status: 409,
@@ -88,14 +77,12 @@ export function isMovingError(error: unknown): error is ORPCError<'MOVING', unkn
   return error instanceof ORPCError && error.code === 'MOVING';
 }
 
-// an image builder is impd's alone while it builds (docs/guides/images.md#isolated-builds)
 export function buildBuilderError(name: string) {
   return new ORPCError('PRECONDITION_FAILED', {
     message: `${name} is an image builder that impd made for one build; only rm reaches it`,
   });
 }
 
-// a kernel oops kept its hold on the imp's disk (docs/guides/operations.md#a-kernel-oops)
 export function buildRebootNeededError(name: string) {
   return new ORPCError('PRECONDITION_FAILED', {
     message: `the host needs a reboot: a kernel oops holds the disk of ${name}; reboot the host, then start it`,
@@ -110,20 +97,13 @@ export function isRamBudgetError(error: unknown): boolean {
   return error instanceof ORPCError && error.code === 'RAM_BUDGET_EXCEEDED';
 }
 
-// an awake imp the governor could not sleep to make room
 export interface ProtectedImp {
   readonly name: string;
   readonly ramMib: number;
-
-  // a live lease of any kind, `hold` included
   readonly leased: boolean;
-
-  // under a lifecycle operation, in use, or its sleep failed
   readonly busy: boolean;
 }
 
-// What only some callers may see: lease owners, other imps' names. The
-// error carries counts; auth/caller-view.ts adds what each caller may see.
 type CallerData =
   | { readonly kind: 'leases'; readonly name: string; readonly leases: readonly LeaseRecord[] }
   | { readonly kind: 'protected'; readonly imps: readonly ProtectedImp[] };
@@ -141,7 +121,6 @@ interface RamShortfall {
   readonly protected: readonly ProtectedImp[];
 }
 
-// sleeping every other imp would not help: the guest can grow past the budget
 export function buildImpOverBudgetError(budgetMib: number, usedMib: number, memoryMib: number) {
   return buildRamError(
     `the imp's memory, at its max (${String(memoryMib)} MiB), is larger than the whole RAM budget (${String(budgetMib)} MiB)`,
@@ -160,7 +139,6 @@ export function buildRamBudgetError(shortfall: Readonly<RamShortfall>) {
   );
 }
 
-// what a boot or wake lacks past the budget; GovernorDecision says it too
 export function buildNeededMib(usedMib: number, requestedMib: number, budgetMib: number): number {
   return Math.max(0, usedMib + requestedMib - budgetMib);
 }
@@ -184,7 +162,6 @@ function buildRamError(message: string, shortfall: Readonly<RamShortfall>) {
   return error;
 }
 
-// a user's sleep or stop, without force, of an imp leased through leases.*
 export function buildLeasedError(name: string, leases: readonly LeaseRecord[]) {
   const error = new ORPCError('LEASED', {
     status: 409,

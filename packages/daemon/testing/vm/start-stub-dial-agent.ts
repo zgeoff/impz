@@ -1,9 +1,6 @@
 import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
-// An agent whose dial reaches a target that answers once the request is
-// whole: `{ ok: true }`, then on stdin EOF `answer` of all the stdin as one
-// stdout frame, STDOUT_EOF and the end of the connection. Any op is a dial.
 export function startStubDialAgent(
   path: string,
   answer: (asked: string) => string,

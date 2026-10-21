@@ -6,15 +6,9 @@ import { createAgentWatchdog } from '../../vm/watchdog/agent-watchdog';
 import type { AgentWatchdog } from '../../vm/watchdog/agent-watchdog';
 import { writeWatchdogSnapshot } from './write-watchdog-snapshot';
 
-// the confirming ping: longer than the idle loop's 1 s, for a guest that is
-// only busy
 const CONFIRM_MS = 5000;
-
-// the look again under the lock, which holds off every other operation
 const RECHECK_MS = 1000;
 
-// The watchdog over impd's own imps: its recovery takes the imp's lock the
-// way background sleeps do, and gives way to any operation holding it.
 export function createImpWatchdog(
   context: ImpHost & ImpClock & ImpVms & ImpDisk,
   lock: ImpLock,
@@ -29,14 +23,12 @@ export function createImpWatchdog(
       !(await context.vms.probeAgentReady(context.findPaths(imp.id), CONFIRM_MS)),
     recover: async (imp, action) => {
       const result = await lock.tryWithImpId(imp.id, async (fresh) => {
-        // a sleep and a wake during the confirming ping left another VM
         if (fresh?.state !== 'running' || fresh.pid !== imp.pid) {
           return false;
         }
 
         const paths = context.findPaths(fresh.id);
 
-        // the last look, under the lock: the agent may have come back
         const answered = await context.vms.probeAgentReady(paths, RECHECK_MS);
 
         if (answered) {

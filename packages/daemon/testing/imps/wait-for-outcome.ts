@@ -1,7 +1,5 @@
 import { waitFor } from '@impz/test-utils/wait-for';
 
-// 'done' or 'failed' once the promise settles, 'hung' when it is still
-// pending after `ms` of polling its state, read on `clock`
 export async function waitForOutcome(
   promise: Promise<unknown>,
   durationMs: number,

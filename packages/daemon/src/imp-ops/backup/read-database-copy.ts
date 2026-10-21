@@ -19,12 +19,9 @@ const CopyImpSchema = z.object({
   diskBytes: z.int(),
   egressAllow: z.string(),
   identityResetPending: z.int(),
-
-  // 0 for an imp left out of every run
   backup: z.int(),
 });
 
-// the filter as the grants row keeps it, JSON or null
 const CopyGrantSchema = z.object({
   impId: z.string(),
   secretName: z.string(),
@@ -67,20 +64,14 @@ type CopyMember = z.infer<typeof CopyMemberSchema>;
 export interface DatabaseCopy {
   readonly imps: readonly CopyImp[];
 
-  // oldest first
   readonly checkpoints: readonly CopyCheckpoint[];
   readonly images: readonly CopyImage[];
-
-  // secret names only: values live in <data>/secrets, which no backup reads
   readonly grants: readonly CopyGrant[];
-
-  // network names: a restore makes any that are missing
   readonly members: readonly CopyMember[];
 }
 
-// One consistent view of the database for a backup run: `VACUUM INTO` copies
-// it in a single read transaction, and the run backs up only what it names,
-// which leaves out image builders.
+// `VACUUM INTO` copies the database in one read transaction, so a backup run
+// sees one consistent view.
 export async function readDatabaseCopy(db: ImpDatabase, path: string): Promise<DatabaseCopy> {
   mkdirSync(dirname(path), { recursive: true });
   rmSync(path, { force: true });

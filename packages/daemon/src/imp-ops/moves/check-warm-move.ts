@@ -37,8 +37,6 @@ interface WarmSendDeps {
   readonly readTapMac?: (tap: string) => string | null;
 }
 
-// A sleeping imp moves warm only to a target that can load its memory;
-// else the refusal names each fact that differs
 export async function checkWarmMove(
   deps: WarmSendDeps,
   imp: ImpRecord,
@@ -54,9 +52,8 @@ export async function checkWarmMove(
       ? ['the target does not say what it can load']
       : collectWarmMismatches(move, target);
 
-  // The guest knows its gateway by this tap's MAC. A tap made before taps
-  // took their slot's MAC has a random one, which no target tap has; with
-  // no tap (a host restart removed it), the guest may still hold one
+  // The guest knows its gateway by this tap's MAC, so the target's tap for
+  // the slot must carry the same one.
   const address = deriveSlotAddress(imp.slot, { subnet: deps.config.subnet, portBase: 0 });
   const tapMac = (deps.readTapMac ?? readTapMac)(address.tap);
 
@@ -66,7 +63,6 @@ export async function checkWarmMove(
     mismatches.push(`its tap ${address.tap} has a MAC from before slot MACs (${tapMac})`);
   }
 
-  // the guest holds its peers' addresses, which are other imps' on the target
   const members = await listNetworkMembers(deps.db);
 
   const networks = members
@@ -86,7 +82,6 @@ export async function checkWarmMove(
   return move;
 }
 
-// a sleeping imp's snapshot record, which a warm send carries
 export function requireSnapshotMeta(
   deps: Pick<WarmSendDeps, 'storage'>,
   imp: ImpRecord,
@@ -100,14 +95,11 @@ export function requireSnapshotMeta(
   return meta;
 }
 
-// a warm send's memory snapshot, and whether the target needs its drive
 export interface WarmParts {
   readonly meta: SnapshotMeta;
   readonly isDriveIncluded: boolean;
 }
 
-// a warm send's part of the header: what the target checks, the snapshot's
-// record and vm.json, and a box imp's resolved addresses
 export async function readWarmHeader(
   deps: WarmSendDeps,
   imp: ImpRecord,
@@ -132,7 +124,6 @@ interface WarmReceiveDeps {
   readonly readWarmHost: () => WarmHost;
 }
 
-// the facts of a warm move this host does not match, as a refusal
 export function requireWarmMove(deps: Pick<WarmReceiveDeps, 'readWarmHost'>, move: WarmMove): void {
   const mismatches = collectWarmMismatches(move, deps.readWarmHost());
 
@@ -141,8 +132,8 @@ export function requireWarmMove(deps: Pick<WarmReceiveDeps, 'readWarmHost'>, mov
   }
 }
 
-// Firecracker reopens the drive by the path the snapshot names: only this
-// host's own path for that sha256, whether the drive came along or not
+// Firecracker reopens the drive by the path the snapshot names, so only this
+// host's own path for that sha256 is accepted.
 export function requireOwnDrivePath(
   deps: Pick<WarmReceiveDeps, 'dataDir'>,
   warm: NonNullable<MoveHeader['warm']>,
@@ -160,21 +151,14 @@ type ReceivedFile = ReceiptBody['files'][number];
 interface WarmFiles {
   readonly impId: string;
   readonly warm: NonNullable<MoveHeader['warm']>;
-
-  // reads the stream's next file, which must be of this kind, into the path
   readonly readFile: (
     kind: 'system-drive' | 'vmstate' | 'mem',
     path: string,
   ) => Promise<{ sha256: string; bytes: number }>;
-
-  // where the system drive lands before it goes under its own sha256
   readonly temp: string;
   readonly onFile: (file: ReceivedFile) => void;
 }
 
-// A warm move's files, after the disk: the system drive when this host
-// lacks it, then vmstate and mem straight into the snapshot directory,
-// which loads nothing without meta.json. meta.json goes last.
 export async function writeWarmFiles(deps: WarmReceiveDeps, files: WarmFiles): Promise<void> {
   const warm = files.warm;
   const paths = deps.storage.resolveImpPaths(files.impId);
@@ -205,7 +189,6 @@ export async function writeWarmFiles(deps: WarmReceiveDeps, files: WarmFiles): P
     await deps.egress.writeAnswers(warm.move.slot, answer.names, [answer]);
   }
 
-  // the wake's own check, before the record that lets a wake load it
   const reason = readColdBootReason(warm.meta, deps.readIdentity());
 
   if (reason !== null) {
@@ -215,8 +198,8 @@ export async function writeWarmFiles(deps: WarmReceiveDeps, files: WarmFiles): P
   writeSnapshotMeta(paths, warm.meta);
 }
 
-// A drive lands under its own sha256, which other snapshots trust: what
-// arrived must hash to the name the snapshot gives it
+// A drive lands under its own sha256, which other snapshots trust, so what
+// arrived must hash to the name the snapshot gives it.
 async function writeSystemDrive(
   deps: Pick<WarmReceiveDeps, 'dataDir'>,
   temp: string,

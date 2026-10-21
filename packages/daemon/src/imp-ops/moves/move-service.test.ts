@@ -37,7 +37,6 @@ import {
 } from './move-tickets';
 import { MOVE_TRANSITIONS } from './move-transitions';
 
-// two impds, the source's move routes reaching the target's in process
 function setupTest(config: Readonly<MoveHostsOptions> = {}) {
   return setupMoveHosts(config);
 }
@@ -193,8 +192,6 @@ test('it lets an imp start again once an abort before the stream undoes its mark
   const started = await ctx.sourceApp.client.imps.start({ name: 'dev' });
 
   expect(started.state).toBe('running');
-
-  // nothing reached the target, so it counted nothing
   expect(ctx.commits).toStrictEqual([]);
 });
 
@@ -372,7 +369,6 @@ test('it ends a move whose target sends no answer to a part within an hour', asy
   const ctx = await setupTest({
     startPeerDeadline: clock.startTimer,
 
-    // the first part is held until its request is aborted
     hook: (request, forward) => {
       if (request.headers.get(MOVE_PART_HEADER) !== '0') {
         return forward();
@@ -417,7 +413,6 @@ test('it ends a move whose target sends no answer to the finish within an hour',
   const ctx = await setupTest({
     startPeerDeadline: clock.startTimer,
 
-    // the finish is held until its request is aborted
     hook: (request, forward) => {
       if (request.headers.get(MOVE_FINISH_HEADER) !== '1') {
         return forward();
@@ -462,7 +457,6 @@ test('it keeps both copies when the target sends no answer to the commit within 
   const ctx = await setupTest({
     startPeerDeadline: clock.startTimer,
 
-    // the commit is held until its request is aborted
     hook: (request, forward) => {
       if (!request.url.endsWith(MOVE_PATHS.commit)) {
         return forward();
@@ -509,7 +503,6 @@ test('it ends a move whose target sends no answer to the offer within ten minute
   const ctx = await setupTest({
     startPeerDeadline: clock.startTimer,
 
-    // the offer is held until its request is aborted
     hook: (request, forward) => {
       if (!request.url.endsWith(MOVE_PATHS.offer)) {
         return forward();
@@ -554,8 +547,6 @@ test('it keeps the mark when the target sends no answer to the abort within ten 
   const ctx = await setupTest({
     startPeerDeadline: clock.startTimer,
 
-    // the stream fails at once; the abort that follows is held until its
-    // request is aborted
     hook: (request, forward) => {
       if (request.url.endsWith(MOVE_PATHS.receive)) {
         return Promise.reject(new TypeError('Unable to connect'));
@@ -604,7 +595,6 @@ test('it reports no error for a failed send while its abort still goes', async (
   const abortRelease = Promise.withResolvers<undefined>();
   const sendEnded = { wait: (): Promise<unknown> => Promise.resolve() };
 
-  // the held abort, and with it the send, ends before the hosts go
   onTestFinished(() => {
     abortRelease.resolve(undefined);
 
@@ -702,8 +692,6 @@ test('it commits on resume after a lost commit, and the source copy goes', async
   expect(target?.moveState).toBeNull();
 });
 
-// #167: main counts the received disk on this hook, so a repeat must not
-// fire it again
 test('it reports the commit on the target once when a commit whose answer was lost resumes', async () => {
   const ctx = await setupTest({ hook: makeStubDroppedCommit({ drops: 'answer' }) });
 
@@ -722,7 +710,6 @@ test('it reports the commit on the target once when a commit whose answer was lo
 });
 
 test('it destroys the source copy on an abort after the target committed', async () => {
-  // the commit lands, but its answer never reaches the source
   const ctx = await setupTest({ hook: makeStubDroppedCommit({ drops: 'answer' }) });
 
   await createUbuntuImage(ctx.source);
@@ -740,8 +727,6 @@ test('it destroys the source copy on an abort after the target committed', async
   expect(aborted.isDone).toBe(true);
   expect(source).toBeUndefined();
   expect(target.move).toBeUndefined();
-
-  // the target's one commit counted the disk; the abort counts nothing more
   expect(ctx.commits).toStrictEqual(['dev']);
 });
 
@@ -1010,8 +995,6 @@ test('it files the image a target lacks under the digest of what arrived', async
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(image.digest).toStartWith('sha256:');
-
-  // filed under what arrived, never the source's claim
   expect(image.digest).not.toBe('sha256:ubuntu');
 
   const hex = image.digest.slice('sha256:'.length);
@@ -1216,7 +1199,6 @@ test('it refuses to move an elastic imp to a target that would drop its max memo
   const landed = await readImpByName(ctx.target.db, 'dev');
   const source = await readImpByName(ctx.source.db, 'dev');
 
-  // nothing went: the source keeps the imp, unmarked, and the target has none
   expect(status.error).toContain('predates elastic memory');
   expect(status.sentBytes).toBe(0);
   expect(source).toMatchObject({ state: 'stopped', moveState: null, maxMemoryMib: 1024 });
@@ -1314,7 +1296,6 @@ test('it undoes on restart a send cut short', async () => {
   await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
   await ctx.source.moves.recover();
 
-  // recovery runs in the background
   const undone = await waitFor(async () => {
     const imp = await readImpByName(ctx.source.db, 'dev');
 
@@ -1329,7 +1310,6 @@ test('it undoes on restart a send cut short', async () => {
 });
 
 test('it finishes on restart a send the target has verified', async () => {
-  // the commit a restart cut short
   const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
   await createUbuntuImage(ctx.source);
@@ -1342,7 +1322,6 @@ test('it finishes on restart a send the target has verified', async () => {
 
   await ctx.source.moves.recover();
 
-  // recovery runs in the background
   await waitFor(async () => {
     const imp = await readImpByName(ctx.source.db, 'dev');
 
@@ -1407,7 +1386,6 @@ test('it counts a target that holds the imp unmarked as committed', async () => 
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
   await ctx.runMove('dev');
 
-  // as a crash between the mark and the ticket would have left it
   await updateImpMove(ctx.target.db, created.id, null);
 
   const aborted = await ctx.sourceApp.client.moves.abort({ name: 'dev' });
@@ -1487,7 +1465,6 @@ test('it moves the imp to the target when its commit lands before a racing abort
 
   const ctx = await setupTest({
     hook: async (request, forward, hosts) => {
-      // the abort reaches the target only once the resume's commit landed
       if (request.url.endsWith(MOVE_PATHS.abort)) {
         await committed.promise;
       }
@@ -1529,8 +1506,6 @@ test('it keeps the imp on the source when a racing abort reaches the target befo
 
   const ctx = await setupTest({
     hook: async (request, forward, hosts) => {
-      // the resume's commit, the second, reaches the network only once the
-      // abort is through; the first is the one the network drops
       if (request.url.endsWith(MOVE_PATHS.commit)) {
         commits.sent += 1;
       }
@@ -1647,7 +1622,6 @@ test('it goes on with a stream longer than 10 minutes while its parts keep comin
   const ctx = await setupTest({
     partBytes: 4096,
     hook: (request, forward, hosts) => {
-      // 50 s between parts, on the target's clock
       if (request.headers.has(MOVE_PART_HEADER)) {
         hosts.target.advance(50_000);
       }
@@ -1728,7 +1702,6 @@ test("it takes a stream whose header names its ticket's imp", async () => {
   expect(status.error).toBeNull();
 });
 
-// the target's answer comes back trimmed
 test.each([
   ['a different name', 'other', 'not other'],
   ['a case variant', 'Dev', 'not Dev'],
@@ -2155,7 +2128,6 @@ test('it never commits a ZFS stream whose sum does not match', async () => {
   const pool = targetZfs.readPool();
   const received = pool.commands.filter((command) => command.startsWith('zfs recv'));
 
-  // nothing to clean up: `zfs recv` never saw the stream's end
   const cleaned = pool.commands.filter(
     (command) => command.includes('/staging/mvin-') && !command.startsWith('zfs recv'),
   );
@@ -2267,7 +2239,6 @@ test('it refuses a ZFS stream whose data frames come out of order', async () => 
 
         const payload = new Uint8Array(frame.payload);
 
-        // the 8-byte big-endian offset that opens a DATA payload
         new DataView(payload.buffer).setBigUint64(0, 1n);
 
         return { type: frame.type, payload };
@@ -2340,7 +2311,6 @@ test('it moves an imp from an XFS host to a ZFS host as files, its checkpoints a
 test('it writes each move mark MOVE_TRANSITIONS holds, and no other, on both hosts', async () => {
   const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
-  // each imp's last mark on each host, and every change a write made to it
   const marks = new Map<string, MoveState | null>();
 
   const written: (readonly [MoveState | null, MoveState | null])[] = [];
@@ -2371,22 +2341,16 @@ test('it writes each move mark MOVE_TRANSITIONS holds, and no other, on both hos
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
 
-  // an abort before the stream
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
   await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
   await ctx.sourceApp.client.moves.abort({ name: 'dev' });
-
-  // a stream to its receipt, a dropped commit, then an abort
   await ctx.runMove('dev');
   await ctx.sourceApp.client.moves.abort({ name: 'dev' });
-
-  // a whole move
   await ctx.sourceApp.client.imps.create({ name: 'web', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.stop({ name: 'web' });
   await ctx.runMove('web');
 
-  // every mark these moves write is in the table, and each the table holds is written
   expect(new Set(written.map(([from, to]) => `${String(from)} → ${String(to)}`))).toStrictEqual(
     new Set(MOVE_TRANSITIONS.map(([from, to]) => `${String(from)} → ${String(to)}`)),
   );

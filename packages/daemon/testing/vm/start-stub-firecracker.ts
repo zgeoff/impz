@@ -7,22 +7,15 @@ import type { StubGuestMemory } from './stub-guest-memory-schema';
 interface StubFirecrackerOptions {
   readonly apiSocket: string;
 
-  // where each call is appended, one line each
   readonly logPath: string;
 
-  // prefixes of `METHOD path body` that get Firecracker's 400
   readonly failures?: readonly string[];
 
-  // true: log each call's body after its path
   readonly isLoggingBodies?: boolean;
 
-  // the guest memory a snapshot writes; without it a snapshot writes no files
   readonly memory?: Readonly<StubGuestMemory>;
 }
 
-// The command that runs run-stub-firecracker.ts in place of Firecracker,
-// for a jail stand-in to hand to startFirecracker. Its argv names the API
-// socket, as the liveness check of a Firecracker expects.
 export function buildStubFirecrackerArgv(options: Readonly<StubFirecrackerOptions>): string[] {
   const failures = options.failures ?? [];
 
@@ -38,8 +31,6 @@ export function buildStubFirecrackerArgv(options: Readonly<StubFirecrackerOption
   ];
 }
 
-// Starts the stand-in as a process of its own, like a VM impd adopts, and
-// waits for its API socket; the process is killed when the test ends.
 export async function startStubFirecracker(options: Readonly<StubFirecrackerOptions>) {
   const child = Bun.spawn(buildStubFirecrackerArgv(options), {
     stdin: 'ignore',

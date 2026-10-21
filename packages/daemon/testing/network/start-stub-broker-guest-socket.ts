@@ -2,14 +2,9 @@ import { createConnection } from 'node:net';
 
 interface StubGuestSocketOptions {
   readonly port: number;
-
-  // the guest's own address: a loopback one stands for a slot's guest
   readonly address: string;
 }
 
-// A guest's raw connection to the broker's front port on 127.0.0.1, open
-// until the caller's stack releases it. `reply` resolves with every byte the
-// broker sent once the connection closes.
 export async function startStubBrokerGuestSocket(
   stack: Readonly<AsyncDisposableStack>,
   options: Readonly<StubGuestSocketOptions>,

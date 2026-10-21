@@ -12,9 +12,8 @@ interface InvariantParts {
   };
 }
 
-// What is wrong with the records once all work stopped, read raw: a service
-// read repairs a dead VM or a lost snapshot and would hide the bug. Until
-// `livenessRan`, a running record may still name a VM that died.
+// The records are read raw, because a service read repairs a dead VM or a lost snapshot
+// and would hide the bug. Until `livenessRan`, a running record may still name a VM that died.
 export async function readBrokenInvariants(
   ctx: Readonly<InvariantParts>,
   livenessRan: boolean,

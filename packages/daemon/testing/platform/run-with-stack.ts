@@ -1,6 +1,3 @@
-// Runs `body` with a fresh stack and releases it once `body` settles, pass
-// or fail, as a property case must before the next. A release that fails
-// after `body` failed rejects as a SuppressedError over the body's error.
 export async function runWithStack<T>(
   body: (stack: Readonly<AsyncDisposableStack>) => Promise<T>,
 ): Promise<T> {

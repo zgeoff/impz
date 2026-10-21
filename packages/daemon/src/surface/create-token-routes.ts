@@ -2,7 +2,6 @@ import { toIdentity } from '../identity/auth/caller';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 
-// `tokens.*`: the API tokens, their lists and their SSH keys
 export function createTokenRoutes(os: RpcImplementer, deps: RouterDeps) {
   return {
     list: os.tokens.list.handler(() => deps.tokens.list()),
@@ -18,9 +17,6 @@ export function createTokenRoutes(os: RpcImplementer, deps: RouterDeps) {
         }),
       }),
     ),
-
-    // a secret taken off the list ends its grants on the token's imps, so
-    // the broker drops what no grant covers any more
     update: os.tokens.update.handler(async (context) => {
       const updated = await deps.tokens.update(context.input.name, {
         ...(context.input.grantable !== undefined && { grantable: context.input.grantable }),

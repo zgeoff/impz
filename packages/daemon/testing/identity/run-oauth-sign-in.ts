@@ -2,10 +2,6 @@ import * as z from 'zod';
 import { PKCE_VERIFIER, createPendingSignIn } from './create-pending-sign-in';
 import type { SignInRoute } from './create-pending-sign-in';
 
-// A whole sign-in on the public MCP route, as arrangement: the login page,
-// the approval `approve` makes, Continue, Allow, and the code's exchange.
-// Throws, naming the step, when one goes another way.
-
 const TokensSchema = z.object({
   access_token: z.string(),
   refresh_token: z.string(),

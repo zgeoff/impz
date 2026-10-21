@@ -2,12 +2,10 @@ import { isImpAllowed } from '@impz/api';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 
-// `secrets.*`: the broker's secrets
 export function createSecretRoutes(os: RpcImplementer, deps: RouterDeps) {
   return {
     add: os.secrets.add.handler((context) => deps.broker.addSecret(context.input)),
 
-    // a caller limited to some imps sees the grants to those only
     list: os.secrets.list.handler(async (context) => {
       const patterns = context.context.caller.imps;
 

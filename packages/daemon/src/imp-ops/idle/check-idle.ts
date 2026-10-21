@@ -1,18 +1,12 @@
-// What keeps an imp awake (docs/architecture/lifecycle/sleep-and-wake.md#idle-detection). An open
-// proxied connection also shows in `tcpEstablished`; the proxy sends `Connection: close`
-// upstream, so a finished request leaves no keep-alive socket in the guest to count.
 export interface IdleSignals {
   readonly execSessions: number;
   readonly proxyConnections: number;
-
-  // authenticated SSH connections, with or without a channel open
   readonly sshConnections: number;
-
-  // `impz proxy` connections
   readonly tunnelConnections: number;
-  readonly tcpEstablished: number;
 
-  // percent of one core since the last sample; null on the first sample
+  // The proxy sends `Connection: close` upstream, so a finished proxied
+  // request leaves no keep-alive socket in the guest to count.
+  readonly tcpEstablished: number;
   readonly cpuPercent: number | null;
   readonly holdUntil: number | null;
   readonly lastActiveAt: number;
@@ -25,7 +19,6 @@ interface IdleSettings {
 }
 
 interface IdleDecision {
-  // why the imp counts as active now, or null when it is idle
   readonly activeReason: string | null;
   readonly sleep: boolean;
 }

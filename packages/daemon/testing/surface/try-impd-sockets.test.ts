@@ -14,9 +14,6 @@ import { buildStubExecGuest } from '../vm/build-stub-exec-guest';
 import { startStubExecAgent } from '../vm/start-stub-exec-agent';
 import { buildImpdSocketUrl, tryExecSocket, tryTunnelSocket } from './try-impd-sockets';
 
-// impd's real app on a loopback port, as the clients reach it, and a root
-// client for the scenario; an armed `gate` holds impd's next read of the
-// imps until the test releases it
 async function setupTest() {
   // first, so a held read lets go before impd stops
   const gate = buildQueryGate('imps');
@@ -75,7 +72,6 @@ test('#tryExecSocket opens /exec with the query', async () => {
   const issued = await ctx.client.exec.ticket({ name: 'dev' });
   const reply = await tryExecSocket(ctx.port, `ticket=${issued.ticket}`, 'other');
 
-  // past the upgrade on the ticket, refused at start: it names another imp
   expect(reply).toBe(
     '{"type":"error","code":"FORBIDDEN","message":"the exec ticket is for imp dev"}',
   );
@@ -101,7 +97,6 @@ test('#tryExecSocket returns closed when the server closes without a message', a
 
   await ctx.gate.reached;
 
-  // impd closes the socket of a token removed while its start waits
   await ctx.client.tokens.delete({ name: 'agent' });
 
   const reply = await trying;
@@ -166,7 +161,6 @@ test('#tryTunnelSocket returns closed when the server closes without a message',
 
   await ctx.gate.reached;
 
-  // impd closes the socket of a token removed while its open waits
   await ctx.client.tokens.delete({ name: 'agent' });
 
   const reply = await trying;

@@ -8,7 +8,6 @@ function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // a front port that answers each CONNECT with the reply the test sets
   const state = { reply: '', heads: [] as string[] };
 
   const front = Bun.listen({
@@ -31,9 +30,6 @@ function setupTest() {
 
 test('it sends nothing until the head is sent', async () => {
   const ctx = setupTest();
-
-  // a front that ends its side at once but reads on: the guest's side ends
-  // in turn, after any bytes it sent on connect
   const heard: string[] = [];
   const hungUp = Promise.withResolvers<void>();
 

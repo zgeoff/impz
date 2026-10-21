@@ -1,8 +1,6 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// A tar of a fresh directory in `dir` that holds these files, each named on
-// tar's command line, as a builder's export streams an image's tree
 export function createFilesTar(
   directory: string,
   files: Readonly<Record<string, string>>,

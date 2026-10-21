@@ -4,17 +4,8 @@ import type { Revocations } from '../../identity/auth/revocations';
 import type { TokenStore } from '../../identity/auth/token-store';
 import { createTtlCache } from '../../platform/process/ttl-cache';
 
-// Single-use `/exec` tickets: a browser WebSocket cannot send the bearer
-// header, and the token must never land in a URL (docs/architecture/control/api.md#exec-and-tunnels).
-
 const TICKET_TTL_MS = 30_000;
-
-// a client asking in a loop evicts its own oldest tickets instead of growing
-// the map, and never another caller's
 const MAX_LIVE_TICKETS_PER_CALLER = 32;
-
-// past this, the oldest ticket of any caller goes; only that many callers
-// asking at once reach it
 const MAX_LIVE_TICKETS = 1024;
 
 interface IssuedTicket {
@@ -22,7 +13,6 @@ interface IssuedTicket {
   readonly expiresAt: Date;
 }
 
-// the imp a ticket opens, and who asked for it: the socket runs as them
 interface TicketHolder {
   readonly name: string;
   readonly caller: Caller;
@@ -30,9 +20,6 @@ interface TicketHolder {
 
 export interface ExecTickets {
   readonly issue: (name: string, caller: Caller) => IssuedTicket;
-
-  // what the ticket was issued for, or null when it is unknown, expired,
-  // used, or its caller's token is gone; a ticket redeems once
   readonly redeem: (ticket: string) => TicketHolder | null;
 }
 
@@ -44,13 +31,9 @@ interface LiveTicket {
 
 interface ExecTicketsDeps {
   readonly now: () => number;
-
-  // false once the caller's token is removed
   readonly isLive: (caller: Readonly<Caller>) => boolean;
 }
 
-// whether a ticket's caller may still open it: its token is there and its
-// OAuth grant, if any, is not revoked
 export function isCallerLive(
   tokens: Pick<TokenStore, 'findById'>,
   revocations: Pick<Revocations, 'isRevoked'>,
@@ -62,21 +45,19 @@ export function isCallerLive(
   );
 }
 
-// A ticket is `<id>.<secret>`: the id finds the entry, and the secret is
-// compared in constant time, so a map lookup's timing gives nothing away.
+// A browser WebSocket cannot send the bearer header, and a token must never
+// land in a URL, so `/exec` takes a single-use ticket.
 export function createExecTickets(deps: Readonly<ExecTicketsDeps>): ExecTickets {
   const now = deps.now;
 
-  // gone at 30 s, where lru-cache keeps an entry until its age passes the
-  // ttl, hence one ms less; lookups peek, so a set past MAX_LIVE_TICKETS
-  // evicts the oldest ticket of any caller
+  // lru-cache keeps an entry until its age passes the ttl, so the ttl is one
+  // ms under the ticket's life.
   const live = createTtlCache<string, LiveTicket>({
     max: MAX_LIVE_TICKETS,
     ttlMs: TICKET_TTL_MS - 1,
     now,
   });
 
-  // the owner's tickets, oldest first
   const listOwned = (owner: string): string[] =>
     [...live.rkeys()].filter((id) => live.peek(id)?.owner === owner);
 
@@ -127,7 +108,6 @@ export function createExecTickets(deps: Readonly<ExecTicketsDeps>): ExecTickets 
   };
 }
 
-// whose tickets count together: a token's by its id, else the identity's
 function readOwner(caller: Readonly<Caller>): string {
   return caller.tokenId === null ? `${caller.kind}:${caller.name}` : `token:${caller.tokenId}`;
 }

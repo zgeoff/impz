@@ -10,20 +10,14 @@ import {
 import { startStubAgent } from './start-stub-agent';
 
 interface StubInnerAgentOptions {
-  // the inner container its ping reports
   readonly inner: MessageInitShape<typeof InnerStatusSchema>;
 
-  // closes the agent; at the test's end by default
   readonly stack?: Readonly<AsyncDisposableStack>;
 }
 
-// A guest agent at `path` that answers what the idle loop asks: its ping
-// reports `inner`, as a 0.18.0 agent's does, and its activity no connections
-// and no sessions. Any other op gets UNKNOWN_OP.
 export function startStubInnerAgent(path: string, options: Readonly<StubInnerAgentOptions>) {
   const closeWith = options.stack === undefined ? {} : { stack: options.stack };
 
-  // every field the agent always writes, zero or not
   const inner = toJson(InnerStatusSchema, create(InnerStatusSchema, options.inner), {
     useProtoFieldName: true,
     alwaysEmitImplicit: true,

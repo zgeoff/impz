@@ -1,7 +1,6 @@
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 
-// `oauth.*`: the public MCP route's clients, grants and approvals
 export function createOAuthRoutes(os: RpcImplementer, deps: RouterDeps) {
   return {
     clients: {

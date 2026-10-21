@@ -1,8 +1,5 @@
 import type { DescMessage } from '@bufbuild/protobuf';
 
-// Every key path of a message in its JSON form under the schema's field
-// names, in collectJsonKeyPaths' form: `a`, `a.b`, and `a[]` for a list's
-// items, so `a[].b` for a field of a message in a list.
 export function collectMessageKeyPaths(schema: DescMessage, prefix = ''): string[] {
   const paths = schema.fields.flatMap((field) => {
     const path = prefix === '' ? field.name : `${prefix}.${field.name}`;

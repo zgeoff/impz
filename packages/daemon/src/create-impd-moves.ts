@@ -9,8 +9,6 @@ import type { ApiAudit } from './platform/audit/api-audit';
 import { printLog } from './platform/process/print-log';
 import type { HostIdentity } from './vm/sleep/vm-identity';
 
-// A move's reach past impd: the other host, the deadline on each request to
-// it, the part size, the warm facts and the source's taps
 // onCommitted hears each commit after impd's own hook, never in its place
 export type ImpdMoveBoundaries = Partial<
   Pick<
@@ -19,7 +17,6 @@ export type ImpdMoveBoundaries = Partial<
   >
 >;
 
-// The moves to and from other hosts
 export function createImpdMoves(
   config: Config,
   deps: Readonly<ImpdDeps>,

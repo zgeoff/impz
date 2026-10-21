@@ -13,12 +13,11 @@ interface MoveBytesDeps {
   readonly log: (message: string) => void;
 }
 
-// `zfs send -nP` estimates: the ticket allows this much more
+// `zfs send -nP` only estimates a stream's size, so the ticket allows this
+// much more.
 const ESTIMATE_SLACK = 1.1;
 const ESTIMATE_SLACK_BYTES = 64 * 1024 * 1024;
 
-// the bytes a send carries: the files' data, and the streams' estimate
-// with room to spare
 export async function countMoveBytes(
   deps: MoveBytesDeps,
   imp: ImpRecord,

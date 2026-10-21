@@ -21,7 +21,6 @@ import type { DiskBudget } from '../../vm/storage/disk-budget';
 const PROCEDURE = 'images.build';
 
 export interface BuildContextRoute {
-  // `toApi` turns the image into what the API shows
   readonly respond: (
     request: Request,
     caller: Readonly<Caller>,
@@ -32,34 +31,23 @@ export interface BuildContextRoute {
 export interface BuildContextDeps {
   readonly config: Pick<Config, 'dataDir' | 'buildContextMaxBytes'>;
   readonly images: Pick<ImageService, 'buildImageFromContext' | 'claimBuildSlot' | 'startBuildRun'>;
-
-  // holds room for the uploaded tar while it is on disk
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
   readonly audit: ApiAudit;
   readonly now: () => number;
-
-  // the gap between progress lines of a streamed build; BUILD_KEEPALIVE_MS
   readonly keepaliveMs: number;
-
-  // the keepalive's timer; runOnInterval by default
   readonly repeat?: Repeat;
 }
 
-// an error as the route answers it, with the code an oRPC call would give
 interface BuildFailure {
   readonly code: string;
   readonly message: string;
   readonly status: number;
 }
 
-// a build's end: the image as the API shows it, or its failure
 type BuildOutcome =
   | { readonly ok: true; readonly image: Image }
   | { readonly ok: false; readonly failure: BuildFailure };
 
-// `POST /images/build` (docs/guides/images.md#build-an-image): the context
-// streams to a temp file, never into memory, and the build reads it from
-// there. Clears what an earlier impd left in the uploads directory.
 export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRoute {
   const uploadsDir = buildUploadsDir(deps.config.dataDir);
 
@@ -101,10 +89,8 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
       const params = Object.fromEntries(new URL(request.url).searchParams);
       const parsed = ImageBuildQuerySchema.safeParse(params);
 
-      // images.build is host-wide, so no secret is read
       const denial = await checkAccess(findAccess(PROCEDURE), caller, params, readNoSecret);
 
-      // writes the audit row with what was thrown
       const writeFailure = (error: unknown): BuildFailure => {
         deps.audit.record({ procedure: PROCEDURE, actor: caller, impName: null, startedAt }, error);
 
@@ -128,7 +114,7 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
         return sendFailure(new ORPCError('BAD_REQUEST', { message }));
       }
 
-      // refused with a real status, before a stream answers 200
+      // A refusal must answer with its real status before a stream answers 200.
       let reserved: {
         readonly limitBytes: number;
         readonly run: BuildRun;
@@ -138,8 +124,6 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
       try {
         const limitBytes = readLimit(request, deps.config.buildContextMaxBytes);
         const releaseSlot = deps.images.claimBuildSlot();
-
-        // images.builds lists the build from its upload on
         const run = deps.images.startBuildRun(parsed.data.name, 'upload');
 
         reserved = {
@@ -161,7 +145,6 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
       ): Promise<BuildOutcome> => {
         const run = reserved.run;
 
-        // what the stream hears, images.builds hears too
         const tracked: BuildReport = {
           setPhase: (phase) => {
             run.setPhase(phase);
@@ -193,7 +176,6 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
 
           return { ok: true, image: toApi(image) };
         } catch (error) {
-          // a client that went is in the audit, not the log
           if (!(error instanceof ORPCError) && !signal.aborted) {
             getImpdLogger('image').error('image build from an upload failed: {error}', { error });
           }
@@ -222,7 +204,6 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
         );
       }
 
-      // the JSON answer shows no phase and no output
       const outcome = await runToOutcome(request.signal, {
         setPhase: () => {},
         output: { emitLog: () => {}, setStep: () => {} },
@@ -233,7 +214,6 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
   };
 }
 
-// Streams the body to `path` and stops past `limitBytes`
 async function writeBody(
   request: Request,
   path: string,
@@ -285,7 +265,6 @@ function readNoSecret(): Promise<null> {
   return Promise.resolve(null);
 }
 
-// answered with its code, as oRPC would
 function sendError(failure: BuildFailure): Response {
   return Response.json(
     { code: failure.code, message: failure.message },
@@ -293,8 +272,8 @@ function sendError(failure: BuildFailure): Response {
   );
 }
 
-// The bytes the body may hold. A Content-Length can only lower the limit:
-// writeBody counts the bytes that come, whatever the header said.
+// A Content-Length can only lower the limit, because a client can send more
+// than it declared; the body's bytes are counted as they come.
 function readLimit(request: Request, maxBytes: number): number {
   const declared = Number(request.headers.get('content-length') ?? Number.NaN);
 
@@ -309,7 +288,6 @@ function readLimit(request: Request, maxBytes: number): number {
   return declared;
 }
 
-// a client from before the stream sends no Accept, and gets JSON at the end
 function isStreamAccepted(request: Request): boolean {
   return request.headers.get('accept')?.includes(IMAGE_BUILD_STREAM_TYPE) === true;
 }

@@ -10,8 +10,6 @@ import { FRAME_TYPES, decodeJsonPayload } from '../../src/vm/agent-client/frame-
 import { buildStubExecGuest } from './build-stub-exec-guest';
 import { startStubExecAgent } from './start-stub-exec-agent';
 
-// a temp dir for the agent's socket, and `stack`, whose releases (the
-// agent's and the streams') run before the dir goes
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -84,7 +82,6 @@ test('it sends a detach of the guest’s command as a frame', async () => {
   const guest = buildStubExecGuest();
   const detached = { type: 'detached' as const, reason: 'the session went on' };
 
-  // the guest's stream, ended by a detach where its command would run on
   const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), {
     openExec: async (name, request) => {
       const stream = await guest.openExec(name, request);
@@ -320,7 +317,6 @@ test('it names the guest’s session in STARTED', async () => {
 
   const guest = buildStubExecGuest();
 
-  // the guest's stream, as a session's that this exec created
   const agent = await startStubExecAgent(join(ctx.directoryPath, 'v.sock'), {
     openExec: async (name, request) => {
       const stream = await guest.openExec(name, request);

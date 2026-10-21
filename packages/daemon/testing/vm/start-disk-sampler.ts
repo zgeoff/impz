@@ -3,21 +3,16 @@ import { existsSync, rmSync, statfsSync } from 'node:fs';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 
-// what one run took of the filesystem, over its use before the run
 export interface DiskTrial {
-  // 'built', or the error's code, or its text when it has none
   readonly outcome: string;
 
-  // the use once the run marked its write done and synced, which on XFS
-  // leaves out blocks held for writes not yet flushed; 0 if never marked
+  // Read after the run's sync, which on XFS still leaves out blocks reserved
+  // for writes not yet flushed.
   readonly settledBytes: number;
   readonly peakBytes: number;
   readonly lowestFree: number;
 }
 
-// Samples a filesystem every millisecond while a run writes to it, once its
-// free space has settled. A filler of its own, which fill() makes and the
-// test's end removes, leaves a chosen room free; `filler` names its path.
 export async function startDiskSampler(
   mount: string,
   filler: string = join(mount, `filler-${Bun.randomUUIDv7()}`),
@@ -34,7 +29,6 @@ export async function startDiskSampler(
   await waitForSettled(mount);
 
   return {
-    // fills the filesystem so that roomBytes is free above reserveBytes
     fill: async (roomBytes: number, reserveBytes: number) => {
       const fillBytes = readDisk(mount).free - reserveBytes - roomBytes;
 
@@ -59,7 +53,6 @@ export async function startDiskSampler(
       await waitForSettled(mount);
     },
 
-    // for the run to call once its writes are all on disk
     markWritten: () => {
       updateSeen();
 
@@ -97,8 +90,8 @@ function readDisk(mount: string): { free: number; used: number } {
   return { free: stats.bavail * stats.bsize, used: (stats.blocks - stats.bfree) * stats.bsize };
 }
 
-// XFS frees a removed file's blocks in the background: waits until free
-// space reads the same twice, 200 ms apart
+// XFS frees a removed file's blocks in the background, so free space counts
+// as settled only once two reads apart agree.
 async function waitForSettled(mount: string): Promise<void> {
   Bun.spawnSync(['sync', '-f', mount]);
 

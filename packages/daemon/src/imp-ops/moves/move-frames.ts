@@ -5,13 +5,10 @@ import * as z from 'zod';
 import type { StreamedCommand } from '../../platform/process/run-stream';
 import { readDataBlocks } from '../backup/read-data-blocks';
 
-// The move stream's frames, as docs/architecture/storage/moves.md#the-stream lays
-// them out: a type byte, a 4-byte big-endian length, the payload.
 export const MOVE_FRAMES = { header: 1, file: 2, data: 3, fileEnd: 4, end: 5 } as const;
 
 type FrameType = (typeof MOVE_FRAMES)[keyof typeof MOVE_FRAMES];
 
-// the data in one DATA frame; also the block size of the hole scan
 export const MOVE_BLOCK_BYTES = 1024 * 1024;
 const OFFSET_BYTES = 8;
 const HEADER_BYTES = 5;
@@ -28,8 +25,6 @@ export const MoveFileSchema = z.object({
     'vmstate',
     'mem',
   ]),
-
-  // a checkpoint's place, oldest first, or a ZFS stream's
   index: z.int().nonnegative().optional(),
   sizeBytes: z.int().nonnegative(),
 });
@@ -63,7 +58,6 @@ function encodeDataFrame(offset: number, data: Uint8Array): Uint8Array {
   return encodeFrame(MOVE_FRAMES.data, payload);
 }
 
-// a DATA payload's offset and bytes
 export function readDataPayload(payload: Uint8Array): { offset: number; data: Uint8Array } {
   if (payload.length < OFFSET_BYTES) {
     throw new Error('move stream: a DATA frame without its offset');
@@ -74,8 +68,6 @@ export function readDataPayload(payload: Uint8Array): { offset: number; data: Ui
   return { offset: Number(view.getBigUint64(0)), data: payload.subarray(OFFSET_BYTES) };
 }
 
-// The frames of one file: FILE, its data blocks, FILE_END. `onData` counts
-// the bytes as they go; the sha256 is what the receipt must repeat.
 export async function* encodeFile(
   path: string,
   file: MoveFile,
@@ -116,9 +108,6 @@ export async function* encodeFile(
   }
 }
 
-// The frames of a command's output, such as `zfs send`: FILE, its bytes in
-// DATA frames, FILE_END. A failed command fails the stream before FILE_END;
-// the command starts after FILE, so a stream given up there starts none.
 export async function* encodeCommand(
   openCommand: () => StreamedCommand,
   file: MoveFile,
@@ -161,7 +150,6 @@ export async function* encodeCommand(
   yield encodeJsonFrame(MOVE_FRAMES.fileEnd, { sha256 });
 }
 
-// the bytes of data a file holds, holes left out: what a send carries
 export async function countDataBytes(path: string): Promise<number> {
   const handle = await open(path, 'r');
 
@@ -191,12 +179,10 @@ interface Frame {
 }
 
 export interface FrameReader {
-  // null at a clean end
   readonly readFrame: () => Promise<Frame | null>;
   readonly cancel: () => Promise<void>;
 }
 
-// Reads frames off a byte stream, one at a time.
 export function createFrameReader(stream: ReadableStream<Uint8Array>): FrameReader {
   const reader = stream.getReader();
   const state = { buffer: new Uint8Array(0), isDone: false };

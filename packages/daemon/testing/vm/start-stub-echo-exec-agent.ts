@@ -2,19 +2,13 @@ import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '../../src/vm/agent-cl
 import { startStubAgent } from './start-stub-agent';
 
 interface EchoExecScript {
-  // the process id its STARTED reports
   readonly pid: number;
 
-  // what the process writes to stderr once its stdin ends
   readonly stderr: Uint8Array;
 
-  // how the process exits after that
   readonly exit: Readonly<{ code: number; signal: number }>;
 }
 
-// An agent whose exec acts like `cat`: STARTED, each stdin frame back as
-// stdout, and on stdin EOF the stderr, EXIT and the end of the connection.
-// Any op is an exec.
 export function startStubEchoExecAgent(
   path: string,
   script: Readonly<EchoExecScript>,

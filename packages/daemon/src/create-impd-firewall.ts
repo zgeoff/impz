@@ -23,9 +23,6 @@ export interface ImpdFirewall {
   readonly egress: EgressService;
 }
 
-// The host's IPv6 plan, the credential broker and the egress firewall with
-// its resolver, started before any VM runs; each goes on `plan` once made.
-// The broker shares `secretFiles` with the GC, which removes what it set aside.
 export async function createImpdFirewall(
   config: Config,
   deps: Readonly<ImpdDeps>,

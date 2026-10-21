@@ -6,14 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 interface StubSshAgentOptions {
-  // `answer`: each request gets `agent:<request>` back; `hold`: connections
-  // stay open and silent, as an agent busy with a confirmation prompt
   readonly mode: 'answer' | 'hold';
 }
 
-// A user's ssh-agent on a unix socket in a temp dir, gone when the test
-// finishes. It speaks no agent protocol: the gateway relays bytes, so an
-// echo with a prefix shows which way they went.
 export async function startStubSshAgent(options: Readonly<StubSshAgentOptions>) {
   const directory = await mkdtemp(join(tmpdir(), 'imp-agent-'));
 
@@ -41,7 +36,7 @@ export async function startStubSshAgent(options: Readonly<StubSshAgentOptions>) 
     server.listen(path, resolve);
   });
 
-  // a held connection would keep the close waiting, so each one is ended
+  // A server's close waits for its open connections, so each held one ends first.
   onTestFinished(
     () =>
       new Promise<void>((resolve) => {

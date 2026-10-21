@@ -1,5 +1,3 @@
-// Every step createImpd runs, in order. A step whose part the config turns
-// off still runs, and finds nothing to start.
 export const IMPD_STARTUP_STEPS = [
   'ksm',
   'telemetry',
@@ -27,5 +25,4 @@ export const IMPD_STARTUP_STEPS = [
 
 export type ImpdStartupStep = (typeof IMPD_STARTUP_STEPS)[number];
 
-// runs one step of the start and records that it ran
 export type RunImpdStartupStep = <T>(step: ImpdStartupStep, task: () => T) => T;

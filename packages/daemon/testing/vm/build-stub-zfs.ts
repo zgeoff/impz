@@ -1,7 +1,6 @@
 import type { CommandResult } from '../../src/platform/process/run-command';
 import { buildStubZfsStreams } from './build-stub-zfs-streams';
 
-// the `creation` of txg 0: 2026-10-03T00:00:00Z
 export const STUB_EPOCH_S = 1_790_985_600;
 
 export interface FakeDataset {
@@ -14,14 +13,12 @@ export interface FakeSnapshot {
   readonly txg: number;
   deferDestroy: boolean;
 
-  // what a send stream names it by, through renames and across pools
   readonly guid: string;
 }
 
 interface FakeZfsOptions {
   readonly root: string;
 
-  // where the root dataset is mounted, as setup-storage.sh mounts it
   readonly rootDir: string;
   readonly userland?: string;
   readonly kernel?: string;
@@ -31,9 +28,6 @@ export class StubZfsCrashError extends Error {
   override name = 'StubZfsCrashError';
 }
 
-// An in-memory ZFS: clones, promote, deferred destroy and legacy mounts, with
-// the errors real ZFS gives where impd could trip. It answers impd's argv in
-// the real `-H` format and records each command.
 export function buildStubZfs(options: FakeZfsOptions) {
   const datasets = new Map<string, FakeDataset>();
   const snapshots = new Map<string, FakeSnapshot>();
@@ -64,7 +58,6 @@ export function buildStubZfs(options: FakeZfsOptions) {
 
   const isMounted = (name: string) => [...mounts.values()].includes(name);
 
-  // a marked snapshot goes with its last clone
   const removeUnusedDeferred = (snapshot: string | null) => {
     const found = snapshot === null ? undefined : snapshots.get(snapshot);
 
@@ -171,8 +164,6 @@ export function buildStubZfs(options: FakeZfsOptions) {
     return buildSuccess();
   };
 
-  // the clone takes over its origin snapshot and every older one; the old
-  // parent becomes a clone of the origin
   const runPromote = (name: string): CommandResult => {
     const promoted = datasets.get(name);
 
@@ -259,8 +250,6 @@ export function buildStubZfs(options: FakeZfsOptions) {
     return buildSuccess();
   };
 
-  // zfs destroy -R: the dataset, its children and their snapshots, and every
-  // clone of those snapshots wherever it is; a mounted one stops it
   const runDestroyAll = (root: string): CommandResult => {
     if (!datasets.has(root)) {
       return buildFailure(`cannot open '${root}': dataset does not exist`);
@@ -321,8 +310,6 @@ export function buildStubZfs(options: FakeZfsOptions) {
     return buildSuccess(rows.map((row) => `${row.line}\n`).join(''));
   };
 
-  // every dataset holds 1 MiB of its own and refers to 3; a snapshot holds 64
-  // KiB. Each was created an hour after STUB_EPOCH_S per txg.
   const listSpace = (root: string): CommandResult => {
     const isInTree = (name: string) => name === root || name.startsWith(`${root}/`);
     const readCreation = (txg: number) => String(STUB_EPOCH_S + txg * 3600);
@@ -350,8 +337,7 @@ export function buildStubZfs(options: FakeZfsOptions) {
     const [tool = '', verb = '', ...rest] = argv;
     const last = argv.at(-1) ?? '';
 
-    // mount -t zfs [-o ro] <name> <dir>; like a real legacy mount, the
-    // readonly property does not make it read-only
+    // A legacy mount ignores the dataset's readonly property, as real ZFS does.
     if (tool === 'mount') {
       const name = argv.at(-2) ?? '';
       const directory = last;
@@ -373,8 +359,7 @@ export function buildStubZfs(options: FakeZfsOptions) {
       return buildSuccess();
     }
 
-    // umount -R <dir>: the dir and every mount beneath it, deepest first; as
-    // util-linux, the dir itself must be a mount
+    // util-linux's umount -R refuses a directory that is not itself a mount.
     if (tool === 'umount' && verb === '-R') {
       if (!mounts.has(last)) {
         return buildFailure(`umount: ${last}: not mounted.`);
@@ -434,7 +419,6 @@ export function buildStubZfs(options: FakeZfsOptions) {
       return createSnapshot(last);
     }
 
-    // zfs clone [-o key=value]… <snapshot> <target>
     if (verb === 'clone') {
       const properties: Record<string, string> = {};
 
@@ -477,7 +461,6 @@ export function buildStubZfs(options: FakeZfsOptions) {
       return runDestroy(last, rest[0] === '-d');
     }
 
-    // zfs send -nP [-i <base>] <snapshot>: every stream is 1 MiB
     if (verb === 'send') {
       return snapshots.has(last)
         ? buildSuccess(`full\t${last}\t1048576\nsize\t1048576\n`)
@@ -520,8 +503,6 @@ export function buildStubZfs(options: FakeZfsOptions) {
       return handleCommand(argv);
     },
 
-    // matching commands wait until release runs; reached resolves once the
-    // first one waits
     blockBefore: (match: (command: string) => boolean) => {
       const gate = Promise.withResolvers<void>();
       const reached = Promise.withResolvers<void>();
@@ -536,7 +517,6 @@ export function buildStubZfs(options: FakeZfsOptions) {
       };
     },
 
-    // the next matching command exits 1 and changes nothing
     failOnce: (match: (command: string) => boolean) => {
       failures.push(match);
     },
@@ -549,13 +529,12 @@ export function buildStubZfs(options: FakeZfsOptions) {
         )
         .join(''),
 
-    // every later command fails, as if impd died just before the matching one
     crashBefore: (match: (command: string) => boolean) => {
       state.crashAt = match;
     },
 
-    // a new impd on the same pool; mounts made in the container survive only
-    // a restart of impd, so `dropMounts` models a container restart
+    // Mounts made in impd's container survive an impd restart but not a
+    // container restart, which `dropMounts` stands for.
     restart: (dropMounts = false) => {
       state.crashAt = null;
       state.crashed = false;
@@ -574,7 +553,6 @@ export function buildStubZfs(options: FakeZfsOptions) {
     readOrigin: (name: string) => datasets.get(name)?.origin ?? null,
     readTxg: (name: string) => (datasets.get(name) ?? snapshots.get(name))?.txg ?? 0,
 
-    // the `creation` the space rows give `name`: an hour after STUB_EPOCH_S per txg
     readCreatedAt: (name: string) =>
       new Date(
         (STUB_EPOCH_S + ((datasets.get(name) ?? snapshots.get(name))?.txg ?? 0) * 3600) * 1000,

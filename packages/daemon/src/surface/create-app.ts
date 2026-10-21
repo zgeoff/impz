@@ -47,37 +47,22 @@ import { toApiImage } from './to-api-image';
 import { withRetryAfter } from './with-retry-after';
 
 // Bun pings an idle exec socket and closes it when no answer comes, so a
-// client that vanished without a close (a laptop lid, dropped Wi-Fi) lets
-// go of its session, and of the imp's idle timer, within a minute
+// client that vanished without a close lets go of its session, and of the
+// imp's idle timer, within a minute.
 const EXEC_SOCKET_OPTIONS = { idleTimeout: 30, sendPings: true } as const;
 
-// a socket whose token is removed closes with this: policy violation
+// WebSocket's close code for a policy violation.
 const CLOSE_REVOKED = 1008;
-
-// oRPC's own default, written out: the gap between an event stream's
-// keepalive comments
 const EVENT_KEEPALIVE_MS = 5000;
 
-// `now` is the clock exec tickets and sessions expire by
 export interface AppDeps extends Omit<RouterDeps, 'execTickets'> {
-  // the token in <dataDir>/token, which keys the dashboard's sessions
   readonly rootToken: string;
   readonly tailnet: CallerSources['tailnet'];
   readonly revocations: Revocations;
-
-  // client addresses the wake proxy hands over for requests it forwards
   readonly peers: ForwardedPeers;
-
-  // false until the default image is seeded; /health reports it
   readonly isReady: () => boolean;
-
-  // `POST /images/build`: a build context streamed from the client
   readonly buildContexts: BuildContextRoute;
-
-  // `POST /move/*`: another host's side of a move (docs/architecture/storage/moves.md)
   readonly moves: MoveService;
-
-  // where an unexpected RPC failure is logged; stderr by default
   readonly logRpcFailure?: (failure: unknown) => void;
 }
 
@@ -87,11 +72,8 @@ interface SocketEntry<Session> {
   readonly forget: () => void;
 }
 
-// Elysia's server, or none under app.handle in tests
 interface PeerServer {
   readonly requestIP: (request: Request) => { readonly address: string } | null;
-
-  // seconds a request may sit idle; 0 never ends it
   readonly timeout: (request: Request, seconds: number) => void;
 }
 
@@ -121,14 +103,12 @@ export function createApp(deps: AppDeps) {
       getImpdLogger('api').error('rpc failed: {failure}', { failure });
     });
 
-  // expected errors (NOT_FOUND, INVALID_STATE, …) go to the client; anything
-  // else is a bug or a host failure worth a log line
   const handler = new RPCHandler(createRouter({ ...deps, execTickets }), {
-    // a GET is what a link or an <img> on any page can make the browser send
+    // A GET is what a link or an <img> on any page can make the browser send.
     plugins: [new StrictGetMethodPlugin()],
 
-    // a silent event stream (a follow, impd's events) sends a comment this
-    // often, far inside the 360 s that Bun's fetch waits for a byte
+    // A silent event stream sends a comment this often, far inside the 360 s
+    // that Bun's fetch waits for a byte.
     eventIteratorKeepAliveInterval: EVENT_KEEPALIVE_MS,
     interceptors: [
       onError((failure) => {
@@ -139,25 +119,17 @@ export function createApp(deps: AppDeps) {
     ],
   });
 
-  // per exec WebSocket: its session, a close for impd's stop, and the undo
-  // of its close on a removed token
   const sessions = new Map<string, SocketEntry<ExecSession>>();
-
-  // per tunnel WebSocket: the same, with its tunnel session
   const tunnels = new Map<string, SocketEntry<TunnelSession>>();
 
   const tunnelLimits = createTunnelLimits();
   const reverseForwards = createReverseForwards();
 
-  // each exec socket's grant and each tunnel socket's caller, by its
-  // upgrade request
   const grants = new WeakMap<Request, ExecGrant>();
   const tunnelCallers = new WeakMap<Request, Caller>();
 
   const logouts = createLogouts();
 
-  // what an `/exec` socket may open, audited as the caller it runs as: the
-  // bearer token's, or the one that asked for the ticket
   const buildExecBackend = (grant: ExecGrant | undefined) => {
     const actor = grant?.caller ?? { kind: 'token', name: 'unknown' };
 
@@ -170,7 +142,6 @@ export function createApp(deps: AppDeps) {
     );
   };
 
-  // what ends when the caller's token or grant goes
   const readRevoked = (caller: Readonly<Caller> | undefined): AbortSignal | null => {
     const signals = [
       deps.revocations.readSignal(caller?.tokenId ?? null),
@@ -180,7 +151,6 @@ export function createApp(deps: AppDeps) {
     return signals.length === 0 ? null : AbortSignal.any(signals);
   };
 
-  // what ends when the caller's dashboard logs out or its token or grant goes
   const readEnds = (caller: Readonly<Caller>): AbortSignal | null => {
     const signals = [
       caller.kind === 'dashboard' ? logouts.readSignal() : null,
@@ -190,15 +160,12 @@ export function createApp(deps: AppDeps) {
     return signals.length === 0 ? null : AbortSignal.any(signals);
   };
 
-  // closes a socket when its caller's token or grant is removed; returns the
-  // undo
   const handleRevocation = (
     caller: Readonly<Caller> | undefined,
     close: () => void,
   ): (() => void) => {
     const signal = readRevoked(caller);
 
-    // removed between the upgrade and the open
     if (signal?.aborted === true) {
       close();
     }
@@ -208,7 +175,6 @@ export function createApp(deps: AppDeps) {
     return () => signal?.removeEventListener('abort', close);
   };
 
-  // a call as `caller`, through the same access rules and audit as /rpc
   const handleRpc = async (request: Request, caller: Readonly<Caller>): Promise<Response> => {
     const handled = await handler.handle(request, {
       prefix: '/rpc',
@@ -222,8 +188,6 @@ export function createApp(deps: AppDeps) {
     return withRetryAfter(handled.response);
   };
 
-  // an `/exec` socket in process, for the MCP endpoint's execs: its ticket
-  // opens it as the caller that asked for it, as over the socket route
   const openExecSocket = (url: string): ExecSocket => {
     const ticket = new URL(url).searchParams.get(EXEC_TICKET_PARAM);
 
@@ -257,7 +221,6 @@ export function createApp(deps: AppDeps) {
     });
   };
 
-  // the server each MCP request came in on, for its peer's address
   const mcpServers = new WeakMap<Request, PeerServer | null>();
 
   const mcp = createMcpEndpoint({
@@ -267,9 +230,6 @@ export function createApp(deps: AppDeps) {
     readEnds,
   });
 
-  // The public route's /mcp: an access token from an OAuth grant and nothing
-  // else, no imp token, cookie or tailnet identity. A browser may call only
-  // from the route's own origin.
   const publicMcp = createMcpEndpoint({
     findCaller: (request) => {
       const bearer = findBearer(request.headers.get('authorization'));
@@ -299,7 +259,7 @@ export function createApp(deps: AppDeps) {
     }))
     .use(dashboardRoutes)
 
-    // parse: 'none' leaves the body unread for oRPC
+    // parse: 'none' leaves the body unread for oRPC.
     .all(
       '/rpc*',
       async (context) => {
@@ -314,8 +274,7 @@ export function createApp(deps: AppDeps) {
       { parse: 'none' },
     )
 
-    // MCP over streamable HTTP: a token or a tailnet identity, never the
-    // cookie. A tool call can run for minutes, so no idle timeout ends it.
+    // A tool call can run for minutes, so no idle timeout ends it.
     .all(
       MCP_PATH,
       (context) => {
@@ -327,9 +286,6 @@ export function createApp(deps: AppDeps) {
       { parse: 'none' },
     )
 
-    // the context streams for as long as it takes: no idle timeout, and Bun's
-    // body limit is set to fit it where impd listens. The same callers as
-    // /rpc, with the access and audit of `images.build`.
     .post(
       IMAGE_BUILD_PATH,
       async (context) => {
@@ -346,9 +302,8 @@ export function createApp(deps: AppDeps) {
       { parse: 'none' },
     )
 
-    // A move ticket in the Authorization header, from a tailnet address on
-    // the connected socket, never one a proxy forwarded. A stream runs for as
-    // long as the disk takes, so no idle timeout ends it.
+    // The peer is the connected socket's address, never one a proxy
+    // forwarded.
     .post(
       '/move/:step',
       (context) => {
@@ -360,9 +315,6 @@ export function createApp(deps: AppDeps) {
       { parse: 'none' },
     )
 
-    // JSON text frames and channel-tagged binary frames (exec-protocol). A
-    // ticket, a token or a tailnet identity, never the session cookie: the
-    // dashboard gets tickets over /rpc. Each start checks the scope.
     .ws(EXEC_PATH, {
       beforeHandle: async (context) => {
         const ticket = new URL(context.request.url).searchParams.get(EXEC_TICKET_PARAM);
@@ -401,7 +353,7 @@ export function createApp(deps: AppDeps) {
               ws.raw.send(text);
             },
 
-            // Bun answers 0 for a message it dropped
+            // Bun answers 0 for a message it dropped.
             sendBinary: (data) => ws.raw.send(data) !== 0,
             close: (code, reason) => {
               ws.raw.close(code, reason);
@@ -438,9 +390,6 @@ export function createApp(deps: AppDeps) {
       },
     })
 
-    // `impz proxy`: a token or a tailnet identity. Never a ticket, which
-    // redeems once: a listener opens a tunnel per connection for hours.
-    // Each tunnel checks the caller's scope.
     .ws(TUNNEL_PATH, {
       beforeHandle: async (context) => {
         const caller = await findCaller(context.request, context.server, false);
@@ -485,8 +434,6 @@ export function createApp(deps: AppDeps) {
 
               return imp.id;
             },
-
-            // audited as it opens, with the guest port: `tunnel:5432`
             openDial: (name, target) => {
               const port = target.address.split(':').at(-1) ?? '';
 
@@ -501,8 +448,6 @@ export function createApp(deps: AppDeps) {
                 () => deps.imps.openDial(name, target, 'tunnel'),
               );
             },
-
-            // audited as it opens, with where it listens: `reverse:/tmp/a.sock`
             openListener: (name, spec) => {
               const where = 'port' in spec ? String(spec.port) : readListenPath(spec);
 
@@ -548,7 +493,6 @@ export function createApp(deps: AppDeps) {
     app,
     publicMcp,
 
-    // the client can tell impd went away on purpose
     closeExecSessions: () => {
       deps.imps.endLogFollows();
 
@@ -563,7 +507,6 @@ export function createApp(deps: AppDeps) {
   };
 }
 
-// what /health tells an operator beside `ready`; empty while all is well
 function buildHealthWarnings(
   rebootReason: string | null,
   storageWarnings: readonly string[],
@@ -573,7 +516,6 @@ function buildHealthWarnings(
   return [...reboot, ...storageWarnings];
 }
 
-// a reverse forward's socket path, for its audit row
 function readListenPath(spec: ListenSpec): string {
   return spec.network === 'unix' ? (spec.path ?? 'auto') : spec.network;
 }

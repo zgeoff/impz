@@ -4,7 +4,6 @@ import { buildExitError, runCommand } from '../../src/platform/process/run-comma
 import type { CommandRunner } from '../../src/platform/process/run-command';
 
 export interface ZfsTestDatasetOptions {
-  // the run's pool dataset and its mount dir (readZfsTestPool)
   readonly parent: string;
   readonly parentDir: string;
   readonly run?: CommandRunner;
@@ -15,17 +14,11 @@ export interface ZfsTestDataset {
   readonly dataDir: string;
 }
 
-// A fresh dataset of this run under `parent`, legacy-mounted on a new dir
-// under `parentDir`, as host/scripts/setup-storage.sh mounts impd's root.
-// Each release goes into `stack` right after its acquisition.
 export async function createZfsTestDataset(
   stack: Readonly<AsyncDisposableStack>,
   options: ZfsTestDatasetOptions,
 ): Promise<ZfsTestDataset> {
   const run = options.run ?? runCommand;
-
-  // the new dir names the dataset; a dataset of that name that `zfs list`
-  // already shows belongs to someone else, and is refused untouched
   const dataDir = mkdtempSync(join(options.parentDir, 'dataset-'));
 
   stack.defer(() => {

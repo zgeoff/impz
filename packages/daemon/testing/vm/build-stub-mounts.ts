@@ -1,22 +1,12 @@
 import type { CommandResult } from '../../src/platform/process/run-command';
 
-// `mount` and `umount` as the jailer runs them, over a mount table in memory
-// that /proc/self/mounts reads; a bind mounts its last argument, and exit 32
-// is util-linux's failure code
 export function buildStubMounts() {
   const calls: string[] = [];
   const mounted: string[] = [];
 
-  // targets a plain umount refuses as busy; a lazy one detaches them
   const busy = new Set<string>();
-
-  // targets every umount refuses
   const stuck = new Set<string>();
-
-  // targets an umount reports gone that stay mounted
   const kept = new Set<string>();
-
-  // targets whose mount fails, with the stderr it prints
   const failing = new Map<string, string>();
 
   const runUmount = (argv: readonly string[]): CommandResult => {
@@ -68,7 +58,6 @@ export function buildStubMounts() {
     readMounts: () =>
       mounted.map((target) => `src ${encodeMountPath(target)} ext4 rw 0 0`).join('\n'),
 
-    // a mount already in the table, as one a crashed impd left
     addMount: (target: string) => {
       mounted.push(target);
     },

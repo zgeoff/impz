@@ -13,22 +13,17 @@ import { tryExecSocket } from '../../testing/surface/try-impd-sockets';
 import { createImage } from '../platform/db/images';
 import { buildImagePaths } from '../vm/storage/data-layout';
 
-// impd's real app on stub VMs, serving an empty dashboard dir, reached in
-// process and on a loopback port for its sockets
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the dashboard's built files; a test writes the shell it reads
   const dashboardDir = await mkdtemp(join(tmpdir(), 'impd-dashboard-'));
 
   stack.defer(() => rm(dashboardDir, { recursive: true, force: true }));
 
   await mkdir(join(dashboardDir, 'assets'), { recursive: true });
 
-  // impd serves the dashboard from its dir; a login trades the root token
-  // for a session
   const harness = await startTestImpd(stack, {
     env: { IMP_DASHBOARD_DIR: dashboardDir },
     rootToken: 'root-token',
@@ -36,7 +31,6 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imps.create boots when it names none
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
@@ -81,7 +75,6 @@ test('it accepts the session from its own page', async () => {
 
   const sendBrowserRequest = (request: Request) => ctx.sendToImpd(request);
 
-  // what a browser on the dashboard's page sends
   const browser: ContractRouterClient<ImpContract> = createORPCClient(
     new RPCLink({
       url: 'http://impd.test/rpc',
@@ -101,7 +94,6 @@ test('it accepts the session from its own page', async () => {
 test('it answers a login behind TLS with a secure __Host- session cookie', async () => {
   const ctx = await setupTest();
 
-  // the wake proxy's HTTPS listener sets x-forwarded-proto on the bare domain
   const login = await ctx.sendToImpd(
     new Request('http://impd.test/auth/login', {
       method: 'POST',
@@ -139,7 +131,6 @@ test('it accepts the __Host- session from its own page', async () => {
 
   const sendBrowserRequest = (request: Request) => ctx.sendToImpd(request);
 
-  // what a browser on the dashboard's page sends
   const browser: ContractRouterClient<ImpContract> = createORPCClient(
     new RPCLink({
       url: 'http://impd.test/rpc',
@@ -202,8 +193,6 @@ test('it refuses a login from another origin and sets no cookie', async () => {
   expect(login.headers.get('set-cookie')).toBeNull();
 });
 
-// what an imp's page on another port of this host can make a browser send:
-// a link, a form post and a text/plain fetch, none needing a preflight
 test.each([
   ['a link', {}],
   ['a same-site link', { 'sec-fetch-site': 'same-site' }],
@@ -379,11 +368,8 @@ test('it answers /health beside the dashboard', async () => {
   await writeFile(join(ctx.dashboardDir, 'index.html'), '<!doctype html><title>imp</title>');
 
   const response = await ctx.sendToImpd(new Request('http://impd.test/health'));
-
-  // impd marks itself ready once its startup seeds the default image
   const body: unknown = await response.json();
 
-  // the warnings follow this host's own kernel, which the test does not set
   expect(body).toStrictEqual({ status: 'ok', ready: true, warnings: expect.toBeArray() });
 });
 

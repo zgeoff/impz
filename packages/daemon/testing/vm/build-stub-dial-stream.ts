@@ -1,7 +1,5 @@
 import type { DialEvent, DialStream } from '../../src/vm/agent-client/dial-stream';
 
-// what the guest side sends next: an event, the end of the stream, or a
-// broken agent connection
 type StubDialItem =
   | { readonly kind: 'event'; readonly event: DialEvent }
   | { readonly kind: 'end' }
@@ -14,20 +12,15 @@ interface StubDialQueue {
 
 const decoder = new TextDecoder();
 
-// A relay to a guest connection, as the agent's dial and accept open it: it
-// records impd's writes and closes, and the test sends the guest's side. A
-// held `drained` stands for a guest that has not taken the bytes yet.
 export function buildStubDialStream() {
   const queue: StubDialQueue = { items: [], wake: null };
   const drain = { gate: Promise.resolve() };
 
   const state = {
-    // each write, decoded as text
     written: [] as string[],
     isEnded: false,
     isClosed: false,
 
-    // how many times impd waited for the guest to take its bytes
     drainWaits: 0,
   };
 
@@ -36,7 +29,6 @@ export function buildStubDialStream() {
     queue.wake?.();
   };
 
-  // the next item, once the test sent one
   const readNext = async (): Promise<StubDialItem> => {
     while (queue.items.length === 0) {
       await new Promise<void>((resolve) => {
@@ -61,7 +53,6 @@ export function buildStubDialStream() {
     },
     events: () => readDialEvents(readNext),
 
-    // the agent's close ends the events
     close: () => {
       state.isClosed = true;
 
@@ -73,25 +64,20 @@ export function buildStubDialStream() {
     stream,
     state,
 
-    // the guest sends bytes, or its eof
     emit: (event: DialEvent): void => {
       sendItem({ kind: 'event', event });
     },
 
-    // the relay ends with no more events, as the agent ends it
     end: (): void => {
       sendItem({ kind: 'end' });
     },
 
-    // the agent connection breaks: the events throw `error`
     fail: (error: Error): void => {
       sendItem({ kind: 'fail', error });
     },
 
-    // how many sent items impd has not read yet
     countUnread: (): number => queue.items.length,
 
-    // holds `drained` until the returned release runs
     holdDrain: (): (() => void) => {
       const held = Promise.withResolvers<void>();
 

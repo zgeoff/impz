@@ -5,13 +5,11 @@ import { z } from 'zod';
 import { generateEd25519Key } from '../../src/surface/ssh/host-key';
 
 interface StubSshServerOptions {
-  // the one password the server takes; it refuses any other
   readonly password: string;
 }
 
-// An SSH server on loopback with one password. Each exec gets `exec.answer`
-// in the open's packet burst; forwards are refused, as ssh2 does unhandled.
-// At the test's end it stops listening; clients end their own connections.
+// ssh2 refuses a forward the server leaves unhandled. Closing the server stops only the
+// listener, so each client ends its own connection.
 export async function startStubSshServer(options: Readonly<StubSshServerOptions>) {
   const exec: { answer: (channel: ServerChannel) => void } = { answer: () => {} };
   const closes = { count: 0 };

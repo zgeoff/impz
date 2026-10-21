@@ -3,8 +3,6 @@ import type { OAuthStateFile } from '../../src/network/broker/oauth-state';
 
 const HOUR_MS = 3_600_000;
 
-// A ready state with every token present: refreshed at a past time, its
-// access token good for 240 hours from then
 export function buildMockOAuthStateFile(overrides: Partial<OAuthStateFile> = {}): OAuthStateFile {
   const refreshedAt = faker.date.past().getTime();
 

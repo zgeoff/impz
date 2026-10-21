@@ -11,21 +11,15 @@ import { buildImagePaths } from '../../src/vm/storage/data-layout';
 import { startTestImpd } from '../start-test-impd';
 import type { TestImpd, TestImpdOptions } from '../start-test-impd';
 
-// the target's peer URL: a literal tailnet address, as a move needs
+// a move needs the target's peer URL to be a literal tailnet address
 export const TARGET_URL = 'http://100.100.0.2:7070';
-
-// the source's address, as the target's socket sees it
 export const SOURCE_PEER = '100.100.0.1';
 
-// what a hook may reach when a request goes: the target's clock and the
-// source's client
 interface MoveHookHosts {
   readonly target: Readonly<Pick<TestImpd, 'advance'>>;
   readonly sourceApp: Readonly<Pick<TestImpd, 'client'>>;
 }
 
-// `forward` sends the request to the target's move routes, or the one it is
-// given in its place
 export type FetchHook = (
   request: Request,
   forward: (replacement?: Request) => Promise<Response>,
@@ -33,30 +27,23 @@ export type FetchHook = (
 ) => Promise<Response>;
 
 export interface MoveHostsOptions {
-  // sees each request the source sends to the target's move routes
   readonly hook?: FetchHook;
-
-  // the timer of the source's deadline on each request to the target
   readonly startPeerDeadline?: StartTimer;
   readonly partBytes?: number;
-
-  // the source's taps' MACs; each slot's own by default
   readonly readTapMac?: (tap: string) => string | null;
 
-  // Both hosts report the target's warm facts, and the source's VMs open
-  // the target's system drive path. Two impds in one process cannot share
-  // a data dir, as a warm move needs.
+  // Two impds in one process cannot share a data dir as a warm move needs, so both hosts
+  // report the target's warm facts and the source's VMs open the target's system drive path.
   readonly isShared?: boolean;
   readonly source?: TestImpdOptions;
   readonly target?: TestImpdOptions;
 
-  // how long a move may take; a real pool takes seconds
+  // a move on a real pool takes seconds
   readonly moveTimeoutMs?: number;
 }
 
-// Two impds in one process: `source` sends to `target` through `fetch`, as
-// from the tailnet. One stack releases both at the test's end, the target
-// first; a throw in one release does not skip the other.
+// One stack releases both hosts, because a throw in one onTestFinished callback skips the
+// callbacks after it.
 export function setupMoveHosts(options: MoveHostsOptions = {}) {
   const stack = new AsyncDisposableStack();
 
@@ -65,13 +52,10 @@ export function setupMoveHosts(options: MoveHostsOptions = {}) {
   return createMoveHosts(stack, options);
 }
 
-// setupMoveHosts' hosts, their releases in `stack`, for a test whose own
-// resources must outlive both impds
 export async function createMoveHosts(
   stack: Readonly<AsyncDisposableStack>,
   options: MoveHostsOptions = {},
 ) {
-  // the name of each move the target's commit hook heard, in order
   const commits: string[] = [];
 
   const target = await startTestImpd(stack, {
@@ -93,8 +77,6 @@ export async function createMoveHosts(
   const slotPlan = { subnet: target.config.subnet, portBase: 0 };
   const sendToTarget = (request: Request) => target.moves.respond(request, SOURCE_PEER);
   const hook = options.hook;
-
-  // the source, once started, for the hook to see; no request goes before
   const built: { hosts: MoveHookHosts | null } = { hosts: null };
 
   const runHook = (request: Request, call: FetchHook): Promise<Response> => {
@@ -124,7 +106,6 @@ export async function createMoveHosts(
     },
   });
 
-  // the source's VMs open the target's system drive path
   if (options.isShared === true) {
     await source.restartImpd({
       ...source.readIdentity(),
@@ -151,9 +132,7 @@ export async function createMoveHosts(
       { timeoutMs: options.moveTimeoutMs ?? 5000 },
     );
 
-  // a whole move, as `impz move` runs it (packages/cli/src/commands/move-command.ts):
-  // ZFS streams to a ZFS target, and the memory too when the facts match;
-  // a stop forces, as --stop does
+  // the steps `impz move` runs, where a stop forces as `--stop` does
   const runMove = async (name: string, stop = false): Promise<MoveStatus> => {
     const info = await target.client.system.info();
     const targetFacts = await target.client.moves.facts();
@@ -188,7 +167,6 @@ export async function createMoveHosts(
   };
 }
 
-// the `ubuntu` test image, with the config.json a create reads
 export async function createUbuntuImage(
   host: Readonly<Pick<TestImpd, 'createTestImage' | 'dataDir'>>,
 ): Promise<void> {
@@ -197,8 +175,6 @@ export async function createUbuntuImage(
   writeFileSync(buildImagePaths(host.dataDir, 'sha256:ubuntu').config, '{}');
 }
 
-// the `ubuntu` image on a host whose storage is buildStubZfsStorage's: the
-// storage starts, then the image is a dataset with the files a create reads
 export async function createZfsUbuntuImage(
   host: Readonly<Pick<TestImpd, 'db' | 'dataDir' | 'storage'>>,
 ): Promise<void> {

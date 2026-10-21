@@ -1,9 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-// A tar of the tree `make` writes in a fresh directory under `dir`, its
-// entries owned by root as an image's files are, through `tarArgs` such as
-// --sparse; the tree goes once it is archived
 export function createTreeTar(
   directory: string,
   make: (tree: string) => void,

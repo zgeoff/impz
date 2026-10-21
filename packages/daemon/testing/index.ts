@@ -1,5 +1,3 @@
-// @impz/daemon/testing: a real impd for another package's tests, and the
-// stand-ins those tests share
 export { startTestImpd } from './start-test-impd';
 export type { TestImpd, TestImpdOptions } from './start-test-impd';
 export { TEST_TOKEN } from './test-token';
@@ -30,7 +28,4 @@ export { startStubDialAgent } from './vm/start-stub-dial-agent';
 export { startStubExecAgent } from './vm/start-stub-exec-agent';
 export { startStubInnerAgent } from './vm/start-stub-inner-agent';
 export { startStubServiceAgent } from './vm/start-stub-service-agent';
-
-// where impd keeps an image's and an imp's files in its data dir, for a test
-// that seeds or reads them
 export { buildImagePaths, buildImpPaths } from '../src/vm/storage/data-layout';

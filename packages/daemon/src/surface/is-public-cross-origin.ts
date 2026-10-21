@@ -1,9 +1,9 @@
-// A browser names the page a request comes from in Sec-Fetch-Site or
-// Origin; on the public route only the route's own origin may call
 export function isPublicCrossOrigin(request: Request, origin: string): boolean {
   const site = request.headers.get('sec-fetch-site');
   const from = request.headers.get('origin');
 
+  // A browser sends Sec-Fetch-Site or Origin, and a client that is no browser
+  // sends neither.
   if (site === null && from === null) {
     return false;
   }

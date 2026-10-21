@@ -2,9 +2,6 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import type { DiskBudget } from '../../src/vm/storage/disk-budget';
 import type { TemplateBuildPlan } from '../../src/vm/vmm/template-vm';
 
-// The VMM's createTemplateVm: it records each plan and the disk room the
-// budget held while it ran, then writes the snapshot's two files where the
-// plan names them, as a paused guest's snapshot lands.
 export function buildStubTemplateVm(diskBudget: Pick<DiskBudget, 'readStatus'>) {
   const builds: TemplateBuildPlan[] = [];
   const pendingAtBuild: number[] = [];

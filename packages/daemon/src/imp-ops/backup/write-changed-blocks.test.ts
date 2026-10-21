@@ -65,7 +65,6 @@ test('it closes the source when the target will not open', () => {
 
   expect(writeChangedBlocks(ctx.source, ctx.target)).rejects.toThrow('ENOENT');
 
-  // another process lists this one's descriptors that still point at the source
   const open = Bun.spawnSync(['find', `/proc/${String(process.pid)}/fd`, '-lname', ctx.source]);
 
   expect(open.stdout.toString()).toBe('');

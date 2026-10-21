@@ -13,9 +13,6 @@ interface TapSource {
   readonly waiting: { wake: (() => void) | null };
 }
 
-// A session tap as `openTapStream` hands one to impd, fed by the test. `drop`
-// ends it as a sleep's vsock reset does; `state.finished` is set once the
-// reader is done with it, at the end or by leaving its loop.
 export function buildStubTapStream(output: SessionOutput) {
   const source: TapSource = {
     queue: [],
@@ -28,8 +25,6 @@ export function buildStubTapStream(output: SessionOutput) {
     source.waiting.wake = null;
   };
 
-  // the next queued event, or null once impd closed the tap or, with the
-  // queue read, the connection dropped
   const readNext = async (): Promise<ExecEvent | null> => {
     for (;;) {
       if (source.state.closed) {
@@ -96,9 +91,6 @@ export function buildStubTapStream(output: SessionOutput) {
   };
 }
 
-// the events `readNext` gives until it gives null, or up to an exit or a
-// detached, as the agent client's readExecEvents ends; `setFinished` marks
-// the reader done with them, at the end or when the reader leaves its loop
 async function* readTapEvents(
   readNext: () => Promise<ExecEvent | null>,
   setFinished: () => void,

@@ -2,13 +2,10 @@ import { onTestFinished } from 'bun:test';
 import { mkdtempSync, truncateSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// the size of every chunk but the last, so what a reader sees at each chunk
-// never depends on how the pipe split tar's writes
+// every chunk but the last has this size, so what a reader sees at each chunk never
+// depends on how the pipe split tar's writes
 const CHUNK_BYTES = 1024 ** 2;
 
-// A running tar, which ends with the test, of a fresh directory in `dir`
-// that holds a sparse file of each size, each named on its command line:
-// a builder's export of a large tree, on no disk and in no buffer
 export function spawnSparseFilesTar(directory: string, sizes: Readonly<Record<string, number>>) {
   const tree = mkdtempSync(join(directory, 'tree-'));
 

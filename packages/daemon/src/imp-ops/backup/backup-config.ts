@@ -1,6 +1,5 @@
 import * as z from 'zod';
 
-// how many restore points restic's `forget` keeps in each bucket
 export interface BackupKeep {
   readonly hourly: number;
   readonly daily: number;
@@ -8,25 +7,13 @@ export interface BackupKeep {
 }
 
 export interface BackupConfig {
-  // a restic repository: s3:https://host/bucket/prefix, /a/path, rest:…
   readonly repository: string;
-
-  // restic's password; anyone who has it and the repository can read every
-  // backup (docs/architecture/storage/backups.md)
   readonly passwordFile: string;
   readonly intervalS: number;
   readonly keep: BackupKeep;
 
-  // false leaves forget and prune to one other machine whose key may delete,
-  // for a bucket that denies impd's key deletes
   readonly forget: boolean;
-
-  // true puts the run's database copy in each snapshot, so a whole-host
-  // restore brings back the named tokens and the secrets' names
-  // (docs/architecture/storage/backups.md#the-database-copy)
   readonly database: boolean;
-
-  // restic runs with GOMAXPROCS and GOMEMLIMIT set from these
   readonly cpus: number;
   readonly memoryMib: number;
 }
@@ -45,7 +32,6 @@ const BackupEnvSchema = z.object({
   IMP_BACKUP_MEMORY_MIB: CountSchema.default(512),
 });
 
-// null when no repository is set: impd then takes no backups
 export function loadBackupConfig(
   env: Readonly<Record<string, string | undefined>>,
 ): BackupConfig | null {
@@ -71,7 +57,6 @@ export function loadBackupConfig(
   };
 }
 
-// hourly=24,daily=7,weekly=4; a bucket left out keeps none
 export function parseBackupKeep(value: string): BackupKeep {
   const keep = { hourly: 0, daily: 0, weekly: 0 };
 

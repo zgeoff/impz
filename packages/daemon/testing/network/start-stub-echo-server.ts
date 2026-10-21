@@ -1,9 +1,6 @@
 import { createServer } from 'node:net';
 import type { Socket } from 'node:net';
 
-// A TCP server on 127.0.0.1 that echoes what each connection sends and holds
-// it open: the far end of a tunnel. Its release, deferred into `stack`,
-// destroys every connection it holds and closes the server.
 export async function startStubEchoServer(
   stack: Readonly<AsyncDisposableStack>,
 ): Promise<{ readonly port: number }> {

@@ -1,14 +1,8 @@
 export interface StubMoveStreamOptions {
-  // runs once the last byte is out, before the stream ends, as a peer's
-  // stream that stays open after `zfs recv` committed it
   readonly onEnd?: () => Promise<void>;
-
-  // ends the stream with this error after its last byte instead of closing
   readonly failAtEnd?: Error;
 }
 
-// A move step's stream as a peer sends it: the bytes of `source`, then
-// whatever the peer does at the end
 export function buildStubMoveStream(
   source: ReadableStream<Uint8Array>,
   options: Readonly<StubMoveStreamOptions> = {},

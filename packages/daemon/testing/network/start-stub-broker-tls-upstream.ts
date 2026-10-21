@@ -2,19 +2,13 @@ import { join } from 'node:path';
 import { loadOrCreateBrokerCa } from '../../src/network/broker/broker-ca';
 
 interface StubTlsUpstreamOptions {
-  // a directory the test owns, for the stand-in's own CA
   readonly directory: string;
-
-  // the name its certificate is issued for; localhost by default
   readonly host?: string;
-
-  // answers each request the upstream receives
   readonly respond: (request: Request) => Response | Promise<Response>;
 }
 
-// An HTTPS host on a free loopback port, its certificate signed by a CA of
-// its own: real TLS, for a test whose contract is certificate verification,
-// which interception cannot carry. Its stop goes into the caller's stack.
+// Real TLS with a CA of its own, because MSW interception cannot carry
+// certificate verification.
 export async function startStubBrokerTlsUpstream(
   stack: Readonly<AsyncDisposableStack>,
   options: Readonly<StubTlsUpstreamOptions>,

@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { PROXY_LABEL } from '../../src/imps/docker-proxy/proxy';
 
 function setupTest() {
-  // an origin that answers each path at once, with the path it got
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
@@ -30,8 +29,8 @@ test('it prints the outcome of imp-docker-proxy’s pull and export as JSON line
 
   const socket = join(directory, 'engine.sock');
 
-  // an engine that answers each call at once: the export's ownership
-  // inspect with a container of this proxy's, the rest with their path
+  // the proxy inspects a container for its own label before an export, so the inspect
+  // answers with a labelled container
   const engine = Bun.serve({
     unix: socket,
     routes: {

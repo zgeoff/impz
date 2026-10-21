@@ -3,7 +3,6 @@ import { formatCaller, isCallerAllowed } from '../identity/auth/caller';
 import type { Caller } from '../identity/auth/caller';
 import { buildForbiddenError } from './api-errors';
 
-// an audit or lease list may name one imp, which must be the caller's
 export function requireNamedImp(
   caller: Readonly<Caller>,
   name: string | undefined,

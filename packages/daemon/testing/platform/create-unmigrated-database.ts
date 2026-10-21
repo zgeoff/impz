@@ -7,9 +7,6 @@ import type { ImpDatabase } from '../../src/platform/db/open-database';
 import type { DB } from '../../src/platform/db/schema';
 import { createEventBus } from '../../src/platform/events/event-bus';
 
-// A database opened as openDatabase opens one, with no migration run: a
-// test migrates it to the point an older impd left it at. `:memory:` when
-// no path is given; closed when the test finishes.
 export function createUnmigratedDatabase(path = ':memory:'): ImpDatabase {
   const sqlite = new Database(path, { create: true });
 
@@ -27,8 +24,7 @@ export function createUnmigratedDatabase(path = ':memory:'): ImpDatabase {
 
   const db = Object.assign(builder, { writes: createEventBus<ImpWrite>() });
 
-  // kysely closes a driver only once a query started it, so the handle closes
-  // here too
+  // kysely closes a driver only once a query has started it, so the handle closes here too
   onTestFinished(async () => {
     await db.destroy();
 

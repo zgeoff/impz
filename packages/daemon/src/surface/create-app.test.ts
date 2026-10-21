@@ -28,29 +28,21 @@ import type { StorageBackend } from '../vm/storage/storage-backend';
 import type { CpuCgroups } from '../vm/vmm/cpu-cgroups';
 
 interface SetupOptions {
-  // the host's cgroup tree
   readonly cgroups: CpuCgroups;
-
-  // the data dir's storage backend; XFS by default
   readonly createStorage?: (dataDir: string) => StorageBackend;
 }
 
-// impd's real app on stub VMs, on a loopback port for the sockets, with a
-// root client in process, the clock the test steps, the stub VMM and the taps
-// impd set up
 async function setupTest(options: SetupOptions) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the host's taint mask, as /proc/sys/kernel/tainted; a test writes it
   const taintDir = await mkdtemp(join(tmpdir(), 'build-app-taint-'));
 
   stack.defer(() => rm(taintDir, { recursive: true, force: true }));
 
   const taintPath = join(taintDir, 'tainted');
 
-  // the clock of holds, budgets and tickets stands still; a test moves it
   const harness = await startTestImpd(stack, {
     env: readImpEnv(),
     rootToken: 'root-token',
@@ -65,7 +57,6 @@ async function setupTest(options: SetupOptions) {
     },
   });
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, { taintPath, port: new URL(harness.url).port });
 }
 
@@ -73,7 +64,6 @@ test('it serves system.info from config and the database', async () => {
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
   const { storage, ...info } = await ctx.client.system.info();
 
-  // the test data dir's own filesystem
   expect(storage.backend).toBe('xfs');
   expect(storage.availableBytes).toBeGreaterThan(0);
 
@@ -93,8 +83,6 @@ test('it serves system.info from config and the database', async () => {
     systemDrive: { sha256: 'b'.repeat(64) },
     guest: { scratchDir: '/tmp', isClearedOnBoot: false },
     tailscale: { enabled: false, state: null, hostname: null, ip: null, names: null },
-
-    // the stub cgroup tree has a cpu controller
     cpu: { hostCpus: 8, limitsEnforced: true },
     rebootReason: null,
     defaults: { memoryMib: 2048, image: null },
@@ -254,8 +242,6 @@ test('it serves the reboot a kernel oops needs in system.info', async () => {
 });
 
 test('it answers /health as ready once impd marks itself ready', async () => {
-  // its startup marks it once the default image is seeded, which the
-  // harness waits for
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
   const response = await ctx.impd.api.app.handle(new Request('http://impd.test/health'));
   const body: unknown = await response.json();
@@ -460,7 +446,6 @@ test('it exposes an imp with a basic credential shown once', async () => {
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
-  // Cloudflare, where the expose writes the imp's public record
   const cloudflare = createStubCloudflareApi({ tokens: ['unused'] });
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
@@ -548,7 +533,6 @@ test('it counts exposed imps in system.info, with no token check for a token fro
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
-  // Cloudflare, where the expose writes the imp's public record
   const cloudflare = createStubCloudflareApi({ tokens: ['unused'] });
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
@@ -619,7 +603,6 @@ test('it gives a new credential to a second expose', async () => {
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
-  // Cloudflare, where each expose writes the imp's public record
   const cloudflare = createStubCloudflareApi({ tokens: ['unused'] });
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
@@ -1005,7 +988,6 @@ test('it boots cold when the snapshot belongs to another firecracker', async () 
 });
 
 test('it sleeps the least recently active imp to fit a new one in the budget', async () => {
-  // 300 MiB per awake imp, 50% of 512 MiB reserved per boot
   updateEnv('IMP_RAM_BUDGET_MIB', '800');
   updateEnv('IMP_DEFAULT_MEMORY_MIB', '512');
 
@@ -1090,7 +1072,6 @@ test('it keeps the sleeping imp and its snapshot when the budget turns away a co
   await ctx.client.imps.hold({ name: 'b', seconds: 600 });
   await ctx.client.imps.hold({ name: 'c', seconds: 600 });
 
-  // a snapshot from another firecracker: the wake falls back to a cold boot
   const metaPath = join(ctx.dataDir, 'imps', asleep.id, 'snapshot', 'meta.json');
 
   const meta = await Bun.file(metaPath).text();
@@ -1101,7 +1082,6 @@ test('it keeps the sleeping imp and its snapshot when the budget turns away a co
     code: 'RAM_BUDGET_EXCEEDED',
   });
 
-  // the raw row: a read through the service would repair a lost snapshot
   const row = await readImpByName(ctx.db, 'a');
 
   expect(row?.state).toBe('sleeping');
@@ -1148,7 +1128,6 @@ test('it frees the name and the slot of a create the RAM budget refused', async 
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
-  // refused: the budget is 800 MiB
   await Promise.allSettled([ctx.client.imps.create({ name: 'huge', memoryMib: 900 })]);
 
   const created = await ctx.client.imps.create({ name: 'huge', memoryMib: 512 });
@@ -1190,7 +1169,6 @@ test('it starts an imp in error', async () => {
 
   ctx.fake.queue('boot', 'fail');
 
-  // the boot fails, as queued
   await Promise.allSettled([ctx.client.imps.create({ name: 'dev' })]);
 
   const started = await ctx.client.imps.start({ name: 'dev' });
@@ -1250,7 +1228,6 @@ test('it keeps an imp running for a read during a lifecycle operation', async ()
 
   await gate.reached;
 
-  // the VM looks dead to a reader while the sleep holds the lock
   ctx.fake.alive.clear();
 
   const during = await ctx.client.imps.get({ name: 'dev' });
@@ -1305,8 +1282,6 @@ test('it refuses the socket of an exec ticket for another imp', async () => {
   await ctx.client.imps.create({ name: 'other' });
 
   const issued = await ctx.client.exec.ticket({ name: 'other' });
-
-  // accepted at the upgrade, refused at start: the session starts imp dev
   const reply = await tryExecSocket(ctx.port, `ticket=${issued.ticket}`);
 
   expect(JSON.parse(reply)).toMatchObject({ type: 'error', code: 'FORBIDDEN' });
@@ -1345,7 +1320,6 @@ test("it keeps the reference an image add's pull resolved in its audit row", asy
   await mkdir(join(ctx.dataDir, 'tree'));
   await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
 
-  // the image is not on the host: the add pulls it, then unpacks its export
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
@@ -1363,7 +1337,6 @@ test("it keeps the reference an image add's pull resolved in its audit row", asy
 
   await ctx.client.images.add({ ref: 'busybox', name: 'box' });
 
-  // the row lands after the answer
   const details = await waitFor(async () => {
     const rows = await listApiCalls(ctx.db, null, 10, null);
 
@@ -1393,7 +1366,6 @@ test('it audits an exec on a ticket the token asked for as the token', async () 
 
   await tryExecSocket(ctx.port, `ticket=${issued.ticket}`);
 
-  // the row lands after the open settles
   const actors = await waitFor(async () => {
     const rows = await listApiCalls(ctx.db, 'dev', 10, null);
 
@@ -1414,7 +1386,6 @@ test('it lets a bearer exec socket start any imp', async () => {
     authorization: 'Bearer root-token',
   });
 
-  // past the grant: the imp does not exist
   expect(JSON.parse(reply)).toMatchObject({ type: 'error', code: 'NOT_FOUND' });
 });
 
@@ -1468,7 +1439,6 @@ test('it takes the bearer header on /tunnel', async () => {
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
   const reply = await tryTunnelSocket(ctx.port, '', { authorization: 'Bearer root-token' });
 
-  // past the auth: the imp does not exist
   expect(JSON.parse(reply)).toMatchObject({ type: 'error', code: 'NOT_FOUND' });
 });
 
@@ -1504,7 +1474,6 @@ test('it audits a tunnel open as the token, with the imp and the port', async ()
 
   await tryTunnelSocket(ctx.port, '', { authorization: 'Bearer root-token' }, 'dev');
 
-  // the row lands after the open settles
   const tunnels = await waitFor(async () => {
     const rows = await listApiCalls(ctx.db, 'dev', 10, null);
 
@@ -1565,7 +1534,6 @@ test('it refuses a wake of an imp in error when restartError is false', async ()
 
   ctx.fake.queue('boot', 'fail');
 
-  // the boot fails, as queued
   await Promise.allSettled([ctx.client.imps.create({ name: 'dev' })]);
 
   expect(ctx.client.imps.wake({ name: 'dev', restartError: false })).rejects.toMatchObject({
@@ -1586,7 +1554,6 @@ test('it restarts an imp in error on a wake', async () => {
 
   ctx.fake.queue('boot', 'fail');
 
-  // the boot fails, as queued
   await Promise.allSettled([ctx.client.imps.create({ name: 'dev' })]);
 
   const restarted = await ctx.client.imps.wake({ name: 'dev' });

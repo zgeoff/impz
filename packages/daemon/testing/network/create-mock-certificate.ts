@@ -10,9 +10,6 @@ interface MockCertificateOptions {
   readonly notAfter: Date;
 }
 
-// A real self-signed certificate and its key, as the cert store holds them:
-// valid from a minute ago for a day unless the dates are given, for one
-// arbitrary domain unless the names are. The first name is its subject.
 export async function createMockCertificate(
   overrides: Partial<MockCertificateOptions> = {},
 ): Promise<Certificate> {

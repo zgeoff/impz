@@ -63,7 +63,6 @@ test('it shows a file key with no comment by its type', () => {
   });
 });
 
-// the narrower grant holds even if someone adds the key to the file later
 test('it logs a key bound to a token in as the token, even when the file lists it', () => {
   const [key] = parseAuthorizedKeys(generateEd25519Key().public).keys;
   const caller = buildMockCaller({ kind: 'ssh', name: 'ci' });

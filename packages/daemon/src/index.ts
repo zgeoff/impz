@@ -1,4 +1,3 @@
-// @impz/daemon: impd's composition root, for a program that starts impd
 export { createImpd } from './create-impd';
 export type { Impd } from './create-impd';
 export type { ImpdBoundaries, ImpdDeps } from './impd-deps';

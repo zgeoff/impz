@@ -22,15 +22,10 @@ import { readImpByName } from '../../platform/db/imps';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 
 interface SetupOptions {
-  // the `tailscale` CLI that impd's whois runs; its peers are the test's
   readonly tailscale: Pick<ReturnType<typeof buildStubTailscale>, 'run'>;
-
-  // the API's idle timeout in seconds; main.ts's by default
   readonly idleTimeoutS?: number;
 }
 
-// impd's real app on a loopback port, as a remote agent reaches /mcp, a root
-// client for the scenario, and `stack`, whose releases run before impd stops
 async function setupTest(options: SetupOptions) {
   const stack = new AsyncDisposableStack();
 
@@ -46,12 +41,10 @@ async function setupTest(options: SetupOptions) {
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imps.create boots when it names none
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, {
     client: createImpClient({ url: harness.url, token: TEST_TOKEN }),
     stack,
@@ -730,7 +723,6 @@ test('it ends the streamed call and running command of a token that is removed',
   expect(response.status).toBe(200);
   expect(response.headers.get('content-type')).toBe('text/event-stream');
 
-  // the stream closed with no answer to the call
   expect(
     text
       .split('\n')
@@ -813,12 +805,10 @@ test('it refuses a caller with no token and no handed-over address with 401', as
 });
 
 test('it serves a tailnet identity the wake proxy hands over the imps its rule allows', async () => {
-  // alice's laptop is the one tailnet peer
   const tailscale = buildStubTailscale();
 
   tailscale.registerPeer('100.101.102.103', { node: 'laptop', login: 'alice@example.com' });
 
-  // alice's laptop may exec on dev-* imps
   updateEnv(
     'IMP_TAILNET_IDENTITIES',
     '[{"match":"user:alice@example.com","scope":"exec","imps":["dev-*"]}]',
@@ -831,7 +821,6 @@ test('it serves a tailnet identity the wake proxy hands over the imps its rule a
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.imps.create({ name: 'prod' });
 
-  // each request comes as the wake proxy sends it, with alice's address
   const opened = await fetch(`${ctx.url}/mcp`, {
     method: 'POST',
     headers: {
@@ -879,7 +868,6 @@ test('it serves a tailnet identity the wake proxy hands over the imps its rule a
   });
 });
 
-// a 400, not a 403, once past the origin check: the ping has no session
 test.each([
   ['an Origin on another site', { origin: 'http://evil.example' }, 403],
   ['a cross-site Sec-Fetch-Site', { 'sec-fetch-site': 'cross-site' }, 403],
@@ -917,7 +905,6 @@ test('it answers a tool call through the wake proxy’s API route', async () => 
 
   await ctx.client.imps.create({ name: 'box' });
 
-  // the proxy's API route, as the HTTPS domain serves impd
   const proxy = startWakeProxy({
     config: {
       ...ctx.config,
@@ -992,11 +979,9 @@ test('it answers a tool call through the wake proxy’s API route', async () => 
 test('it answers a long JSON tool call through the wake proxy', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
 
-  // the guest's `wait` runs until the test lets it end
   const done = Promise.withResolvers<void>();
   const guest = buildStubExecGuest({ wait: () => done.promise });
 
-  // the guest's command ends before impd stops
   ctx.stack.defer(() => {
     done.resolve();
   });
@@ -1013,7 +998,6 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
     agent.close();
   });
 
-  // the proxy's API route, as the HTTPS domain serves impd
   const proxy = startWakeProxy({
     config: {
       ...ctx.config,
@@ -1038,8 +1022,6 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
 
   const via = `http://127.0.0.1:${String(front.port)}`;
 
-  // a 2026-07-28 call with no progress token gets one JSON answer; a
-  // 2025-era session streams every answer
   const client = new Client(
     { name: 'test', version: '1.0.0' },
     { versionNegotiation: { mode: { pin: '2026-07-28' } } },
@@ -1088,11 +1070,9 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
 test('it keeps a call answered as server-sent events open through the wake proxy past the idle timeout that ends an unprotected stream', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale(), idleTimeoutS: 1 });
 
-  // the guest's `wait` runs until the test lets it end
   const done = Promise.withResolvers<void>();
   const guest = buildStubExecGuest({ wait: () => done.promise });
 
-  // the guest's command ends before impd stops
   ctx.stack.defer(() => {
     done.resolve();
   });
@@ -1109,7 +1089,6 @@ test('it keeps a call answered as server-sent events open through the wake proxy
     agent.close();
   });
 
-  // the proxy's API route, as the HTTPS domain serves impd
   const proxy = startWakeProxy({
     config: {
       ...ctx.config,
@@ -1177,8 +1156,6 @@ test('it keeps a call answered as server-sent events open through the wake proxy
     invariant(guest.requests[0]);
   });
 
-  // impd's event stream on /rpc, which lifts no idle timeout: its keepalive
-  // comes every 5 s, as the MCP stream's does, so the deadline ends it first
   const control = await fetch(`${ctx.url}/rpc/events/stream`, {
     method: 'POST',
     headers: { authorization: `Bearer ${TEST_TOKEN}`, 'content-type': 'application/json' },

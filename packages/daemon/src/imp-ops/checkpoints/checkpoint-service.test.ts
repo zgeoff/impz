@@ -26,8 +26,6 @@ import {
 } from './checkpoint-service';
 
 interface SetupOptions {
-  // XFS clones files; ZFS, on the stub pool, snapshots datasets and checks
-  // each new checkpoint id against the pool's snapshots
   readonly storage: 'xfs' | 'zfs';
 }
 
@@ -40,12 +38,10 @@ async function setupTest(options: SetupOptions) {
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  // freeze, thaw and each clone's source under the data dir, in order
   const events: string[] = [];
   const zfs = buildStubZfs({ root: 'tank/imp', rootDir: dataDir });
 
   const storages = {
-    // each clone a real copy, recorded as it starts
     xfs: () =>
       createXfsBackend({
         dataDir,
@@ -56,8 +52,6 @@ async function setupTest(options: SetupOptions) {
         },
       }),
 
-    // the stub pool's zfs, streams and mount table, as setup-storage.sh
-    // mounts the root dataset on the data dir
     zfs: () =>
       createZfsBackend({
         dataDir,
@@ -70,7 +64,6 @@ async function setupTest(options: SetupOptions) {
       }),
   };
 
-  // the guest's fsfreeze around each consistent copy, recorded
   const freezer = {
     freeze: () => {
       events.push('freeze');
@@ -84,9 +77,6 @@ async function setupTest(options: SetupOptions) {
     },
   };
 
-  // holds the first select that names `base` once armed: a fork reads its
-  // source's image there, between its two locks of the source; impd's
-  // queries run through it, on the test's write feed
   const gate = buildQueryGate('base');
 
   const harness = await startTestImpd(stack, {
@@ -96,7 +86,6 @@ async function setupTest(options: SetupOptions) {
     boundaries: { freezer },
   });
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, { events, gate });
 }
 
@@ -105,7 +94,6 @@ test('it makes an id of cp- and six letters that read unambiguously', () => {
 });
 
 test('it picks each letter of an id from its own draw of the random source', () => {
-  // the 1st, 11th, 12th, 24th, 25th and 32nd of the 32 letters, in turn
   const draws = [0, 10 / 32, 11 / 32, 23 / 32, 24 / 32, 31 / 32];
 
   expect(buildCheckpointId(() => draws.shift() ?? Number.NaN)).toBe('cp-akmz29');
@@ -176,7 +164,6 @@ test('it thaws and leaves no checkpoint when the clone fails', async () => {
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
 
-  // a disk that is gone fails the real copy
   rmSync(paths.disk);
 
   const seen = ctx.events.length;
@@ -251,8 +238,6 @@ test('it restores a running imp: kill, swap the disk, drop the snapshot, boot', 
   const record = await readImpByName(ctx.db, 'dev');
 
   expect(restored.state).toBe('running');
-
-  // the old guest's disk and memory are thrown away: no graceful shutdown
   expect(ctx.fake.stops).toStrictEqual([{ pid: 1001, graceful: false }]);
   expect(readFileSync(paths.disk, 'utf8')).toBe('a=1');
   expect(existsSync(paths.snapshotDir)).toBe(false);
@@ -445,8 +430,6 @@ test('it rejects a listing of an imp that does not exist', async () => {
 test('it rejects a restore of an imp still being created', async () => {
   const ctx = await setupTest({ storage: 'xfs' });
   const image = await createImage(ctx.db, buildMockNewImage());
-
-  // a row a create left in `creating`, with a checkpoint to restore
   const imp = await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: image.id }));
 
   await createCheckpoint(ctx.db, buildMockNewCheckpoint({ impId: imp.id, label: 'v1' }));
@@ -460,7 +443,6 @@ test('it rejects a fork of the live disk of an imp still being created', async (
   const ctx = await setupTest({ storage: 'xfs' });
   const image = await createImage(ctx.db, buildMockNewImage());
 
-  // a row a create left in `creating`
   await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: image.id }));
 
   expect(ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'copy' })).rejects.toMatchObject({
@@ -487,7 +469,6 @@ test('it leaves a sleeping imp asleep with its memory when a restore’s clone f
 
   await ctx.impd.imps.sleepImp('dev');
 
-  // a checkpoint disk that is gone fails the real copy
   rmSync(join(paths.checkpointsDir, checkpoint.id, 'disk.ext4'));
 
   const restore = ctx.impd.checkpoints.restoreCheckpoint('dev', 'v1');
@@ -515,8 +496,6 @@ test('it leaves a running imp running on its own disk when a restore’s clone f
   const checkpoint = await ctx.impd.checkpoints.createCheckpoint('dev', 'v1');
 
   writeFileSync(paths.disk, 'changed');
-
-  // a checkpoint disk that is gone fails the real copy
   rmSync(join(paths.checkpointsDir, checkpoint.id, 'disk.ext4'));
 
   expect(ctx.impd.checkpoints.restoreCheckpoint('dev', 'v1')).rejects.toMatchObject({
@@ -547,7 +526,6 @@ test('it leaves the imp stopped on its old disk when a restore’s swap fails af
   mkdirSync(paths.snapshotDir, { recursive: true });
   writeFileSync(join(paths.snapshotDir, 'memory'), 'old');
 
-  // the kill waits here; the staged clone goes meanwhile, so the swap fails
   const kill = ctx.fake.hold('stop');
   const restore = ctx.impd.checkpoints.restoreCheckpoint('dev', 'v1');
 
@@ -576,7 +554,6 @@ test('it refuses a fork whose source is destroyed before the disk copy and leave
 
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
 
-  // the fork stops at its read of the source's image, past its first lock
   ctx.gate.arm();
 
   const fork = ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'copy' });
@@ -607,7 +584,6 @@ test('it refuses a fork whose source is made again under its name before the dis
 
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
 
-  // the fork stops at its read of the source's image, past its first lock
   ctx.gate.arm();
 
   const fork = ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'copy' });
@@ -643,7 +619,6 @@ test('it leaves an imp that took a refused fork’s name before the fork’s cle
 
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
 
-  // the fork stops at its read of the source's image, past its first lock
   ctx.gate.arm();
 
   const fork = ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'copy' });
@@ -653,15 +628,11 @@ test('it leaves an imp that took a refused fork’s name before the fork’s cle
   await ctx.impd.imps.destroyImp('dev');
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
 
-  // The next write is the fork's row, made under the fork's lock: `impz rm` of
-  // the fork, then a new `copy`, queue on that lock ahead of the refused
-  // fork's cleanup.
   const queued: { row?: ImpRecord; removed?: Promise<void>; taker?: Promise<Imp> } = {};
 
   const unwatch = ctx.db.writes.subscribe((write) => {
     unwatch();
 
-    // a throw here fails the fork's insert, and with it the test
     if (write.kind !== 'added') {
       throw new Error(`the first write was ${write.kind}, not the fork's row`);
     }
@@ -699,8 +670,6 @@ test('it leaves an imp that took a refused fork’s name before the fork’s cle
 test('it draws a new id when the pool holds a snapshot by the drawn one', async () => {
   const ctx = await setupTest({ storage: 'zfs' });
 
-  // the stub pool keeps no files: the image is a dataset only, and the
-  // imp's disk file is there before its clone
   await ctx.storage.createImage('sha256:base', () => Promise.resolve());
 
   writeFileSync(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
@@ -715,7 +684,6 @@ test('it draws a new id when the pool holds a snapshot by the drawn one', async 
 
   await ctx.impd.imps.createImp({ id: impId, name: 'dev', image: 'base' });
 
-  // six draws of 0 make cp-aaaaaa, six of 1/32 make cp-bbbbbb
   const draws = [
     0,
     0,
@@ -745,7 +713,6 @@ test('it draws a new id when the pool holds a snapshot by the drawn one', async 
     diskBudget: ctx.impd.diskBudget,
     log: () => {},
 
-    // the guest's fsfreeze; the stub VMM's guest has no agent to run it
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
     random: () => draws.shift() ?? Number.NaN,
   });
@@ -760,8 +727,6 @@ test('it draws a new id when the pool holds a snapshot by the drawn one', async 
 test('it draws a new id when a deleted checkpoint’s snapshot stays for a fork', async () => {
   const ctx = await setupTest({ storage: 'zfs' });
 
-  // the stub pool keeps no files: the image is a dataset only, and each
-  // imp's disk file is there before its clone
   await ctx.storage.createImage('sha256:base', () => Promise.resolve());
 
   writeFileSync(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
@@ -776,7 +741,6 @@ test('it draws a new id when a deleted checkpoint’s snapshot stays for a fork'
 
   await ctx.impd.imps.createImp({ id: impId, name: 'dev', image: 'base' });
 
-  // six draws of 0 make cp-aaaaaa, six of 1/32 make cp-bbbbbb
   const draws = [
     ...Array.from({ length: 12 }, () => 0),
     ...Array.from({ length: 6 }, () => 1 / 32),
@@ -790,18 +754,15 @@ test('it draws a new id when a deleted checkpoint’s snapshot stays for a fork'
     diskBudget: ctx.impd.diskBudget,
     log: () => {},
 
-    // the guest's fsfreeze; the stub VMM's guest has no agent to run it
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
     random: () => draws.shift() ?? Number.NaN,
   });
 
   await checkpoints.createCheckpoint('dev', 'v1');
 
-  // the fork's disk file, written as its row lands and before its clone
   const unwatch = ctx.db.writes.subscribe((write) => {
     unwatch();
 
-    // a throw here fails the fork's insert, and with it the test
     if (write.kind !== 'added') {
       throw new Error(`the first write was ${write.kind}, not the fork's row`);
     }
@@ -825,8 +786,6 @@ test('it draws a new id when a deleted checkpoint’s snapshot stays for a fork'
 test('it gives up after three drawn ids that each name a snapshot in the pool', async () => {
   const ctx = await setupTest({ storage: 'zfs' });
 
-  // the stub pool keeps no files: the image is a dataset only, and the
-  // imp's disk file is there before its clone
   await ctx.storage.createImage('sha256:base', () => Promise.resolve());
 
   writeFileSync(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
@@ -841,8 +800,6 @@ test('it gives up after three drawn ids that each name a snapshot in the pool', 
 
   await ctx.impd.imps.createImp({ id: impId, name: 'dev', image: 'base' });
 
-  // The first checkpoint and the next three tries draw cp-aaaaaa; a fourth
-  // try would draw the free cp-bbbbbb.
   const draws = [
     ...Array.from({ length: 24 }, () => 0),
     ...Array.from({ length: 6 }, () => 1 / 32),
@@ -856,7 +813,6 @@ test('it gives up after three drawn ids that each name a snapshot in the pool', 
     diskBudget: ctx.impd.diskBudget,
     log: () => {},
 
-    // the guest's fsfreeze; the stub VMM's guest has no agent to run it
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
     random: () => draws.shift() ?? Number.NaN,
   });

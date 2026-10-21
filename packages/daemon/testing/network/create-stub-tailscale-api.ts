@@ -4,11 +4,8 @@ import { HttpResponse, http } from 'msw';
 import { z } from 'zod';
 import type { TailnetService } from '../../src/network/tailnet-names/services-api';
 
-// where the Tailscale API lives, as services-api calls it by default
 const TAILSCALE_API = 'https://api.tailscale.com/api/v2';
 
-// a Tailscale Service as the API stores it; a test that seeds one sets the
-// fields it needs
 const StubServiceSchema = z.object({
   name: z.string().default(() => `svc:${faker.word.noun().toLowerCase()}`),
   comment: z.string().default(() => faker.lorem.words(3)),
@@ -16,7 +13,6 @@ const StubServiceSchema = z.object({
   tags: z.array(z.string()).default(() => []),
 });
 
-// the body of a PUT: every field a service has, and nothing filled in
 const PutServiceSchema = z.strictObject({
   name: z.string(),
   comment: z.string(),
@@ -24,26 +20,19 @@ const PutServiceSchema = z.strictObject({
   tags: z.array(z.string()),
 });
 
-// an access token the token endpoint handed out, with its granted scopes
-// joined by spaces
 const StubTokenSchema = z.object({
   value: z.string().default(() => `tskey-api-${faker.string.alphanumeric(24)}`),
   scope: z.string().default('services'),
 });
 
-// one request as the API got it
 interface StubTailscaleRequest {
   readonly method: string;
-
-  // the path under /api/v2, as sent
   readonly path: string;
   readonly authorization: string | null;
   readonly body: string;
 }
 
 interface StubTailscaleApiOptions {
-  // the one OAuth client the tailnet knows, and the scopes it was granted
-  // (`services` by default)
   readonly client: {
     readonly clientId: string;
     readonly clientSecret: string;
@@ -51,9 +40,6 @@ interface StubTailscaleApiOptions {
   };
 }
 
-// The Tailscale API's OAuth token endpoint and Services routes as MSW
-// handlers over @msw/data collections: 401 without a live token it issued,
-// 403 past the token's scope, 400 for a PUT that is not a whole service.
 export function createStubTailscaleApi(options: Readonly<StubTailscaleApiOptions>) {
   const services = new Collection({ schema: StubServiceSchema });
   const tokens = new Collection({ schema: StubTokenSchema });
@@ -61,7 +47,6 @@ export function createStubTailscaleApi(options: Readonly<StubTailscaleApiOptions
   const granted = options.client.scopes ?? ['services'];
   const requests: StubTailscaleRequest[] = [];
 
-  // every request lands in `requests`, in order, before it is answered
   const readRecordedBody = async (request: Request): Promise<string> => {
     const body = await request.text();
 
@@ -75,7 +60,6 @@ export function createStubTailscaleApi(options: Readonly<StubTailscaleApiOptions
     return body;
   };
 
-  // the scopes of the bearer token, or null for none this API issued
   const readTokenScopes = (request: Request): readonly string[] | null => {
     const header = request.headers.get('authorization') ?? '';
     const bearer = /^Bearer (?<token>.+)$/v.exec(header)?.groups?.['token'];
@@ -88,7 +72,6 @@ export function createStubTailscaleApi(options: Readonly<StubTailscaleApiOptions
     return token === undefined ? null : token.scope.split(' ');
   };
 
-  // null when the token may make the call, else the refusal
   const readRefusal = (request: Request): Response | null => {
     const scopes = readTokenScopes(request);
 
@@ -191,23 +174,18 @@ export function createStubTailscaleApi(options: Readonly<StubTailscaleApiOptions
     handlers,
     services,
     requests: requests as readonly StubTailscaleRequest[],
-
-    // every access token handed out so far, in order
     readIssuedTokens: (): readonly string[] => tokens.all().map((token) => token.value),
 
-    // every token handed out so far stops working, as an expired one does
     revokeTokens: (): void => {
       tokens.clear();
     },
   };
 }
 
-// the fields the API sends, without the collection's own record metadata
 function toService(stored: Required<TailnetService>): TailnetService {
   return { name: stored.name, comment: stored.comment, ports: stored.ports, tags: stored.tags };
 }
 
-// a body's JSON, or undefined for one that is not JSON
 function parseJson(body: string): unknown {
   try {
     return JSON.parse(body);

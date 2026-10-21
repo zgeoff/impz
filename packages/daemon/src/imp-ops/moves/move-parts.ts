@@ -1,21 +1,12 @@
 import type { Clock } from '../../platform/process/clock';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
 
-// A move's stream goes in parts of at most this many bytes, one POST each,
-// so impd's request body limit never has to fit a whole disk
 export const MOVE_PART_BYTES = 256 * 1024 * 1024;
-
-// how long the receiver waits for the next part before it gives up
 export const PART_WAIT_MS = 60_000;
 
 export interface PartPipe {
-  // the parts' bytes as one stream
   readonly stream: ReadableStream<Uint8Array>;
-
-  // resolves once the part's body is read to its end
   readonly push: (body: ReadableStream<Uint8Array>) => Promise<void>;
-
-  // no part follows: the stream ends
   readonly end: () => void;
   readonly fail: (error: Error) => void;
 }
@@ -29,9 +20,6 @@ interface Part {
   readonly consumed: PromiseWithResolvers<void>;
 }
 
-// The receiving end: each POST hands its body over, and the frame reader
-// reads them in turn as if they were one stream. `timer` is the clock the
-// wait for the next part reads and the timer that wakes it at the deadline.
 export function createPartPipe(
   waitMs = PART_WAIT_MS,
   timer: Pick<Clock, 'now' | 'startTimer'> = REAL_CLOCK,
@@ -152,8 +140,6 @@ export function createPartPipe(
   };
 }
 
-// The frames one chunk at a time, with room to put back what a part's
-// limit cut off
 interface ChunkSource {
   readonly readNext: () => Promise<Uint8Array | null>;
   readonly putBack: (chunk: Uint8Array) => void;
@@ -192,8 +178,6 @@ function createChunkSource(
   };
 }
 
-// The sending end: splits the frames into bodies of at most `partBytes` and
-// hands each to `post`, in order. Returns the count of parts.
 export async function sendInParts(
   frames: Readonly<AsyncGenerator<Uint8Array, void, undefined>>,
   post: (part: number, body: ReadableStream<Uint8Array>) => Promise<void>,
@@ -202,7 +186,8 @@ export async function sendInParts(
   try {
     return await sendEachPart(createChunkSource(frames), post, partBytes);
   } finally {
-    // a failed post leaves the frames part-read: their files close now
+    // A failed post leaves the frames part-read, and only returning the
+    // generator closes their files.
     await frames.return();
   }
 }
@@ -248,7 +233,6 @@ async function sendEachPart(
 
     part += 1;
 
-    // a part that ended at its limit: look ahead, so no empty part follows
     const next = source.isDone() ? null : await source.readNext();
 
     if (next !== null) {

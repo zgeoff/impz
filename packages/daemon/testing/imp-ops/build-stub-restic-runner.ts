@@ -1,8 +1,5 @@
 import type { CommandResult } from '../../src/platform/process/run-command';
 
-// The process runner createRestic hands each restic command to: it answers
-// with the queued results in order, then with a clean exit and no output, and
-// records each argv (joined by spaces) and env it was given.
 export function buildStubResticRunner(results: readonly CommandResult[] = []) {
   const argvs: string[] = [];
   const envs: Readonly<Record<string, string>>[] = [];

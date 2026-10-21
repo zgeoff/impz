@@ -3,8 +3,6 @@ import { formatKeyFingerprint } from '../../src/imps/ssh/authorized-keys';
 import type { TokenSshKeyRecord } from '../../src/platform/db/tokens';
 import { generateEd25519Key } from '../../src/surface/ssh/host-key';
 
-// An SSH key bound to a token, as the token store writes its row: a fresh
-// ed25519 key under a fresh token id, with an arbitrary comment and age.
 export function buildMockTokenSshKeyRecord(
   overrides: Partial<TokenSshKeyRecord> = {},
 ): TokenSshKeyRecord {

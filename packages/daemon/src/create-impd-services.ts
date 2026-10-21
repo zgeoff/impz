@@ -11,7 +11,6 @@ import { createApiAudit } from './platform/audit/api-audit';
 import { printLog } from './platform/process/print-log';
 import { createStorageGc } from './vm/storage/storage-gc';
 
-// The services over the imps that the API serves
 export function createImpdServices(
   config: Config,
   deps: Readonly<ImpdDeps>,

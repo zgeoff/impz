@@ -1,8 +1,6 @@
 import { createServer } from 'node:net';
 import type { Server, Socket } from 'node:net';
 
-// The far end of a plain tunnel on a free loopback port that holds every
-// connection open, saying nothing, until it stops
 export async function startStubBrokerHoldTarget(stack: Readonly<AsyncDisposableStack>) {
   const held = new Set<Socket>();
 
@@ -29,13 +27,10 @@ export async function startStubBrokerHoldTarget(stack: Readonly<AsyncDisposableS
   return {
     port: address.port,
     held,
-
-    // ends the held connections at once; the stack then finds it stopped
     stop: () => stopServer(server, held),
   };
 }
 
-// closes the listener and ends its connections; safe again once stopped
 async function stopServer(server: Server, sockets: ReadonlySet<Socket>): Promise<void> {
   for (const socket of sockets) {
     socket.destroy();

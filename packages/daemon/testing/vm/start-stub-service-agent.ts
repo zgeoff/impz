@@ -12,16 +12,10 @@ import {
 } from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
-// the user the image runs its services as, which a current agent reports
 const IMAGE_USER = 'dev';
-
-// the inode of every service's log file
 const LOG_INODE = 7;
-
-// the most lines a logs call may ask for, as the agent's MaxLogLines
 const MAX_LOG_LINES = 100_000;
 
-// one open follow of a service's log
 interface Follow {
   readonly service: string;
   readonly socket: Socket;
@@ -29,17 +23,11 @@ interface Follow {
 }
 
 interface StubServiceAgentOptions {
-  // false: an agent from before the services API, which knows only
-  // services.list and lists no definitions
   readonly knowsServices: boolean;
 
-  // closes with this stack, else at the test's end
   readonly stack?: Readonly<AsyncDisposableStack>;
 }
 
-// An imp's guest agent on `vsockPath` that keeps services as
-// agent/internal/services does; an argv of `bad` is its BAD_REQUEST. Each
-// log is one file, which a removed service keeps.
 export async function startStubServiceAgent(
   vsockPath: string,
   options: Readonly<StubServiceAgentOptions>,
@@ -50,12 +38,7 @@ export async function startStubServiceAgent(
   const logs = new Map<string, Buffer>();
 
   const follows: Follow[] = [];
-
-  // while set, the agent refuses every log open, or every list, as INTERNAL
   const failing = { logs: false, list: false };
-
-  // the pid the next start runs: an add, a replace and a restart each start
-  // a new process
   const pids = { next: 40 };
 
   const allocatePid = (): number => {
@@ -83,8 +66,6 @@ export async function startStubServiceAgent(
     socket.write(encodeJsonFrame(FRAME_TYPES.cursor, { inode: LOG_INODE, offset: end }));
   };
 
-  // the last `lines` lines; or from a cursor, unless the log shrank below it
-  // or it names another file, which sends the whole log
   const getLogStart = (log: Buffer, request: Request): number => {
     if (request.cursor === undefined) {
       return getLastLinesStartOffset(log, request.lines ?? 0);
@@ -159,8 +140,6 @@ export async function startStubServiceAgent(
     sendResponse(socket, { ok: true });
   };
 
-  // a remove or a restart needs the service itself: a log that a removed
-  // service left is NO_SERVICE to both, as it is to the agent
   const handleChange = (socket: Socket, request: Request): void => {
     const name = request.service ?? '';
     const index = services.findIndex((service) => service.name === name);
@@ -175,7 +154,6 @@ export async function startStubServiceAgent(
     if (request.op === 'services.remove') {
       services.splice(index, 1);
     } else {
-      // a new process, which has no last exit yet
       const { lastExit: _lastExit, ...kept } = service;
 
       services.splice(index, 1, { ...kept, state: 'running', pid: allocatePid(), restarts: 0 });
@@ -193,8 +171,6 @@ export async function startStubServiceAgent(
     if (request.op === 'services.list' && failing.list) {
       sendError(socket, 'INTERNAL', 'the services could not be listed');
     } else if (request.op === 'services.list') {
-      // by name in byte order, as the agent's sort; names are unique, and
-      // each service has every field the agent always writes, zero or not
       const listed = services
         .toSorted((left, right) => (left.name < right.name ? -1 : 1))
         .map((service) =>
@@ -204,7 +180,6 @@ export async function startStubServiceAgent(
           }),
         );
 
-      // an agent from before the services API had no image user to write
       const answer = options.knowsServices
         ? { services: listed, image_user: IMAGE_USER }
         : { services: listed };
@@ -244,7 +219,6 @@ export async function startStubServiceAgent(
     failing,
     close: agent.close,
 
-    // adds to the service's log file and sends the bytes to each follow
     writeLog: (service: string, text: string | Uint8Array): void => {
       const data = typeof text === 'string' ? new TextEncoder().encode(text) : text;
       const log = Buffer.concat([logs.get(service) ?? Buffer.alloc(0), data]);
@@ -258,7 +232,6 @@ export async function startStubServiceAgent(
       }
     },
 
-    // what a VM going to sleep does to its vsock connections
     stopFollows: (): void => {
       for (const follow of follows) {
         follow.socket.destroy();
@@ -267,12 +240,8 @@ export async function startStubServiceAgent(
   };
 }
 
-// the newline byte, which ends each line of a log
 const NEWLINE = 0x0a;
 
-// Where the last `count` lines of `log` start, as the agent's findLastLines
-// reads them: the newline that ends the log ends its last line, and a last
-// line without one counts as a line.
 function getLastLinesStartOffset(log: Buffer, count: number): number {
   if (count === 0) {
     return log.length;

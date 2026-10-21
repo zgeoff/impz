@@ -1,9 +1,8 @@
 import { faker } from '@faker-js/faker';
 import type { NewImp } from '../../src/platform/db/imps';
 
-// An imp row as createImp inserts it: a user imp with no optional field set;
-// its name, image and shape arbitrary. Slot 0 of the default IMP_SUBNET,
-// 10.66.0.0/16, has the guest address 10.66.0.2, so the two go together.
+// Slot 0 of the default subnet, 10.66.0.0/16, has the guest address 10.66.0.2, so the two
+// go together.
 export function buildMockNewImp(overrides: Partial<NewImp> = {}): NewImp {
   return {
     name: faker.string.alpha({ length: 8, casing: 'lower' }),

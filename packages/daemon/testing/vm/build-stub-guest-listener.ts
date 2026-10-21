@@ -1,14 +1,10 @@
 import type { GuestListener, ListenSpec } from '../../src/vm/agent-client/listener-stream';
 
-// each waiting client's connection id, or null where the listener ends
 interface StubListenerQueue {
   readonly ids: (number | null)[];
   wake: (() => void) | null;
 }
 
-// A guest socket as the agent's listen opens it: the path or port asked for
-// (its own path for none, 41000 for port 0). The test connects clients and
-// ends it as a forced sleep does; a close ends it too.
 export function buildStubGuestListener(id: string, spec: ListenSpec) {
   const queue: StubListenerQueue = { ids: [], wake: null };
   const state = { isClosed: false };
@@ -18,7 +14,6 @@ export function buildStubGuestListener(id: string, spec: ListenSpec) {
     queue.wake?.();
   };
 
-  // the next client, or null once the listener ended
   const readNext = async (): Promise<number | null> => {
     while (queue.ids.length === 0) {
       await new Promise<void>((resolve) => {
@@ -45,12 +40,10 @@ export function buildStubGuestListener(id: string, spec: ListenSpec) {
     listener,
     state,
 
-    // a guest client connects, waiting for an accept under `connection`
     connect: (connection: number): void => {
       sendId(connection);
     },
 
-    // the agent connection ended, as after a forced sleep
     end: (): void => {
       sendId(null);
     },

@@ -5,7 +5,6 @@ import { createMcpAuth } from './identity/oauth/create-mcp-auth';
 import type { ImpdDeps } from './impd-deps';
 import { printLog } from './platform/process/print-log';
 
-// The API tokens, their revocations and the OAuth grants on top of them
 export async function loadImpdAccess(
   config: Config,
   deps: Readonly<ImpdDeps>,

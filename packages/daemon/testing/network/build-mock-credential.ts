@@ -1,8 +1,6 @@
 import { faker } from '@faker-js/faker';
 import type { Credential } from '../../src/network/broker/forward-request';
 
-// A bearer credential of an arbitrary secret that is not oauth, sent to
-// https://<host> for any method and path
 export function buildMockCredential(overrides: Partial<Credential> = {}): Credential {
   return {
     secretName: faker.helpers.fromRegExp(/[a-z][a-z0-9-]{2,12}/u),

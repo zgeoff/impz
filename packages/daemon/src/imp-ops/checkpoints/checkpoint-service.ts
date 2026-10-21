@@ -33,8 +33,6 @@ import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 
-// Short, typeable and global, so the existing primary key holds them without
-// a migration, and an id never comes back after a delete (unlike v1, v2…).
 export const CHECKPOINT_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
 const CHECKPOINT_ID_PREFIX = 'cp-';
 const ID_ATTEMPTS = 3;
@@ -49,18 +47,12 @@ export interface CheckpointService {
   readonly createCheckpoint: (name: string, label: string | undefined) => Promise<Checkpoint>;
   readonly listCheckpoints: (name: string) => Promise<Checkpoint[]>;
   readonly removeCheckpoint: (name: string, ref: string) => Promise<void>;
-
-  // stops the VM, puts the checkpoint's disk in place, drops any memory
-  // snapshot, and boots again if the imp was awake
   readonly restoreCheckpoint: (name: string, ref: string) => Promise<Imp>;
 
-  // disk only: a memory fork would duplicate entropy and IDs
-  // (docs/architecture/storage/storage.md#checkpoints-restores-and-forks)
+  // Disk only, because a memory fork would duplicate entropy and IDs.
   readonly forkImp: (input: ForkInput) => Promise<ForkedImp>;
 }
 
-// the fork, and the id of the source it was checked against: its name may
-// belong to another imp by the time the grants are copied
 interface ForkedImp {
   readonly imp: Imp;
   readonly sourceId: string;
@@ -73,11 +65,7 @@ export interface CheckpointServiceDeps {
   readonly storage: StorageBackend;
   readonly log?: (message: string) => void;
   readonly freezer?: DiskFreezer;
-
-  // a checkpoint is thin, but none is made past the reserve
   readonly diskBudget: Pick<DiskBudget, 'requireRoom'>;
-
-  // the draws each new checkpoint id is made from; Math.random by default
   readonly random?: () => number;
 }
 
@@ -89,7 +77,6 @@ export function buildCheckpointId(random: () => number = Math.random): string {
   return CHECKPOINT_ID_PREFIX + picks.map((pick) => CHECKPOINT_ID_ALPHABET[pick]).join('');
 }
 
-// A label is looked up the same way as an id, so it must not look like one.
 export function isValidCheckpointLabel(label: string): boolean {
   return !label.startsWith(CHECKPOINT_ID_PREFIX);
 }
@@ -97,8 +84,6 @@ export function isValidCheckpointLabel(label: string): boolean {
 export function createCheckpointService(deps: CheckpointServiceDeps): CheckpointService {
   const log = deps.log ?? printLog;
 
-  // a fork its source changed under goes, by id: an imp that took its name
-  // since stays
   const removeRefusedFork = async (name: string, forkId: string | null): Promise<void> => {
     if (forkId === null) {
       return;
@@ -206,8 +191,6 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
       return checkpoints.map((checkpoint) => toApiCheckpoint(checkpoint));
     },
 
-    // the row goes first: a leftover disk is harmless, a row without a disk
-    // is not
     removeCheckpoint: (name, ref) =>
       deps.imps.lockImp(name, async (imp) => {
         const checkpoint = await readCheckpointOrThrow(imp, ref);
@@ -233,19 +216,16 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
         const wasAwake = imp.state === 'running' || imp.state === 'sleeping';
         const started = performance.now();
 
-        // a failed clone leaves the imp as it was; the halt kills the VM,
-        // whose disk and memory go anyway (docs/architecture/storage/storage.md)
         const halted = await storage.restoreCheckpoint(imp.id, checkpoint.id, async () => {
           const stopped = await deps.imps.haltImp(imp, false);
 
-          // the memory holds the old disk's page cache: never pair it with
-          // the new disk, even after a crash
+          // The memory holds the old disk's page cache, so it must never pair
+          // with the new disk, even after a crash.
           rmSync(paths.snapshotDir, { recursive: true, force: true });
 
           return stopped;
         });
 
-        // the disk is the checkpoint's now, at the checkpoint's size
         const resized = await updateImpDisk(deps.db, imp.id, {
           diskBytes: checkpoint.diskBytes,
           isGrowPending: false,
@@ -253,8 +233,6 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
 
         const sized = toLockedImp(halted, resized);
 
-        // a stopped imp boots later, from whatever path: that boot is the
-        // restore's
         if (!wasAwake) {
           await writeNextBootCause(deps.db, imp.id, 'restore');
         }
@@ -262,7 +240,6 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
         const booted = wasAwake ? await deps.imps.bootImp(sized) : sized;
         const durationMs = Math.round(performance.now() - started);
 
-        // the state may be what it was, the disk is not: the stream hears of it
         const restored = await updateLockedImpState(deps.db, booted, {
           reason: 'restored',
           detail: { durationMs, trigger: checkpoint.id },
@@ -275,7 +252,6 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
       }),
 
     forkImp: async (input) => {
-      // fail before the new imp exists when the source or checkpoint is wrong
       const source = await deps.imps.lockImp(input.source, async (imp) => {
         const policy = await readEgressPolicy(deps.db, imp.id);
 
@@ -299,11 +275,8 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
         };
       });
 
-      // the fork's id once it has one, and whether its source changed
       const made = { forkId: null as string | null, isSourceChanged: false };
 
-      // the name may belong to another imp by now, or to none: the fork must
-      // not copy what is there
       const requireSameSource = (imp: Readonly<ImpRecord> | null): void => {
         if (imp === null || imp.id !== source.imp.id) {
           made.isSourceChanged = true;
@@ -344,7 +317,6 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
       };
 
       try {
-        // the source's policy is in the fork's insert: it never runs more open
         const fork = await deps.imps.createImp({
           name: input.name,
           image: source.imp.image,
@@ -357,8 +329,6 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
             cpuWeight: source.imp.cpu.weight,
           }),
           isIdentityResetPending: source.isIdentityResetPending,
-
-          // a fork holds its source's disk: one left out of backups stays out
           isBackedUp: source.isBackedUp,
           prepareDisk: createForkDisk,
         });
@@ -375,8 +345,6 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
   };
 }
 
-// the fork's source was destroyed, or destroyed and made again under its
-// name, between its check and its disk copy
 function buildSourceChangedError(source: string) {
   return buildConflictError(
     'imp',

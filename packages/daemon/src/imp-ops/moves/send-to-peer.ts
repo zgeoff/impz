@@ -4,12 +4,10 @@ import { MOVE_PATHS } from './move-header';
 import { buildTicketHeader } from './move-tickets';
 
 interface PeerDeps {
-  // the timer of each request's deadline to the target; setTimeout by default
   readonly startPeerDeadline?: StartTimer;
   readonly fetch?: (request: Request) => Promise<Response>;
 }
 
-// a request to the target: the ticket header always, and these besides
 export interface PeerRequest {
   readonly body?: string | ReadableStream<Uint8Array>;
   readonly duplex?: 'half';
@@ -17,9 +15,8 @@ export interface PeerRequest {
   readonly extraHeaders?: Readonly<Record<string, string>>;
 }
 
-// The target's time to answer, in place of Bun's 360 s limit on a silent
-// answer: a part and the finish wait on the target's disk, which can take
-// minutes; the offer, the commit and the abort (which removes a copy) less
+// Bun gives up on a silent answer after 360 s, but a part and the finish wait
+// on the target's disk for longer, so each request carries its own deadline.
 const PEER_DEADLINES_MS = {
   stream: 60 * 60 * 1000,
   control: 10 * 60 * 1000,
@@ -37,7 +34,7 @@ export function sendToPeer(
   const durationMs =
     path === MOVE_PATHS.receive ? PEER_DEADLINES_MS.stream : PEER_DEADLINES_MS.control;
 
-  // a redirect could send the ticket somewhere else: it fails instead
+  // A followed redirect could send the ticket to another host.
   return sendLongRequest(
     new URL(path, peer).toString(),
     {

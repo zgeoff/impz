@@ -9,11 +9,7 @@ import { TemplateRestoreError } from '../../src/vm/vmm/template-vm';
 import type { TemplateRestorePlan } from '../../src/vm/vmm/template-vm';
 import type { VmRunner } from '../../src/vm/vmm/vm-runner';
 
-// what every fake agent's ping reports
 export const STUB_AGENT_VERSION = '0.1.0';
-
-// whom every VM runs as unless a test says otherwise: impd's own uid, as an
-// unjailed Firecracker does
 const IMPD_OWNER: VmOwner = { uid: process.getuid?.() ?? 0, cgroup: null };
 
 export type VmStep =
@@ -28,12 +24,8 @@ export type VmStep =
   | 'restore'
   | 'claim';
 
-// What the next call of a step does, within the VmRunner contract; each step
-// below says what fail and die mean for it. A hang waits for releaseHangs(),
-// then succeeds.
 export type VmOutcome = 'ok' | 'fail' | 'die' | 'hang';
 
-// Every failure the fake makes, so a test can tell it from a real bug.
 export class StubVmError extends Error {
   constructor(message: string) {
     super(message);
@@ -43,12 +35,10 @@ export class StubVmError extends Error {
 }
 
 interface Hold {
-  // resolves when the first call reaches the hold
   readonly reached: Promise<void>;
   readonly release: () => void;
 }
 
-// a boot_id as the kernel writes one, a UUID, here made from the VM's pid
 export function buildStubBootId(pid: number): string {
   return `00000000-0000-4000-8000-${String(pid).padStart(12, '0')}`;
 }
@@ -59,58 +49,36 @@ interface FakeGuestMemory {
   requestedMib: number;
   usedMib: number;
 
-  // an unplug stops here, as a guest stops at memory it cannot migrate
   unplugFloorMib: number;
 }
 
-// One fake host for every impd the test starts. Firecrackers outlive impd, so
-// `alive` is shared; each impd gets its own runner, and a runner whose impd
-// was replaced never settles a call again, like a process that is gone.
+// Firecracker processes outlive impd, so every impd a test starts shares one
+// set of live VMs.
 export function buildStubVmm() {
   const alive = new Set<number>();
 
-  // the version each boot and wake reports; a test may set it
   const agent = { version: STUB_AGENT_VERSION };
 
-  // what each VM serves and does, and the pid files starts wrote; only a pid
-  // in `alive` counts
   const vms = new Map<number, { apiSocket: string; state: InstanceState; owner: VmOwner }>();
   const pidFiles = new Map<string, number>();
 
   const wakes: number[] = [];
 
-  // the boot_id each API socket's guest booted with; a wake keeps it
   const bootIds = new Map<string, string>();
 
   const stops: { pid: number; graceful: boolean }[] = [];
   const grows: { disk: string; diskBytes: number }[] = [];
-
-  // each cold boot's hostname and whether it asked for an identity reset
   const boots: { hostname: string; isIdentityReset: boolean }[] = [];
-
-  // each template build's shape, and each restore's claim
   const templateBuilds: { vcpus: number; memoryMib: number }[] = [];
   const restores: { hostname: string; isIdentityReset: boolean; memFile: string }[] = [];
-
-  // the startup sweeps of orphans in their order; a test's cgroups add theirs
   const sweeps: string[] = [];
-
-  // every restore's whole plan: what its jail binds and who it runs as
   const restorePlans: TemplateRestorePlan[] = [];
-
-  // each wake's jail user, and which of the files its jail prepare hands the
-  // VM were there when it began
   const wakeJails: { jail: JailUser | null; files: string[] }[] = [];
 
-  // snapshot dirs a wake loaded: the guest ran on them, so they no longer
-  // match the disk, even when the wake then failed
   const usedSnapshots = new Set<string>();
 
   const counter = { nextPid: 1000, generation: 0 };
 
-  // what every fake agent reports as its uptime: old enough to sleep at once
-  // hasBootId false: a guest whose agent could not read its boot_id; no
-  // boot steps: an agent from before them
   const guest = {
     uptimeMs: 60_000,
     identityReset: 'ok' as 'ok' | 'failed' | undefined,
@@ -118,11 +86,8 @@ export function buildStubVmm() {
     bootSteps: {} as Readonly<Record<string, number>>,
   };
 
-  // elastic guests by imp dir: what each holds, and how far down it can
-  // unplug (in use memory it cannot migrate away)
   const guestMemory = new Map<string, FakeGuestMemory>();
 
-  // a guest no test set up: 512 MiB, nothing plugged
   const readFakeGuestMemory = (directory: string): FakeGuestMemory => {
     const known = guestMemory.get(directory);
 
@@ -147,16 +112,10 @@ export function buildStubVmm() {
   const holds = new Map<VmStep, { gate: PromiseWithResolvers<void>; reached: () => void }>();
 
   const hangs = { gate: Promise.withResolvers<void>() };
-
-  // calls waiting on a hang now, and calls of replaced runners that never
-  // settle: what a test waits for before it reads a call as pending
   const waiting = { hung: 0, parked: 0 };
 
-  // per runner, settled once one of its template builds parks for good
   const parkedBuilds = new WeakMap<VmRunner, Promise<void>>();
 
-  // runs between the steps of every call; a property test hands it to its
-  // scheduler to order the steps of concurrent calls
   const pacer: { pace: (step: VmStep) => Promise<void> } = { pace: () => Promise.resolve() };
 
   const chooseOutcome = async (step: VmStep): Promise<Exclude<VmOutcome, 'hang'>> => {
@@ -201,7 +160,6 @@ export function buildStubVmm() {
     vms.set(pid, { apiSocket: paths.apiSocket, state, owner });
   };
 
-  // the newest live VM on the socket: the one its API answers from
   const findServing = (paths: Readonly<ImpPaths>) => {
     const serving = [...vms].filter(
       ([pid, vm]) => alive.has(pid) && vm.apiSocket === paths.apiSocket,
@@ -213,7 +171,6 @@ export function buildStubVmm() {
   const buildRunner = (generation: number): VmRunner => {
     const parkedBuild = Promise.withResolvers<void>();
 
-    // a replaced impd: every later call waits forever
     const waitForever = <T>(onPark?: () => void): Promise<T> => {
       waiting.parked += 1;
       onPark?.();
@@ -221,8 +178,6 @@ export function buildStubVmm() {
       return new Promise<T>(() => {});
     };
 
-    // an in-flight call whose impd was replaced parks whether it resolves or
-    // rejects, so a dead impd makes no late write
     const runInGeneration = async <T>(call: () => Promise<T>, onPark?: () => void): Promise<T> => {
       if (generation !== counter.generation) {
         return waitForever(onPark);
@@ -244,7 +199,6 @@ export function buildStubVmm() {
       return settled.value;
     };
 
-    // a synchronous read by a replaced impd throws instead of answering
     const withGeneration = <T>(read: () => T): T => {
       if (generation !== counter.generation) {
         throw new Error('this impd was replaced');
@@ -253,7 +207,6 @@ export function buildStubVmm() {
       return read();
     };
 
-    // fail leaves no VM; die returns a pid whose VM is already gone
     const startFakeVm = async (
       step: 'boot' | 'wake' | 'restore',
       paths: Readonly<FirecrackerPaths>,
@@ -282,7 +235,6 @@ export function buildStubVmm() {
 
           const started = await startFakeVm('boot', plan.paths);
 
-          // each cold boot is a new guest kernel, with its own boot_id
           const bootId = guest.hasBootId ? buildStubBootId(started.pid) : undefined;
           const vm = { ...started, bootId, guestSteps: guest.bootSteps };
 
@@ -321,12 +273,10 @@ export function buildStubVmm() {
         runInGeneration(async () => {
           const vm = vms.get(pid);
 
-          // paused for the snapshot, as Firecracker is
           if (vm !== undefined) {
             vm.state = 'Paused';
           }
 
-          // fail resumes the VM; die fails after the kill, with no snapshot
           const outcome = await chooseOutcome('sleep');
 
           if (outcome === 'fail') {
@@ -343,7 +293,6 @@ export function buildStubVmm() {
             throw new StubVmError('snapshot files lost after the kill');
           }
 
-          // as Firecracker does: new files, renamed over the old ones
           mkdirSync(target.snapshotDir, { recursive: true });
           writeFileSync(`${target.vmstate}.new`, 'vmstate');
           writeFileSync(`${target.memFile}.new`, 'mem');
@@ -364,7 +313,6 @@ export function buildStubVmm() {
         }),
       stopVm: (pid, _paths, graceful) =>
         runInGeneration(async () => {
-          // fail and die: the VM survived SIGKILL
           const outcome = await chooseOutcome('stop');
 
           if (outcome !== 'ok' && alive.has(pid)) {
@@ -376,7 +324,6 @@ export function buildStubVmm() {
         }),
       probeVmAlive: (pid) => withGeneration(() => alive.has(pid)),
 
-      // fail: the guest did not grow; die: its agent is from before grow
       growDrive: (paths, diskBytes) =>
         runInGeneration(async () => {
           const outcome = await chooseOutcome('grow');
@@ -399,7 +346,6 @@ export function buildStubVmm() {
         }),
       readGuestUptimeMs: () => runInGeneration(() => Promise.resolve(guest.uptimeMs)),
 
-      // fail: the API does not answer, as while a large load runs
       readVmState: (paths) =>
         runInGeneration(async () => {
           const outcome = await chooseOutcome('vmState');
@@ -439,7 +385,6 @@ export function buildStubVmm() {
           };
         }),
 
-      // fail and die: no snapshot
       createTemplateVm: (plan) =>
         runInGeneration(async () => {
           const outcome = await chooseOutcome('template');
@@ -455,8 +400,6 @@ export function buildStubVmm() {
           templateBuilds.push({ vcpus: plan.vcpus, memoryMib: plan.memoryMib });
         }, parkedBuild.resolve),
 
-      // restore: as a boot, a failure in the template's own steps; claim:
-      // fail is a failure once the imp's disk and values are in play
       loadTemplateVm: (plan) =>
         runInGeneration(async () => {
           restorePlans.push(plan);
@@ -465,8 +408,6 @@ export function buildStubVmm() {
             throw new TemplateRestoreError('restore failed', true, error);
           });
 
-          // as the real restore: the disk before the claim, and a disk that
-          // fails is the imp's fault and ends the VM
           await plan.diskReady.catch((error: unknown) => {
             alive.delete(vm.pid);
             throw new TemplateRestoreError('disk failed', false, error);
@@ -530,33 +471,25 @@ export function buildStubVmm() {
     wakeJails,
     sweeps,
 
-    // elastic guests by imp dir; a test sets what one uses and how far down
-    // an unplug can go
     guestMemory,
 
-    // the runner for a new impd; the one before it goes quiet
     startGeneration: (): VmRunner => {
       counter.generation += 1;
 
       return buildRunner(counter.generation);
     },
 
-    // settles once a template build of `runner` parks, since its impd was
-    // replaced; a build that got past its VM call never parks
     whenTemplateBuildParks: (runner: VmRunner): Promise<void> =>
       parkedBuilds.get(runner) ?? Promise.reject(new Error('not a runner of this fake')),
 
-    // the next calls of `step` take these outcomes in order, then succeed
     queue: (step: VmStep, ...outcomes: readonly VmOutcome[]) => {
       queues.set(step, [...(queues.get(step) ?? []), ...outcomes]);
     },
 
-    // every later call succeeds
     clearQueues: () => {
       queues.clear();
     },
 
-    // every call of `step` waits until release()
     hold: (step: VmStep): Hold => {
       const reached = Promise.withResolvers<void>();
       const gate = Promise.withResolvers<void>();
@@ -581,23 +514,18 @@ export function buildStubVmm() {
       hangs.gate = Promise.withResolvers<void>();
     },
 
-    // the uptime every agent reports from now on
     setGuestUptime: (uptimeMs: number) => {
       guest.uptimeMs = uptimeMs;
     },
 
-    // whether the guests booted from now on report a boot_id
     setGuestBootId: (hasBootId: boolean) => {
       guest.hasBootId = hasBootId;
     },
 
-    // the steps every later boot and restore reports for its guest's boot
     setGuestBootSteps: (steps: Readonly<Record<string, number>>) => {
       guest.bootSteps = steps;
     },
 
-    // what every later boot that asks for an identity reset reports;
-    // undefined is an agent that leaves the field out
     setIdentityReset: (result: 'ok' | 'failed' | undefined) => {
       guest.identityReset = result;
     },
@@ -606,9 +534,6 @@ export function buildStubVmm() {
       pacer.pace = pace;
     },
 
-    // a Firecracker that is running without any impd knowing it yet; given
-    // the imp's paths, it serves its socket in `state`, as `owner`, with a
-    // pid file unless the start died before it wrote one
     spawnOrphan: (
       orphan: {
         readonly paths: Readonly<ImpPaths>;
@@ -632,7 +557,6 @@ export function buildStubVmm() {
       return pid;
     },
 
-    // whom the VM `pid` runs as from now on, as a recycled pid would
     setOwner: (pid: number, owner: VmOwner) => {
       const vm = vms.get(pid);
 
@@ -641,7 +565,6 @@ export function buildStubVmm() {
       }
     },
 
-    // what the VM `pid` does now, as GET / reports it
     readState: (pid: number): InstanceState | undefined => vms.get(pid)?.state,
   };
 }

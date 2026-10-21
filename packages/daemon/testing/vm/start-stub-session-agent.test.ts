@@ -18,12 +18,6 @@ import {
 } from '../../src/vm/agent-client/exec-stream';
 import { startStubSessionAgent } from './start-stub-session-agent';
 
-// The stand-in's assumptions are agent/internal/session's: Manager.find,
-// Manager.Kill, session.attach and session.tap there, proto.ExitOf, and
-// Activity.ExecSessions.
-
-// a temp dir for the agent's socket, and `stack`, whose releases (the
-// agent's and the streams') run before the dir goes
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -726,7 +720,6 @@ test('it names a killed run as the previous of its session', async () => {
     data: {
       bootId: '22222222-2222-4222-8222-222222222222',
 
-      // a signal ended it, so it has no exit code
       previous: { executionGeneration: run.generation, end: 4, exitCode: null },
     },
   });
@@ -799,7 +792,6 @@ test('it ignores an exec’s session name as an agent from before sessions', asy
     stack: ctx.stack,
   });
 
-  // impd reads a STARTED without the session as an agent too old for sessions
   const opening = openExecStream(path, { argv: ['sh'], tty: true, session: 'main' });
 
   expect(opening).rejects.toMatchObject({ code: 'AGENT_OUTDATED' });

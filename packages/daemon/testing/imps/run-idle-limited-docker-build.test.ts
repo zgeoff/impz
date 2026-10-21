@@ -141,7 +141,6 @@ test('it starts the unprotected fetch only on a control line', async () => {
     child.kill();
   });
 
-  // both builds have run to their image, and the control has had its chance
   await Promise.all([build.closed, cancelled.closed]);
 
   const controlState = await Promise.race([

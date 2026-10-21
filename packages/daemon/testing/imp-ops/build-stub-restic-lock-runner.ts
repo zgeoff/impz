@@ -4,8 +4,6 @@ import type { CommandResult } from '../../src/platform/process/run-command';
 const EXCLUSIVE_COMMANDS = new Set(['forget', 'prune', 'check']);
 const UNLOCKED_COMMANDS = new Set(['unlock']);
 
-// what each command prints on success: `snapshots --json` an empty list,
-// `backup --json` its summary line
 const OUTPUT: Readonly<Record<string, string>> = {
   snapshots: '[]',
   backup: JSON.stringify({
@@ -18,16 +16,13 @@ const OUTPUT: Readonly<Record<string, string>> = {
   }),
 };
 
-// restic's answer to a lock it could not take, at once or after --retry-lock
+// restic exits 11 when it cannot take a lock, at once or after --retry-lock
 const LOCKED: CommandResult = {
   exitCode: 11,
   stdout: '',
   stderr: 'unable to create lock in backend\n',
 };
 
-// createRestic's runner over restic's lock rule: a blocked command exits 11,
-// or with --retry-lock waits until the lock frees or stopWaits ends its wait.
-// Each holds the lock until stopCommand; `events` records each step in order.
 export function buildStubResticLockRunner() {
   const lock = { exclusive: false, shared: 0 };
   const events: string[] = [];
@@ -107,7 +102,6 @@ export function buildStubResticLockRunner() {
     return { exitCode: 0, stdout: OUTPUT[command] ?? '', stderr: '' };
   };
 
-  // ends a command that holds the lock
   const stopCommand = (command: string): void => {
     const end = running.get(command);
 
@@ -118,14 +112,12 @@ export function buildStubResticLockRunner() {
     end();
   };
 
-  // as --retry-lock's wait running out: each command waiting now exits 11
   const stopWaits = (): void => {
     waits.expired += 1;
 
     wakeWaiters();
   };
 
-  // settles every command, for a test's cleanup: waits end and runs stop
   const stopAll = (): void => {
     stopWaits();
 

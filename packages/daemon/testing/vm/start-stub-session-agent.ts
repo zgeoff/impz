@@ -12,7 +12,6 @@ import {
 } from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
-// what a start reads of an exec with a session name
 type StubStart = Readonly<{
   tty?: boolean;
   argv?: readonly string[];
@@ -27,16 +26,12 @@ interface StubExit {
   readonly signal: number;
 }
 
-// a generation whose process ended and that left its name, as
-// agent/internal/session keeps it for STARTED and NO_SESSION
 interface StubPrevious {
   readonly execution_generation: string;
   readonly end: number;
   readonly exit: StubExit;
 }
 
-// one run of a session: its output generation and bytes, the one viewer
-// attached to it, its taps, and its exit once its process ended
 interface StubRun {
   readonly generation: string;
   readonly argv: readonly string[];
@@ -51,28 +46,17 @@ interface StubRun {
 }
 
 interface StubSessionAgentOptions {
-  // the agent's boot, in the uuid form impd checks before it names a log
-  // path; one fixed boot by default
   readonly bootId?: string;
 
-  // closes the agent; at the test's end by default
   readonly stack?: Readonly<AsyncDisposableStack>;
 
-  // an older agent, the current one by default; what each lacks is pinned
-  // in this stand-in's tests
   readonly release?: 'before-sessions' | 'before-offsets';
 }
 
-// the ops an agent from before sessions answers UNKNOWN_OP
 const SESSION_OPS: ReadonlySet<string> = new Set(['session.attach', 'session.kill', 'session.tap']);
 
-// how a process dies of the SIGHUP that session.kill sends it, as the agent's
-// proto.ExitOf reports a signal
 const HANGUP_EXIT: StubExit = { code: 128 + 1, signal: 1 };
 
-// A guest agent at `path` that runs sessions as agent/internal/session's
-// Manager does. It keeps every output byte from offset 0, so a resume never
-// meets a gap.
 export async function startStubSessionAgent(
   path: string,
   options: Readonly<StubSessionAgentOptions> = {},
@@ -98,7 +82,6 @@ export async function startStubSessionAgent(
         rows: run.rows,
         started_unix_ms: run.startedUnixMs,
 
-        // left out of the JSON while undefined, as the agent omits them
         exit: run.exit ?? undefined,
         execution_generation: hasOffsets ? run.generation : undefined,
         boot_id: hasOffsets ? bootId : undefined,
@@ -131,8 +114,6 @@ export async function startStubSessionAgent(
     });
   };
 
-  // the session's run leaves its name, and, once its process ended, its
-  // generation becomes the name's previous
   const removeRun = (session: string): void => {
     const run = runs.get(session);
 
@@ -151,16 +132,12 @@ export async function startStubSessionAgent(
     }
   };
 
-  // the EXIT as `socket`'s last frame; the run is over once a viewer got it
   const sendExit = (session: string, socket: Socket, exit: StubExit): void => {
     socket.end(encodeJsonFrame(FRAME_TYPES.exit, exit));
 
     removeRun(session);
   };
 
-  // where a connection to the session's run starts: the whole output
-  // without a resume, or from the offset a resume names; null for an offset
-  // past the end
   const readPlace = (session: string, resume: ResumeFrom | undefined) => {
     const run = runs.get(session);
 
@@ -200,8 +177,6 @@ export async function startStubSessionAgent(
     return { ...output, offset: resume.offset, resume: { kind: 'exact' } };
   };
 
-  // STARTED, the output the resume asks for, then the EXIT of an exited run
-  // or live output to this viewer, which takes the run over
   const openViewer = (
     socket: Socket,
     session: string,
@@ -259,8 +234,6 @@ export async function startStubSessionAgent(
     });
   };
 
-  // exec with a session name: start the run unless it runs, or a resume
-  // names its generation; an exited run gives its name to the new one
   const startSession = (socket: Socket, session: string, start: StubStart): void => {
     if (start.tty !== true) {
       sendError(socket, { code: 'BAD_REQUEST', message: 'a session needs a tty' });
@@ -281,7 +254,7 @@ export async function startStubSessionAgent(
 
     removeRun(session);
 
-    // a size with either side unset is 80 by 24, as the agent's newSession
+    // The guest agent opens a session at 80 by 24 when either side is unset.
     const isSized = (start.cols ?? 0) > 0 && (start.rows ?? 0) > 0;
 
     runs.set(session, {
@@ -300,8 +273,6 @@ export async function startStubSessionAgent(
     openViewer(socket, session, start.resume, true);
   };
 
-  // session.tap: STARTED and the raw output from the resume or the start,
-  // then live output; a tap is never the viewer
   const openTap = (socket: Socket, session: string, resume: ResumeFrom | undefined): void => {
     const run = runs.get(session);
 
@@ -346,9 +317,6 @@ export async function startStubSessionAgent(
     });
   };
 
-  // session.kill, as Manager.Kill: the run leaves its name at once; a run
-  // still running gets SIGHUP, which ends it, so its viewer and taps get the
-  // EXIT and its generation becomes the name's previous
   const stopKilledRun = (socket: Socket, session: string): void => {
     const run = runs.get(session);
 
@@ -375,8 +343,6 @@ export async function startStubSessionAgent(
     socket.end(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
   };
 
-  // a connection the activity counts: exec, exec.outer and session.attach,
-  // and exec with a session, for as long as it is open
   const countConnection = (socket: Socket): void => {
     connections.open += 1;
 
@@ -454,20 +420,16 @@ export async function startStubSessionAgent(
   return {
     close: agent.close,
 
-    // the exec requests the agent got, not its other requests
     readExecs: (): Request[] =>
       agent.received
         .map((frame) => decodeAgentMessage(RequestSchema, decodeJsonPayload(frame)))
         .filter((frame) => frame.op === 'exec'),
 
-    // the same requests' JSON as it came, with any field the schema lacks
     readExecPayloads: (): JsonValue[] =>
       agent.received
         .map((frame) => decodeJsonPayload(frame))
         .filter((payload) => isExecPayload(payload)),
 
-    // a session's current run, or undefined before it started and once a
-    // viewer got its EXIT
     readRun: (session: string) => {
       const run = runs.get(session);
 
@@ -480,8 +442,6 @@ export async function startStubSessionAgent(
           };
     },
 
-    // the run's process exits: an attached viewer gets the EXIT and the run
-    // is over; with none, the run waits for a viewer to take the EXIT
     exitRun: (session: string, exit: StubExit): void => {
       const run = runs.get(session);
 
@@ -501,14 +461,11 @@ export async function startStubSessionAgent(
 
       run.viewer = null;
 
-      // a viewer whose connection already went leaves the EXIT to the next
       if (viewer !== null && !viewer.destroyed) {
         sendExit(session, viewer, exit);
       }
     },
 
-    // output of the run: the agent keeps it, and sends it to the viewer and
-    // the taps attached now
     writeOutput: (session: string, data: Uint8Array): void => {
       const run = runs.get(session);
 
@@ -523,8 +480,6 @@ export async function startStubSessionAgent(
       }
     },
 
-    // a cold boot: the guest's sessions, and what it knew of ended ones,
-    // are gone
     clearRuns: (): void => {
       runs.clear();
       previous.clear();

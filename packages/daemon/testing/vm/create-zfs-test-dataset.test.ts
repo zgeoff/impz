@@ -17,7 +17,6 @@ function setupTest() {
     rmSync(parentDir, { recursive: true, force: true });
   });
 
-  // the run's pool dataset, mounted on the dir its test datasets go under
   const fake = buildStubZfs({ root: 'tank/imp', rootDir: parentDir });
 
   return { stack, parentDir, fake };
@@ -47,7 +46,6 @@ test('it releases every mount under its dir, then the dataset with its children,
     run: ctx.fake.run,
   });
 
-  // what a backend makes under its root, as impd's own datasets and mounts
   await ctx.fake.run(['zfs', 'create', `${dataset.root}/mem`]);
   await ctx.fake.run(['mount', '-t', 'zfs', `${dataset.root}/mem`, join(dataset.dataDir, 'mem')]);
 
@@ -68,7 +66,6 @@ test('it releases every mount under its dir, then the dataset with its children,
 test('it leaves a sibling dataset under the same parent when it releases its own', async () => {
   const ctx = setupTest();
 
-  // another owner's dataset beside this run's
   await ctx.fake.run(['zfs', 'create', 'tank/imp/other']);
 
   const dataset = await createZfsTestDataset(ctx.stack, {
@@ -112,7 +109,6 @@ test('it reports a failed unmount, keeps the mounted dataset and still removes t
 test('it refuses a dataset name zfs already shows and never touches that dataset', async () => {
   const ctx = setupTest();
 
-  // another owner makes the dataset just before the check
   const run = async (argv: readonly string[]) => {
     if (argv[1] === 'list') {
       await ctx.fake.run(['zfs', 'create', argv.at(-1) ?? '']);

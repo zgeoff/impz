@@ -6,9 +6,6 @@ import type { SessionInfo } from '../../src/vm/agent-client/agent-protocol';
 
 type MockSessionOverrides = MessageInitShape<typeof SessionInfoSchema>;
 
-// A running session as an agent with output offsets lists it: detached, with
-// no exit. The name, process, size, start, generation and boot are
-// arbitrary; `log` and `exit` are unset until an override sets them.
 export function buildMockAgentSession(overrides: MockSessionOverrides = {}): SessionInfo {
   return create(SessionInfoSchema, {
     name: faker.string.alpha({ length: 8, casing: 'lower' }),
