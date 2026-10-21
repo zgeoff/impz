@@ -9,10 +9,6 @@ import { openDatabase } from '../../platform/db/open-database';
 import { listFileRemovals, readSecret } from '../../platform/db/secrets';
 import { createBroker } from './broker-service';
 
-// A restore puts back an older database: the values of secrets added since
-// have no row, and the start keeps them aside rather than delete them
-// (docs/guides/connectors.md#value-files).
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -45,7 +41,6 @@ test('it keeps aside a value no row of an older database names', async () => {
 
   await first.addSecret({ name: 'early', kind: 'github', value: 'ghp_EARLY' });
 
-  // the copy a restore would put back, taken before the later secret
   const copyPath = join(ctx.dataDir, 'older.sqlite');
 
   await writeConsistentCopy(ctx.db, copyPath);
@@ -116,7 +111,6 @@ test('it removes the old file of a delete that stopped before removing it, on th
   await first.deleteSecret('gone');
   await first.stop();
 
-  // the next start finds the file again
   await rm(oldFile, { recursive: true });
   await writeFile(oldFile, 'ghp_OLD');
 
@@ -164,7 +158,6 @@ test('it removes the old file of a replace that stopped before removing it, on t
   await first.addSecret({ name: 'gone', kind: 'github', value: 'ghp_NEW', replace: true });
   await first.stop();
 
-  // the next start finds the file again
   await rm(oldFile, { recursive: true });
   await writeFile(oldFile, 'ghp_OLD');
 
@@ -259,7 +252,6 @@ test('it never removes a recorded file that a row still names', async () => {
 
   invariant(saved);
 
-  // a record naming the live file, as a bug or a hand edit would leave
   await ctx.db
     .insertInto('secret_file_removals')
     .values({ value_file: saved.valueFile, created_at: Date.now() })

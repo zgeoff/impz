@@ -1,8 +1,6 @@
 import type { GuestMemory, VmRunner } from '../vmm/vm-runner';
 import { getSpareTotalMib, toWholeBlocks } from './elastic-memory';
 
-// how often a shrink looks whether the guest got there, and how long the
-// plugged size may stand still before the unplug counts as stopped
 const POLL_MS = 100;
 const STALL_MS = 500;
 
@@ -14,8 +12,6 @@ interface ShrinkOptions {
   readonly now?: () => number;
 }
 
-// The plugged size that leaves the guest a step more available than its grow
-// mark, never below 0; the guest's base memory comes first.
 export function getShrinkTargetMib(memory: Readonly<GuestMemory>): number {
   const usedMib = memory.totalMib - memory.availableMib;
   const baseMib = memory.totalMib - memory.pluggedMib;
@@ -23,17 +19,12 @@ export function getShrinkTargetMib(memory: Readonly<GuestMemory>): number {
   return Math.max(0, toWholeBlocks(getSpareTotalMib(usedMib) - baseMib));
 }
 
-// What a shrink saw: the guest as its first read found it, the most it held
-// plugged in any read, as a plug under way may still move after the first,
-// and the MiB it holds at the end, or will once a plug under way ends.
 export interface ShrinkResult {
   readonly before: Readonly<GuestMemory>;
   readonly reachedMib: number;
   readonly pluggedMib: number;
 }
 
-// Unplugs toward the shrink target until the guest gets there, stops moving
-// (then asks it back to what it reached), or the time limit passes.
 export async function shrinkGuest(
   vm: GuestMemoryVm,
   paths: Parameters<GuestMemoryVm['readGuestMemory']>[0],
@@ -47,7 +38,6 @@ export async function shrinkGuest(
 
   const targetMib = getShrinkTargetMib(before);
 
-  // nothing to give back; a plug under way may still add up to its request
   if (targetMib >= before.pluggedMib) {
     return {
       before,

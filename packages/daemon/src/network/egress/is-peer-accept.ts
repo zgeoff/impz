@@ -1,4 +1,3 @@
-// setup-net.sh's rule, as `iptables -S FORWARD` prints it
 export function isPeerAccept(rule: string): boolean {
   return (
     rule.includes('--comment imp-network') &&

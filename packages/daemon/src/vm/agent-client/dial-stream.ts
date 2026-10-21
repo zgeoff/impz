@@ -6,7 +6,6 @@ import { readFrameWithin, requireNoAgentError, sendRequestFrame } from './agent-
 import type { AgentRequest } from './agent-requests';
 import { FRAME_TYPES } from './frame-codec';
 
-// an address inside the guest: "host:port" for tcp, a socket path for unix
 export interface DialTarget {
   readonly network: 'tcp' | 'unix';
   readonly address: string;
@@ -14,31 +13,19 @@ export interface DialTarget {
 
 export type DialEvent =
   | { readonly type: 'data'; readonly data: Uint8Array }
-
-  // the target closed its side; no data follows
   | { readonly type: 'eof' };
 
 export interface DialStream {
   readonly write: (data: Uint8Array) => void;
-
-  // resolves once what was written is on its way to the guest
   readonly drained: () => Promise<void>;
-
-  // closes the target's write side (a TCP half-close)
   readonly end: () => void;
-
-  // the target's bytes, then one eof; ends without an eof when the target
-  // or the connection failed
   readonly events: () => AsyncGenerator<DialEvent, void, undefined>;
   readonly close: () => void;
 }
 
-// longer than the agent's own 5 s connect timeout, so its DIAL_FAILED arrives
+// Longer than the agent's own 5 s connect timeout, so the agent's DIAL_FAILED arrives first.
 const DIAL_ANSWER_TIMEOUT_MS = 10_000;
 
-// Connects to an address in the guest through the agent (protocol `dial`).
-// Throws AgentError DIAL_FAILED when the agent cannot connect, and
-// AGENT_OUTDATED for an agent from before dial.
 export function openDialStream(
   vsockPath: string,
   target: Readonly<DialTarget>,
@@ -47,8 +34,6 @@ export function openDialStream(
   return openRelayStream(vsockPath, { op: 'dial', ...target }, 'ssh', answerTimeoutMs);
 }
 
-// One request whose RESPONSE starts a relay with dial's framing; dial and
-// agent.accept both use it.
 export async function openRelayStream(
   vsockPath: string,
   request: AgentRequest,

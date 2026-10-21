@@ -7,8 +7,6 @@ import { readImpByName } from '../../platform/db/imps';
 import { buildImpPaths } from './data-layout';
 import { createDiskBudget } from './disk-budget';
 
-// impd over the stub VMM, whose disk a test fills past what impd is asked
-// to write, and a client of its API
 async function setupTest(options: TestImpdOptions = {}) {
   const stack = new AsyncDisposableStack();
 
@@ -16,14 +14,12 @@ async function setupTest(options: TestImpdOptions = {}) {
 
   const harness = await startTestImpd(stack, options);
 
-  // the image every imp boots from
   await harness.createTestImage('ubuntu');
 
   return harness;
 }
 
 test('it allows a write that leaves the reserve free', async () => {
-  // 100 GiB: the default reserve is 5 GiB
   const budget = createDiskBudget({
     storage: {
       readUsage: () =>
@@ -37,7 +33,6 @@ test('it allows a write that leaves the reserve free', async () => {
 });
 
 test('it refuses a write that would leave less than the reserve', () => {
-  // 100 GiB: the default reserve is 5 GiB
   const budget = createDiskBudget({
     storage: {
       readUsage: () =>
@@ -103,7 +98,6 @@ test('it refuses a write while another write under way holds the room', async ()
   const started = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
 
-  // a sleep writes 4 GiB of memory; free space shows none of it yet
   const sleeping = budget.withRoom(4 * 1024 ** 3, () => {
     started.resolve();
 
@@ -257,7 +251,6 @@ test('it counts the bytes a growing write has written once', () => {
     disk.usedBytes += 3 * 1024 ** 3;
     disk.availableBytes -= 3 * 1024 ** 3;
 
-    // 7 GiB free and 1 GiB of the hold still to write: 1 GiB more leaves 5
     await grow(5 * 1024 ** 3, 3 * 1024 ** 3);
 
     const grown = await budget.readStatus();
@@ -283,7 +276,6 @@ test('it refuses a growing write that has written part of its hold and grows pas
     disk.usedBytes += 3 * 1024 ** 3;
     disk.availableBytes -= 3 * 1024 ** 3;
 
-    // 7 GiB free and 1 GiB of the hold still to write: 3 GiB more leaves 3
     await grow(7 * 1024 ** 3, 3 * 1024 ** 3);
   });
 
@@ -309,12 +301,9 @@ test('it counts another write as no part of a growing write', () => {
   const growing = budget.withGrowingRoom(async (grow) => {
     await grow(6 * 1024 ** 3, 0);
 
-    // a write that holds nothing takes 3 GiB, before the disk shows any of
-    // the growing write's own
     disk.usedBytes += 3 * 1024 ** 3;
     disk.availableBytes -= 3 * 1024 ** 3;
 
-    // 9 GiB free and all 6 GiB of the hold still to write: 2 GiB more leaves 1
     await grow(8 * 1024 ** 3, 0);
   });
 
@@ -339,7 +328,6 @@ test('it counts back no more than a growing write holds', () => {
     disk.usedBytes += 1024 ** 3;
     disk.availableBytes -= 1024 ** 3;
 
-    // 9 GiB free and the 1 GiB hold all written: 6 GiB more leaves 3
     await grow(7 * 1024 ** 3, 4 * 1024 ** 3);
   });
 
@@ -373,7 +361,6 @@ test('it frees all a growing write held when its task throws', async () => {
 });
 
 test('it counts one growing write against another and frees only the refused one', async () => {
-  // 6 GiB above the reserve
   const budget = createDiskBudget({
     storage: {
       readUsage: () =>
@@ -583,7 +570,6 @@ test('it refuses a sleep the disk cannot take with DISK_FULL and leaves the imp 
   const ctx = await setupTest();
   const created = await ctx.client.imps.create({ name: 'dev' });
 
-  // the 5 GiB reserve and a 2 GiB guest: 7 GiB needed
   ctx.diskUsage.availableBytes = 6 * 1024 ** 3;
 
   const sleeping = ctx.client.imps.sleep({ name: 'dev' });
@@ -603,7 +589,6 @@ test('it refuses an admission the disk keeps from making room with DISK_FULL', a
 
   await ctx.imps.createImp({ name: 'a' });
 
-  // the 5 GiB reserve and a's 512 MiB do not fit
   ctx.diskUsage.availableBytes = 5.25 * 1024 ** 3;
 
   const admitting = ctx.governor.admit({ id: 'x', name: 'x', reserveMib: 900, memoryMib: 900 });

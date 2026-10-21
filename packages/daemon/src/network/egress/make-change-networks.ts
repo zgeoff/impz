@@ -2,14 +2,11 @@ import type { NetworkMember } from '../../platform/db/networks';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import type { KeyedMutex } from '../../platform/process/keyed-mutex';
 
-// A table nft refuses runs `undo`, so the rows and the table agree. Imps the
-// change parts lose their connections to each other.
 export interface NetworkChange<T> {
   readonly write: () => Promise<T>;
   readonly undo: (written: T) => Promise<void>;
 }
 
-// what a network change needs of the rest of the egress service
 interface ChangeNetworksDeps {
   readonly mutex: KeyedMutex;
   readonly log: (message: string) => void;
@@ -17,15 +14,12 @@ interface ChangeNetworksDeps {
   readonly tryApplyTable: () => Promise<void>;
   readonly flushPair: (first: string, second: string) => Promise<void>;
 
-  // the networks' members as of the last table
   readonly readMembers: () => readonly NetworkMember[];
 }
 
 export function makeChangeNetworks(
   deps: ChangeNetworksDeps,
 ): <T>(change: NetworkChange<T>) => Promise<T> {
-  // an undo, tried twice; false when both throw, so the rows may still hold
-  // the change
   const tryUndo = async (undo: () => Promise<void>): Promise<boolean> => {
     for (const attempt of [1, 2]) {
       try {
@@ -48,9 +42,6 @@ export function makeChangeNetworks(
 
       const result = await change.write();
 
-      // The rows go back, then the table is built again from whatever the
-      // rows say: an undo that throws leaves the change in the rows, and the
-      // table follows them, so a failed leave never keeps a pair connected.
       try {
         await deps.applyTable();
       } catch (error) {
@@ -68,8 +59,6 @@ export function makeChangeNetworks(
         throw error;
       }
 
-      // the table refuses their next packet already; this drops the flows
-      // conntrack still holds for them
       const after = listPeerPairs(deps.readMembers());
 
       for (const pair of before) {
@@ -88,7 +77,6 @@ export function makeChangeNetworks(
     });
 }
 
-// every two addresses that share a network, as `low high`
 function listPeerPairs(members: readonly NetworkMember[]): Set<string> {
   const pairs = new Set<string>();
 

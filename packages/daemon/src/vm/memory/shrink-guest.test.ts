@@ -23,7 +23,6 @@ test('#findShrinkTargetMib never goes below 0', () => {
 });
 
 test('#findShrinkTargetMib keeps 15 % of a large guest free, in whole blocks', () => {
-  // (623 + 256) / 0.85 is 1034.1: 1036 in whole 2 MiB blocks, 524 of it plugged
   expect(
     getShrinkTargetMib({ pluggedMib: 512, requestedMib: 512, totalMib: 1024, availableMib: 401 }),
   ).toBe(524);
@@ -73,8 +72,6 @@ test('#shrinkGuest asks an unplug that stops partway back to what it reached', a
 
   expect(shrunk.pluggedMib).toBe(768);
   expect(stub.requests).toStrictEqual([496, 768]);
-
-  // 768 reached at 200 ms, then 500 ms without a move
   expect(clock.now()).toBe(700);
 });
 
@@ -96,7 +93,6 @@ test('#shrinkGuest ends a slow unplug at the time limit with what the guest hold
     sleep: clock.sleep,
   });
 
-  // 20 looks of 100 ms, each 16 MiB further down
   expect(shrunk.pluggedMib).toBe(704);
   expect(clock.now()).toBe(2000);
   expect(stub.requests).toStrictEqual([496, 704]);
@@ -143,8 +139,6 @@ test('#shrinkGuest reports the most the guest held, when a plug moves after its 
   const guests = buildStubGuestMemory();
   const paths = buildImpPaths('/data', 'dev');
 
-  // the rest of the plug lands before the guest takes the unplug, which
-  // then stops at 128
   guests.addGuest(paths, {
     pluggedMib: 64,
     requestedMib: 256,

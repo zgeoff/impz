@@ -2,34 +2,23 @@ import type { AuditRefusal, GrantFilter } from '@impz/api';
 import type { NewAuditEntry } from '../../platform/db/broker-audit';
 import { isRequestInFilter } from './is-request-in-filter';
 
-// One terminated request, sent on to the real host with the credential.
-
-// what the broker adds for one host of one imp
 export interface Credential {
   readonly secretName: string;
   readonly header: string;
   readonly value: string;
 
-  // the rule's own origin (http or https), or null for https://<host>
   readonly upstream: string | null;
 
-  // the grant's method and path filter, or null for the whole host
   readonly filter: GrantFilter | null;
 
-  // for an oauth secret, when the refresh that gave this access token ran
-  // (ms, null before the first); null for every other kind
   readonly oauth: { readonly refreshedAt: number | null } | null;
 }
 
-// where requests for a host go: the rule's upstream, else a test upstream
-// (create-upstream-resolver.ts), else https://<host>; with the extra CA a test
-// upstream is signed by
 export interface Upstream {
   readonly origin: string;
   readonly ca: readonly string[] | null;
 }
 
-// what the forwarder hands fetch: Bun's init, narrowed to what it sets
 interface UpstreamInit {
   readonly method: string;
   readonly headers: Headers;
@@ -46,15 +35,11 @@ export interface ForwardDeps {
   readonly impName: string;
   readonly host: string;
 
-  // null once the grant is gone: a terminator can outlive it by a request
   readonly findCredential: (impId: string, host: string) => Promise<Credential | null>;
   readonly resolveUpstream: (host: string) => Upstream;
   readonly recordAudit: (entry: NewAuditEntry) => void;
   readonly fetch?: UpstreamFetch;
 
-  // After the host answered 401 to an oauth access token: true once a newer
-  // token is in place. The service can revoke a token before its expiry
-  // (docs/guides/connectors.md#refresh-after-a-401). Never rejects.
   readonly refreshAfterRejection?: (
     secretName: string,
     refreshedAt: number | null,
@@ -67,9 +52,6 @@ export interface ForwardDeps {
 const METHOD_OVERRIDE_HEADERS = ['x-http-method-override', 'x-http-method', 'x-method-override'];
 const MAX_AUDIT_PATH = 512;
 
-// The handler for a terminator bound to one imp and one host. The URL is the
-// upstream's origin plus the request's path: neither the Host header nor an
-// absolute-form target can send the credential elsewhere.
 export function createForwarder(deps: ForwardDeps): (request: Request) => Promise<Response> {
   const fetchUpstream = deps.fetch ?? sendUpstream;
 
@@ -78,8 +60,6 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
 
     const url = new URL(request.url);
 
-    // answered before any credential is read, with an audit row that keeps
-    // nothing from the request's headers or body
     const sendRefusal = (status: number, message: string, reason: AuditRefusal): Response => {
       deps.recordAudit({
         impId: deps.impId,
@@ -119,8 +99,6 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
       return sendRefusal(403, `no credential is granted for ${deps.host}`, 'no-grant');
     }
 
-    // read with the credential, so a grant changed since applies to this
-    // request; refused before the credential goes into any header
     if (
       credential.filter !== null &&
       !isRequestInFilter(credential.filter, request.method, url.pathname)
@@ -132,7 +110,6 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
       );
     }
 
-    // one send upstream with one credential, with its own audit row
     const sendWith = async (sent: Readonly<Credential>): Promise<Response> => {
       const counts = { requestBytes: 0, responseBytes: 0 };
 
@@ -153,9 +130,6 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
         });
       };
 
-      // The rule's upstream wins, and it came with the credential, so a rebind
-      // or a revoke applies to the next request. It is verified against the
-      // system roots when https, and sent with no TLS when http.
       const upstream: Upstream =
         sent.upstream === null
           ? deps.resolveUpstream(deps.host)
@@ -234,8 +208,8 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
       credential.oauth.refreshedAt,
     );
 
-    // A body was streamed upstream and is gone, so only a request without
-    // one is sent again; the guest's next request gets the new token.
+    // a body streamed upstream is consumed, so only a request without one is
+    // sent again
     if (request.body !== null) {
       return response;
     }
@@ -244,7 +218,6 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
       return response;
     }
 
-    // read again, so the retry follows a revoke, a rebind or a new filter
     const renewed = await deps.findCredential(deps.impId, deps.host);
 
     if (
@@ -272,7 +245,6 @@ function sendUpstream(url: string, init: UpstreamInit): Promise<Response> {
   return fetch(url, { ...init, ...tls });
 }
 
-// the host part of a Host header: lowercased, without :443
 function findHostName(value: string | null): string | null {
   if (value === null) {
     return null;
@@ -283,15 +255,14 @@ function findHostName(value: string | null): string | null {
   return lower.endsWith(':443') ? lower.slice(0, -':443'.length) : lower;
 }
 
-// `Upgrade: websocket`, in a list of protocols and in any case
 function isWebSocketUpgrade(headers: Headers): boolean {
   return (headers.get('upgrade') ?? '')
     .split(',')
     .some((protocol) => protocol.trim().toLowerCase().split('/')[0] === 'websocket');
 }
 
-// Per RFC 9110 these describe one connection, not the message; the proxy
-// ones are the guest's to its proxy. `expect` is answered here.
+// Per RFC 9110 these describe one connection, not the message, and the proxy
+// ones are the guest's to its proxy; this hop answers `expect` itself.
 const HOP_HEADERS = [
   'connection',
   'expect',
@@ -305,7 +276,6 @@ const HOP_HEADERS = [
   'upgrade',
 ];
 
-// the end-to-end headers: hop-by-hop ones and those Connection names dropped
 function buildEndToEndHeaders(source: Headers): Headers {
   const headers = new Headers(source);
 
@@ -320,8 +290,6 @@ function buildEndToEndHeaders(source: Headers): Headers {
   return headers;
 }
 
-// The same bytes, counted; `onEnd` runs once, at the end, an error or a
-// cancel, so a guest that hangs up mid-body still leaves an audit row.
 function countBytes(
   body: ReadableStream<Uint8Array>,
   onEnd: (bytes: number) => void,

@@ -2,10 +2,9 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// The ID that marks a service as this host's: made on first use and kept in
-// the data dir, so it outlives the tailnet node, which a re-registered
-// ephemeral key replaces.
 export function loadOrCreateHostId(dataDir: string): string {
+  // kept in the data dir: a re-registered ephemeral key replaces the tailnet
+  // node, and the ID must outlive it
   const directory = join(dataDir, 'tailnet-names');
   const path = join(directory, 'host-id');
 

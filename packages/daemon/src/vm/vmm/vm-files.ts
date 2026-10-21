@@ -11,11 +11,10 @@ import {
   writeSync,
 } from 'node:fs';
 
-// Files impd opens as root next to a VM (docs/architecture/isolation.md#the-jailer).
-// Never through a symlink, and never a FIFO, which would block the event loop.
+// impd opens these as root beside a VM that may plant a symlink, or a FIFO,
+// which would block the event loop
 const SAFE_FLAGS = constants.O_NOFOLLOW | constants.O_NONBLOCK;
 
-// an fd on the regular file at `path`; anything else there is replaced
 function openRegularFile(path: string, flags: number, mode: number): number {
   try {
     const fd = openSync(path, flags | constants.O_CREAT | SAFE_FLAGS, mode);
@@ -46,7 +45,6 @@ function isNotRegular(error: unknown): boolean {
   return error.code === 'ELOOP' || error.code === 'ENXIO' || error.code === 'EISDIR';
 }
 
-// an append-only fd for a VM's log, handed to Firecracker as stdout
 export function setupLogFile(path: string): number {
   return openRegularFile(path, constants.O_WRONLY | constants.O_APPEND, 0o644);
 }
@@ -62,7 +60,6 @@ export function writeRegularFile(path: string, text: string): void {
   }
 }
 
-// throws unless `path` is a regular file
 export function readRegularFile(path: string): string {
   const fd = openSync(path, constants.O_RDONLY | SAFE_FLAGS);
 
@@ -77,8 +74,6 @@ export function readRegularFile(path: string): string {
   }
 }
 
-// A new, empty file for Firecracker to write, owned by `owner`: it can write
-// the file, not replace it, in a directory impd owns.
 export function createOwnedFile(path: string, owner: Readonly<{ uid: number; gid: number }>): void {
   rmSync(path, { force: true, recursive: true });
 
@@ -95,7 +90,6 @@ export function createOwnedFile(path: string, owner: Readonly<{ uid: number; gid
   }
 }
 
-// a socket impd connects to as root: never a symlink to one elsewhere
 export function requireSocket(path: string): void {
   if (!lstatSync(path).isSocket()) {
     throw new Error(`${path} is not a socket`);

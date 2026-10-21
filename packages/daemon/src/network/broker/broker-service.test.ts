@@ -35,11 +35,9 @@ async function setupTest() {
 
   const installs: string[] = [];
 
-  // a loopback subnet lets a test's socket be a guest
   const harness = await startTestImpd(stack, {
     env: { IMP_SUBNET: '127.0.0.0/16' },
 
-    // the guest's CA install, which takes where the vsock path exists
     installBundle: (vsockPath) => {
       installs.push(vsockPath);
 
@@ -49,7 +47,6 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
-  // the default image, which every imp the tests create boots
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
@@ -261,7 +258,6 @@ test('it logs a failed write in the API’s log without the value', async () => 
 
   expect(added).rejects.toThrow();
 
-  // as console.error would print each: message, stack and own fields
   const logged = ctx.rpcFailures.map((failure) => Bun.inspect(failure));
 
   expect(logged).toHaveLength(1);
@@ -632,7 +628,6 @@ test('it gives a new boot whose install fails no broker variables, and logs why'
 
   await ctx.impd.broker.readExecEnv(imp, vsock);
 
-  // another pid is a new boot, whose guest has no agent socket to install through
   const env = await ctx.impd.broker.readExecEnv(
     { ...imp, pid: imp.pid + 1 },
     join(ctx.dataDir, 'gone'),
@@ -664,8 +659,6 @@ test('it installs again for the same pid after the imp stops', async () => {
 
   await ctx.impd.broker.readExecEnv(imp, vsock);
   await ctx.client.imps.stop({ name: 'dev' });
-
-  // the record as it was before the stop: the pid a new boot could get
   await ctx.impd.broker.readExecEnv(imp, vsock);
 
   expect(ctx.installs).toStrictEqual([vsock, vsock]);
@@ -675,7 +668,6 @@ test('it keeps the newest audit rows of each imp', async () => {
   const ctx = await setupTest();
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
-  // one past the cap, oldest first
   for (let index = 0; index < AUDIT_ROWS_PER_IMP + 5; index += 1) {
     await writeAuditEntry(
       ctx.db,
@@ -695,7 +687,6 @@ test('it keeps the sent rows of an imp whose refused rows pass the cap', async (
 
   await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId: dev.id, path: '/sent' }));
 
-  // a full cap of refusals after it, and one past
   for (let index = 0; index < AUDIT_ROWS_PER_IMP + 1; index += 1) {
     await writeAuditEntry(
       ctx.db,
@@ -719,7 +710,6 @@ test('it keeps the newest refused rows of each imp', async () => {
   const ctx = await setupTest();
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
-  // one past the cap, oldest first
   for (let index = 0; index < AUDIT_ROWS_PER_IMP + 1; index += 1) {
     await writeAuditEntry(
       ctx.db,
@@ -799,7 +789,6 @@ test('it caps an audit listing at 1000 rows whatever the limit asked', async () 
   const dev = await ctx.client.imps.create({ name: 'dev' });
   const other = await ctx.client.imps.create({ name: 'other' });
 
-  // two imps, each under its own cap, together past 1000
   for (const impId of [dev.id, other.id]) {
     for (let index = 0; index < 550; index += 1) {
       await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId }));
@@ -847,7 +836,6 @@ test('it reports a fork whose grants cannot be copied, and logs the cause', asyn
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
 
-  // the fork is gone by the time the grants are copied
   const report = await ctx.impd.broker.createForkGrants(dev, { id: 'gone', name: 'gone' }, null);
 
   expect(report).toStrictEqual({
@@ -897,7 +885,6 @@ test('it skips a grant the caller may not make on a fork, and logs why', async (
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
 
-  // a caller whose list grants nothing
   const report = await ctx.impd.broker.createForkGrants(dev, copy, {
     tokenId: null,
     grantable: [],
@@ -956,7 +943,6 @@ test('it keeps the old value and makes no new file when a replace clashes', asyn
 
   const before = await readSecret(ctx.db, 'claude');
 
-  // claude moving onto gh's host would give dev two credentials for it
   const clash = ctx.client.secrets.add({
     name: 'claude',
     kind: 'custom',
@@ -1008,7 +994,6 @@ test('it logs an audit row it could not write and still answers the request', as
 
   const established = Promise.withResolvers<Socket>();
 
-  // slot 0's guest, 127.0.0.2, through its gateway's front port
   const tunnel = createConnection({ host: '127.0.0.1', port, localAddress: '127.0.0.2' }, () => {
     tunnel.write('CONNECT api.github.com:443 HTTP/1.1\r\nHost: api.github.com:443\r\n\r\n');
   });
@@ -1071,8 +1056,6 @@ test('it refuses a tunnel into the imps’ IPv6 prefix', async () => {
   ctx.stack.defer(() => broker.stop());
 
   const port = await broker.listen(0);
-
-  // slot 0's guest, 127.0.0.2
   const guest = await startStubBrokerGuestSocket(ctx.stack, { port, address: '127.0.0.2' });
 
   guest.write('CONNECT [fd12:3456:789a:1::9]:443 HTTP/1.1\r\n\r\n');
@@ -1096,7 +1079,6 @@ test('it dials a public IPv6 address when impd has IPv6', async () => {
 
   const dialled: string[] = [];
 
-  // the far end of the tunnel, on loopback
   const target = await startStubBrokerReplyTarget(ctx.stack, 'tunnel');
 
   const broker = await createBroker({
@@ -1115,12 +1097,8 @@ test('it dials a public IPv6 address when impd has IPv6', async () => {
   ctx.stack.defer(() => broker.stop());
 
   const port = await broker.listen(0);
-
-  // slot 0's guest, 127.0.0.2
   const guest = await startStubBrokerGuestSocket(ctx.stack, { port, address: '127.0.0.2' });
 
-  // the head and the request behind it, which the target reads before it
-  // answers
   guest.write(
     'CONNECT [2606:4700::1111]:443 HTTP/1.1\r\n\r\nGET / HTTP/1.1\r\nHost: example.com\r\n\r\n',
   );
@@ -1151,8 +1129,6 @@ test('it refuses every IPv6 tunnel when impd has no IPv6', async () => {
   ctx.stack.defer(() => broker.stop());
 
   const port = await broker.listen(0);
-
-  // slot 0's guest, 127.0.0.2
   const guest = await startStubBrokerGuestSocket(ctx.stack, { port, address: '127.0.0.2' });
 
   guest.write('CONNECT [2606:4700::1111]:443 HTTP/1.1\r\n\r\n');

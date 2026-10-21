@@ -12,33 +12,21 @@ import {
 import { dirname, join } from 'node:path';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
 
-// Secret values, one file each in <dataDir>/secrets: the directory 0700, each
-// file 0600, unencrypted, as the key would live on the same disk. A file is
-// named by buildValueFile, or by the bare secret name from an older impd.
+// values sit unencrypted: the key would live on the same disk
 export interface SecretFiles {
-  // a new file, durably: temp file, fsync, rename, fsync of the directory
   readonly write: (file: string, value: string) => void;
 
-  // Replaces a file's content in place by name, durably, as write does.
-  // Only an oauth secret's file is rewritten
-  // (docs/guides/connectors.md#value-files).
   readonly rewrite: (file: string, value: string) => void;
 
-  // null when the file is gone
   readonly read: (file: string) => string | null;
   readonly remove: (file: string) => void;
 
-  // moves every file not in `keep`, temp files a crash left included, into
-  // ORPHANED_DIR/<at> (0700), and returns their names
   readonly keepOrphansExcept: (keep: ReadonlySet<string>, at: Date) => KeptOrphans;
 
-  // each directory under ORPHANED_DIR, for `impz gc`, and its removal by name
   readonly listKept: () => KeptDirectory[];
   readonly removeKept: (name: string) => void;
 }
 
-// where the start puts value files no row names, as after a restore from an
-// older database (docs/guides/connectors.md#value-files)
 const ORPHANED_DIR = '.orphaned';
 
 interface KeptDirectory {
@@ -46,26 +34,20 @@ interface KeptDirectory {
   readonly path: string;
   readonly bytes: number;
 
-  // from its name, the start that made it
   readonly createdAt: Date | null;
   readonly files: readonly string[];
 }
 
 interface KeptOrphans {
-  // null when there were none, and no directory was made
   readonly directory: string | null;
   readonly files: readonly string[];
 }
 
-// A new file for each value: a replace writes the new value beside the old,
-// and the secret's row switches from one to the other.
 export function buildValueFile(name: string): string {
   return `${name}.${randomBytes(8).toString('hex')}`;
 }
 
 interface SecretFilesOptions {
-  // flushes one open file or directory to the disk; fsync by default, and a
-  // test passes a recorder that calls it
   readonly sync?: (fd: number) => void;
 }
 
@@ -78,7 +60,7 @@ export function createSecretFiles(
 
   mkdirSync(directory, { recursive: true, mode: 0o700 });
 
-  // a directory made by an older impd or by hand keeps its mode otherwise
+  // mkdir leaves the mode of a directory that already exists alone
   chmodSync(directory, 0o700);
 
   return {
@@ -158,7 +140,6 @@ export function createSecretFiles(
   };
 }
 
-// a directory itself, never a symlink to one
 function checkDirectory(path: string): boolean {
   try {
     return lstatSync(path).isDirectory();
@@ -171,7 +152,6 @@ function checkDirectory(path: string): boolean {
   }
 }
 
-// the start time a kept directory is named after, its colons dashes
 function readStamp(name: string): Date | null {
   const iso = name.replace(/T(?<h>\d{2})-(?<m>\d{2})-(?<s>\d{2})/u, 'T$<h>:$<m>:$<s>');
 
@@ -180,9 +160,8 @@ function readStamp(name: string): Date | null {
   return Number.isNaN(at.getTime()) ? null : at;
 }
 
-// A file or a symlink where the orphans' directory goes would fail the start
-// or take the chmod elsewhere: it is renamed to `name` beside it, which no
-// row names, so it is kept aside with the other orphans.
+// a file or a symlink at `path` would fail the start or take the chmod
+// elsewhere, so it is renamed aside and kept with the other orphans
 function checkOrphansDirectory(path: string, name: string): void {
   try {
     if (lstatSync(path).isDirectory()) {

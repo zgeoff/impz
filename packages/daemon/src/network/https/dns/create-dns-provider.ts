@@ -4,7 +4,6 @@ import { createCloudflareProvider } from './cloudflare-provider';
 import type { DnsProvider } from './dns-provider';
 import type { DnsToken } from './dns-token';
 
-// loadConfig has checked that each provider has what it needs
 export function createDnsProvider(
   config: DnsConfig,
   token: DnsToken | null,

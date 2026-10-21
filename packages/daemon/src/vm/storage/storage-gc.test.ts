@@ -19,8 +19,6 @@ import { createStorageGc } from './storage-gc';
 import { createXfsBackend } from './xfs-backend';
 import { createZfsBackend } from './zfs/zfs-backend';
 
-// `cloneFile` copies a disk or checkpoint file; a test holds one to catch
-// storage made before its row
 function setupTest(
   options: Readonly<{ cloneFile?: (source: string, target: string) => Promise<void> }> = {},
 ) {
@@ -32,11 +30,7 @@ function setupTest(
     createStorage: (dataDir) =>
       createXfsBackend({
         dataDir,
-
-        // sweep lines this suite reads from the GC's own log instead
         log: () => {},
-
-        // a copy keeps a sparse disk's holes
         cloneFile:
           options.cloneFile ??
           (async (source, target) => {
@@ -57,14 +51,11 @@ test('it lists what a sweep would drop and keep in a dry run, and removes nothin
 
   await ctx.client.imps.create({ name: 'dev' });
 
-  // a disk no row names: a lost database, or a destroy that crashed after
-  // its row went
   const lost = buildImpPaths(ctx.dataDir, 'lost');
 
   await mkdir(lost.directory, { recursive: true });
   await writeFile(lost.disk, 'disk');
 
-  // what a destroy leaves once the disk is gone
   const done = buildImpPaths(ctx.dataDir, 'done');
 
   await mkdir(done.runDir, { recursive: true });
@@ -161,8 +152,6 @@ test('it keeps every orphan of a lost database through start, the hourly pass an
     log,
   });
 
-  // an empty database over an image, and the disks, checkpoints and memory
-  // snapshots of two imps
   await ctx.storage.createImage('sha256:old', async (directory) => {
     await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
   });
@@ -207,8 +196,6 @@ test('it keeps every orphan of a lost database through start, the hourly pass an
     'imp b',
   ]);
 
-  // each orphan once, then only the count while the set stays; impz gc
-  // returns them instead
   const lines = log.mock.calls.map(([line]) => line);
 
   expect(lines.filter((line) => line.includes('kept orphan imp a '))).toHaveLength(1);
@@ -278,7 +265,6 @@ test('it waits for a checkpoint whose clone exists before its row', async () => 
     gate.resolve();
   });
 
-  // clones pass until the checkpoint's, which holds once its file exists
   const hold = { reached: () => {}, gate: Promise.resolve() };
 
   const ctx = await setupTest({
@@ -337,7 +323,6 @@ test('it waits with orphans for an imp whose disk exists before its row', async 
     cloneFile: async (source, target) => {
       await runChecked(['cp', '--sparse=always', source, target]);
 
-      // the disk's clone holds, after its file exists and before its row
       reached.resolve();
 
       await gate.promise;
@@ -395,7 +380,6 @@ test('it waits with orphans for a destroy that holds the gate', async () => {
 
   const gc = ctx.client.system.gc({ orphans: true });
 
-  // the GC waits on the gate while the VM stops, before any file goes
   await waitFor(() => {
     expect(ctx.impd.storageGate.countWaiting()).toBe(1);
   });
@@ -472,9 +456,6 @@ test('it logs and skips the hourly pass while operations keep storage busy', asy
   expect(dropUnnamed).not.toHaveBeenCalled();
 });
 
-// Secret values the broker kept aside (docs/guides/connectors.md#value-files)
-// come only to a caller that asks with `secretFiles`: an older client does not
-// know kind `secrets`. Only `removeSecretFiles` with `orphans` deletes them.
 test('it leaves the secret values kept aside out of a GC that does not ask for them', async () => {
   const ctx = await setupTest();
 

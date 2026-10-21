@@ -1,7 +1,6 @@
 import { Resolver } from 'node:dns/promises';
 import type { AddressAnswer } from './egress-sets';
 
-// A records, and with IPv6 AAAA too; a name with no AAAA still resolves
 export function createExactResolver(
   servers: readonly string[],
   ipv6: boolean,

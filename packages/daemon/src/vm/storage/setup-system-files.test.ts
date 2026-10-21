@@ -268,7 +268,5 @@ test('it installs the drive placed in the data dir when no drive is configured, 
   );
 
   expect(readFileSync(files.systemDrivePath, 'utf8')).toBe('hand-placed drive');
-
-  // kept: a VM booted by an older impd may still run from it
   expect(existsSync(join(ctx.directoryPath, 'system', 'imp-system.squashfs'))).toBeTrue();
 });

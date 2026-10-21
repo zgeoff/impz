@@ -2,26 +2,19 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { FirecrackerPaths } from '../vmm/firecracker-process';
 
-// The /var/lib/imp layout (docs/architecture/storage/storage.md#the-data-directory).
-
 export interface ImpPaths extends FirecrackerPaths {
   readonly impId: string;
   readonly directory: string;
   readonly runDir: string;
   readonly disk: string;
   readonly snapshotDir: string;
-
-  // the memory snapshot of a sleeping imp (docs/architecture/lifecycle/sleep-and-wake.md)
   readonly vmstate: string;
   readonly memFile: string;
   readonly snapshotMeta: string;
 
-  // what the VM booted with; outside snapshotDir, which a cold boot clears
+  // sits outside the snapshot directory, which a cold boot clears
   readonly vmIdentity: string;
   readonly checkpointsDir: string;
-
-  // impd's logs of the imp's sessions, one directory per generation
-  // (docs/architecture/guest/sessions.md#session-logs)
   readonly sessionLogsDir: string;
 }
 
@@ -31,11 +24,8 @@ export interface ImagePaths {
   readonly config: string;
 }
 
-// The directories directly under the data dir that impd keeps its state in.
 const DATA_DIRS = ['db', 'system', 'images', 'imps'] as const;
 
-// impd makes its own top-level directories at start, on whatever the data dir
-// is mounted from, so nothing that sets up the mount needs to know them.
 export function createDataDirs(dataDir: string): void {
   for (const name of DATA_DIRS) {
     mkdirSync(join(dataDir, name), { recursive: true });
@@ -50,7 +40,6 @@ export function buildImagesDir(dataDir: string): string {
   return join(dataDir, 'images');
 }
 
-// `digest` is the docker image ID; its `sha256:` prefix stays out of paths
 export function toDigestHex(digest: string): string {
   return digest.replace(/^sha256:/u, '');
 }
@@ -75,16 +64,12 @@ export function buildImpPaths(dataDir: string, impId: string): ImpPaths {
   };
 }
 
-// The one memory snapshot the watchdog keeps of an imp whose agent went
-// silent, for a post-mortem: in the imp's directory, which a destroy removes.
 export function buildWatchdogSlot(impDir: string): SnapshotPaths {
   return buildSnapshotPaths(join(impDir, 'watchdog'));
 }
 
-// where a snapshot's files go: a sleeping imp's, or the watchdog's slot
 export type SnapshotPaths = Readonly<ReturnType<typeof buildSnapshotPaths>>;
 
-// the memory snapshot's files; ZFS keeps them in a dataset of their own
 export function buildSnapshotPaths(snapshotDir: string) {
   return {
     snapshotDir,
@@ -104,13 +89,10 @@ export function buildImagePaths(dataDir: string, digest: string): ImagePaths {
   };
 }
 
-// build contexts clients upload, each removed after its build
 export function buildUploadsDir(dataDir: string): string {
   return join(dataDir, 'uploads');
 }
 
-// System drives are named by their sha256 and never written over: a sleeping
-// VM's snapshot reopens its drive by path, so the bytes there must stay.
 export function buildSystemDrivesDir(dataDir: string): string {
   return join(dataDir, 'system', 'drives');
 }
@@ -119,35 +101,23 @@ export function buildSystemDrivePath(dataDir: string, sha256: string): string {
   return join(buildSystemDrivesDir(dataDir), `${sha256}.squashfs`);
 }
 
-// What impd's backups keep on the host (docs/architecture/storage/backups.md).
 export function buildBackupPaths(dataDir: string) {
   const directory = join(dataDir, 'backup');
 
   return {
     directoryPath: directory,
-
-    // what restic reads: the manifest, and the disks, checkpoints and images
-    // at the same paths every run; the run's database copy sits outside it,
-    // and a copy of that goes in only with IMP_BACKUP_DATABASE
     tree: join(directory, 'tree'),
     cache: join(directory, 'cache'),
-
-    // when forget, prune and check last ran
     state: join(directory, 'state.json'),
-
-    // XFS: the source of each disk copy in the tree, to reuse an unchanged one
     copies: join(directory, 'copies.json'),
     restoreDir: join(directory, 'restore'),
   };
 }
 
-// Paths in the backup tree, relative to it: the same on XFS and ZFS, where
-// each directory is a read-only clone of the dataset.
 export const BACKUP_TREE = {
   manifest: 'manifest.json',
 
-  // impd's database copy, alone in its directory, since restic restores a
-  // directory at a time
+  // alone in its directory, since restic restores a directory at a time
   database: join('database', 'impd.sqlite'),
   buildImpDir: (impId: string) => join('imps', impId),
   buildDisk: (impId: string) => join('imps', impId, 'disk', 'rootfs.ext4'),

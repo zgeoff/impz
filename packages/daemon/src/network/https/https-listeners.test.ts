@@ -25,12 +25,8 @@ async function setupTest() {
 
   const db = harness.db;
   const impd = harness.impd;
-
-  // impd's API as the bare domain reaches it, and the upstream the tests'
-  // imps point at: it echoes what it got
   const echo = startStubHeaderEcho(stack);
 
-  // the wake proxy the listeners serve through, on ports of its own
   const proxy = startWakeProxy({
     config: { ...harness.config, apiPort: echo.port },
     db,
@@ -44,7 +40,6 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imp here boots: a create needs one
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(db, image);
@@ -128,7 +123,6 @@ test('it takes one label in front of the domain as an imp, even one named like t
 
   listeners.setCertificate(certificate);
 
-  // `imp.imp.test` is the imp named imp, which does not exist
   const response = await fetch(`https://127.0.0.1:${String(listeners.readPorts().https)}/`, {
     headers: { host: 'imp.imp.test' },
     tls: { rejectUnauthorized: false },
@@ -257,7 +251,6 @@ test('it never hands the dashboard session to an imp', async () => {
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: ctx.echo.port });
 
-  // the imp's address is the echo's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
 
   listeners.setAddresses(['127.0.0.1']);
@@ -563,7 +556,6 @@ test('it stops serving an address that goes away', async () => {
 test('it logs an address it cannot bind once', async () => {
   const ctx = await setupTest();
 
-  // a process that is not impd holds the HTTPS port on loopback
   const squatter = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
@@ -601,7 +593,6 @@ test('it logs an address it cannot bind once', async () => {
 test('it binds an address it could not bind once the port is free, and says so', async () => {
   const ctx = await setupTest();
 
-  // a process that is not impd holds the HTTPS port on loopback, for a while
   const squatter = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
@@ -818,7 +809,6 @@ test('it serves a public imp without auth on the public listener', async () => {
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: ctx.echo.port });
 
-  // the imp's address is the echo's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
 
   await updateImpExposure(ctx.db, imp.id, { auth: 'none', user: null, hash: null });
@@ -987,7 +977,6 @@ test('it serves a token imp given its token, without passing the token on', asyn
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: ctx.echo.port });
 
-  // the imp's address is the echo's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
 
   await updateImpExposure(ctx.db, imp.id, {
@@ -1083,7 +1072,6 @@ test('it serves a basic auth imp given its user and password, without passing th
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: ctx.echo.port });
 
-  // the imp's address is the echo's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
 
   await updateImpExposure(ctx.db, imp.id, {
@@ -1149,7 +1137,6 @@ test('it takes no open slot and no wake for plain http on the public listener', 
 
   listeners.setCertificate(certificate);
 
-  // more than the 64 open slots and the 10 wakes
   const statuses = await Promise.all(
     Array.from({ length: 100 }, async () => {
       const response = await fetch(`http://127.0.0.1:${String(listeners.readPorts().http)}/`, {
@@ -1236,7 +1223,6 @@ test('it replaces a public client’s forwarding headers with its own', async ()
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: ctx.echo.port });
 
-  // the imp's address is the echo's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
 
   await updateImpExposure(ctx.db, imp.id, { auth: 'none', user: null, hash: null });
@@ -1288,7 +1274,6 @@ test('it names neither the imp’s port nor the error on the public listener whe
 
   ctx.stack.defer(() => listeners.stop());
 
-  // nothing listens on port 1 of loopback
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: 1 });
 
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();

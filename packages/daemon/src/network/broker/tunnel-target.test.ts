@@ -171,8 +171,6 @@ test('it refuses a name whose answer from the system resolver is loopback', () =
   );
 });
 
-// with every IPv6 address allowed, only the host's own interfaces, which
-// hold ::1 on loopback, refuse it
 test("it refuses the host's own interface address by default", () => {
   expect(resolveTunnelTarget('::1', { isBlocked6: () => false })).rejects.toThrowWithMessage(
     TunnelRefusedError,

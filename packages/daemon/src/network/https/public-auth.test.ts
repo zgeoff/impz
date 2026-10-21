@@ -423,7 +423,6 @@ test('#createPublicRoute gives back the open slot of a wake it limits', async ()
     Array.from({ length: 10 }, () => sleeping('web', new Request('https://web.imp.test/'))),
   );
 
-  // the ten wakes above stay open, so 53 more leave one slot below the cap of 64
   await Promise.all(
     Array.from({ length: 53 }, () => running('web', new Request('https://web.imp.test/'))),
   );

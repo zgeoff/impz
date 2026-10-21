@@ -10,7 +10,6 @@ import type { HttpsConfig } from './https-config';
 import type { RecordsStatus } from './https-service';
 import { buildCredentialHash, createCredential } from './public-auth';
 
-// basic auth's user when the caller names none
 const DEFAULT_USER = 'imp';
 
 interface ExposeRequest {
@@ -19,11 +18,7 @@ interface ExposeRequest {
   readonly user?: string | undefined;
 }
 
-// Which imps the internet reaches (docs/guides/https.md#public-imps). The
-// records and the listeners follow the database: the HTTPS service watches
-// for the change.
 export interface ExposureService {
-  // public, with a fresh credential each time; shown this once
   readonly expose: (request: ExposeRequest) => Promise<ExposeResult>;
   readonly unexpose: (name: string) => Promise<ImpRecord>;
 }
@@ -32,7 +27,6 @@ interface ExposureDeps {
   readonly db: ImpDatabase;
   readonly https: HttpsConfig | null;
 
-  // a pass over the public records now; null without the HTTPS service
   readonly updateRecords: () => Promise<RecordsStatus | null>;
 }
 
@@ -44,7 +38,6 @@ export function createExposureService(deps: ExposureDeps): ExposureService {
       throw buildNotFoundError('imp', name);
     }
 
-    // a move checks the imp is not public as it begins
     if (imp.moveState !== null) {
       throw buildMovingError(name);
     }
@@ -99,7 +92,6 @@ export function createExposureService(deps: ExposureDeps): ExposureService {
         throw buildMovingError(imp.name);
       }
 
-      // a failed removal is logged, and the next pass tries again
       await deps.updateRecords();
 
       return changed;

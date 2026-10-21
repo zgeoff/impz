@@ -7,20 +7,13 @@ import { createXfsBackend } from './xfs-backend';
 import { createZfsBackend } from './zfs/zfs-backend';
 import type { ZfsBackendDeps } from './zfs/zfs-backend';
 
-// names the backend that wrote the data dir; a switch would orphan every disk
 const MARKER_FILE = 'storage-backend';
 
-// The host boundaries each backend takes; the host's own by default
 interface StorageBoundaries {
-  // tests on a tmpfs set 0
   readonly xfsReserveFileBytes?: number;
-
-  // `zfs`, its streams, the mount table and the module's version
   readonly zfs?: Omit<ZfsBackendDeps, 'dataDir' | 'root' | 'isUiomoveBugAllowed'>;
 }
 
-// The marker is written once start succeeds: on ZFS, start checks that the
-// dataset is mounted on the data dir, so the marker never lands under it.
 export function createStorageBackend(
   config: Config,
   boundaries: Readonly<StorageBoundaries> = {},
@@ -34,12 +27,13 @@ export function createStorageBackend(
     start: async (live) => {
       await backend.start(live);
 
+      // a marker written before ZFS mounts its dataset on the data dir would sit hidden under it
       writeStorageMarker(config.dataDir, config.storageBackend);
     },
   };
 }
 
-// as ZFS's <root>/reserve: a destroy still runs on a full filesystem
+// removing the reserve frees room for a destroy to run on a full filesystem
 const XFS_RESERVE_FILE_BYTES = 1024 ** 3;
 
 function createBackend(config: Config, boundaries: Readonly<StorageBoundaries>): StorageBackend {
@@ -62,7 +56,6 @@ function createBackend(config: Config, boundaries: Readonly<StorageBoundaries>):
   });
 }
 
-// Refuses a data dir another backend wrote.
 export function checkStorageMarker(dataDir: string, kind: StorageBackendKind): void {
   const marker = join(dataDir, MARKER_FILE);
   const recorded = existsSync(marker) ? readFileSync(marker, 'utf8').trim() : readUnmarked(dataDir);
@@ -82,7 +75,6 @@ export function writeStorageMarker(dataDir: string, kind: StorageBackendKind): v
   }
 }
 
-// every data dir from before the marker is XFS; an empty one is new
 function readUnmarked(dataDir: string): StorageBackendKind | null {
   const imps = buildImpsDir(dataDir);
   const hasImps = existsSync(imps) && readdirSync(imps).length > 0;

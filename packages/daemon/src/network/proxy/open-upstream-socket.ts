@@ -1,6 +1,5 @@
 import type { StartTimer } from '../../platform/process/clock';
 
-// how long an upstream WebSocket may take to open, and the timer that waits
 interface OpenDeadline {
   readonly timeoutMs: number;
   readonly startTimer: StartTimer;

@@ -45,8 +45,6 @@ test('it answers a peer by its bare name', () => {
   });
 });
 
-// web and db share lab, db and cache share ops, slot 3 is on neither, and
-// empty has no members
 test.each([
   [0, 'cache.ops.internal'],
   [0, 'cache.lab.internal'],
@@ -71,7 +69,6 @@ test.each([
   ).toStrictEqual({ kind: 'nxdomain' });
 });
 
-// web and db share lab; cache is on ops, which web is not on
 test.each([
   [0, 'metadata.google.internal'],
   [0, 'db.corp.internal'],
@@ -112,7 +109,6 @@ test('it answers no data, not NXDOMAIN, for another type of a peer', () => {
   expect(answer).toStrictEqual({ kind: 'records', records: [] });
 });
 
-// db shares lab with web and ops with cache
 test.each([
   [1, '10.0.66.10.in-addr.arpa', 'cache.ops.internal'],
   [0, '6.0.66.10.in-addr.arpa', 'db.lab.internal'],
@@ -180,7 +176,6 @@ test('it answers no data for another type of a peer address', () => {
   expect(answer).toStrictEqual({ kind: 'records', records: [] });
 });
 
-// cache, on ops, is no peer of web
 test.each([
   ['10.0.66.10.in-addr.arpa', 'PTR'],
   ['0.66.10.in-addr.arpa', 'PTR'],

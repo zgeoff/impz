@@ -12,19 +12,14 @@ import { createDiskBudget } from '../storage/disk-budget';
 import { TEMPLATE_BOOT_ARGS, buildTemplateKey, createBootTemplates } from './boot-templates';
 import type { BootTemplateDeps } from './boot-templates';
 
-// a template store's host: a data dir, the template VM, a disk budget, the
-// taps, cgroups and RAM admission as recorders, and a frozen clock
 async function setupTest() {
   const dataDir = await mkdtemp(join(tmpdir(), 'boot-templates-'));
 
   onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
 
   const logs: string[] = [];
-
-  // a frozen clock, far from the wall clock, that moves only with advance
   const clock = { durationMs: Date.UTC(2026, 0, 1) };
 
-  // the host's free space, so a build never meets this machine's disk
   const diskBudget = createDiskBudget({
     storage: { readUsage: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }) },
     reserveBytes: null,
@@ -35,8 +30,6 @@ async function setupTest() {
 
   const deps = {
     dataDir,
-
-    // the binary, kernel and guest age only the template VM reads
     firecrackerBin: 'firecracker',
     kernelPath: 'vmlinux',
     minGuestUptimeMs: 1500,
@@ -361,7 +354,6 @@ test('#buildTemplate removes the cgroup of a jailed build once the build is done
   expect(ctx.deps.cgroups.remove).toHaveBeenCalledAfter(ctx.deps.cgroups.setup);
 });
 
-// a restore reopens the drive the snapshot booted, and the placeholder
 test('#buildTemplate returns the drive and the placeholder a restore reopens', async () => {
   const ctx = await setupTest();
 
@@ -590,7 +582,6 @@ test('#buildTemplate refuses a build the RAM turns away with the admission error
 test('#buildTemplate refuses a build the disk has no room for', async () => {
   const ctx = await setupTest();
 
-  // a disk of 1 GiB holds no 512 MiB build past its reserve
   const store = createBootTemplates({
     ...ctx.deps,
     identity: buildMockHostIdentity(),
@@ -652,7 +643,6 @@ test('#buildTemplate gives back the admission of a refused build and leaves no w
 test('#buildTemplate counts no refused build as a failure', async () => {
   const ctx = await setupTest();
 
-  // four refusals, past the three failures that turn a key off, then room
   const admit = mock(() => Promise.resolve())
     .mockImplementationOnce(() => Promise.reject(new Error('no room: ram')))
     .mockImplementationOnce(() => Promise.reject(new Error('no room: ram')))
@@ -774,7 +764,6 @@ test('#buildTemplate refuses a key its restore faults turned off', async () => {
   );
 });
 
-// an image that never pings fails in the imp, every time
 test('#reportFailure counts no fault in the imp toward turning the key off', async () => {
   const ctx = await setupTest();
 
@@ -863,7 +852,6 @@ test('#buildTemplate removes the least recently used template past four', async 
     ctx.advance(1000);
   }
 
-  // the first is used again; the second is now the oldest
   store.requestTemplate({ vcpus: 1, memoryMib: 256 });
   ctx.advance(1000);
 
@@ -881,7 +869,6 @@ test('#removeStale removes the templates of another host identity', async () => 
   const identity = buildMockHostIdentity();
   const store = createBootTemplates({ ...ctx.deps, identity, bootReservePercent: 50 });
 
-  // a template the host built before its system drive changed
   const old = createBootTemplates({
     ...ctx.deps,
     identity: { ...identity, systemDrive: 'd0', systemDrivePath: '/data/system/drives/d0' },

@@ -20,13 +20,10 @@ interface BuildHttpsOptions {
   readonly proxy: Pick<WakeProxy, 'startListener'>;
   readonly readTailscale: (() => Promise<TailscaleStatus>) | null;
 
-  // the DNS API token, read at each use; null for a provider that needs none
   readonly dnsToken: DnsToken | null;
   readonly log: (message: string) => void;
 }
 
-// The HTTPS service from impd's config, with the real CA, DNS provider and
-// tailscaled.
 export function wireHttpsService(options: BuildHttpsOptions): HttpsService {
   const config = options.config;
   const log = options.log;
@@ -56,8 +53,6 @@ export function wireHttpsService(options: BuildHttpsOptions): HttpsService {
     readPublicImpByName: (name) => readPublicImp(options.db, name),
   });
 
-  // the destroy of a public imp takes its record; an expose and an unexpose
-  // update the records themselves, to report how the write went
   const unsubscribe = options.db.writes.subscribe((write) => {
     if (write.kind === 'removed' && write.imp.publicAuth !== null) {
       void service.updatePublicRecords();
@@ -81,8 +76,6 @@ export function wireHttpsService(options: BuildHttpsOptions): HttpsService {
   };
 }
 
-// A token file that is missing or empty does not stop impd: it says so at
-// start, and in system info, and each DNS call reads the file again.
 async function checkDnsToken(token: DnsToken, log: (message: string) => void): Promise<void> {
   try {
     await token.read();

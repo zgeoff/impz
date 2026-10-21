@@ -8,7 +8,6 @@ import { EDE_PROHIBITED, RCODE, buildEmptyReply, buildLocalReply, readQuery } fr
 test('#readQuery reads the id, name and type of a query with one question', () => {
   const query = readQuery(buildMockDnsQuery({ name: 'Example.COM', type: 'AAAA', id: 0x12_34 }));
 
-  // the decoded packet carries every flag dns-packet reads
   expect(query).toMatchObject({
     id: 0x12_34,
     name: 'Example.COM',

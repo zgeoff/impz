@@ -23,15 +23,12 @@ import {
   toWholeBlocks,
 } from './elastic-memory';
 
-// `cgroups` writes each imp's limits; a stub that records them by default
 async function setupTest(options: Pick<TestImpdOptions, 'cgroups'> = {}) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
   const cgroups = buildStubCpuCgroups();
-
-  // a sleep's shrink waits on this clock, which only its own pauses move
   const clock = buildStubClock({ startMs: Date.now() });
 
   const harness = await startTestImpd(stack, {
@@ -42,12 +39,11 @@ async function setupTest(options: Pick<TestImpdOptions, 'cgroups'> = {}) {
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imp boots from: a create needs one
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
 
-  // assigned, not spread: a spread reads the harness's parts once
+  // Object.assign keeps the harness's getters live, where a spread reads each of them once.
   return Object.assign(harness, { cgroups });
 }
 
@@ -66,12 +62,10 @@ test.each([
   expect(getLowMib(totalMib)).toBe(lowMib);
 });
 
-// 200 used: its grow mark is 128 MiB free, and a 256 MiB step above it
 test('#findSpareTotalMib leaves a small guest a step more than 128 MiB free', () => {
   expect(getSpareTotalMib(200)).toBe(584);
 });
 
-// 2000 used: of 2655 MiB, 15 % is 398.25 free and the guest has 655
 test('#findSpareTotalMib leaves a large guest a step more than 15 % of it free', () => {
   expect(getSpareTotalMib(2000)).toBe(2655);
 });
@@ -153,7 +147,6 @@ test('it forks an imp with the max of its source', async () => {
 });
 
 test('it never boots an imp whose max is larger than the whole RAM budget', async () => {
-  // a budget the imp's memory fits but its max does not
   updateEnv('IMP_RAM_BUDGET_MIB', '1024');
 
   const ctx = await setupTest();
@@ -170,7 +163,6 @@ test('it unplugs on a sleep what the guest can spare', async () => {
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  // 512 plugged, 100 used: the target is 228, but the guest stops at 256
   ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 512,
@@ -203,7 +195,6 @@ test('it allows on a wake what the guest kept plugged at its sleep', async () =>
   await ctx.client.imps.sleep({ name: 'dev' });
   await ctx.client.imps.wake({ name: 'dev' });
 
-  // the boot's limit, then the wake's, before the load
   expect(
     ctx.cgroups.calls.filter((call) => call.startsWith(`memory ${created.id} `)),
   ).toStrictEqual([`memory ${created.id} 256`, `memory ${created.id} 512`]);
@@ -215,7 +206,6 @@ test('it records what a plug under way asked for at a sleep', async () => {
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  // 256 plugged of 512 asked, and nothing to spare
   ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 256,
@@ -268,8 +258,6 @@ test('it sleeps an imp that does not grow without asking its guest', async () =>
 });
 
 test('it raises memory.max with a grow of the guest', async () => {
-  // a cgroup root with the cpu and memory controllers handed to imps/, as
-  // setup-cgroups.sh leaves it
   const root = await mkdtemp(join(tmpdir(), 'imp-elastic-cgroups-'));
 
   await mkdir(join(root, 'imps'));
@@ -277,10 +265,8 @@ test('it raises memory.max with a grow of the guest', async () => {
 
   const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
 
-  // registered after the impd's, so it goes after the impd that writes it
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
-  // an agent that moves its container's limit with the guest
   ctx.fake.agent.version = '0.17.0';
 
   const created = await ctx.impd.imps.createImp({
@@ -291,7 +277,6 @@ test('it raises memory.max with a grow of the guest', async () => {
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  // 56 MiB available, under the 128 MiB mark: the next tick plugs a step
   ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 0,
@@ -379,8 +364,6 @@ test('it keeps memory.max at the plugged size across a sleep and a wake', async 
   });
 
   await ctx.impd.governed.memory.runTick();
-
-  // the guest has nothing to spare, so it sleeps with the step plugged
   await ctx.impd.imps.sleepImp('dev');
   await ctx.impd.imps.wakeImp('dev');
 
@@ -444,7 +427,6 @@ test('it allows on adopt after a restart what the guest holds', async () => {
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  // 512 plugged, none of it free to unplug
   ctx.fake.guestMemory.set(paths.directory, {
     baseMib: 256,
     pluggedMib: 512,
@@ -453,7 +435,6 @@ test('it allows on adopt after a restart what the guest holds', async () => {
     unplugFloorMib: 512,
   });
 
-  // a new impd, which adopts the running VM
   await ctx.restartImpd();
 
   const memoryMax = await readFile(join(root, 'imps', created.id, 'memory.max'), 'utf8');

@@ -20,10 +20,6 @@ import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createBroker } from './broker-service';
 import { buildValueFile, createSecretFiles } from './secret-files';
 
-// Secrets through the API (docs/guides/connectors.md#rotate-or-rebind),
-// with an oauth secret's token endpoint answered by MSW; every token is made
-// up (docs/guides/connectors.md#oauth-secrets).
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -33,7 +29,6 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
-  // the default image, which every imp the tests create boots
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
@@ -247,7 +242,6 @@ test('it lists an oauth secret whose refresh token is dead as needing a new sign
 
   const config = buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' });
 
-  // the endpoint has no answer for fake-refresh-0: invalid_grant
   await ctx.client.secrets.add({
     name: 'codex',
     kind: 'oauth',
@@ -632,7 +626,6 @@ test('it holds a replace behind a refresh under way, which never overwrites it',
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<void>();
 
-  // the next token call waits at the endpoint until the gate opens
   server.use(
     http.post(
       'https://auth.example.com/oauth/token',
@@ -680,7 +673,6 @@ test('it holds a replace behind a refresh under way, which never overwrites it',
 
   const stored: unknown = JSON.parse(text);
 
-  // the replace's own call came only after the held refresh had answered
   expect(tokens.requests.map((request) => request.refreshToken)).toStrictEqual([
     'fake-refresh-0',
     'fake-refresh-1',
@@ -719,7 +711,6 @@ test('it holds a delete behind a refresh under way, then removes the secret', as
   const gate = Promise.withResolvers<void>();
   const seen: { row: SecretRecord | undefined } = { row: undefined };
 
-  // the next token call waits at the endpoint, then reads the row as it answers
   server.use(
     http.post(
       'https://auth.example.com/oauth/token',
@@ -776,7 +767,6 @@ test('it answers not found for a secret deleted outside the lock during its refr
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<void>();
 
-  // the next token call waits at the endpoint until the gate opens
   server.use(
     http.post(
       'https://auth.example.com/oauth/token',
@@ -794,8 +784,6 @@ test('it answers not found for a secret deleted outside the lock during its refr
   const refreshing = ctx.client.secrets.refresh({ name: 'codex' });
 
   await reached.promise;
-
-  // as a bug or a restore would
   await removeSecret(ctx.db, 'codex');
 
   gate.resolve();
@@ -841,7 +829,6 @@ test('it refreshes a pending secret when the broker starts', async () => {
 
   server.use(tokens.handler);
 
-  // the first sign-in meets a network error, so the secret stays pending
   server.use(
     http.post('https://auth.example.com/oauth/token', () => HttpResponse.error(), { once: true }),
   );
@@ -856,8 +843,6 @@ test('it refreshes a pending secret when the broker starts', async () => {
 
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
-  // the refresh timer runs, as at a real start: its first tick is at once,
-  // and its next is a minute away, past the test's end
   const started = await createBroker({ config: ctx.config, db: ctx.db, log: () => {} });
 
   ctx.stack.defer(() => started.stop());
@@ -1124,8 +1109,6 @@ test('it gives no credential for a grant of another generation', async () => {
   });
 
   await ctx.client.grants.add({ name: 'dev', secret: 'api' });
-
-  // a row left from another generation, as a bug or a hand edit would
   await ctx.db.updateTable('grants').set({ secret_generation: 'other' }).execute();
 
   const dev = await readImpByName(ctx.db, 'dev');
@@ -1244,8 +1227,6 @@ test('it keeps aside a new file whose row never came, on the next start', async 
   const before = await readSecret(ctx.db, 'api');
 
   invariant(before);
-
-  // stopped after the write: the new file has no row, and a temp file is left
   createSecretFiles(ctx.dataDir).write(buildValueFile('api'), 'v2');
 
   await writeFile(join(ctx.dataDir, 'secrets', '.api.half-written'), 'v');
@@ -1271,7 +1252,6 @@ test('it removes the old file of a committed replace, on the next start', async 
 
   await ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'v1', rules });
 
-  // stopped after the commit: the row names the new file, the old one stays
   const next = buildValueFile('api');
 
   createSecretFiles(ctx.dataDir).write(next, 'v3');
@@ -1349,7 +1329,6 @@ test('it removes on the next start the old file a replace could not, not keeping
 
   await ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'v2', rules, replace: true });
 
-  // the next start finds a file there again
   await rm(oldFile, { recursive: true });
   await writeFile(oldFile, 'v1');
 

@@ -10,22 +10,13 @@ import { GROW_STEP_MIB, getLowMib, getRegionMib, getStructPageMib } from './elas
 import type { MemoryLimit } from './memory-limit';
 import { getShrinkTargetMib, shrinkGuest } from './shrink-guest';
 
-// a guest that could give back a step for this long shrinks
 const SHRINK_AFTER_MS = 60_000;
-
-// a plug or an unplug the guest cannot finish (memory it cannot online or
-// migrate) is not asked again in that direction for this long
 const BACKOFF_MS = 60_000;
-
-// what a reclaim waits for each guest's unplug under the governor's lock
 const RECLAIM_TIME_LIMIT_MS = 1000;
-
-// a plug or an unplug whose plugged size stands still this long has stopped
 const STALL_MS = 2000;
 
-// The balloon statistics count a plug at their next poll, 1 s at most after
-// it lands (configure-vm.ts); a grow they still miss this long after a tick
-// saw it land no longer holds back the next one.
+// Firecracker's balloon statistics count a plug at their next poll, at most 1 s after it lands, so
+// a grow they still miss after this long stops holding back the next one.
 const GROW_UNCOUNTED_MS = 3000;
 
 export interface ElasticImp {
@@ -35,37 +26,22 @@ export interface ElasticImp {
   readonly memoryMib: number;
   readonly maxMemoryMib: number;
   readonly paths: ImpPaths;
-
-  // the agent it booted with; undefined when impd has no record of it
   readonly agentVersion: string | undefined;
 }
 
 export interface MemoryControllerDeps {
-  // the running imps whose max is above their memory
   readonly listElastic: () => Promise<readonly ElasticImp[]>;
   readonly vms: Pick<VmRunner, 'readGuestMemory' | 'requestPluggedMib'>;
-
-  // a lifecycle operation holds the imp's lock: the controller leaves it be
   readonly isLocked: (id: string) => boolean;
-
-  // an open exec session, proxied request or hold: a reclaim leaves it be
   readonly isBusy: (id: string) => boolean;
 
-  // runs `action` under the imp's lifecycle lock when the lock is free and
-  // the imp still runs; false when it did not run. A plug or an unplug goes
-  // through it, so that a sleep never sees its guest change size.
+  // A plug or an unplug runs under the imp's lifecycle lock, so a sleep never snapshots a guest
+  // whose size is changing.
   readonly tryWhileRunning: (id: string, action: () => Promise<void>) => Promise<boolean>;
-
-  // the governor's admission for a grow, which reserves it; false when it
-  // refused. A grow that then cannot plug gives the reservation back.
   readonly admitGrow: (request: GrowRequest) => Promise<boolean>;
   readonly releaseGrow: (id: string) => void;
   readonly limit: MemoryLimit;
-
-  // the RAM the VM owns now, as the governor counts it
   readonly readRamMib: (imp: ElasticImp) => number | null;
-
-  // what the guest holds, for the API; null when it is not known
   readonly setPluggedMib: (id: string, mib: number | null) => void;
   readonly log: (message: string) => void;
   readonly now?: () => number;
@@ -73,54 +49,27 @@ export interface MemoryControllerDeps {
 }
 
 interface ImpState {
-  // since when the guest could give back a step
   spareSince: number | null;
-
-  // no shrink before this, after an unplug that stopped partway; no grow
-  // before growAfter, after a plug that did
   shrinkAfter: number;
   growAfter: number;
-
-  // a plug or an unplug under way: where it stood, and since when
   change: { pluggedMib: number; since: number } | null;
-
-  // after a grow, the total the balloon statistics reach once they count it;
-  // the next grow waits for them, or for `until`, set once a tick sees the
-  // plug land (docs/architecture/lifecycle/elastic-memory.md#the-controller)
   uncountedGrow: { totalMib: number; until: number | null } | null;
-
-  // a stopped plug is logged once, until the guest's size moves again
   stalledAtMib: number | null;
-
-  // a limit to lower once the guest holds no more than it and its RSS fell
   lowerTo: number | null;
-
-  // a refused grow is logged once until a grow goes through again
   isRefused: boolean;
-
-  // a grow its agent cannot use is logged once
   isAgentOutdated: boolean;
 }
 
 export interface MemoryController {
-  // one look at every elastic imp: grow, shrink, or nothing
   readonly runTick: () => Promise<void>;
-
-  // the governor's step before it sleeps imps: idle elastic imps unplug to
-  // their spare size; returns the MiB unplugged
   readonly reclaimIdle: (excludeId: string | null) => Promise<number>;
 }
 
-// Grows elastic guests under pressure and shrinks them when they have memory
-// to spare. A guest grows only here, through the governor's admission;
-// refused, it stays at its size (docs/architecture/lifecycle/elastic-memory.md#the-controller).
 export function createMemoryController(deps: MemoryControllerDeps): MemoryController {
   const now = deps.now ?? Date.now;
 
   const states = new Map<string, ImpState>();
 
-  // seen for the first time: a new boot or a VM impd re-adopted, whose
-  // plugged size the limit must cover
   const readState = (imp: ElasticImp, memory: Readonly<GuestMemory>): ImpState => {
     const known = states.get(imp.id);
 
@@ -150,7 +99,6 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     return created;
   };
 
-  // the limit comes down once the unplug is done and the RSS is under it
   const applyLowerLimit = (imp: ElasticImp, memory: Readonly<GuestMemory>): void => {
     const state = readState(imp, memory);
 
@@ -169,7 +117,6 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     state.lowerTo = null;
   };
 
-  // an unplug, or a plug's end, under the imp's lock
   const sendLocked = (imp: ElasticImp, mib: number) =>
     deps.tryWhileRunning(imp.id, () => deps.vms.requestPluggedMib(imp.paths, mib));
 
@@ -224,14 +171,14 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
 
     const pluggedMib = memory.pluggedMib + stepMib;
 
-    // the host lets the guest have it before the guest takes it
+    // The host's memory limit rises before the plug, so the guest never takes memory the host has
+    // not yet allowed it.
     const isRequested = await deps.tryWhileRunning(imp.id, async () => {
       deps.limit.setGuestMib(imp.id, imp.memoryMib + pluggedMib);
 
       await sendPlug(imp, memory, pluggedMib);
     });
 
-    // a sleep or stop took the imp since the tick looked
     if (!isRequested) {
       deps.releaseGrow(imp.id);
 
@@ -240,9 +187,7 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
 
     state.lowerTo = null;
 
-    // Statistics that missed an earlier grow past its hold miss it here too,
-    // so this step counts on top of that one. The guest's struct pages for
-    // the step may come out of what it counts.
+    // The guest kernel's struct pages for the plugged step can come out of the total it reports.
     state.uncountedGrow = {
       totalMib:
         Math.max(memory.totalMib, state.uncountedGrow?.totalMib ?? 0) +
@@ -256,9 +201,8 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     );
   };
 
-  // A failed request may still have landed, its answer lost: the requested
-  // size says, and an unreadable guest counts as one where it did. One that
-  // did not gives back the reservation and the limit.
+  // A failed request to Firecracker may still have landed with its answer lost, so the guest's
+  // requested size decides, and a guest that cannot be read counts as one where it landed.
   const sendPlug = async (imp: ElasticImp, memory: Readonly<GuestMemory>, pluggedMib: number) => {
     try {
       await deps.vms.requestPluggedMib(imp.paths, pluggedMib);
@@ -275,8 +219,6 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     }
   };
 
-  // an unplug toward the spare size; the guest gets there in its own time,
-  // and a later tick sees whether it did
   const shrinkImp = async (imp: ElasticImp, memory: Readonly<GuestMemory>) => {
     const state = readState(imp, memory);
     const targetMib = getShrinkTargetMib(memory);
@@ -295,8 +237,6 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     );
   };
 
-  // A plug or an unplug that stands still has stopped: the guest keeps what
-  // it reached, impd asks for exactly that, and backs off that direction.
   const checkChange = async (imp: ElasticImp, memory: Readonly<GuestMemory>, time: number) => {
     const state = readState(imp, memory);
 
@@ -330,9 +270,6 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     }
 
     state.growAfter = time + BACKOFF_MS;
-
-    // the guest never got the rest of the step, and the statistics have had
-    // the stall's time to count what it did get
     state.uncountedGrow = null;
 
     if (state.stalledAtMib === null) {
@@ -350,7 +287,6 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
 
     deps.setPluggedMib(imp.id, memory.pluggedMib);
 
-    // a plug or an unplug under way: still moving, or stopped partway
     if (memory.requestedMib !== memory.pluggedMib) {
       await checkChange(imp, memory, time);
 
@@ -373,8 +309,6 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
       }
     }
 
-    // past `until` the total stays until the statistics count it, for the
-    // next grow to count on
     const held = state.uncountedGrow;
     const isGrowHeld = held !== null && held.until !== null && time < held.until;
 
@@ -410,7 +344,6 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
 
       const seen = new Set(imps.map((imp) => imp.id));
 
-      // a sleep, stop or destroy ends what the controller knew
       for (const id of states.keys()) {
         if (!seen.has(id)) {
           states.delete(id);
@@ -435,12 +368,10 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
 
       const idle = imps.filter((imp) => imp.id !== excludeId && !deps.isBusy(imp.id));
 
-      // a guest's whole unplug runs under its lock, like a sleep's
       const shrinkIdleImp = async (imp: ElasticImp): Promise<number> => {
         const freed = { mib: 0 };
 
         await deps.tryWhileRunning(imp.id, async () => {
-          // the shrink's own reads, so a plug that moves between them counts
           const shrunk = await shrinkGuest(deps.vms, imp.paths, {
             timeLimitMs: RECLAIM_TIME_LIMIT_MS,
             ...(deps.sleep !== undefined && { sleep: deps.sleep }),
@@ -461,12 +392,9 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
             state.uncountedGrow !== null &&
             afterMib < shrunk.before.requestedMib
           ) {
-            // the unplug stopped a plug under way, whose rest the guest never
-            // gets; what it got may land in the statistics after this
             state.uncountedGrow.totalMib -= shrunk.before.requestedMib - afterMib;
           }
 
-          // a plug under way gives nothing back
           freed.mib = Math.max(0, shrunk.reachedMib - afterMib);
         });
 

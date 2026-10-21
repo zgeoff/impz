@@ -9,35 +9,21 @@ import { openRelayStream } from './dial-stream';
 import type { DialStream } from './dial-stream';
 import { FRAME_TYPES, decodeJsonPayload } from './frame-codec';
 
-// the agent makes a directory and a socket, or starts a helper, then answers
 const ANSWER_TIMEOUT_MS = 10_000;
 
-// What a guest listener serves: the ssh-agent socket for SSH_AUTH_SOCK, or a
-// reverse forward's unix socket (at a path, or one the agent makes for a
-// null path) or port on the guest's 127.0.0.1 (0 takes any free port).
 export type ListenSpec =
   | { readonly network: 'ssh-agent' }
   | { readonly network: 'unix'; readonly path: string | null }
   | { readonly network: 'tcp'; readonly port: number };
 
-// A socket in the guest whose clients come back to impd (protocol
-// `agent.listen` and `listen`). It lives until close, or until the agent
-// connection ends: a forced sleep resets it.
 export interface GuestListener {
-  // the unix socket, or null for a port
   readonly path: string | null;
-
-  // the port, or null for a unix socket
   readonly port: number | null;
   readonly id: string;
-
-  // the id of each client that waits for an agent.accept; ends with the
-  // listener
   readonly connections: () => AsyncGenerator<number, void, undefined>;
   readonly close: () => void;
 }
 
-// agent.listen, or a listen for a socket or a port
 function buildListenRequest(spec: ListenSpec): AgentRequest {
   if (spec.network === 'ssh-agent') {
     return { op: 'agent.listen' };
@@ -50,7 +36,6 @@ function buildListenRequest(spec: ListenSpec): AgentRequest {
   return { op: 'listen', network: 'tcp', address: `127.0.0.1:${String(spec.port)}` };
 }
 
-// Throws AGENT_OUTDATED for an agent from before the op.
 export async function openListener(vsockPath: string, spec: ListenSpec): Promise<GuestListener> {
   const feature = spec.network === 'ssh-agent' ? 'agent-forwarding' : 'reverse-forward';
 
@@ -83,8 +68,6 @@ export async function openListener(vsockPath: string, spec: ListenSpec): Promise
   }
 }
 
-// The relay for one client of a listener (protocol `agent.accept`). Closing
-// it at once refuses the client.
 export function openAccept(
   vsockPath: string,
   listener: string,

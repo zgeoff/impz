@@ -1,8 +1,5 @@
 import type { OAuthStateFile } from './oauth-state';
 
-// Due now without an access token, never for needs_login; else with less
-// than min(24 h, half the lifetime) left, and never less than MIN_LEAD_MS, so
-// an impd stopped for a day never hands out an expired token.
 export function isDue(state: Readonly<OAuthStateFile>, at: number): boolean {
   if (state.status === 'needs_login') {
     return false;
@@ -19,9 +16,6 @@ export function isDue(state: Readonly<OAuthStateFile>, at: number): boolean {
   }
 
   const remaining = state.expiresAt - at;
-
-  // at least one 60 s tick and one 30 s token call before the expiry, with
-  // room to spare, so a short-lived token is refreshed before it runs out
   const MIN_LEAD_MS = 3 * 60_000;
 
   if (state.refreshedAt === null) {

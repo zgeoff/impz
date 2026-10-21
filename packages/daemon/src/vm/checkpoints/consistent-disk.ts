@@ -8,10 +8,8 @@ import { buildInvalidStateError } from '../../surface/api-errors';
 import { sendFreeze, sendThaw } from '../agent-client/agent-requests';
 import type { StorageBackend } from '../storage/storage-backend';
 
-// How long the guest stays frozen at most if impd never sends thaw.
 export const FREEZE_TIMEOUT_MS = 10_000;
 
-// the agent's freeze and thaw, behind an interface for tests
 export interface DiskFreezer {
   readonly freeze: (vsockPath: string, timeoutMs: number) => Promise<void>;
   readonly thaw: (vsockPath: string) => Promise<void>;
@@ -24,9 +22,6 @@ interface ConsistentDiskDeps {
   readonly freezer?: DiskFreezer | undefined;
 }
 
-// Runs `task` on a consistent disk: a running one is frozen around it (sync
-// + FIFREEZE in the guest), a sleeping one wakes first, since its memory
-// image holds unwritten page cache. The caller holds the imp's lock.
 export type WithConsistentDisk = <T>(
   found: LockedImp,
   action: string,
@@ -43,6 +38,8 @@ export function createConsistentDisk(deps: ConsistentDiskDeps): WithConsistentDi
       return task();
     }
 
+    // A sleeping guest wakes first, because its memory snapshot holds page cache it has not yet
+    // written to the disk.
     const imp = found.state === 'sleeping' ? await deps.imps.requireRunningImp(found) : found;
 
     if (imp.state !== 'running') {

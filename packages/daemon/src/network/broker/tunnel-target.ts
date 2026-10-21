@@ -9,9 +9,8 @@ import { getErrorMessage } from '../../platform/process/get-error-message';
 // `INPUT -i imp+ DROP` rule: unchecked, a guest could reach impd's API, the
 // wake proxy and other imps' ports.
 
-// [network, prefix length]: every block not globally reachable in the IANA
-// IPv4 Special-Purpose Address Registry (tunnel-target.test.ts), and
-// multicast; the egress firewall refuses them to a box or public imp too
+// every block the IANA IPv4 Special-Purpose Address Registry marks not
+// globally reachable, and multicast
 export const REFUSED_RANGES: readonly (readonly [string, number])[] = [
   ['0.0.0.0', 8],
   ['10.0.0.0', 8],
@@ -44,9 +43,6 @@ export class TunnelRefusedError extends Error {
   override name = 'TunnelRefusedError';
 }
 
-// True for every address a tunnel must not reach: the ranges above, the
-// host's own addresses, and the IPv6 `isBlocked6` blocks (all of it without
-// one). A mapped address is checked as the IPv4 address it holds.
 export function isRefusedAddress(
   address: string,
   hostAddresses: ReadonlySet<string>,
@@ -69,7 +65,6 @@ export function isRefusedAddress(
   return PARSED_RANGES.some((range) => ip >= range.network && ip < range.network + range.size);
 }
 
-// one spelling per address, so a match turns on neither case nor zeros
 function formatAddressKey(address: string): string {
   const ip4 = parseIpv4(address);
   const ip6 = parseIpv6(address);
@@ -95,17 +90,11 @@ export interface TunnelTargetDeps {
   readonly resolve?: (host: string) => Promise<readonly string[]>;
   readonly readHostAddresses?: () => ReadonlySet<string>;
 
-  // with IPv6, which IPv6 addresses no tunnel reaches; without it, every
-  // IPv6 address is refused and names resolve to IPv4 only
   readonly isBlocked6?: ((address: string) => boolean) | null;
 
-  // more addresses this tunnel may not reach: a public imp's
   readonly isRefusedMore?: (address: string) => boolean;
 }
 
-// The address to dial for `host`, resolved once and dialled as checked, so a
-// DNS rebind cannot swap it. Every answer must pass; IPv4 goes first, and a
-// mapped answer is dialled as the IPv4 address it holds.
 export async function resolveTunnelTarget(
   host: string,
   deps: TunnelTargetDeps = {},
@@ -114,6 +103,7 @@ export async function resolveTunnelTarget(
   const resolve = deps.resolve ?? ((name: string) => resolveAddresses(name, isBlocked6 !== null));
   const hostAddresses = (deps.readHostAddresses ?? readHostAddresses)();
 
+  // resolved once and dialled as checked, so a DNS rebind cannot swap the address
   const answers = await resolve(host);
 
   const addresses = answers.map((address) => findMappedIpv4(address) ?? address);
@@ -140,8 +130,6 @@ export async function resolveTunnelTarget(
   return first;
 }
 
-// A public imp's tunnel leaves by a default route's interface only, as its
-// firewall's traffic does; a route that cannot be read refuses it too.
 export async function requireUplinkRoute(
   host: string,
   address: string,
@@ -167,7 +155,6 @@ export async function requireUplinkRoute(
 }
 
 async function resolveAddresses(host: string, ipv6: boolean): Promise<readonly string[]> {
-  // a literal is its own answer, and the check refuses what it must
   if (parseIpv4(host) !== null || host.includes(':')) {
     return [host];
   }

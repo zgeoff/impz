@@ -11,16 +11,14 @@ import { FRAME_TYPES, decodeJsonPayload } from './frame-codec';
 import type { AgentFrame } from './frame-codec';
 import { parseAgentActivity } from './parse-agent-activity';
 
-// a claim flushes the disk and reseeds the CRNG: well under a second
 const CLAIM_TIMEOUT_MS = 5000;
 
-// the agent's own 10 s wait for the new size, and the resize after it
+// The agent waits up to 10 s for the guest to see a grown disk's new size, then resizes the root
+// filesystem.
 const GROW_TIMEOUT_MS = 20_000;
 
-// A REQUEST frame's message: every request names its op.
 export type AgentRequest = MessageInitShape<typeof RequestSchema> & { readonly op: string };
 
-// throws AgentError when the frame is a RESPONSE carrying an `error`
 export function requireNoAgentError(frame: AgentFrame): void {
   if (frame.type !== FRAME_TYPES.response) {
     return;
@@ -39,8 +37,6 @@ export function requireNoAgentError(frame: AgentFrame): void {
   }
 }
 
-// An error whose data impd cannot read keeps its code and message without
-// the data, so the caller still sees the agent's error.
 function decodeErrorResponse(payload: JsonObject): ErrorResponse {
   try {
     return decodeAgentMessage(ErrorResponseSchema, payload);
@@ -56,12 +52,10 @@ function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-// sends the REQUEST frame that opens every connection
 export function sendRequestFrame(connection: AgentConnection, request: AgentRequest): void {
   connection.sendJson(FRAME_TYPES.request, encodeAgentMessage(RequestSchema, request));
 }
 
-// One unary request: REQUEST out, one RESPONSE back, then the agent closes.
 export async function sendAgentRequest(
   vsockPath: string,
   request: AgentRequest,
@@ -92,21 +86,15 @@ export async function sendPing(vsockPath: string, timeoutMs = 2000): Promise<Pin
   return decodeAgentMessage(PingSchema, response);
 }
 
-// What a guest restored from a boot template needs to become one imp
-// (docs/architecture/lifecycle/boot-templates.md#restore).
 export interface Claim {
   readonly id: string;
   readonly hostname: string;
   readonly ip: string;
   readonly gw: string;
-
-  // the guest's IPv6 /128 and gateway; null when the host gives imps none
   readonly ip6: string | null;
   readonly gw6: string | null;
   readonly dns: readonly string[];
   readonly mac: string;
-
-  // the disk's size as the host made it: the parked agent waits to see it
   readonly diskBytes: number;
   readonly unixMs: number;
   readonly seed: Uint8Array;
@@ -139,7 +127,6 @@ export async function sendClaim(vsockPath: string, claim: Readonly<Claim>): Prom
   decodeAgentMessage(OKSchema, response);
 }
 
-// The agent replies, then powers the guest off; Firecracker exits after.
 export async function sendShutdown(vsockPath: string): Promise<void> {
   const response = await sendAgentRequest(vsockPath, { op: 'shutdown' });
 
@@ -152,8 +139,6 @@ export async function sendActivity(vsockPath: string, timeoutMs = 1000): Promise
   return parseAgentActivity(response);
 }
 
-// Throws AgentError NO_SESSION when the imp has no session of that name,
-// and AGENT_OUTDATED for an agent from before sessions.
 export async function sendSessionKill(vsockPath: string, session: string): Promise<void> {
   const response = await sendAgentRequest(vsockPath, { op: 'session.kill', session }).catch(
     handleUnknownOp('sessions'),
@@ -162,25 +147,19 @@ export async function sendSessionKill(vsockPath: string, session: string): Promi
   decodeAgentMessage(OKSchema, response);
 }
 
-// After a wake: the guest clock stopped while the VM slept.
 export async function sendResumed(vsockPath: string, unixMs: number): Promise<void> {
   const response = await sendAgentRequest(vsockPath, { op: 'resumed', unixMs });
 
   decodeAgentMessage(OKSchema, response);
 }
 
-// sync + FIFREEZE on the guest root; the agent thaws by itself after
-// `timeoutMs` if no thaw arrives. The answer can take a while: sync flushes
-// the guest page cache first.
 export async function sendFreeze(vsockPath: string, timeoutMs: number): Promise<void> {
+  // The agent's answer waits for sync to flush the guest page cache.
   const response = await sendAgentRequest(vsockPath, { op: 'freeze', timeoutMs }, timeoutMs);
 
   decodeAgentMessage(OKSchema, response);
 }
 
-// After the host grew the disk: the agent waits up to 10 s for the guest to
-// see the new size, then grows the root filesystem online. AGENT_OUTDATED
-// for an agent from before it: the next cold boot grows the filesystem.
 export async function sendGrow(vsockPath: string, diskBytes: number): Promise<void> {
   const response = await sendAgentRequest(
     vsockPath,
@@ -197,7 +176,6 @@ export async function sendThaw(vsockPath: string): Promise<void> {
   decodeAgentMessage(OKSchema, response);
 }
 
-// the next frame, or a rejection after `timeoutMs`
 export function readFrameWithin(
   connection: AgentConnection,
   timeoutMs: number,

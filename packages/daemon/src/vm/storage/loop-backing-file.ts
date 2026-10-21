@@ -1,7 +1,6 @@
 import { readFileSync, realpathSync, statfsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-// where procfs and sysfs are mounted
 export interface LoopHostDirs {
   readonly procDir: string;
   readonly sysDir: string;
@@ -9,8 +8,6 @@ export interface LoopHostDirs {
 
 const HOST_DIRS: LoopHostDirs = { procDir: '/proc', sysDir: '/sys' };
 
-// The file behind the loop device mounted on `dir`, from mountinfo and the
-// loop driver's sysfs; null for any other mount, or when either is unreadable.
 export function readLoopBackingFile(
   directory: string,
   hostDirs: Readonly<LoopHostDirs> = HOST_DIRS,
@@ -39,9 +36,7 @@ export function readLoopBackingFile(
   return null;
 }
 
-// Free bytes in the directory that holds the loop file behind `dir`: the
-// filesystem inside can report room its sparse file can no longer get. null
-// when `dir` is no loop mount, or the host directory cannot be read.
+// a filesystem on a sparse loop file can report room that its backing file can no longer get
 export function readLoopHostFreeBytes(
   directory: string,
   hostDirs: Readonly<LoopHostDirs> = HOST_DIRS,

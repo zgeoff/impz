@@ -4,9 +4,8 @@ import * as z from 'zod';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import type { Upstream } from './forward-request';
 
-// Tests only (IMP_BROKER_TEST_UPSTREAMS): a file that sends granted hosts to
-// fake servers whose certificates verify against its extra CA; never a way
-// to turn verification off. docs/runbooks/development.md has the format.
+// a test file adds a CA that fake upstreams verify against; it never turns
+// verification off
 
 const FileSchema = z.object({
   ca: z.string().includes('-----BEGIN CERTIFICATE-----'),

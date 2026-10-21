@@ -16,26 +16,13 @@ export interface VmPlan {
   readonly hostname: string;
   readonly vcpus: number;
   readonly memoryMib: number;
-
-  // above memoryMib, the guest gets a virtio-mem region to grow into
-  // (docs/architecture/lifecycle/elastic-memory.md)
   readonly maxMemoryMib: number;
   readonly dns: readonly string[];
-
-  // the CPU limit's cgroup; null runs the VM unlimited
   readonly cgroup: ImpCgroup | null;
-
-  // the first boot of an imp from a template: the agent gives it a new
-  // machine-id and ssh host keys (docs/guides/templates.md#identity)
   readonly isIdentityReset: boolean;
-
-  // the imp's jail user; null runs Firecracker unjailed, as root
   readonly jail: JailUser | null;
 }
 
-// The kernel cmdline: the system drive (vdb) is the initial root and the agent
-// PID 1; imp.* parameters configure the guest
-// (docs/architecture/guest/agent.md#two-drives-and-a-kernel).
 export function buildBootArgs(plan: Readonly<VmPlan>): string {
   return [
     ...BASE_BOOT_ARGS,

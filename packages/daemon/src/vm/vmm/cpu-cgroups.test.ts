@@ -19,8 +19,6 @@ import {
   parseOomKills,
 } from './cpu-cgroups';
 
-// A cgroup root with its imps/ cgroup and a /proc, in a temp dir; what
-// setup-cgroups.sh hands down to imps/ is the test's to write.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-cgroups-'));
 
@@ -195,7 +193,8 @@ test('#remove takes an empty cgroup', async () => {
 
   cgroups.setup('gone', { limit: null, weight: 100 }, 512);
 
-  // the kernel's files are not in a temp dir; an empty cgroup is an empty dir
+  // a real cgroup's files vanish with it; a temp dir needs them removed to be
+  // empty
   rmSync(join(ctx.root, 'imps', 'gone', 'cpu.max'));
   rmSync(join(ctx.root, 'imps', 'gone', 'cpu.weight'));
 
@@ -224,7 +223,8 @@ test('#remove logs a cgroup that still holds a VM and keeps it', async () => {
 
   const cgroups = createCpuCgroups({ root: ctx.root, procRoot: ctx.procRoot, log: ctx.log });
 
-  // a cgroup that still holds files stands for one that still holds a VM
+  // rmdir refuses a temp dir that holds files, as the kernel refuses a cgroup
+  // that holds a process
   cgroups.setup('busy', { limit: null, weight: 100 }, 512);
 
   await cgroups.remove('busy');
@@ -241,7 +241,7 @@ test('#remove tries a busy cgroup again until the kernel lets it go', async () =
 
   const sleeps: number[] = [];
 
-  // the first rmdir finds the exited VM still held, as the kernel answers
+  // the kernel answers EBUSY for a moment after the VM in a cgroup exits
   const rmdir = mock(rmdirSync).mockImplementationOnce(() => {
     throw Object.assign(new Error('EBUSY: resource busy or locked, rmdir'), { code: 'EBUSY' });
   });
@@ -292,7 +292,6 @@ test('#remove logs a cgroup that stays busy past the last try and keeps it', asy
 
   await cgroups.remove('held');
 
-  // 40 tries, with a 50 ms wait between each two
   expect(sleeps).toHaveLength(39);
 
   expect(ctx.logs).toStrictEqual([
@@ -409,8 +408,6 @@ test('#probeOomKillSinceStart counts no kill an older VM left in a kept cgroup',
   const ctx = setupTest();
 
   writeFileSync(join(ctx.root, 'imps', 'cgroup.subtree_control'), 'cpu memory\n');
-
-  // a cgroup a busy remove kept, with an older VM's kill in it
   mkdirSync(join(ctx.root, 'imps', 'a'));
   writeFileSync(join(ctx.root, 'imps', 'a', 'memory.events'), 'oom 1\noom_kill 1\n');
 

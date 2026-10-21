@@ -6,18 +6,12 @@ export interface WaitOptions {
   readonly deadlineMs: number;
   readonly firstDelayMs?: number;
   readonly maxDelayMs?: number;
-
-  // how long one ping may take (default 1000)
   readonly attemptMs?: number;
-
-  // wait for an agent parked in a boot template (true) or for one that
-  // booted on (false); any answer when left out
   readonly isParked?: boolean;
 }
 
-// Pings until the agent answers. During boot the vsock socket may not exist
-// yet, refuse the CONNECT, or close: every failure means retry until the
-// deadline.
+// During boot Firecracker's vsock socket may not exist yet, refuse the CONNECT, or close, so every
+// failure retries until the deadline.
 export async function waitForAgent(
   vsockPath: string,
   options: Readonly<WaitOptions>,

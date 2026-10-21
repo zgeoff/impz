@@ -5,8 +5,6 @@ const CredentialSchema = z.object({ clientId: z.string().min(1), clientSecret: z
 
 export type OAuthCredential = z.infer<typeof CredentialSchema>;
 
-// The OAuth client for Tailscale Services, from a file only its owner can
-// read. An error names the file and what is wrong with it, never a value.
 export function readOAuthCredential(path: string): OAuthCredential {
   const mode = statSync(path).mode & 0o777;
 

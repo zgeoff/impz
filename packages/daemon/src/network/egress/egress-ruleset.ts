@@ -1,37 +1,24 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressMode } from '@impz/api';
 
-// The nftables table impd owns (docs/architecture/network/egress.md#the-firewall).
-// It only drops and rejects: setup-net.sh's FORWARD rules still accept what
-// it lets through, and a drop in any base chain is final.
+// The table only drops and rejects: an accept in one base chain still passes
+// the packet to the next, and a drop in any base chain is final.
 const EGRESS_TABLE = 'inet imp_egress';
 const NAT66_TABLE = 'ip6 imp_nat66';
-
-// the packet mark of traffic between two imps on one network: setup-net.sh
-// accepts it ahead of its imp-to-imp DROP. Set with an OR, so a bit someone
-// else uses survives.
 const PEER_MARK = '0x01000000';
-
-// open imps reach anything but these: cloud metadata services, and the
-// shared range that holds the tailnet
 const OPEN_BLOCKED_RANGES: readonly string[] = ['169.254.0.0/16', '100.64.0.0/10'];
 
-// One slot's part of the table. `addresses` are what the resolver let in for
-// a box; `cidrs` are its allow-list's address entries. Both hold IPv4 and
-// IPv6 alike; the table splits them by family.
 export interface FirewallSlot {
   readonly slot: number;
   readonly tap: string;
   readonly guestIp: string;
 
-  // the imp's IPv6 /128, or null when it has none
   readonly guestIp6: string | null;
   readonly mode: EgressMode;
   readonly cidrs: readonly string[];
   readonly addresses: readonly string[];
 }
 
-// one imp on a network, by the tap it sends from
 export interface NetworkPeer {
   readonly tap: string;
   readonly guestIp: string;
@@ -40,27 +27,16 @@ export interface NetworkPeer {
 export interface RulesetInput {
   readonly slots: readonly FirewallSlot[];
 
-  // each network's imps, which reach one another whatever their policies
   readonly networks: readonly (readonly NetworkPeer[])[];
 
-  // IMP_SUBNET: a query to an imp is for a peer's own DNS server
   readonly subnet: string;
 
-  // the guests' resolvers (IMP_DNS): an open imp on a network asks impd
-  // through them for its peers' names
   readonly dnsServers: readonly string[];
 
-  // what a box may not reach unless its list names it: REFUSED_RANGES and
-  // the imp subnet
   readonly privateRanges: readonly string[];
 
-  // what no open or box imp reaches over IPv6, unless a box's list names
-  // it: BLOCKED_RANGES6, the imps' /64 and the container's own prefixes
   readonly blocked6: readonly string[];
 
-  // what no public imp reaches: the private ranges, the host container's
-  // networks and IMP_EGRESS_DENY in each family, and the interfaces its
-  // traffic may leave by, each family's default routes'
   readonly public4: readonly string[];
   readonly public6: readonly string[];
   readonly uplinks4: readonly string[];
@@ -69,9 +45,6 @@ export interface RulesetInput {
   readonly setSize: number;
 }
 
-// The whole table, as one `nft -f` transaction: the empty table and the
-// delete make the script work whether or not the table exists, on any
-// kernel, and nothing is ever half applied.
 export function buildRuleset(input: RulesetInput): string {
   const box = input.slots.filter((slot) => EGRESS_MODE_TRAITS[slot.mode].hasAllowList);
   const redirected = input.slots.filter((slot) => EGRESS_MODE_TRAITS[slot.mode].needsRuleset);
@@ -83,6 +56,8 @@ export function buildRuleset(input: RulesetInput): string {
     (slot) => EGRESS_MODE_TRAITS[slot.mode].isOpen && peerTaps.has(slot.tap),
   );
 
+  // one `nft -f` applies all or nothing; the empty table before the delete
+  // makes the script work whether or not the table exists, on any kernel
   const lines = [
     `table ${EGRESS_TABLE} {}`,
     `delete table ${EGRESS_TABLE}`,
@@ -130,8 +105,7 @@ export function buildRuleset(input: RulesetInput): string {
     '    type filter hook forward priority filter - 1; policy accept;',
     '    iifname != "imp*" accept',
 
-    // both ends on one network, each from its own tap; any other imp to imp
-    // packet, IPv6 included, is refused before a policy could accept it
+    // the mark is set with an OR, so a bit another tool uses survives
     ...input.networks.map(
       (_peers, index) =>
         `    iifname . ip saddr @net${String(index)} oifname . ip daddr @net${String(index)} meta mark set meta mark | ${PEER_MARK} accept`,
@@ -139,13 +113,11 @@ export function buildRuleset(input: RulesetInput): string {
     '    oifname "imp*" goto deny',
     '    iifname vmap @slots',
 
-    // a tap with no slot
     '    goto deny',
     '  }',
 
-    // A guest's IPv6 to the host container itself: neighbour discovery
-    // only, as setup-net.sh's ip6tables INPUT, which may be missing, says.
-    // IPv4 is left to iptables.
+    // the host's ip6tables INPUT rules may be missing, so a guest's IPv6 to
+    // the host container gets neighbour discovery only; iptables owns IPv4
     '  chain input {',
     '    type filter hook input priority filter - 1; policy accept;',
     '    iifname != "imp*" accept',
@@ -156,7 +128,6 @@ export function buildRuleset(input: RulesetInput): string {
     '  chain dns {',
     '    type nat hook prerouting priority dstnat - 1; policy accept;',
 
-    // a query to an imp is for a peer's own server
     `    iifname @dns_taps meta nfproto ipv4 ip daddr != ${input.subnet} meta l4proto { tcp, udp } th dport 53 redirect to :${String(input.dnsPort)}`,
     ...(input.dnsServers.length === 0
       ? []
@@ -170,8 +141,6 @@ export function buildRuleset(input: RulesetInput): string {
   return `${lines.join('\n')}\n`;
 }
 
-// the resolver's additions and the sweep's deletions for one box slot, in
-// allow<slot> for IPv4 and allow6<slot> for IPv6
 export function buildElementChange(
   verb: 'add' | 'delete',
   slot: number,
@@ -186,7 +155,6 @@ export function buildElementChange(
   ].join('');
 }
 
-// the public chains' sets, written only while some imp is public
 function buildPublicSets(input: RulesetInput): readonly string[] {
   const interval = ['flags interval', 'auto-merge'];
 
@@ -208,7 +176,6 @@ function buildPublicSets(input: RulesetInput): readonly string[] {
   ];
 }
 
-// a box's sets, by family: what the resolver let in, and its list's CIDRs
 function buildBoxSets(slot: FirewallSlot, setSize: number): readonly string[] {
   const id = String(slot.slot);
   const [addresses, addresses6] = splitFamilies(slot.addresses);
@@ -231,9 +198,8 @@ function splitFamilies(entries: readonly string[]): readonly [string[], string[]
   ];
 }
 
-// The slot's chain. Its first rules check the source in each family: the
-// tap's reverse-path check passes the rest of the guest's /30, and an `ip`
-// rule never sees IPv6. Then the policy, for both families.
+// the source is checked in each family: the tap's reverse-path check passes
+// the rest of the guest's /30, and an `ip` rule never sees IPv6
 function buildSlotChain(slot: FirewallSlot): readonly string[] {
   const id = String(slot.slot);
 
@@ -244,9 +210,9 @@ function buildSlotChain(slot: FirewallSlot): readonly string[] {
       'accept',
     ],
 
-    // Only out of a default route's interface: a route to the tailnet, a
-    // Tailscale subnet route or another Docker network leaves by another,
-    // whatever address it carries. Then by address, in each family.
+    // only out of a default route's interface: a route to the tailnet, a
+    // Tailscale subnet route or another Docker network leaves by another
+    // interface, whatever address it carries
     public: [
       'ct state invalid drop',
       'meta nfproto ipv4 oifname != @uplinks4 goto deny',
@@ -301,9 +267,6 @@ function formatTap(tap: string): string {
   return `"${tap}"`;
 }
 
-// NAT66 for a unique local prefix (docs/architecture/network/networking.md#ipv6), in
-// a table of its own: written once at start, never with the egress table
-// NAT66 gone, whether it was there or not: IPv6 off, or a routed /64
 export function buildNat66Removal(): string {
   return `table ${NAT66_TABLE} {}\ndelete table ${NAT66_TABLE}\n`;
 }

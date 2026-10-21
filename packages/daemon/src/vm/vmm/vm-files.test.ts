@@ -26,7 +26,7 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  // the test's own uid, so the chown works without root
+  // the test's own uid, because a chown to another uid needs root
   const owner = { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 };
 
   return { directoryPath: directory, owner };

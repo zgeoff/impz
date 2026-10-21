@@ -41,16 +41,10 @@ function setupTest() {
 
   const dataDir = join(root, 'host');
   const peerDir = join(root, 'peer');
-
-  // each fake pool mounts its root dataset on its data dir, as
-  // host/scripts/setup-storage.sh does; start refuses a data dir without it
   const fake = buildStubZfs({ root: 'tank/imp', rootDir: dataDir });
   const peerFake = buildStubZfs({ root: 'tank/imp', rootDir: peerDir });
   const log = mock<(message: string) => void>();
 
-  // A new impd on the same pool and data dir, as after a crash or restart.
-  // The kernel module matches the fake's userland, so start goes on. A
-  // reclaim still queued must not outlive the test.
   const startBackend = () => {
     const backend = createZfsBackend({
       dataDir,
@@ -67,7 +61,6 @@ function setupTest() {
     return backend;
   };
 
-  // the far host of a move, on its own pool
   const peerBackend = createZfsBackend({
     dataDir: peerDir,
     root: 'tank/imp',
@@ -80,9 +73,6 @@ function setupTest() {
 
   stack.defer(() => peerBackend.waitForReclaim());
 
-  // The real-pool tests' own dataset on the pool scripts/test-zfs.sh sets, and
-  // a backend on it. A new impd on the same dataset comes from its
-  // startBackend, and each one's reclaim ends before the dataset goes.
   const createPoolBackend = async () => {
     const pool = readZfsTestPool();
 
@@ -94,8 +84,7 @@ function setupTest() {
       run: CommandRunner = runCommand,
       poolLog: (message: string) => void = () => {},
     ) => {
-      // the pool is the host's own module, whatever its version: these
-      // tests kill no VM during a disk read
+      // The zfs_uiomove bug needs a VM killed during a disk read, and these tests run no VM.
       const backend = createZfsBackend({
         dataDir: dataset.dataDir,
         root: dataset.root,
@@ -117,8 +106,6 @@ function setupTest() {
     };
   };
 
-  // a tree or move source the test opens closes into this stack, before the
-  // reclaims it starts are awaited
   return {
     stack,
     dataDir,
@@ -791,7 +778,6 @@ test('#removeCheckpoint frees the disk a restore retired once its last checkpoin
     .listDatasets()
     .filter((name) => name.startsWith('tank/imp/retired/'));
 
-  // the restored disk is a clone of cp-old: the promote hands it over
   await ctx.backend.removeCheckpoint('a', 'cp-old');
   await ctx.backend.waitForReclaim();
 
@@ -933,8 +919,6 @@ test('#removeImpDisk frees a removed image once its clones go, the promoted one 
   await ctx.backend.createImpDisk('b', { kind: 'image', digest: 'sha256:9f2c' });
   await ctx.backend.removeImage('sha256:9f2c');
   await ctx.backend.waitForReclaim();
-
-  // a goes first, while b still needs its @base
   await ctx.backend.removeImpDisk('a', []);
   await ctx.backend.waitForReclaim();
   await ctx.backend.removeImpDisk('b', []);
@@ -1090,8 +1074,6 @@ test('#start on an older database keeps the newer checkpoints and the disks it d
   await ctx.backend.createCheckpoint('a', 'cp-kept');
   await ctx.backend.createCheckpoint('a', 'cp-new');
   await ctx.backend.createCheckpoint('gone', 'cp-g1');
-
-  // fork snapshots whose clones never happened
   await ctx.fake.run(['zfs', 'snapshot', 'tank/imp/disks/a@fork-left']);
   await ctx.fake.run(['zfs', 'snapshot', 'tank/imp/disks/gone@fork-left']);
 
@@ -1237,18 +1219,14 @@ test('#start after a lost database keeps every disk, image and checkpoint, and l
   mkdirSync(join(ctx.dataDir, 'mem', 'a'), { recursive: true });
   writeFileSync(join(ctx.dataDir, 'mem', 'a', 'mem'), 'memory');
 
-  // an image with no `@base`: a build cut short, or not
   await ctx.fake.run(['zfs', 'create', 'tank/imp/images/half']);
 
-  // a memory snapshot and a VM identity whose disks are gone
   mkdirSync(join(ctx.dataDir, 'mem', 'm1'), { recursive: true });
   writeFileSync(join(ctx.dataDir, 'mem', 'm1', 'vmstate'), 'vmstate');
   writeFileSync(join(ctx.dataDir, 'mem', 'm1', 'meta.json'), '{}');
   mkdirSync(join(ctx.dataDir, 'imps', 'v1'), { recursive: true });
   writeFileSync(join(ctx.dataDir, 'imps', 'v1', 'vm.json'), '{}');
 
-  // an image build under its temporary name, and the empty directories two
-  // destroys leave once their disks are retired
   await ctx.fake.run(['zfs', 'create', 'tank/imp/staging/image-crashed']);
 
   mkdirSync(join(ctx.dataDir, 'mem', 'done'), { recursive: true });
@@ -1296,8 +1274,6 @@ test('#start after a lost database keeps every disk, image and checkpoint, and l
   expect(existsSync(join(ctx.dataDir, 'mem', 'done'))).toBeFalse();
   expect(existsSync(join(ctx.dataDir, 'imps', 'done'))).toBeFalse();
 
-  // a directory's creation is its birth time on the test's filesystem; only a
-  // directory orphan names an absolute path, where a dataset names its pool
   expect(
     ctx.log.mock.calls
       .map(([line]) => line)
@@ -1559,8 +1535,6 @@ test('#dropUnnamed drops what a crash left, keeps an unnamed disk and leaves sta
   await ctx.backend.createImpDisk('b', { kind: 'image', digest: 'sha256:9f2c' });
   await ctx.backend.createCheckpoint('a', 'cp-1');
   await ctx.backend.createCheckpoint('a', 'cp-lost');
-
-  // an image build in flight, and the memory of an imp long gone
   await ctx.fake.run(['zfs', 'create', 'tank/imp/staging/image-now']);
 
   mkdirSync(join(ctx.dataDir, 'mem', 'gone'), { recursive: true });
@@ -1668,7 +1642,6 @@ test('#removeImpDisk lets a checkpoint and a fork of the promote target run whil
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:9f2c' });
   await ctx.backend.createImpDisk('b', { kind: 'imp', impId: 'a' });
 
-  // retiring a needs a promote of b; it waits until released
   const block = ctx.fake.blockBefore((command) => command.startsWith('zfs promote'));
 
   await ctx.backend.removeImpDisk('a', []);
@@ -1885,7 +1858,6 @@ test('#removeImpDisk holds back the reclaim of an imp that restic reads until th
   await ctx.backend.removeImpDisk('a', ['cp-1']);
   await ctx.backend.waitForReclaim();
 
-  // the staging clones hold the retired disk; a promote would take its snapshots
   const retiredWhileOpen = ctx.fake
     .listDatasets()
     .filter((name) => name.startsWith('tank/imp/retired/'));
@@ -2035,7 +2007,6 @@ test('#measureUsage counts the checkpoints a restore retired against the imp', a
     { impId: 'c', checkpointIds: [] },
   ]);
 
-  // the fake: each dataset holds 1 MiB of its own and refers to 3
   expect(usage.imps.get('a')).toStrictEqual({
     exclusiveBytes: 2_097_152,
     sharedBytes: 2_097_152,
@@ -2083,7 +2054,6 @@ test('#removeImpDisk leaves no watchdog slot behind, since it sits on the root d
   mkdirSync(slot.snapshotDir, { recursive: true });
   writeFileSync(slot.memFile, 'mem');
 
-  // as a destroy does: the disk through the backend, then the directory
   await ctx.backend.removeImpDisk('a', []);
 
   rmSync(paths.directory, { recursive: true });
@@ -2138,7 +2108,6 @@ test('#receiveMoveSnapshots lands each checkpoint and the disk a ZFS move sends'
 
   const source = await ctx.backend.openMoveSource('a', ['cp-one', 'cp-two'], 'zfs');
 
-  // the test closes the source itself; the fallback closes it only once
   const closing = { done: null as Promise<void> | null };
 
   ctx.stack.defer(() => (closing.done ??= source.close()));
@@ -2286,7 +2255,6 @@ test('#receiveMoveSnapshots keeps the received disk snapshot through a GC before
 
   const dropped: unknown[] = [];
 
-  // the last stream stays open after `zfs recv` committed it, while a GC runs
   const streams = [
     checkpointStep.open().stdout,
     buildStubMoveStream(diskStep.open().stdout, {
@@ -2370,7 +2338,6 @@ test('#receiveMoveSnapshots leaves nothing in staging and no disk when a stream 
 
   invariant(checkpointStep);
 
-  // the disk's stream breaks before its first byte
   const streams = [
     checkpointStep.open().stdout,
     buildStubMoveStream(new Blob([]).stream(), { failAtEnd: new Error('the stream broke') }),
@@ -2430,7 +2397,6 @@ test('#receiveMoveSnapshots leaves nothing in the way of a retry when a first st
 
   invariant(checkpointStep);
 
-  // the first stream whole, so `zfs recv` commits it, then an error
   const streams = [
     buildStubMoveStream(checkpointStep.open().stdout, {
       failAtEnd: new Error('the sum does not match'),
@@ -2470,9 +2436,6 @@ test('#receiveMoveSnapshots destroys each clone before its origin, whatever the 
     imageDigests: new Set(),
   });
 
-  // dataset 1 comes first and dataset 0 is its clone, as a peer may number
-  // them; each stream is whole, so `zfs recv` commits it, and the second then
-  // fails
   const streams = [
     buildStubMoveStream(new Blob([JSON.stringify({ guid: 'g-one', baseGuid: null })]).stream()),
     buildStubMoveStream(new Blob([JSON.stringify({ guid: 'g-two', baseGuid: 'g-one' })]).stream(), {
@@ -2581,7 +2544,6 @@ test('#openMoveSource reads a move to XFS from read-only clones that a GC leaves
 
   const source = await ctx.backend.openMoveSource('a', ['cp-one'], 'files');
 
-  // the test closes the source itself; the fallback closes it only once
   const closing = { done: null as Promise<void> | null };
 
   ctx.stack.defer(() => (closing.done ??= source.close()));
@@ -2631,7 +2593,6 @@ test('#removeImpDisk logs a busy dataset once while a kernel oops holds it, not 
   await backend.createImpDisk('a', { kind: 'image', digest: 'sha256:9f2c' });
   await backend.createImpDisk('b', { kind: 'image', digest: 'sha256:9f2c' });
 
-  // the task an oops killed still has the retired disk open
   const block = ctx.fake.blockBefore((command) => command.startsWith('zfs destroy'));
 
   await backend.removeImpDisk('a', []);
@@ -2647,8 +2608,6 @@ test('#removeImpDisk logs a busy dataset once while a kernel oops holds it, not 
   block.release();
 
   await backend.waitForReclaim();
-
-  // a second change starts a second pass, which meets the same busy dataset
   await backend.removeImpDisk('b', []);
   await backend.waitForReclaim();
 
@@ -2669,7 +2628,6 @@ test('#removeImpDisk logs a busy dataset on each pass while the kernel has not o
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:9f2c' });
   await ctx.backend.createImpDisk('b', { kind: 'image', digest: 'sha256:9f2c' });
 
-  // a task still has the retired disk open
   const block = ctx.fake.blockBefore((command) => command.startsWith('zfs destroy'));
 
   await ctx.backend.removeImpDisk('a', []);
@@ -2685,8 +2643,6 @@ test('#removeImpDisk logs a busy dataset on each pass while the kernel has not o
   block.release();
 
   await ctx.backend.waitForReclaim();
-
-  // a second change starts a second pass, which meets the same busy dataset
   await ctx.backend.removeImpDisk('b', []);
   await ctx.backend.waitForReclaim();
 
@@ -2694,10 +2650,6 @@ test('#removeImpDisk logs a busy dataset on each pass while the kernel has not o
 
   expect(failures).toHaveLength(2);
 });
-
-// The real-pool tests run as root where scripts/test-zfs.sh sets a pool, and
-// skip elsewhere. A zfs command on a CI runner takes seconds, so each gets
-// 120 s: bun's default 5 s kills a slow test's children with SIGTERM.
 
 test.skipIf(readZfsTestPool() === null)(
   'it gives an imp cloned from an image the bytes of the image',
@@ -2833,7 +2785,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     writeSyncedFile(pool.backend.resolveImpPaths('a').disk, 'three');
 
-    // forks of a disk that two restores replaced
     await pool.backend.restoreCheckpoint('a', 'cp-one', () => Promise.resolve());
     await pool.backend.restoreCheckpoint('a', 'cp-two', () => Promise.resolve());
     await pool.backend.createImpDisk('b', { kind: 'imp', impId: 'a' });
@@ -2844,7 +2795,6 @@ test.skipIf(readZfsTestPool() === null)(
       checkpointId: 'cp-one',
     });
 
-    // the source goes while both forks need its blocks
     await pool.backend.removeImpDisk('a', ['cp-one', 'cp-two']);
 
     expect(readFileSync(pool.backend.resolveImpPaths('b').disk, 'utf8')).toBe('two');
@@ -2901,7 +2851,6 @@ test.skipIf(readZfsTestPool() === null)(
       pool.root,
     ]);
 
-    // what start made, the image and its @base; nothing retired, staged or forked
     expect(left.trim().split('\n')).toIncludeSameMembers([
       pool.root,
       `${pool.root}/disks`,
@@ -2917,8 +2866,6 @@ test.skipIf(readZfsTestPool() === null)(
   120_000,
 );
 
-// The chain the retire and reclaim must cover: a template's dataset is a clone
-// of its source's disk, and imps are clones of the template.
 test.skipIf(readZfsTestPool() === null)(
   'it keeps the imps of a template whole after the source and the template go',
   async () => {
@@ -2965,7 +2912,6 @@ test.skipIf(readZfsTestPool() === null)(
       digest: 'imp-0199a3b4-0000-7000-8000-000000000001',
     });
 
-    // the source goes, then the template, while the imps need their blocks
     await pool.backend.removeImpDisk('a', ['cp-one']);
     await pool.backend.waitForReclaim();
     await pool.backend.removeImage('imp-0199a3b4-0000-7000-8000-000000000001');
@@ -3076,7 +3022,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     writeFileSync(pool.backend.resolveImpPaths('a').disk, 'two');
 
-    // impd dies after the old disk is retired, before the clone takes its name
     const dying = pool.startBackend((argv) =>
       argv.join(' ').startsWith(`zfs rename ${pool.root}/staging/`)
         ? Promise.reject(new Error('impd died'))
@@ -3096,7 +3041,7 @@ test.skipIf(readZfsTestPool() === null)(
       (error: unknown) => error,
     );
 
-    // a container restart drops every mount but the root
+    // A container restart drops every mount but the root.
     await runChecked(['umount', join(pool.dataDir, 'mem')]);
     await runChecked(['umount', join(pool.dataDir, 'images', 'real')]);
 
@@ -3137,7 +3082,6 @@ test.skipIf(readZfsTestPool() === null)(
   120_000,
 );
 
-// a record of the real format that the stand-in's rows copy
 test.skipIf(readZfsTestPool() === null)(
   'it gets zfs list rows in the format the stand-in gives',
   async () => {
@@ -3176,8 +3120,8 @@ test.skipIf(readZfsTestPool() === null)(
   120_000,
 );
 
-// restic skips a file whose inode, mtime, ctime and size match its last run;
-// each run's tree is a new clone, so these must survive the clone
+// restic skips a file whose inode, mtime, ctime and size match its last run, and each run's tree
+// is a new clone.
 test.skipIf(readZfsTestPool() === null)(
   'it keeps the metadata of a backup tree file from run to run',
   async () => {
@@ -3234,7 +3178,7 @@ test.skipIf(readZfsTestPool() === null)(
   120_000,
 );
 
-// restic reads the tree; a write there would change what the next run compares
+// restic reads the tree, so a write there would change what its next run compares.
 test.skipIf(readZfsTestPool() === null)(
   'it mounts a backup tree file read-only with the bytes of the disk copy',
   async () => {
@@ -3495,8 +3439,6 @@ test.skipIf(readZfsTestPool() === null)(
   120_000,
 );
 
-// The GC's sweep with storage the database names only in part: what the
-// storage gate keeps from overlapping must still never break
 test.skipIf(readZfsTestPool() === null)(
   'it keeps a fork of a destroyed imp, an open backup tree, a staged restore and a build through a GC',
   async () => {
@@ -3522,7 +3464,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     await pool.backend.createCheckpoint('a', 'cp-one');
 
-    // b forks a's checkpoint, then a goes: b's origin now lives in retired/
     await pool.backend.createImpDisk('b', {
       kind: 'checkpoint',
       impId: 'a',
@@ -3540,7 +3481,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     ctx.stack.defer(() => tree.close());
 
-    // a restore between its clone and its swap
     await pool.backend.createImpDisk('c', { kind: 'image', digest: 'sha256:real' });
     await pool.backend.createCheckpoint('c', 'cp-two');
 
@@ -3551,7 +3491,6 @@ test.skipIf(readZfsTestPool() === null)(
       `${pool.root}/staging/restore-c`,
     ]);
 
-    // the sweep runs while an image build writes, before the image has a row
     const swept: { dropped: readonly { kind: string; id: string }[] } = { dropped: [] };
 
     await pool.backend.createImage('sha256:building', async (directory) => {
@@ -3594,8 +3533,6 @@ test.skipIf(readZfsTestPool() === null)(
   120_000,
 );
 
-// A database lost with the pool kept: a new impd keeps every disk, image and
-// checkpoint, and only `impz gc --orphans` retires them, for the reclaim to free
 test.skipIf(readZfsTestPool() === null)(
   'it keeps every dataset at a start after a lost database',
   async () => {
@@ -3728,9 +3665,8 @@ test.skipIf(readZfsTestPool() === null)(
   120_000,
 );
 
-// the disk budget counts back a build tree's blocks from `available`, which
-// loses what the dataset takes but is the pool's: the txg that commits the
-// tree may also shrink blocks outside the dataset, such as the pool's metadata
+// The ZFS txg that commits a tree can also shrink blocks outside its dataset, such as the pool's
+// metadata, so the pool's `available` is no exact measure of the dataset.
 test.skipIf(readZfsTestPool() === null)(
   'it shows a tree no more blocks than its dataset has taken',
   async () => {
@@ -3752,13 +3688,12 @@ test.skipIf(readZfsTestPool() === null)(
 
     const fd = openSync(join(tree, 'layer.bin'), 'w');
 
-    // closed before the dataset is unmounted
+    // An open file keeps the dataset busy, so it closes before the unmount.
     ctx.stack.defer(() => {
       closeSync(fd);
     });
 
-    // no sync between writes: each sample may fall inside an open txg; a
-    // margin is what the dataset has taken less what the tree shows, in order
+    // With no sync between writes, each sample can fall inside an open ZFS txg.
     const margins: number[] = [];
 
     for (let chunk = 0; chunk < 16; chunk += 1) {

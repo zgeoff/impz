@@ -1,7 +1,6 @@
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildExitError } from '../../platform/process/run-command';
 
-// applies one nft script; throws with nft's reason
 export type NftRunner = (script: string) => Promise<void>;
 
 interface QueuedScript {
@@ -10,9 +9,6 @@ interface QueuedScript {
   readonly reject: (error: unknown) => void;
 }
 
-// The one writer of impd's nft table: scripts run in order, and those that
-// wait while one runs go in a single `nft -f`. A failed batch runs again one
-// script at a time, so a bad script fails only its own caller.
 export function createNftWriter(run: NftRunner = runNft): (script: string) => Promise<void> {
   const queue: QueuedScript[] = [];
   const state = { running: false };
@@ -62,7 +58,6 @@ export function createNftWriter(run: NftRunner = runNft): (script: string) => Pr
   };
 }
 
-// `nft -f -` from `nftBin`, which is found on PATH unless it is a path
 export function createNftRunner(nftBin = 'nft'): NftRunner {
   return async (script) => {
     const child = Bun.spawn([nftBin, '-f', '-'], {
@@ -78,7 +73,6 @@ export function createNftRunner(nftBin = 'nft'): NftRunner {
     const [stderr, exitCode] = await Promise.all([new Response(child.stderr).text(), child.exited]);
 
     if (exitCode !== 0) {
-      // the first line alone, under the name `nft` whatever the binary's path
       throw buildExitError(['nft'], { exitCode, stderr: stderr.trim().split('\n')[0] ?? '' });
     }
   };
@@ -86,7 +80,6 @@ export function createNftRunner(nftBin = 'nft'): NftRunner {
 
 export const runNft: NftRunner = createNftRunner();
 
-// `nft` itself failed to start: a missing binary reads better this way
 export function formatNftError(error: unknown): string {
   const message = getErrorMessage(error);
 

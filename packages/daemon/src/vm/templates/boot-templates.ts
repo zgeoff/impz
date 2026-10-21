@@ -27,12 +27,8 @@ import type { CpuCgroups } from '../vmm/cpu-cgroups';
 import type { JailUser } from '../vmm/jail';
 import type { TemplateBuildPlan } from '../vmm/template-vm';
 
-// The cmdline of every template: the agent parks for a claim, and nothing in
-// it names an imp (docs/architecture/lifecycle/boot-templates.md#build)
 export const TEMPLATE_BOOT_ARGS = [...BASE_BOOT_ARGS, 'imp.template=1'].join(' ');
 
-// The template VM's own tap: it is only ever opened by a build, one at a
-// time, and its guest configures no address. A restore names the imp's tap.
 const TEMPLATE_ADDRESS: SlotAddress = {
   slot: -1,
   tap: 'imp-tpl',
@@ -46,14 +42,11 @@ const TEMPLATE_ADDRESS: SlotAddress = {
   tailnetPort: 0,
 };
 
-// the jail and cgroup every build runs in, one at a time, with no CPU limit
 const BUILD_JAIL_ID = 'tpl-build';
 const BUILD_CPU = { limit: null, weight: 100 };
 const PLACEHOLDER_BYTES = 1024 * 1024;
 const PLACEHOLDER_NAME = 'placeholder.ext4';
 const MIB = 1024 * 1024;
-
-// docs/architecture/lifecycle/boot-templates.md#restore has why each is what it is
 const MIN_MISSES = 2;
 const MAX_TEMPLATES = 4;
 const MAX_BUILD_FAILURES = 3;
@@ -76,42 +69,23 @@ export interface TemplateShape {
 
 interface TemplateFiles {
   readonly key: string;
-
-  // which build made the files: a key rebuilt after a removal gets a new one
   readonly buildId: string;
   readonly vmstate: string;
   readonly memFile: string;
 
-  // what the snapshot reopens on a restore: the system drive it booted, and
-  // the placeholder it saw as its disk
+  // A Firecracker restore reopens the system drive the snapshot booted and the placeholder it saw
+  // as its disk.
   readonly systemDrivePath: string;
   readonly placeholderPath: string;
 }
 
 export interface BootTemplates {
-  // the ready template for the shape, or null; the second miss of a key
-  // starts its build in the background
   readonly requestTemplate: (shape: Readonly<TemplateShape>) => TemplateFiles | null;
-
-  // the build itself, shared by every miss of one key while it runs; it
-  // rejects while the key backs off or is off
   readonly buildTemplate: (shape: Readonly<TemplateShape>) => Promise<TemplateFiles>;
-
-  // a restore of `files` failed; `isTemplateFault` when it failed before the
-  // claim, where nothing of the imp's own was in play: only then do those
-  // files go and the failure count toward turning the key off
   readonly reportFailure: (files: Readonly<TemplateFiles>, isTemplateFault: boolean) => void;
   readonly reportRestored: (files: Readonly<TemplateFiles>) => void;
-
-  // drops templates this host no longer boots, and what builds cut short
-  // left; returns the keys. At startup only, before any build: a build's
-  // work directory counts as left over.
   readonly removeStale: () => string[];
-
-  // the system drives the templates reopen on a restore
   readonly listDrivePaths: () => string[];
-
-  // waits for builds in flight
   readonly stop: () => Promise<void>;
 }
 
@@ -124,8 +98,6 @@ export interface BootTemplateDeps {
   readonly bootReservePercent: number;
   readonly buildVm: (plan: Readonly<TemplateBuildPlan>) => Promise<void>;
   readonly taps: TapDevices;
-
-  // who a build runs as (TEMPLATE_BUILD_UID); null runs it unjailed
   readonly jail: JailUser | null;
   readonly cgroups: Pick<CpuCgroups, 'setup' | 'remove'>;
   readonly admission?: RamAdmission | undefined;
@@ -134,14 +106,10 @@ export interface BootTemplateDeps {
   readonly log: (message: string) => void;
 }
 
-// The host had no free RAM or disk room for a build: it backs off, but
-// counts as no failure, since a host near its budget is the normal case.
 class BuildRefusedError extends Error {
   override name = 'BuildRefusedError';
 }
 
-// what a key has cost: failed builds hold off the next one, and too many
-// failures of either kind turn the key off until impd restarts
 interface KeyRecord {
   misses: number;
   buildFailures: number;
@@ -150,9 +118,6 @@ interface KeyRecord {
   isOff: boolean;
 }
 
-// Everything a restore inherits from the snapshot; the drive's sha covers
-// the agent, and the image is not in it, since the disk is the imp's own
-// (docs/architecture/lifecycle/boot-templates.md#the-key).
 export function buildTemplateKey(identity: Readonly<HostIdentity>, shape: Readonly<TemplateShape>) {
   const fields = {
     guestKernel: identity.guestKernel,
@@ -161,8 +126,8 @@ export function buildTemplateKey(identity: Readonly<HostIdentity>, shape: Readon
     snapshotVersion: identity.snapshotVersion,
     hostKernel: identity.hostKernel,
 
-    // the guest kernel picked its code paths on this CPU: one that changed
-    // since, as a cloud host's can at a reboot, faults a restore
+    // The guest kernel picks its code paths on the CPU it boots on, and a cloud host's CPU can
+    // change at a reboot, which faults a restore.
     cpuModel: identity.cpuModel,
     cpuFlags: identity.cpuFlags,
     bootArgs: TEMPLATE_BOOT_ARGS,
@@ -178,16 +143,13 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
   const root = join(deps.dataDir, 'templates');
   const now = deps.now ?? Date.now;
 
-  // the snapshot names this path, so it is the same for every template
+  // A Firecracker snapshot records its drive paths, so every template shares this one.
   const placeholder = join(root, PLACEHOLDER_NAME);
   const building = createSingleFlight<TemplateFiles>();
 
   const records = new Map<string, KeyRecord>();
-
-  // when each template last served a restore; LRU eviction reads it
   const lastUsed = new Map<string, number>();
 
-  // one build at a time: they share the template tap
   const lane = createSemaphore(1);
 
   const getRecord = (key: string): KeyRecord => {
@@ -214,7 +176,6 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     }
   };
 
-  // the ready template of the key, or null
   const readReady = (key: string): TemplateFiles | null => {
     const directory = join(root, key);
     const meta = readMeta(key);
@@ -238,8 +199,8 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       ? readdirSync(root).filter((name) => name !== PLACEHOLDER_NAME && !name.startsWith('.'))
       : [];
 
-  // a directory a restore may still map stays readable: rename it away, then
-  // remove it; a mapped mem file lives on until its last VM exits
+  // Linux keeps a mapped mem file alive until its last VM exits, so a directory that a restore may
+  // still map is renamed away before it is removed.
   const removeDir = (name: string): void => {
     const gone = join(root, `.gone-${Bun.randomUUIDv7()}`);
 
@@ -268,7 +229,6 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     }
   };
 
-  // past MAX_TEMPLATES, the least recently used go
   const removeLeastUsed = (keep: string): void => {
     const keys = listTemplateKeys().filter((key) => key !== keep);
     const excess = keys.length + 1 - MAX_TEMPLATES;
@@ -306,8 +266,6 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     await deps.taps.setupTap(TEMPLATE_ADDRESS, deps.jail);
 
     const snapshotDir = join(work, 'snapshot');
-
-    // memory.max caps a build too, and cgroup.kill stops all of it
     const cgroup = deps.cgroups.setup(BUILD_JAIL_ID, BUILD_CPU, shape.memoryMib);
 
     if (cgroup === null && deps.jail !== null) {
@@ -342,13 +300,13 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
         memFile: join(snapshotDir, 'mem'),
       });
     } finally {
-      // logged, never thrown: the build's own error is the one that counts
+      // A throw from finally would replace the build's own error, so this one is only logged.
       await deps.cgroups.remove(BUILD_JAIL_ID).catch((error: unknown) => {
         deps.log(`impd: cgroup ${BUILD_JAIL_ID}: ${getErrorMessage(error)}`);
       });
     }
 
-    // zero pages become holes, before any VM maps the file; never after
+    // Digging holes in the mem file is safe only before any VM maps it.
     await runCommand(['fallocate', '--dig-holes', join(snapshotDir, 'mem')]);
 
     const meta: TemplateMeta = {
@@ -378,9 +336,6 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     };
   };
 
-  // A build takes free RAM and holds disk room for its mem file, which can be
-  // the whole memory, until the rename; a refusal of either throws a
-  // BuildRefusedError.
   const runBuild = async (shape: Readonly<TemplateShape>, key: string): Promise<TemplateFiles> => {
     const work = join(root, `.build-${Bun.randomUUIDv7()}`);
     const id = `template-${key.slice(0, 12)}`;
@@ -394,7 +349,6 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     };
 
     try {
-      // no user waits on a build: it takes free RAM, never an imp's
       await deps.admission?.admit({
         id,
         name: null,
@@ -418,9 +372,6 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     }
   };
 
-  // a failed build holds off the next one, twice as long each time; the
-  // third failure turns the key off. A refused build holds off the next one
-  // as long as a first failure, and is no failure.
   const setBuildFailed = (key: string, error: unknown): void => {
     const record = getRecord(key);
 
@@ -494,7 +445,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     try {
       await createTemplateFiles(shape);
     } catch {
-      // setBuildFailed logged it
+      // the build's failure is already logged
     }
   };
 
@@ -515,7 +466,6 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
         return ready;
       }
 
-      // a shape booted once is not worth a template's RAM and disk
       record.misses += 1;
 
       if (record.misses >= MIN_MISSES && now() >= record.retryAt) {
@@ -526,9 +476,6 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     },
     buildTemplate: createTemplateFiles,
     reportFailure: (files, isTemplateFault) => {
-      // Only the template's own fault counts, and only against the build that
-      // failed: an imp's fault (a bad disk, an image that never pings) says
-      // nothing of the template, and an evicted or rebuilt one is gone.
       if (!isTemplateFault || readMeta(files.key)?.buildId !== files.buildId) {
         return;
       }
@@ -557,8 +504,6 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
 
       const live = new Set(building.listKeys());
 
-      // a key names one host's identity and one shape (meta.json says which):
-      // any other is stale, as is what a build cut short left
       const probeCurrent = (name: string) => {
         const meta = readMeta(name);
 

@@ -2,29 +2,21 @@ import type { Clock } from '../../platform/process/clock';
 import type { TryResult } from '../../platform/process/keyed-mutex';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
 
-// An operation that may make storage before its rows commit runs in `join`.
-// `runAlone` (the GC) waits until none is in flight, and holds new ones back
-// only while it runs, never while it waits.
+// Every operation that can make storage before its rows commit runs in `join`,
+// so the GC never sweeps that storage as an orphan.
 export interface StorageGate {
   readonly join: <T>(task: () => Promise<T>) => Promise<T>;
-
-  // ran: false when operations kept the gate busy for `timeoutMs`
   readonly runAlone: <T>(task: () => Promise<T>, timeoutMs: number) => Promise<TryResult<T>>;
   readonly countInFlight: () => number;
-
-  // the tasks that wait to run alone, for operations in flight to end
   readonly countWaiting: () => number;
 }
 
-// The wall clock and setTimeout by default; tests pass a clock they step
 export function createStorageGate(
   clock: Pick<Clock, 'now' | 'startTimer'> = REAL_CLOCK,
 ): StorageGate {
   const state = {
     inFlight: 0,
     waiting: 0,
-
-    // set while a task runs alone; joins wait for it
     alone: null as Promise<void> | null,
     idle: Promise.withResolvers<void>(),
   };
@@ -49,7 +41,6 @@ export function createStorageGate(
     }
   };
 
-  // one alone at a time
   const queue = { tail: Promise.resolve() };
 
   const runAlone = async <T>(task: () => Promise<T>, timeoutMs: number): Promise<TryResult<T>> => {
@@ -66,7 +57,7 @@ export function createStorageGate(
       state.waiting += 1;
 
       try {
-        // the check and the claim run in one synchronous step: no join slips in
+        // no await sits between the last check and the claim, so no join slips in between
         while (state.inFlight > 0) {
           const left = deadline - clock.now();
 

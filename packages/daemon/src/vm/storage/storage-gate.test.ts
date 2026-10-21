@@ -26,7 +26,6 @@ test('it runs a task alone after the operations in flight, and lets new ones pas
     return Promise.resolve('dropped');
   }, 5000);
 
-  // a GC that waits holds nothing back
   await gate.join(() => {
     events.push('op 2');
 
@@ -97,7 +96,6 @@ test('it gives up a task alone when operations keep the gate busy past its timeo
 
   const op = gate.join(() => stuck.promise);
 
-  // a timeout of 0 is already past: the task never waits on a timer
   const alone = await gate.runAlone(() => Promise.resolve('never'), 0);
 
   const inFlight = gate.countInFlight();

@@ -3,8 +3,6 @@ import type { EgressPolicy } from '@impz/api';
 import { parseIpv4 } from '../../host-net/net/addressing';
 import { parseIpv6 } from '../../host-net/net/addressing6';
 
-// An allow-list split by kind: exact names, wildcard suffixes, IPv4 ranges
-// as [first, size], and IPv6 ranges. `cidrs` holds both families.
 export interface AllowRules {
   readonly names: ReadonlySet<string>;
   readonly suffixes: readonly string[];
@@ -42,12 +40,10 @@ export function buildAllowRules(allow: readonly string[]): AllowRules {
   return { names, suffixes, ranges, ranges6, cidrs };
 }
 
-// a name as DNS and CONNECT give it: any case, maybe a trailing dot
 export function normalizeName(name: string): string {
   return name.toLowerCase().replace(/\.$/u, '');
 }
 
-// `*.example.com` covers every name under example.com, not example.com
 export function isNameAllowed(rules: AllowRules, name: string): boolean {
   const normal = normalizeName(name);
 
@@ -66,9 +62,6 @@ export function isAddressAllowed(rules: AllowRules, address: string): boolean {
   return ip !== null && rules.ranges.some(([first, size]) => ip >= first && ip < first + size);
 }
 
-// What the broker's plain tunnel may reach, by the host the CONNECT names:
-// a box allows its names, and an address literal its ranges allow. Open and
-// public allow any: the broker itself dials only checked public addresses.
 export function isTunnelAllowed(policy: EgressPolicy, host: string): boolean {
   const traits = EGRESS_MODE_TRAITS[policy.mode];
 
@@ -81,7 +74,6 @@ export function isTunnelAllowed(policy: EgressPolicy, host: string): boolean {
   return isNameAllowed(rules, host) || isAddressAllowed(rules, host);
 }
 
-// the exact names of a list, which impd can resolve ahead of the guest
 export function listExactNames(allow: readonly string[]): readonly string[] {
   return [...buildAllowRules(allow).names];
 }

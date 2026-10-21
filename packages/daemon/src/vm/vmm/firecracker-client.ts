@@ -1,14 +1,11 @@
 import * as z from 'zod';
 import { requireSocket } from './vm-files';
 
-// Typed calls to the Firecracker API over its unix socket.
-
-// what the VM does: `Not started` before InstanceStart or a snapshot load
 const InstanceInfoSchema = z.object({ state: z.enum(['Not started', 'Running', 'Paused']) });
 
 export type InstanceState = z.infer<typeof InstanceInfoSchema>['state'];
 
-// a VM that does not track the pages it dirties leaves the field out
+// Firecracker leaves the field out for a VM that does not track dirty pages
 const MachineConfigSchema = z.object({ track_dirty_pages: z.boolean().optional() });
 
 interface BootSource {
@@ -39,9 +36,6 @@ interface Vsock {
   readonly udsPath: string;
 }
 
-// docs/architecture/lifecycle/sleep-and-wake.md#sleep: free page reporting hands memory
-// the guest frees back to the host. impd never inflates it, so
-// deflate_on_oom has nothing to give back (docs/architecture/lifecycle/elastic-memory.md).
 interface Balloon {
   readonly amountMib: number;
   readonly deflateOnOom: boolean;
@@ -49,7 +43,6 @@ interface Balloon {
   readonly freePageReporting: boolean;
 }
 
-// a virtio-mem region the guest can grow into (docs/architecture/lifecycle/elastic-memory.md)
 interface HotplugMemory {
   readonly totalSizeMib: number;
   readonly slotSizeMib: number;
@@ -57,8 +50,7 @@ interface HotplugMemory {
 }
 
 export interface HotplugState {
-  // what the guest holds now, and what it was asked to hold; an unplug the
-  // guest cannot finish leaves plugged above requested
+  // an unplug the guest cannot finish leaves plugged above requested
   readonly pluggedMib: number;
   readonly requestedMib: number;
 }
@@ -68,8 +60,8 @@ interface BalloonStats {
   readonly availableMib: number;
 }
 
-// Full writes every page of the guest; Diff writes only the pages dirtied since
-// the load, over a mem file that already holds the rest
+// a Diff writes only the pages dirtied since the load, so its mem file must
+// already hold the rest
 export type SnapshotType = 'Full' | 'Diff';
 
 interface SnapshotFiles {
@@ -77,8 +69,6 @@ interface SnapshotFiles {
   readonly memFilePath: string;
 }
 
-// A boot template's restore (docs/architecture/lifecycle/boot-templates.md): the
-// imp's own tap and vsock socket in place of the ones the snapshot names.
 interface SnapshotOverrides {
   readonly ifaceId: string;
   readonly hostDevName: string;
@@ -88,8 +78,6 @@ interface SnapshotOverrides {
 interface LoadOptions {
   readonly resumeVm: boolean;
   readonly overrides?: SnapshotOverrides;
-
-  // KVM logs the pages the guest writes, so the VM's next sleep can take a Diff
   readonly isTrackingDirtyPages?: boolean;
 }
 
@@ -100,36 +88,29 @@ interface MachineState {
 export interface FirecrackerClient {
   readonly putBootSource: (source: BootSource) => Promise<void>;
   readonly putMachineConfig: (config: MachineConfig) => Promise<void>;
-
-  // a loaded VM answers with what its load set
   readonly loadMachineConfig: () => Promise<MachineState>;
   readonly putDrive: (drive: Drive) => Promise<void>;
-
-  // after boot: Firecracker reads the file's size again and tells the guest
   readonly patchDrive: (driveId: string, pathOnHost: string) => Promise<void>;
   readonly putNetworkInterface: (iface: NetworkInterface) => Promise<void>;
   readonly putVsock: (vsock: Vsock) => Promise<void>;
 
-  // before InstanceStart only; a running or restored VM cannot add one
+  // Firecracker accepts a balloon or a hotplug region only before
+  // InstanceStart, never on a running or restored VM
   readonly putBalloon: (balloon: Balloon) => Promise<void>;
-
-  // the guest's own view of its memory, every stats_polling_interval_s
   readonly readBalloonStats: () => Promise<BalloonStats>;
-
-  // before InstanceStart only, as the balloon
   readonly putHotplugMemory: (hotplug: HotplugMemory) => Promise<void>;
   readonly readHotplugMemory: () => Promise<HotplugState>;
-
-  // the guest plugs or unplugs blocks toward `mib`, in its own time
   readonly patchHotplugMemory: (requestedMib: number) => Promise<void>;
   readonly instanceStart: () => Promise<void>;
   readonly pause: () => Promise<void>;
   readonly resume: () => Promise<void>;
 
-  // pause the VM first; a Diff needs a VM that tracks its dirty pages
+  // Firecracker snapshots only a paused VM, and a Diff only from a VM that
+  // tracks its dirty pages
   readonly createSnapshot: (files: SnapshotFiles, type: SnapshotType) => Promise<void>;
 
-  // only on a fresh Firecracker process, before any other configuration
+  // Firecracker loads a snapshot only on a fresh process, before any other
+  // configuration
   readonly loadSnapshot: (files: SnapshotFiles, options: LoadOptions) => Promise<void>;
   readonly readVersion: () => Promise<string>;
   readonly readInstanceState: () => Promise<InstanceState>;
@@ -342,7 +323,6 @@ function parseObject(call: string, text: string): Readonly<Record<string, unknow
   return Object.fromEntries(Object.entries(parsed));
 }
 
-// the balloon's statistics are bytes
 function readBytesAsMib(parsed: Readonly<Record<string, unknown>>, key: string): number {
   return Math.floor(readNumber(parsed, key) / 1_048_576);
 }

@@ -12,8 +12,6 @@ import { buildCredentialHash } from './public-auth';
 
 async function setupTest() {
   const database = await createTestDatabase();
-
-  // an imp row needs the image it boots
   const image = await createImage(database.db, buildMockNewImage({ name: 'ubuntu' }));
 
   return { db: database.db, imageId: image.id };

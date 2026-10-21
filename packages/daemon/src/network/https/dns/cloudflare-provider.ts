@@ -4,12 +4,8 @@ import { waitForTxt } from './wait-for-txt';
 import type { WaitForTxtOptions } from './wait-for-txt';
 
 const CLOUDFLARE_API = 'https://api.cloudflare.com/client/v4';
-
-// short, so a stale challenge value is gone soon after a failed attempt
 const TXT_TTL_S = 60;
 const A_TTL_S = 300;
-
-// a page of listed records; the list asks for pages until one is short
 const PAGE_SIZE = 500;
 const ApiErrorSchema = z.object({ code: z.number().optional(), message: z.string() });
 
@@ -18,7 +14,6 @@ const EnvelopeSchema = z.object({
   errors: z.array(ApiErrorSchema).default([]),
   result: z.unknown().optional(),
 
-  // on a list: which page this is, of how many
   result_info: z.object({ page: z.number(), total_pages: z.number() }).optional(),
 });
 
@@ -43,7 +38,6 @@ const RecordSchema = z.object({
 // as a website's at the zone apex, and impd never changes it
 const MANAGED_COMMENT = 'managed by impd';
 
-// the types a client resolves a name to an address with
 const ADDRESS_TYPES = new Set(['A', 'AAAA', 'CNAME']);
 
 const ZoneListSchema = z.array(ZoneSchema);
@@ -51,33 +45,24 @@ const RecordListSchema = z.array(RecordSchema);
 
 type Zone = z.infer<typeof ZoneSchema>;
 
-// a zone and a DNS record as Cloudflare answers them, in the fields impd reads
 export type CloudflareZone = z.input<typeof ZoneSchema>;
 
 export type CloudflareRecord = z.input<typeof RecordSchema>;
 
 interface CloudflareOptions {
-  // a token with Zone:Read and DNS:Edit on the zone, read at each request
-  // so a rotated one works at once; never logged
   readonly readToken: () => Promise<string>;
   readonly apiUrl?: string;
   readonly propagation?: WaitForTxtOptions;
   readonly log?: (message: string) => void;
 }
 
-// Cloudflare's v4 API. Records are DNS only (`proxied: false`): a proxied
-// record would send clients to Cloudflare's edge, which cannot reach a
-// tailnet address.
 export function createCloudflareProvider(options: CloudflareOptions): DnsProvider {
   const base = options.apiUrl ?? CLOUDFLARE_API;
 
-  // by the name asked for, so each name walks the labels once
   const zones = new Map<string, Zone>();
 
-  // the token the zones were found with
   let zonesToken: string | null = null;
 
-  // the envelope, and the token it was sent with
   const sendEnvelope = async (
     method: string,
     path: string,
@@ -85,9 +70,6 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
   ): Promise<{ envelope: Envelope; token: string }> => {
     const token = await options.readToken();
 
-    // a new token may see other zones, or the same names in other ones:
-    // the next lookup asks again. A request already holding a zone sends
-    // it once more with the new token, and fails at worst.
     if (token !== zonesToken) {
       zones.clear();
 
@@ -106,7 +88,6 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
         ? parsed.data.errors.map((error) => error.message).join('; ')
         : 'no Cloudflare answer';
 
-      // the path and Cloudflare's own messages only: the token is a header
       throw new Error(
         `Cloudflare ${method} ${path.split('?')[0] ?? path}: ${String(response.status)} ${reasons}`,
       );
@@ -121,8 +102,6 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
     return sent.envelope.result;
   };
 
-  // The zone that holds the name: walk up its labels until one is a zone
-  // the token can see, so imp.example.com and imp.example.co.uk both work.
   const readZone = async (fqdn: string): Promise<Zone> => {
     const cached = zones.get(fqdn);
 
@@ -131,8 +110,6 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
     }
 
     const labels = fqdn.split('.');
-
-    // `*.imp.example.com` is a record in a zone, never a zone's own name
     const first = labels[0] === '*' ? 1 : 0;
 
     for (let index = first; index < labels.length - 1; index += 1) {
@@ -144,8 +121,6 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
       const zone = found.find((item) => item.name === candidate);
 
       if (zone !== undefined) {
-        // a lookup the old token started, which ends after a new one
-        // cleared the zones, must not put its answer back
         if (sent.token === zonesToken) {
           zones.set(fqdn, zone);
         }
@@ -157,7 +132,6 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
     throw new Error(`Cloudflare: no zone this token can see holds ${fqdn}`);
   };
 
-  // the A records named exactly `fqdn` that carry this owner's comment
   const readOwnA = async (zoneId: string, fqdn: string, owner: string) => {
     const query = `type=A&name=${encodeURIComponent(fqdn)}`;
 
@@ -219,6 +193,8 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
         name: fqdn,
         content: ip,
         ttl: A_TTL_S,
+
+        // a proxied record sends clients to Cloudflare's edge, which cannot reach a tailnet address
         proxied: false,
         comment: owner,
       };
@@ -247,8 +223,6 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
         const envelope = sent.envelope;
         const records = RecordListSchema.parse(envelope.result);
 
-        // the filter is the API's; checked again, since a record found by
-        // mistake would be removed
         for (const record of records) {
           const name = record.name ?? '';
 

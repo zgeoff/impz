@@ -4,8 +4,6 @@ import type { StorageBackend } from '../storage-backend';
 import { CHECKPOINT_SNAPSHOT, getSnapshotId } from './zfs-commands';
 import type { ZfsCommands } from './zfs-commands';
 
-// what the ZFS backend lends its usage pass: its commands, its root and
-// retired datasets, and the names of each imp's disk and files
 interface ZfsUsageContext {
   readonly zfs: ZfsCommands;
   readonly root: string;
@@ -14,8 +12,6 @@ interface ZfsUsageContext {
   readonly resolveImpPaths: (impId: string) => ImpPaths;
 }
 
-// Each imp's exclusive and shared bytes, from one listing of the pool's
-// space accounting
 export function createZfsUsage(ctx: ZfsUsageContext): Pick<StorageBackend, 'measureUsage'> {
   return {
     measureUsage: async (imps) => {
@@ -29,8 +25,8 @@ export function createZfsUsage(ctx: ZfsUsageContext): Pick<StorageBackend, 'meas
 
           const checkpointIds = new Set(imp.checkpointIds);
 
-          // after a restore, the imp's older checkpoints live on a retired
-          // dataset; its whole `used` goes with them
+          // A restore leaves the imp's older checkpoints on a retired dataset, whose whole `used`
+          // goes with them.
           const retiredSnapshots = space.filter(
             (entry) =>
               entry.name.startsWith(`${ctx.datasets.retired}/`) &&
@@ -54,12 +50,9 @@ export function createZfsUsage(ctx: ZfsUsageContext): Pick<StorageBackend, 'meas
               (found?.used ?? 0) +
               [...retiredNames].reduce((sum, name) => sum + (byName.get(name)?.used ?? 0), 0) +
               readAllocatedBytes(ctx.resolveImpPaths(imp.impId).memFile),
-
-            // what it refers to from its origin: the image or a checkpoint
             sharedBytes: Math.max(0, (found?.referenced ?? 0) - (found?.usedByDataset ?? 0)),
 
-            // a fork holds blocks a destroy would otherwise free; the imp's
-            // own disk, cloned from a retired checkpoint, is not a fork
+            // A fork's ZFS clone holds blocks that a destroy would otherwise free.
             isUpperBound: snapshots.some((entry) => entry.clones.some((clone) => clone !== disk)),
           };
 

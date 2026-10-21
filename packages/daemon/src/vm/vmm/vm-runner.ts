@@ -42,9 +42,7 @@ const GUEST_MEMORY_TIMEOUTS = { requestMs: 1000, snapshotMs: 1000 };
 // a sleep asks under the imp's lock: a wedged agent must not hold it long
 const UPTIME_PING_TIMEOUT_MS = 250;
 
-// what an elastic guest holds and has free, as Firecracker reports it
 export interface GuestMemory extends HotplugState {
-  // the guest's own count: its base memory plus what is plugged
   readonly totalMib: number;
   readonly availableMib: number;
 }
@@ -52,21 +50,10 @@ export interface GuestMemory extends HotplugState {
 export interface StartedVm {
   readonly pid: number;
   readonly firecrackerVersion: string;
-
-  // the protocol version the agent's ping reports
   readonly agentVersion: string;
-
-  // milliseconds per step, for the create-time breakdown in the log
   readonly timings: Readonly<Record<string, number>>;
-
-  // milliseconds per step of the guest's own boot, from its first ping;
-  // absent from a wake, whose agent reports the boot it woke into
   readonly guestSteps?: Readonly<Record<string, number>> | undefined;
-
-  // what a boot with isIdentityReset reported; absent for any other start
   readonly identityReset?: string | undefined;
-
-  // the guest's boot_id; absent from an agent from before output offsets
   readonly bootId?: string | undefined;
 }
 
@@ -75,107 +62,52 @@ interface WakePlan {
   readonly paths: ImpPaths;
   readonly cgroup: ImpCgroup | null;
   readonly jail: JailUser | null;
-
-  // the files the snapshot's VM reads: the system drive
   readonly readOnlyFiles: readonly string[];
 }
 
-// what the rest of a wake learned about the VM
 interface FinishedWake {
   readonly agentVersion: string;
   readonly firecrackerVersion: string;
   readonly bootId?: string | undefined;
 }
 
-// Firecracker, behind an interface so the lifecycle can run against a fake.
 export interface VmRunner {
   readonly startVm: (plan: VmPlan) => Promise<StartedVm>;
-
-  // pause, snapshot to new files in `target`, kill, rename them into place
-  // (docs/architecture/lifecycle/sleep-and-wake.md#sleep); a failed snapshot keeps the VM
   readonly sleepVm: (
     pid: number,
     paths: ImpPaths,
     cgroup: ImpCgroup | null,
     target: SnapshotPaths,
   ) => Promise<Readonly<Record<string, number>>>;
-
-  // a new Firecracker that loads the snapshot as its first call; throws, with
-  // the process gone, when the load or the agent fails
   readonly wakeVm: (plan: WakePlan) => Promise<StartedVm>;
-
-  // agent shutdown first when `graceful`, SIGKILL after the timeout; its
-  // jail's mounts go once it has exited
   readonly stopVm: (pid: number, paths: ImpPaths, graceful: boolean) => Promise<void>;
-
-  // the jail's mounts of a VM that exited by itself
   readonly releaseVm: (paths: ImpPaths) => Promise<void>;
-
-  // a destroyed imp's jail, mounts and directory
   readonly removeJail: (paths: ImpPaths) => Promise<void>;
-
-  // the jails of imps not in `impIds`, as after destroys while impd was
-  // down; returns their ids
   readonly removeOrphanJails: (impIds: ReadonlySet<string>) => Promise<string[]>;
   readonly probeVmAlive: (pid: number, paths: ImpPaths) => boolean;
   readonly probeAgentReady: (paths: ImpPaths, deadlineMs?: number) => Promise<boolean>;
-
-  // the guest's uptime from the agent's ping, without the time asleep; null
-  // when the agent does not answer within 250 ms or cannot read its clock
   readonly readGuestUptimeMs: (paths: ImpPaths) => Promise<number | null>;
-
-  // a live VM after its disk file grew: Firecracker rereads the size, then
-  // the guest grows its filesystem into it
   readonly growDrive: (paths: ImpPaths, diskBytes: number) => Promise<void>;
-
-  // what the VM behind the API socket does; null when nothing answers
   readonly readVmState: (paths: ImpPaths) => Promise<InstanceState | null>;
   readonly resumeVm: (pid: number, paths: ImpPaths) => Promise<void>;
-
-  // the pid file a start writes, and every live Firecracker: a start cut
-  // short may have left a VM without the file. Either can name a process a
-  // jailed VM forged: its owner says whose it is.
   readonly readPid: (paths: ImpPaths) => number | null;
   readonly listVms: () => readonly FoundVm[];
   readonly readVmOwner: (pid: number) => VmOwner;
-
-  // the rest of a wake, for a VM that loaded its snapshot under an impd that
-  // died: the agent's ping, then the guest clock
   readonly finishWake: (paths: ImpPaths) => Promise<FinishedWake>;
-
-  // a boot template: a cold boot parked for a claim, snapshotted and killed
-  // (docs/architecture/lifecycle/boot-templates.md#build)
   readonly createTemplateVm: (plan: TemplateBuildPlan) => Promise<void>;
-
-  // a start from a template, in place of startVm; throws, with the process
-  // gone, when any step fails (docs/architecture/lifecycle/boot-templates.md#restore)
   readonly loadTemplateVm: (plan: TemplateRestorePlan) => Promise<StartedVm>;
-
-  // an elastic guest's memory (docs/architecture/lifecycle/elastic-memory.md); throws when the
-  // VM or its balloon statistics do not answer
   readonly readGuestMemory: (paths: ImpPaths) => Promise<GuestMemory>;
-
-  // the guest plugs or unplugs blocks toward `mib` of its region
   readonly requestPluggedMib: (paths: ImpPaths, mib: number) => Promise<void>;
 }
 
-// `jails` releases a jail whatever started the VM: an impd with the jailer
-// off still stops a jailed VM it adopted. Every Firecracker, an imp's or a
-// template build's, starts through `mergeWrapper` (ksm-exec with IMP_KSM).
 export function createVmRunner(
   jails: Jails,
   mergeWrapper: string | null = null,
-
-  // asks the agent with a deadline; sendPing by default
   sendUptimePing: typeof sendPing = sendPing,
-
-  // where /proc is mounted, for the liveness checks
   procRoot = '/proc',
 ): VmRunner {
   const removeVmMounts = (paths: ImpPaths): Promise<void> => jails.release(paths.impId);
 
-  // the jailer's command in a prepared chroot, or Firecracker's own beside
-  // a swept run/
   const setupVmCommand = async (
     bin: string,
     paths: ImpPaths,
@@ -191,7 +123,6 @@ export function createVmRunner(
     return buildFirecrackerCommand(bin, paths.apiSocket);
   };
 
-  // a prepare or spawn that fails leaves no jail mounts behind
   const startVmProcess = async (
     command: () => Promise<readonly string[]>,
     paths: ImpPaths,
@@ -208,7 +139,6 @@ export function createVmRunner(
     }
   };
 
-  // the VM is gone: its jail's mounts can go
   const stopVmNow = async (pid: number, paths: ImpPaths): Promise<boolean> => {
     stopPid(pid);
 
@@ -338,8 +268,6 @@ export function createVmRunner(
       const setMark = timer.setMark;
       const api = createFirecrackerClient(paths.apiSocket);
       const files = { snapshotPath: `${target.vmstate}.new`, memFilePath: `${target.memFile}.new` };
-
-      // the VM writes into files impd made, owned like its disk
       const owner = lstatSync(paths.disk);
 
       mkdirSync(target.snapshotDir, { recursive: true });
@@ -347,8 +275,6 @@ export function createVmRunner(
       createOwnedFile(files.memFilePath, owner);
       cgroup?.liftLimit();
 
-      // a woken VM writes only the pages it dirtied, over a copy of the file
-      // it woke from (docs/architecture/lifecycle/sleep-and-wake.md#sleep)
       const baseStep = await writeSnapshotBase(api, paths.memFile, files.memFilePath);
 
       if (baseStep !== null) {
@@ -377,8 +303,6 @@ export function createVmRunner(
 
           cgroup?.applyLimit();
         } catch {
-          // paused for good: kill it, the caller sees it gone and boots the
-          // disk cold next time
           await stopVmNow(pid, paths);
         }
 
@@ -387,14 +311,12 @@ export function createVmRunner(
 
       setMark('snapshot');
 
-      // the VM is paused and its snapshot is on disk: nothing to shut down
       if (!(await stopVmNow(pid, paths))) {
         throw new Error(`firecracker ${String(pid)} survived SIGKILL`);
       }
 
       setMark('kill');
 
-      // nothing of the VM runs now: its files go back to impd before any load
       for (const file of [files.snapshotPath, files.memFilePath]) {
         setupSnapshotFile(file, owner.gid);
       }
@@ -413,7 +335,8 @@ export function createVmRunner(
 
       setMark(digStep);
 
-      // meta.json, written next, vouches for these: they reach the disk first
+      // the snapshot metadata written after this vouches for these files, so
+      // they reach the disk first
       writeToDisk([target.vmstate, target.memFile, target.snapshotDir]);
       setMark('flush');
 
@@ -423,10 +346,10 @@ export function createVmRunner(
       const timer = createMarks();
       const setMark = timer.setMark;
 
-      // unlimited until the memory is in and the guest runs again
       plan.cgroup?.liftLimit();
 
-      // startFirecracker removes the stale vsock socket, which would end the load
+      // a stale vsock socket fails Firecracker's snapshot load, and the spawn
+      // removes it
       const readArgv = () =>
         setupVmCommand(plan.firecrackerBin, plan.paths, plan.jail, plan.readOnlyFiles);
 
@@ -442,8 +365,8 @@ export function createVmRunner(
       try {
         const api = createFirecrackerClient(plan.paths.apiSocket);
 
-        // the load binds the vsock socket; the seal comes before the guest runs
-        // the next sleep writes only the pages the guest dirties from here on
+        // the load binds the vsock socket, so the jail's seal waits for the load
+        // and lands before the guest runs
         await api.loadSnapshot(
           { snapshotPath: plan.paths.vmstate, memFilePath: plan.paths.memFile },
           { resumeVm: false, isTrackingDirtyPages: true },

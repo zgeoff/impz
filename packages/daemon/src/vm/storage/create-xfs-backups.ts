@@ -15,8 +15,6 @@ import { BACKUP_TREE, buildBackupPaths, buildImagePaths } from './data-layout';
 import type { ImpPaths } from './data-layout';
 import type { StorageBackend } from './storage-backend';
 
-// what the XFS backend lends its backups: its clone and the paths of each
-// imp's disk and checkpoints
 interface XfsBackupContext {
   readonly dataDir: string;
   readonly cloneFile: (source: string, target: string) => Promise<void>;
@@ -24,9 +22,7 @@ interface XfsBackupContext {
   readonly buildCheckpointDisk: (impId: string, checkpointId: string) => string;
 }
 
-// The source disk of each copy in the backup tree. A sleeping or stopped
-// imp's disk with the same inode and ctime is unchanged since, so the copy
-// stays, and restic sees the file it read last run.
+// an unchanged disk keeps last run's copy, so restic finds the same file and skips rereading it
 const CopiesSchema = z.record(
   z.string(),
   z.object({ ino: z.string(), ctimeNs: z.string(), size: z.string() }),
@@ -34,14 +30,11 @@ const CopiesSchema = z.record(
 
 type Copies = z.infer<typeof CopiesSchema>;
 
-// A backup run's side of the XFS backend: a reflink copy of each disk in the
-// backup tree, kept between runs while its source is unchanged
 export function createXfsBackups(
   ctx: XfsBackupContext,
 ): Pick<StorageBackend, 'createBackupCopy' | 'openBackupTree'> {
   const backup = buildBackupPaths(ctx.dataDir);
 
-  // this run's copies of running disks: new every run, so none outlives it
   const freshCopies = new Set<string>();
 
   const readCopies = (): Copies => {
@@ -57,7 +50,7 @@ export function createXfsBackups(
     writeFileDurably(backup.copies, JSON.stringify(copies));
   };
 
-  // a clone made once: checkpoints and images never change
+  // checkpoints and images never change, so one clone serves every run
   const createTreeClone = async (source: string, target: string): Promise<boolean> => {
     if (!existsSync(source)) {
       return false;
@@ -110,7 +103,6 @@ export function createXfsBackups(
       }
     },
 
-    // the tree stays between runs, so restic finds each file it read before
     openBackupTree: async (request) => {
       const impIds = new Set<string>();
       const checkpointIds = new Set<string>();
@@ -164,7 +156,7 @@ export function createXfsBackups(
 
       writeCopies(Object.fromEntries(Object.entries(copies).filter(([id]) => impIds.has(id))));
 
-      // a running disk's copy would pin the blocks it shares until next run
+      // a reflink copy of a running disk would pin the blocks it shares until the next run
       const removeFreshCopies = () => {
         for (const impId of freshCopies) {
           rmSync(join(backup.tree, BACKUP_TREE.buildDisk(impId)), { force: true });
@@ -180,7 +172,6 @@ export function createXfsBackups(
   };
 }
 
-// drops each entry of `dir` that `keep` does not name
 function removeUnlisted(directory: string, keep: ReadonlySet<string>): void {
   const names = existsSync(directory) ? readdirSync(directory) : [];
 

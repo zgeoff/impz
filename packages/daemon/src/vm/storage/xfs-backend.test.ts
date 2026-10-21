@@ -15,7 +15,6 @@ import { buildStubFiemap } from '../../../testing/vm/build-stub-fiemap';
 import { readExtents } from './fiemap';
 import { createXfsBackend } from './xfs-backend';
 
-// `parentDir` is where the data dir goes, a temp dir by default
 async function setupTest(
   options: Readonly<{
     parentDir?: string;
@@ -33,8 +32,7 @@ async function setupTest(
     dataDir,
     log,
 
-    // a temp dir is rarely XFS, so a clone is a copy; written byte by byte,
-    // so it shares no extent even where the filesystem could reflink
+    // written byte by byte, because a temp dir's filesystem may reflink a copy and share extents
     cloneFile: (source, target) => {
       writeFileSync(target, readFileSync(source));
 
@@ -50,7 +48,6 @@ async function setupTest(
 test('#createImage replaces a directory a crash left with no rootfs', async () => {
   const ctx = await setupTest();
 
-  // what impd before the storage backends left when it died mid-build
   mkdirSync(join(ctx.dataDir, 'images', 'abc'), { recursive: true });
   writeFileSync(join(ctx.dataDir, 'images', 'abc', 'config.json'), '{"old":true}');
 
@@ -140,16 +137,12 @@ test('#start keeps every imp and image a lost database leaves', async () => {
   await ctx.backend.createCheckpoint('a', 'cp-1');
   await ctx.backend.createCheckpoint('a', 'cp-2');
 
-  // a's memory file, an image with no rootfs, and the memory snapshot of an
-  // imp with no disk
   mkdirSync(dirname(ctx.backend.resolveImpPaths('a').memFile), { recursive: true });
   writeFileSync(ctx.backend.resolveImpPaths('a').memFile, 'memory');
   mkdirSync(join(ctx.dataDir, 'images', 'half'), { recursive: true });
   writeFileSync(join(ctx.dataDir, 'images', 'half', 'config.json'), '{}');
   mkdirSync(ctx.backend.resolveImpPaths('sleeper').snapshotDir, { recursive: true });
   writeFileSync(ctx.backend.resolveImpPaths('sleeper').vmstate, 'vmstate');
-
-  // empty directories: provably nothing
   mkdirSync(ctx.backend.resolveImpPaths('done').runDir, { recursive: true });
   mkdirSync(join(ctx.dataDir, 'images', 'empty'), { recursive: true });
 
@@ -181,13 +174,10 @@ test('#start logs each orphan it keeps and each leftover it removes', async () =
   await ctx.backend.createCheckpoint('a', 'cp-1');
   await ctx.backend.createCheckpoint('a', 'cp-2');
 
-  // an image with no rootfs, and the memory snapshot of an imp with no disk
   mkdirSync(join(ctx.dataDir, 'images', 'half'), { recursive: true });
   writeFileSync(join(ctx.dataDir, 'images', 'half', 'config.json'), '{}');
   mkdirSync(ctx.backend.resolveImpPaths('sleeper').snapshotDir, { recursive: true });
   writeFileSync(ctx.backend.resolveImpPaths('sleeper').vmstate, 'vmstate');
-
-  // empty directories: provably nothing
   mkdirSync(ctx.backend.resolveImpPaths('done').runDir, { recursive: true });
   mkdirSync(join(ctx.dataDir, 'images', 'empty'), { recursive: true });
 
@@ -200,7 +190,6 @@ test('#start logs each orphan it keeps and each leftover it removes', async () =
     'impd: storage: removed imp done',
   ]);
 
-  // one line per orphan, none twice
   expect(
     lines
       .filter((line) => line.startsWith('impd: storage: kept orphan '))
@@ -239,13 +228,10 @@ test('#dropUnnamed removes what is provably nothing and keeps each orphan with i
   await ctx.backend.createCheckpoint('a', 'cp-1');
   await ctx.backend.createCheckpoint('a', 'cp-2');
 
-  // an image with no rootfs, and the memory snapshot of an imp with no disk
   mkdirSync(join(ctx.dataDir, 'images', 'half'), { recursive: true });
   writeFileSync(join(ctx.dataDir, 'images', 'half', 'config.json'), '{}');
   mkdirSync(ctx.backend.resolveImpPaths('sleeper').snapshotDir, { recursive: true });
   writeFileSync(ctx.backend.resolveImpPaths('sleeper').vmstate, 'vmstate');
-
-  // empty directories: provably nothing
   mkdirSync(ctx.backend.resolveImpPaths('done').runDir, { recursive: true });
   mkdirSync(join(ctx.dataDir, 'images', 'empty'), { recursive: true });
 
@@ -333,7 +319,6 @@ test('#dropUnnamed lists each orphan as dropped in a dry run with orphans, and r
   await ctx.backend.createImpDisk('b', { kind: 'image', digest: 'sha256:old' });
   await ctx.backend.createCheckpoint('a', 'cp-1');
 
-  // an image with no rootfs, and the memory snapshot of an imp with no disk
   mkdirSync(join(ctx.dataDir, 'images', 'half'), { recursive: true });
   writeFileSync(join(ctx.dataDir, 'images', 'half', 'config.json'), '{}');
   mkdirSync(ctx.backend.resolveImpPaths('sleeper').snapshotDir, { recursive: true });
@@ -373,7 +358,6 @@ test('#dropUnnamed removes each orphan when asked for orphans', async () => {
   await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:abc' });
   await ctx.backend.createCheckpoint('a', 'cp-1');
 
-  // an image with no rootfs, and the memory snapshot of an imp with no disk
   mkdirSync(join(ctx.dataDir, 'images', 'half'), { recursive: true });
   writeFileSync(join(ctx.dataDir, 'images', 'half', 'config.json'), '{}');
   mkdirSync(ctx.backend.resolveImpPaths('sleeper').snapshotDir, { recursive: true });
@@ -413,7 +397,6 @@ test('#dropUnnamed keeps the checkpoints and imps an older database does not nam
   await ctx.backend.createCheckpoint('a', 'cp-new');
   await ctx.backend.createCheckpoint('gone', 'cp-gone');
 
-  // it names a and cp-1, not cp-new
   const swept = await ctx.backend.dropUnnamed(
     {
       impIds: new Set(['a']),
@@ -453,7 +436,6 @@ test('#dropUnnamed removes what an older database does not name when asked for o
   await ctx.backend.createCheckpoint('a', 'cp-1');
   await ctx.backend.createCheckpoint('a', 'cp-new');
 
-  // an image build in flight keeps its hidden directory
   mkdirSync(join(ctx.dataDir, 'images', '.build-now'), { recursive: true });
 
   const removed = await ctx.backend.dropUnnamed(
@@ -540,7 +522,6 @@ test('#createCheckpoint returns the bytes its clone holds', async () => {
 test('#createCheckpoint removes the half-made checkpoint when its clone fails', async () => {
   const ctx = await setupTest();
 
-  // no disk to clone: the copy fails
   const created = ctx.backend.createCheckpoint('a', 'cp-1');
   const checkpointsDir = ctx.backend.resolveImpPaths('a').checkpointsDir;
 
@@ -827,8 +808,7 @@ test('#start logs and skips a reserve file that would take more than half the fr
 });
 
 test('#measureUsage counts the blocks of each imp and its checkpoints through FIEMAP', async () => {
-  // FIEMAP needs a filesystem with extents, which a tmpfs /tmp lacks; /var/tmp
-  // is the disk-backed temp root
+  // a tmpfs /tmp has no extents for FIEMAP to map, and /var/tmp is disk-backed
   const ctx = await setupTest({ parentDir: '/var/tmp' });
 
   await ctx.backend.createImage('sha256:abc', async (directory) => {
@@ -847,8 +827,6 @@ test('#measureUsage counts the blocks of each imp and its checkpoints through FI
     { impId: 'b', checkpointIds: [] },
   ]);
 
-  // copies here, so nothing is shared; the disk and its checkpoint are 1 MiB
-  // each, and b's copy of the image takes what its filesystem allocated
   expect(report.isPartial).toBeFalse();
 
   expect(report.imps.get('a')).toStrictEqual({

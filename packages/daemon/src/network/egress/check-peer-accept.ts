@@ -1,16 +1,12 @@
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { isPeerAccept } from './is-peer-accept';
 
-// what the ACCEPT check reads, and whether it was missing at the last one
 export interface PeerAcceptCheck {
   readonly readForwardRules: () => Promise<string>;
   readonly wasMissing: boolean;
   readonly log: (message: string) => void;
 }
 
-// Setup-net.sh's ACCEPT for marked traffic between imps: without it the
-// imp-to-imp DROP takes every packet. Logged once until it is back. True
-// while missing; a failed read keeps the last answer.
 export async function checkPeerAccept(check: PeerAcceptCheck): Promise<boolean> {
   try {
     const rules = await check.readForwardRules();

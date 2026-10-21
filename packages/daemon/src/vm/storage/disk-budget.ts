@@ -6,52 +6,33 @@ import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { StorageBackend } from './storage-backend';
 
 const GIB = 1024 ** 3;
-
-// the default reserve: max(5 GiB, 5 % of the filesystem or pool)
 const RESERVE_MIN_BYTES = 5 * GIB;
 const RESERVE_FRACTION = 0.05;
 
 interface DiskStatus {
   readonly usedBytes: number;
   readonly availableBytes: number;
-
-  // promised to writes under way, such as a sleep's memory file
   readonly pendingBytes: number;
   readonly reserveBytes: number;
-
-  // free space, less what is pending, is below twice the reserve
   readonly isLow: boolean;
 }
 
-// One ledger of free space: each write's estimate is held until it ends, and a
-// write that would leave less than the reserve is refused. A thin clone's
-// estimate is 0, so it is refused only once the reserve is reached.
 export interface DiskBudget {
   readonly withRoom: <T>(bytes: number, task: () => Promise<T>) => Promise<T>;
-
-  // withRoom for a write whose size shows only as it goes, such as a
-  // build's export: grow(total, written) holds up to total, or refuses as
-  // withRoom, with the bytes the disk shows it has written counted once
   readonly withGrowingRoom: <T>(
     task: (grow: (totalBytes: number, writtenBytes: number) => Promise<void>) => Promise<T>,
   ) => Promise<T>;
-
-  // withRoom for a write the estimate cannot see, such as a thin clone
   readonly requireRoom: (bytes: number) => Promise<void>;
   readonly readStatus: () => Promise<DiskStatus>;
 }
 
 interface DiskBudgetDeps {
   readonly storage: Pick<StorageBackend, 'readUsage'>;
-
-  // null: the default reserve
   readonly reserveBytes: number | null;
 
-  // how long a write's hold outlives it: ZFS reports a write's blocks in
-  // `available` only once its transaction group commits, about 5 s later
+  // ZFS shows a write's blocks in `available` only once its transaction group
+  // commits, about 5 s after the write
   readonly releaseDelayMs?: number;
-
-  // runs `fire` once `ms` is up and returns the cancel; setTimeout by default
   readonly startTimer?: StartTimer;
   readonly log: (message: string) => void;
 }
@@ -59,7 +40,6 @@ interface DiskBudgetDeps {
 export function createDiskBudget(deps: DiskBudgetDeps): DiskBudget {
   const mutex = buildKeyedMutex();
 
-  // a pending release never keeps impd running
   const startTimer: StartTimer =
     deps.startTimer ?? ((fire, durationMs) => startRealTimer(fire, durationMs, { isUnref: true }));
 
@@ -75,9 +55,6 @@ export function createDiskBudget(deps: DiskBudgetDeps): DiskBudget {
 
     const free = usage.availableBytes - ledger.pendingBytes;
     const isLow = free < 2 * reserveBytes;
-
-    // once per episode: it ends a GiB clear of the line, so free space that
-    // hovers at it logs nothing more
     const isEpisodeOver = free >= 2 * reserveBytes + GIB;
 
     if (isLow ? !ledger.wasLow : ledger.wasLow && isEpisodeOver) {
@@ -93,9 +70,6 @@ export function createDiskBudget(deps: DiskBudgetDeps): DiskBudget {
     return { ...usage, pendingBytes: ledger.pendingBytes, reserveBytes, isLow };
   };
 
-  // the check and the hold run under one lock, so two writes never both
-  // pass on the same reading; readWrittenBytes counts back what the write
-  // has written already, gone from `available` and still held in `pending`
   const holdRoom = (bytes: number, readWrittenBytes: () => number = () => 0) =>
     mutex.runExclusive('ledger', async () => {
       const status = await readStatus();
@@ -137,9 +111,6 @@ export function createDiskBudget(deps: DiskBudgetDeps): DiskBudget {
     task: (grow: (totalBytes: number, writtenBytes: number) => Promise<void>) => Promise<T>,
   ): Promise<T> => {
     const held = { bytes: 0 };
-
-    // what the write has written, up to what it holds; the caller counts
-    // only bytes the disk shows as its own, which `available` has lost
     const written = { bytes: 0 };
     const readWrittenBytes = () => Math.min(held.bytes, written.bytes);
 

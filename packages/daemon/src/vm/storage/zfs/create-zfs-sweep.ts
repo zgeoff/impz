@@ -12,8 +12,6 @@ import {
 } from './zfs-commands';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
 
-// what the ZFS backend lends its sweep: its commands, its held snapshots, the
-// names of its datasets and their mounts, and its retire
 interface ZfsSweepContext {
   readonly zfs: ZfsCommands;
   readonly dataDir: string;
@@ -29,21 +27,15 @@ interface ZfsSweepContext {
 }
 
 const FORK_SNAPSHOT = /@fork-[^@]+$/u;
-
-// `@bk-<run>-<imp>`: a backup run's copy of a disk, gone once the run ends
 const BACKUP_SNAPSHOT = /@bk-[^@]+$/u;
-
-// `@mv-<move>`: a move's copy of a stopped disk, gone once the move ends
 const MOVE_SNAPSHOT = /@mv-[^@]+$/u;
 
-// an `imps/<id>` or `mem/<id>` with files and no row, kept with no disk
 interface OrphanDir {
   readonly kind: 'imp' | 'memory';
   readonly id: string;
   readonly directory: string;
 }
 
-// what removeLeftovers removes, in this order, and the orphans it keeps
 interface LeftoverPlan {
   readonly snapshots: readonly ZfsEntry[];
   readonly disks: readonly ZfsEntry[];
@@ -55,12 +47,7 @@ interface LeftoverPlan {
   readonly orphanDirs: readonly OrphanDir[];
 }
 
-// The ZFS backend's sweep of what the database does not name, at start and
-// for `impz gc`
 export function createZfsSweep(ctx: ZfsSweepContext) {
-  // What the database does not name: a crash leftover goes, an orphan stays
-  // with its snapshots unless `isOrphans`. A lost database would make every
-  // disk an orphan (docs/architecture/storage/disk-space.md#the-sweep).
   const planLeftovers = (
     entries: readonly ZfsEntry[],
     live: LiveStorage,
@@ -76,8 +63,6 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
       (image) => !liveDigests.has(getChildId(image.name, ctx.datasets.images)),
     );
 
-    // every image, too: one with no `@base` may be a build cut short, but
-    // only a `staging/` name proves that, and start settles those
     const orphans = [...unknownDisks, ...unknownImages];
 
     const orphanNames = new Set(orphans.map((orphan) => orphan.name));
@@ -86,13 +71,8 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
       CHECKPOINT_SNAPSHOT.test(snapshot.name) &&
       live.checkpointIds.has(getSnapshotId(snapshot.name));
 
-    // An orphan's snapshots go only with it, before the retire, so the
-    // reclaim can free it; its `@base` goes with the image.
     const isOnOrphan = (snapshot: ZfsEntry) => orphanNames.has(getSnapshotDataset(snapshot.name));
 
-    // A checkpoint with no row is an orphan wherever it is, on a named disk or
-    // in `retired/`: an older database lacks the newer rows. A fork, backup or
-    // move snapshot elsewhere is impd's own, and never outlives its operation.
     const isOrphanCheckpoint = (snapshot: ZfsEntry) =>
       CHECKPOINT_SNAPSHOT.test(snapshot.name) && !isLiveCheckpoint(snapshot);
 
@@ -116,8 +96,6 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
       ? []
       : unmarked.filter((entry) => !isOnOrphan(entry) && isOrphanCheckpoint(entry));
 
-    // A directory with no row goes with a kept disk. With no disk, only an
-    // empty one is provably nothing; one with files is an orphan.
     const keptDisks = isOrphans ? [] : unknownDisks;
 
     const keptImpIds = new Set(keptDisks.map((disk) => getChildId(disk.name, ctx.datasets.disks)));
@@ -166,7 +144,6 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
     ...plan.memDirs.map((impId) => ({ kind: 'memory' as const, id: impId })),
   ];
 
-  // the size, age and snapshots of each orphan, for the log and `impz gc`
   const readOrphans = async (
     entries: readonly ZfsEntry[],
     plan: LeftoverPlan,
@@ -212,9 +189,7 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
     return [...datasetOrphans, ...checkpoints, ...dirs];
   };
 
-  // Drops what the database no longer names and a crash explains, and the
-  // orphans with `isOrphans`. Snapshots go first: a retire renames the
-  // dataset they are on. The caller runs it serially.
+  // Snapshots go first, because a retire renames the dataset they are on.
   const removeLeftovers = async (
     live: LiveStorage,
     options: Readonly<{ isDryRun: boolean; isOrphans: boolean }>,
@@ -243,7 +218,6 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
     for (const image of plan.images) {
       await ctx.removeMount(ctx.buildImageDir(getChildId(image.name, ctx.datasets.images)));
 
-      // a crash between the rename and the snapshot leaves an image without one
       if (names.has(`${image.name}@base`)) {
         await ctx.zfs.destroyDeferred(`${image.name}@base`);
       }
@@ -251,7 +225,6 @@ export function createZfsSweep(ctx: ZfsSweepContext) {
       await ctx.removeDataset(image.name);
     }
 
-    // an imp's directory holds its disk's mount point: never one in use
     const mounted = [...parseZfsMounts(ctx.readMounts()).keys()];
 
     for (const impId of plan.impDirs) {

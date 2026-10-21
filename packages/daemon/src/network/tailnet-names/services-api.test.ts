@@ -330,7 +330,6 @@ test('it asks for a new token on the call after a 401', async () => {
 
   stub.revokeTokens();
 
-  // the fault: the call with the revoked token is refused and drops it
   const [refused] = await Promise.allSettled([api.listServices()]);
   const listed = await api.listServices();
 

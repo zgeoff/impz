@@ -6,16 +6,12 @@ import { buildSystemDrivePath } from './data-layout';
 import { deriveFileSha256, readKernelInfo } from './system-file-info';
 import type { SystemFileInfo } from './system-file-info';
 
-// The files imps boot with, and what system.info reports about them.
 export interface SystemFiles {
   readonly kernelPath: string;
   readonly systemDrivePath: string;
   readonly info: SystemFileInfo;
 }
 
-// Copies the kernel and the system drive into <dataDir>/system; each is
-// hashed once here. Drives are content-addressed and never written over
-// (docs/architecture/storage/storage.md#system-files).
 export async function setupSystemFiles(config: Config): Promise<SystemFiles> {
   const kernelSource = config.kernelSource ?? config.kernelPath;
 
@@ -28,7 +24,7 @@ export async function setupSystemFiles(config: Config): Promise<SystemFiles> {
   const kernel = readFileSync(kernelSource);
   const guestKernel = readKernelInfo(kernel);
 
-  // renamed over: a VM that has the old file open keeps the old inode
+  // the copy renames over the old kernel, so a VM that has it open keeps the old inode
   if (config.kernelSource !== null && !probeContent(config.kernelPath, kernel)) {
     writeCopy(config.kernelSource, config.kernelPath);
   }
@@ -39,7 +35,7 @@ export async function setupSystemFiles(config: Config): Promise<SystemFiles> {
 
   const sha256 = await deriveFileSha256(config.systemDriveSource);
 
-  // a sleeping VM's snapshot reopens its drive by path: the bytes there stay
+  // a sleeping VM's Firecracker snapshot reopens its drive by path, so the bytes there never change
   const systemDrivePath = buildSystemDrivePath(config.dataDir, sha256);
 
   if (!existsSync(systemDrivePath)) {
@@ -53,12 +49,10 @@ export async function setupSystemFiles(config: Config): Promise<SystemFiles> {
   };
 }
 
-// compared byte for byte: the source is hashed once already
 function probeContent(path: string, content: Uint8Array): boolean {
   return existsSync(path) && Buffer.from(content).equals(readFileSync(path));
 }
 
-// a crash mid-copy leaves only the .new file, never a short target
 function writeCopy(source: string, target: string): void {
   mkdirSync(dirname(target), { recursive: true });
   writeCopyDurably(source, target);

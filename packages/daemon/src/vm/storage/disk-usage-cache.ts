@@ -7,13 +7,9 @@ import { getErrorMessage } from '../../platform/process/get-error-message';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { ImpDiskUsage, StorageBackend } from './storage-backend';
 
-// a write that changes what an imp takes asks for a pass; this many ms later
-// it runs, so a burst of them costs one
 const REFRESH_DELAY_MS = 10_000;
 
-// changes to an imp that change what it takes: a grown disk, a restored
-// checkpoint, and a stop or a sleep, which writes the guest's cache and memory
-// out
+// a stop or a sleep changes disk use too, as the guest writes its cache and memory out
 export const CHANGES_USAGE: ReadonlySet<ImpChangeReason> = new Set([
   'resized',
   'restored',
@@ -22,18 +18,14 @@ export const CHANGES_USAGE: ReadonlySet<ImpChangeReason> = new Set([
 ]);
 
 export interface CachedDiskUsage extends ImpDiskUsage {
-  // when the pass started: the count holds every write before it
   readonly measuredAt: Date;
   readonly isPartial: boolean;
 }
 
 export interface DiskUsageCache {
-  // a whole pass; one at a time
   readonly runPass: () => Promise<void>;
   readonly requestRefresh: () => void;
   readonly read: (impId: string) => CachedDiskUsage | undefined;
-
-  // what the imps take on their own, together: what destroying each frees
   readonly readExclusiveTotal: () => number;
   readonly stop: () => void;
 }
@@ -44,13 +36,10 @@ interface DiskUsageCacheDeps {
   readonly log: (message: string) => void;
   readonly now?: () => Date;
   readonly refreshDelayMs?: number;
-
-  // runs `fire` once `ms` is up and returns the cancel; setTimeout by default
   readonly startTimer?: StartTimer;
 }
 
-// Usage is slow to measure on XFS (FIEMAP over every file), so `impz ls` and
-// `impz info` read the last pass, with its time.
+// measuring usage on XFS runs FIEMAP over every file, too slow for a listing to wait on
 export function createDiskUsageCache(deps: DiskUsageCacheDeps): DiskUsageCache {
   const now = deps.now ?? (() => new Date());
   const refreshDelayMs = deps.refreshDelayMs ?? REFRESH_DELAY_MS;
@@ -59,11 +48,7 @@ export function createDiskUsageCache(deps: DiskUsageCacheDeps): DiskUsageCache {
   const state = {
     usage: new Map<string, CachedDiskUsage>(),
     running: null as Promise<void> | null,
-
-    // the pending refresh's cancel
     cancelRefresh: null as (() => void) | null,
-
-    // set at shutdown: the sleeps that follow ask for passes nobody reads
     isStopped: false,
   };
 
@@ -83,7 +68,6 @@ export function createDiskUsageCache(deps: DiskUsageCacheDeps): DiskUsageCache {
 
       const report = await deps.storage.measureUsage(listed);
 
-      // an imp a cut-short pass did not reach keeps its last count and time
       const kept = listed.flatMap((imp) => {
         const usage = report.imps.get(imp.impId);
         const last = state.usage.get(imp.impId);
@@ -125,9 +109,6 @@ export function createDiskUsageCache(deps: DiskUsageCacheDeps): DiskUsageCache {
 
   return {
     runPass: runOnePass,
-
-    // a pass under way may have measured before the write that asked, so
-    // the refresh waits for it and runs its own
     requestRefresh: () => {
       if (state.isStopped) {
         return;

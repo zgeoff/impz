@@ -1,18 +1,14 @@
 import type { Uplinks } from '../../host-net/net/host-routes';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 
-// the host container's networks and default routes, read for a table build
 export interface HostNetwork {
   readonly connected4: readonly string[];
   readonly connected6: readonly string[];
   readonly uplinks: Uplinks;
 
-  // a read that failed while some imp is public; its imps then reach
-  // nothing, and none starts
   readonly error: string | null;
 }
 
-// what the read reaches the host through
 export interface HostNetworkReaders {
   readonly hasIPv6: boolean;
   readonly readConnected6: () => Promise<readonly string[]>;
@@ -21,16 +17,13 @@ export interface HostNetworkReaders {
   readonly log: (message: string) => void;
 }
 
-// No interface: a public imp's traffic leaves by none
 const NO_UPLINKS: Uplinks = { ipv4: [], ipv6: [] };
 
-// The container's own links, read now: a network can join it later. The
-// IPv4 side and the uplinks only matter while some imp is public. A read
-// that fails then leaves public imps no uplink: the table refuses them all.
 export async function readHostNetwork(
   hasPublic: boolean,
   readers: HostNetworkReaders,
 ): Promise<HostNetwork> {
+  // read at each build: Docker can attach a network to the container later
   try {
     return {
       connected6: readers.hasIPv6 ? await readers.readConnected6() : [],

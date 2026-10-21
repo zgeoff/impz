@@ -25,7 +25,6 @@ export function readBackoffMs(failures: number): number {
   return buildBackoffMs(failures, { baseMs: FIRST_BACKOFF_MS, capMs: MAX_BACKOFF_MS });
 }
 
-// the names one certificate must hold for the domain
 export function listCertificateNames(domain: string): readonly string[] {
   return [domain, `*.${domain}`];
 }
@@ -37,8 +36,6 @@ interface RenewalInput {
   readonly now: number;
 }
 
-// Whether to ask the CA for a certificate now, given the one on disk (or
-// none) and the attempts so far.
 export function planRenewal(options: RenewalInput): RenewalDecision {
   const reason = findRenewalReason(options.info, options.domain, options.now);
 

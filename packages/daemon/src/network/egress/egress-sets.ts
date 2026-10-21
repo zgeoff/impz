@@ -1,6 +1,5 @@
-// What the resolver let into each box slot's set, and until when. impd
-// keeps the expiry itself and a sweep deletes what is due: nftables does not
-// refresh an element's timeout on a second add before kernel 6.10.
+// impd keeps each address's expiry and sweeps what is due: before kernel
+// 6.10, nftables does not refresh an element's timeout on a second add.
 
 export interface AddressAnswer {
   readonly address: string;
@@ -8,8 +7,6 @@ export interface AddressAnswer {
 }
 
 export interface SetLimits {
-  // the clamp on an answer's TTL: short TTLs would churn the set, long ones
-  // keep a moved name's old address allowed
   readonly minTtlS: number;
   readonly maxTtlS: number;
   readonly maxPerSlot: number;
@@ -27,8 +24,6 @@ export interface HeldAnswer {
 }
 
 export interface EgressSets {
-  // The answers to a query for an allowed name. `names` is the name asked for
-  // and the CNAME chain from it; the chain's names become allowed aliases.
   readonly record: (
     slot: number,
     names: readonly string[],
@@ -37,16 +32,12 @@ export interface EgressSets {
   ) => SetChange;
   readonly isAlias: (slot: number, name: string, now: number) => boolean;
 
-  // drops what expired, per slot
   readonly sweep: (now: number) => ReadonlyMap<number, readonly string[]>;
 
-  // keeps the addresses some name of which `keep` still allows; aliases go
   readonly prune: (slot: number, keep: (name: string) => boolean) => readonly string[];
   readonly clear: (slot: number) => void;
   readonly listAddresses: (slot: number) => readonly string[];
 
-  // what the slot's set holds, each address with its names and the seconds
-  // it has left: what a warm move carries to the target
   readonly listAnswers: (slot: number, now: number) => readonly HeldAnswer[];
 }
 
@@ -100,7 +91,6 @@ export function createEgressSets(limits: SetLimits): EgressSets {
         }
       }
 
-      // a full set drops what expires soonest, never this answer
       const removed = [...slotEntries]
         .filter(([address]) => !touched.has(address))
         .toSorted(([, left], [, right]) => left.expiresAt - right.expiresAt)

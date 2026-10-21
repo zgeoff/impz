@@ -12,7 +12,6 @@ test('#AgentGenerationSchema accepts 32 lowercase hex characters', () => {
   expect(result.data).toBe('0123456789abcdef0123456789abcdef');
 });
 
-// a hostile agent can send anything; each must fail before impd touches the disk
 test.each([
   ['a slash', '/'],
   ['a backslash', '\\'],

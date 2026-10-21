@@ -233,7 +233,6 @@ test('it never replaces an address record it did not make, and names it', async 
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
-  // the zone apex, with a website on it
   await api.records.create({
     id: 'web',
     zone_id: 'z1',
@@ -313,7 +312,6 @@ test('it lists only its owner’s A records under the domain, page by page', asy
     comment: owner,
   });
 
-  // someone else's, the bare domain, another domain and another impd's
   await api.records.create({ zone_id: 'z1', name: 'web.pub.example.com', content: '198.51.100.1' });
 
   await api.records.create({
@@ -366,7 +364,6 @@ test('it lists every page without result_info until a page is short', async () =
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
-  // one more than the provider's page of 500
   await api.records.createMany(501, (index) => ({
     zone_id: 'z1',
     name: `imp${String(index)}.pub.example.com`,
@@ -428,7 +425,6 @@ test('it never removes another owner’s A record', async () => {
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
-  // the bare domain of an impd on dev.pub.example.com
   await api.records.create({
     id: 'p5',
     zone_id: 'z1',
@@ -535,8 +531,6 @@ test('it reads the token at each request, and finds the zone again with a new on
 
   current.token = 'cf-rotated';
 
-  // the first request with the new token drops the zones found with the
-  // old one, so the name asks again, once
   await provider.setA('rotate.example.com', '100.64.0.8');
   await provider.setA('rotate.example.com', '100.64.0.9');
 
@@ -550,8 +544,6 @@ test('it reads the token at each request, and finds the zone again with a new on
   expect(api.readRecords().map((record) => record.content)).toStrictEqual(['100.64.0.9']);
 });
 
-// a new token from another account sees its own example.com zone; the call
-// that first reads it still holds the old zone, and fails
 test('it writes to the zone a new token sees after one refused call on the old zone', async () => {
   const api = createStubCloudflareApi({
     tokens: ['cf-token', 'cf-rotated'],
@@ -626,8 +618,6 @@ test('it keeps no zone that the old token found after a new one took over', asyn
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
-  // the old token's lookup of example.com waits on the wire, then goes on
-  // to the API's own answer
   server.use(
     http.get('https://api.cloudflare.com/client/v4/zones', async (info) => {
       const isOld = info.request.headers.get('authorization') === 'Bearer cf-token';

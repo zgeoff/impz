@@ -10,9 +10,6 @@ import { normalizeName } from './egress-rules';
 import type { AddressAnswer } from './egress-sets';
 import type { LocalAnswer } from './network-names';
 
-// What the resolver does with a name, which it forwards unless refused:
-// `admit` puts the addresses into the imp's set, `answer` adds nothing, and
-// `screen` drops the addresses a public imp may not reach.
 export type QueryVerdict = 'admit' | 'answer' | 'screen' | 'refuse';
 
 export interface RateLimit {
@@ -23,20 +20,15 @@ export interface RateLimit {
 export interface ResolverDeps {
   readonly subnet: Subnet;
 
-  // imps have IPv6: AAAA answers go into the sets as A answers do
   readonly ipv6?: boolean;
 
-  // impd's own answer for a network name (network-names.ts), or null for a
-  // name it passes on; asked before checkName, so one never goes upstream
   readonly resolveLocal: (
     slot: number,
     query: Readonly<{ name: string; type: string }>,
   ) => LocalAnswer | null;
 
-  // null for a slot with no imp
   readonly checkName: (slot: number, name: string) => Promise<QueryVerdict | null>;
 
-  // resolves once the addresses are in nft
   readonly writeAnswers: (
     slot: number,
     names: readonly string[],
@@ -44,14 +36,10 @@ export interface ResolverDeps {
   ) => Promise<void>;
   readonly forward: DnsForward;
 
-  // an address a public imp may not reach, which a screened reply leaves out
   readonly isScreened: (address: string) => boolean;
 
-  // the longest TTL a reply carries: a guest asks again within it, so an
-  // impd restart, which empties the sets, costs a guest at most that long
   readonly maxTtlS: number;
 
-  // a slot's query rate, which its policy sets
   readonly readRate: (slot: number) => RateLimit;
   readonly now: () => number;
   readonly log: (message: string) => void;
@@ -59,13 +47,9 @@ export interface ResolverDeps {
 
 export type QueryHandler = (source: string, message: Uint8Array) => Promise<Uint8Array>;
 
-// One query from a guest to its reply. The verdict comes first, so a refused
-// name never leaves the host, and the answer's addresses are in nft before
-// the guest sees them.
 export function createQueryHandler(deps: ResolverDeps): QueryHandler {
   const tokens = new Map<number, { level: number; at: number }>();
 
-  // a bucket per slot: a burst, then perSecond
   const tryTakeToken = (slot: number): boolean => {
     const now = deps.now();
     const rate = deps.readRate(slot);
@@ -90,7 +74,6 @@ export function createQueryHandler(deps: ResolverDeps): QueryHandler {
       return buildEmptyReply(message, RCODE.refused, EDE_PROHIBITED);
     }
 
-    // plain REFUSED, so a guest can tell a busy resolver from a denied name
     if (!tryTakeToken(slot)) {
       return buildEmptyReply(message, RCODE.refused);
     }
@@ -116,7 +99,6 @@ export function createQueryHandler(deps: ResolverDeps): QueryHandler {
       return buildEmptyReply(message, RCODE.refused, EDE_PROHIBITED);
     }
 
-    // without IPv6, guests have no route out for an AAAA answer
     if (query.type === 'AAAA' && deps.ipv6 !== true) {
       return buildEmptyReply(message, RCODE.noError);
     }
@@ -147,8 +129,6 @@ interface AddressQuery {
   readonly type: 'A' | 'AAAA';
 }
 
-// The A or AAAA records on the CNAME chain from the name asked for go into
-// the set, and every TTL in the reply drops to maxTtlS.
 async function writeAnswers(
   deps: ResolverDeps,
   query: AddressQuery,
@@ -174,9 +154,8 @@ async function writeAnswers(
   });
 }
 
-// The reply without an A or AAAA record a public imp may not reach, in any
-// section: the firewall drops the address anyway, and a guest that never
-// sees it tries the next at once. The rest stays as it came.
+// the firewall drops these addresses anyway, but a guest that never sees one
+// tries the next address at once
 function removeScreened(reply: Uint8Array, isScreened: (address: string) => boolean): Uint8Array {
   const packet = dnsPacket.decode(Buffer.from(reply));
 
@@ -193,7 +172,6 @@ function removeScreened(reply: Uint8Array, isScreened: (address: string) => bool
   });
 }
 
-// the name and each CNAME target reached from it, in order
 function readChain(name: string, records: readonly Answer[]): string[] {
   const chain = [name];
 
@@ -222,11 +200,8 @@ function toCappedTtl(record: Answer, maxTtlS: number): Answer {
   return record.type === 'OPT' ? record : { ...record, ttl: Math.min(record.ttl ?? 0, maxTtlS) };
 }
 
-// a TCP client's idle time before the resolver closes it, and the
-// connections one slot may hold open, as the broker caps them
 export const DEFAULT_TCP_LIMITS: ResolverServerLimits = { idleS: 10, maxPerSlot: 16 };
 
-// smaller limits for tests
 interface ResolverServerLimits {
   readonly idleS: number;
   readonly maxPerSlot: number;
@@ -237,18 +212,13 @@ export interface ResolverServerOptions {
   readonly now?: () => number;
   readonly limits?: ResolverServerLimits;
 
-  // where the UDP socket's errors and failed replies go;
-  // createSocketErrorReport by default
   readonly reportError?: (...args: readonly unknown[]) => void;
 }
 
-// what a reply to a guest that went, or to a gateway with no route, gets
-// back as ICMP: Bun marks it `errqueue`, and the guest just asked again
+// ICMP back for a reply to a guest that went, or to a gateway with no route:
+// Bun marks it `errqueue`
 const ROUTINE_SOCKET_ERRORS = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH']);
 
-// Bun 1.4.2 passes the error alone, not after the socket its types name.
-// A routine error has a log limit of its own, so a burst of refused replies
-// never holds back the line of another error.
 export function createSocketErrorReport(
   log: (message: string) => void,
   now: () => number,
@@ -257,6 +227,7 @@ export function createSocketErrorReport(
   const logOther = makeLimitedLog(log, now);
 
   return (...args) => {
+    // Bun 1.4.2 passes the error alone, not after the socket its types name
     const error = args.at(-1);
     const write = isRoutineSocketError(error) ? logRoutine : logOther;
 
@@ -274,7 +245,6 @@ function isRoutineSocketError(error: unknown): boolean {
   return fields.errqueue === true || ROUTINE_SOCKET_ERRORS.has(String(fields.code));
 }
 
-// one line per minute at most, with a count of the ones it held back
 const SOCKET_ERROR_LOG_MS = 60_000;
 
 function makeLimitedLog(
@@ -306,9 +276,6 @@ export interface ResolverServer {
   readonly stop: () => void;
 }
 
-// UDP and TCP on every address of the host container: guests reach it on
-// their gateway through the nat redirect of port 53, and setup-net.sh drops
-// the port for anything but a guest.
 export async function startResolverServer(
   port: number,
   subnet: Subnet,
@@ -334,8 +301,6 @@ export async function startResolverServer(
     },
   });
 
-  // a socket's release frees its slot's count once it closes; null for a
-  // socket refused at open
   const tcp = Bun.listen<{ buffered: Buffer; release: (() => void) | null }>({
     hostname: '0.0.0.0',
     port: udp.port,

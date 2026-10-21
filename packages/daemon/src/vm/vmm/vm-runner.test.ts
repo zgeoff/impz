@@ -21,9 +21,6 @@ import { probeFirecrackerAlive } from './firecracker-process';
 import { buildJailerCommand } from './jail';
 import { createVmRunner } from './vm-runner';
 
-// A temp dir and the log the stub VMM appends its calls to. `createImpDir`
-// makes the run/ and the disk of the imp a test names, which a sleep needs for
-// its snapshot's owner.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-vm-'));
 
@@ -217,8 +214,6 @@ test('#sleepVm takes a full snapshot of a woken VM whose memory file cannot be c
   expect(timings).toContainKey('copyBaseFailed');
 });
 
-// the failed snapshot may have cleared the dirty page log, so a later diff
-// over that file could miss pages
 test('#sleepVm removes the memory file a woken VM woke from when its snapshot fails, and leaves the VM running', async () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
@@ -263,7 +258,6 @@ test('#sleepVm removes the memory file a VM woke from when a full snapshot fails
   expect(existsSync(paths.memFile)).toBeFalse();
 });
 
-// a sleep asks under the imp's lock: far below a ping's default of 2 s
 test('#readGuestUptimeMs asks the agent with a 250 ms deadline', async () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
@@ -282,7 +276,6 @@ test('#readGuestUptimeMs reads no uptime from an agent that does not answer by t
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
 
-  // accepts the connection and never answers
   await startStubAgent(paths.vsockSocket, () => {});
 
   const uptime = await createVmRunner(buildStubJails().jails, null, (vsockPath) =>
@@ -327,7 +320,6 @@ test('#startVm returns the steps the guest reports for its boot', async () => {
     jail: { uid: 900_000, gid: 900_000 },
   });
 
-  // the spawn removes a stale agent socket, so the agent comes after it
   await waitFor(() => {
     expect(existsSync(paths.apiSocket)).toBeTrue();
   });
@@ -542,7 +534,6 @@ test('#wakeVm starts a jailed VM through the merge wrapper, which runs the jaile
   expect(wrapper.readArgv()).toStrictEqual([...command]);
 });
 
-// the resume fails, so the wake ends right after the load it logged
 test('#wakeVm loads the snapshot with dirty page tracking, so the next sleep takes a diff', () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');

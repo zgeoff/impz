@@ -1,5 +1,3 @@
-// impd's ACME issuer against Pebble, Let's Encrypt's test CA, in Docker:
-// `bun run test:pebble`. Plain `bun test` skips this file.
 import { expect, onTestFinished, test } from 'bun:test';
 import { X509Certificate, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -14,15 +12,11 @@ import { createCloudflareProvider } from '../dns/cloudflare-provider';
 import { createAcmeIssuer } from './acme-issuer';
 import { createCertStore } from './cert-store';
 
-// A Pebble and challtestsrv of the test's own, under a second to start and
-// about a second to stop, and a cert store in a temp dir.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // per run and per test, so neither another run on this machine nor a stack
-  // an earlier test left behind ever holds this test's container names
   const prefix = `imp-acme-it-${String(process.pid)}-${randomUUID().slice(0, 8)}`;
 
   const directory = await mkdtemp(join(tmpdir(), 'imp-acme-it-'));
@@ -56,7 +50,6 @@ test('it issues one certificate for the domain and its wildcard', async () => {
 
   const issueMs = Math.round(performance.now() - issueStarted);
 
-  // the stack's own phases log at its start; this names the issue's share
   console.error(`pebble: issue ${String(issueMs)} ms`);
 
   expect(new X509Certificate(certificate.chainPem).subjectAltName).toBe(
@@ -122,7 +115,6 @@ test('it opens a new account and still issues when the account file is lost', as
 
   invariant(lost);
 
-  // what the https e2e suite does between runs, when Pebble starts afresh
   await rm(join(ctx.directoryPath, 'tls', 'account.json'));
 
   const second = createAcmeIssuer({
@@ -187,7 +179,6 @@ test('it rejects an ACME directory that answers with an error status', async () 
 test('it rejects with the DNS provider reason, and no token, when the provider refuses the token', async () => {
   const ctx = await setupTest();
 
-  // a stand-in that accepts no token refuses every call with Cloudflare's 403
   server.use(...createStubCloudflareApi({ tokens: [] }).handlers);
 
   const logs: string[] = [];

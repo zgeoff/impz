@@ -6,12 +6,8 @@ import type { CertificateInfo } from './renewal-policy';
 import { planRenewal, readBackoffMs } from './renewal-policy';
 
 export interface CertManager {
-  // the certificate on disk, expired or not: an expired one still serves
-  // better than none while a renewal fails
   readonly load: () => Certificate | null;
 
-  // asks the CA when the certificate is due and the backoff allows; the new
-  // certificate, or null when nothing changed. Never throws.
   readonly renew: () => Promise<Certificate | null>;
 }
 
@@ -27,11 +23,7 @@ export function createCertManager(options: CertManagerOptions): CertManager {
   const domain = options.domain;
   const store = options.store;
   const log = options.log;
-
-  // one renewal at a time; a second call joins the one under way
   let running: Promise<Certificate | null> | null = null;
-
-  // the backoff end last logged, so a wait is logged once, not every tick
   let loggedWaitUntil: number | null = null;
 
   const readInfo = (certificate: Certificate | null): CertificateInfo | null => {
@@ -77,7 +69,6 @@ export function createCertManager(options: CertManagerOptions): CertManager {
 
     log(`impd: https: asking for a certificate for ${domain} and *.${domain}: ${decision.reason}`);
 
-    // counted as failed before it starts: a crash in the middle still backs off
     const failures = attempts.failures + 1;
 
     store.writeAttempts({ failures, lastAttemptAt: now, lastError: attempts.lastError });

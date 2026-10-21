@@ -1,18 +1,15 @@
-// What `system.info` reports about the guest kernel and the system drive
-// impd boots imps with: enough to tell which release they came from.
 export interface SystemFileInfo {
   readonly guestKernel: { readonly version: string | null; readonly sha256: string };
   readonly systemDrive: { readonly sha256: string };
 }
 
+// every Linux kernel image carries a C-string banner such as "Linux version 6.1.188 (imp@imp) ..."
 const BANNER = Buffer.from('Linux version ');
 
-// a kernel image is small and read whole for its banner anyway
 export function readKernelInfo(image: Uint8Array): SystemFileInfo['guestKernel'] {
   return { version: parseKernelVersion(image), sha256: deriveSha256(image) };
 }
 
-// streamed: a system drive can be large
 export async function deriveFileSha256(path: string): Promise<string> {
   const hasher = new Bun.CryptoHasher('sha256');
 
@@ -23,8 +20,6 @@ export async function deriveFileSha256(path: string): Promise<string> {
   return hasher.digest('hex');
 }
 
-// The release from the banner every kernel image carries
-// ("Linux version 6.1.188 (imp@imp) ..."), or null without one.
 export function parseKernelVersion(image: Uint8Array): string | null {
   const start = Buffer.from(image.buffer, image.byteOffset, image.byteLength).indexOf(BANNER);
 
@@ -32,7 +27,6 @@ export function parseKernelVersion(image: Uint8Array): string | null {
     return null;
   }
 
-  // the banner is a C string: stop at its NUL
   const tail = Buffer.from(image.subarray(start + BANNER.length, start + BANNER.length + 64));
   const [text = ''] = tail.toString('latin1').split('\0');
   const match = /^\S+/u.exec(text);

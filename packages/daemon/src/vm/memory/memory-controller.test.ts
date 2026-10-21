@@ -4,9 +4,6 @@ import { buildStubGuestMemory } from '../../../testing/vm/build-stub-guest-memor
 import { createMemoryController } from './memory-controller';
 import type { ElasticImp, MemoryControllerDeps } from './memory-controller';
 
-// The controller's deps on stand-in guests, a clock the test moves, and a
-// record of every call it made: it admits each grow, finds no imp busy or
-// locked, and runs each plug.
 function setupTest() {
   const clock = { now: 0 };
   const guests = buildStubGuestMemory();
@@ -18,7 +15,6 @@ function setupTest() {
 
   const plugged = new Map<string, number>();
 
-  // the RAM each VM owns is the test's to give, as `readRamMib`
   const deps: Omit<MemoryControllerDeps, 'readRamMib'> = {
     listElastic: () => Promise.resolve(imps),
     vms: guests.vms,
@@ -88,7 +84,6 @@ test('it grows a guest low on memory by a step, its limit raised before the plug
 
   await controller.runTick();
 
-  // 256 MiB and its 4 MiB of struct pages
   expect(ctx.grows).toStrictEqual([{ id: 'dev', mib: 260 }]);
   expect(ctx.limits).toStrictEqual(['dev 512', 'dev 768']);
   expect(ctx.guests.requests).toStrictEqual([256]);
@@ -129,7 +124,6 @@ test('it grows a guest step by step to its max and no further', async () => {
 
   ctx.imps.push(imp);
 
-  // 488 MiB of growth to the max, in whole 128 MiB slots
   const guest = ctx.guests.addGuest(imp.paths, { usedMib: 2000, regionMib: 512 });
   const controller = createMemoryController({ ...ctx.deps, readRamMib: () => 400 });
 
@@ -137,7 +131,6 @@ test('it grows a guest step by step to its max and no further', async () => {
     await controller.runTick();
   }
 
-  // the region is whole slots (512), but the max (1000) caps it: 256 + 232
   expect(ctx.guests.requests).toStrictEqual([256, 488]);
   expect(guest.pluggedMib).toBe(488);
 });
@@ -430,7 +423,6 @@ test('it holds the next grow for 3 s from when the plug lands, not from a slow a
     staleStats: { totalMib: 512, availableMib: 22 },
   });
 
-  // the governor makes room for the grow by sleeping other imps
   const controller = createMemoryController({
     ...ctx.deps,
     admitGrow: () => {
@@ -479,7 +471,6 @@ test('it counts a grow after a missed one on top of it', async () => {
 
   await controller.runTick();
 
-  // the statistics count the first grow only, and still show the guest low
   guest.staleStats = { totalMib: 768, availableMib: 22 };
 
   ctx.advance(500);
@@ -536,7 +527,6 @@ test('it shrinks a guest that could give back a step for a minute', async () => 
 
   await controller.runTick();
 
-  // 600 used, so 1008 in all leaves a step past the grow mark; 512 is base
   expect(ctx.guests.requests).toStrictEqual([496]);
 });
 
@@ -881,7 +871,6 @@ test('it counts no part of a plug that a reclaim stopped in the grow after it', 
 
   const guest = ctx.guests.addGuest(imp.paths, { usedMib: 490, isSlow: true });
 
-  // the reclaim's polls take time on the controller's clock
   const controller = createMemoryController({
     ...ctx.deps,
     readRamMib: () => 400,
@@ -894,13 +883,11 @@ test('it counts no part of a plug that a reclaim stopped in the grow after it', 
 
   await controller.runTick();
 
-  // half the plug lands, then the guest goes idle and stops moving
   guest.pluggedMib = 128;
   guest.usedMib = 100;
 
   await controller.reclaimIdle(null);
 
-  // the statistics count what landed, and the guest is low again
   guest.isSlow = false;
   guest.usedMib = 600;
 
@@ -931,7 +918,6 @@ test('it counts what a reclaim unplugs from a plug that moves after its first re
     isSlow: true,
   });
 
-  // the reclaim's polls take time on the controller's clock
   const controller = createMemoryController({
     ...ctx.deps,
     readRamMib: () => 400,
@@ -944,8 +930,6 @@ test('it counts what a reclaim unplugs from a plug that moves after its first re
 
   await controller.runTick();
 
-  // the rest of the plug lands after the reclaim first reads the guest, and
-  // the unplug then stops at 128
   guest.isSlow = false;
   guest.pluggedOnReads = [64, 256];
 
@@ -985,7 +969,6 @@ test('it shrinks a large guest to leave 15 % of it free', async () => {
 
   await controller.runTick();
 
-  // 2656 in all: 656 available, a step past its grow mark of 398
   expect(ctx.guests.requests).toStrictEqual([1632]);
 });
 
@@ -1176,7 +1159,6 @@ test('it counts no part of a plug that never finished in the grow after it', asy
 
   await controller.runTick();
 
-  // the statistics count the retried step, and the guest is still low
   guest.usedMib = 750;
 
   ctx.advance(500);
@@ -1309,8 +1291,6 @@ test('it gives back the reservation and the limit of a plug that Firecracker ref
   });
 
   ctx.imps.push(imp);
-
-  // a region too small for the step: Firecracker answers 400
   ctx.guests.addGuest(imp.paths, { usedMib: 490, regionMib: 128 });
 
   const controller = createMemoryController({ ...ctx.deps, readRamMib: () => 400 });

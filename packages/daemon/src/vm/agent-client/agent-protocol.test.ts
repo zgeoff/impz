@@ -34,9 +34,6 @@ import {
 import { encodeAgentMessage } from './encode-agent-message';
 import { FRAME_TYPES, MAX_PAYLOAD } from './frame-codec';
 
-// testdata/guest is what the agent sends and testdata/host what impd sends
-// (docs/architecture/guest/protocol.md#contract-tests)
-
 test.each([
   ['ping', PingSchema],
   ['ping-inner-up', PingSchema],
@@ -161,7 +158,6 @@ test.each(listAgentFixtures('host/requests'))(
   },
 );
 
-// the agent marks where a service came from; impd never says
 test('it sets each field of a request in a fixture the agent decodes', () => {
   const sent = listAgentFixtures('host/requests').flatMap((op) =>
     collectJsonKeyPaths(readAgentFixture(`host/requests/${op}.json`)),

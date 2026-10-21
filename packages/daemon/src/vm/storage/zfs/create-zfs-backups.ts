@@ -6,8 +6,6 @@ import type { StorageBackend } from '../storage-backend';
 import { listCheckpointSnapshots, parseZfsMounts } from './zfs-commands';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
 
-// what the ZFS backend lends its backups: its commands, its lanes, its
-// reclaim, and the names of its datasets and their mounts
 interface ZfsBackupContext {
   readonly zfs: ZfsCommands;
   readonly dataDir: string;
@@ -24,19 +22,15 @@ interface ZfsBackupContext {
   readonly buildImageName: (digest: string) => string;
 }
 
-// A backup run's side of the ZFS backend: a snapshot of each disk, then
-// read-only clones of them mounted in the backup tree
 export function createZfsBackups(
   ctx: ZfsBackupContext,
 ): Pick<StorageBackend, 'createBackupCopy' | 'openBackupTree'> {
   return {
-    // the frozen guest waits for no reclaim, as with a checkpoint
     createBackupCopy: (impId, runId) =>
       ctx.runSnapshot(() => ctx.zfs.snapshot(`${ctx.buildDiskName(impId)}@bk-${runId}-${impId}`)),
 
-    // Read-only clones in staging, mounted in the tree. Each disk copy is
-    // marked at once, so ZFS drops it with its clone and a removed imp's
-    // retired disk goes once the run closes.
+    // ZFS drops a snapshot marked for deferred destroy with its last clone, so each disk copy is
+    // marked at once and a removed imp's retired disk goes once the run closes.
     openBackupTree: async (request) => {
       const tree = buildBackupPaths(ctx.dataDir).tree;
       const clones: { name: string; directory: string }[] = [];
@@ -52,7 +46,6 @@ export function createZfsBackups(
             await ctx.zfs.destroy(clone.name);
           }
 
-          // a copy that never made it into the tree
           const entries = await ctx.listAll();
 
           for (const snapshot of entries) {
@@ -86,7 +79,6 @@ export function createZfsBackups(
           throw new Error(`zfs: ${mounted} in the backup tree is still mounted`);
         }
 
-        // empty mount points of the last run
         rmSync(join(tree, 'imps'), { recursive: true, force: true });
         rmSync(join(tree, 'images'), { recursive: true, force: true });
 
@@ -113,7 +105,6 @@ export function createZfsBackups(
           for (const checkpointId of imp.checkpointIds) {
             const [snapshot, ...others] = listCheckpointSnapshots(entries, checkpointId);
 
-            // deleted since the database copy
             if (snapshot === undefined || others.length > 0 || snapshot.deferDestroy) {
               continue;
             }

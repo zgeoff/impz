@@ -101,7 +101,7 @@ test('#stopProcessOfUid sends nothing to a process of another uid', async () => 
 
   stopProcessOfUid(child.pid, 900_001);
 
-  // a SIGKILL sent above is pending before this one, and would end it first
+  // a pending SIGKILL from the call above reaches the process before this one
   child.kill('SIGTERM');
 
   await child.exited;

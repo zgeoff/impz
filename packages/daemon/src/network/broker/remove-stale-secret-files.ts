@@ -3,9 +3,6 @@ import { listFileRemovals, listValueFiles, removeFileRemoval } from '../../platf
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import type { SecretFiles } from './secret-files';
 
-// The broker's start over the value files (docs/guides/connectors.md#value-files):
-// it removes each file a committed delete or replace displaced, and keeps
-// aside each value no row and no record names.
 export async function removeStaleSecretFiles(
   db: ImpDatabase,
   files: Pick<SecretFiles, 'remove' | 'keepOrphansExcept'>,
@@ -15,9 +12,8 @@ export async function removeStaleSecretFiles(
   const valueFiles = await listValueFiles(db);
   const pending = await removeRecordedFiles(db, files, valueFiles, log);
 
-  // A value no row and no record names is kept aside, not deleted: it may be
-  // a secret added after the database copy a restore put back, or a write
-  // whose row never came. A record that failed again keeps its file here.
+  // kept aside, not deleted: a value no row names may be a secret added after
+  // the database copy that a restore put back
   const orphans = files.keepOrphansExcept(new Set([...valueFiles, ...pending]), at);
 
   for (const file of orphans.files) {
@@ -27,9 +23,6 @@ export async function removeStaleSecretFiles(
   }
 }
 
-// Removes each file a committed delete or replace displaced and impd stopped
-// before removing, then its record; returns the files whose removal failed
-// again, whose records stay for the next start. A file a row names stays.
 async function removeRecordedFiles(
   db: ImpDatabase,
   files: Pick<SecretFiles, 'remove'>,

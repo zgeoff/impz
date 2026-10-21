@@ -22,8 +22,6 @@ import { buildImpPaths } from '../storage/data-layout';
 import { probeFirecrackerAlive } from './firecracker-process';
 import { TemplateRestoreError, createTemplateVm, loadTemplateVm } from './template-vm';
 
-// A temp dir with one log that the stub VMM and the stub jails both append
-// to, so the order of their calls shows.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-tpl-vm-'));
 
@@ -57,7 +55,6 @@ test('#loadTemplateVm owns the disk of a jailed restore once the clone is done, 
 
   const restoring = loadTemplateVm(plan, stub.jails);
 
-  // the start writes the pid file in the same tick as the spawn
   await waitFor(() => {
     expect(existsSync(paths.pidFile)).toBeTrue();
   });
@@ -74,7 +71,6 @@ test('#loadTemplateVm owns the disk of a jailed restore once the clone is done, 
 
   await startStubParkedAgent(paths.vsockSocket);
 
-  // the clone lands once the restore has resumed the parked guest
   await waitFor(() => {
     expect(readFileSync(ctx.logPath, 'utf8')).toInclude('PATCH /vm\n');
   });
@@ -95,7 +91,8 @@ test('#loadTemplateVm owns the disk of a jailed restore once the clone is done, 
     'GET /version',
   ]);
 
-  // without the drive the snapshot names, every jailed load fails
+  // Firecracker fails a jailed load unless the drive the snapshot names is
+  // bound in
   expect(stub.plans).toStrictEqual([
     {
       impId: 'i1',
@@ -242,7 +239,7 @@ test('#loadTemplateVm releases the jail of a restore whose prepare fails, and pa
 test('#buildTemplateVm releases the jail of a build before its files go to root, readable by all', async () => {
   const ctx = setupTest();
 
-  // a build chowns its snapshot files to its uid: the test's own, without root
+  // the test's own uid, because a chown to another uid needs root
   const user = { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 };
 
   const plan = buildMockTemplateBuildPlan({
@@ -260,7 +257,6 @@ test('#buildTemplateVm releases the jail of a build before its files go to root,
     },
   });
 
-  // the release kills the build uid: the files are still the VM's then
   const memModes: string[] = [];
 
   const building = createTemplateVm(plan, {
@@ -281,7 +277,6 @@ test('#buildTemplateVm releases the jail of a build before its files go to root,
 
   const calls = readFileSync(ctx.logPath, 'utf8').trim().split('\n');
 
-  // the jail seals before the boot, and the release comes after the snapshot
   expect(calls).toStrictEqual([
     'prepare build tpl-build',
     'PUT /boot-source',

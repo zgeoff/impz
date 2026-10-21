@@ -50,17 +50,11 @@ import { resolveNetworkName } from './network-names';
 import { readHostNetwork } from './read-host-network';
 import type { HostNetwork } from './read-host-network';
 
-// impd's clamp on an answer's TTL, and the size of a box imp's set
 const MIN_TTL_S = 300;
 const MAX_TTL_S = 86_400;
 const SET_SIZE = 4096;
 const SWEEP_MS = 30_000;
-
-// a box or none imp's queries: a burst, then this many a second
 const CLOSED_RATE: RateLimit = { burst: 500, perSecond: 100 };
-
-// An open imp on a network and a public imp send every query through impd,
-// so they get more: they reach any public server directly anyway.
 const OPEN_RATE: RateLimit = { burst: 2000, perSecond: 1000 };
 
 export interface EgressDeps {
@@ -71,14 +65,11 @@ export interface EgressDeps {
   readonly db: ImpDatabase;
   readonly log: (message: string) => void;
 
-  // the broker: hosts a grant covers, and its plain tunnels
   readonly isGranted: (impId: string, host: string) => Promise<boolean>;
   readonly closeTunnels: (impId: string, keep: (host: string) => boolean) => void;
 
-  // the IPv6 impd resolved at start; null or left out, imps get none
   readonly ipv6?: Ipv6Plan | null;
 
-  // tests stand in for nft, conntrack and the network
   readonly runNft?: NftRunner;
   readonly readConnected6?: () => Promise<readonly string[]>;
   readonly readConnected4?: () => Promise<readonly string[]>;
@@ -90,33 +81,25 @@ export interface EgressDeps {
   readonly resolveExact?: (name: string) => Promise<readonly AddressAnswer[]>;
   readonly now?: () => number;
 
-  // runs `run` every `ms` until the returned stop; setInterval by default
   readonly repeat?: (run: () => void, durationMs: number) => () => void;
 }
 
 export interface EgressService {
-  // the table, then the resolver: before any VM is adopted, booted or woken
   readonly start: () => Promise<void>;
   readonly stop: () => void;
 
-  // PRECONDITION_FAILED for a box or none policy when nft cannot enforce it
   readonly requirePolicy: (policy: EgressPolicy) => void;
   readonly isEnforced: () => boolean;
   readonly requireImp: (impId: string) => Promise<void>;
 
-  // a new imp's slot, fresh, after its insert and before its tap
   readonly addSlot: (slot: number) => Promise<void>;
 
-  // a destroyed imp's slot, out of the table before the slot is free
   readonly releaseSlot: (slot: number) => Promise<void>;
 
-  // a change to the networks' rows, then the table, one change at a time
   readonly changeNetworks: <T>(change: NetworkChange<T>) => Promise<T>;
   readonly readPolicy: (name: string) => Promise<EgressPolicy>;
   readonly setPolicy: (name: string, policy: EgressPolicy) => Promise<EgressPolicy>;
 
-  // the resolver's side: its verdict on a name, the answers it lets in,
-  // and the sweep of what expired
   readonly checkName: (slot: number, name: string) => Promise<QueryVerdict | null>;
   readonly writeAnswers: (
     slot: number,
@@ -125,7 +108,6 @@ export interface EgressService {
   ) => Promise<void>;
   readonly runSweep: () => Promise<void>;
 
-  // a box slot's resolved addresses, for a warm move to carry
   readonly readAnswers: (slot: number) => readonly HeldAnswer[];
 }
 
@@ -169,21 +151,17 @@ export function createEgressService(deps: EgressDeps): EgressService {
   const state: {
     slots: Map<number, SlotView>;
 
-    // the networks' members, released slots left out
     members: readonly NetworkMember[];
     networkNames: ReadonlySet<string>;
 
-    // setup-net's ACCEPT was missing at the last check, and that was logged
     peerAcceptMissing: boolean;
     released: Set<number>;
     unenforced: string | null;
     server: ResolverServer | null;
     stopSweep: (() => void) | null;
 
-    // what a public imp's DNS answers leave out, as of the last table
     isScreened: (address: string) => boolean;
 
-    // why the last table could not read the routes a public imp needs
     publicUnenforced: string | null;
     denyListMissing: boolean;
   } = {
@@ -204,7 +182,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
     denyListMissing: false,
   };
 
-  // an imp's /128, from its IPv4 address as its tap derives it
   const findGuestIp6 = (guestIp: string): string | null => {
     const ip = parseIpv4(guestIp);
 
@@ -217,8 +194,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
     ...host.connected6,
   ];
 
-  // a public imp's ranges: the private ones and the host's own networks,
-  // and IMP_EGRESS_DENY, in each family
   const listPublicRanges = (host: HostNetwork): readonly [string[], string[]] => [
     [...privateRanges, ...host.connected4, ...deny4],
     [...listBlocked6(host), ...DOCUMENTATION_RANGES6, ...RESERVED_RANGES6, ...deny6],
@@ -257,8 +232,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
     });
   };
 
-  // the slots from the database, then the whole table in one transaction;
-  // impd's view of the slots changes only once nft has taken it
   const applyTable = (): Promise<void> =>
     mutex.runExclusive('table', async () => {
       const rows = await listEgressSlots(deps.db);
@@ -293,7 +266,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
 
         const isMissing = isMissingHostAddresses(hasPublic, deps.config.hostAddresses);
 
-        // logged once each time the missing addresses appear
         if (isMissing && !state.denyListMissing) {
           deps.log(
             "impd: egress: WARNING: a public imp exists and IMP_HOST_ADDRESSES is empty, so only IMP_EGRESS_DENY keeps it from the Docker host's own addresses and networks; the systemd unit and the NixOS module fill it at each start, compose does not (docs/architecture/network/egress.md#public)",
@@ -323,7 +295,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
       state.networkNames = new Set(networkNames);
     });
 
-  // after a failed apply: nft may still refuse, and keeps its last table
   const tryApplyTable = async (): Promise<void> => {
     try {
       await applyTable();
@@ -359,14 +330,12 @@ export function createEgressService(deps: EgressDeps): EgressService {
       return null;
     }
 
-    // an open imp on a network asks through impd, for its peers' names
     const traits = EGRESS_MODE_TRAITS[view.entry.policy.mode];
 
     if (traits.isOpen) {
       return 'answer';
     }
 
-    // any name, with the addresses it may not reach left out
     if (traits.isPublic) {
       return 'screen';
     }
@@ -383,7 +352,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
     return granted ? 'answer' : 'refuse';
   };
 
-  // the exact names of a box's list, resolved before the guest asks
   const resolveExactNames = async (slot: number): Promise<void> => {
     const view = state.slots.get(slot);
 
@@ -525,8 +493,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
     requirePolicy,
     isEnforced: () => state.unenforced === null,
 
-    // a public imp after a failed route read builds the table again first:
-    // the routes may be back
     requireImp: async (impId) => {
       const policy = await readEgressPolicy(deps.db, impId);
 
@@ -543,8 +509,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
       }
     },
 
-    // under the policy lock: a table built here must not carry a policy
-    // row that a failed setPolicy is about to put back
     addSlot: (slot) =>
       mutex.runExclusive('policy', async () => {
         state.released.delete(slot);
@@ -585,12 +549,10 @@ export function createEgressService(deps: EgressDeps): EgressService {
   };
 }
 
-// a box imp: its allow-list's sets are the ones to keep
 function hasAllowList(view: SlotView | undefined): boolean {
   return view !== undefined && EGRESS_MODE_TRAITS[view.entry.policy.mode].hasAllowList;
 }
 
-// an open or public imp: every name it asks is forwarded
 function isForwardedFreely(view: SlotView | undefined): boolean {
   if (view === undefined) {
     return false;

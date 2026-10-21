@@ -14,7 +14,6 @@ import { MAX_HEAD_BYTES, findHeadEnd, parseConnectHead } from './connect-head';
 import type { TerminatorKey } from './terminators';
 import { TunnelRefusedError } from './tunnel-target';
 
-// connections one imp may hold open through the broker at once
 const MAX_CONNECTIONS_PER_IMP = 256;
 
 export interface BrokerFrontDeps {
@@ -23,39 +22,30 @@ export interface BrokerFrontDeps {
   readonly isGranted: (impId: string, host: string) => Promise<boolean>;
   readonly openTerminator: (key: TerminatorKey) => Promise<string>;
 
-  // the address to dial for a host, checked against what the imp's policy
-  // refuses beyond every tunnel's ranges
   readonly resolveTunnelTarget: (host: string, mode: EgressMode) => Promise<string>;
 
-  // an audit row for each request of a known imp that the front refuses
   readonly recordAudit: (entry: NewAuditEntry) => void;
   readonly log: (message: string) => void;
 
-  // opens a plain tunnel's upstream socket; tests point it at a local server
   readonly dialTunnel?: (address: string, port: number) => Socket;
 
-  // a smaller cap for tests
   readonly maxConnectionsPerImp?: number;
 
-  // starts the deadline for a connection's head, given its length;
-  // AbortSignal.timeout by default, and tests abort it themselves
   readonly startHeadDeadline?: (durationMs: number) => AbortSignal;
 }
 
 export interface BrokerFront {
   readonly server: Server;
 
-  // the port it listens on: the one asked for, or the kernel's pick for 0
   readonly port: number;
 
-  // ends the imp's plain tunnels to hosts `keep` rejects, as a tighter
-  // egress policy needs: they are relays in impd, which conntrack never sees
+  // plain tunnels are relays in impd, which a conntrack flush never reaches,
+  // so a tighter policy ends them here
   readonly closeTunnels: (impId: string, keep: (host: string) => boolean) => void;
   readonly stop: () => Promise<void>;
 }
 
 export function startBrokerFront(port: number, deps: BrokerFrontDeps): Promise<BrokerFront> {
-  // how many connections each imp holds open
   const open = createCountedLimit(deps.maxConnectionsPerImp ?? MAX_CONNECTIONS_PER_IMP);
   const tunnels = createTunnelRegistry();
 
@@ -105,17 +95,12 @@ export function startBrokerFront(port: number, deps: BrokerFrontDeps): Promise<B
   return ready.promise;
 }
 
-// Each imp's connections from accept, with their CONNECT's host once it
-// comes. A policy change ends those with a host it denies, and leaves its
-// `keep` on the rest for their tunnel start to check.
 interface TunnelRegistry {
   readonly add: (impId: string, socket: Socket) => void;
   readonly setHost: (impId: string, socket: Socket, host: string) => void;
 
-  // a connection to a granted host, which every policy allows
   readonly drop: (impId: string, socket: Socket) => void;
 
-  // false once a policy change denies the host, or the connection ended
   readonly isKept: (impId: string, socket: Socket, host: string) => boolean;
   readonly closeDenied: (impId: string, keep: (host: string) => boolean) => void;
 }
@@ -170,7 +155,6 @@ function createTunnelRegistry(): TunnelRegistry {
   };
 }
 
-// a failure ends the connection and is logged; it never reaches the server
 async function handleConnection(
   socket: Socket,
   deps: BrokerFrontDeps,
@@ -185,7 +169,6 @@ async function handleConnection(
   }
 }
 
-// a reply the front refuses with, and what its audit row records
 interface FrontRefusal {
   readonly status: number;
   readonly message: string;
@@ -194,18 +177,8 @@ interface FrontRefusal {
   readonly host: string | null;
 }
 
-// The front port every guest reaches on its own gateway. A CONNECT to a
-// granted host goes to its TLS terminator; any other is a plain tunnel to a
-// checked public address, when the imp's egress policy allows the host.
-
-// the time a client has to send its CONNECT head
 const HEAD_TIMEOUT_MS = 10_000;
-
-// a dead guest's connections go once keepalive probes fail
 const KEEPALIVE_MS = 60_000;
-
-// the longest host an audit row keeps, the API's bound: a bracketed host in a
-// head has none
 const MAX_AUDIT_HOST = 253;
 
 async function runConnection(
@@ -217,7 +190,6 @@ async function runConnection(
   const started = performance.now();
   const slot = findPeerSlot(socket.remoteAddress ?? '', socket.localAddress ?? '', deps.subnet);
 
-  // not a guest, or a guest on another imp's gateway
   if (slot === null) {
     socket.destroy();
 
@@ -314,7 +286,6 @@ async function runConnection(
 
   tunnels.setHost(peer.id, socket, head.host);
 
-  // the policy as it is now: it may have changed while the head was coming
   const current = await deps.readPeer(slot);
 
   if (current?.id !== peer.id) {
@@ -342,7 +313,6 @@ async function runConnection(
   try {
     address = await deps.resolveTunnelTarget(head.host, current.egress.mode);
   } catch (error) {
-    // a lookup that failed is no refusal, and gets no audit row
     if (error instanceof TunnelRefusedError) {
       sendRefusal({
         status: 403,
@@ -389,8 +359,6 @@ function sendReply(socket: Socket, status: number, message: string): void {
   );
 }
 
-// The CONNECT head and any bytes after it, or null when the client sends
-// too much, too slowly, or hangs up first.
 interface HeadRead {
   readonly head: string;
   readonly rest: Uint8Array;
@@ -445,8 +413,6 @@ function readHead(socket: Socket, deadline: AbortSignal): Promise<HeadRead | nul
   return done.promise;
 }
 
-// answers once the far end is connected, then pipes both ways; pipeline
-// carries backpressure and tears both down on an error
 function startRelay(client: Socket, upstream: Socket, rest: Uint8Array): void {
   const state = { connected: false };
 
@@ -459,6 +425,7 @@ function startRelay(client: Socket, upstream: Socket, rest: Uint8Array): void {
       upstream.write(rest);
     }
 
+    // pipeline carries backpressure and tears both sockets down on an error
     pipeline(client, upstream, () => {
       upstream.destroy();
     });

@@ -12,7 +12,6 @@ import type { NewAuditEntry } from '../../platform/db/broker-audit';
 import { loadOrCreateBrokerCa } from './broker-ca';
 import { createForwarder } from './forward-request';
 
-// the stand-in TLS upstreams keep their CAs here, and stop before it goes
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -309,8 +308,6 @@ test('it records an audit row for an answer with no body', async () => {
 
 test('it records an audit row when the upstream body fails midway', async () => {
   const audits: NewAuditEntry[] = [];
-
-  // the upstream fails only once the guest has read its first chunk
   const firstRead = Promise.withResolvers<void>();
 
   server.use(
@@ -419,7 +416,6 @@ test('it records an audit row with the bytes read when the guest hangs up mid-bo
 
   await reader.read();
 
-  // the mocked upstream never settles a cancel, so the test does not wait on it
   void reader.cancel();
 
   expect(audits).toStrictEqual([

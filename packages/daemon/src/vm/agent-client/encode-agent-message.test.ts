@@ -20,7 +20,7 @@ test('it writes a request under the schema’s field names', () => {
   });
 });
 
-// an older agent decodes int64 with encoding/json, which refuses a string
+// An older agent decodes int64 with Go's encoding/json, which refuses a string.
 test('it writes a count past 32 bits as a JSON number', () => {
   expect(
     encodeAgentMessage(RequestSchema, { op: 'grow', diskBytes: 34_359_738_368 }),

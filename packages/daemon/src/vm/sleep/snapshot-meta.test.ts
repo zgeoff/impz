@@ -34,7 +34,6 @@ function setupTest() {
 
   const paths = buildImpPaths(directory, 'imp1');
 
-  // the snapshot's dir, which every sleep makes before it writes there
   mkdirSync(paths.snapshotDir, { recursive: true });
 
   return { directoryPath: directory, paths };

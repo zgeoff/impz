@@ -3,9 +3,6 @@ import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
 import { createSingleFlight } from '../../platform/process/single-flight';
 
 const HOUR_MS = 3_600_000;
-
-// the first recovery may follow the report at once; each later one in the
-// same hour waits twice as long as the one before
 const FIRST_BACKOFF_MS = 60_000;
 const MAX_RECOVERIES_PER_HOUR = 3;
 
@@ -16,35 +13,18 @@ interface AgentWatchdogDeps {
   readonly action: WatchdogAction;
   readonly now: () => number;
   readonly log: (message: string) => void;
-
-  // a longer ping than the idle loop's; true when the agent still says nothing
   readonly confirmSilent: (imp: ImpRecord) => Promise<boolean>;
-
-  // kills the VM and boots it cold, first keeping its memory for `snapshot`;
-  // false when another operation held the imp
   readonly recover: (imp: ImpRecord, action: 'restart' | 'snapshot') => Promise<boolean>;
 }
 
-// Watches the agents the idle loop asks for their activity: one silent past
-// the timeout and a longer ping is reported, then recovered by the policy,
-// at most three times an hour with a growing wait.
 export interface AgentWatchdog {
-  // the idle loop's activity answer for a running imp nothing holds
   readonly observe: (imp: ImpRecord, answered: boolean) => void;
-
-  // the imp is held, asleep or gone: its silence no longer counts
   readonly forget: (id: string) => void;
-
-  // when its agent went silent, once that is reported
   readonly readSilentSince: (id: string) => Date | null;
-
-  // resolves once the checks and recoveries under way have finished
   readonly settle: () => Promise<void>;
 }
 
 export function createAgentWatchdog(deps: AgentWatchdogDeps): AgentWatchdog {
-  // per imp: when its agent went silent; which of those are reported, and
-  // which ran out of recoveries this hour
   const silences = new Map<string, number>();
   const reported = new Set<string>();
   const capped = new Set<string>();
@@ -52,7 +32,6 @@ export function createAgentWatchdog(deps: AgentWatchdogDeps): AgentWatchdog {
 
   const running = createSingleFlight<void>();
 
-  // when the next recovery may run; null once the hour's are spent
   const findNextRecovery = (id: string): number | null => {
     const recent = (recoveries.get(id) ?? []).filter((at) => at > deps.now() - HOUR_MS);
 
@@ -89,7 +68,6 @@ export function createAgentWatchdog(deps: AgentWatchdogDeps): AgentWatchdog {
       return;
     }
 
-    // it answered, or went away, while the ping ran
     if (silences.get(imp.id) !== since) {
       return;
     }
@@ -130,8 +108,6 @@ export function createAgentWatchdog(deps: AgentWatchdogDeps): AgentWatchdog {
 
     const recovered = await deps.recover(imp, deps.action);
 
-    // a cold boot starts a new agent: its silence starts over. One that
-    // another operation held off does not count.
     if (recovered) {
       recoveries.get(imp.id)?.push(startedAt);
       removeSilence(imp.id);

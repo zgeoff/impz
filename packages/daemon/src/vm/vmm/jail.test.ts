@@ -37,8 +37,6 @@ function setupTest() {
   const mounts = buildStubMounts();
   const processes = buildStubUidProcesses();
   const logs: string[] = [];
-
-  // the mount commands and the kills in the order the jailer makes them
   const steps: string[] = [];
 
   const jails = createJails({
@@ -63,13 +61,9 @@ function setupTest() {
       steps.push(`kill ${String(pid)}`);
       processes.deps.killUidPid(pid, uid);
     },
-
-    // no real pause between two kill scans
     wait: () => Promise.resolve(),
   });
 
-  // the dir of the imp a test names, which every jail binds, and where the
-  // jailer chroots that imp
   const createImpDir = (impId: string) => {
     const paths = buildImpPaths(dataDir, impId);
 
@@ -87,7 +81,7 @@ function setupTest() {
     jails,
     createImpDir,
 
-    // the test's own uid, so the chowns work without root
+    // the test's own uid, because a chown to another uid needs root
     user: { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 },
   };
 }
@@ -262,8 +256,6 @@ test('#prepare rebuilds the chroot so a symlink the last VM planted leads nowher
   const imp = ctx.createImpDir('i1');
   const plan = { impId: 'i1', user: ctx.user, paths: imp.paths, readOnlyFiles: [] };
   const elsewhere = join(ctx.dataDir, 'elsewhere');
-
-  // the first segment of the imp dir's absolute path, as it sits in the chroot
   const top = join(imp.root, imp.paths.directory.split('/')[1] ?? '');
 
   writeFileSync(imp.paths.disk, '');
@@ -271,7 +263,6 @@ test('#prepare rebuilds the chroot so a symlink the last VM planted leads nowher
   await ctx.jails.prepare(plan);
   await ctx.jails.release('i1');
 
-  // the VM owned root/ and swapped the path to its bind for a symlink
   mkdirSync(elsewhere);
   rmSync(top, { recursive: true });
   symlinkSync(elsewhere, top);
@@ -331,8 +322,6 @@ test('#prepare empties run/ and keeps the snapshot readable by the jail group be
   mkdirSync(imp.paths.snapshotDir, { recursive: true });
   writeFileSync(imp.paths.vmstate, 'vmstate');
   writeFileSync(imp.paths.memFile, 'mem');
-
-  // planted by the last VM, after its seal and before its kill
   mkdirSync(join(imp.paths.runDir, 'planted'), { recursive: true });
   writeFileSync(join(imp.paths.runDir, 'planted', 'payload'), 'x');
   writeFileSync(join(imp.paths.runDir, 'api.sock'), 'not a socket');
@@ -386,8 +375,6 @@ test('#prepare kills the jail cgroup and each process of the jail uid before it 
   writeFileSync(imp.paths.disk, '');
 
   ctx.processes.start(900_001, 4242);
-
-  // a mount that never goes, so the prepare stops right after the kills
   ctx.mounts.addMount(imp.root);
   ctx.mounts.refuseUmount(imp.root);
 
@@ -442,9 +429,6 @@ test('#remove waits for a killed VM of the jail uid that takes long to exit, the
 
   ctx.processes.ownRoot(imp.root, 900_001);
   ctx.processes.start(900_001, 4242);
-
-  // as Firecracker frees many GiB of guest memory: past the scans in which a
-  // process that still runs counts as surviving its kills
   ctx.processes.exitSlowly(4242, 200);
 
   await ctx.jails.remove('i1');
@@ -744,8 +728,6 @@ test('#seal hands run/ back to impd with its log and a new pid file', async () =
   await ctx.jails.prepare({ impId: 'i1', user: ctx.user, paths: imp.paths, readOnlyFiles: [] });
 
   chmodSync(imp.paths.runDir, 0o700);
-
-  // what a start leaves: impd's log and pid file
   writeFileSync(imp.paths.logFile, 'boot\n');
   writeFileSync(imp.paths.pidFile, '1\n');
 
@@ -1023,13 +1005,11 @@ test('#seal passes for an unjailed start after a sweep of what a jailed VM plant
 
   await ctx.jails.prepare({ impId: 'i1', user: ctx.user, paths: imp.paths, readOnlyFiles: [] });
 
-  // the jailed VM's leftovers, then a switch to IMP_JAILER=false
   mkdirSync(join(imp.paths.runDir, 'planted', 'deep'), { recursive: true });
   symlinkSync(outside, imp.paths.pidFile);
 
   await ctx.jails.sweepRunDir(imp.paths);
 
-  // what an unjailed start leaves before its seal
   writeFileSync(imp.paths.logFile, 'boot\n');
 
   ctx.jails.seal(imp.paths, 4242);

@@ -20,7 +20,6 @@ import { createDnsToken } from './dns/dns-token';
 import { createHttpsService } from './https-service';
 
 async function setupTest() {
-  // one stack: a service a test starts stops before its dir goes
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -78,8 +77,6 @@ test('it serves nothing until the first certificate arrives', async () => {
 
   ctx.stack.defer(() => service.stop());
 
-  // the certificate arrives once the test is over, and is on disk before the
-  // dir goes: the service writes it there as it arrives
   ctx.stack.defer(async () => {
     const arrived = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
@@ -370,7 +367,6 @@ test('it logs Cloudflare’s refusal of a bad DNS token', async () => {
     },
     store: ctx.store,
 
-    // the issuer's first DNS step, as the ACME flow takes it
     issue: async (domain) => {
       await dns.addTxt(`_acme-challenge.${domain}`, 'value');
 
@@ -431,7 +427,6 @@ test('it keeps a bad DNS token out of the log', async () => {
     },
     store: ctx.store,
 
-    // the issuer's first DNS step, as the ACME flow takes it
     issue: async (domain) => {
       await dns.addTxt(`_acme-challenge.${domain}`, 'value');
 
@@ -472,8 +467,6 @@ test('it serves nothing on any port without a DNS token file', async () => {
 
   const tokenPath = join(ctx.directoryPath, 'dns-api-token');
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
-
-  // fixed ports, so the test can knock on each one the service would open
   const free = claimFreePorts(4);
   const httpsPort = free.take();
   const httpPort = free.take();
@@ -498,7 +491,6 @@ test('it serves nothing on any port without a DNS token file', async () => {
     },
     store: ctx.store,
 
-    // the issuer's first DNS step, as the ACME flow takes it
     issue: async (domain) => {
       await dns.addTxt(`_acme-challenge.${domain}`, 'value');
 
@@ -528,7 +520,6 @@ test('it serves nothing on any port without a DNS token file', async () => {
 
   service.start();
 
-  // the renewal and address passes have both failed
   await waitFor(() => {
     invariant(ctx.logs.some((line) => line.includes('no certificate for imp.test')));
     invariant(ctx.logs.some((line) => line.includes('cannot point')));
@@ -585,7 +576,6 @@ test('it sends Cloudflare no call without a DNS token file', async () => {
     },
     store: ctx.store,
 
-    // the issuer's first DNS step, as the ACME flow takes it
     issue: async (domain) => {
       await dns.addTxt(`_acme-challenge.${domain}`, 'value');
 
@@ -682,8 +672,6 @@ test('it logs a records failure that repeats once, until it changes', async () =
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const failure: { message: string | null } = { message: 'DNS down' };
 
-  // Cloudflare fails each list of the zone's records while `failure` holds
-  // a message, then answers again
   server.use(
     http.get('https://api.cloudflare.com/client/v4/zones/:zoneId/dns_records', () =>
       failure.message === null
@@ -887,8 +875,6 @@ test('it keeps the public records in line with the public imps, and leaves the r
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
-  // one left by an imp that is gone, a deeper name impd never clears, and
-  // the bare domain of an impd on dev.imp.test, which is not this impd's
   await api.records.create({
     zone_id: 'z1',
     name: 'old.imp.test',
@@ -1224,7 +1210,6 @@ test('it writes the public records on the pass after one that failed', async () 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const outage = { isDown: true };
 
-  // Cloudflare fails each list of the zone's records until the outage ends
   server.use(
     http.get('https://api.cloudflare.com/client/v4/zones/:zoneId/dns_records', () =>
       outage.isDown
@@ -1340,8 +1325,6 @@ test('it keeps the tailnet listener and its connections when a tailscale status 
   const ctx = await setupTest();
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
-
-  // the tailnet IP, then two failed reads, then the IP again
   const answers = buildStubAnswerQueue(['127.0.0.2', null, null, '127.0.0.2']);
 
   server.use(...api.handlers);
@@ -1529,12 +1512,10 @@ test('it asks for a certificate again on each renewal tick', async () => {
 
   service.start();
 
-  // the first pass runs at start, before any tick
   await waitFor(() => {
     invariant(asked[0] !== undefined, 'no first renewal yet');
   });
 
-  // past any backoff the failed first pass set: the longest is a day
   clock.now += 2 * 86_400_000;
 
   await ctx.timer.fire('https renewal');
@@ -1581,7 +1562,6 @@ test('it writes the public records again on each public records tick', async () 
 
   service.start();
 
-  // the first pass runs at start, with no imp public yet
   await waitFor(() => {
     invariant(service.readRecordsStatus(), 'no first records pass yet');
   });

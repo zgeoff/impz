@@ -20,9 +20,6 @@ import type { TailnetNamesDeps } from './tailnet-names';
 import { createPresenceCheck } from './wire-tailnet-names';
 
 interface SetupOptions {
-  // '1' wires impd's own per-imp names (IMP_TAILNET_NAMES) on a tailnet node
-  // (IMP_TAILSCALE_NODE), which serve through the stub `tailscale serve`
-  // and the stub API; left out, impd claims no names
   readonly tailnetNames?: '1';
 }
 
@@ -41,7 +38,6 @@ async function setupTest(options: SetupOptions = {}) {
       }),
     },
     boundaries: {
-      // the node's MagicDNS name gives impd's own names their suffix
       readTailscale: () =>
         Promise.resolve({
           state: 'Running',
@@ -51,19 +47,16 @@ async function setupTest(options: SetupOptions = {}) {
           ips: [],
         }),
 
-      // `tailscale serve` for impd's own names, never the host's
       runCommand: tailscale.run,
     },
   });
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
-  // the image every imp here boots
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
 
-  // the OAuth client the stub tailnet knows, which every API call needs a token from
   const tailscaleApi = createStubTailscaleApi({
     client: { clientId: 'kExample', clientSecret: 'secret' },
   });
@@ -72,8 +65,6 @@ async function setupTest(options: SetupOptions = {}) {
 
   const logs: string[] = [];
 
-  // every dep but the host's ID, through the real Services API client and
-  // `tailscale serve` against their stand-ins
   const namesDeps: Omit<TailnetNamesDeps, 'hostId'> = {
     config: { prefix: '', oauthFile: join(harness.dataDir, 'unused-oauth.json') },
     db: harness.db,
@@ -84,15 +75,13 @@ async function setupTest(options: SetupOptions = {}) {
     findPort: (slot) => deriveSlotAddress(slot, harness.config).tailnetPort,
     isImpPresent: createPresenceCheck(harness.imps, harness.db),
 
-    // a sync runs without the suffix, which only a name's URL needs
     readSuffix: () => Promise.resolve(null),
     log: (line) => {
       logs.push(line);
     },
   };
 
-  // assigned, not spread: a spread reads the harness's parts once; `logs`
-  // are the names' own lines, and `impdLogs` impd's
+  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, {
     tailscaleApi,
     tailscale,
@@ -168,7 +157,6 @@ test('it writes the service before it serves it', async () => {
 
   await ctx.client.imps.create({ name: 'box' });
 
-  // the serve calls made when the write arrives
   const servedAtWrite = mock<(calls: readonly (readonly string[])[]) => void>();
 
   server.use(
@@ -320,7 +308,6 @@ test('it fails a name whose service appears after the list, and never writes it'
   await ctx.tailscaleApi.services.create({ name: 'svc:box', comment: 'someone else', tags: [] });
   await ctx.client.imps.create({ name: 'box' });
 
-  // the list was read before the other owner made the service
   server.use(
     http.get(
       'https://api.tailscale.com/api/v2/tailnet/-/services',
@@ -350,7 +337,6 @@ test('it clears a destroyed imp’s serve config, then deletes its service', asy
   await names.runSync();
   await ctx.client.imps.destroy({ name: 'box' });
 
-  // the last serve call made when the delete arrives
   const lastServeAtDelete = mock<(argv: readonly string[] | undefined) => void>();
 
   server.use(
@@ -491,7 +477,6 @@ test('it removes a moved imp’s service once the target holds a verified copy',
 
   await names.runSync();
 
-  // a send's mark, then its receipt
   await updateImpMove(ctx.db, imp.id, 'sending');
   await updateImpMove(ctx.db, imp.id, 'moved');
 
@@ -671,7 +656,6 @@ test('it shows an imp’s service URL once its name is live', async () => {
 
   await ctx.client.imps.create({ name: 'box' });
 
-  // the create's write starts impd's sync, which serves the name
   const service = await waitFor(async () => {
     const urls = await ctx.client.imps.url({ name: 'box' });
 
@@ -688,7 +672,6 @@ test('it shows no service URL before the name is live', async () => {
 
   await ctx.client.imps.create({ name: 'box' });
 
-  // with no OAuth client file, impd's sync cannot claim the name
   const failure = await waitFor(() => {
     const line = ctx.impdLogs.find((each) => each.startsWith('impd: tailnet names: box: '));
 

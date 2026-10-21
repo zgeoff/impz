@@ -2,8 +2,6 @@ import { expect, mock, test } from 'bun:test';
 import { buildMockImpRecord } from '../../../testing/imps/build-mock-imp-record';
 import { createAgentWatchdog } from './agent-watchdog';
 
-// A clock the test moves and the watchdog's log; the agent's answer to the
-// longer ping and the recovery are the test's to give.
 function setupTest() {
   const clock = { nowMs: 0 };
   const logs: string[] = [];
@@ -149,8 +147,6 @@ test('it backs off restarts, then stops at three an hour', async () => {
     action: 'restart',
   });
 
-  // silent for good: each restart's new agent goes silent too, and each
-  // silence is two looks this far apart
   for (const durationMs of [60_000, 30_000, 30_000, 120_000, 200_000, 60_000]) {
     watchdog.observe(imp, false);
 
@@ -161,7 +157,6 @@ test('it backs off restarts, then stops at three an hour', async () => {
     await watchdog.settle();
   }
 
-  // 60 s, then 60 s after the first, then 120 s after the second; none after
   expect(recoveredAt).toStrictEqual([60_000, 120_000, 240_000]);
   expect(ctx.logs.filter((line) => line.includes('it only reports now'))).toHaveLength(1);
 });
@@ -169,8 +164,6 @@ test('it backs off restarts, then stops at three an hour', async () => {
 test('it tries a restart another operation held off again at the next look', async () => {
   const ctx = setupTest();
   const imp = buildMockImpRecord({ name: 'dev' });
-
-  // the first try finds the imp's lock taken; the second gets it
   const recover = mock(() => Promise.resolve(true)).mockResolvedValueOnce(false);
 
   const watchdog = createAgentWatchdog({

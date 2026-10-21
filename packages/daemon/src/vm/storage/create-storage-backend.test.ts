@@ -128,8 +128,6 @@ test('#createStorageBackend refuses the zfs backend with no root dataset', async
     IMP_ZFS_ROOT: 'tank/imp',
   });
 
-  // loadConfig refuses this itself; the backend checks again for a caller
-  // that builds its config another way
   expect(() => createStorageBackend({ ...config, zfsRoot: null })).toThrowWithMessage(
     Error,
     'IMP_STORAGE_BACKEND=zfs needs IMP_ZFS_ROOT',
@@ -184,7 +182,6 @@ test('#createStorageBackend marks the data dir xfs once start succeeds', async (
 test('#createStorageBackend accepts a data dir with imps and no marker, and marks it xfs', async () => {
   const ctx = await setupTest();
 
-  // a data dir from before the marker: an imp's disk and nothing else
   await mkdir(join(ctx.dataDir, 'imps', 'some-imp'), { recursive: true });
 
   writeFileSync(join(ctx.dataDir, 'imps', 'some-imp', 'disk.ext4'), '');

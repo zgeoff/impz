@@ -13,7 +13,6 @@ import {
   readVmMemory,
 } from './vm-stats';
 
-// an empty /proc in a temp dir; the test writes each process's files
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-vm-stats-'));
 

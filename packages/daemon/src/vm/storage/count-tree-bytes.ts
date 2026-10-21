@@ -3,13 +3,9 @@ import { lstat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export interface CountTreeBytesDeps {
-  // the real listing by default; tests list a directory too wide to make
   readonly readDir?: (directory: string) => Promise<Dirent[]>;
 }
 
-// The disk a tree's files take, less the 512-byte dnode slot ZFS shows in a
-// file's blocks before its free space drops; a hard link counts once, and a
-// symlink is never followed, as Bun's recursive readdir follows one
 export async function countTreeBytes(root: string, deps: CountTreeBytesDeps = {}): Promise<number> {
   const readDir = deps.readDir ?? readDirEntries;
 
@@ -17,12 +13,11 @@ export async function countTreeBytes(root: string, deps: CountTreeBytesDeps = {}
 
   const dirs = [root];
 
-  // off the event loop, one directory's entries at a time
+  // a hand walk, because Bun's recursive readdir follows symlinks
   for (let directory = dirs.pop(); directory !== undefined; directory = dirs.pop()) {
     const entries = await readEntries(readDir, directory);
 
-    // one at a time, as a spread of a wide directory's subdirectories passes
-    // the engine's argument limit
+    // spreading a wide directory's subdirectories into push passes the engine's argument limit
     for (const entry of entries) {
       if (entry.isDirectory()) {
         dirs.push(join(directory, entry.name));
@@ -37,6 +32,7 @@ export async function countTreeBytes(root: string, deps: CountTreeBytesDeps = {}
 
     for (const stat of stats) {
       if (stat !== undefined) {
+        // ZFS counts a 512-byte dnode slot in a file's blocks before its free space drops
         inodes.set(`${String(stat.dev)}:${String(stat.ino)}`, Math.max(0, stat.blocks - 1) * 512);
       }
     }
@@ -49,7 +45,6 @@ function readDirEntries(directory: string): Promise<Dirent[]> {
   return readdir(directory, { withFileTypes: true });
 }
 
-// a directory gone since its listing, or never made, holds nothing
 async function readEntries(
   readDir: (directoryPath: string) => Promise<Dirent[]>,
   directory: string,
@@ -69,7 +64,6 @@ function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
 
-// a file gone since its listing counts nothing
 async function readFileStats(path: string): Promise<Stats | undefined> {
   try {
     return await lstat(path);

@@ -7,8 +7,6 @@ import { createChalltestsrvProvider } from '../dns/challtestsrv-provider';
 import { createAcmeIssuer } from './acme-issuer';
 import { createCertStore } from './cert-store';
 
-// impd's ACME issuer against a stub ACME server on loopback, for what Pebble
-// never does; acme-issuer.pebble.ts runs it against Pebble.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -32,7 +30,6 @@ test('it rejects an order whose authorization offers no dns-01 challenge', async
     caPem: null,
     store: createCertStore(ctx.directoryPath),
 
-    // never reached: the order fails before any TXT record goes up
     dns: createChalltestsrvProvider('http://127.0.0.1:9'),
     log: () => {},
   });
