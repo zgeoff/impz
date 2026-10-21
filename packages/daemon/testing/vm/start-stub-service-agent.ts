@@ -1,14 +1,17 @@
 import type { Socket } from 'node:net';
 import { create, toJson } from '@bufbuild/protobuf';
-import type { JsonValue } from '@bufbuild/protobuf';
 import {
+  ErrorResponseSchema,
   FRAME_TYPES,
+  LogCursorSchema,
+  OKSchema,
   RequestSchema,
   ServiceStatusSchema,
-  decodeAgentMessage,
-  decodeJsonPayload,
+  ServicesListSchema,
+  decodeMessageFrame,
   encodeFrame,
   encodeJsonFrame,
+  encodeMessageFrame,
 } from '@impz/agent-protocol';
 import type { Request, ServiceDef, ServiceStatus } from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
@@ -64,7 +67,10 @@ export async function startStubServiceAgent(
 
   const sendLog = (socket: Socket, data: Uint8Array, end: number): void => {
     socket.write(encodeFrame(FRAME_TYPES.stdout, data));
-    socket.write(encodeJsonFrame(FRAME_TYPES.cursor, { inode: LOG_INODE, offset: end }));
+
+    socket.write(
+      encodeMessageFrame(FRAME_TYPES.cursor, LogCursorSchema, { inode: LOG_INODE, offset: end }),
+    );
   };
 
   const getLogStart = (log: Buffer, request: Request): number => {
@@ -96,7 +102,7 @@ export async function startStubServiceAgent(
 
     const from = getLogStart(log, request);
 
-    socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
 
     if (from < log.length) {
       sendLog(socket, log.subarray(from), log.length);
@@ -138,7 +144,7 @@ export async function startStubServiceAgent(
 
     services.splice(at, 1, toService(def));
 
-    sendResponse(socket, { ok: true });
+    sendOK(socket);
   };
 
   const handleChange = (socket: Socket, request: Request): void => {
@@ -160,7 +166,7 @@ export async function startStubServiceAgent(
       services.splice(index, 1, { ...kept, state: 'running', pid: allocatePid(), restarts: 0 });
     }
 
-    sendResponse(socket, { ok: true });
+    sendOK(socket);
   };
 
   const handleRequest = (socket: Socket, request: Request): void => {
@@ -171,7 +177,16 @@ export async function startStubServiceAgent(
 
     if (request.op === 'services.list' && failing.list) {
       sendError(socket, 'INTERNAL', 'the services could not be listed');
+    } else if (request.op === 'services.list' && options.knowsServices) {
+      socket.end(
+        encodeMessageFrame(FRAME_TYPES.response, ServicesListSchema, {
+          services: services.toSorted((left, right) => (left.name < right.name ? -1 : 1)),
+          imageUser: IMAGE_USER,
+        }),
+      );
     } else if (request.op === 'services.list') {
+      // An agent from before the services API writes no image_user, a field the schema marks
+      // implicit, so this answer cannot go through the schema's encoder.
       const listed = services
         .toSorted((left, right) => (left.name < right.name ? -1 : 1))
         .map((service) =>
@@ -181,11 +196,7 @@ export async function startStubServiceAgent(
           }),
         );
 
-      const answer = options.knowsServices
-        ? { services: listed, image_user: IMAGE_USER }
-        : { services: listed };
-
-      sendResponse(socket, answer);
+      socket.end(encodeJsonFrame(FRAME_TYPES.response, { services: listed }));
     } else if (!options.knowsServices) {
       sendError(socket, 'UNKNOWN_OP', `unknown op ${request.op}`);
     } else if (request.op === 'services.add') {
@@ -207,7 +218,7 @@ export async function startStubServiceAgent(
     vsockPath,
     (socket, request, frames) => {
       if (frames.length === 1) {
-        handleRequest(socket, decodeAgentMessage(RequestSchema, decodeJsonPayload(request)));
+        handleRequest(socket, decodeMessageFrame(RequestSchema, request));
       }
     },
     closeWith,
@@ -265,9 +276,11 @@ function getLastLinesStartOffset(log: Buffer, count: number): number {
 }
 
 function sendError(socket: Socket, code: string, message: string): void {
-  sendResponse(socket, { error: { code, message } });
+  socket.end(
+    encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, { error: { code, message } }),
+  );
 }
 
-function sendResponse(socket: Socket, value: JsonValue): void {
-  socket.end(encodeJsonFrame(FRAME_TYPES.response, value));
+function sendOK(socket: Socket): void {
+  socket.end(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
 }

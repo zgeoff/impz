@@ -1,4 +1,10 @@
-import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import {
+  ExitSchema,
+  FRAME_TYPES,
+  StartedSchema,
+  encodeFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
 interface EchoExecScript {
@@ -20,12 +26,12 @@ export function startStubEchoExecAgent(
       const last = frames.at(-1);
 
       if (frames.length === 1) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: script.pid }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: script.pid }));
       } else if (last?.type === FRAME_TYPES.stdin) {
         socket.write(encodeFrame(FRAME_TYPES.stdout, last.payload));
       } else if (last?.type === FRAME_TYPES.stdinEof) {
         socket.write(encodeFrame(FRAME_TYPES.stderr, script.stderr));
-        socket.end(encodeJsonFrame(FRAME_TYPES.exit, script.exit));
+        socket.end(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, script.exit));
       }
     },
     options,

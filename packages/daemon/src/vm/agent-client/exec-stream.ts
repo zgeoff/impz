@@ -7,8 +7,7 @@ import {
   ResizeSchema,
   SignalSchema,
   StartedSchema,
-  decodeAgentMessage,
-  decodeJsonPayload,
+  decodeMessageFrame,
   encodeAgentMessage,
 } from '@impz/agent-protocol';
 import type { Previous, Resume, Started } from '@impz/agent-protocol';
@@ -167,7 +166,7 @@ async function openStream(
       throw new Error(`agent exec: expected STARTED, got frame type ${String(first.type)}`);
     }
 
-    started = decodeAgentMessage(StartedSchema, decodeJsonPayload(first));
+    started = decodeMessageFrame(StartedSchema, first);
 
     if (!hasAgentNameForms(started)) {
       throw new Error(
@@ -220,13 +219,13 @@ async function* readExecEvents(
 
       yield { type, data: frame.payload };
     } else if (frame.type === FRAME_TYPES.exit) {
-      const exit = decodeAgentMessage(ExitSchema, decodeJsonPayload(frame));
+      const exit = decodeMessageFrame(ExitSchema, frame);
 
       yield { type: 'exit', code: exit.code, signal: exit.signal };
 
       return;
     } else if (frame.type === FRAME_TYPES.detached) {
-      const detached = decodeAgentMessage(DetachedSchema, decodeJsonPayload(frame));
+      const detached = decodeMessageFrame(DetachedSchema, frame);
 
       yield { type: 'detached', reason: detached.reason };
 

@@ -25,7 +25,10 @@ Choose the kind by the boundary that the code under test reaches:
   the VM layer. A test scripts each VM step to succeed, fail, die or hang, and it waits for the
   count of hung calls to rise before it inspects a held call.
 - **Guest agent stand-ins** listen on an imp's vsock socket and speak the agent protocol. Pick the
-  one whose protocol area the test drives: exec, sessions, attach, services, dial or echo.
+  one whose protocol area the test drives: exec, sessions, attach, services, dial or echo. A
+  stand-in parses each request and writes each answer through the generated message schemas in
+  `@impz/agent-protocol`, which write every field the Go agent writes. Plain JSON is only for an
+  older agent's answer that leaves out a field the schema always writes.
 - **Command-layer fakes** answer the CLIs that impd spawns, such as `zfs`, `nft`, `ip`, `tailscale`,
   `mount`, `restic` and `docker`. Each one keeps a model of the state behind the CLI and records the
   argv it got, so a test asserts on the resulting state rather than on the argv alone.

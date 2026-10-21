@@ -2,7 +2,9 @@ export * from './agent-protocol';
 export { AGENT_ERROR_CODES } from './agent-error-codes';
 export type { AgentErrorCode } from './agent-error-codes';
 export { decodeAgentMessage } from './decode-agent-message';
+export { decodeMessageFrame } from './decode-message-frame';
 export { encodeAgentMessage } from './encode-agent-message';
+export { encodeMessageFrame } from './encode-message-frame';
 
 export {
   FRAME_TYPES,

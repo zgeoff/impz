@@ -53,6 +53,7 @@ test('it writes an inner container’s zero fields, as the agent does', async ()
     ok: true,
     version: '0.18.0',
     inner: { up: false, restarts: 0 },
+    boot_steps: [],
   });
 });
 

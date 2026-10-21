@@ -1,15 +1,17 @@
 import type { Socket } from 'node:net';
-import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import {
+  ConnectionSchema,
+  ErrorResponseSchema,
+  FRAME_TYPES,
+  ListeningSchema,
+  OKSchema,
+  RequestSchema,
+  decodeMessageFrame,
+  encodeFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
+import type { Request } from '@impz/agent-protocol';
 import type { StubAgentHandler } from '@impz/daemon/testing';
-import * as z from 'zod';
-
-const RequestSchema = z.looseObject({
-  op: z.string(),
-  network: z.string().optional(),
-  address: z.string().optional(),
-});
-
-type StubRequest = z.infer<typeof RequestSchema>;
 
 interface AgentRefusal {
   readonly code: string;
@@ -20,7 +22,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 export function buildStubForwardAgent() {
-  const requests: StubRequest[] = [];
+  const requests: Request[] = [];
   const listeners: Socket[] = [];
   const refusal: { error: AgentRefusal | null } = { error: null };
 
@@ -42,28 +44,30 @@ export function buildStubForwardAgent() {
       return;
     }
 
-    const parsed = RequestSchema.parse(decodeJsonPayload(request));
+    const parsed = decodeMessageFrame(RequestSchema, request);
 
     requests.push(parsed);
     socket.on('error', () => {});
 
     if (parsed.op === 'listen' && refusal.error !== null) {
-      socket.end(encodeJsonFrame(FRAME_TYPES.response, { error: refusal.error }));
+      socket.end(
+        encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, { error: refusal.error }),
+      );
     } else if (parsed.op === 'listen') {
       listeners.push(socket);
 
       socket.write(
-        encodeJsonFrame(FRAME_TYPES.response, {
+        encodeMessageFrame(FRAME_TYPES.response, ListeningSchema, {
           ok: true,
           listener: `fwd${String(listeners.length)}`,
           ...readListening(parsed),
         }),
       );
     } else if (parsed.op === 'agent.accept') {
-      socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
     } else {
       socket.end(
-        encodeJsonFrame(FRAME_TYPES.response, {
+        encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
           error: { code: 'UNKNOWN_OP', message: `unknown op ${parsed.op}` },
         }),
       );
@@ -74,7 +78,7 @@ export function buildStubForwardAgent() {
     requests,
     readFrame,
     connect: (id: number) => {
-      listeners.at(-1)?.write(encodeJsonFrame(FRAME_TYPES.connection, { id }));
+      listeners.at(-1)?.write(encodeMessageFrame(FRAME_TYPES.connection, ConnectionSchema, { id }));
     },
     endListeners: () => {
       for (const listener of listeners) {
@@ -87,7 +91,7 @@ export function buildStubForwardAgent() {
   };
 }
 
-function readListening(request: Readonly<StubRequest>) {
+function readListening(request: Readonly<Request>) {
   if (request.network === 'tcp') {
     return { port: 4000 };
   }

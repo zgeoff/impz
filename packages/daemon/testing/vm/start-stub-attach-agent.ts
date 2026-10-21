@@ -1,9 +1,9 @@
 import {
   FRAME_TYPES,
+  PingSchema,
   RequestSchema,
-  decodeAgentMessage,
-  decodeJsonPayload,
-  encodeJsonFrame,
+  decodeMessageFrame,
+  encodeMessageFrame,
 } from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
@@ -34,14 +34,14 @@ export async function startStubAttachAgent(
         return;
       }
 
-      const parsed = decodeAgentMessage(RequestSchema, decodeJsonPayload(request));
+      const parsed = decodeMessageFrame(RequestSchema, request);
 
       if (parsed.op === 'ping') {
         socket.end(
-          encodeJsonFrame(FRAME_TYPES.response, {
+          encodeMessageFrame(FRAME_TYPES.response, PingSchema, {
             ok: true,
             version: '0.15.0',
-            boot_id: options.bootId,
+            bootId: options.bootId,
           }),
         );
 
@@ -65,6 +65,6 @@ export async function startStubAttachAgent(
     close: agent.close,
 
     readOps: (): string[] =>
-      agent.received.map((frame) => decodeAgentMessage(RequestSchema, decodeJsonPayload(frame)).op),
+      agent.received.map((frame) => decodeMessageFrame(RequestSchema, frame).op),
   };
 }

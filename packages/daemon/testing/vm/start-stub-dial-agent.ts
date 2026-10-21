@@ -1,4 +1,4 @@
-import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import { FRAME_TYPES, OKSchema, encodeFrame, encodeMessageFrame } from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
 export function startStubDialAgent(
@@ -12,7 +12,7 @@ export function startStubDialAgent(
       const last = frames.at(-1);
 
       if (frames.length === 1) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
       } else if (last?.type === FRAME_TYPES.stdinEof) {
         const asked = frames
           .filter((frame) => frame.type === FRAME_TYPES.stdin)

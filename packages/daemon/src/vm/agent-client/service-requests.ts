@@ -5,7 +5,7 @@ import {
   OKSchema,
   ServicesListSchema,
   decodeAgentMessage,
-  decodeJsonPayload,
+  decodeMessageFrame,
 } from '@impz/agent-protocol';
 import type { LogCursor, ServiceDefSchema, ServicesList } from '@impz/agent-protocol';
 import { openAgentConnection } from './agent-connection';
@@ -106,7 +106,7 @@ export async function openServiceLogStream(
     }
 
     requireNoAgentError(first);
-    decodeAgentMessage(OKSchema, decodeJsonPayload(first));
+    decodeMessageFrame(OKSchema, first);
   } catch (error) {
     connection.close();
 
@@ -134,7 +134,7 @@ async function* readLogChunks(
     } else if (frame.type === FRAME_TYPES.cursor) {
       yield {
         kind: 'cursor',
-        cursor: decodeAgentMessage(LogCursorSchema, decodeJsonPayload(frame)),
+        cursor: decodeMessageFrame(LogCursorSchema, frame),
       };
     }
   }

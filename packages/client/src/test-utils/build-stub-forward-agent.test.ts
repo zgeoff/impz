@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { RequestSchema, encodeAgentMessage } from '@impz/agent-protocol';
 import { openDialStream } from '@impz/daemon/src/vm/agent-client/dial-stream';
 import { openAccept, openListener } from '@impz/daemon/src/vm/agent-client/listener-stream';
 import { startStubAgent } from '@impz/daemon/testing';
@@ -123,7 +124,7 @@ test('it answers an accepted client with got and the bytes, then closes its side
   ]);
 });
 
-test('it records each request in its wire form', async () => {
+test('it records each request it parses', async () => {
   const ctx = await setupTest();
   const listener = await openListener(ctx.vsockPath, { network: 'unix', path: '/tmp/app.sock' });
 
@@ -133,7 +134,9 @@ test('it records each request in its wire form', async () => {
 
   stream.close();
 
-  expect(ctx.agent.requests).toStrictEqual([
+  expect(
+    ctx.agent.requests.map((request) => encodeAgentMessage(RequestSchema, request)),
+  ).toStrictEqual([
     { op: 'listen', network: 'unix', address: '/tmp/app.sock' },
     { op: 'agent.accept', listener: 'fwd1', connection: 3 },
   ]);

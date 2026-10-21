@@ -1,13 +1,14 @@
-import { create, toJson } from '@bufbuild/protobuf';
 import type { MessageInitShape } from '@bufbuild/protobuf';
 import {
+  ActivitySchema,
+  ErrorResponseSchema,
   FRAME_TYPES,
-  InnerStatusSchema,
+  PingSchema,
   RequestSchema,
-  decodeAgentMessage,
-  decodeJsonPayload,
-  encodeJsonFrame,
+  decodeMessageFrame,
+  encodeMessageFrame,
 } from '@impz/agent-protocol';
+import type { InnerStatusSchema } from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
 interface StubInnerAgentOptions {
@@ -19,11 +20,6 @@ interface StubInnerAgentOptions {
 export function startStubInnerAgent(path: string, options: Readonly<StubInnerAgentOptions>) {
   const closeWith = options.stack === undefined ? {} : { stack: options.stack };
 
-  const inner = toJson(InnerStatusSchema, create(InnerStatusSchema, options.inner), {
-    useProtoFieldName: true,
-    alwaysEmitImplicit: true,
-  });
-
   return startStubAgent(
     path,
     (socket, request, frames) => {
@@ -31,28 +27,21 @@ export function startStubInnerAgent(path: string, options: Readonly<StubInnerAge
         return;
       }
 
-      const op = decodeAgentMessage(RequestSchema, decodeJsonPayload(request)).op;
+      const op = decodeMessageFrame(RequestSchema, request).op;
 
       if (op === 'ping') {
         socket.end(
-          encodeJsonFrame(FRAME_TYPES.response, {
+          encodeMessageFrame(FRAME_TYPES.response, PingSchema, {
             ok: true,
             version: '0.18.0',
-            inner,
+            inner: options.inner,
           }),
         );
       } else if (op === 'activity') {
-        socket.end(
-          encodeJsonFrame(FRAME_TYPES.response, {
-            tcp_established: 0,
-            exec_sessions: 0,
-            load1: 0,
-            sessions: [],
-          }),
-        );
+        socket.end(encodeMessageFrame(FRAME_TYPES.response, ActivitySchema, {}));
       } else {
         socket.end(
-          encodeJsonFrame(FRAME_TYPES.response, {
+          encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
             error: { code: 'UNKNOWN_OP', message: `unknown op ${op}` },
           }),
         );

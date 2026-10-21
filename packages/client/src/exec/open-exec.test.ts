@@ -1,4 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { RequestSchema, encodeAgentMessage } from '@impz/agent-protocol';
 import { CONSOLE_SHELL } from '@impz/api';
 import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
@@ -335,7 +336,7 @@ test('#openExec passes a kill grace to the agent and reports that it kills the g
   await handle.exit.catch(() => null);
 
   expect(started.groupKill).toBeTrue();
-  expect(ctx.agent.requests).toMatchObject([{ argv: ['wait'], kill_grace_ms: 2000 }]);
+  expect(ctx.agent.requests).toMatchObject([{ argv: ['wait'], killGraceMs: 2000 }]);
 });
 
 test('#openExec reports no group kill from an agent from before it', async () => {
@@ -509,9 +510,9 @@ test('#openAttach streams the replay and rejects with DETACHED on a takeover', a
 
   expect(first.value).toStrictEqual(new TextEncoder().encode('replay'));
 
-  expect(ctx.agent.requests).toStrictEqual([
-    { op: 'session.attach', session: 'main', cols: 80, rows: 24 },
-  ]);
+  expect(
+    ctx.agent.requests.map((request) => encodeAgentMessage(RequestSchema, request)),
+  ).toStrictEqual([{ op: 'session.attach', session: 'main', cols: 80, rows: 24 }]);
 
   expect(handle.exit).rejects.toBeInstanceOf(ExecError);
   expect(handle.exit).rejects.toMatchObject({ code: 'DETACHED', data: { reason: 'taken_over' } });
@@ -529,7 +530,9 @@ test('#openAttach resumes at its place in the output and gives the offset at the
 
   const exit = await handle.exit;
 
-  expect(ctx.agent.requests).toStrictEqual([
+  expect(
+    ctx.agent.requests.map((request) => encodeAgentMessage(RequestSchema, request)),
+  ).toStrictEqual([
     {
       op: 'session.attach',
       session: 'counted',

@@ -1,15 +1,21 @@
 import { randomBytes } from 'node:crypto';
 import type { Socket } from 'node:net';
-import type { JsonValue } from '@bufbuild/protobuf';
+import type { JsonValue, MessageInitShape } from '@bufbuild/protobuf';
 import {
+  DetachedSchema,
+  ErrorResponseSchema,
+  ExitSchema,
   FRAME_TYPES,
+  OKSchema,
   RequestSchema,
-  decodeAgentMessage,
+  StartedSchema,
   decodeJsonPayload,
+  decodeMessageFrame,
   encodeFrame,
   encodeJsonFrame,
+  encodeMessageFrame,
 } from '@impz/agent-protocol';
-import type { Request, ResumeFrom } from '@impz/agent-protocol';
+import type { ErrorSchema, PreviousSchema, Request, ResumeFrom } from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
 type StubStart = Readonly<{
@@ -24,12 +30,6 @@ type StubStart = Readonly<{
 interface StubExit {
   readonly code: number;
   readonly signal: number;
-}
-
-interface StubPrevious {
-  readonly execution_generation: string;
-  readonly end: number;
-  readonly exit: StubExit;
 }
 
 interface StubRun {
@@ -64,7 +64,7 @@ export async function startStubSessionAgent(
   const bootId = options.bootId ?? '6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f';
 
   const runs = new Map<string, StubRun>();
-  const previous = new Map<string, StubPrevious>();
+  const previous = new Map<string, MessageInitShape<typeof PreviousSchema>>();
 
   const connections = { open: 0 };
   const hasOffsets = options.release === undefined;
@@ -89,6 +89,8 @@ export async function startStubSessionAgent(
         log: hasOffsets && run.isLogged ? true : undefined,
       }));
 
+  // An agent from before sessions or offsets leaves out fields the schema marks implicit, which
+  // the schema's encoder writes, so the activity answer is plain JSON.
   const listActivity = () => ({
     tcp_established: 0,
     exec_sessions: connections.open,
@@ -102,7 +104,7 @@ export async function startStubSessionAgent(
     sendError(socket, {
       code: 'NO_SESSION',
       message: `no session "${session}"`,
-      data: { boot_id: bootId, ...(last !== undefined && { previous: last }) },
+      data: { bootId, ...(last !== undefined && { previous: last }) },
     });
   };
 
@@ -110,7 +112,7 @@ export async function startStubSessionAgent(
     sendError(socket, {
       code: 'INVALID_RESUME',
       message: `offset ${String(offset)} is past the end of the output, ${String(end)}`,
-      data: { end, buffer_start: 0 },
+      data: { end, bufferStart: 0 },
     });
   };
 
@@ -125,7 +127,7 @@ export async function startStubSessionAgent(
 
     if (run.exit !== null) {
       previous.set(session, {
-        execution_generation: run.generation,
+        executionGeneration: run.generation,
         end: run.output.length,
         exit: run.exit,
       });
@@ -133,7 +135,7 @@ export async function startStubSessionAgent(
   };
 
   const sendExit = (session: string, socket: Socket, exit: StubExit): void => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.exit, exit));
+    socket.end(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, exit));
 
     removeRun(session);
   };
@@ -146,9 +148,9 @@ export async function startStubSessionAgent(
     }
 
     const output = {
-      boot_id: bootId,
-      execution_generation: run.generation,
-      buffer_start: 0,
+      bootId,
+      executionGeneration: run.generation,
+      bufferStart: 0,
       end: run.output.length,
       offset: 0,
       prelude: 0,
@@ -164,8 +166,8 @@ export async function startStubSessionAgent(
         ...output,
         resume: {
           kind: 'generation_changed',
-          execution_generation: run.generation,
-          first_offset: 0,
+          executionGeneration: run.generation,
+          firstOffset: 0,
         },
       };
     }
@@ -201,11 +203,14 @@ export async function startStubSessionAgent(
 
     const last = previous.get(session);
 
-    run.viewer?.end(encodeJsonFrame(FRAME_TYPES.detached, { reason: 'taken_over' }));
+    run.viewer?.end(
+      encodeMessageFrame(FRAME_TYPES.detached, DetachedSchema, { reason: 'taken_over' }),
+    );
+
     run.viewer = null;
 
     socket.write(
-      encodeJsonFrame(FRAME_TYPES.started, {
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
         pid: 9,
         session,
         ...(created && { created: true }),
@@ -296,7 +301,9 @@ export async function startStubSessionAgent(
       return;
     }
 
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9, session, output }));
+    socket.write(
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9, session, output }),
+    );
 
     const data = run.output.subarray(output.offset);
 
@@ -305,7 +312,7 @@ export async function startStubSessionAgent(
     }
 
     if (run.exit !== null) {
-      socket.end(encodeJsonFrame(FRAME_TYPES.exit, run.exit));
+      socket.end(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, run.exit));
 
       return;
     }
@@ -330,7 +337,7 @@ export async function startStubSessionAgent(
       run.exit = HANGUP_EXIT;
 
       for (const reader of [run.viewer, ...run.taps]) {
-        reader?.end(encodeJsonFrame(FRAME_TYPES.exit, HANGUP_EXIT));
+        reader?.end(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, HANGUP_EXIT));
       }
 
       run.viewer = null;
@@ -340,7 +347,7 @@ export async function startStubSessionAgent(
 
     removeRun(session);
 
-    socket.end(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+    socket.end(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
   };
 
   const countConnection = (socket: Socket): void => {
@@ -360,7 +367,7 @@ export async function startStubSessionAgent(
         return;
       }
 
-      const parsed = decodeAgentMessage(RequestSchema, decodeJsonPayload(request));
+      const parsed = decodeMessageFrame(RequestSchema, request);
       const session = parsed.session ?? '';
 
       if (parsed.op === 'activity') {
@@ -400,7 +407,7 @@ export async function startStubSessionAgent(
       }
 
       if (parsed.session === undefined || options.release === 'before-sessions') {
-        socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
 
         return;
       }
@@ -422,7 +429,7 @@ export async function startStubSessionAgent(
 
     readExecs: (): Request[] =>
       agent.received
-        .map((frame) => decodeAgentMessage(RequestSchema, decodeJsonPayload(frame)))
+        .map((frame) => decodeMessageFrame(RequestSchema, frame))
         .filter((frame) => frame.op === 'exec'),
 
     readExecPayloads: (): JsonValue[] =>
@@ -452,7 +459,7 @@ export async function startStubSessionAgent(
       run.exit = exit;
 
       for (const tapped of run.taps) {
-        tapped.end(encodeJsonFrame(FRAME_TYPES.exit, exit));
+        tapped.end(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, exit));
       }
 
       run.taps.clear();
@@ -487,8 +494,8 @@ export async function startStubSessionAgent(
   };
 }
 
-function sendError(socket: Socket, error: Readonly<Record<string, unknown>>): void {
-  socket.end(encodeJsonFrame(FRAME_TYPES.response, { error }));
+function sendError(socket: Socket, error: MessageInitShape<typeof ErrorSchema>): void {
+  socket.end(encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, { error }));
 }
 
 function isExecPayload(payload: JsonValue): boolean {

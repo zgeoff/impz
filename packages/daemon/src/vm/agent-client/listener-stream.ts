@@ -2,8 +2,7 @@ import {
   ConnectionSchema,
   FRAME_TYPES,
   ListeningSchema,
-  decodeAgentMessage,
-  decodeJsonPayload,
+  decodeMessageFrame,
 } from '@impz/agent-protocol';
 import { openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
@@ -56,7 +55,7 @@ export async function openListener(vsockPath: string, spec: ListenSpec): Promise
 
     requireNoAgentError(answer);
 
-    const listening = decodeAgentMessage(ListeningSchema, decodeJsonPayload(answer));
+    const listening = decodeMessageFrame(ListeningSchema, answer);
 
     return {
       path: listening.path ?? null,
@@ -96,7 +95,7 @@ async function* readConnections(
     }
 
     if (frame.type === FRAME_TYPES.connection) {
-      yield decodeAgentMessage(ConnectionSchema, decodeJsonPayload(frame)).id;
+      yield decodeMessageFrame(ConnectionSchema, frame).id;
     }
   }
 }
