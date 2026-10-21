@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
@@ -243,6 +244,49 @@ test('it counts the bytes a pool still frees in the background as available', as
   const uses = await listImageUses(ctx.db);
 
   expect(uses.map((use) => use.name)).toStrictEqual(['web-1111111']);
+});
+
+test('it reads usage again after the measure, once the storage settled earlier removals', async () => {
+  const ctx = await setupTest();
+
+  const usages = buildStubAnswerQueue([
+    { usedBytes: 90, availableBytes: 10 },
+    { usedBytes: 70, availableBytes: 30 },
+  ]);
+
+  const eviction = createImageEviction({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: ctx.db,
+    storage: {
+      readUsage: () => Promise.resolve(usages.next()),
+      measureImages: ctx.storage.measureImages,
+    },
+    storageGate: createStorageGate(),
+    removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
+    log: ctx.log,
+    now: () => Date.parse('2026-10-01T00:00:00Z'),
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
+  await mkdir(buildImagePaths(ctx.dataDir, 'sha256:1').directory, { recursive: true });
+  await writeFile(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs, '');
+
+  ctx.fiemap.setExtents(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs, [
+    { logical: 0, physical: 4096, length: 50, flags: 0 },
+  ]);
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+  await eviction.runEviction();
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(uses.map((use) => use.name)).toStrictEqual(['web-1111111']);
+  expect(usages.left).toBe(0);
 });
 
 test('it never removes an image an imp uses, a pinned image, or the image impd boots by default', async () => {

@@ -99,13 +99,16 @@ export function createImageEviction(deps: ImageEvictionDeps): ImageEviction {
 
     const report = await deps.storage.measureImages([...new Set(uses.map((use) => use.digest))]);
 
+    // The measure lets the storage settle the frees of earlier removals first.
+    const settled = await deps.storage.readUsage();
+
     const evicted = pickEvictedImages(
       {
         uses,
         keptNames: new Set([deps.config.defaultImage, FALLBACK_DEFAULT_IMAGE]),
         spaces: report.images,
-        usedBytes: usage.usedBytes,
-        availableBytes: usage.availableBytes + report.freeingBytes,
+        usedBytes: settled.usedBytes,
+        availableBytes: settled.availableBytes + report.freeingBytes,
         now: at,
       },
       marks,

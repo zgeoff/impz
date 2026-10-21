@@ -489,6 +489,7 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
       datasets,
       buildDiskName,
       buildImageName,
+      waitForReclaim: reclaim.waitForReclaim,
       resolveImpPaths,
     }),
 

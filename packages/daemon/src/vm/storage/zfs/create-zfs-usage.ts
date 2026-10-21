@@ -10,6 +10,7 @@ interface ZfsUsageContext {
   readonly datasets: { readonly retired: string };
   readonly buildDiskName: (impId: string) => string;
   readonly buildImageName: (digest: string) => string;
+  readonly waitForReclaim: () => Promise<void>;
   readonly resolveImpPaths: (impId: string) => ImpPaths;
 }
 
@@ -67,6 +68,10 @@ export function createZfsUsage(
     },
 
     measureImages: async (digests) => {
+      // A removed dataset waits under `retired` until the reclaim destroys it, and the pool's
+      // usage counts it until then.
+      await ctx.waitForReclaim();
+
       const [space, freeingBytes] = await Promise.all([
         ctx.zfs.listSpace(ctx.root),
         ctx.zfs.readFreeing(ctx.root.split('/')[0] ?? ctx.root),

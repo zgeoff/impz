@@ -15,6 +15,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildStubMoveStream } from '../../../../testing/imp-ops/build-stub-move-stream';
 import { writeSyncedFile } from '../../../../testing/platform/write-synced-file';
@@ -3771,17 +3772,36 @@ test.skipIf(readZfsTestPool() === null)(
       return Promise.resolve();
     });
 
-    await runChecked(['zpool', 'sync', poolName]);
+    // An earlier test's destroy can still be freeing blocks of the same pool.
+    await waitFor(
+      async () => {
+        await runChecked(['zpool', 'sync', poolName]);
+
+        const settled = await pool.backend.measureImages([]);
+
+        expect(settled.freeingBytes).toBe(0);
+      },
+      { intervalMs: 200, timeoutMs: 60_000 },
+    );
 
     const measured = await pool.backend.measureImages(['sha256:spacious']);
     const before = await pool.backend.readUsage();
 
     await pool.backend.removeImage('sha256:spacious');
 
-    await runChecked(['zpool', 'sync', poolName]);
+    // The measure waits for the reclaim, and the pool then frees the blocks in the background.
+    await waitFor(
+      async () => {
+        await runChecked(['zpool', 'sync', poolName]);
+
+        const settled = await pool.backend.measureImages([]);
+
+        expect(settled.freeingBytes).toBe(0);
+      },
+      { intervalMs: 200, timeoutMs: 60_000 },
+    );
 
     const after = await pool.backend.readUsage();
-    const freeing = await pool.backend.measureImages([]);
 
     const space = measured.images.get('sha256:spacious');
 
@@ -3795,9 +3815,10 @@ test.skipIf(readZfsTestPool() === null)(
       space.freedBytes * 1.05,
     );
 
-    expect(
-      after.availableBytes + freeing.freeingBytes - before.availableBytes - measured.freeingBytes,
-    ).toBeWithin(space.freedBytes * 0.95, space.freedBytes * 1.05);
+    expect(after.availableBytes - before.availableBytes).toBeWithin(
+      space.freedBytes * 0.95,
+      space.freedBytes * 1.05,
+    );
   },
   120_000,
 );
