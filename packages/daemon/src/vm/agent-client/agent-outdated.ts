@@ -4,14 +4,9 @@ import { isAgentError } from './is-agent-error';
 interface Feature {
   readonly since: readonly [number, number];
   readonly missing: string;
-
-  // a version that is missing or does not parse fails the check, where
-  // the agent's own answer settles other features
   readonly strict?: true;
 }
 
-// What a newer agent can do, and the first protocol version with it.
-// `ssh` is the dial op and `imp-agent sftp` on the system drive.
 const FEATURES = {
   sessions: { since: [0, 2], missing: 'no sessions' },
   ssh: { since: [0, 3], missing: 'no port forwarding or SFTP' },
@@ -22,31 +17,25 @@ const FEATURES = {
   'reverse-forward': { since: [0, 9], missing: 'no reverse forwards' },
   services: { since: [0, 10], missing: 'no services API' },
 
-  // an older agent answers the op with UNKNOWN_OP; strict all the same,
-  // as a field it ignores would run the command in the container as root
+  // Strict, because an agent that ignored the field would run the command in the container as
+  // root.
   'outer-exec': {
     since: [0, 16],
     missing: 'no exec --agent',
     strict: true,
   },
 
-  // an older agent fixes the inner container's limit at its boot size, so
-  // its user processes are OOM-killed in memory the guest grew into
+  // An older agent fixes the inner container's limit at its boot size, so its user processes are
+  // OOM-killed in memory the guest grew into.
   'elastic-memory': {
     since: [0, 17],
     missing: 'no elastic memory, so its programs could not use a grow',
     strict: true,
   },
-
-  // session.tap, for impd's session logs; an older agent ignores `log` on a
-  // start and answers the tap UNKNOWN_OP
   'session-log': { since: [0, 18], missing: 'no session logs' },
-
-  // files.write and files.remove; an older agent answers UNKNOWN_OP
   files: { since: [0, 19], missing: 'no read-only files' },
 
-  // an older agent ignores the field and runs the command with
-  // CAP_SYS_ADMIN, so strict
+  // Strict, because an older agent ignores the field and runs the command with CAP_SYS_ADMIN.
   'drop-sys-admin': {
     since: [0, 20],
     missing: 'no exec without CAP_SYS_ADMIN',
@@ -56,7 +45,6 @@ const FEATURES = {
 
 export type AgentFeature = keyof typeof FEATURES;
 
-// a woken imp keeps the agent it booted with, until its next cold boot
 export function buildAgentOutdatedError(feature: AgentFeature): AgentError {
   return new AgentError(
     'AGENT_OUTDATED',
@@ -64,8 +52,6 @@ export function buildAgentOutdatedError(feature: AgentFeature): AgentError {
   );
 }
 
-// a strict feature with no recorded version: impd failed to write the imp's
-// vm.json at its boot (it logs why), or the imp booted before impd kept it
 export function buildAgentUnknownError(feature: AgentFeature): AgentError {
   return new AgentError(
     'AGENT_OUTDATED',
@@ -73,9 +59,6 @@ export function buildAgentUnknownError(feature: AgentFeature): AgentError {
   );
 }
 
-// false for an agent version from before the feature; a missing version
-// (an imp booted before impd recorded them) or one that does not parse
-// passes unless the feature is strict, and the agent's answer settles it
 export function hasFeature(agentVersion: string | undefined, feature: AgentFeature): boolean {
   const known: Feature = FEATURES[feature];
   const [major, minor] = (agentVersion ?? '').split('.').map(Number);
@@ -88,7 +71,6 @@ export function hasFeature(agentVersion: string | undefined, feature: AgentFeatu
   return major > sinceMajor || (major === sinceMajor && minor >= sinceMinor);
 }
 
-// an agent from before a feature answers its op with UNKNOWN_OP
 export function handleUnknownOp(feature: AgentFeature): (error: unknown) => never {
   return (error) => {
     if (isAgentError(error, 'UNKNOWN_OP')) {

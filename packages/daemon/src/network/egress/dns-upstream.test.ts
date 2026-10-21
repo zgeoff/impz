@@ -68,7 +68,6 @@ test('it fails over to the next upstream when the first refuses with ICMP', asyn
     answers: [{ type: 'A', name: 'example.com', ttl: 60, data: '192.0.2.1' }],
   });
 
-  // nothing listens on 127.0.0.2 at the port
   const forward = createDnsForward(['127.0.0.2', '127.0.0.1'], upstream.port);
 
   const reply = await forward(buildMockDnsQuery({ name: 'example.com', type: 'A', id: 4242 }));

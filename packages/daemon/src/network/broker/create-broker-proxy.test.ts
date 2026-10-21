@@ -27,12 +27,6 @@ import { listGrantNames, readSecret, removeCheckedGrant } from '../../platform/d
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { loadOrCreateBrokerCa } from './broker-ca';
 
-// The broker end to end on loopback: with IMP_SUBNET 127.0.0.0/16, curl
-// bound to 127.0.0.2 is slot 0's guest, and 127.0.0.1 its gateway. A fake
-// upstream serves the granted host through the test-upstreams file.
-
-// An oauth secret's token endpoint is an MSW handler; every token is made up.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -42,12 +36,8 @@ async function setupTest() {
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  // the real host past a plain tunnel, with a CA nobody trusts: the guest
-  // must see a certificate the broker CA did not sign
   const tunnelled: { method: string; path: string; authorization: string | null }[] = [];
 
-  // a test's own answer for a path on the real host; any other path gets a
-  // 500 that names it
   const tunnelAnswers = new Map<string, () => Response>();
 
   const realHost = await startStubBrokerTlsUpstream(stack, {
@@ -70,11 +60,9 @@ async function setupTest() {
     },
   });
 
-  // the fake upstream, with its own CA the broker is told to trust
   const seen: { method: string; path: string; authorization: string | null; bodyBytes: number }[] =
     [];
 
-  // a test's own answer for a path; any other path gets a 500 that names it
   const answers = new Map<string, () => Response | Promise<Response>>();
 
   const upstream = await startStubBrokerTlsUpstream(stack, {
@@ -102,20 +90,14 @@ async function setupTest() {
     },
   });
 
-  // the broker reads the file when a request comes; a test writes it
   const upstreamsFile = join(dataDir, 'upstreams.json');
-
-  // what a request does between its rule read and its value read
   const ruleRead = { hook: (): Promise<void> => Promise.resolve() };
 
-  // plain tunnels stay on loopback, and port 443 goes to the real host
   const tunnelPorts = new Map([[443, realHost.port]]);
 
-  // the broker's clock, which a test moves on
   const clock = { nowMs: Date.now() };
   const log = mock<(message: string) => void>(() => {});
 
-  // a loopback subnet, so a local address stands for a guest
   const harness = await startTestImpd(stack, {
     dataDir,
     env: { IMP_SUBNET: '127.0.0.0/16', IMP_BROKER_TEST_UPSTREAMS: upstreamsFile },
@@ -129,7 +111,6 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
-  // the image every imp boots from
   await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
@@ -156,7 +137,6 @@ async function setupTest() {
     proxyPort,
     caFile,
 
-    // slot 0's guest
     guest: buildStubBrokerGuest({ proxyPort, caFile, address: '127.0.0.2' }),
   };
 }
@@ -243,8 +223,6 @@ test('it records the audit row of a request that ends after its imp is destroyed
 
   ctx.answers.set('/slow', held.answer);
 
-  // the destroy lands while the upstream holds /slow, and the upstream
-  // answers once the imp's row is gone
   const request = ctx.guest.curl('https://api.github.com/slow');
 
   await held.arrived;
@@ -479,7 +457,6 @@ test('it keeps no credential, header, query or body in the audit row of a refuse
   await ctx.impd.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_real' });
   await ctx.impd.broker.addGrant('dev', 'gh');
 
-  // a granted connection, then a request on it for another name
   const result = await ctx.guest.curl('https://api.github.com/repos/x?token=query-secret', [
     '-X',
     'POST',
@@ -520,7 +497,6 @@ test('it keeps no credential, header, query or body in the audit row of a refuse
     },
   ]);
 
-  // every value the guest sent or the broker holds, none of them in the row
   expect(
     ['ghp_real', 'imp-broker-placeholder', 'query-secret', 'body-secret', 'evil.test'].filter(
       (secret) => JSON.stringify(rows).includes(secret),
@@ -607,7 +583,6 @@ test('it closes the connection of a guest on another imp’s gateway without a r
   await ctx.impd.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_real' });
   await ctx.impd.broker.addGrant('dev', 'gh');
 
-  // 127.0.0.6 is slot 1's guest, dialling slot 0's gateway
   const other = await startStubBrokerGuestSocket(ctx.stack, {
     port: ctx.proxyPort,
     address: '127.0.0.6',
@@ -654,8 +629,6 @@ test('it stops sending the credential as soon as the grant is revoked', async ()
   await ctx.guest.curl('https://api.github.com/a');
   await ctx.impd.broker.removeGrant('dev', 'gh');
 
-  // now a plain tunnel: the real host's certificate, which the guest does
-  // not trust
   const result = await ctx.guest.curl('https://api.github.com/b');
 
   expect(result.code).toBe(60);
@@ -752,15 +725,12 @@ test('it gives no credential to the next request on a connection whose grant is 
   await ctx.impd.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_real' });
   await ctx.impd.broker.addGrant('dev', 'gh');
 
-  // the row goes while the upstream handles /a, and no prune runs, so the
-  // connection stays: the lookup on each request is what refuses /b
   ctx.answers.set('/a', async () => {
     await removeCheckedGrant(ctx.db, dev.id, 'gh', null);
 
     return new Response('from upstream');
   });
 
-  // /a then /b in one curl run, on one connection when it can
   const result = await ctx.guest.curl('https://api.github.com/b', [
     '-w',
     ' %{http_code} %{num_connects}\n',
@@ -789,8 +759,6 @@ test('it lets the request under way finish on a revoke, and the next gets no cre
   await ctx.impd.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_real' });
   await ctx.impd.broker.addGrant('dev', 'gh');
 
-  // the revoke lands while the upstream handles /a; it waits for the grant
-  // to go, not for the revoke's prune, which waits for /a to end
   const revoke = { done: Promise.resolve() };
 
   ctx.answers.set('/a', async () => {
@@ -813,8 +781,7 @@ test('it lets the request under way finish on a revoke, and the next gets no cre
 
   await revoke.done;
 
-  // the prune closed the connection once /a was done: /b dialled again, got
-  // a plain tunnel to the real host, and never trusted it (curl's 60)
+  // curl exits 60 when it cannot verify the peer's certificate
   expect(result).toStrictEqual({
     code: 60,
     stdout: 'from upstream 200 1\n 000 1\n',
@@ -844,7 +811,6 @@ test('it never sends a rebound value to the host the secret had before', async (
 
   await ctx.impd.broker.addGrant('dev', 'api');
 
-  // the request holds between its rule read and its value read
   const reached = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
 
@@ -867,8 +833,6 @@ test('it never sends a rebound value to the host the secret had before', async (
     rebind: true,
   });
 
-  // the row has switched and the old file is gone; the replace itself then
-  // waits for the held request, as a revoke's prune does
   await waitFor(async () => {
     const secret = await readSecret(ctx.db, 'api');
     const files = await readdir(join(ctx.dataDir, 'secrets'));
@@ -1412,7 +1376,6 @@ test('it gives no credential for a secret with no access token', async () => {
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.example.com': ctx.upstreamOrigin } }),
   );
 
-  // no answer is issued, so the first sign-in gets invalid_grant
   server.use(createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token').handler);
 
   await ctx.client.imps.create({ name: 'dev' });
@@ -1452,7 +1415,6 @@ test('it keeps sending the valid access token of a secret that needs a new sign-
 
   server.use(endpoint.handler);
 
-  // the sign-in works; the refresh token it returns is dead by the refresh
   endpoint.issue('fake-refresh-0', {
     access_token: 'fake-access-1',
     refresh_token: 'fake-refresh-1',
@@ -1530,7 +1492,6 @@ test('it refreshes through a token host that the test-upstreams file routes', as
 
   const refreshTokens: string[] = [];
 
-  // the token host over TLS the broker verifies with the file's CA
   const tokenHost = await startStubBrokerTlsUpstream(ctx.stack, {
     directory: join(ctx.dataDir, 'token-host'),
     respond: async (request: Request) => {

@@ -5,18 +5,16 @@ import type { ProxyRoute } from '../proxy/wake-proxy';
 import type { ListenerScope } from './https-listeners';
 import type { PublicLimits } from './public-limits';
 
-// A public imp's token or password: impd makes it, so it is long enough
-// that a fast hash is safe to store and to check on every request.
 export function createCredential(): string {
   return randomBytes(32).toString('base64url');
 }
 
 export function buildCredentialHash(credential: string): string {
+  // impd makes every credential long enough that a fast hash is safe to
+  // store and to check on every request
   return createHash('sha256').update(credential).digest('base64url');
 }
 
-// What the public listeners serve (ListenerScope): the route, and the
-// redirect's check, which has no side effects
 export function createPublicScope(
   findPublicImp: (name: string) => Promise<PublicImp | undefined>,
   limits: PublicLimits,
@@ -32,9 +30,6 @@ export function createPublicScope(
   };
 }
 
-// The public listeners' route for an imp name: null while the imp is not
-// public, whatever the request carries. The credential and the limits are
-// checked before the wake, so a stranger never boots the imp.
 export function createPublicRoute(
   findPublicImp: (name: string) => Promise<PublicImp | undefined>,
   limits: PublicLimits,
@@ -59,7 +54,6 @@ export function createPublicRoute(
     }
 
     if (!checkCredential(stored, authorization)) {
-      // a correct credential always passes, so the limit locks out guesses only
       if (!limits.tryFail(found.id)) {
         return buildLimited(
           'Too many failed sign-ins; try again later.',
@@ -94,7 +88,6 @@ function buildLimited(detail: string, retryAfterS: number): ProxyRoute {
   return { kind: 'limited', detail, retryAfterS };
 }
 
-// true for no auth, or the right token, or basic's user and password
 function checkCredential(stored: StoredPublicAuth, authorization: string | null): boolean {
   if (stored.auth === 'none') {
     return true;
@@ -109,7 +102,6 @@ function checkCredential(stored: StoredPublicAuth, authorization: string | null)
   const storedDigest = Buffer.from(stored.hash, 'base64url');
   const presentedDigest = buildDigest(presented.secret);
 
-  // a stored hash impd did not write lets nobody in
   if (storedDigest.length !== presentedDigest.length) {
     return false;
   }
@@ -126,7 +118,6 @@ interface Presented {
   readonly secret: string;
 }
 
-// the token, or basic auth's user and password, as the header carries them
 function readPresented(stored: StoredPublicAuth, authorization: string | null): Presented | null {
   const match = /^(?<scheme>\S+) +(?<value>\S+)$/u.exec(authorization?.trim() ?? '')?.groups;
   const scheme = match?.['scheme']?.toLowerCase();

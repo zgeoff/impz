@@ -16,12 +16,8 @@ import { createPublicScope } from './public-auth';
 import { createPublicLimits } from './public-limits';
 
 const RENEW_INTERVAL_MS = 10 * 60_000;
-
-// as often as the proxy's own listener sync: a new tailnet IP is picked up
-// within half a minute
 const ADDRESS_INTERVAL_MS = 30_000;
 
-// how the last pass over the public records went
 export interface RecordsStatus {
   readonly isOk: boolean;
   readonly error: string | null;
@@ -34,19 +30,12 @@ interface HttpsPorts {
 }
 
 export interface HttpsService {
-  // returns at once: issuance runs in the background, so a CA or DNS
-  // outage never holds up impd
   readonly start: () => void;
 
-  // brings the public A records in line with the public imps; after an
-  // expose, an unexpose or a destroy. Never throws: a DNS failure is logged
-  // and the next pass tries again.
   readonly updatePublicRecords: () => Promise<RecordsStatus>;
 
-  // the last pass, or null before the first
   readonly readRecordsStatus: () => RecordsStatus | null;
 
-  // the ports the tailnet and public listeners hold; null while none does
   readonly readPorts: () => {
     readonly tailnet: HttpsPorts;
     readonly public: HttpsPorts | null;
@@ -61,28 +50,19 @@ interface HttpsServiceDeps {
   readonly dns: DnsProvider;
   readonly proxy: ProxyListen;
 
-  // null when the host is on no tailnet: the domain then answers only on
-  // loopback in the host container
   readonly readTailscale: (() => Promise<TailscaleStatus>) | null;
   readonly readServePorts: () => Promise<readonly number[]>;
   readonly now: () => number;
   readonly log: (message: string) => void;
 
-  // the public imps, for their A records and the public listeners
   readonly listPublicImps: () => Promise<readonly string[]>;
   readonly readPublicImpByName: (name: string) => Promise<PublicImp | undefined>;
 
-  // where the renewal, records and address passes wait out their intervals:
-  // the runtime's timers unless a test steps them by hand
   readonly timer?: TickerTimer;
 
-  // where the public listeners bind; every address unless a test says
   readonly publicAddress?: string;
 }
 
-// HTTPS on the domain (docs/guides/https.md): the certificate, its renewal,
-// the listeners on loopback and the tailnet IP, and the DNS records that
-// point the domain at that IP.
 export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
   const config = deps.config;
   const domain = config.domain;
@@ -105,8 +85,6 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
     scope: { kind: 'tailnet' },
   });
 
-  // every address, on ports of their own that Docker publishes as 443 and
-  // 80: which listener a request came in on decides what it may reach
   const publicConfig = config.public;
 
   const publicListeners: HttpsListeners | null =
@@ -126,9 +104,6 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
     publicListeners?.setCertificate(certificate);
   };
 
-  // the tailnet IP, the records' IP and their last failure (logged once),
-  // the IP checked for `tailscale serve`, and whether stop ran: a renewal
-  // that finishes later must not start listeners again
   const state: {
     tailnetIp: string | null;
     recordsIp: string | null;
@@ -160,8 +135,8 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
     }
   };
 
-  // The records follow the tailnet IP, which changes when Tailscale deletes
-  // an ephemeral node that stayed offline (docs/guides/tailscale.md).
+  // the tailnet IP changes when Tailscale deletes an ephemeral node that
+  // stayed offline
   const setRecords = async (ip: string): Promise<void> => {
     try {
       await deps.dns.setA(domain, ip);
@@ -199,8 +174,6 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
   const updateAddresses = async (): Promise<void> => {
     const status = deps.readTailscale === null ? null : await deps.readTailscale();
 
-    // a status call that fails reads as no IP; dropping the listener for it
-    // would cut every open connection, so only a new IP moves them
     state.tailnetIp = status?.ip ?? state.tailnetIp;
 
     const ip = state.tailnetIp;
@@ -226,9 +199,6 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
     }
   };
 
-  // One `<name>.<domain>` record per public imp, at the public IP; it wins
-  // over the tailnet wildcard. The other public records of this domain go,
-  // all of them when public mode is off.
   const publicOwner = buildPublicOwner(domain);
 
   const applyPublicRecords = async (): Promise<void> => {
@@ -250,7 +220,6 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
     for (const fqdn of present.keys()) {
       const label = fqdn.slice(0, -(domain.length + 1));
 
-      // a deeper name is no imp's, whatever its comment says
       if (label.includes('.') || wanted.includes(label)) {
         continue;
       }
@@ -261,7 +230,6 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
     }
   };
 
-  // one pass at a time, so two never race on a record
   const recordsGate = createSemaphore(1);
   let recordsStatus: RecordsStatus | null = null;
 
@@ -304,7 +272,6 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
         );
       }
 
-      // the first pass now, not a tick from now
       void runLogged('addresses', updateAddresses, log);
       void runLogged('renewal', runRenewal, log);
       void updatePublicRecords();
@@ -312,7 +279,6 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
       tickers.push(
         startTask('https renewal', RENEW_INTERVAL_MS, runRenewal, log),
 
-        // as often as renewal: a record changed by hand comes back in time
         startTask(
           'https public records',
           RENEW_INTERVAL_MS,

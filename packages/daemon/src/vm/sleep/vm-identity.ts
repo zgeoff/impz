@@ -8,40 +8,24 @@ import type { SystemFiles } from '../storage/setup-system-files';
 import { readCpuIdentity } from './cpu-identity';
 import type { CpuIdentity } from './cpu-identity';
 
-// What a VM booted with. impd writes it at every cold boot; it holds until the
-// next one, across sleeps, wakes and impd restarts, so a sleep records what
-// the VM runs, not what the host would boot now.
 export const VmIdentitySchema = z.object({
   firecrackerVersion: z.string(),
   snapshotVersion: z.string(),
   hostKernel: z.string(),
-
-  // sha256 of the guest kernel and the system drive
   guestKernel: z.string(),
   systemDrive: z.string(),
-
-  // the drive's content-addressed path, which the VM's snapshots reopen
   systemDrivePath: z.string(),
   agentVersion: z.string(),
-
-  // why this boot was cold instead of a wake; null for a create or a start
   bootReason: z.string().nullable(),
-
-  // the IPv6 /64 the guest got its address from; null for none, and left
-  // out by an older impd
   ipv6Prefix: z.string().nullable().optional(),
-
-  // the CPU it booted on (cpu-identity.ts); left out by an older impd
   cpuModel: z.string().optional(),
   cpuFlags: z.string().optional(),
 });
 
 export type VmIdentity = z.infer<typeof VmIdentitySchema>;
 
-// What this host boots imps with now.
 export type HostIdentity = Omit<VmIdentity, 'agentVersion' | 'bootReason'> & CpuIdentity;
 
-// Read once at start: impd installs the kernel and the system drive only then.
 export function readHostIdentity(
   firecrackerBin: string,
   systemFiles: Readonly<SystemFiles>,
@@ -59,12 +43,10 @@ export function readHostIdentity(
   };
 }
 
-// written next to the old file and renamed over it: a crash never leaves half
 export function writeVmIdentity(paths: Readonly<ImpPaths>, identity: Readonly<VmIdentity>): void {
   writeFileDurably(paths.vmIdentity, `${JSON.stringify(identity, null, 2)}\n`);
 }
 
-// null for a VM booted before impd kept the file, or a broken one
 export function readVmIdentity(paths: Readonly<ImpPaths>): VmIdentity | null {
   if (!existsSync(paths.vmIdentity)) {
     return null;
@@ -82,8 +64,6 @@ type PartIdentity = Pick<
   'firecrackerVersion' | 'guestKernel' | 'systemDrive' | 'ipv6Prefix'
 >;
 
-// The parts of the host a VM predates; it picks them up at its next cold
-// boot. `ipv6`: the host gives imps an IPv6 the VM did not boot with.
 export function collectOutdatedParts(
   vm: Readonly<PartIdentity>,
   host: Readonly<PartIdentity>,
@@ -102,7 +82,6 @@ export function collectOutdatedParts(
     : outdated;
 }
 
-// what a version reads as when the binary is missing, as on a dev machine
 export const UNKNOWN_VERSION = 'unknown';
 
 function readVersionOutput(bin: string, flag: string): string {

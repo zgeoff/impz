@@ -2,22 +2,15 @@ import { EXTENT_FLAGS } from './fiemap';
 import type { Extent } from './fiemap';
 
 export interface OwnedFile {
-  // an imp, an image or the backup tree: whoever removing the file frees
   readonly owner: string;
   readonly extents: readonly Extent[];
 }
 
 export interface OwnerBytes {
-  // blocks only this owner's files hold: what removing them all frees
   readonly exclusiveBytes: number;
-
-  // blocks it holds with another owner
   readonly sharedBytes: number;
 }
 
-// An extent FIEMAP does not mark shared belongs to its file alone; a shared
-// one is matched by physical address, so blocks shared only among one owner's
-// files (a disk and its checkpoint) still count as its exclusive bytes.
 export function countOwnerBytes(files: readonly OwnedFile[]): Map<string, OwnerBytes> {
   const totals = new Map<string, { exclusiveBytes: number; sharedBytes: number }>();
 
@@ -35,14 +28,13 @@ export function countOwnerBytes(files: readonly OwnedFile[]): Map<string, OwnerB
     return created;
   };
 
-  // +1 where a shared extent starts, -1 where it ends
   const events: { at: number; owner: string; step: 1 | -1 }[] = [];
 
   for (const file of files) {
     const total = readTotal(file.owner);
 
     for (const extent of file.extents) {
-      // a delayed allocation has no address yet: no other file can share it
+      // FIEMAP gives a delayed allocation no physical address yet, so no other file shares it
       if (
         (extent.flags & EXTENT_FLAGS.shared) === 0 ||
         (extent.flags & EXTENT_FLAGS.delalloc) !== 0

@@ -1,20 +1,15 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-// The CPU a guest kernel picked its code paths on: a memory snapshot loads
-// only on the same model with the same CPUID flags
-// (docs/architecture/lifecycle/sleep-and-wake.md#snapshot-identity)
+// A guest kernel picks its code paths on the CPU it boots on, so its memory snapshot loads only on
+// the same CPU model with the same CPUID flags.
 export interface CpuIdentity {
   readonly cpuModel: string;
-
-  // sha256 of the flags, sorted, so their order in /proc/cpuinfo does not count
   readonly cpuFlags: string;
 }
 
 export const UNKNOWN_CPU = 'unknown';
 
-// The first processor's model and flags; arm64 names them `CPU part` and
-// `Features`. A CPU it cannot read is `unknown`: a move refuses it.
 export function parseCpuInfo(text: string): CpuIdentity {
   const first = text.split(/\n\s*\n/u)[0] ?? '';
 
@@ -28,6 +23,7 @@ export function parseCpuInfo(text: string): CpuIdentity {
     }
   }
 
+  // arm64's /proc/cpuinfo names the model `CPU part` and the flags `Features`.
   const model = fields.get('model name') ?? fields.get('CPU part') ?? UNKNOWN_CPU;
   const flags = fields.get('flags') ?? fields.get('Features');
 
@@ -48,8 +44,6 @@ export function readCpuIdentity(path = '/proc/cpuinfo'): CpuIdentity {
   }
 }
 
-// why a snapshot from one CPU cannot load on another, or null; a snapshot
-// without the CPU, from an older impd, loads as it did before
 export function findCpuChange(
   snapshot: Readonly<{ cpuModel?: string | undefined; cpuFlags?: string | undefined }>,
   host: Readonly<CpuIdentity>,

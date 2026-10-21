@@ -1,12 +1,8 @@
 import type { DnsProvider } from './dns-provider';
 
-// pebble-challtestsrv, the DNS server Pebble asks in tests
-// (docs/guides/https.md#testing-with-pebble). Its management API sets the
-// records; there is nothing to wait for, since it is the only nameserver.
 export function createChalltestsrvProvider(apiUrl: string): DnsProvider {
-  // It has no list call, so the provider remembers what this impd wrote:
-  // fqdn to owner and address. A restarted impd forgets, and the records it
-  // wrote before stay until challtestsrv restarts.
+  // challtestsrv has no list call, so a restarted impd forgets its records,
+  // and they stay until challtestsrv restarts
   const records = new Map<string, { readonly owner: string; readonly ip: string }>();
 
   const sendCommand = async (path: string, body: unknown): Promise<void> => {
@@ -28,13 +24,11 @@ export function createChalltestsrvProvider(apiUrl: string): DnsProvider {
       return { fqdn, value, id: value };
     },
 
-    // it clears every value of the name at once; impd removes all of them
-    // together after an attempt anyway
+    // challtestsrv clears every value of the name at once
     removeTxt: async (record) => {
       await sendCommand('/clear-txt', { host: `${record.fqdn}.` });
     },
 
-    // set as soon as the API answers
     waitForTxt: () => Promise.resolve(),
     setA: async (fqdn, ip, owner = 'managed by impd') => {
       await sendCommand('/add-a', { host: `${fqdn}.`, addresses: [ip] });

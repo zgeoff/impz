@@ -3,22 +3,16 @@ import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 
-// how long one upstream has to answer before the next is asked
 const UPSTREAM_TIMEOUT_MS = 2000;
 const TC = 0x02_00;
 
-// sends the query to an upstream resolver and returns its reply
 export type DnsForward = (query: Uint8Array) => Promise<Uint8Array>;
 
-// The upstreams in order (IMP_DNS, port 53 unless given), over UDP, then TCP
-// for a truncated reply. A fresh random id per upstream query keeps a guest
-// from choosing the id a forger must guess; the guest gets its own back.
 export function createDnsForward(
   servers: readonly string[],
   port = 53,
   timeoutMs = UPSTREAM_TIMEOUT_MS,
 
-  // the UDP wait's timer, setTimeout by default; a test passes a fake one
   startTimer: StartTimer = startRealTimer,
 ): DnsForward {
   return async (guestQuery) => {
@@ -26,6 +20,7 @@ export function createDnsForward(
 
     for (const server of servers) {
       try {
+        // a fresh random ID keeps a guest from choosing the ID a forger must guess
         const query = toFreshId(guestQuery);
 
         const udpReply = await sendUdp({ server, port, timeoutMs }, query, startTimer);
@@ -74,14 +69,12 @@ async function sendUdp(
   const socket = await Bun.udpSocket({
     socket: {
       data: (_socket, data, _port, address) => {
-        // a reply from anywhere else, or for another id, is not this one
         if (address === server && data[0] === query[0] && data[1] === query[1]) {
           reply.resolve(new Uint8Array(data));
         }
       },
 
-      // an upstream that refuses, as ICMP: the next one gets the query.
-      // Bun 1.4.2 passes the error alone, not after the socket its types name.
+      // Bun 1.4.2 passes the error alone, not after the socket its types name
       error: (...args: readonly unknown[]) => {
         const message = getErrorMessage(args.at(-1));
 

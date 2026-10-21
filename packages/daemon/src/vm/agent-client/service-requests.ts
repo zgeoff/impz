@@ -13,14 +13,9 @@ import {
 import { decodeAgentMessage } from './decode-agent-message';
 import { FRAME_TYPES, decodeJsonPayload } from './frame-codec';
 
-// The agent's services ops (docs/architecture/guest/agent.md#execs-and-services). Each
-// throws AgentError NO_SERVICE for a name it does not have, and
-// AGENT_OUTDATED for an agent from before them.
-
-// a stop waits up to 5 s for SIGTERM before SIGKILL, then the start
+// The agent waits up to 5 s after SIGTERM before it sends SIGKILL, and a restart then starts the
+// service again.
 const STOP_TIMEOUT_MS = 15_000;
-
-// how long the agent may take to send the first frame of a log stream
 const LOGS_START_TIMEOUT_MS = 5000;
 
 export async function sendServicesList(
@@ -32,7 +27,6 @@ export async function sendServicesList(
   return decodeAgentMessage(ServicesListSchema, response);
 }
 
-// a service definition for services.add, as impd builds one
 type ServiceDefInit = MessageInitShape<typeof ServiceDefSchema>;
 
 export async function sendServicesAdd(
@@ -73,8 +67,6 @@ export interface ServiceLogRequest {
   readonly service: string;
   readonly lines: number;
   readonly follow: boolean;
-
-  // everything after it, in place of `lines`
   readonly cursor?: LogCursor | undefined;
 }
 
@@ -82,8 +74,6 @@ export type ServiceLogChunk =
   | { readonly kind: 'data'; readonly data: Uint8Array }
   | { readonly kind: 'cursor'; readonly cursor: LogCursor };
 
-// A service's log: the chunks end when the agent sends STDOUT_EOF or closes,
-// and `close` ends a follow. A cursor follows each piece of data.
 export interface ServiceLogStream {
   readonly chunks: () => AsyncGenerator<ServiceLogChunk, void, undefined>;
   readonly close: () => void;

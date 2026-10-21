@@ -19,15 +19,10 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
 import type { EgressService } from '../egress/egress-service';
 
-// Private networks between imps (docs/guides/networks.md). Every change to
-// who is on a network goes through the egress firewall's lock, which builds
-// the table from these rows.
-
 export interface NetworkDeps {
   readonly db: ImpDatabase;
   readonly egress: Pick<EgressService, 'changeNetworks'>;
 
-  // a join holds the imp's lock, which refuses an imp a move marked
   readonly imps: Pick<ImpCheckpointHooks, 'lockImp'>;
 }
 
@@ -38,20 +33,14 @@ export interface NetworkService {
   readonly joinNetwork: (network: string, imp: string) => Promise<NetworkJoin>;
   readonly leaveNetwork: (network: string, imp: string) => Promise<Network>;
 
-  // a trust warning for each network the imp is on that mixes open imps
-  // with box or none ones; NOT_FOUND for no such imp
   readonly readTrustWarnings: (imp: string) => Promise<string[]>;
 
-  // a new imp's networks; NOT_FOUND for one that does not exist
   readonly resolveNetworkIds: (names: readonly string[]) => Promise<string[]>;
 
-  // a restored imp's networks, made under the firewall's lock when missing;
-  // `created` names the ones made, for removeEmptyNetworks after a failure
   readonly writeMissingNetworks: (
     names: readonly string[],
   ) => Promise<{ readonly ids: readonly string[]; readonly created: readonly string[] }>;
 
-  // the named networks that have no members left
   readonly removeEmptyNetworks: (names: readonly string[]) => Promise<void>;
 }
 
@@ -81,7 +70,6 @@ export function createNetworkService(deps: NetworkDeps): NetworkService {
     return imp.id;
   };
 
-  // inside the lock: nothing else makes networks meanwhile
   const requireWritten = async (name: string): Promise<NetworkRecord> => {
     const network = await writeNetwork(db, name);
 
@@ -102,9 +90,6 @@ export function createNetworkService(deps: NetworkDeps): NetworkService {
     }
   };
 
-  // An open member reaches anything, and can relay for any other one; a
-  // public member reaches the internet, and can relay for a box or none one:
-  // a network is a trust boundary. Null when the network mixes no policies.
   const readTrustWarning = async (networkName: string, impName: string): Promise<string | null> => {
     const network = await requireNetwork(networkName);
     const slots = await listEgressSlots(db);
@@ -150,7 +135,6 @@ export function createNetworkService(deps: NetworkDeps): NetworkService {
       return networks.map((network) => toApiNetwork(network));
     },
 
-    // through the lock, so the resolver knows the name at once
     createNetwork: async (name) => {
       const network = await deps.egress.changeNetworks({
         write: () => writeNetwork(db, name),
@@ -168,8 +152,6 @@ export function createNetworkService(deps: NetworkDeps): NetworkService {
       return toApiNetwork(network);
     },
 
-    // the members are read under the lock, so a join just before is put
-    // back with the rest
     removeNetwork: async (name) => {
       const network = await requireNetwork(name);
 
@@ -188,8 +170,6 @@ export function createNetworkService(deps: NetworkDeps): NetworkService {
     joinNetwork: async (networkName, impName) => {
       const network = await requireNetwork(networkName);
 
-      // under the imp's lock, which refuses a marked imp with MOVING: a join
-      // cannot slip in after a warm move's network check
       await deps.imps.lockImp(impName, (imp) =>
         deps.egress.changeNetworks({
           write: () => writeMember(db, network.id, imp.id),
@@ -292,7 +272,6 @@ function isPublic(mode: EgressMode | undefined): boolean {
   return mode !== undefined && EGRESS_MODE_TRAITS[mode].isPublic;
 }
 
-// neither reaches the internet of its own: only a box's list, or nothing
 function isBoxOrNone(mode: EgressMode | undefined): boolean {
   return (
     mode !== undefined && !EGRESS_MODE_TRAITS[mode].isOpen && !EGRESS_MODE_TRAITS[mode].isPublic

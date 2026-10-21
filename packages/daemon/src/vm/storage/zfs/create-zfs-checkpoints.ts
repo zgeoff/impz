@@ -4,8 +4,6 @@ import type { StorageBackend } from '../storage-backend';
 import { getCheckpointSnapshot, listCheckpointSnapshots } from './zfs-commands';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
 
-// what the ZFS backend lends its checkpoints: its commands, its lanes, its
-// retire and reclaim, and the names of its disks and their mounts
 interface ZfsCheckpointContext {
   readonly zfs: ZfsCommands;
   readonly runSerial: <T>(task: () => Promise<T>) => Promise<T>;
@@ -21,13 +19,9 @@ interface ZfsCheckpointContext {
   readonly buildRestoreName: (impId: string) => string;
 }
 
-// A checkpoint is a snapshot of the imp's disk, and a restore clones it into
-// staging, then swaps it in for the disk.
 export function createZfsCheckpoints(
   ctx: ZfsCheckpointContext,
 ): Pick<StorageBackend, 'createCheckpoint' | 'removeCheckpoint' | 'restoreCheckpoint'> {
-  // A swap that failed halfway leaves the imp a disk: the old one when it is
-  // still in place, else the staged clone, as the next start would.
   const resolveFailedSwap = async (impId: string): Promise<void> => {
     try {
       const entries = await ctx.listAll();
@@ -53,7 +47,7 @@ export function createZfsCheckpoints(
       ctx.runSnapshot(async () => {
         const entries = await ctx.listAll();
 
-        // a deleted checkpoint's snapshot stays while a fork needs it
+        // ZFS keeps a deleted checkpoint's snapshot while a fork's clone depends on it.
         if (listCheckpointSnapshots(entries, checkpointId).length > 0) {
           throw new CheckpointIdTakenError(checkpointId);
         }
@@ -110,7 +104,6 @@ export function createZfsCheckpoints(
         try {
           await ctx.runSerial(() => ctx.zfs.destroy(staged));
         } catch (destroyError) {
-          // the next start destroys it: the disk is still in place
           ctx.log(`impd: zfs: could not drop ${staged}: ${getErrorMessage(destroyError)}`);
         }
 

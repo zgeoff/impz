@@ -2,9 +2,9 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { LeafCertificate } from './broker-ca';
 
-// One TLS server per (imp, host) on a unix socket only impd can open. Not
-// one per imp with SNI: Bun serves an unknown SNI with the first
-// certificate, and a reload does not swap certificates.
+// One TLS server per imp and host, not one per imp with SNI: Bun serves an
+// unknown SNI with the first certificate, and a reload does not swap
+// certificates.
 
 // a slow model call that answers in one piece can sit quiet for minutes;
 // the guest's TCP connection decides when it is over
@@ -16,23 +16,18 @@ const MAX_REQUEST_BODY_BYTES = 8 * 1024 ** 3;
 export interface TerminatorKey {
   readonly impId: string;
 
-  // for the audit rows, which outlive the imp
   readonly impName: string;
   readonly host: string;
 }
 
 export interface Terminators {
-  // the socket for the pair, its server started on first use
   readonly open: (key: TerminatorKey) => Promise<string>;
 
-  // stops every server whose pair `keep` rejects, or whose leaf is due;
-  // requests under way finish
   readonly prune: (keep: (key: TerminatorKey) => boolean) => Promise<void>;
   readonly stop: () => Promise<void>;
 }
 
 export interface TerminatorDeps {
-  // a 0700 directory for the sockets; its old sockets are removed
   readonly socketDir: string;
   readonly issueLeaf: (host: string) => Promise<LeafCertificate>;
   readonly isLeafDue: (leaf: LeafCertificate) => boolean;
@@ -44,7 +39,6 @@ interface Entry {
   readonly socket: string;
   readonly leaf: LeafCertificate;
 
-  // `force` cuts open connections; without it their requests finish
   readonly stop: (force: boolean) => Promise<void>;
 }
 
@@ -150,7 +144,6 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
   };
 }
 
-// a server that failed to start counts as none
 async function readSettled(pending: Promise<Entry>): Promise<Entry | null> {
   try {
     return await pending;

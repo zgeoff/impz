@@ -2,8 +2,6 @@ import { getErrorMessage } from '../../../platform/process/get-error-message';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
 import { planReclaimStep } from './zfs-reclaim';
 
-// what the ZFS backend lends its reclaim: its commands, its serial lane, the
-// names of its datasets and its log
 interface ZfsReclaimContext {
   readonly zfs: ZfsCommands;
   readonly datasets: { readonly staging: string; readonly retired: string };
@@ -13,22 +11,16 @@ interface ZfsReclaimContext {
   readonly isKernelOopsed: () => boolean;
 }
 
-// a reclaim pass ends after this many steps, so a bug never spins
 const MAX_RECLAIM_STEPS = 1000;
 
-// zfs's refusal of a dataset a task still holds, such as
-// `cannot destroy 'tank/imp/a': dataset is busy`
+// zfs refuses a dataset a task still holds with `cannot destroy 'tank/imp/a': dataset is busy`.
 const BUSY_DATASET = /'(?<name>[^']+)': dataset is busy/v;
 
-// The ZFS backend's reclaim of retired datasets: one step at a time, and a
-// pass in the background after each change that may free one
 export function createZfsReclaim(ctx: ZfsReclaimContext) {
-  // datasets an oops holds busy until a reboot, each logged once
   const oopsHeld = new Set<string>();
 
   const reclaim = { running: null as Promise<void> | null, isWanted: false };
 
-  // one promote or destroy; true when nothing is left to reclaim
   const runReclaimStep = async (): Promise<boolean> => {
     const entries = await ctx.listAll();
 
@@ -47,7 +39,6 @@ export function createZfsReclaim(ctx: ZfsReclaimContext) {
     return false;
   };
 
-  // `runStep` queues each step on its own, so other changes go between them
   const runReclaim = async (runStep: () => Promise<boolean>): Promise<void> => {
     try {
       for (let step = 0; step < MAX_RECLAIM_STEPS; step += 1) {
@@ -60,11 +51,10 @@ export function createZfsReclaim(ctx: ZfsReclaimContext) {
 
       ctx.log(`impd: zfs: reclaim stopped after ${String(MAX_RECLAIM_STEPS)} steps`);
     } catch (error) {
-      // the space comes back on the next pass; the change itself is done
       const message = getErrorMessage(error);
       const busy = BUSY_DATASET.exec(message)?.groups?.['name'];
 
-      // no pass frees it before the reboot, so one line says so
+      // A dataset that a kernel oops holds stays busy until the host reboots, so it is logged once.
       if (busy !== undefined && ctx.isKernelOopsed()) {
         if (!oopsHeld.has(busy)) {
           oopsHeld.add(busy);
@@ -81,7 +71,6 @@ export function createZfsReclaim(ctx: ZfsReclaimContext) {
     }
   };
 
-  // after a change that may free a retired dataset; never awaited by it
   const startReclaim = (): void => {
     reclaim.isWanted = true;
 
@@ -102,7 +91,6 @@ export function createZfsReclaim(ctx: ZfsReclaimContext) {
     reclaim.running = runPasses();
   };
 
-  // resolves once the reclaim that changes start in the background is done
   const waitForReclaim = async (): Promise<void> => {
     await reclaim.running;
   };

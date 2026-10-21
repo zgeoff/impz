@@ -4,21 +4,15 @@ export interface WaitForTxtOptions {
   readonly timeoutMs?: number;
   readonly intervalMs?: number;
 
-  // the TXT values one nameserver gives for a name; DNS by default
   readonly readTxt?: (server: string, fqdn: string) => Promise<readonly string[]>;
 
-  // a nameserver's addresses; the system resolver by default
   readonly resolveServer?: (hostname: string) => Promise<readonly string[]>;
 
-  // the clock the deadline is read from
   readonly now?: () => number;
 
-  // waits out the interval between rounds
   readonly wait?: (durationMs: number) => Promise<void>;
 }
 
-// Waits until every one of the zone's nameservers answers every value. A CA
-// asks one of them, and a value only some of them have fails the challenge.
 export async function waitForTxt(
   nameservers: readonly string[],
   fqdn: string,
@@ -41,6 +35,7 @@ export async function waitForTxt(
     throw new Error(`no address for the nameservers of ${fqdn}: ${nameservers.join(', ')}`);
   }
 
+  // a CA asks any one nameserver, so a value only some of them have fails the challenge
   for (;;) {
     const missing = await readMissing(servers, fqdn, values, readTxt);
 
@@ -79,7 +74,6 @@ async function resolveServerAddresses(hostname: string): Promise<readonly string
   }
 }
 
-// the first server that lacks a value, or null when all have every one
 async function readMissing(
   servers: readonly string[],
   fqdn: string,
@@ -92,7 +86,6 @@ async function readMissing(
     try {
       answer = await readTxt(server, fqdn);
     } catch {
-      // NXDOMAIN or a timeout: not there yet
       return server;
     }
 

@@ -16,12 +16,6 @@ import { readSnapshotMeta } from '../../sleep/snapshot-meta';
 import { createZfsBackend } from './zfs-backend';
 import type { ZfsBackend } from './zfs-backend';
 
-// Moves between two impds on one real pool, as root: scripts/test-zfs.sh sets
-// the pool, in the `zfs` CI job and on a host. Each test skips everywhere
-// else; only the VMs are fakes.
-
-// zfs commands on a shared CI runner take seconds each: each test gets 180 s
-// and each move 120 s
 async function setupTest(options: Readonly<{ isShared?: boolean }> = {}) {
   const stack = new AsyncDisposableStack();
 
@@ -34,8 +28,6 @@ async function setupTest(options: Readonly<{ isShared?: boolean }> = {}) {
   const sourceSet = await createZfsTestDataset(stack, pool);
   const targetSet = await createZfsTestDataset(stack, pool);
 
-  // the stack runs in reverse: both impds stop, then their reclaims end, then
-  // their datasets go
   const backends: ZfsBackend[] = [];
 
   stack.defer(async () => {
@@ -47,7 +39,6 @@ async function setupTest(options: Readonly<{ isShared?: boolean }> = {}) {
     source: {
       dataDir: sourceSet.dataDir,
       createStorage: (directory) => {
-        // the host's own module, whatever its version: no VM runs here
         const backend = createZfsBackend({
           dataDir: directory,
           root: sourceSet.root,
@@ -90,8 +81,6 @@ async function setupTest(options: Readonly<{ isShared?: boolean }> = {}) {
     imageDigests: new Set(),
   });
 
-  // a move source the test opens closes into this stack, before both impds
-  // stop and both datasets go
   return { ...hosts, stack, sourceRoot: sourceSet.root, targetRoot: targetSet.root };
 }
 
@@ -229,8 +218,6 @@ test.skipIf(readZfsTestPool() === null)(
 test.skipIf(readZfsTestPool() === null)(
   'it moves a sleeping imp warm between two ZFS impds into its slot with its memory',
   async () => {
-    // two impds in one process differ in their data dirs: both report the
-    // target's facts, as two hosts with the same IMP_DATA_DIR would
     const ctx = await setupTest({ isShared: true });
 
     await ctx.source.storage.createImage('sha256:ubuntu', (directory) => {
@@ -257,7 +244,6 @@ test.skipIf(readZfsTestPool() === null)(
       buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
     );
 
-    // slot 0 goes to another imp, so the target's lowest free slot is not dev's
     await ctx.sourceApp.client.imps.create({ name: 'first', image: 'ubuntu' });
 
     const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
@@ -310,8 +296,6 @@ test.skipIf(readZfsTestPool() === null)(
 test.skipIf(readZfsTestPool() === null)(
   'it wakes an imp that moved warm between two ZFS impds from its memory',
   async () => {
-    // two impds in one process differ in their data dirs: both report the
-    // target's facts, as two hosts with the same IMP_DATA_DIR would
     const ctx = await setupTest({ isShared: true });
 
     await ctx.source.storage.createImage('sha256:ubuntu', (directory) => {
@@ -446,7 +430,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     await ctx.target.storage.createImpDisk('a', { kind: 'empty' });
 
-    // as the receiver does: each file into a temp file, then over the disk
     for (const [index, text] of ['one', 'two'].entries()) {
       writeSyncedFile(join(incomingDir, 'incoming'), text);
 

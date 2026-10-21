@@ -2,8 +2,6 @@ import type { ZfsEntry } from './zfs-commands';
 
 interface ReclaimRoots {
   readonly retired: string;
-
-  // impd's own short-lived clones: a restore on its way in, or a backup read
   readonly staging: string;
 }
 
@@ -11,9 +9,6 @@ export type ReclaimStep =
   | { readonly kind: 'destroy'; readonly name: string }
   | { readonly kind: 'promote'; readonly name: string };
 
-// The next step that frees a retired disk or image, or null when none can go
-// yet: promote the newest snapshot's clone, never one in staging, which impd
-// destroys soon (docs/architecture/storage/storage.md#zfs).
 export function planReclaimStep(
   entries: readonly ZfsEntry[],
   roots: ReclaimRoots,
@@ -36,8 +31,8 @@ export function planReclaimStep(
       continue;
     }
 
-    // ZFS destroys a marked snapshot with its last clone; one without clones
-    // is a leftover a crash cut short
+    // ZFS destroys a marked snapshot with its last clone, so a marked one without clones is a
+    // leftover that a crash cut short.
     const unused = snapshots.find((snapshot) => findClones(snapshot.name).length === 0);
 
     if (unused !== undefined) {

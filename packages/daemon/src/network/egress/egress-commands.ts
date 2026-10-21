@@ -1,10 +1,6 @@
 import { buildExitError, runCommand } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';
 
-// The commands the egress service runs past nft, each from `run`. A failure
-// names stderr alone, never stdout.
-
-// setup-net.sh's FORWARD rules, as `iptables -S FORWARD` prints them
 export async function runForwardRulesList(run: CommandRunner = runCommand): Promise<string> {
   const argv = ['iptables', '-S', 'FORWARD'];
 
@@ -17,12 +13,12 @@ export async function runForwardRulesList(run: CommandRunner = runCommand): Prom
   return result.stdout;
 }
 
-// both directions: conntrack matches -s and -d on a flow's original tuple
 export async function runPairFlush(
   first: string,
   second: string,
   run: CommandRunner = runCommand,
 ): Promise<void> {
+  // both directions: conntrack matches -s and -d on a flow's original tuple
   for (const [source, destination] of [
     [first, second],
     [second, first],
@@ -37,7 +33,6 @@ export async function runPairFlush(
   }
 }
 
-// `conntrack -D` exits 1 when it found nothing to delete
 export async function runConntrackFlush(
   guestIp: string,
   run: CommandRunner = runCommand,
@@ -46,6 +41,7 @@ export async function runConntrackFlush(
 
   const result = await run(argv);
 
+  // `conntrack -D` exits 1 when it found nothing to delete
   if (result.exitCode !== 0 && !result.stderr.includes('0 flow entries')) {
     throw buildExitError(argv, { exitCode: result.exitCode, stderr: result.stderr });
   }

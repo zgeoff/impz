@@ -15,7 +15,7 @@ const EDE_OPTION = 15;
 
 export const RCODE = { noError: 0, formErr: 1, servFail: 2, nxDomain: 3, refused: 5 } as const;
 
-// RFC 8914's "Prohibited": the name is outside the imp's policy
+// the Extended DNS Error code RFC 8914 assigns to Prohibited
 export const EDE_PROHIBITED = 18;
 
 export interface DnsQuery {
@@ -25,8 +25,6 @@ export interface DnsQuery {
   readonly packet: DecodedPacket;
 }
 
-// The query's one question, or null for anything the resolver will not
-// answer: not a query, an opcode other than QUERY, or not one question.
 export function readQuery(message: Uint8Array): DnsQuery | null {
   let packet: DecodedPacket;
 
@@ -50,9 +48,6 @@ export function readQuery(message: Uint8Array): DnsQuery | null {
   return { id: packet.id ?? 0, name: question.name, type: question.type, packet };
 }
 
-// A reply with no answers: REFUSED, with the EDE code when the query spoke
-// EDNS, or an empty NOERROR (no data of this type). The question goes back
-// when the query had exactly one that reads plainly.
 export function buildEmptyReply(message: Uint8Array, rcode: number, ede?: number): Uint8Array {
   const view = new DataView(message.buffer, message.byteOffset, message.byteLength);
 
@@ -84,7 +79,6 @@ export function buildEmptyReply(message: Uint8Array, rcode: number, ede?: number
   return reply;
 }
 
-// impd's own answer, as the authority for the name
 export function buildLocalReply(query: DnsQuery, answers: readonly Answer[]): Uint8Array {
   return dnsPacket.encode({
     type: 'response',
@@ -95,8 +89,6 @@ export function buildLocalReply(query: DnsQuery, answers: readonly Answer[]): Ui
   });
 }
 
-// the first question's bytes, or none when it uses compression or runs
-// past the end
 function getQuestionBytes(message: Uint8Array): Uint8Array {
   let offset = HEADER_BYTES;
 

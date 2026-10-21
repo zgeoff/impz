@@ -21,15 +21,11 @@ export type LocalAnswer =
 
 const NXDOMAIN: LocalAnswer = { kind: 'nxdomain' };
 
-// what impd knows of the networks: every name, members or not
 export interface NetworkView {
   readonly names: ReadonlySet<string>;
   readonly members: readonly NetworkMember[];
 }
 
-// impd's answer to a name from the guest in `slot`, or null for one it passes
-// on, such as metadata.google.internal. Under a network that exists, a name
-// the guest may not see is NXDOMAIN, as one that does not exist is.
 export function resolveNetworkName(
   view: Readonly<NetworkView>,
   subnet: Subnet,
@@ -59,17 +55,12 @@ export function resolveNetworkName(
     return buildPointerAnswer(query, reverse, peers);
   }
 
-  // no dot: a peer by its imp name, else what upstream says of it
   const peer = query.name.includes('.')
     ? undefined
     : peers.find((each) => each.name === query.name);
 
   return peer === undefined ? null : buildAddressAnswer(query, peer.guestIp);
 }
-
-// impd's own answers for the names of imps on a network
-// (docs/guides/networks.md#names): `<imp>.<network>.internal`, a peer's bare
-// name, and the reverse names of IMP_SUBNET. They never go upstream.
 
 // short, so a join or a leave shows in a guest's cache soon after
 const LOCAL_TTL_S = 5;
@@ -86,8 +77,6 @@ function buildAddressAnswer(
 
 const REVERSE_SUFFIX = '.in-addr.arpa';
 
-// For a reverse name inside the subnet: the address it names, or '' for one
-// that names a range within it. Null for any other name.
 function readReverseAddress(name: string, subnet: Subnet): string | null {
   if (!name.endsWith(REVERSE_SUFFIX)) {
     return null;
@@ -114,7 +103,6 @@ function readReverseAddress(name: string, subnet: Subnet): string | null {
   return octets.length === 4 ? padded : '';
 }
 
-// a peer's address names it once for each network the guest shares with it
 function buildPointerAnswer(
   query: Readonly<{ name: string; type: string }>,
   address: string,

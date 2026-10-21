@@ -7,34 +7,19 @@ import type { AgentFrame, FrameType } from './frame-codec';
 
 const AGENT_PORT = 1024;
 
-// One agent connection carries one request
-// (docs/architecture/guest/protocol.md#one-request-per-connection).
 export interface AgentConnection {
   readonly send: (type: FrameType, payload?: Uint8Array) => void;
-
-  // a JSON frame: a message encodeAgentMessage made, of the frame's type
   readonly sendJson: (type: FrameType, value: JsonValue) => void;
-
-  // resolves once what was sent fits under the socket's buffer limit again,
-  // or the socket closed: a sender that waits for it never buffers without
-  // bound when the guest reads slower than the sender writes
   readonly drained: () => Promise<void>;
-
-  // the next frame, or null once the agent closed the connection cleanly
   readonly next: () => Promise<AgentFrame | null>;
   readonly close: () => void;
 }
 
-// An agent-side failure: a RESPONSE with an `error` object.
 export class AgentError extends Error {
   readonly code: string;
 
-  // the agent's message without the code, for a client that shows the code
-  // on its own
   readonly detail: string;
 
-  // the code's detail, as the agent sent it (NO_SESSION, INVALID_RESUME), or
-  // in the API's shape once impd converted it
   readonly data: unknown;
 
   constructor(code: string, detail: string, data?: unknown) {
@@ -47,8 +32,6 @@ export class AgentError extends Error {
   }
 }
 
-// Connects to Firecracker's vsock socket and runs the `CONNECT` handshake.
-// Rejects when the agent is not listening yet, so callers can retry.
 export function openAgentConnection(vsockPath: string, timeoutMs = 2000): Promise<AgentConnection> {
   return new Promise((resolve, reject) => {
     requireSocket(vsockPath);
@@ -107,8 +90,8 @@ export function openAgentConnection(vsockPath: string, timeoutMs = 2000): Promis
   });
 }
 
-// frames queued before the socket stops reading, and when it reads again: a
-// reader that falls behind pushes back on the guest through vsock
+// A paused socket pushes back on the guest through vsock, so a reader that falls behind slows the
+// agent instead of queueing without bound.
 const PAUSE_FRAMES = 64;
 const RESUME_FRAMES = 16;
 
@@ -116,7 +99,6 @@ function wrapConnection(socket: Socket, leftover: Uint8Array): AgentConnection {
   const decoder = buildFrameDecoder();
   const frames: AgentFrame[] = [];
 
-  // an object, not lets: the closures below mutate it and read it back
   const state: { ended: boolean; failure: Error | null; wake: (() => void) | null } = {
     ended: false,
     failure: null,

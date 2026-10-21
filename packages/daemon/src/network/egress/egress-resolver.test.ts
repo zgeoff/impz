@@ -17,8 +17,6 @@ import {
   startResolverServer,
 } from './egress-resolver';
 
-// In 10.66.0.0/16, slot 0's guest is 10.66.0.2 and slot 1's 10.66.0.6.
-
 test('#createQueryHandler admits the CNAME chain and its A records, and nothing off the chain', async () => {
   const egress = buildStubEgressService({
     verdicts: { 1: { 'registry.npmjs.org': 'admit' } },
@@ -133,7 +131,6 @@ test('#createQueryHandler drops the addresses a public imp may not reach from ev
 
   const reply = await handle('10.66.0.6', buildMockDnsQuery({ name: 'rebind.test', type: 'A' }));
 
-  // the chain stays, TTLs as they came: no set holds a public imp's answers
   expect(dnsPacket.decode(Buffer.from(reply))).toMatchObject({
     answers: [
       { type: 'CNAME', data: 'inside.test', ttl: 300 },
@@ -215,7 +212,6 @@ test('#createQueryHandler refuses a denied name with no OPT record when the quer
   });
 });
 
-// slot 1's /30 holds 10.66.0.5 and 10.66.0.7 too; slot 0 holds no imp
 test.each(['10.66.0.7', '10.66.0.5', '10.66.0.2', '192.0.2.1'])(
   '#createQueryHandler refuses a query from %p, which is no guest with an imp',
   async (source) => {
@@ -414,7 +410,6 @@ test("#createQueryHandler answers AAAA for a peer's name with no data, and never
   expect(egress.forwarded).toStrictEqual([]);
 });
 
-// slot 2 (10.66.0.10) is on no network; nobody is no peer on lab
 test.each([
   ['10.66.0.10', 'web.lab.internal'],
   ['10.66.0.6', 'nobody.lab.internal'],
@@ -503,7 +498,6 @@ test('#startResolverServer answers over UDP, through an upstream whose truncated
     server.stop();
   });
 
-  // 127.0.0.2 is slot 0's guest in 127.0.0.0/16
   const reply = Promise.withResolvers<Uint8Array>();
 
   const client = await Bun.udpSocket({
@@ -577,7 +571,6 @@ test('#startResolverServer answers a TCP query that comes in two writes', async 
 
   const received = await framed.promise;
 
-  // the stub upstream answers with the query's own id, which the handler keeps
   const reply = buildMockDnsReply(query, {
     answers: [{ type: 'A', name: 'github.com', ttl: 60, data: '140.82.112.3' }],
   });
@@ -665,8 +658,6 @@ test("#startResolverServer closes at once a TCP client past its slot's cap, and 
   framed.writeUInt16BE(query.byteLength, 0);
   framed.set(query, 2);
 
-  // slot 0's guest is 127.0.0.2, slot 1's 127.0.0.6: each client asks once,
-  // and settles on its reply or on its close, whichever comes first
   const outcomes = await Promise.all(
     ['127.0.0.2', '127.0.0.2', '127.0.0.2', '127.0.0.6'].map((from) => {
       const outcome = Promise.withResolvers<'answered' | 'closed'>();
@@ -724,8 +715,6 @@ test('#startResolverServer closes at once the 17th TCP client of a slot without 
   framed.writeUInt16BE(query.byteLength, 0);
   framed.set(query, 2);
 
-  // slot 0's guest is 127.0.0.2: each client asks once, and settles on its
-  // reply or on its close, whichever comes first
   const outcomes = await Promise.all(
     Array.from({ length: 17 }, () => {
       const outcome = Promise.withResolvers<'answered' | 'closed'>();
@@ -768,7 +757,6 @@ test('#startResolverServer closes a TCP client idle past idleS', async () => {
     verdicts: { 0: { 'github.com': 'answer' } },
   });
 
-  // idleS is whole seconds, so 1 is the shortest
   const short = await startResolverServer(
     ports.take(),
     parseSubnet('127.0.0.0/16'),
@@ -780,7 +768,6 @@ test('#startResolverServer closes a TCP client idle past idleS', async () => {
     short.stop();
   });
 
-  // the control: a client of the same age that may idle for a minute
   const long = await startResolverServer(
     ports.take(),
     parseSubnet('127.0.0.0/16'),
@@ -794,8 +781,6 @@ test('#startResolverServer closes a TCP client idle past idleS', async () => {
 
   const closed = Promise.withResolvers<void>();
   const connected = Promise.withResolvers<void>();
-
-  // slot 0's guest is 127.0.0.2
   const idle = connect({ host: '127.0.0.1', port: short.port, localAddress: '127.0.0.2' });
 
   onTestFinished(() => {
@@ -853,7 +838,6 @@ test('#startResolverServer stays up when a guest goes before its reply, and logs
     () => 0,
   );
 
-  // holds the first reply until its guest has closed its port
   const server = await startResolverServer(
     ports.take(),
     parseSubnet('127.0.0.0/16'),
@@ -931,8 +915,6 @@ test('#startResolverServer logs a reply that the kernel refuses after a guest we
   const reached: string[] = [];
   const released = Promise.withResolvers<void>();
 
-  // holds the first two replies until the first guest has closed its port,
-  // so both go out in one burst, before the loop reads the ICMP error
   const server = await startResolverServer(
     ports.take(),
     parseSubnet('127.0.0.0/16'),
@@ -1005,7 +987,6 @@ test('#startResolverServer logs a reply that the kernel refuses after a guest we
 
   client.send(query, server.port, '127.0.0.1');
 
-  // the refused send took b.example's reply with it: the guest asks again
   await waitFor(() => {
     expect(replies).toStrictEqual([query]);
   });
@@ -1040,8 +1021,6 @@ test('#startResolverServer reports a TCP query whose handler fails, and answers 
   });
 
   const received = Promise.withResolvers<Buffer>();
-
-  // 127.0.0.2 is slot 0's guest in 127.0.0.0/16
   const client = connect({ host: '127.0.0.1', port: server.port, localAddress: '127.0.0.2' });
 
   onTestFinished(() => {

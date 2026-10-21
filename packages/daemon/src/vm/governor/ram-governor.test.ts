@@ -8,8 +8,6 @@ import type { RoomLeft } from '../../../testing/vm/create-stub-governed-host';
 import { createEventBus } from '../../platform/events/event-bus';
 import { ENFORCE_INTERVAL_MS, createRamGovernor } from './ram-governor';
 
-// docs/architecture/lifecycle/ram-governor.md#enforcement says every 5 s, and the scale e2e suite
-// allows use over the budget for that long
 test('it enforces the budget every 5 s, as the docs say', () => {
   expect(ENFORCE_INTERVAL_MS).toBe(5000);
 });
@@ -111,10 +109,8 @@ test('it refuses an admit that sleeping the other idle imps cannot make room for
     governor.admit({ id: 'y', name: 'y', reserveMib: 900, memoryMib: 900 }),
   ).rejects.toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
 
-  // sleeping `new` alone could not make room, so it stays awake
   expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
 
-  // 900 in use and 900 asked: 800 short, with the busy `pinned` in the way
   expect(published.at(-1)).toStrictEqual({
     v: 1,
     at: new Date(1_000_000),
@@ -186,7 +182,6 @@ test('it refuses an admit once only victims that are skipped are left', async ()
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 300 });
 
-  // 300 awake in `old` and 300 reserved for x: 700 more needs `old` again
   expect(
     governor.admit({ id: 'y', name: 'y', reserveMib: 700, memoryMib: 700 }),
   ).rejects.toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
@@ -207,8 +202,6 @@ test('it sleeps no more imps for a rejected admit once a victim is skipped', () 
 
   host.refuseSleep('mid', 'skipped');
 
-  // 800 missing picks all three; once `mid` is skipped, `new` alone cannot
-  // free the 500 still missing, so it stays awake
   expect(
     governor.admit({ id: 'x', name: 'x', reserveMib: 900, memoryMib: 900 }),
   ).rejects.toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
@@ -234,7 +227,6 @@ test('it refuses an admit with the disk error when a victim had no room for its 
 
   host.refuseSleep('old', 'diskFull');
 
-  // 500 missing: with `old` kept awake, `new` alone cannot free it
   expect(
     governor.admit({ id: 'x', name: 'x', reserveMib: 900, memoryMib: 900 }),
   ).rejects.toThrowWithMessage(Error, 'the disk has no room for a snapshot');
@@ -497,7 +489,6 @@ test('it measures every awake imp at once, each read started before any ends', a
 
   const pending = new Map<string, PromiseWithResolvers<number | null>>();
 
-  // each read waits for the test; the usage resolves only once all three ran
   const governor = createRamGovernor({
     ...host.deps,
     readRamMib: (_pid, id) => {
@@ -564,7 +555,6 @@ test('it counts the KSM headroom against the budget, so a merged page that split
     log: () => {},
   });
 
-  // 600 used and 300 headroom leave 100: a 200 MiB wake sleeps the oldest
   await governor.admit({ id: 'c', name: 'c', reserveMib: 200, memoryMib: 512 });
 
   expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['a']);
@@ -644,7 +634,6 @@ test('it sleeps no imp when an unplug the reclaim did not count made room', asyn
     awake: [{ id: 'old', rssMib: 700 }],
   });
 
-  // the guest's earlier unplug ends while the reclaim runs, which counts none of it
   const governor = createRamGovernor({
     ...host.deps,
     log: () => {},
@@ -744,7 +733,6 @@ test('it refuses a grow when only busy imps could make room, and publishes why',
   expect(admitted).toBeFalse();
   expect(host.sleepCalls).toStrictEqual([]);
 
-  // the two busy imps were in the way; the grower itself is not counted
   expect(published).toStrictEqual([
     {
       v: 1,
@@ -796,7 +784,6 @@ test('it makes no room and reserves nothing for a grow of an imp that is no long
   expect(usage).toStrictEqual({ usedMib: 600, reservedMib: 0, headroomMib: 0 });
 });
 
-// with IMP_KSM a split of every merged page must still fit after the grow
 test('it counts the KSM headroom for a grow, as for a boot or a wake', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,
@@ -809,8 +796,6 @@ test('it counts the KSM headroom for a grow, as for a boot or a wake', async () 
 
   const governor = createRamGovernor({
     ...host.deps,
-
-    // KSM saves 300 MiB while both run, nothing in one alone
     readHeadroomMib: (pids) => {
       const headroomMib = pids.length > 1 ? 300 : 0;
 
@@ -819,7 +804,6 @@ test('it counts the KSM headroom for a grow, as for a boot or a wake', async () 
     log: () => {},
   });
 
-  // 600 used and 300 headroom leave 100: a 200 MiB grow sleeps the other imp
   const admitted = await governor.admitGrow({ id: 'grower', name: 'grower', mib: 200 });
 
   expect(admitted).toBeTrue();
@@ -888,14 +872,9 @@ test('it lets idle guests unplug before enforcement sleeps an imp', async () => 
 
   await governor.enforce();
 
-  // the reclaim gave back nothing more, so the least recently active sleeps
   expect(reclaims).toStrictEqual(['x', null]);
   expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['grower']);
 });
-
-// The property tests: each case builds its own host and governor, which hold no
-// resource to release. A failure reports fast-check's seed, path and shrunk
-// counterexample.
 
 test('it keeps each admission within the budget and never asks a pinned imp to sleep, one op at a time', async () => {
   const arbitraries = buildStubGovernedHostArbitraries(['a', 'b', 'c', 'd', 'e', 'f']);
@@ -926,8 +905,6 @@ test('it keeps each admission within the budget and never asks a pinned imp to s
             continue;
           }
 
-          // an admit that cannot fit throws RAM_BUDGET_EXCEEDED; anything
-          // else fails the property
           const outcome = await governor
             .admit({
               id: op.id,
@@ -958,7 +935,6 @@ test('it keeps each admission within the budget and never asks a pinned imp to s
         } else if (op.kind === 'enforce') {
           await governor.enforce();
 
-          // under the budget, or every imp it may sleep is asleep
           expect(host.getRoomLeft()).toSatisfy(
             (room: RoomLeft) => room.overMib <= 0 || room.eligibleAwake === 0,
           );
@@ -968,14 +944,9 @@ test('it keeps each admission within the budget and never asks a pinned imp to s
 
         const calls = host.sleepCalls.slice(callsBefore);
 
-        // nothing changes between the pick and the sleep: no pinned imp is
-        // even asked, and each awake imp at most once
         expect(calls.filter((call) => !call.eligible)).toStrictEqual([]);
         expect(calls.length).toBeLessThanOrEqual(awakeBefore);
 
-        // a rejected admit gives up at a failed sleep, never after a sleep
-        // that worked, which would leave the pick enough; with no call at
-        // all, nothing slept
         if (rejected) {
           expect(calls.slice(-1).map((call) => call.outcome)).not.toContain('slept');
         }
@@ -986,8 +957,6 @@ test('it keeps each admission within the budget and never asks a pinned imp to s
 }, 30_000);
 
 test('it gets a crowded host under the budget or sleeps every imp it may', async () => {
-  // imps up to the whole budget each, often held or busy: often the imps
-  // enforce may sleep cannot free enough between them
   const crowdedArb = fc.uniqueArray(
     fc.record({
       id: fc.constantFrom('a', 'b', 'c', 'd', 'e', 'f'),
@@ -1028,7 +997,6 @@ test('it gets a crowded host under the budget or sleeps every imp it may', async
 test('it settles concurrent admits with holds and RSS changes inside them, leaving no reservation for a rejected one', async () => {
   const arbitraries = buildStubGovernedHostArbitraries(['a', 'b', 'c', 'd', 'e', 'f']);
 
-  // up to four admits for different imps, started at once
   const admitsArb = fc.uniqueArray(arbitraries.admit, {
     selector: (admit) => admit.id,
     maxLength: 4,
@@ -1075,8 +1043,6 @@ test('it settles concurrent admits with holds and RSS changes inside them, leavi
 
         const enforcing = governor.enforce();
 
-        // each change lands wherever the scheduler releases it, inside an
-        // admit as often as between two
         const changing = changes.map(async (change) => {
           await scheduler.schedule(Promise.resolve());
 
@@ -1087,9 +1053,6 @@ test('it settles concurrent admits with holds and RSS changes inside them, leavi
 
         await scheduler.waitFor(Promise.all([enforcing, ...changing]));
 
-        // a pin set after the pick reaches the stand-in, which refuses it as
-        // the real sleep does under the lock; the governor moves on. Each
-        // admit and the enforce pass ask each imp at most once.
         expect(host.sleepCalls.length).toBeLessThanOrEqual((admitting.length + 1) * 6);
 
         host.pacer.pace = () => Promise.resolve();
@@ -1104,7 +1067,6 @@ test('it settles concurrent admits with holds and RSS changes inside them, leavi
 
         await governor.enforce();
 
-        // under the budget, or every imp it may sleep is asleep
         expect(host.getRoomLeft()).toSatisfy(
           (room: RoomLeft) => room.overMib <= 0 || room.eligibleAwake === 0,
         );
@@ -1167,11 +1129,8 @@ test('it keeps a grow within the budget, never sleeps its grower, and sleeps onl
 
           expect(usage.usedMib + usage.reservedMib).toBeLessThanOrEqual(1000);
 
-          // the guest's RSS shows the grow once the plug lands
           host.findImp(op.id).rssMib += op.mib;
         } else {
-          // refused: nothing slept for room that was not there, so the last
-          // call, if any, did not sleep
           expect(calls.slice(-1).map((call) => call.outcome)).not.toContain('slept');
         }
       }

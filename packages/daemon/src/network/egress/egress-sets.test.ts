@@ -24,7 +24,6 @@ test('#record extends the expiry of an address the set holds', () => {
   sets.record(1, ['github.com'], [{ address: '140.82.112.3', ttlS: 60 }], 0);
   sets.record(1, ['github.com'], [{ address: '140.82.112.3', ttlS: 600 }], 1000);
 
-  // 1 s plus 600 s
   expect(sets.listAnswers(1, 1000)).toStrictEqual([
     { names: ['github.com'], address: '140.82.112.3', ttlS: 600 },
   ]);

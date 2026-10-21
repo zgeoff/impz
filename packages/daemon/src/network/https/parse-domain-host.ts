@@ -4,9 +4,6 @@ export type DomainRoute =
   | { readonly kind: 'apex' }
   | { readonly kind: 'imp'; readonly name: string };
 
-// What a Host header names on the HTTPS listeners: the bare domain is impd's
-// own API, and exactly one label in front of it names an imp. `a.b.<domain>`
-// or another domain is null, so no host outside the certificate reaches one.
 export function parseDomainHost(host: string | null, domain: string): DomainRoute | null {
   if (host === null || host.startsWith('[')) {
     return null;

@@ -4,7 +4,6 @@ import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { LiveStorage } from './storage-backend';
 
-// What the storage backend must keep when impd starts.
 export async function readLiveStorage(db: ImpDatabase): Promise<LiveStorage> {
   const imps = await listImps(db);
   const images = await listImages(db);

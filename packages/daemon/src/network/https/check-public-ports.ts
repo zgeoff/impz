@@ -1,5 +1,3 @@
-// The public listeners bind every address in the host container, so a port
-// any other listener holds would make one of them fail at start.
 export function checkPublicPorts(
   ports: Readonly<{ httpsPort: number; httpPort: number }>,
   others: readonly (readonly [string, number])[],

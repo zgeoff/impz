@@ -10,8 +10,6 @@ import { readLiveStorage } from './read-live-storage';
 import type { StorageBackend } from './storage-backend';
 import type { StorageGate } from './storage-gate';
 
-// `impz gc` waits this long for the operations in flight; the hourly pass
-// waits longer, then skips the hour
 const MANUAL_WAIT_MS = 30_000;
 const SCHEDULED_WAIT_MS = 600_000;
 
@@ -20,11 +18,7 @@ interface StorageGcDeps {
   readonly storage: Pick<StorageBackend, 'dropUnnamed'>;
   readonly storageGate: StorageGate;
   readonly log: (message: string) => void;
-
-  // the secret values the broker kept aside (docs/guides/connectors.md#value-files)
   readonly secretFiles?: Pick<SecretFiles, 'listKept' | 'removeKept'>;
-
-  // how long `impz gc` and the hourly pass wait for the gate; a test passes 0
   readonly manualWaitMs?: number;
   readonly scheduledWaitMs?: number;
 }
@@ -34,9 +28,6 @@ interface GcOptions {
   readonly isOrphans: boolean;
 }
 
-// `isSecretFiles`: the caller asked for kind `secrets`, which an older
-// client does not know. Only `isRemoveSecretFiles` with `isOrphans` deletes
-// them: they may be values a restore lost, to recover first.
 interface ManualGcOptions extends GcOptions {
   readonly isSecretFiles?: boolean;
   readonly isRemoveSecretFiles?: boolean;
@@ -47,9 +38,6 @@ export interface StorageGcService {
   readonly runScheduled: () => Promise<void>;
 }
 
-// The GC: the same sweep as start, while nothing that could make storage
-// without its row yet is in flight (docs/architecture/storage/disk-space.md#the-sweep).
-// Only `impz gc --orphans` takes orphans.
 export function createStorageGc(deps: StorageGcDeps): StorageGcService {
   const hourly = { lastKept: null as string | null };
 
@@ -63,8 +51,6 @@ export function createStorageGc(deps: StorageGcDeps): StorageGcService {
     if (result.ran && !options.isDryRun) {
       const kept = JSON.stringify(result.value.kept.map((orphan) => orphan.location));
       const isChanged = kept !== hourly.lastKept;
-
-      // the hourly pass lists them when the set changed, else counts them
       const scheduledLogging: OrphanLogging = isChanged ? 'each' : 'count';
       const logging = isScheduled ? scheduledLogging : 'none';
 
@@ -111,9 +97,6 @@ export function createStorageGc(deps: StorageGcDeps): StorageGcService {
   };
 }
 
-// Each directory of secret values the broker kept aside: listed under
-// `kept`, or with `orphans` and `removeSecretFiles` removed (listed under
-// `dropped` in a dry run).
 function removeSecretFiles(
   deps: Readonly<StorageGcDeps>,
   options: Readonly<ManualGcOptions>,

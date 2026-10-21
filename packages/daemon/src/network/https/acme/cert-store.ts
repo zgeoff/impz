@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import * as z from 'zod';
 import { writeFileDurably } from '../../../platform/process/write-file-durably';
 
-// One key and its certificate chain, as the TLS listener takes them.
 export interface Certificate {
   readonly keyPem: string;
   readonly chainPem: string;
@@ -12,8 +11,6 @@ export interface Certificate {
 // The last issuance attempts, so a restart does not retry at once and run
 // into the CA's limit on failed validations.
 export interface AttemptState {
-  // attempts that failed in a row; an attempt counts as failed until it
-  // succeeds, so a crash in the middle of one counts too
   readonly failures: number;
   readonly lastAttemptAt: number | null;
   readonly lastError: string | null;
@@ -25,8 +22,6 @@ const AttemptStateSchema = z.object({
   lastError: z.string().nullable(),
 });
 
-// An ACME account: its key and the URL the CA gave it, at one directory.
-// The two are kept together: a key without its URL cannot be used again.
 interface AcmeAccount {
   readonly directoryUrl: string;
   readonly url: string;
@@ -35,7 +30,8 @@ interface AcmeAccount {
 
 const AccountSchema = z.object({ directoryUrl: z.string(), url: z.string(), keyPem: z.string() });
 
-// v0.1.1 kept the key in account.key and only the URL in account.json
+// the layout an impd up to v0.1.1 wrote: the key in account.key, the URL
+// alone in account.json
 const LegacyAccountSchema = z.object({ directoryUrl: z.string(), url: z.string() });
 const NO_ATTEMPTS: AttemptState = { failures: 0, lastAttemptAt: null, lastError: null };
 
@@ -43,16 +39,12 @@ export interface CertStore {
   readonly readCertificate: () => Certificate | null;
   readonly writeCertificate: (certificate: Certificate) => void;
 
-  // null when there is no account at this directory yet
   readonly readAccount: (directoryUrl: string) => AcmeAccount | null;
   readonly writeAccount: (account: AcmeAccount) => void;
   readonly readAttempts: () => AttemptState;
   readonly writeAttempts: (state: AttemptState) => void;
 }
 
-// <dataDir>/tls (docs/architecture/storage/storage.md), every file 0600, synced and
-// replaced by a rename. The key and its certificate share one file, so a
-// crash never pairs a key with the wrong certificate.
 export function createCertStore(
   dataDir: string,
   log: (message: string) => void = () => {},
@@ -69,8 +61,6 @@ export function createCertStore(
     writeFileDurably(path, content, { mode: 0o600 });
   };
 
-  // the stored account, whatever its directory; null when there is none.
-  // v0.1.1's pair of files at this directory becomes one account.json.
   const readStoredAccount = (directoryUrl: string): AcmeAccount | null => {
     const text = readIfExists(accountPath);
 
@@ -96,8 +86,6 @@ export function createCertStore(
       return migrated;
     }
 
-    // a damaged file means a new account, which costs nothing, but say so
-    // once: a file that never parses would make one at every start
     if (!legacy.success && !warned.account) {
       warned.account = true;
 
@@ -114,6 +102,7 @@ export function createCertStore(
       return pem === null ? null : splitCertificate(pem);
     },
     writeCertificate: (certificate) => {
+      // one file for both, so a crash never pairs a key with the wrong certificate
       write(
         certificatePath,
         `${certificate.keyPem.trimEnd()}\n${certificate.chainPem.trimEnd()}\n`,
@@ -122,7 +111,6 @@ export function createCertStore(
     readAccount: (directoryUrl) => {
       const account = readStoredAccount(directoryUrl);
 
-      // v0.1.1's key file: moved into account.json above, or of no use now
       rmSync(legacyKeyPath, { force: true });
 
       return account?.directoryUrl === directoryUrl ? account : null;
@@ -133,7 +121,6 @@ export function createCertStore(
     readAttempts: () => {
       const text = readIfExists(attemptsPath);
 
-      // a damaged file only forgets the backoff
       try {
         return text === null ? NO_ATTEMPTS : AttemptStateSchema.parse(JSON.parse(text));
       } catch {
@@ -160,8 +147,6 @@ function parseJson(text: string): unknown {
 
 const PEM_BLOCK = /-----BEGIN (?<label>[A-Z ]+)-----[\s\S]+?-----END \k<label>-----\n?/gu;
 
-// the key block, then every certificate block in order; null for a file
-// with no key or no certificate
 function splitCertificate(pem: string): Certificate | null {
   const blocks = [...pem.matchAll(PEM_BLOCK)];
   const key = blocks.find((block) => block.groups?.['label']?.endsWith('PRIVATE KEY') === true);

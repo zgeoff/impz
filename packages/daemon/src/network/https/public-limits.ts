@@ -1,27 +1,20 @@
 import { createCountedLimit } from '../../platform/process/counted-limit';
 
-// Limits per public imp (docs/guides/https.md#how-it-works-1). They count by imp,
-// not by client: behind Docker's userland proxy every client can share one
-// source address, so a limit by address would lock everyone out at once.
+// The limits count by imp, not by client: behind Docker's userland proxy every
+// client can share one source address, so a limit by address would lock
+// everyone out at once.
 
-// requests and WebSockets one public imp holds open at once
 const MAX_OPEN = 64;
-
-// a burst, then one more every so many milliseconds
 const WAKE_BUCKET = { size: 10, refillMs: 6000 };
 const FAILURE_BUCKET = { size: 20, refillMs: 3000 };
 
 export interface PublicLimits {
-  // a release for one more open request, or null at the cap
   readonly tryOpen: (impId: string) => (() => void) | null;
 
-  // false when the imp woke too often lately
   readonly tryWake: (impId: string) => boolean;
 
-  // counts a wrong or missing credential; false when there were too many
   readonly tryFail: (impId: string) => boolean;
 
-  // seconds until the wake or failure bucket holds one again
   readonly readRetryS: (kind: 'wake' | 'failure') => number;
 }
 
@@ -44,8 +37,8 @@ export function createPublicLimits(now: () => number = Date.now): PublicLimits {
   };
 }
 
-// A token bucket per key: false when the key has none left. Keys must be
-// few, such as public imps or known clients: the map keeps one per key.
+// keys must be few, such as public imps or known clients: the map keeps a
+// bucket for every key it has seen
 export function createBuckets(
   spec: Readonly<{ size: number; refillMs: number }>,
   now: () => number,

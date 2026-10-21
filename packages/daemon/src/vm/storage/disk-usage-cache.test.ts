@@ -81,7 +81,6 @@ test('it keeps each count with the time its pass started', async () => {
   const usage = buildMockImpDiskUsage();
   const clock = buildStubClock({ startMs: 5000 });
 
-  // the measure takes four seconds of the clock
   const measureUsage = makeStubSlowMeasure(clock, 4000, {
     imps: new Map([[imp.id, usage]]),
     isPartial: true,
@@ -314,7 +313,6 @@ test('it keeps the last count of an imp a cut-short pass did not reach', async (
 
   await cache.runPass();
 
-  // the second pass reached no imp
   clock.durationMs = 9000;
 
   measureUsage.mockImplementation(() => Promise.resolve({ imps: new Map(), isPartial: true }));
@@ -353,7 +351,6 @@ test('it stamps a count with the time its pass started, not the time it ended', 
     db: ctx.db,
     storage: {
       measureUsage: () => {
-        // the measure is slow: a write lands while it runs
         clock.durationMs = 9000;
 
         return Promise.resolve({
@@ -417,7 +414,6 @@ test('it runs a refresh asked for during a pass as a pass of its own after it', 
 
   cache.requestRefresh();
 
-  // the refresh's timer fires while the first pass still measures
   const fire = startTimer.mock.calls[0]?.[0];
 
   invariant(fire);

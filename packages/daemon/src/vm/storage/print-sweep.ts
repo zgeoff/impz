@@ -1,11 +1,7 @@
 import type { OrphanStorage, SweepResult } from './storage-backend';
 
-// how much of the orphans a sweep logs: each and their count, the count
-// alone, or nothing (`impz gc` returns them instead)
 export type OrphanLogging = 'each' | 'count' | 'none';
 
-// What a sweep did, for the log: each thing it removed, then the orphans it
-// kept, as `orphans` says.
 export function printSweep(
   log: (message: Readonly<string>) => void,
   prefix: string,

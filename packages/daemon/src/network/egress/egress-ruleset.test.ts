@@ -538,10 +538,6 @@ test('#buildNat66Ruleset masquerades the prefix out of the uplink in a table of 
   );
 });
 
-// The host tests apply impd's table with the real nft in a fresh network
-// namespace, in a user namespace when not root. Each skips where it cannot,
-// unless IMP_HOST_TESTS=required: `bun run test:host`.
-
 test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
   '#buildRuleset applies over the table it already applied',
   () => {
@@ -754,7 +750,6 @@ test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
       setSize: 4096,
     });
 
-    // slot 1 gone, as after an imp rm
     const second = buildRuleset({
       slots: [
         {
@@ -1261,9 +1256,6 @@ test.skipIf(
     setSize: 4096,
   });
 
-  // three guests behind veth pairs named as taps, and setup-net's two FORWARD
-  // rules: g0 on lab, g1 on lab and ops, g2 on ops. g1 counts the pings from
-  // g0's address, so a spoofed one that arrives shows.
   const run = runInNetns({
     script: `
 mount -t tmpfs tmpfs /run
@@ -1307,7 +1299,6 @@ counted
     mount: true,
   });
 
-  // the spoofed ping from g2's tap with g0's address never reaches g1
   expect(run).toStrictEqual({
     stdout: [
       'g0>10.66.0.6 yes',
@@ -1331,7 +1322,6 @@ test.skipIf(
     'nft list ruleset && iptables -S && ip link && command -v ping && command -v sysctl',
   ]),
 )('#buildRuleset lets a public imp reach only public addresses, in each family', () => {
-  // the host's own networks as impd reads them, and IMP_EGRESS_DENY
   const table = buildRuleset({
     slots: [
       {
@@ -1383,8 +1373,6 @@ test.skipIf(
     setSize: 4096,
   });
 
-  // a refusal comes back at once as ICMP admin-prohibited; the open imp, as a
-  // control, reaches what the public one is refused by address and by route
   const run = runInNetns({
     script: `${buildStubPublicNetwork()}
 printf '%s' "$TABLE" | nft -f -
@@ -1538,9 +1526,6 @@ test.skipIf(
       setSize: 4096,
     });
 
-    // the namespace has no ip6tables rules, as a container without ip6tables;
-    // the gateway's link-local address and its own on the tap, then IPv4 and
-    // the internet as controls (neighbour discovery must still pass)
     const run = runInNetns({
       script: `${buildStubPublicNetwork()}
 printf '%s' "$TABLE" | nft -f -

@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { deriveFileSha256, parseKernelVersion, readKernelInfo } from './system-file-info';
 
 test('#parseKernelVersion reads the release from the kernel banner', () => {
-  // an ELF header, then the banner as a C string
   const image = Buffer.concat([
     Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0, 1, 2]),
     Buffer.from('Linux version 6.1.188 (imp@imp) (gcc (Ubuntu 11.4.0) 11.4.0) #1 SMP\0'),

@@ -123,7 +123,6 @@ test('it rejects when the agent sends output before it answers', async () => {
 test('it rejects when the agent does not answer within the answer timeout', async () => {
   const ctx = setupTest();
 
-  // an agent that never answers, so the deadline alone decides
   await startStubAgent(ctx.vsockPath, () => {});
 
   expect(

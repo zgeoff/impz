@@ -11,12 +11,10 @@ import type { CpuSettings } from '../../platform/db/imps';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { readProcessCgroup } from './process-owner';
 
-// cpu.max's period: a limit of 1.5 cores is a quota of 150000 per 100000 µs
 const PERIOD_US = 100_000;
 
-// Room above the guest's memory for Firecracker and the page cache of its
-// disk and snapshot I/O, which the kernel reclaims at memory.max before any
-// OOM kill (docs/architecture/isolation.md#cgroups)
+// Room above the guest for Firecracker and the page cache of its disk and
+// snapshot I/O, which the kernel reclaims at memory.max before an OOM kill.
 const MEMORY_MIN_OVERHEAD_MIB = 256;
 const MEMORY_OVERHEAD_DIVISOR = 8;
 const BYTES_PER_MIB = 1024 * 1024;
@@ -25,15 +23,11 @@ const BYTES_PER_MIB = 1024 * 1024;
 const REMOVE_TRIES = 40;
 const REMOVE_WAIT_MS = 50;
 
-// Each imp's Firecracker in imps/<id> under the container's cgroup root
-// (host/scripts/setup-cgroups.sh), the layout the jailer's --parent-cgroup
-// makes, so #27 replaces only this writer.
 export interface ImpCgroup {
-  // a new process writes its own pid here to join before it runs
   readonly procsPath: string;
 
-  // no limit while a snapshot is made or loaded, then the imp's again: a
-  // throttled VMM thread stretches a pause past the guest's patience
+  // a throttled VMM thread stretches a snapshot's pause past what the guest
+  // tolerates, so the limit lifts while a snapshot is made or loaded
   readonly liftLimit: () => void;
   readonly applyLimit: () => void;
 }
@@ -44,60 +38,24 @@ export interface CpuStat {
 }
 
 export interface CpuCgroups {
-  // false without a private cgroup v2 namespace: limits are kept, not applied
   readonly isEnforced: boolean;
-
-  // whether the memory controller is on too, for each VM's memory limit
   readonly isMemoryEnforced: boolean;
-
-  // makes the cgroup with the imp's settings; null when not enforced
   readonly setup: (impId: string, cpu: CpuSettings, memoryMib: number) => ImpCgroup | null;
-
-  // new settings on a cgroup a VM may be running in
   readonly apply: (impId: string, cpu: CpuSettings) => void;
-
-  // a VM impd re-adopts joins its cgroup when it is anywhere else
   readonly adopt: (impId: string, pid: number, cpu: CpuSettings, memoryMib: number) => void;
-
-  // after the VM exited; waits out the moment its exited Firecracker still
-  // counts as inside
   readonly remove: (impId: string) => Promise<void>;
-
-  // A sleep, a failed sleep and a repair to sleeping keep it, empty and
-  // harmless: setup reuses it and writes the settings again, the spawn's
-  // baseline hides its old cpu.stat, and a destroy or a stop removes it.
-
-  // the guest's memory, base plus hot-plugged, for its memory limit: raised
-  // before a plug, lowered once an unplug's RSS has fallen
   readonly setGuestMib: (impId: string, guestMib: number) => void;
-
-  // removes the cgroup of every id not in `impIds`; returns those ids
   readonly removeOrphans: (impIds: ReadonlySet<string>) => string[];
   readonly readCpuStat: (impId: string) => CpuStat | null;
-
-  // how often the kernel killed a process in the cgroup for its memory
-  // limit (memory.events oom_kill); null without the file
   readonly readOomKills: (impId: string) => number | null;
-
-  // whether it did since the last setup or adopt, for a VM found dead: a
-  // cgroup that a busy remove kept still counts an older VM's kill
   readonly probeOomKillSinceStart: (impId: string) => boolean;
-
-  // SIGKILL to every process in the cgroup at once (cgroup.kill), so one that
-  // forked from Firecracker cannot outlive it; nothing without the cgroup
   readonly kill: (impId: string) => void;
 }
 
 interface CpuCgroupOptions {
-  // /sys/fs/cgroup; a test passes a directory of its own
   readonly root: string;
   readonly log: (message: string) => void;
-
-  // where /proc/<pid>/cgroup is read; /proc by default
   readonly procRoot?: string;
-
-  // how remove takes a cgroup and waits between tries; rmdirSync and
-  // Bun.sleep by default
   readonly rmdir?: (path: string) => void;
   readonly sleep?: (durationMs: number) => Promise<void>;
 }
@@ -108,7 +66,6 @@ export function formatCpuMax(limit: number | null): string {
     : `${String(Math.round(limit * PERIOD_US))} ${String(PERIOD_US)}`;
 }
 
-// cpu.stat's usage_usec and throttled_usec; null without the fields
 export function parseCpuStat(text: string): CpuStat | null {
   const fields = new Map(
     text
@@ -126,7 +83,6 @@ export function parseCpuStat(text: string): CpuStat | null {
   return { usageUsec, throttledUsec: fields.get('throttled_usec') ?? 0 };
 }
 
-// memory.max: the guest plus 256 MiB, or an eighth of it when that is more
 export function buildMemoryMax(memoryMib: number): string {
   const overhead = Math.max(
     MEMORY_MIN_OVERHEAD_MIB,
@@ -136,7 +92,6 @@ export function buildMemoryMax(memoryMib: number): string {
   return String((memoryMib + overhead) * BYTES_PER_MIB);
 }
 
-// memory.events' oom_kill; null without the field
 export function parseOomKills(text: string): number | null {
   const match = /^oom_kill (?<count>\d+)$/mu.exec(text);
 
@@ -153,8 +108,6 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
   const getDir = (impId: string): string => join(imps, impId);
 
   const guestMibs = new Map<string, number>();
-
-  // oom_kill when the VM in each cgroup started or was adopted
   const oomBaselines = new Map<string, number>();
 
   const readOomKills = (impId: string): number | null => {
@@ -176,8 +129,7 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
     writeFileSync(join(getDir(impId), 'cpu.max'), formatCpuMax(limit));
   };
 
-  // No swap, and an OOM kill takes the whole VM, never one thread of it. No
-  // memory.high: its throttling halved a guest's disk throughput.
+  // memory.high stays at max: its throttling halved a guest's disk throughput
   const writeMemory = (impId: string): void => {
     const guestMib = guestMibs.get(impId);
 
@@ -193,7 +145,6 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
     writeFileSync(join(directory, 'memory.oom.group'), '1');
   };
 
-  // a failed write costs the limit, never the boot or the wake
   const tryWrite = (impId: string, what: string, write: () => void): void => {
     try {
       write();
@@ -208,7 +159,6 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
     }
 
     try {
-      // a size setGuestMib gave outlives a sleep; a stop forgets it
       if (!guestMibs.has(impId)) {
         guestMibs.set(impId, memoryMib);
       }
@@ -343,8 +293,6 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
   };
 }
 
-// the entrypoint hands controllers to imps/ only in a private cgroup v2
-// namespace
 function probeControllerDelegated(imps: string, controller: string): boolean {
   try {
     const delegated = readFileSync(join(imps, 'cgroup.subtree_control'), 'utf8');

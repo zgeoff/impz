@@ -14,33 +14,21 @@ import { readRegularFile } from '../vmm/vm-files';
 import { findCpuChange } from './cpu-identity';
 import type { HostIdentity, VmIdentity } from './vm-identity';
 
-// What a memory snapshot is tied to: the identity of the VM that wrote it, since the snapshot
-// holds the guest kernel and the page cache of the system drive it reopens by path
-// (docs/architecture/lifecycle/sleep-and-wake.md#snapshot-identity).
+// A Firecracker memory snapshot holds the guest kernel and the page cache of the system drive it
+// reopens by path, so it is tied to the identity of the VM that wrote it.
 const SnapshotIdentitySchema = z.object({
   firecrackerVersion: z.string(),
   snapshotVersion: z.string(),
   hostKernel: z.string(),
   guestKernel: z.string(),
   systemDrive: z.string(),
-
-  // left out by an older impd, whose snapshot then boots cold once, and for a
-  // VM booted before impd kept its identity
   systemDrivePath: z.string().optional(),
   agentVersion: z.string().optional(),
-
-  // the IPv6 /64 the guest's address is in; null for none
   ipv6Prefix: z.string().nullable().optional(),
-
-  // the CPU the guest kernel picked its code paths on; left out by an older
-  // impd, whose snapshot loads as before
   cpuModel: z.string().optional(),
   cpuFlags: z.string().optional(),
 });
 
-// Sessions and services keep the agent's JSON form, every field the agent
-// sends included, as every impd writes them. A session whose names lack their
-// agent's form fails the whole record, as a forged one.
 const AGENT_RECORD_JSON = { useProtoFieldName: true, alwaysEmitImplicit: true } as const;
 
 const SeenSessionJsonSchema = z.json().transform((json, ctx): SeenSession => {
@@ -77,20 +65,9 @@ const ServicesListJsonSchema = z.json().transform((json, ctx): ServicesList => {
 export const SnapshotMetaSchema = SnapshotIdentitySchema.extend({
   createdAt: z.int(),
   memoryMib: z.int(),
-
-  // the RAM the VM owned when it went to sleep: what a wake reserves
   ramMib: z.int().nonnegative(),
-
-  // what an elastic guest held plugged past memoryMib, which the load
-  // restores (docs/architecture/lifecycle/elastic-memory.md); left out when it held none
   pluggedMib: z.int().nonnegative().optional(),
-
-  // the guest's sessions as it went to sleep, so listing them does not wake
-  // it; left out by an older impd
   sessions: z.array(SeenSessionJsonSchema).readonly().optional(),
-
-  // and its services, for services.list; left out when the agent did not
-  // answer in time, or by an older impd
   services: ServicesListJsonSchema.optional(),
 });
 
@@ -98,8 +75,6 @@ export type SnapshotIdentity = z.infer<typeof SnapshotIdentitySchema>;
 
 export type SnapshotMeta = z.output<typeof SnapshotMetaSchema>;
 
-// What a sleep records: the VM's identity. A VM booted before impd kept one
-// gets the host's Firecracker and no drive, so it boots cold once.
 export function buildSnapshotIdentity(
   vm: Readonly<VmIdentity> | null,
   host: Readonly<HostIdentity>,
@@ -128,8 +103,8 @@ export function buildSnapshotIdentity(
   };
 }
 
-// meta.json is the snapshot's commit record: written last, and durably, so
-// the files it vouches for are complete
+// The record is the snapshot's commit marker: a caller writes it last, after the files it vouches
+// for are complete.
 export function writeSnapshotMeta(
   paths: Pick<ImpPaths, 'snapshotMeta'>,
   meta: Readonly<SnapshotMeta>,
@@ -137,14 +112,11 @@ export function writeSnapshotMeta(
   writeFileDurably(paths.snapshotMeta, `${JSON.stringify(encodeSnapshotMeta(meta), null, 2)}\n`);
 }
 
-// the record with its sessions and services in the agent's JSON form
 export type SnapshotMetaJson = Omit<SnapshotMeta, 'sessions' | 'services'> & {
   readonly sessions?: readonly JsonValue[];
   readonly services?: JsonValue;
 };
 
-// The record as JSON, as meta.json and a warm move's header carry it: what
-// SnapshotMetaSchema reads back, and what an older impd reads too
 export function encodeSnapshotMeta(meta: Readonly<SnapshotMeta>): SnapshotMetaJson {
   const { sessions, services, ...identity } = meta;
 
@@ -174,32 +146,25 @@ function encodeSeenSession(session: SeenSession): JsonValue {
   return { ...json, observed_unix_ms: session.observedUnixMs };
 }
 
-// Without its record the snapshot does not load. A sleep drops it before it
-// writes new files, so a crash mid-sleep cannot pair them with the old one; a
-// wake drops it once the VM runs on its memory.
 export function removeSnapshotMeta(paths: Readonly<ImpPaths>): void {
   rmSync(paths.snapshotMeta, { force: true });
   rmSync(buildLoadingPath(paths), { force: true });
 }
 
-// where the record waits while a wake loads it
 function buildLoadingPath(paths: Pick<ImpPaths, 'snapshotMeta'>): string {
   return `${paths.snapshotMeta}.loading`;
 }
 
-// Before a load: from here the guest may run and write its disk, so after a
-// crash the snapshot no longer loads. Reconcile reads the record here to adopt
-// the VM the load left, or drops the snapshot when there is none.
 export function setSnapshotLoading(paths: Readonly<ImpPaths>): void {
+  // Once a load starts, the guest may run and write its disk, so after a crash the snapshot no
+  // longer loads.
   writeRenamed(paths.snapshotMeta, buildLoadingPath(paths));
 }
 
-// the load never started the guest: its disk is as the snapshot left it
 export function resetSnapshotLoading(paths: Readonly<ImpPaths>): void {
   writeRenamed(buildLoadingPath(paths), paths.snapshotMeta);
 }
 
-// the record of a load a crash cut short, or null
 export function readLoadingMeta(paths: Readonly<ImpPaths>): SnapshotMeta | null {
   const path = buildLoadingPath(paths);
 
@@ -210,7 +175,6 @@ export function readLoadingMeta(paths: Readonly<ImpPaths>): SnapshotMeta | null 
   }
 }
 
-// null when there is no complete snapshot to load
 export function readSnapshotMeta(paths: Readonly<ImpPaths>): SnapshotMeta | null {
   if (!existsSync(paths.vmstate) || !existsSync(paths.memFile)) {
     return null;
@@ -227,13 +191,11 @@ export function probeSnapshot(paths: Readonly<ImpPaths>): boolean {
   return readSnapshotMeta(paths) !== null;
 }
 
-// Why the snapshot cannot be loaded on this host, or null when it can. The
-// guest kernel does not count: the VM holds it in memory. The drive counts
-// only as the file the snapshot reopens, which stays while a snapshot names it.
 export function readColdBootReason(
   meta: Readonly<SnapshotIdentity>,
   host: Readonly<HostIdentity>,
 ): string | null {
+  // The guest kernel does not count, because the snapshot holds it in memory.
   const keys = ['firecrackerVersion', 'snapshotVersion', 'hostKernel'] as const;
 
   for (const key of keys) {
@@ -252,8 +214,7 @@ export function readColdBootReason(
     return cpuChange;
   }
 
-  // a guest with an address in another prefix would send from it; one with
-  // none wakes, and has no IPv6 until its next cold boot
+  // A guest woken with an address in another prefix would keep sending from it.
   const hostPrefix = host.ipv6Prefix ?? null;
 
   if (typeof meta.ipv6Prefix === 'string' && meta.ipv6Prefix !== hostPrefix) {
@@ -267,7 +228,6 @@ export function readColdBootReason(
   return null;
 }
 
-// A stopped imp boots cold, and a restored disk invalidates the memory.
 export function removeSnapshot(paths: Readonly<ImpPaths>): void {
   rmSync(paths.snapshotDir, { recursive: true, force: true });
 }

@@ -11,14 +11,11 @@ export interface AcmeIssuerOptions {
   readonly directoryUrl: string;
   readonly email: string | null;
 
-  // the PEM the ACME server's TLS chains to when it is not a public CA
   readonly caPem: string | null;
   readonly store: CertStore;
   readonly dns: DnsProvider;
   readonly log: (message: string) => void;
 
-  // how acme-client polls a challenge or an order that is still pending;
-  // left out, its own defaults apply (5 s at first, up to 30 s, 10 tries)
   readonly poll?: AcmePollOptions;
 }
 
@@ -28,7 +25,6 @@ interface AcmePollOptions {
   readonly backoffMax: number;
 }
 
-// a pending DNS-01 challenge: one per certificate name
 interface PendingChallenge {
   readonly challenge: Challenge;
   readonly fqdn: string;
@@ -37,18 +33,14 @@ interface PendingChallenge {
 
 export type IssueCertificate = (domain: string) => Promise<Certificate>;
 
-// Issues one certificate for `<domain>` and `*.<domain>` with DNS-01. Both
-// names share `_acme-challenge.<domain>`, so both TXT values go up and reach
-// every nameserver before the CA is told to look at either.
 export function createAcmeIssuer(options: AcmeIssuerOptions): IssueCertificate {
   if (options.caPem !== null) {
-    // acme-client's own axios instance; impd talks to one ACME server
     acme.axios.defaults.httpsAgent = new Agent({ ca: options.caPem });
   }
 
-  // The stored account, or a new one with a new key. A key that has an
-  // account but lost its URL is never asked to register again: acme-client
-  // then sends an account update that strict CAs such as Pebble refuse.
+  // a key that has an account but lost its URL is never registered again:
+  // acme-client then sends an account update that strict CAs such as Pebble
+  // refuse
   const openClient = async (): Promise<acme.Client> => {
     const stored = options.store.readAccount(options.directoryUrl);
 
@@ -124,6 +116,8 @@ export function createAcmeIssuer(options: AcmeIssuerOptions): IssueCertificate {
         pending.push({ challenge, fqdn, value });
       }
 
+      // `<domain>` and `*.<domain>` share one challenge name, so both values
+      // reach every nameserver before the CA is told to look at either
       for (const fqdn of new Set(pending.map((item) => item.fqdn))) {
         const values = pending.filter((item) => item.fqdn === fqdn).map((item) => item.value);
 
@@ -170,7 +164,6 @@ export function readCertificateInfo(chainPem: string): CertificateInfo {
   return { notBefore: info.notBefore, notAfter: info.notAfter, names: [...names] };
 }
 
-// a failed removal leaves a stale TXT value, which harms nothing
 async function removeRecords(
   options: AcmeIssuerOptions,
   records: readonly TxtRecord[],
@@ -206,7 +199,6 @@ async function checkDirectory(directoryUrl: string, caPem: string | null): Promi
   }
 }
 
-// the same failure later in the flow, once the directory has answered
 function formatAcmeError(error: unknown): string {
   const message = getErrorMessage(error);
 

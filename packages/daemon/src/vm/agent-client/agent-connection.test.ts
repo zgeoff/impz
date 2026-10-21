@@ -43,7 +43,6 @@ test('it hands over the frames the agent sends after its OK', async () => {
 test('it rejects a handshake that Firecracker refuses', async () => {
   const ctx = setupTest();
 
-  // a host side that answers the CONNECT with a line other than OK
   const server = createServer((socket) => {
     socket.end('FAILURE\n');
   });
@@ -85,8 +84,6 @@ test('it rejects when the socket closes during the handshake', async () => {
 
 test('it rejects when the handshake gets no answer within the timeout', async () => {
   const ctx = setupTest();
-
-  // a socket that takes the CONNECT and never answers, so the deadline alone decides
   const server = createServer(() => {});
 
   await new Promise<void>((resolve) => {
@@ -106,7 +103,7 @@ test('it rejects when the handshake gets no answer within the timeout', async ()
 test('it rejects with the connect error when nothing listens on the vsock socket', async () => {
   const ctx = setupTest();
 
-  // a socket file whose listener is gone: a link to a server's socket outlives the server
+  // A hard link to a unix socket file outlives the server's listener on it.
   const server = createServer(() => {});
   const listenPath = `${ctx.vsockPath}.listen`;
 
@@ -114,7 +111,7 @@ test('it rejects with the connect error when nothing listens on the vsock socket
     server.listen(listenPath, resolve);
   });
 
-  // a close of a closed server hands its callback the error
+  // Node hands the close callback an error when the server is already closed.
   onTestFinished(() => {
     server.close(() => {});
   });

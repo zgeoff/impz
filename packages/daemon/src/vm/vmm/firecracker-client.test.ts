@@ -416,7 +416,7 @@ test('it asks the guest for a plugged size', async () => {
 test('it reads what the guest holds plugged and was asked for', async () => {
   const ctx = setupTest();
 
-  // what Firecracker v1.17 answered on the dev box
+  // the body a real Firecracker v1.17 returned
   startStubFirecrackerApi(ctx.socket, {
     answers: {
       'GET /hotplug/memory': {
@@ -466,7 +466,7 @@ test('it rejects a hot-plug answer without the plugged size', () => {
 test('it reads the balloon statistics in whole MiB', async () => {
   const ctx = setupTest();
 
-  // what Firecracker v1.17 answered on the dev box
+  // the body a real Firecracker v1.17 returned
   startStubFirecrackerApi(ctx.socket, {
     answers: {
       'GET /balloon/statistics': {

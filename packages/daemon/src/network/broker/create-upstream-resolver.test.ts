@@ -179,7 +179,6 @@ test('it logs an invalid file and sends every host to its real origin', async ()
 
   const logs: string[] = [];
 
-  // an http upstream: the file allows https only
   writeFileSync(
     join(ctx.directoryPath, 'upstreams.json'),
     JSON.stringify({

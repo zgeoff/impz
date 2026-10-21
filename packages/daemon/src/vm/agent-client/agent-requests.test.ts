@@ -84,7 +84,6 @@ test('#sendAgentRequest rejects when the agent answers with a frame that is not 
 test('#readFrameWithin rejects when the agent does not answer within the timeout', async () => {
   const ctx = setupTest();
 
-  // an agent that never answers, so the deadline alone decides
   await startStubAgent(ctx.vsockPath, () => {});
 
   const connection = await openAgentConnection(ctx.vsockPath);
@@ -202,7 +201,6 @@ test('#sendActivity lists no sessions for an agent from before sessions', async 
   expect(activity.sessions).toStrictEqual([]);
 });
 
-// a hostile agent can send anything; each name must fail before impd touches the disk
 test.each([
   ['generation is a slash', { execution_generation: '/' }],
   ['generation is a backslash', { execution_generation: '\\' }],

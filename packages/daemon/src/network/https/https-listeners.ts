@@ -6,25 +6,21 @@ import type { DomainRoute } from './parse-domain-host';
 import { parseDomainHost } from './parse-domain-host';
 
 export interface HttpsListeners {
-  // serves this certificate from now on; open connections keep the old one
   readonly setCertificate: (certificate: Certificate) => void;
 
   // the addresses to listen on: loopback and the tailnet IP, never 0.0.0.0,
   // so a port published to the internet never reaches these listeners
   readonly setAddresses: (addresses: readonly string[]) => void;
 
-  // the ports that running listeners hold; null while none does
   readonly readPorts: () => { readonly https: number | null; readonly http: number | null };
   readonly stop: () => Promise<void>;
 }
 
-// a running server, as far as these listeners use one
 interface Listener {
   readonly port: number | undefined;
   readonly stop: (closeActiveConnections?: boolean) => Promise<void>;
 }
 
-// the wake proxy, or a stand-in in tests
 export interface ProxyListen {
   readonly startListener: (options: ProxyListenOptions) => Listener;
 }
@@ -34,12 +30,8 @@ export type ListenerScope =
   | {
       readonly kind: 'public';
 
-      // the imp's route, or null while it is not public; it takes a slot
-      // and maybe a wake, which the request gives back as it ends
       readonly routeImp: (name: string, request: Request) => Promise<ProxyRoute | null>;
 
-      // whether the name is a public imp, and nothing else: the redirect
-      // only answers, so it takes no slot and no wake
       readonly probePublic: (name: string) => Promise<boolean>;
     };
 
@@ -47,14 +39,10 @@ interface HttpsListenersOptions {
   readonly proxy: ProxyListen;
   readonly domain: string;
 
-  // 0 takes a free port at the first bind, which every later bind and the
-  // redirect then keep
   readonly httpsPort: number;
   readonly httpPort: number;
   readonly log: (message: string) => void;
 
-  // the public listeners serve public imps only: no API on the bare
-  // domain, and a tailnet-only imp is a 404 like an unknown one
   readonly scope: ListenerScope;
 }
 
@@ -63,17 +51,12 @@ interface AddressListeners {
   redirect: Listener | null;
 }
 
-// The listeners on the domain, per address: TLS on httpsPort into the wake
-// proxy, and a redirect to it on httpPort. One wildcard certificate covers
-// every name, so SNI needs no choice; the Host header picks the imp.
 export function createHttpsListeners(options: HttpsListenersOptions): HttpsListeners {
   const domain = options.domain;
   const log = options.log;
   const ports = { https: options.httpsPort, http: options.httpPort };
 
   const byAddress = new Map<string, AddressListeners>();
-
-  // `<address>:<port>` that failed to bind, logged once until it binds
   const failed = new Set<string>();
 
   let certificate: Certificate | null = null;
@@ -81,8 +64,6 @@ export function createHttpsListeners(options: HttpsListenersOptions): HttpsListe
 
   // Docker publishes the public listener as 443, whatever its port inside
   const readRedirectPort = (): number => (scope.kind === 'public' ? 443 : ports.https);
-
-  // the public 404 names no imp and no use of the domain
   const hint = scope.kind === 'public' ? 'No public imp here.' : `Use https://<imp>.${domain}/.`;
 
   const resolveRoute = async (request: Request): Promise<ProxyRoute> => {
@@ -101,8 +82,6 @@ export function createHttpsListeners(options: HttpsListenersOptions): HttpsListe
     return route ?? { kind: 'none', hint };
   };
 
-  // a redirect that answered for a tailnet-only imp would tell the internet
-  // the name exists
   const checkRedirect = (request: Request): Promise<boolean> => {
     const parsed = parseDomainHost(request.headers.get('host'), domain);
 
@@ -169,8 +148,6 @@ export function createHttpsListeners(options: HttpsListenersOptions): HttpsListe
       }),
     );
 
-  // starts whatever is missing on an address; nothing serves before the
-  // first certificate
   const startMissing = (address: string): void => {
     const listeners = byAddress.get(address);
 
@@ -240,8 +217,7 @@ export function createHttpsListeners(options: HttpsListenersOptions): HttpsListe
   };
 }
 
-// http://<name>.<domain>/path to the same on https; the target is built
-// from the parsed name, never from the raw Host header
+// the target is built from the parsed name, never from the raw Host header
 function buildRedirect(
   request: Request,
   domain: string,

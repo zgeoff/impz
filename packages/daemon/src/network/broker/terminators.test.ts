@@ -8,8 +8,6 @@ import type { LeafCertificate } from './broker-ca';
 import { createTerminators } from './terminators';
 import type { TerminatorKey } from './terminators';
 
-// The terminators a test makes stop before the directory their sockets sit
-// in goes: each test defers its stop into `ctx.stack`.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -19,7 +17,6 @@ async function setupTest() {
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  // the CA every leaf comes from
   const ca = await loadOrCreateBrokerCa(join(directory, 'ca'));
 
   return { directoryPath: directory, ca, stack };

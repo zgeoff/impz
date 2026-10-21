@@ -34,7 +34,6 @@ test('#hasFeature passes dial and sftp, which are not strict, for the dev versio
   expect(hasFeature('dev', 'ssh')).toBe(true);
 });
 
-// the agent's own answer settles a feature that is not strict
 test.each([['dev'], ['']])(
   '#hasFeature passes a feature that is not strict for the version %p, which does not parse',
   (version) => {

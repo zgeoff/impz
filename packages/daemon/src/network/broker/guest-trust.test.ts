@@ -256,7 +256,6 @@ test('it installs again for the same pid after a stop', async () => {
 
   await trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
 
-  // the stop's write, then a boot that got pid 7 again
   trust.observe({ id: 'imp-1', name: 'dev', pid: null, state: 'stopped' });
   trust.observe({ id: 'imp-1', name: 'dev', pid: 7, state: 'running' });
 
@@ -381,7 +380,6 @@ test('it throws when the agent ends the install without an exit', async () => {
 test('it cuts off an install that outlasts its timeout', async () => {
   const ctx = await setupTest();
 
-  // the install starts and never exits
   await startStubAgent(
     join(ctx.directoryPath, 'v.sock'),
     (socket, _request, frames) => {

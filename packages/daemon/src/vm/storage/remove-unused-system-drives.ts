@@ -2,14 +2,12 @@ import { readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildSystemDrivesDir } from './data-layout';
 
-// Deletes every system drive whose file name is not in `keep`, and any copy a
-// crash cut short; returns the names it deleted. Names, not paths: a moved
-// data dir must not delete a drive in use.
 export function removeUnusedSystemDrives(dataDir: string, keep: ReadonlySet<string>): string[] {
   const directory = buildSystemDrivesDir(dataDir);
   const removed: string[] = [];
 
   for (const name of readNames(directory)) {
+    // `keep` holds file names, not paths, so a data dir that moved never loses a drive in use
     if (!keep.has(name)) {
       rmSync(join(directory, name), { force: true });
 

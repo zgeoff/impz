@@ -82,7 +82,6 @@ test('#openExecStream rejects and closes its connection when STARTED never comes
   const ctx = setupTest();
   const closed = Promise.withResolvers<void>();
 
-  // an agent that never answers, so the start deadline alone decides
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.on('close', () => {
       closed.resolve();
@@ -202,8 +201,6 @@ test("#openExecStream arms the group kill when the agent's STARTED echoes the ki
   expect(stream.groupKill).toBe(true);
 });
 
-// an agent from before 0.8.0 ignores the field and does not echo it, so the
-// host keeps cleaning up the group itself
 test('#openExecStream leaves the group kill off for an agent that does not echo the kill grace', async () => {
   const ctx = setupTest();
 
@@ -583,7 +580,6 @@ test('#openTapStream rejects with AGENT_OUTDATED for an agent from before sessio
   });
 });
 
-// a hostile agent can send anything; each name must fail before impd touches the disk
 test.each([
   ['a slash', '/'],
   ['a backslash', '\\'],

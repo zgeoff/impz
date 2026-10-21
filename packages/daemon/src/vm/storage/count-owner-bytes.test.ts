@@ -5,14 +5,11 @@ import { EXTENT_FLAGS } from './fiemap';
 
 test('it counts what only one owner holds as exclusive and the rest as shared', () => {
   const totals = countOwnerBytes([
-    // the image: 100 MiB, which both disks clone
     {
       owner: 'image:base',
       extents: [buildMockExtent({ physical: 0, length: 104_857_600, flags: EXTENT_FLAGS.shared })],
     },
 
-    // a: the image's first 60 MiB, its own 10 MiB, and a checkpoint that
-    // shares a's own 10 MiB
     {
       owner: 'imp:a',
       extents: [
@@ -27,7 +24,6 @@ test('it counts what only one owner holds as exclusive and the rest as shared', 
       ],
     },
 
-    // b: the whole image, and 5 MiB written since
     {
       owner: 'imp:b',
       extents: [
@@ -45,7 +41,6 @@ test('it counts what only one owner holds as exclusive and the rest as shared', 
 });
 
 test('it counts a shared extent that no other owner holds as exclusive', () => {
-  // FIEMAP marked it shared, but the other file is not one of the owners
   const totals = countOwnerBytes([
     {
       owner: 'imp:a',
@@ -57,7 +52,7 @@ test('it counts a shared extent that no other owner holds as exclusive', () => {
 });
 
 test('it counts a delayed allocation as exclusive even when it is marked shared', () => {
-  // the delayed extent reports physical 0, where imp:b's shared extent lies
+  // FIEMAP reports a delayed allocation at physical 0, which a real shared extent can also hold
   const totals = countOwnerBytes([
     {
       owner: 'imp:a',

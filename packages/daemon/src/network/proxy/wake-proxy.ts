@@ -43,7 +43,6 @@ interface SocketData {
   readonly upstream: WebSocket;
   readonly release: () => void;
 
-  // upstream messages that arrive before the client socket opens
   readonly pending: (string | ArrayBuffer)[];
   readonly handleEarlyMessage: (event: MessageEvent<string | ArrayBuffer>) => void;
 }
@@ -54,33 +53,21 @@ interface WakeProxyDeps {
   readonly imps: Pick<ImpRuntime, 'requireRunning' | 'tracker' | 'recordActivity'>;
   readonly log: (message: string) => void;
 
-  // structured lines, with the imp a line is about in its `imp` property;
-  // impd.proxy by default
   readonly logger?: Pick<Logger, 'warning'>;
   readonly peers: ForwardedPeers;
 
-  // the Host-routed port and each slot's port; the config's unless a test
-  // asks for any free one (0)
   readonly ports?: { readonly proxy: number; readonly slot: (slot: number) => number };
 
-  // how long an upstream WebSocket may take to open; 10 s by default
   readonly upstreamSocketTimeoutMs?: number;
 
-  // that deadline's timer, returning its cancel; setTimeout by default
   readonly startTimer?: StartTimer;
 }
 
-// A request on the public listeners (docs/guides/https.md#public-imps): no
-// detail in its errors, a fresh X-Forwarded-For, no checked credential
-// upstream. `release` runs when the request or its WebSocket ends.
 interface PublicRequest {
   readonly dropAuthorization: boolean;
   readonly release: () => void;
 }
 
-// Where a request goes: an imp, which it wakes, impd's own API, nowhere,
-// back with a 401 that asks for a public imp's credential, or back with a
-// 429 when a public imp is over a limit.
 export type ProxyRoute =
   | { readonly kind: 'imp'; readonly name: string; readonly public?: PublicRequest }
   | { readonly kind: 'api' }
@@ -93,47 +80,34 @@ export interface ProxyListenOptions {
   readonly hostname?: string;
   readonly tls?: { readonly key: string; readonly cert: string };
 
-  // lets a listener with a new certificate bind next to the old one
   readonly reusePort?: boolean;
   readonly route: (request: Request) => ProxyRoute | Promise<ProxyRoute>;
 }
 
 type ProxyServer = Server<SocketData>;
 
-// one request on its way to an address behind the proxy
 interface UpstreamOptions {
-  // ends the connection's count in the activity tracker
   readonly release: () => void;
   readonly wokeMs: number | null;
   readonly formatFailure: (reason: string) => string;
 
-  // impd's own API needs the dashboard's session, and the client's address
-  // for its tailnet identity; an imp must never get either
   readonly toApi: boolean;
   readonly public: PublicRequest | null;
 
-  // the imp a log line about the request names; null for impd's own API
   readonly imp: string | null;
 }
 
 export interface WakeProxy {
-  // one listener per imp on portBase + slot; call after a create or destroy
   readonly syncListeners: () => Promise<void>;
 
-  // the port the Host-routed listener holds
   readonly port: number;
 
-  // the port of an imp's own listener, or null while it has none
   readonly readImpPort: (impId: string) => number | null;
 
-  // another listener with the same proxy behind it; the caller stops it
   readonly startListener: (options: ProxyListenOptions) => ProxyServer;
   readonly stop: () => Promise<void>;
 }
 
-// The wake-on-request proxy (docs/architecture/network/ingress.md#the-wake-proxy): Host routing
-// on the proxy port and one port per imp. A request wakes or boots the imp, then goes to its
-// HTTP port; WebSockets are relayed message by message.
 export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
   const listeners = new Map<string, { readonly slot: number; readonly server: ProxyServer }>();
   const failedSlots = new Set<number>();
@@ -207,9 +181,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
 
     if (route.kind === 'api') {
       return sendUpstream(request, server, `127.0.0.1:${String(deps.config.apiPort)}`, {
-        release: () => {
-          // impd's own API: nothing to keep awake
-        },
+        release: () => {},
         wokeMs: null,
         formatFailure: (reason) => `impd's API did not answer (${reason}).`,
         toApi: true,
@@ -221,8 +193,6 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     const name = route.name;
     const publicRequest = route.public ?? null;
     const releaseRoute = publicRequest?.release ?? (() => {});
-
-    // nothing counted in the tracker yet, only the route's own count
     const opened: { release: () => void } = { release: releaseRoute };
     let running: { readonly imp: ImpRecord; readonly wokeMs: number | null };
 
@@ -238,7 +208,6 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     } catch (error) {
       opened.release();
 
-      // the internet learns nothing about the imp or the host
       return publicRequest === null
         ? buildWakeErrorPage(name, error)
         : buildErrorPage(503, 'This site is not available right now.');
@@ -255,9 +224,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
 
     try {
       await deps.imps.recordActivity(name);
-    } catch {
-      // the idle loop also counts the open connection
-    }
+    } catch {}
 
     return sendUpstream(request, server, `${imp.ip}:${String(imp.httpPort)}`, {
       release: opened.release,
@@ -292,9 +259,8 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
 
     const client = server.requestIP(request)?.address;
 
-    // A public client's forwarding headers are whatever it chose to send:
-    // X-Forwarded-For comes from the socket alone, and X-Forwarded-Host and
-    // -Proto are impd's own, set above from the Host it routed by and its TLS.
+    // a public client's forwarding headers are whatever it chose to send, so
+    // X-Forwarded-For comes from the socket alone
     if (options.public !== null) {
       upstreamHeaders.delete('forwarded');
       upstreamHeaders.delete('x-real-ip');
@@ -305,7 +271,6 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
       }
     }
 
-    // no client names its own address to the API, nor learns a handle
     upstreamHeaders.delete(PEER_HEADER);
 
     if (options.toApi && client !== undefined && isCallerPath(url.pathname)) {
@@ -342,7 +307,6 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
         headers.set('x-imp-wake-ms', String(wokeMs));
       }
 
-      // an upstream that exits mid-stream, such as a dev server that restarts
       const body =
         upstream.body === null
           ? null
@@ -452,15 +416,11 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
 
   deps.log(`impd: proxy on :${String(deps.config.proxyPort)}`);
 
-  // one at a time: a pass that read the imps before a destroy must not
-  // re-add a listener after a later pass removed it
   const runListenerSync = (): Promise<void> =>
     syncSlot.run(async () => {
       const imps = await listImps(deps.db);
 
       const wanted = new Map(imps.map((imp) => [imp.id, imp]));
-
-      // a slot no imp holds any more has nothing left to warn about
       const slots = new Set(imps.map((imp) => imp.slot));
 
       for (const slot of failedSlots) {
@@ -538,7 +498,6 @@ function buildWakeErrorPage(name: string, error: unknown): Response {
   const reason = getErrorMessage(error);
   const page = buildErrorPage(503, `${name} could not wake: ${reason}`);
 
-  // a move holds the imp for a while: the client may come back
   if (error instanceof ORPCError && error.code === 'MOVING') {
     page.headers.set('retry-after', String(MOVING_RETRY_AFTER_S));
   }
@@ -563,9 +522,8 @@ function buildUpstreamHeaders(
     headers.delete(header);
   }
 
-  // The dashboard's session goes to every port of this host, imps' ports
-  // too; an imp must not get it. An imp can still set a cookie by that name
-  // and so log the dashboard out, which costs a login and nothing more.
+  // a browser sends the dashboard's session cookie to every port of this
+  // host, imps' ports too, and an imp must not get it
   const cookie = headers.get('cookie');
   const kept = cookie === null || keepSession ? cookie : stripSessionCookie(cookie);
 

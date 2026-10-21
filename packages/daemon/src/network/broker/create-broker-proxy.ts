@@ -40,25 +40,15 @@ import { createTerminators } from './terminators';
 import type { TerminatorKey } from './terminators';
 import { requireUplinkRoute, resolveTunnelTarget } from './tunnel-target';
 
-// The broker's request path (docs/guides/connectors.md): the front port
-// guests reach on their gateway, a plain tunnel to an ungranted host, and a
-// TLS terminator per granted host that sends the real credential on.
-
 interface BrokerProxy {
-  // true when a grant of the imp covers the host
   readonly isGranted: (impId: string, host: string) => Promise<boolean>;
 
-  // stops the terminators `keep` rejects
   readonly prune: (keep: (key: TerminatorKey) => boolean) => Promise<void>;
 
-  // ends the imp's plain tunnels to hosts `keep` rejects
   readonly closeTunnels: (impId: string, keep: (host: string) => boolean) => void;
 
-  // opens the front port on every address; 0 picks a free port, which it
-  // returns
   readonly listen: (port: number) => Promise<number>;
 
-  // the front port, the configured one until listen
   readonly getPort: () => number;
   readonly stop: () => Promise<void>;
 }
@@ -77,15 +67,10 @@ interface BrokerProxyDeps {
   readonly ipv6?: Ipv6Plan | null | undefined;
   readonly afterRuleRead?: (() => Promise<void>) | undefined;
 
-  // the refresh after a granted host answered 401 to an oauth access token
   readonly refreshAfterRejection?: ForwardDeps['refreshAfterRejection'] | undefined;
 }
 
-// how long the container's own prefixes stay read
 const CONNECTED_CACHE_MS = 30_000;
-
-// the refused requests of one imp audited in one second; past it, the rest
-// of that second's refusals get no row
 const REFUSED_AUDITS_PER_SECOND = 20;
 
 export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
@@ -96,16 +81,12 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
   const now = deps.now;
   const ca = deps.ca;
 
-  // the container's own prefixes, each read again once it is more than
-  // CONNECTED_CACHE_MS old
   const blocked6 = createTtlCache<'blocked6', (address: string) => boolean>({
     max: 1,
     ttlMs: CONNECTED_CACHE_MS,
     now,
   });
 
-  // with IPv6, what no tunnel dials: the fixed ranges, the imps' /64, and
-  // the container's own links
   const readBlocked6 = async (): Promise<((address: string) => boolean) | null> => {
     const ipv6 = deps.ipv6 ?? null;
 
@@ -133,9 +114,6 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     { readonly check: (address: string) => boolean; readonly uplinks: Uplinks }
   >({ max: 1, ttlMs: CONNECTED_CACHE_MS, now });
 
-  // what a public imp's tunnel may not dial beyond every tunnel's ranges,
-  // as its firewall refuses it: the container's IPv4 networks (can be
-  // public), IMP_EGRESS_DENY and the IPv6 ranges refused to public only
   const readPublicRefused = async (): Promise<{
     readonly check: (address: string) => boolean;
     readonly uplinks: Uplinks;
@@ -171,8 +149,6 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     const refused = await readPublicRefused();
     const address = await resolveTunnelTarget(host, { isBlocked6, isRefusedMore: refused.check });
 
-    // as the firewall's uplink rule: a route by another interface reaches
-    // a private service whatever the address
     await requireUplinkRoute(host, address, refused.uplinks, readRouteDevice);
 
     return address;
@@ -184,17 +160,12 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     return rules.find((granted) => granted.rule.host === host);
   };
 
-  // The value comes from the file the rule's row names: a replace writes a
-  // new file and switches the row, so the old host never gets the new value.
-  // A request that read the row just before finds the old file gone.
   const readCredential = async (impId: string, host: string): Promise<Credential | null> => {
     const granted = await readRule(impId, host);
 
     await deps.afterRuleRead?.();
 
     const stored = granted === undefined ? null : files.read(granted.valueFile);
-
-    // an oauth secret's file is its state; the credential is the access token
     const oauth = granted?.kind === 'oauth' && stored !== null ? parseOAuthState(stored) : null;
     const value = granted?.kind === 'oauth' ? (oauth?.accessToken ?? null) : stored;
 
@@ -212,7 +183,6 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     };
   };
 
-  // the audit write must never fail the request it describes
   const writeAudit = async (entry: Readonly<NewAuditEntry>): Promise<void> => {
     try {
       await writeAuditEntry(db, entry);
@@ -223,8 +193,6 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
 
   const refusals = createRefusalBudget({ perSecond: REFUSED_AUDITS_PER_SECOND, now });
 
-  // every request sent with a credential, and the refused ones within the
-  // imp's budget
   const writeBudgetedAudit = (entry: NewAuditEntry): void => {
     if (entry.reason === null || refusals.tryClaim(entry.impId)) {
       void writeAudit(entry);

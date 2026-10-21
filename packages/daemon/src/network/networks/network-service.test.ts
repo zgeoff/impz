@@ -12,8 +12,6 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the firewall the network sets live in, and the conntrack flush of a
-  // pair that no longer shares a network
   const nft = buildStubNft();
   const flushPair = mock<(first: string, second: string) => Promise<void>>(() => Promise.resolve());
 
@@ -24,7 +22,6 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
-  // the image every imp here boots
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);

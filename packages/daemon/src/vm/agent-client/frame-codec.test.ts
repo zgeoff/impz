@@ -9,7 +9,7 @@ import {
   encodeJsonFrame,
 } from './frame-codec';
 
-// the same vectors as agent/internal/proto/proto_test.go
+// The Go agent's codec tests use these same vectors.
 
 test('it writes the type and the big-endian payload length before the payload', () => {
   const bytes = encodeJsonFrame(FRAME_TYPES.request, { op: 'ping' });

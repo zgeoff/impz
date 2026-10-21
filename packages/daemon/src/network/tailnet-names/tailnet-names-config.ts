@@ -1,7 +1,6 @@
 import { join } from 'node:path';
 import * as z from 'zod';
 
-// a DNS label's head: with an imp's name it makes the service's label
 const PrefixSchema = z
   .string()
   .regex(
@@ -16,15 +15,11 @@ export const TailnetNamesEnvSchema = z.object({
 });
 
 export interface TailnetNamesConfig {
-  // `svc:<prefix><imp name>`; empty gives the imp's own name
   readonly prefix: string;
 
-  // a 0600 JSON file with the OAuth client's id and secret; impd reads it
-  // when it needs a token, so the secret is never in its env or config
   readonly oauthFile: string;
 }
 
-// null unless IMP_TAILNET_NAMES=1 (docs/guides/tailscale.md#per-imp-names)
 export function parseTailnetNamesConfig(
   env: z.infer<typeof TailnetNamesEnvSchema>,
   dataDir: string,

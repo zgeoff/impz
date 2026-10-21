@@ -26,45 +26,26 @@ import {
   parseZfsMounts,
 } from './zfs-commands';
 
-// ARC and record sizes are set where the datasets are made (deploy/
-// bootstrap.sh); these are the defaults impd uses for what it creates itself.
 const BLOCK_RECORDSIZE = '16K';
 
-// held back, so a destroy still has room to run on a full pool: free it with
-// `zfs set refreservation=none <root>/reserve`
+// ZFS needs free space to run a destroy on a full pool, so this much is held back;
+// `zfs set refreservation=none <root>/reserve` frees it.
 const RESERVE_SIZE = '1G';
-
-// the file in each disk and image dataset; a disk is a clone of an image
 const ROOTFS_FILE = 'rootfs.ext4';
 
 export interface ZfsBackendDeps {
   readonly dataDir: string;
-
-  // the dataset mounted on dataDir, such as tank/imp
   readonly root: string;
   readonly run?: CommandRunner;
-
-  // `zfs send` and `zfs recv` for moves
   readonly streams?: StreamRunner;
-
-  // /proc/self/mounts and /sys/module/zfs/version by default
   readonly readMounts?: () => string;
   readonly readModuleVersion?: () => string | null;
   readonly log?: (message: string) => void;
-
-  // IMP_ZFS_ALLOW_UIOMOVE_BUG=1: start on a module with the zfs_uiomove bug,
-  // with a warning; start refuses one by default
   readonly isUiomoveBugAllowed?: boolean;
-
-  // whether the host's kernel has oopsed (imps/kernel-oops-watch.ts); never
-  // by default
   readonly isKernelOopsed?: () => boolean;
 }
 
-// Each imp disk is a dataset holding one file, a checkpoint is a snapshot of
-// it and a fork is a clone (docs/architecture/storage/storage.md#zfs).
 export interface ZfsBackend extends StorageBackend {
-  // resolves once the reclaim that changes start in the background is done
   readonly waitForReclaim: () => Promise<void>;
 }
 
@@ -72,7 +53,6 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
   const zfs = createZfsCommands(deps.run ?? runCommand);
   const streams = deps.streams ?? createStreamRunner();
 
-  // a move's snapshots while it sends: no GC drops them
   const heldSnapshots = new Set<string>();
 
   const log = deps.log ?? printLog;
@@ -80,14 +60,11 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
   const readModuleVersion = deps.readModuleVersion ?? readZfsModuleVersion;
   const isKernelOopsed = deps.isKernelOopsed ?? (() => false);
 
-  // Dataset changes run one at a time: a reclaim must never see a restore
-  // half done. Snapshots of a frozen guest have a lane of their own and never
-  // wait for one; they touch no dataset a reclaim or restore moves.
+  // Snapshots of a frozen guest take a lane of their own, so a frozen guest never waits on a
+  // reclaim or a restore.
   const mutex = buildKeyedMutex();
   const runSerial = <T>(task: () => Promise<T>) => mutex.runExclusive('zfs', task);
   const runSnapshot = <T>(task: () => Promise<T>) => mutex.runExclusive('snapshot', task);
-
-  // what /health tells an operator about this host's ZFS, set at start
   const host = { warnings: [] as string[] };
 
   const datasets = {
@@ -141,8 +118,6 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
     }
   };
 
-  // an old disk or image leaves the namespace at once; runReclaim frees it once
-  // no checkpoint or clone needs its blocks
   const removeDataset = async (name: string): Promise<void> => {
     const retired = `${datasets.retired}/${Bun.randomUUIDv7()}`;
 
@@ -201,14 +176,12 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
     }
   };
 
-  // A restore clones the checkpoint into staging, then renames it over the
-  // disk. With the disk gone, the crash came between the two renames.
   const resolveStaging = async (): Promise<void> => {
     const entries = await listAll();
 
     const names = new Set(entries.map((entry) => entry.name));
 
-    // newest first: a move's clones go before their origins
+    // Newest first, because ZFS destroys a clone only before its origin.
     for (const staged of listChildren(entries, datasets.staging).toReversed()) {
       const impId = staged.name.slice(buildRestoreName('').length);
 
@@ -219,15 +192,12 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
         continue;
       }
 
-      // a backup run's clones are mounted in the backup tree
       for (const [directory, name] of parseZfsMounts(readMounts())) {
         if (name === staged.name) {
           await zfs.unmount(directory);
         }
       }
 
-      // a build cut short after its `@base`, before its rename, and a move's
-      // received datasets carry snapshots
       await zfs.destroyRecursive(staged.name);
 
       log(`impd: zfs: destroyed ${staged.name}, a clone or build a crash cut short`);
@@ -261,8 +231,6 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
     }
   };
 
-  // Mounts a staged image dataset for `write`, then renames it into place
-  // with its @base snapshot; a failed write destroys it.
   const createImageFromStaging = async (
     digest: string,
     staged: string,
@@ -291,7 +259,7 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
 
       removeMountDir(directory);
 
-      // the snapshot moves with the rename, so no image is ever without one
+      // ZFS moves a snapshot with its dataset's rename, so no image is ever without its `@base`.
       await zfs.snapshot(`${staged}@base`);
       await zfs.rename(staged, name);
 
@@ -366,8 +334,6 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
       await createImageFromStaging(digest, staged, write);
     },
 
-    // The fork of a live disk, as createImpDisk makes one, in staging: the
-    // image's origin is the imp's disk until a reclaim promotes it.
     createImageFromImp: async (digest, impId, steps) => {
       const staged = `${datasets.staging}/image-${Bun.randomUUIDv7()}`;
       const snapshot = `${buildDiskName(impId)}@fork-${Bun.randomUUIDv7()}`;
@@ -414,9 +380,6 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
     createImpDisk: async (impId, source) => {
       const target = buildDiskName(impId);
 
-      // The caller has a live source frozen, so its fork takes the snapshot
-      // lane and never waits for a reclaim. Its new clone is not retired, and
-      // nothing else names it yet.
       if (source.kind === 'imp') {
         const snapshot = `${buildDiskName(source.impId)}@fork-${Bun.randomUUIDv7()}`;
 
@@ -426,7 +389,7 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
           try {
             await zfs.clone(snapshot, target);
           } finally {
-            // ZFS keeps a fork snapshot while the clone needs it
+            // ZFS keeps a snapshot marked for deferred destroy while its clone needs it.
             await zfs.destroyDeferred(snapshot);
           }
 
@@ -448,7 +411,7 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
         return;
       }
 
-      // a promote can move a checkpoint's snapshot, so the lookup is serial
+      // A ZFS promote can move a checkpoint's snapshot to another dataset, so the lookup is serial.
       await runSerial(async () => {
         const origin = await readOrigin(source);
 
@@ -540,7 +503,7 @@ function readZfsModuleVersion(): string | null {
   }
 }
 
-// Not recursive: a dataset still mounted there would lose its files.
+// A recursive removal would delete the files of a dataset still mounted there.
 function removeMountDir(directory: string): void {
   if (existsSync(directory)) {
     rmdirSync(directory);

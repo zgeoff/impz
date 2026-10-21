@@ -173,7 +173,6 @@ test('it writes the account readable by root only', async () => {
 test('it makes the v0.1.1 key and URL at the same directory one account', async () => {
   const ctx = await setupTest();
 
-  // v0.1.1's layout: the key in account.key, the URL alone in account.json
   await mkdir(join(ctx.directoryPath, 'tls'));
 
   await writeFile(

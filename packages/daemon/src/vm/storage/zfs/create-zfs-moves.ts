@@ -16,11 +16,8 @@ import {
 } from './zfs-commands';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
 
-// tries at a checkpoint id no snapshot in the pool has
 const ID_ATTEMPTS = 5;
 
-// what the ZFS backend lends its moves: its commands, its lanes, its held
-// snapshots and the names of its datasets and their mounts
 interface ZfsMoveContext {
   readonly zfs: ZfsCommands;
   readonly streams: StreamRunner;
@@ -35,18 +32,12 @@ interface ZfsMoveContext {
   readonly buildDiskName: (impId: string) => string;
   readonly buildDiskDir: (impId: string) => string;
   readonly buildStagingDir: (name: string) => string;
-
-  // the file in each disk and image dataset
   readonly rootfsFile: string;
 }
 
-// A move's side of the ZFS backend: its source as streams or read-only
-// clones, and the streams it receives (docs/architecture/storage/moves.md#zfs)
 export function createZfsMoves(
   ctx: ZfsMoveContext,
 ): Pick<StorageBackend, 'openMoveSource' | 'receiveMoveSnapshots'> {
-  // Read-only clones of each snapshot, mounted in staging, for a move to an
-  // XFS host: the last is the disk, the others the checkpoints in order
   const openMoveFiles = async (
     snapshots: readonly string[],
     removeMoveSnapshot: () => Promise<void>,
@@ -96,9 +87,6 @@ export function createZfsMoves(
     };
   };
 
-  // The snapshots in the order they were made, each incremental from the
-  // last one before it on its dataset, a clone stream from its dataset's
-  // origin, or else full (docs/architecture/storage/moves.md#zfs)
   const planSendSteps = async (
     entries: readonly ZfsEntry[],
     wanted: ReadonlyMap<string, string | null>,
@@ -143,7 +131,6 @@ export function createZfsMoves(
     return steps;
   };
 
-  // a checkpoint id no snapshot in the pool has
   const pickCheckpointId = (
     entries: readonly ZfsEntry[],
     picked: readonly string[],
@@ -162,9 +149,6 @@ export function createZfsMoves(
     throw new CheckpointIdTakenError(tried.id);
   };
 
-  // Each stream into staging, then the disk's into place and the others
-  // retired, as a restore leaves them. What a failure leaves:
-  // docs/architecture/storage/moves.md#zfs
   const writeReceived = async (
     impId: string,
     steps: readonly ReceiveStep[],
@@ -188,8 +172,6 @@ export function createZfsMoves(
       names.push(name);
     }
 
-    // the disk's own snapshot, staged and in place: a GC leaves it until
-    // setupReceived destroys it (checkReceiveSteps refused no steps)
     const diskSnapshot = names.at(-1) ?? '';
 
     const held = [
@@ -219,8 +201,8 @@ export function createZfsMoves(
 
       return await ctx.runSerial(() => setupReceived(impId, steps, names, buildStaged));
     } catch (error) {
-      // by listing, so a stream that failed after `zfs recv` committed it
-      // goes too; newest first by createtxg, so each clone before its origin
+      // A stream can fail after `zfs recv` committed it, so the cleanup lists the pool. It goes
+      // newest first, because ZFS destroys a clone only before its origin.
       await ctx.runSerial(async () => {
         const prefix = buildStaged(0).slice(0, -1);
 
@@ -280,7 +262,6 @@ export function createZfsMoves(
           sizeBytes: await ctx.zfs.readWritten(snapshot),
         });
       } else {
-        // the disk's own snapshot served the stream only
         await ctx.zfs.destroyDeferred(snapshot);
       }
     }
@@ -292,7 +273,6 @@ export function createZfsMoves(
     openMoveSource: async (impId, checkpointIds, mode) => {
       const disk = `${ctx.buildDiskName(impId)}@mv-${Bun.randomUUIDv7()}`;
 
-      // the imp is stopped and marked: no write lands after this
       await ctx.runSnapshot(() => ctx.zfs.snapshot(disk));
 
       ctx.heldSnapshots.add(disk);
@@ -330,9 +310,6 @@ export function createZfsMoves(
   };
 }
 
-// A peer's plan: each base comes before its step, a dataset's first step is
-// full or a clone, every later one incremental from the step before it on
-// that dataset, and only the last step is the disk's own
 function checkReceiveSteps(steps: readonly ReceiveStep[]): void {
   const lastOn = new Map<number, number>();
 

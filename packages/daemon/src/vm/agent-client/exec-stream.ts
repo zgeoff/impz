@@ -33,95 +33,47 @@ export interface AgentExecRequest {
   readonly cols?: number;
   readonly rows?: number;
   readonly user?: string;
-
-  // starts this session, or attaches to it if it runs; needs a tty
   readonly session?: string;
-
-  // after a stop signal, how long the rest of the process group gets before
-  // the agent kills it; see docs/architecture/guest/protocol.md#the-schema
   readonly killGraceMs?: number;
-
-  // with a session: the output after this byte, not a replay
   readonly resumeFrom?: ResumeFrom;
-
-  // a session impd keeps a log of; an agent from before session logs
-  // ignores it, and its STARTED says no log
   readonly log?: boolean;
-
-  // runs in the agent's own world, outside the inner container, as root:
-  // the exec.outer op, which an older agent refuses
   readonly outer?: boolean;
 
-  // runs without CAP_SYS_ADMIN and CAP_SYS_PTRACE; an agent before 0.20.0
-  // ignores it, so impd checks the agent's version first
+  // An agent before 0.20.0 ignores this field, so a caller checks the agent's version first.
   readonly dropSysAdmin?: boolean;
-
-  // what impd checks before it starts the command (exec/exec-require.ts);
-  // never sent to the agent
   readonly require?: readonly ExecRequirement[];
 }
 
-// attaches to a session that exists
 export interface AgentAttachRequest {
   readonly session: string;
   readonly cols?: number;
   readonly rows?: number;
   readonly resumeFrom?: ResumeFrom;
-
-  // impd's alone, never sent to the agent: false fails with INVALID_STATE
-  // rather than boot or wake the imp
   readonly wake?: boolean;
 }
 
 export type ExecEvent =
   | { readonly type: 'stdout' | 'stderr'; readonly data: Uint8Array }
   | { readonly type: 'exit'; readonly code: number; readonly signal: number }
-
-  // the agent ended a session connection: `taken_over` or `slow`
   | { readonly type: 'detached'; readonly reason: string };
 
 export interface ExecStream {
   readonly pid: number;
-
-  // set for a session; created is false when the stream attached to a
-  // session that already ran
   readonly session: string | null;
   readonly created: boolean;
-
-  // the agent kills what is left of the group once the command stops after
-  // a stop signal, and sends the exit only then; false for an agent from
-  // before 0.8.0, which ignores killGraceMs
   readonly groupKill: boolean;
-
-  // a session's place in its output, null for a plain exec; coldBoots is
-  // empty until impd adds the imp's (docs/architecture/guest/sessions.md#generations-boots-and-offsets)
   readonly output: SessionOutput | null;
   readonly writeStdin: (data: Uint8Array) => void;
-
-  // resolves once the stdin written so far is on its way to the guest; a
-  // writer that waits for it holds no more than a socket buffer of it
   readonly stdinDrained: () => Promise<void>;
   readonly closeStdin: () => void;
   readonly resize: (cols: number, rows: number) => void;
-
-  // a Linux signal number, sent to the whole process group
   readonly sendSignal: (signal: number) => void;
-
-  // stdout and stderr in order, then one exit or detached; ends early
-  // when the connection drops
   readonly events: () => AsyncGenerator<ExecEvent, void, undefined>;
-
-  // the agent sends SIGHUP to a plain exec whose connection closes; a
-  // session just detaches
   readonly close: () => void;
 }
 
-// a hung agent must not leave the exec, and the activity count it holds,
-// pending for good
 const EXEC_START_TIMEOUT_MS = 10_000;
 
-// Opens an exec connection and waits for STARTED. Throws AgentError
-// (EXEC_FAILED) when the process cannot start.
 export async function openExecStream(
   vsockPath: string,
   request: Readonly<AgentExecRequest>,
@@ -144,8 +96,8 @@ export async function openExecStream(
 
   const stream = await (outer === true ? opening.catch(handleUnknownOp('outer-exec')) : opening);
 
-  // an agent from before sessions ignores the name and runs a plain exec,
-  // which would die with its connection; a woken imp keeps its old agent
+  // An agent from before sessions ignores the name and runs a plain exec, which would die with its
+  // connection.
   if (request.session !== undefined && stream.session === null) {
     stream.close();
     throw buildAgentOutdatedError('sessions');
@@ -154,9 +106,6 @@ export async function openExecStream(
   return stream;
 }
 
-// Taps a logged session's raw output beside its viewer, from resumeFrom or
-// the ring's start; it counts as no connection. Throws NO_SESSION, and
-// BAD_REQUEST for a session without a log.
 export function openTapStream(
   vsockPath: string,
   session: string,
@@ -174,9 +123,6 @@ export function openTapStream(
   ).catch(handleUnknownOp('session-log'));
 }
 
-// Attaches to a session and waits for STARTED; the replay follows as
-// stdout. Throws AgentError (NO_SESSION) when there is no such session, and
-// AGENT_OUTDATED for an agent from before sessions.
 export function openAttachStream(
   vsockPath: string,
   request: Readonly<AgentAttachRequest>,
@@ -288,7 +234,6 @@ async function* readExecEvents(
   }
 }
 
-// a session from an agent without offsets replays as before
 function toSessionOutput(started: Started): SessionOutput | null {
   if (started.session === undefined) {
     return null;
@@ -315,8 +260,6 @@ function toSessionOutput(started: Started): SessionOutput | null {
   };
 }
 
-// a kind this impd does not know, or one without its fields, throws: the
-// data that follows has no place it can name
 function toResume(resume: Resume): ResumeResult {
   if (resume.kind === 'exact') {
     return { kind: 'exact' };
@@ -341,7 +284,6 @@ function toResume(resume: Resume): ResumeResult {
   throw new Error(`agent exec: a resume of kind ${JSON.stringify(resume.kind)} without its fields`);
 }
 
-// exitCode is null when a signal ended the process, as an API exit's code
 function toPrevious(previous: Previous): PreviousGeneration {
   const exit = previous.exit ?? { code: 0, signal: 0 };
 
@@ -352,9 +294,6 @@ function toPrevious(previous: Previous): PreviousGeneration {
   };
 }
 
-// The agent's error data in the API's shape: NO_SESSION's (coldBoots is
-// impd's to add) and INVALID_RESUME's. Data an older agent lacks, that lacks
-// its code's fields, or whose names lack their agent's form, goes.
 function toApiAgentError(error: unknown): unknown {
   if (!(error instanceof AgentError) || error.data === undefined) {
     return error;

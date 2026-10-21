@@ -24,7 +24,6 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imp here boots: a create needs one
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
@@ -47,7 +46,6 @@ test('it ends overlapping listener syncs with no listener for an imp the databas
 
   ctx.stack.defer(() => proxy.stop());
 
-  // a listener for `old`, then `old` goes and `new` takes its slot
   const old = await ctx.impd.imps.createImp({ name: 'old' });
 
   await proxy.syncListeners();
@@ -56,8 +54,6 @@ test('it ends overlapping listener syncs with no listener for an imp the databas
 
   const fresh = await ctx.impd.imps.createImp({ name: 'new' });
 
-  // the first pass reads `new`, then waits on stopping old's listener; the
-  // second reads after `new` is gone too
   const first = proxy.syncListeners();
 
   await removeImp(ctx.db, fresh.id);
@@ -162,7 +158,6 @@ test('it keeps the dashboard session cookie from an imp over HTTP', async () => 
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
 
-  // the imp's address is the upstream's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
   await proxy.syncListeners();
 
@@ -208,7 +203,6 @@ test('it keeps the dashboard session cookie from an imp over a WebSocket', async
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
 
-  // the imp's address is the upstream's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
   await proxy.syncListeners();
 
@@ -252,7 +246,6 @@ test('it relays WebSocket messages both ways', async () => {
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
 
-  // the imp's address is the upstream's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
   await proxy.syncListeners();
 
@@ -292,7 +285,6 @@ test.each([['/ui/'], ['/ui/assets/app.js'], ['/health'], ['/rpcx']])(
       return new Response('ok');
     };
 
-    // impd's API, as far as the proxy can tell
     const api = Bun.serve({
       port: 0,
       hostname: '127.0.0.1',
@@ -344,7 +336,6 @@ test('it hands the API a peer handle for the client’s address on a path that r
     return new Response('ok');
   };
 
-  // impd's API, as far as the proxy can tell
   const api = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
@@ -385,9 +376,6 @@ test('it hands the API a peer handle for the client’s address on a path that r
   expect(register).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(/127\.0\.0\.1$/v));
 });
 
-// A streamed build (docs/guides/images.md#build-an-image) lives on its
-// progress lines: the proxy in front of the API must pass each one on as it
-// comes, not hold the body until it ends.
 test('it passes the first line of a streamed API answer on while the API holds the next', async () => {
   const ctx = await setupTest();
 
@@ -474,7 +462,6 @@ test('it passes on an API answer that stays silent past Bun’s idle limit, wher
     },
   );
 
-  // the child goes first, before the origin it calls
   ctx.stack.defer(() => {
     child.kill();
   });
@@ -492,8 +479,6 @@ test('it passes on an API answer that stays silent past Bun’s idle limit, wher
   ]);
 }, 30_000);
 
-// fake timers run 400 s of an API that sends nothing: no timer on the
-// proxy's side ends the request; the test above covers Bun's native limit
 test('it passes on an API answer that comes after 400 s of fake time', async () => {
   const ctx = await setupTest();
 
@@ -624,9 +609,6 @@ test('it passes the rest of a streamed API answer on once the API sends it', asy
   expect(body).toBe('first\nsecond\n');
 });
 
-// What `tailscale serve` sends for a per-imp name (docs/guides/tailscale.md):
-// the service's Host, its own forwarding headers and the member's login. On
-// the imp's own port every one goes to the imp, never to impd's API.
 test.each([['box.tail1234.ts.net'], ['imp.example.com'], ['imp.tail1234.ts.net']])(
   'it sends a request on an imp’s port to the imp, not the API, for Host %s',
   async (host) => {
@@ -671,7 +653,6 @@ test.each([['box.tail1234.ts.net'], ['imp.example.com'], ['imp.tail1234.ts.net']
 
     const imp = await ctx.impd.imps.createImp({ name: 'box', httpPort: upstream.port });
 
-    // the imp's address is the upstream's
     await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
     await proxy.syncListeners();
 
@@ -719,7 +700,6 @@ test('it passes tailscale serve’s headers on to the imp, with the session and 
 
   const imp = await ctx.impd.imps.createImp({ name: 'box', httpPort: upstream.port });
 
-  // the imp's address is the upstream's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
   await proxy.syncListeners();
 
@@ -775,7 +755,6 @@ test('it routes the Host-named imp on the proxy port', async () => {
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
 
-  // the imp's address is the upstream's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
 
   const response = await fetch(`http://127.0.0.1:${String(proxy.port)}/`, {
@@ -988,7 +967,6 @@ test('it wakes a sleeping imp and says how long the wake took', async () => {
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
 
-  // the imp's address is the upstream's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
   await ctx.impd.imps.sleepImp('web');
   await proxy.syncListeners();
@@ -1026,7 +1004,6 @@ test('it stops the request to the imp when the client goes away', async () => {
     return new Response('late');
   };
 
-  // answers only once the request is aborted
   const upstream = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
@@ -1048,7 +1025,6 @@ test('it stops the request to the imp when the client goes away', async () => {
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
 
-  // the imp's address is the upstream's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
   await proxy.syncListeners();
 
@@ -1123,7 +1099,6 @@ test('it warns through its logger, naming the imp, when the imp’s server close
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
 
-  // the imp's address is the upstream's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
   await proxy.syncListeners();
 
@@ -1170,7 +1145,6 @@ test('it keeps serving an imp after the imp’s server closes a stream', async (
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
 
-  // the imp's address is the upstream's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
   await proxy.syncListeners();
 
@@ -1216,7 +1190,6 @@ test('it answers a 502 that names the port when nothing answers on the imp’s H
 
   ctx.stack.defer(() => proxy.stop());
 
-  // nothing listens on port 1 of loopback
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: 1 });
 
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
@@ -1245,7 +1218,6 @@ test('it answers a 502 when the imp’s WebSocket cannot be reached', async () =
 
   ctx.stack.defer(() => proxy.stop());
 
-  // nothing listens on port 1 of loopback
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: 1 });
 
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
@@ -1272,7 +1244,6 @@ test('it answers a 502 when the imp’s WebSocket cannot be reached', async () =
 test('it answers a 502 when the imp’s WebSocket does not open in time', async () => {
   const ctx = await setupTest();
 
-  // takes the connection and never answers the handshake
   const silent = Bun.listen({
     hostname: '127.0.0.1',
     port: 0,
@@ -1300,7 +1271,6 @@ test('it answers a 502 when the imp’s WebSocket does not open in time', async 
 
   const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: silent.port });
 
-  // the imp's address is the silent listener's
   await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
   await proxy.syncListeners();
 
@@ -1315,7 +1285,6 @@ test('it answers a 502 when the imp’s WebSocket does not open in time', async 
     },
   });
 
-  // the open deadline passes while the silent listener holds the handshake
   await waitFor(() => {
     expect(clock.readPendingMs()).toStrictEqual([50]);
   });
@@ -1334,7 +1303,6 @@ test('it answers a 502 when the imp’s WebSocket does not open in time', async 
 test('it warns once about a slot whose port another process holds', async () => {
   const ctx = await setupTest();
 
-  // a process that is not impd holds the port of the imp's slot
   const squatter = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
@@ -1370,7 +1338,6 @@ test('it warns once about a slot whose port another process holds', async () => 
 test('it warns again about a slot that could not listen once a new imp holds it', async () => {
   const ctx = await setupTest();
 
-  // a process that is not impd holds the port of the first imp's slot
   const squatter = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',

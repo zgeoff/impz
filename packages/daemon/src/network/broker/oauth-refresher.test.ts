@@ -21,8 +21,6 @@ import { createOAuthRefresher } from './oauth-refresher';
 import { buildPendingState, formatOAuthState, parseOAuthState } from './oauth-state';
 import { buildValueFile, createSecretFiles } from './secret-files';
 
-// Every token here is made up; the token endpoint answers through MSW.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -1256,7 +1254,6 @@ test('it caps the wait between transient errors at 30 minutes', async () => {
     now: () => clock.nowMs,
   });
 
-  // past the 1, 2, 4, 8 and 16 minute waits, each tick fails once more
   for (let index = 0; index < 6; index += 1) {
     await refresher.tick();
 
@@ -1514,7 +1511,6 @@ test('it treats a call that outlasts the timeout as transient', async () => {
     valueFile,
   });
 
-  // a deadline that has passed by the time the call is under way
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
@@ -1850,8 +1846,6 @@ test('it drops a result when the secret was deleted during the call', async () =
   const running = refresher.refresh('codex', true);
 
   await reached.promise;
-
-  // outside the lock, as a bug or a restore would
   await removeSecret(ctx.db, 'codex');
 
   gate.resolve();
@@ -2139,7 +2133,6 @@ test('it never writes an unsaved result for a secret deleted after the tick list
 
   rmSync(valuePath, { recursive: true });
 
-  // the tick's list of secrets is held until the row is gone
   gate.arm();
 
   const ticking = refresher.tick();

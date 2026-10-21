@@ -2,19 +2,18 @@ import { ptr } from 'bun:ffi';
 import { closeSync, openSync } from 'node:fs';
 import { readErrno, readLibc } from '../../platform/process/libc';
 
-// _IOWR('f', 11, struct fiemap): the 32-byte header; extents follow it
+// _IOWR('f', 11, struct fiemap): the kernel's 32-byte header, with the extents after it
 const FS_IOC_FIEMAP = 0xc0_20_66_0b;
 const HEADER_BYTES = 32;
 const EXTENT_BYTES = 56;
 
-// extents per call: the call holds the file's inode lock, which a running
-// guest's writes wait on
+// each FIEMAP call holds the file's inode lock, which a running guest's writes wait on
 const BATCH_EXTENTS = 1024;
 
 export const EXTENT_FLAGS = {
   last: 0x1,
 
-  // DELALLOC: the data has no block yet, so no physical address either
+  // the kernel gives a delayed allocation no block yet, so no physical address either
   delalloc: 0x4,
   shared: 0x20_00,
 } as const;
@@ -28,13 +27,10 @@ export interface Extent {
 
 interface ExtentRead {
   readonly extents: Extent[];
-
-  // false when the deadline cut the read short
   readonly isComplete: boolean;
 }
 
-// one FIEMAP call from `start`; never FIEMAP_FLAG_SYNC, which would flush the
-// guest's dirty pages first
+// FIEMAP_FLAG_SYNC stays off, because it flushes the guest's dirty pages first
 function readBatch(fd: number, start: number, buffer: Uint8Array): Extent[] {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 
@@ -63,8 +59,6 @@ function readBatch(fd: number, start: number, buffer: Uint8Array): Extent[] {
   });
 }
 
-// The file's extents, a batch at a time with the event loop free between
-// batches, until the last one or `deadline` (a Date.now time).
 export async function readExtents(path: string, deadline: number): Promise<ExtentRead> {
   const fd = openSync(path, 'r');
 

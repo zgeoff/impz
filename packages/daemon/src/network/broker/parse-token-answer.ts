@@ -24,7 +24,6 @@ export function parseTokenAnswer(status: number, text: string): Classified {
 
   const code = findErrorCode(body);
 
-  // error codes that mean the refresh token is dead
   const PERMANENT_CODES = new Set([
     'invalid_grant',
     'refresh_token_expired',
@@ -47,12 +46,9 @@ export function parseTokenAnswer(status: number, text: string): Classified {
   return parseTokens(body);
 }
 
-// the error of a token endpoint's answer: a string, or an object with a
-// `code` or an `error` string
 const ErrorObjectSchema = z.object({ code: z.string().nullish(), error: z.string().nullish() });
 const ErrorAnswerSchema = z.object({ error: z.union([z.string(), ErrorObjectSchema]) });
 
-// a code a log line and an API answer may carry: short and plain
 function findErrorCode(body: unknown): string | null {
   const parsed = ErrorAnswerSchema.safeParse(body);
 
@@ -84,8 +80,6 @@ function parseTokens(body: unknown): Classified {
   const refreshToken = parsed.data.refresh_token ?? null;
   const idToken = parsed.data.id_token ?? null;
 
-  // a token goes into a header or a file: one that could split a header is
-  // not one
   const unusable = [accessToken, refreshToken, idToken].some(
     (token) => token !== null && !isHeaderSafeToken(token),
   );
@@ -94,12 +88,10 @@ function parseTokens(body: unknown): Classified {
     return { kind: 'transient', error: 'invalid response' };
   }
 
-  // a 200 that carries no token refreshed nothing
   if (accessToken === null && refreshToken === null) {
     return { kind: 'transient', error: 'no token in the response' };
   }
 
-  // 0 or less is a token that is already due, not an unknown expiry
   const expiresIn = parsed.data.expires_in ?? null;
   const expiresInMs = expiresIn === null ? null : Math.max(0, expiresIn) * 1000;
 

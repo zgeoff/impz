@@ -5,11 +5,9 @@ import type { CommandRunner } from '../../../platform/process/run-command';
 export interface ZfsEntry {
   readonly name: string;
   readonly type: 'filesystem' | 'snapshot';
-
-  // a filesystem's: the snapshot it is a clone of
   readonly origin: string | null;
 
-  // a snapshot's: `zfs destroy -d` marked it, and it goes with its last clone
+  // ZFS destroys a snapshot that `zfs destroy -d` marked together with its last clone.
   readonly deferDestroy: boolean;
 }
 
@@ -18,7 +16,6 @@ interface MountOptions {
 }
 
 export interface ZfsCommands {
-  // every filesystem and snapshot under `root`, oldest first
   readonly list: (root: string) => Promise<ZfsEntry[]>;
   readonly create: (name: string, properties?: Readonly<Record<string, string>>) => Promise<void>;
   readonly snapshot: (name: string) => Promise<void>;
@@ -31,25 +28,14 @@ export interface ZfsCommands {
   readonly promote: (name: string) => Promise<void>;
   readonly destroy: (name: string) => Promise<void>;
   readonly destroyDeferred: (snapshot: string) => Promise<void>;
-
-  // a dataset and every snapshot on it; never one with clones
   readonly destroyRecursive: (name: string) => Promise<void>;
-
-  // what `zfs send` of the snapshot would write, in bytes; an estimate
   readonly estimateSend: (snapshot: string, base: string | null) => Promise<number>;
-
-  // bytes written to the dataset between the previous snapshot and this one
   readonly readWritten: (snapshot: string) => Promise<number>;
   readonly readUsage: (name: string) => Promise<{ used: number; available: number }>;
-
-  // every dataset and snapshot under root with its space properties
   readonly listSpace: (root: string) => Promise<ZfsSpace[]>;
-
-  // the userland version, such as 2.2.2-0ubuntu9
   readonly readVersion: () => Promise<string>;
 
-  // legacy mountpoints: impd mounts every dataset itself. A legacy mount
-  // ignores the readonly property, so a read-only mount says so itself.
+  // A legacy ZFS mount ignores the readonly property, so a read-only mount passes `ro` itself.
   readonly mount: (name: string, directory: string, options?: MountOptions) => Promise<void>;
   readonly unmount: (directory: string) => Promise<void>;
 }
@@ -57,23 +43,20 @@ export interface ZfsCommands {
 const LIST_COLUMNS = 'name,type,origin,defer_destroy';
 const SPACE_COLUMNS = 'name,used,referenced,usedbydataset,creation,clones';
 
-// A dataset's or snapshot's space. `used` of a dataset counts its snapshots;
-// of a snapshot, the blocks only it holds. A snapshot has no usedbydataset.
+// ZFS counts a dataset's snapshots in its `used`, and a snapshot's `used` holds only the blocks it
+// alone holds. A snapshot has no usedbydataset.
 export interface ZfsSpace {
   readonly name: string;
   readonly used: number;
   readonly referenced: number;
   readonly usedByDataset: number;
 
-  // `creation`, which `-p` gives in seconds since the epoch; null when unreadable
+  // `zfs list -p` gives `creation` in seconds since the epoch.
   readonly createdAt: Date | null;
-
-  // the clones of a snapshot: forks, a restore, a backup tree
   readonly clones: readonly string[];
 }
 
 export function createZfsCommands(run: CommandRunner): ZfsCommands {
-  // `run` gets the argv alone, as a stand-in records each call
   const readStdout = (argv: readonly string[]): Promise<string> =>
     runChecked(argv, {}, (command) => run(command));
 
@@ -159,7 +142,6 @@ export function createZfsCommands(run: CommandRunner): ZfsCommands {
   };
 }
 
-// `zfs send`'s arguments: the snapshot, incremental from `base` when given
 function buildSendArgs(snapshot: string, base: string | null): string[] {
   return base === null ? [snapshot] : ['-i', base, snapshot];
 }
@@ -168,15 +150,14 @@ export function buildSendArgv(snapshot: string, base: string | null): string[] {
   return ['zfs', 'send', ...buildSendArgs(snapshot, base)];
 }
 
-// Unmounted, as impd mounts every dataset itself; a clone stream names its
-// origin, as the source's guid alone could match the source's own snapshot
-// in the same pool
 export function buildReceiveArgv(target: string, origin: string | null): string[] {
+  // A clone stream names its origin, because the source's guid alone could match the source's own
+  // snapshot in the same pool.
   return ['zfs', 'recv', '-u', ...(origin === null ? [] : ['-o', `origin=${origin}`]), target];
 }
 
-// `zfs send -nP` ends with `size\t<bytes>`
 export function parseSendSize(stdout: string): number {
+  // `zfs send -nP` ends with `size\t<bytes>`
   const line = stdout.split('\n').find((row) => row.startsWith('size\t'));
 
   if (line === undefined) {
@@ -211,7 +192,6 @@ export function parseZfsSpace(stdout: string): ZfsSpace[] {
     });
 }
 
-// `zfs list -H` output: one tab-separated row per dataset, `-` for no value
 function buildPropertyArgs(properties: Readonly<Record<string, string>>): string[] {
   return Object.entries(properties).flatMap(([key, value]) => ['-o', `${key}=${value}`]);
 }
@@ -236,9 +216,9 @@ export function parseZfsList(stdout: string): ZfsEntry[] {
     });
 }
 
-// `zfs version` prints the userland first (zfs-2.2.2-0ubuntu9), then the
-// kernel module (zfs-kmod-2.2.2-0ubuntu9)
 export function parseZfsVersion(stdout: string): string {
+  // `zfs version` prints the userland first (zfs-2.2.2-0ubuntu9), then the kernel module
+  // (zfs-kmod-2.2.2-0ubuntu9).
   const userland = /^zfs-(?<version>\d+\.\d+\S*)$/mu.exec(stdout);
   const version = userland?.groups?.['version'];
 
@@ -249,15 +229,12 @@ export function parseZfsVersion(stdout: string): string {
   return version;
 }
 
-// 2.2.2-0ubuntu9 → { major: '2', minor: '2' }
 export function parseZfsRelease(version: string): { major: string; minor: string } {
   const found = /^(?<major>\d+)\.(?<minor>\d+)/u.exec(version.trim())?.groups;
 
   return { major: found?.['major'] ?? version.trim(), minor: found?.['minor'] ?? '' };
 }
 
-// /proc/self/mounts → the ZFS dataset mounted on each directory. A space in a
-// path is written \040.
 export function parseZfsMounts(mounts: string): Map<string, string> {
   return new Map(
     parseMounts(mounts)
@@ -276,7 +253,6 @@ function parseBytes(value: string): number {
   return bytes;
 }
 
-// only orphans read it, so a value it cannot read never fails a usage pass
 function parseEpochSeconds(value: string): Date | null {
   const seconds = Number(value);
 
@@ -289,12 +265,10 @@ export function getSnapshotId(name: string): string {
 
 export const CHECKPOINT_SNAPSHOT = /@cp-[^@]+$/u;
 
-// `tank/imp/disks/<id>` → `<id>`
 export function getChildId(name: string, parent: string): string {
   return name.slice(parent.length + 1);
 }
 
-// the direct child filesystems of `parent`
 export function listChildren(entries: readonly ZfsEntry[], parent: string): ZfsEntry[] {
   return entries.filter(
     (entry) =>
@@ -304,12 +278,12 @@ export function listChildren(entries: readonly ZfsEntry[], parent: string): ZfsE
   );
 }
 
-// Checkpoint ids are global, so the snapshot is found by name wherever it is:
-// a restore or a promote moves it to another dataset.
 export function listCheckpointSnapshots(
   entries: readonly ZfsEntry[],
   checkpointId: string,
 ): ZfsEntry[] {
+  // A restore or a ZFS promote moves a checkpoint's snapshot to another dataset, so it is found by
+  // name wherever it is.
   return entries.filter(
     (entry) => entry.type === 'snapshot' && getSnapshotId(entry.name) === checkpointId,
   );

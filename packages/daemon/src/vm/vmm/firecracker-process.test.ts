@@ -39,7 +39,6 @@ test('#listFirecrackers finds a live firecracker with the socket it serves and i
 
   const found = listFirecrackers();
 
-  // whom it runs as, which a jailed process cannot forge as its argv
   expect(found).toContainEqual({
     pid: child.pid,
     apiSocket,
@@ -212,7 +211,7 @@ test('#buildSpawnArgv puts the merge wrapper before the jailer, so the chroot ne
   expect(buildSpawnArgv(jailer, null, 'ksm-exec')).toStrictEqual(['setsid', 'ksm-exec', ...jailer]);
 });
 
-// /usr/bin/env stands in for ksm-exec: it execs the rest of its argv
+// /usr/bin/env stands in for ksm-exec, because it too execs the rest of its argv
 test('#buildSpawnArgv records the pid in the cgroup and execs the wrapper and the command', () => {
   const ctx = setupTest();
   const procs = join(ctx.directoryPath, 'cgroup.procs');
@@ -237,7 +236,6 @@ test('#startFirecracker resolves with the pid and writes it to the pid file once
   const ctx = setupTest();
   const apiSocket = join(ctx.directoryPath, 'api.sock');
 
-  // stands in for Firecracker: it makes its API socket path, then runs on
   const pid = await startFirecracker(['sh', '-c', 'touch "$0"; exec sleep 30', apiSocket], {
     apiSocket,
     vsockSocket: join(ctx.directoryPath, 'vsock.sock'),
@@ -293,7 +291,8 @@ test('#isImpVm refuses a VM of another uid in another cgroup', () => {
 });
 
 test('#probeJailedFirecracker finds a process run with --id', async () => {
-  // `; true` keeps bash from execing sleep in place, so its argv keeps --id
+  // bash execs a lone last command in place; `; true` stops that, so the argv
+  // keeps --id
   const child = Bun.spawn(['bash', '-c', 'sleep 30; true', 'x', '--id', 'i1']);
 
   onTestFinished(() => {

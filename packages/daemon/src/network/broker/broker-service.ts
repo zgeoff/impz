@@ -59,19 +59,11 @@ import { removeStaleSecretFiles } from './remove-stale-secret-files';
 import { createSecretFiles } from './secret-files';
 import type { SecretFiles } from './secret-files';
 
-// The credential broker (docs/guides/connectors.md): grants for the API, the
-// exec variables that point a guest's tools at it, and the secret store and
-// request path it puts together.
-
-// what a fork's copy of its source's grants did: the grants it skipped, and
-// a message when it copied none because the copy failed as a whole
 interface ForkGrantsReport {
   readonly notCopied: readonly GrantNotCopied[];
   readonly error: string | null;
 }
 
-// an imp by id, not by name, which another imp may take meanwhile; the
-// name is for the log
 interface ForkEnd {
   readonly id: string;
   readonly name: string;
@@ -81,13 +73,9 @@ export interface Broker {
   readonly addSecret: (input: AddSecretInput) => Promise<SecretAdded>;
   readonly listSecrets: () => Promise<Secret[]>;
 
-  // forces one refresh of an oauth secret and answers after it ends
   readonly refreshSecret: (name: string) => Promise<Secret>;
   readonly deleteSecret: (name: string) => Promise<void>;
 
-  // with an authority, the token must still exist and the secret still be
-  // the one its list named (docs/guides/tokens.md#granting-secrets); a
-  // filter replaces the grant's own, and none keeps it
   readonly addGrant: (
     impName: string,
     secretName: string,
@@ -101,48 +89,34 @@ export interface Broker {
   ) => Promise<void>;
   readonly listGrants: (impName: string) => Promise<string[]>;
 
-  // the same, each with its filter
   readonly listGrantDetails: (impName: string) => Promise<Grant[]>;
 
-  // one imp's, or every imp's; only imps within the patterns when there
-  // are any
   readonly listAudit: (
     impName: string | null,
     limit: number,
     patterns: readonly string[] | null,
   ) => Promise<AuditEntry[]>;
 
-  // the requests it refused, by the same rules as listAudit
   readonly listRefused: (
     impName: string | null,
     limit: number,
     patterns: readonly string[] | null,
   ) => Promise<RefusedRequest[]>;
 
-  // as db createForkGrants; a skip or a failure is logged and reported,
-  // not thrown, as the fork exists by then
   readonly createForkGrants: (
     source: Readonly<ForkEnd>,
     fork: Readonly<ForkEnd>,
     authority: Readonly<ForkAuthority> | null,
   ) => Promise<ForkGrantsReport>;
 
-  // the variables for an exec in this imp: none without a grant, or when
-  // the CA could not be put in this boot of the guest
   readonly readExecEnv: (imp: ImpRecord, vsockPath: string) => Promise<BrokerExecEnv>;
 
-  // drops terminators no grant covers and forgets destroyed imps; logs a
-  // failure rather than throwing
   readonly applyGrants: () => Promise<void>;
 
-  // true when a grant of the imp covers the host
   readonly isGranted: (impId: string, host: string) => Promise<boolean>;
 
-  // ends the imp's plain tunnels to hosts `keep` rejects
   readonly closeTunnels: (impId: string, keep: (host: string) => boolean) => void;
 
-  // opens the front port on every address; 0 picks a free port, which it
-  // returns
   readonly listen: (port: number) => Promise<number>;
   readonly stop: () => Promise<void>;
 }
@@ -152,26 +126,19 @@ export interface BrokerDeps {
   readonly db: ImpDatabase;
   readonly log: (message: string) => void;
 
-  // tests stand in for the guest install and for the network
   readonly installBundle?: InstallBundle;
   readonly fetch?: UpstreamFetch;
   readonly oauthFetch?: OAuthFetch;
   readonly now?: () => number;
 
-  // false in tests that run no refresh timer
   readonly runOAuthTimer?: boolean;
   readonly resolveTunnelTarget?: (host: string, mode: EgressMode) => Promise<string>;
   readonly dialTunnel?: (address: string, port: number) => Socket;
 
-  // the IPv6 impd resolved at start; without it, tunnels dial IPv4 only
   readonly ipv6?: Ipv6Plan | null;
 
-  // tests hold a request between its rule read and its value read, and
-  // stand in for the value files
   readonly afterRuleRead?: () => Promise<void>;
 
-  // tests act between a grant call's access check and its transaction: a
-  // grant, a revoke, or a fork's copy runs this first
   readonly beforeGrantWrite?: () => Promise<void>;
   readonly secretFiles?: SecretFiles;
 }
@@ -182,8 +149,6 @@ const FORK_SKIP_CAUSES: Readonly<Record<GrantNotCopied['reason'], string>> = {
   'no-secret': 'the secret is gone',
 };
 
-// what a fork answers when its copy made no grant at all; the cause of a
-// failure stays in impd's log
 const FORK_TOKEN_GONE =
   "the token behind this fork was removed, so it got none of the source's grants";
 
@@ -210,7 +175,6 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     log,
   );
 
-  // a stop, sleep or halt ends the imp's boot, even if its pid comes back
   const unwatch = db.writes.subscribe((write) => {
     if (write.kind === 'added' || write.kind === 'changed') {
       trust.observe(write.imp);
@@ -256,7 +220,6 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     refresher.start();
   }
 
-  // never rejects: it runs from a timer and from imp changes
   const applyGrants = async (): Promise<void> => {
     try {
       const [granted, imps] = await Promise.all([listAllGrantedRules(db), listImps(db)]);
@@ -282,8 +245,6 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     addGrant: async (impName, secretName, authority, filter) => {
       const imp = await requireImp(impName);
 
-      // a send carries the grants it read at its start; a target's staged
-      // imp takes the ones the stream named
       if (imp.moveState === 'sending' || imp.moveState === 'moved') {
         throw buildMovingError(impName);
       }
@@ -436,13 +397,10 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
   };
 }
 
-// the token behind the call was removed after its access check
 function buildTokenGoneError() {
   return new ORPCError('UNAUTHORIZED', { message: 'the token behind this call was removed' });
 }
 
-// the call came through a grantable list whose entry is stale: the secret
-// was deleted, and maybe made again, since the access check
 function buildStaleError(secretName: string) {
   return buildForbiddenError(
     `secret ${secretName} is not one this caller may grant`,

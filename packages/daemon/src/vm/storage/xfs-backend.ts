@@ -35,21 +35,15 @@ import type {
   SweepResult,
 } from './storage-backend';
 
-// a usage pass stops here and reports what it read (fiemap.ts)
 const USAGE_DEADLINE_MS = 20_000;
-
-// an image directory being written, renamed into place once complete; a
-// hidden name, as image-service's `.build-` work directories
 const STAGING_PREFIX = '.new-';
 
-// what no row names, and the directory that holds it
 interface OrphanEntry {
   readonly kind: 'imp' | 'image' | 'checkpoint';
   readonly id: string;
   readonly directory: string;
 }
 
-// what a sweep removes, and the orphans it keeps
 interface LeftoverPlan {
   readonly dropped: DroppedStorage[];
   readonly orphans: OrphanEntry[];
@@ -57,16 +51,9 @@ interface LeftoverPlan {
 
 interface XfsBackendDeps {
   readonly dataDir: string;
-
-  // a reflink clone by default; tests on a non-XFS tmpdir copy instead
   readonly cloneFile?: (source: string, target: string) => Promise<void>;
-
-  // Space start allocates to <dataDir>/reserve, so a destroy still runs on a
-  // full filesystem; removing the file frees it. None by default.
   readonly reserveFileBytes?: number;
   readonly log?: (message: string) => void;
-
-  // FIEMAP by default; tests cut a pass short with their own
   readonly readFileExtents?: typeof readExtents;
 }
 
@@ -75,8 +62,6 @@ interface OwnedPath {
   readonly path: string;
 }
 
-// Every disk, checkpoint and fork is a reflink clone of another file
-// (docs/architecture/storage/storage.md).
 export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
   const cloneFile = deps.cloneFile ?? createReflinkClone;
   const log = deps.log ?? printLog;
@@ -111,8 +96,6 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     try {
       await write(staged);
 
-      // impd before the storage backends wrote config.json first, so a
-      // crash could leave the directory with no rootfs
       if (!existsSync(paths.rootfs)) {
         rmSync(paths.directory, { recursive: true, force: true });
       }
@@ -125,9 +108,6 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
 
   const backup = buildBackupPaths(deps.dataDir);
 
-  // What the database does not name: a crash leftover goes, an orphan stays
-  // unless `isOrphans`. A lost database would make every imp an orphan
-  // (docs/architecture/storage/disk-space.md#the-sweep).
   const planLeftovers = (live: LiveStorage, isOrphans: boolean): LeftoverPlan => {
     const liveDigests = new Set(
       [...live.imageDigests].map((digest) =>
@@ -137,8 +117,6 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
 
     const impIds = listEntries(buildImpsDir(deps.dataDir));
 
-    // a named imp's checkpoint with no row is an orphan: an older database
-    // lacks the newer rows
     const checkpoints = impIds
       .filter((impId) => live.impIds.has(impId))
       .flatMap((impId) => {
@@ -152,7 +130,6 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
       })
       .filter((checkpoint) => !live.checkpointIds.has(checkpoint.id));
 
-    // hidden entries are image builds in flight, which only start drops
     const unknownImages = listEntries(buildImagesDir(deps.dataDir))
       .filter((name) => !name.startsWith('.') && !liveDigests.has(name))
       .map((name) => ({
@@ -169,8 +146,6 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
         directory: resolveImpPaths(impId).directory,
       }));
 
-    // only a directory with no file in it is provably nothing; anything
-    // else may be what an imp needs to come back
     const unknown: OrphanEntry[] = [...unknownImages, ...unknownImps, ...checkpoints];
     const probeDropped = (entry: OrphanEntry) => isOrphans || !probeHoldingFiles(entry.directory);
 
@@ -180,7 +155,6 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     };
   };
 
-  // the size, age and checkpoints of an orphan, for the log and `impz gc`
   const readOrphan = (orphan: OrphanEntry): OrphanStorage => {
     const snapshots =
       orphan.kind === 'imp' ? listEntries(resolveImpPaths(orphan.id).checkpointsDir) : [];
@@ -207,8 +181,6 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     }
   };
 
-  // Every file that holds disk blocks, with whoever removing it frees them.
-  // The backup tree's reflinks hold blocks between runs, so it is an owner.
   const listImpFiles = (impId: string) => {
     const paths = resolveImpPaths(impId);
 
@@ -221,8 +193,7 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
       .map((path) => ({ owner: `imp:${impId}`, path }));
   };
 
-  // the owners besides imps; the backup tree's reflinks hold blocks between
-  // runs, so it is one
+  // the backup tree's reflink copies hold blocks between runs, so the tree counts as an owner
   const listOtherFiles = () => {
     const images = listEntries(buildImagesDir(deps.dataDir))
       .filter((name) => !name.startsWith('.'))
@@ -236,11 +207,8 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     return [...images, ...tree].filter((file) => existsSync(file.path));
   };
 
-  // the imp a pass cut short stopped at; the next pass starts there
   const usageState = { resumeImpId: null as string | null };
 
-  // made once, and again at a start after someone removed it to free space,
-  // when twice its size is free
   const setupReserveFile = async (): Promise<void> => {
     const bytes = deps.reserveFileBytes ?? 0;
     const file = join(deps.dataDir, 'reserve');
@@ -281,8 +249,6 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
   return {
     kind: 'xfs',
     readWarnings: () => [],
-
-    // an image build that a crash cut short leaves its staging dir
     start: (live) => {
       const imagesDir = buildImagesDir(deps.dataDir);
 
@@ -299,7 +265,7 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     dropUnnamed: (live, options) => Promise.resolve(removeUnnamed(live, options)),
     resolveImpPaths,
 
-    // the files themselves: the fence keeps every writer off them
+    // sends the files in place, since the move's fence keeps every writer off them
     openMoveSource: (impId, checkpointIds, mode) => {
       if (mode !== 'files') {
         return Promise.reject(new Error('xfs: a move from an XFS host sends files'));
@@ -365,8 +331,7 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
       try {
         await cloneFile(resolveImpPaths(impId).disk, disk);
 
-        // allocated bytes of the clone; the extents it shares with the imp
-        // disk count in full, so this is the most it can cost, not its cost
+        // a reflink clone's blocks count the extents it shares in full, so this is an upper bound
         return statSync(disk).blocks * 512;
       } catch (error) {
         rmSync(dirname(disk), { recursive: true, force: true });
@@ -395,7 +360,6 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
 
         return halted;
       } finally {
-        // gone after the swap; a clone or halt that failed leaves it behind
         rmSync(staged, { force: true });
       }
     },
@@ -409,9 +373,6 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
 
     stop: () => Promise.resolve(),
 
-    // The images and the backup tree first, since every imp's shared bytes
-    // need them; then the imps, from where the last pass stopped. An imp
-    // the pass did not finish is left out, and the cache keeps its last count.
     measureUsage: async (imps) => {
       const deadline = Date.now() + USAGE_DEADLINE_MS;
       const owned: OwnedFile[] = [];
@@ -477,17 +438,15 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
   };
 }
 
-// sorted, so a sweep lists the same order on every filesystem
+// readdir order differs between filesystems, so a sweep sorts to list the same order on each
 function listEntries(directory: string): string[] {
   return existsSync(directory) ? readdirSync(directory).toSorted() : [];
 }
 
-// a kind and id alone, without the directory
 function toStorage(entry: OrphanEntry): DroppedStorage {
   return { kind: entry.kind, id: entry.id };
 }
 
-// a file removed since the listing holds nothing
 async function readOwnedExtents(
   readFileExtents: typeof readExtents,
   path: string,

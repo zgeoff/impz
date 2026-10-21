@@ -1,5 +1,3 @@
-// Plain HTML answers for requests the proxy cannot forward.
-
 const STATUS_TITLES: Readonly<Record<number, string>> = {
   401: 'Sign in to this imp',
   404: 'No such imp',

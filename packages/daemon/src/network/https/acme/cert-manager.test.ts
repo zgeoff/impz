@@ -372,7 +372,6 @@ test('it replaces a certificate for another domain', async () => {
     notAfter: new Date('2030-04-10T00:00:00Z'),
   });
 
-  // still valid for months at the manager's now: only its names are wrong
   const other = await createMockCertificate({
     names: ['other.test', '*.other.test'],
     notBefore: new Date('2030-01-01T00:00:00Z'),
@@ -405,7 +404,6 @@ test('it loads no certificate it cannot read, and logs why', async () => {
 
   const certificate = await createMockCertificate();
 
-  // a certificate block whose body is not a certificate
   await mkdir(join(ctx.directoryPath, 'tls'), { recursive: true });
 
   await writeFile(
@@ -517,8 +515,6 @@ test('it backs off when the DNS token file holds no token', async () => {
 
   await writeFile(tokenPath, '');
 
-  // the issuer reads the token for each DNS call, as the Cloudflare
-  // provider does
   const manager = createCertManager({
     domain: 'imp.test',
     store: ctx.store,
@@ -570,7 +566,6 @@ test('it uses a token put in place once the backoff has passed, and never logs i
 
   await manager.renew();
 
-  // the operator drops the token in place; the backoff still holds
   await writeFile(tokenPath, 'cf-new-token\n');
 
   await manager.renew();

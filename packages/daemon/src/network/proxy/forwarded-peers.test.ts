@@ -115,8 +115,6 @@ test('#createForwardedPeers evicts the oldest handle when a handle is made with 
   expect(peers.take(oldest)).toBeNull();
 });
 
-// the clock steps back after the new handle, so only a handle the store no
-// longer holds can read as gone: take alone refuses an expired one
 test('#createForwardedPeers drops an expired handle when it makes a new one', () => {
   const clock = { now: 0 };
   const peers = createForwardedPeers(() => clock.now);

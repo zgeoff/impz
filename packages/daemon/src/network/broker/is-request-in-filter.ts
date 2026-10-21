@@ -4,9 +4,8 @@ import type { GrantFilter } from '@impz/api';
 // segment break after the filter matched the path as one segment
 const ENCODED_SEPARATOR = /%2f|%5c/iu;
 
-// True when a grant's filter lets the request have the credential. The path
-// is the URL parser's pathname, which the broker sends upstream, so it holds
-// no dot segments; patterns match it as GrantFilterSchema describes.
+// `path` must be the URL parser's pathname, the one sent upstream, so that it
+// holds no dot segments
 export function isRequestInFilter(filter: GrantFilter, method: string, path: string): boolean {
   if (filter.methods !== undefined && !filter.methods.includes(method)) {
     return false;
@@ -25,7 +24,6 @@ export function isRequestInFilter(filter: GrantFilter, method: string, path: str
   return filter.paths.some((pattern) => isPathMatch(pattern.split('/'), segments));
 }
 
-// both start with the empty segment before the first slash
 function isPathMatch(pattern: readonly string[], segments: readonly string[]): boolean {
   const isRest = pattern.at(-1) === '**';
   const fixed = isRest ? pattern.slice(0, -1) : pattern;

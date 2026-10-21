@@ -91,7 +91,8 @@ test('#checkMergeableMappings finds no guest memory in a large mapping that is n
   expect(checkMergeableMappings(smaps.join('\n'))).toBeNull();
 });
 
-// as CI's 6.17 showed a template restore: the mem file in pieces, none of 64 MiB
+// Linux 6.17 in CI mapped a template restore's mem file in pieces, none of
+// them 64 MiB
 test('#checkMergeableMappings checks the guest memory of a restore, split into small mappings, whole', () => {
   const smaps = [
     buildStubSmapsMapping({
@@ -238,7 +239,6 @@ test('#checkGuestMemoryMergeable answers from ksm_merge_any when the kernel has 
     'ksm_rmap_items 0\nksm_merge_any: yes\n',
   );
 
-  // smaps that says otherwise: ksm_merge_any wins
   writeFileSync(
     join(ctx.directoryPath, '42', 'smaps'),
     buildStubSmapsMapping({ start: 0x7f_00_00_00_00_00, mib: 512, perms: 'rw-p', flags: '' }),

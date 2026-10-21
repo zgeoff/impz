@@ -2,8 +2,6 @@ import * as z from 'zod';
 import type { OAuthCredential } from './oauth-credential';
 
 const TAILSCALE_API = 'https://api.tailscale.com/api/v2';
-
-// a token's last minute is not worth a request that may outlast it
 const TOKEN_MARGIN_MS = 60_000;
 
 const ServiceSchema = z
@@ -20,7 +18,6 @@ export type TailnetService = z.infer<typeof ServiceSchema>;
 const ServiceListSchema = z.object({ vipServices: z.array(ServiceSchema).nullable().optional() });
 const TokenSchema = z.object({ access_token: z.string(), expires_in: z.number().positive() });
 
-// what the definition of one imp's service says
 export interface ServiceDefinition {
   readonly name: string;
   readonly comment: string;
@@ -28,17 +25,14 @@ export interface ServiceDefinition {
   readonly tags: readonly string[];
 }
 
-// The Services part of the Tailscale API, as the OAuth client: its
-// `services` scope reaches every service on the tailnet, so the caller
-// decides which ones are this host's.
+// the OAuth client's `services` scope reaches every service on the tailnet,
+// so the caller decides which ones are this host's
 export interface ServicesApi {
   readonly listServices: () => Promise<readonly TailnetService[]>;
 
-  // null when no service has the name
   readonly readService: (name: string) => Promise<TailnetService | null>;
   readonly writeService: (definition: ServiceDefinition) => Promise<void>;
 
-  // a service that is already gone counts as deleted
   readonly removeService: (name: string) => Promise<void>;
 }
 
@@ -54,7 +48,6 @@ class TailscaleApiError extends Error {
 }
 
 interface ServicesApiOptions {
-  // read on each new token, so a rotated secret is picked up
   readonly readCredential: () => OAuthCredential;
   readonly apiUrl?: string;
   readonly now?: () => number;
@@ -65,7 +58,6 @@ export function createServicesApi(options: ServicesApiOptions): ServicesApi {
   const now = options.now ?? Date.now;
   const token: { value: string | null; expiresAt: number } = { value: null, expiresAt: 0 };
 
-  // client credentials, asking for the services scope and nothing more
   const resolveToken = async (): Promise<string> => {
     if (token.value !== null && now() < token.expiresAt - TOKEN_MARGIN_MS) {
       return token.value;
@@ -121,7 +113,6 @@ export function createServicesApi(options: ServicesApiOptions): ServicesApi {
       token.value = null;
     }
 
-    // the method, the path and Tailscale's message only: the token is a header
     if (!response.ok) {
       throw new TailscaleApiError(
         `Tailscale ${method} ${path}: ${String(response.status)} ${readErrorText(text)}`,

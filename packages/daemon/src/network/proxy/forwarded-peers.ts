@@ -2,27 +2,21 @@ import { randomBytes } from 'node:crypto';
 import { EXEC_PATH, MCP_PATH, TUNNEL_PATH } from '@impz/api';
 import { createTtlCache } from '../../platform/process/ttl-cache';
 
-// The wake proxy hands impd's API the client's address in-process, not in a
-// forwarded header a client could write: it sends a random handle that the
-// API redeems once, from a loopback peer only (docs/guides/tokens.md).
+// a random handle the API redeems once, not the address itself, which any
+// client could write into a forwarded header
 export const PEER_HEADER = 'x-imp-peer';
 const HANDLE_TTL_MS = 30_000;
-
-// a flood of requests evicts its own oldest handles
 const MAX_HANDLES = 1024;
 
 export interface ForwardedPeers {
-  // a handle for the client's address, for one request
   readonly register: (address: string) => string;
 
-  // the address behind a handle, once; null for an unknown or used one
   readonly take: (handle: string) => string | null;
 }
 
 export function createForwardedPeers(now: () => number): ForwardedPeers {
-  // each handle's address. A handle is gone at 30 s, where lru-cache keeps
-  // an entry until its age passes the ttl, hence one ms less; a set past
-  // MAX_HANDLES evicts the oldest, as no read touches recency
+  // lru-cache keeps an entry until its age passes the ttl, hence one ms less;
+  // no read touches recency, so a full cache evicts the oldest handle
   const handles = createTtlCache<string, string>({
     max: MAX_HANDLES,
     ttlMs: HANDLE_TTL_MS - 1,
@@ -49,8 +43,6 @@ export function createForwardedPeers(now: () => number): ForwardedPeers {
   };
 }
 
-// The paths where the API resolves a caller, so where a handle is redeemed;
-// a handle for any other path would only crowd out live ones
 export function isCallerPath(pathname: string): boolean {
   return (
     pathname.startsWith('/rpc/') ||
@@ -60,8 +52,6 @@ export function isCallerPath(pathname: string): boolean {
   );
 }
 
-// The client's address: the socket's own, or, when the socket is the wake
-// proxy on loopback, the one it handed over
 export function redeemPeerAddress(
   request: Request,
   socketAddress: string | null,

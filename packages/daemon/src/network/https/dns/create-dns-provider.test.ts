@@ -65,7 +65,6 @@ test('it sends a Cloudflare provider’s calls to the API the config names', asy
     () => {},
   );
 
-  // no zone answers, so the call fails once it has asked
   await expect(provider.setA('imp.test', '100.64.0.7')).toReject();
 
   expect(received).toHaveBeenCalledWith(

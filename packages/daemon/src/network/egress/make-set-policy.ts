@@ -9,7 +9,6 @@ import { buildMovingError, buildNotFoundError } from '../../surface/api-errors';
 import { buildAllowRules, isNameAllowed, isTunnelAllowed } from './egress-rules';
 import type { EgressSets } from './egress-sets';
 
-// what a policy change needs of the rest of the egress service
 interface SetPolicyDeps {
   readonly db: ImpDatabase;
   readonly mutex: KeyedMutex;
@@ -26,11 +25,8 @@ interface SetPolicyDeps {
 export function makeSetPolicy(
   deps: SetPolicyDeps,
 ): (name: string, policy: EgressPolicy) => Promise<EgressPolicy> {
-  // one change at a time, slots included, so a rollback never undoes a
-  // later change
   return (name, policy) =>
     deps.mutex.runExclusive('policy', async () => {
-      // the routes a public policy needs are read with the table, below
       deps.requireFirewall(policy);
 
       const imp = await readImpByName(deps.db, name);
@@ -41,7 +37,6 @@ export function makeSetPolicy(
         throw buildNotFoundError('imp', name);
       }
 
-      // a send carries the policy it read at its start
       if (imp.moveState !== null) {
         throw buildMovingError(name);
       }
@@ -56,9 +51,6 @@ export function makeSetPolicy(
         deps.sets.clear(imp.slot);
       }
 
-      // the row goes back, and the table is built again from it, so nft
-      // and the database agree whichever table nft last took; a public
-      // policy whose routes could not be read goes back too
       try {
         await deps.applyTable();
 
@@ -71,9 +63,6 @@ export function makeSetPolicy(
         throw error;
       }
 
-      // the guest's own flows the new policy may deny, and the broker's
-      // tunnels, which conntrack does not see. A tunnel is kept by its
-      // host, and one that becomes public was dialled under fewer checks.
       const isNewlyPublic =
         EGRESS_MODE_TRAITS[policy.mode].isPublic && !EGRESS_MODE_TRAITS[previous.mode].isPublic;
 

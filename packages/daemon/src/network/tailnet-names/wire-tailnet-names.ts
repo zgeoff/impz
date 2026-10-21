@@ -24,11 +24,9 @@ interface BuildTailnetNamesOptions {
   readonly readTailscale: () => Promise<TailscaleStatus>;
   readonly log: (message: string) => void;
 
-  // runs `tailscale serve`; runCommand by default
   readonly runCommand?: CommandRunner | undefined;
 }
 
-// Per-imp names from impd's config, with the real API and tailscaled.
 export function wireTailnetNames(options: BuildTailnetNamesOptions): TailnetNames {
   const names = options.names;
 
@@ -52,8 +50,6 @@ export function wireTailnetNames(options: BuildTailnetNamesOptions): TailnetName
   });
 }
 
-// Under the imp's lock: a create or destroy of the name finishes first. An
-// imp the target holds a verified copy of is not this host's any more.
 export function createPresenceCheck(
   imps: Pick<Imps, 'lockImp'>,
   db: ImpDatabase,

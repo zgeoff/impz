@@ -3,15 +3,11 @@ import { join } from 'node:path';
 import { readPidfdLibc } from '../../platform/process/libc';
 import { stopPid } from '../../platform/process/proc';
 
-// What /proc says about who runs a process: its uids and its cgroup. A jailed
-// process can rewrite its argv, but not these.
-
 interface ProcessUids {
   readonly real: number;
   readonly effective: number;
 }
 
-// the real and effective uid; null when the process is gone
 function readProcessUids(pid: number, procRoot = '/proc'): ProcessUids | null {
   try {
     const status = readFileSync(join(procRoot, String(pid), 'status'), 'utf8');
@@ -25,15 +21,12 @@ function readProcessUids(pid: number, procRoot = '/proc'): ProcessUids | null {
   }
 }
 
-// the one uid a process runs as, real and effective; null when they differ
-// or the process is gone
 export function readProcessUid(pid: number, procRoot = '/proc'): number | null {
   const uids = readProcessUids(pid, procRoot);
 
   return uids !== null && uids.real === uids.effective ? uids.real : null;
 }
 
-// the cgroup v2 path of a process, such as /imps/<id>; null when gone
 export function readProcessCgroup(pid: number, procRoot = '/proc'): string | null {
   try {
     const text = readFileSync(join(procRoot, String(pid), 'cgroup'), 'utf8');
@@ -44,7 +37,6 @@ export function readProcessCgroup(pid: number, procRoot = '/proc'): string | nul
   }
 }
 
-// whether `pid` runs as `uid`, by its real or its effective uid
 export function probeProcessOfUid(pid: number, uid: number): boolean {
   const uids = readProcessUids(pid);
 
@@ -58,7 +50,7 @@ interface Pidfd {
   readonly sendSignal: (fd: number, signal: number) => number;
 }
 
-// glibc's pidfd wrappers (2.36+); null where they or the syscalls are missing
+// glibc has the pidfd wrappers from 2.36
 function loadPidfd(): Pidfd | null {
   const libc = readPidfdLibc();
 
@@ -89,13 +81,11 @@ function loadPidfd(): Pidfd | null {
 
 let pidfd: Pidfd | null | undefined;
 
-// SIGKILL to `pid` only while it runs as `uid`, through a pidfd: the uid read
-// once it is open is that of the process the signal reaches. Without pidfd,
-// the uid is read just before kill(), and a reused pid can still be hit.
 export function stopProcessOfUid(pid: number, uid: number): void {
   pidfd ??= loadPidfd();
 
   if (pidfd === null) {
+    // Without a pidfd, a reused pid can still be hit.
     if (probeProcessOfUid(pid, uid)) {
       stopPid(pid);
     }
@@ -103,9 +93,9 @@ export function stopProcessOfUid(pid: number, uid: number): void {
     return;
   }
 
+  // A pidfd pins the process, so the uid read after the open belongs to the one the signal reaches.
   const fd = pidfd.open(pid);
 
-  // gone already
   if (fd < 0) {
     return;
   }

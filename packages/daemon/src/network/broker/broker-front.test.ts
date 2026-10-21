@@ -10,12 +10,7 @@ import type { BrokerPeer } from '../../platform/db/read-broker-peer';
 import { startBrokerFront } from './broker-front';
 import { TunnelRefusedError, resolveTunnelTarget } from './tunnel-target';
 
-// The front on 127.0.0.0/16: slot 0's gateway is 127.0.0.1 and its guest
-// 127.0.0.2, so a socket bound to 127.0.0.2 is that guest.
-
 function setupTest() {
-  // the front and the guests that dial it: a guest is deferred after the
-  // front, so it closes first
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -69,7 +64,6 @@ test('it cuts off a client whose time to finish its head runs out mid-head', asy
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
     log: () => {},
 
-    // the imp is found and the head is being read once the deadline starts
     startHeadDeadline: () => {
       reading.resolve();
 
@@ -539,7 +533,6 @@ test('it cuts the host of a refused audit row at 253 characters', async () => {
     address: '127.0.0.2',
   });
 
-  // a bracketed host has no length bound in the head
   guest.write(`CONNECT [${'a'.repeat(300)}]:443 HTTP/1.1\r\n\r\n`);
 
   await guest.reply;

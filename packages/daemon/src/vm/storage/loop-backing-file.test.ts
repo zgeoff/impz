@@ -10,10 +10,8 @@ async function setupTest() {
 
   onTestFinished(() => rm(made, { recursive: true, force: true }));
 
-  // mountinfo names the real path, which the unit resolves the dir to
+  // mountinfo holds resolved paths, and a temp dir may sit behind a symlink
   const root = realpathSync(made);
-
-  // procfs and sysfs as trees under the root, and the dir a test mounts
   const procDir = join(root, 'proc');
   const sysDir = join(root, 'sys');
   const mountDir = join(root, 'mnt');

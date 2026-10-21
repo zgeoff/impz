@@ -14,10 +14,6 @@ import { parseTokenAnswer } from './parse-token-answer';
 import type { Classified, TokenResponse } from './parse-token-answer';
 import type { SecretFiles } from './secret-files';
 
-// Keeps each oauth secret's access token fresh (docs/guides/connectors.md
-// #oauth-secrets). It never logs or returns a token: a log line says only
-// whether the refresh token rotated and when the access token expires.
-
 interface OAuthRequest {
   readonly method: 'POST';
   readonly headers: Headers;
@@ -33,35 +29,21 @@ type RefreshOutcome =
   | { readonly kind: 'refreshed'; readonly rotated: boolean }
   | { readonly kind: 'transient'; readonly error: string }
   | { readonly kind: 'needs-login'; readonly error: string }
-
-  // replaced or deleted during the call; the result was dropped
   | { readonly kind: 'dropped' }
   | { readonly kind: 'gone' }
   | { readonly kind: 'unreadable' }
-
-  // a refresh after a 401 that sent nothing: the token was refreshed since,
-  // or the checks turned it down
   | { readonly kind: 'superseded' }
   | { readonly kind: 'skipped' };
 
 export interface OAuthRefresher {
-  // Refreshes now and answers after it ends. A refresh already running for
-  // the secret is the one answered; there is never a second request.
-  // `force` skips the backoff and the needs_login stop.
   readonly refresh: (name: string, force: boolean) => Promise<RefreshOutcome>;
 
-  // after a granted host refused the token of the refresh at `refreshedAt`:
-  // true once a newer token is in place; never rejects
-  // (docs/guides/connectors.md#refresh-after-a-401)
   readonly refreshAfterRejection: (name: string, refreshedAt: number | null) => Promise<boolean>;
 
-  // runs `work` after every earlier lock holder of the secret has ended
   readonly withLock: <T>(name: string, work: () => Promise<T>) => Promise<T>;
 
-  // refreshes each secret that is due; never rejects
   readonly tick: () => Promise<void>;
 
-  // the timer, and one tick at once
   readonly start: () => void;
   readonly stop: () => Promise<void>;
 }
@@ -79,9 +61,6 @@ interface OAuthRefresherDeps {
 
 const BACKOFF_BASE_MS = 60_000;
 const BACKOFF_CAP_MS = 30 * 60_000;
-
-// the youngest token a 401 refreshes: at most one such refresh per secret
-// in this time, whatever a guest sends
 const REJECTION_FLOOR_MS = 5 * 60_000;
 
 export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
@@ -94,8 +73,8 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
 
   const backoff = new Map<string, { failures: number; nextAt: number }>();
 
-  // a result whose write failed, kept to write again before the next call:
-  // the refresh token it holds may be the only live one
+  // a result whose write failed is kept: a rotated refresh token in it may be
+  // the only live one
   const unsaved = new Map<string, { valueFile: string; state: OAuthStateFile }>();
 
   const lifecycle = { stopping: false };
@@ -105,8 +84,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     running: null,
   };
 
-  // Each holder waits for the one before it, and a failed holder never
-  // blocks the next.
   const withLock = locks.runExclusive;
 
   const writeState = (
@@ -130,7 +107,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     }
   };
 
-  // the state to start from: a result not yet written, else the file
   const loadState = (name: string, secret: Readonly<SecretRecord>): OAuthStateFile | null => {
     const kept = unsaved.get(name);
 
@@ -174,7 +150,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     let response: Response;
     let text: string;
 
-    // the whole call, the body included, is under the timeout
     try {
       response = await send(`${upstream.origin}${url.pathname}${url.search}`, {
         method: 'POST',
@@ -215,7 +190,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
       return { kind: 'unreadable' };
     }
 
-    // a result an earlier write failed on goes first
     if (unsaved.has(name) && !writeState(name, secret.valueFile, state)) {
       return { kind: 'transient', error: 'value file not writable' };
     }
@@ -225,8 +199,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     }
 
     const classified = await sendTokenRequest(secret.oauth, state.refreshToken);
-
-    // a replace or a delete outside the lock changed what this result is for
     const current = await readSecret(deps.db, name);
 
     if (current?.valueFile !== secret.valueFile || current.generation !== secret.generation) {
@@ -275,7 +247,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
       expiresAt = at + tokens.expiresInMs;
     }
 
-    // an expiry no date can hold is no expiry; the tokens are kept all the same
     if (expiresAt !== null && !isValidTime(expiresAt)) {
       expiresAt = null;
     }
@@ -293,8 +264,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
 
     backoff.delete(name);
 
-    // The old value is not live once the endpoint rotated it, so a failed
-    // write keeps this result in memory for the next try (see `unsaved`)
     writeState(name, secret.valueFile, next);
 
     const rotated = refreshToken !== state.refreshToken;
@@ -338,7 +307,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
 
     backoff.delete(name);
 
-    // the refresh token is dead but harmless, so the file stays as it is
     writeState(name, secret.valueFile, { ...state, status: 'needs_login', error: failure.error });
 
     if (state.status !== 'needs_login') {
@@ -358,8 +326,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
 
     const outcome = await run();
 
-    // A joined refresh after a 401 that sent nothing answers no caller that
-    // wanted a refresh of its own: a due one, or a forced one.
     if (outcome.kind === 'skipped' || (force && outcome.kind === 'superseded')) {
       return run();
     }
@@ -367,7 +333,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     return outcome;
   };
 
-  // under the lock, so it sees the result of any refresh before it
   const runRejectedRefresh = async (
     name: string,
     refreshedAt: number | null,
@@ -384,7 +349,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
       return { kind: 'unreadable' };
     }
 
-    // a refresh since the rejected token was sent already replaced it
     if (state.refreshedAt !== refreshedAt) {
       return state.status === 'ready' ? { kind: 'superseded' } : { kind: 'skipped' };
     }
@@ -405,8 +369,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     return runRefresh(name, false);
   };
 
-  // on the same single flight as every other refresh, so a 401 joins a
-  // refresh under way and a tick or a forced refresh joins this one
   const refreshAfterRejection = async (
     name: string,
     refreshedAt: number | null,
@@ -428,9 +390,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     }
   };
 
-  // Writes a result an earlier write failed on. The secret's row is read
-  // again under the lock: a result for a secret since deleted or replaced is
-  // dropped, never written.
   const writeUnsaved = async (name: string): Promise<void> => {
     if (!unsaved.has(name)) {
       return;
@@ -476,8 +435,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
           continue;
         }
 
-        // a result whose write failed is written again at every tick,
-        // whether or not the secret is due
         await writeUnsaved(secret.name);
 
         const wait = backoff.get(secret.name);
@@ -540,10 +497,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
 
       await timer.running;
 
-      // a refresh under way ends, its write included, before stop answers
       await inflight.waitForAll();
-
-      // one last try at each result still unsaved, for a restart to find
       await Promise.allSettled([...unsaved.keys()].map((name) => writeUnsaved(name)));
     },
   };
@@ -555,7 +509,6 @@ function sendToken(url: string, init: OAuthRequest): Promise<Response> {
   return fetch(url, { ...init, ...tls });
 }
 
-// a time in ms that a Date can hold
 function isValidTime(durationMs: number): boolean {
   return Number.isFinite(durationMs) && !Number.isNaN(new Date(durationMs).getTime());
 }

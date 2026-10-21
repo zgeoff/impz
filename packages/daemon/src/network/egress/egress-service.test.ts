@@ -18,7 +18,6 @@ import { removeMember, removeNetwork, writeNetwork } from '../../platform/db/net
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import type { EgressDeps } from './egress-service';
 
-// the stand-ins a test wires in place of the default host's
 interface SetupOptions {
   readonly nft?: Readonly<ReturnType<typeof buildStubNft>>;
   readonly egress?: Readonly<Partial<NonNullable<ImpdDeps['egress']>>>;
@@ -26,8 +25,6 @@ interface SetupOptions {
   readonly resolveIpv6?: ImpdDeps['resolveIpv6'];
 }
 
-// impd booted on stub VMs, a data dir and a database; impd settings come
-// from the test's updateEnv
 async function setupTest(options: Readonly<SetupOptions> = {}) {
   const stack = new AsyncDisposableStack();
 
@@ -35,15 +32,11 @@ async function setupTest(options: Readonly<SetupOptions> = {}) {
 
   const nft = options.nft ?? buildStubNft();
 
-  // the plan impd resolves for IPv6 at its start; none by default
   const resolved = await options.resolveIpv6?.();
 
   const ipv6 = resolved ?? undefined;
-
-  // each tap as it came up, with the table nft held then
   const taps: { tap: string; table: string | null }[] = [];
 
-  // a frozen clock that moves only with advance
   const harness = await startTestImpd(stack, {
     env: readImpEnv(),
     frozenClockMs: Date.UTC(2026, 0, 1),
@@ -60,15 +53,12 @@ async function setupTest(options: Readonly<SetupOptions> = {}) {
         removeTap: () => Promise.resolve(),
       },
 
-      // the host container has no links or default routes unless a test
-      // gives some
       egress: { ...buildStubHostRoutes().deps, ...options.egress },
     },
   });
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
-  // IMP_DEFAULT_IMAGE, which every create here boots from
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
@@ -85,7 +75,6 @@ test('it writes a new imp into the table, with its policy, before its tap comes 
     policy: { mode: 'box', allow: ['github.com'] },
   });
 
-  // the DNS port is a free one, picked per boot
   const tables = ctx.tapTables.map((tap) =>
     tap.table?.replaceAll(`:${String(ctx.config.egressDnsPort)}`, ':<dns port>'),
   );
@@ -233,8 +222,6 @@ test('it writes a fork into its first table with the policy of its source', asyn
   );
 });
 
-// dev is a box of *.npmjs.org in slot 0, web open in 1, shut none in 2 and
-// pub public in 3; the broker serves gh, api.github.com, to dev and shut
 test.each([
   ['a box', 0, 'registry.npmjs.org', 'admit'],
   ['a box', 0, 'api.github.com', 'answer'],
@@ -335,7 +322,6 @@ test('it sweeps nothing before an admitted address is due, whatever shorter TTL 
 
   const before = ctx.nft.scripts.length;
 
-  // 60 s counts as 300 s
   ctx.advance(299_000);
 
   await ctx.impd.egress.runSweep();
@@ -367,7 +353,6 @@ test('it never sweeps an address that is not yet due, in another slot', async ()
 
   await ctx.impd.egress.writeAnswers(1, ['npmjs.org'], [{ address: '104.16.0.1', ttlS: 60 }]);
 
-  // slot 0's address is due now, slot 1's in 200 s: each counts as 300 s
   ctx.advance(100_000);
 
   const before = ctx.nft.scripts.length;
@@ -543,7 +528,6 @@ test('it lets a public imp out only by the uplinks, and refuses it the private r
   updateEnv('IMP_EGRESS_DENY', '8.8.4.4,2a01:4f8::7/128');
   updateEnv('IMP_HOST_ADDRESSES', '2a01:4f8:1::5/64');
 
-  // two links of the container's own and a default route each way
   const routes = buildStubHostRoutes({
     connected4: ['172.17.0.0/16', '172.17.0.2/32'],
     connected6: ['2001:db8:a::/64'],
@@ -555,7 +539,6 @@ test('it lets a public imp out only by the uplinks, and refuses it the private r
   await ctx.impd.imps.createImp({ name: 'dev' });
   await ctx.impd.egress.setPolicy('dev', { mode: 'public', allow: [] });
 
-  // the DNS port is a free one, picked per boot
   const table = ctx.nft
     .readTable()
     ?.replaceAll(`:${String(ctx.config.egressDnsPort)}`, ':<dns port>');
@@ -648,14 +631,12 @@ test('it lets a public imp out only by the uplinks, and refuses it the private r
 });
 
 test('it ends every plain tunnel of an imp that becomes public', async () => {
-  // guests on loopback, and every tunnel's host on loopback too
   updateEnv('IMP_SUBNET', '127.0.0.0/16');
 
   const ctx = await setupTest({
     broker: { resolveTunnelTarget: () => Promise.resolve('127.0.0.1') },
   });
 
-  // the far end of the tunnel
   const far = await startStubEchoServer(ctx.stack);
 
   await ctx.impd.imps.createImp({ name: 'dev' });
@@ -665,7 +646,6 @@ test('it ends every plain tunnel of an imp that becomes public', async () => {
   const established = Promise.withResolvers<void>();
   const closed = Promise.withResolvers<void>();
 
-  // slot 0's guest is 127.0.0.2
   const tunnel = createConnection(
     { host: '127.0.0.1', port: brokerPort, localAddress: '127.0.0.2' },
     () => {
@@ -675,7 +655,6 @@ test('it ends every plain tunnel of an imp that becomes public', async () => {
     },
   );
 
-  // gone before impd stops
   ctx.stack.defer(() => {
     tunnel.destroy();
   });
@@ -700,14 +679,12 @@ test('it ends every plain tunnel of an imp that becomes public', async () => {
 });
 
 test('it keeps the plain tunnels of an imp that stays public', async () => {
-  // guests on loopback, and every tunnel's host on loopback too
   updateEnv('IMP_SUBNET', '127.0.0.0/16');
 
   const ctx = await setupTest({
     broker: { resolveTunnelTarget: () => Promise.resolve('127.0.0.1') },
   });
 
-  // the far end of the tunnel
   const far = await startStubEchoServer(ctx.stack);
 
   await ctx.impd.imps.createImp({ name: 'dev', policy: { mode: 'public', allow: [] } });
@@ -717,7 +694,6 @@ test('it keeps the plain tunnels of an imp that stays public', async () => {
   const established = Promise.withResolvers<void>();
   const echoed = Promise.withResolvers<string>();
 
-  // slot 0's guest is 127.0.0.2
   const tunnel = createConnection(
     { host: '127.0.0.1', port: brokerPort, localAddress: '127.0.0.2' },
     () => {
@@ -727,7 +703,6 @@ test('it keeps the plain tunnels of an imp that stays public', async () => {
     },
   );
 
-  // gone before impd stops
   ctx.stack.defer(() => {
     tunnel.destroy();
   });
@@ -822,7 +797,6 @@ test('it accepts a public policy once the routes are back', async () => {
 
   await ctx.impd.imps.createImp({ name: 'dev' });
 
-  // the refusal while the routes were gone, kept for the end
   const refusal = Promise.try(() => {
     ctx.impd.egress.requirePolicy({ mode: 'public', allow: [] });
   });
@@ -941,7 +915,6 @@ test('it leaves nft and the database agreeing when a create meets a failing poli
 
   await ctx.impd.imps.createImp({ name: 'dev' });
 
-  // nft refuses dev's box set; the first create after dev's waits in nft
   ctx.nft.refuse({ reason: 'table busy', match: (script) => script.includes('allow0') });
 
   const held = ctx.nft.hold((script) => script.includes('imp1'));
@@ -949,7 +922,6 @@ test('it leaves nft and the database agreeing when a create meets a failing poli
 
   await held.reached;
 
-  // a second create gets its row, then waits behind the first for the table
   const second = ctx.impd.imps.createImp({ name: 'second' });
 
   await waitFor(async () => {
@@ -1054,7 +1026,6 @@ test("it checks an IPv6 slot's source /128, and blocks the imps' /64 and the con
 
   invariant(prefix);
 
-  // the container's own IPv6 link
   const routes = buildStubHostRoutes({ connected6: ['2001:db8:a::/64'] });
 
   const ctx = await setupTest({
@@ -1067,7 +1038,6 @@ test("it checks an IPv6 slot's source /128, and blocks the imps' /64 and the con
     policy: { mode: 'box', allow: ['2001:db8:c::/48'] },
   });
 
-  // the DNS port is a free one, picked per boot
   const table = ctx.nft
     .readTable()
     ?.replaceAll(`:${String(ctx.config.egressDnsPort)}`, ':<dns port>');
@@ -1311,7 +1281,6 @@ test('it logs a pair whose flows cannot be dropped, and keeps the change', async
 });
 
 test("it says once that setup-net.sh's imp-network ACCEPT is missing from a table with members", async () => {
-  // the rule without its mark, as a hand-made one might be
   const ctx = await setupTest({
     egress: {
       readForwardRules: () =>
@@ -1378,7 +1347,6 @@ test('it frees the DNS port when it stops', async () => {
 
   ctx.impd.egress.stop();
 
-  // the resolver bound both on every address
   const socket = await Bun.udpSocket({ hostname: '0.0.0.0', port: ctx.config.egressDnsPort });
 
   onTestFinished(() => {

@@ -13,15 +13,11 @@ import {
 import type { ProtectedImp } from '../../surface/api-errors';
 import { pickSleepVictims } from './pick-sleep-victims';
 
-// A reservation covers a VM until its RSS catches up: a VM that just booted
-// or woke measures small for some seconds.
+// A Firecracker VM that just booted or woke shows a small RSS for some seconds, so its reservation
+// counts until the measurement catches up.
 const RESERVATION_TTL_MS = 20_000;
 
-// How often enforce runs. A guest can grow past its boot reserve, so measured
-// use may pass the budget until the next pass sleeps an imp.
 export const ENFORCE_INTERVAL_MS = 5000;
-
-// the trigger of an enforce pass's sleeps, as the slept event's detail.trigger
 export const ENFORCE_TRIGGER = 'RAM over budget';
 
 interface AwakeImp {
@@ -35,27 +31,17 @@ interface AwakeImp {
 
 interface AdmissionRequest {
   readonly id: string;
-
-  // the imp's name; null for work that is no imp's, such as a boot
-  // template's build, which has no GovernorDecision event
   readonly name: string | null;
   readonly reserveMib: number;
-
-  // the most the guest can hold, its max memory: a guest that can grow past
-  // the whole budget is never admitted
   readonly memoryMib: number;
-
-  // false: admitted only into free room, never by sleeping an imp; for work
-  // no user waits on, such as a boot template's build
   readonly maySleepImps?: boolean;
 }
 
-// an elastic guest that asks to grow (docs/architecture/lifecycle/elastic-memory.md)
 export interface GrowRequest {
   readonly id: string;
   readonly name: string;
 
-  // the plug and the struct pages it costs the host
+  // The plug plus the host kernel's struct pages for it.
   readonly mib: number;
 }
 
@@ -64,12 +50,8 @@ interface UsageTotals {
   readonly effectiveMib: number;
 }
 
-// When the imps makeRoom may sleep cannot free enough: admission sleeps none
-// for a request that cannot fit; enforcement sleeps them all, since the
-// budget protects the host
 type WhenShort = 'giveUp' | 'sleepAll';
 
-// a GovernorDecision event, less what every one shares
 interface GovernorDecision {
   readonly decision: 'admitted' | 'refused' | 'slept';
   readonly name: string;
@@ -83,87 +65,43 @@ interface GovernorDecision {
 interface RoomOutcome {
   readonly fits: boolean;
   readonly slept: number;
-
-  // a victim's snapshot did not fit on the disk
   readonly diskFull: boolean;
-
-  // what was still missing at the last measurement, and what was in use
   readonly missingMib: number;
   readonly effectiveMib: number;
-
-  // the awake imps it could not sleep, at the last pass
   readonly protected: readonly ProtectedImp[];
 }
 
 interface RamUsage {
-  // measured: what awake Firecrackers own now
   readonly usedMib: number;
-
-  // reservations for boots and wakes the measurement does not show yet
   readonly reservedMib: number;
-
-  // kept free for merged pages that writes split again (IMP_KSM)
   readonly headroomMib: number;
 }
 
-// The part of the governor the imp lifecycle calls.
 export interface RamAdmission {
-  // makes room for the imp (sleeps LRU imps) and reserves its RAM; throws
-  // RAM_BUDGET_EXCEEDED when it cannot fit
   readonly admit: (request: AdmissionRequest) => Promise<void>;
-
-  // the imp went to sleep, stopped or failed to boot
   readonly release: (id: string) => void;
 }
 
 export interface RamGovernor extends RamAdmission {
   readonly readUsage: () => Promise<RamUsage>;
-
-  // makes room for an elastic guest's grow as for a wake, and reserves it;
-  // false when the imp is not awake, or only busy or held imps could make room
   readonly admitGrow: (request: GrowRequest) => Promise<boolean>;
-
-  // a grow that did not plug: the imp's reservation goes back to what it was
-  // before the grow, as a boot's or a wake's that the grow counted in
   readonly releaseGrow: (id: string) => void;
-
-  // sleeps LRU imps while measured usage is over the budget; when the imps it
-  // may sleep cannot free enough, it sleeps all of them to get as close as it
-  // can
   readonly enforce: () => Promise<void>;
 }
 
 export interface RamGovernorDeps {
   readonly budgetMib: number;
   readonly listAwake: () => Promise<AwakeImp[]>;
-
-  // read for every awake VM at once, off the event loop
-  // (docs/architecture/lifecycle/ram-governor.md#what-it-measures)
   readonly readRamMib: (pid: number, apiSocket: string) => Promise<number | null>;
 
-  // RAM to keep free besides the budget's use, given the awake VMs' pids: with
-  // IMP_KSM, a share of what KSM saves in them, since writes split merged
-  // pages faster than a tick
+  // Writes split pages that KSM merged faster than a tick, so a share of what KSM saves stays free.
   readonly readHeadroomMib?: (pids: readonly number[]) => Promise<number>;
-
-  // true while the imp's lifecycle lock is taken or it has open exec sessions
-  // or proxied requests: never a victim
   readonly isBusy: (id: string) => boolean;
-
-  // sleeps the imp if it still runs and is not held; the type admits only a
-  // sleep that never waits for the imp's lock, since admission is held
   readonly trySleepImp: LockFreeSleep;
-
-  // the DISK_FULL that last turned a victim's sleep away
   readonly readDiskFullError?: () => Error | null;
   readonly log: (message: string) => void;
   readonly now?: () => number;
-
-  // where its decisions go as GovernorDecision events
   readonly events?: EventBus;
-
-  // the step before any sleep: elastic guests other than `excludeId` give
-  // back what they can spare; returns the MiB unplugged
   readonly reclaim?: (excludeId: string | null) => Promise<number>;
 }
 
@@ -173,18 +111,14 @@ interface Reservation {
 }
 
 export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
-  // one admission or enforcement at a time
   const admission = createSemaphore(1);
 
-  // a grow's keeps the reservation it replaced, null when there was none
   const reservations = new Map<
     string,
     Reservation & { readonly beforeGrow?: Reservation | null }
   >();
 
   const now = deps.now ?? Date.now;
-
-  // enforce logs that it cannot reach the budget once, not every tick
   let stuckOver = false;
 
   const emitDecision = (decision: GovernorDecision): void => {
@@ -231,7 +165,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     return reservation.mib;
   };
 
-  // the RAM each imp counts for: measured, or its reservation while larger
   const readEffectiveUsage = async (excludeId: string | null) => {
     const listed = await deps.listAwake();
 
@@ -254,7 +187,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       effectiveMib += effective;
     }
 
-    // imps that are booting or waking: reserved, not awake yet
     for (const id of reservations.keys()) {
       if (id !== excludeId && !byImp.has(id)) {
         effectiveMib += readReservation(id);
@@ -270,7 +202,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     return { awake, byImp, usedMib, effectiveMib, headroomMib };
   };
 
-  // what fits without sleeping anything
   const readFreeRoom = async (
     excludeId: string,
     findMissing: (usage: UsageTotals) => number,
@@ -289,9 +220,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     };
   };
 
-  // sleeps LRU imps until `findMissing` reports nothing missing; it gives up
-  // when no eligible imp is left awake, or as `whenShort` says. Each pass
-  // sleeps an imp or passes one for good, so it ends within 2n passes.
   const makeRoom = async (
     excludeId: string | null,
     reason: string,
@@ -299,7 +227,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     findMissing: (usage: UsageTotals) => number,
     protectedId: string | null = null,
   ): Promise<RoomOutcome> => {
-    // a growing imp counts, but is no victim for its own grow
     const pinned = protectedId === null ? [] : [protectedId];
 
     const passed = new Set<string>(pinned);
@@ -324,9 +251,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         };
       }
 
-      // Unplugging idle elastic guests costs no imp its memory: it comes
-      // first. Usage is measured again even when it reports nothing freed, as
-      // an unplug it did not ask for may have ended meanwhile.
       if (!reclaim.isDone && deps.reclaim !== undefined) {
         reclaim.isDone = true;
 
@@ -341,7 +265,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
       const time = now();
 
-      // each with its name, for the decision event when it sleeps
       const candidates = usage.awake.map((imp) => ({
         id: imp.id,
         name: imp.name,
@@ -352,10 +275,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       }));
 
       const picked = pickSleepVictims(candidates, missingMib);
-
-      // one victim per pass: after a skip or a failure the rest of the pick is
-      // stale, and sleeping it could cost imps their memory for an admission
-      // that then gives up
       const [victim] = picked.victims;
 
       if (victim === undefined || (!picked.enough && whenShort === 'giveUp')) {
@@ -365,8 +284,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           diskFull,
           missingMib,
           effectiveMib: usage.effectiveMib,
-
-          // the growing imp is the one asking, not one in its way
           protected: candidates
             .filter((candidate) => candidate.id !== protectedId)
             .filter((candidate) => candidate.held || candidate.busy)
@@ -429,7 +346,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
         const diskFull = room.diskFull ? (deps.readDiskFullError?.() ?? null) : null;
 
-        // the disk, not the budget, kept an idle imp awake
         if (!room.fits && diskFull !== null) {
           throw diskFull;
         }
@@ -466,7 +382,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       admission.run(async () => {
         const listed = await deps.listAwake();
 
-        // a sleep or stop got there first: no imp makes room for it
         if (!listed.some((imp) => imp.id === request.id)) {
           return false;
         }
@@ -481,7 +396,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
         const usage = await readEffectiveUsage(null);
 
-        // the imp may have gone to sleep while room was made
         const fits = room.fits && usage.awake.some((imp) => imp.id === request.id);
 
         emitDecision({
@@ -502,7 +416,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
         const before = reservations.get(request.id);
 
-        // the grow counts until the guest's RSS shows it
         reservations.set(request.id, {
           mib: (usage.byImp.get(request.id) ?? 0) + request.mib,
           until: now() + RESERVATION_TTL_MS,
@@ -515,7 +428,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     releaseGrow: (id) => {
       const reservation = reservations.get(id);
 
-      // a boot or a wake reserved since the grow: it is not the grow's
       if (reservation?.beforeGrow === undefined) {
         return;
       }

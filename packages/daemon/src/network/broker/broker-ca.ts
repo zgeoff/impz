@@ -7,15 +7,9 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { join } from 'node:path';
 import * as x509 from '@peculiar/x509';
 
-// The broker's CA: one per host, not per imp. impd holds every key either
-// way, so one per imp adds no isolation; one survives forks and restores
-// (docs/guides/connectors.md has the reasoning).
-
 const ALGORITHM = { name: 'ECDSA', namedCurve: 'P-256', hash: 'SHA-256' } as const;
 const DAY_MS = 86_400_000;
 const LEAF_DAYS = 365;
-
-// a leaf this close to its end is issued again
 const LEAF_RENEW_MS = 30 * DAY_MS;
 
 export interface LeafCertificate {
@@ -27,16 +21,13 @@ export interface LeafCertificate {
 export interface BrokerCa {
   readonly certPem: string;
 
-  // for this hostname: a SAN, serverAuth and the CA's key id, so strict
-  // verifiers (Python 3.13, OpenSSL -x509_strict) accept it
+  // a SAN, serverAuth and the CA's key ID, so strict verifiers (Python 3.13,
+  // OpenSSL -x509_strict) accept the leaf
   readonly issueLeaf: (host: string) => Promise<LeafCertificate>;
 
-  // true when the leaf ends within the renewal window
   readonly isDue: (leaf: LeafCertificate, now: number) => boolean;
 }
 
-// The CA in <dir>: ca.pem (the certificate) and ca.key (0600), made on the
-// first start; `now` dates the CA and each leaf.
 export async function loadOrCreateBrokerCa(
   directory: string,
   now: () => number = Date.now,
@@ -117,7 +108,6 @@ async function createCa(
     keys,
     signingAlgorithm: ALGORITHM,
     extensions: [
-      // a CA that signs leaves only, never another CA
       new x509.BasicConstraintsExtension(true, 0, true),
       new x509.KeyUsagesExtension(
         x509.KeyUsageFlags.keyCertSign | x509.KeyUsageFlags.cRLSign,

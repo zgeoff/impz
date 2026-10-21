@@ -1,9 +1,7 @@
 import type { JsonValue } from '@bufbuild/protobuf';
 import * as z from 'zod';
 
-// The agent wire format (docs/architecture/guest/protocol.md#one-request-per-connection):
-// `[u8 type][u32 BE length][payload]`.
-
+// The agent's wire format is `[u8 type][u32 BE length][payload]`.
 export const FRAME_TYPES = {
   request: 1,
   response: 2,
@@ -16,14 +14,8 @@ export const FRAME_TYPES = {
   stderr: 9,
   exit: 10,
   detached: 11,
-
-  // dial: the target closed its side
   stdoutEof: 12,
-
-  // agent.listen: a client of the socket waits for an agent.accept
   connection: 13,
-
-  // services.logs: how far the stream has sent
   cursor: 14,
 } as const;
 
@@ -38,15 +30,10 @@ export interface AgentFrame {
 }
 
 export interface FrameDecoder {
-  // the frames the bytes so far complete; a partial frame waits for more
   readonly push: (chunk: Uint8Array) => AgentFrame[];
-
-  // throws when the stream ended inside a frame
   readonly end: () => void;
 }
 
-// One frame, or several when the payload is larger than MAX_PAYLOAD; an empty
-// payload is still one frame.
 export function encodeFrame(type: FrameType, payload: Uint8Array = new Uint8Array()): Uint8Array {
   const count = Math.max(1, Math.ceil(payload.byteLength / MAX_PAYLOAD));
 

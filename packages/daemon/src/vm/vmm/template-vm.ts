@@ -23,14 +23,12 @@ import type { JailUser, Jails, RunPaths } from './jail';
 import { createOwnedFile } from './vm-files';
 import type { StartedVm } from './vm-runner';
 
-// the ping after a claim: the rest of a cold boot, without the kernel
 const CLAIMED_AGENT_DEADLINE_MS = 10_000;
 
-// a restore's agent answers within tens of ms: ping often, not on a
-// cold boot's backoff
+// a restore's agent answers within tens of ms, so it is pinged often rather
+// than on a cold boot's backoff
 const RESTORE_PING_DELAY_MS = 5;
 
-// The cold boot a template is made from (docs/architecture/lifecycle/boot-templates.md).
 export interface TemplateBuildPlan {
   readonly firecrackerBin: string;
   readonly kernelPath: string;
@@ -38,59 +36,37 @@ export interface TemplateBuildPlan {
   readonly bootArgs: string;
   readonly vcpus: number;
   readonly memoryMib: number;
-
-  // the build's work dir, with its sockets and log in run/, and the stand-in
-  // for an imp disk, which a jailed build gets as a file of its own
   readonly workDir: string;
   readonly paths: RunPaths;
   readonly placeholderPath: string;
   readonly tap: string;
   readonly guestMac: string;
-
-  // the build's own jail and cgroup; a null jail runs it as root
   readonly jailId: string;
   readonly jail: JailUser | null;
   readonly cgroup: ImpCgroup | null;
 
-  // IMP_SLEEP_MIN_GUEST_UPTIME_MS: a younger guest restores slowly on a
-  // host kernel before 6.7
+  // on a host kernel before 6.7, a guest snapshotted too young restores slowly
   readonly minGuestUptimeMs: number;
-
-  // where the snapshot goes; the caller renames the directory into place
   readonly snapshotDir: string;
   readonly vmstate: string;
   readonly memFile: string;
 }
 
-// One imp's restore of a template.
 export interface TemplateRestorePlan {
   readonly firecrackerBin: string;
   readonly paths: ImpPaths;
-
-  // the template's files and the system drive its snapshot names, bound in
-  // read-only, and its placeholder disk, a file of the imp's own
   readonly vmstate: string;
   readonly memFile: string;
   readonly systemDrivePath: string;
   readonly placeholderPath: string;
-
-  // the imp's disk, by its absolute path, and its tap
   readonly diskPath: string;
   readonly tap: string;
   readonly cgroup: ImpCgroup | null;
   readonly jail: JailUser | null;
-
-  // the disk's size once the host has made it: the restore runs up to the
-  // parked guest meanwhile, and points rootfs at the disk only then
   readonly diskReady: Promise<number>;
-
-  // the clock is stamped at the claim, after the load
   readonly claim: Omit<Claim, 'unixMs' | 'diskBytes'>;
 }
 
-// Boots the stub VM, waits for its agent to park and the guest to be old
-// enough, then pauses it and writes a full snapshot. The VM and its jail's
-// mounts are gone after, whatever happens; the files are root's then.
 export async function createTemplateVm(
   plan: Readonly<TemplateBuildPlan>,
   jails: Jails,
@@ -99,7 +75,6 @@ export async function createTemplateVm(
   try {
     await runBuildVm(plan, jails, mergeWrapper);
 
-    // every restore, of any imp, reads them: root's, and readable by all
     setupTemplateFile(plan.vmstate);
     setupTemplateFile(plan.memFile);
     writeToDisk([plan.vmstate, plan.memFile, plan.snapshotDir]);
@@ -174,7 +149,6 @@ async function runBuildVm(
 
       await api.pause();
 
-      // the VM writes into files impd made, in a directory it cannot change
       const owner = plan.jail ?? IMPD_USER;
 
       mkdirSync(plan.snapshotDir, { recursive: true });
@@ -188,14 +162,12 @@ async function runBuildVm(
       await waitForExit(pid, plan.paths.apiSocket, VM_DEADLINES.killMs);
     }
   } finally {
-    // kills every process of the uid too: nothing writes the files after
     if (plan.jail !== null) {
       await jails.release(plan.jailId);
     }
   }
 }
 
-// a prepare or spawn that fails leaves no jail mounts behind
 async function startRestoreProcess(
   plan: Readonly<TemplateRestorePlan>,
   jails: Jails,
@@ -212,8 +184,6 @@ async function startRestoreProcess(
   }
 }
 
-// the jailer's command in the imp's chroot with the template bound in, or
-// Firecracker's own beside a swept run/
 async function setupRestoreCommand(
   plan: Readonly<TemplateRestorePlan>,
   jails: Jails,
@@ -234,9 +204,6 @@ async function setupRestoreCommand(
   });
 }
 
-// A failed restore. `isTemplateFault` when the step that failed reads only
-// the template: the load, the resume and the parked guest's ping. The disk,
-// the patch, the claim and the boot after it are the imp's own.
 export class TemplateRestoreError extends Error {
   readonly isTemplateFault: boolean;
 
@@ -248,8 +215,6 @@ export class TemplateRestoreError extends Error {
   }
 }
 
-// Loads the template, resumes it, and once the imp's disk is ready points
-// rootfs at it and claims the guest. The process is gone when any step fails.
 export async function loadTemplateVm(
   plan: Readonly<TemplateRestorePlan>,
   jails: Jails,
@@ -257,7 +222,6 @@ export async function loadTemplateVm(
 ): Promise<StartedVm> {
   const marks = createMarks();
 
-  // startFirecracker puts the process in the cgroup before the load
   const pid = await startRestoreProcess(plan, jails, mergeWrapper);
 
   marks.setMark('spawn');
@@ -281,7 +245,7 @@ export async function loadTemplateVm(
 
     marks.setMark('load');
 
-    // the load bound the vsock socket; no guest code has run yet
+    // the load binds the vsock socket, and the seal lands before guest code runs
     jails.seal(plan.paths, pid);
 
     await api.resume();
@@ -297,20 +261,18 @@ export async function loadTemplateVm(
 
     marks.setMark('parked');
 
-    // from here on the imp's own disk and values are in play
     step.isTemplateFault = false;
 
     const diskBytes = await plan.diskReady;
 
-    // the clone made the disk as root's, and the prepare left it so
     if (plan.jail !== null) {
       jails.setupDiskOwner(plan.paths, plan.jail);
     }
 
     marks.setMark('disk');
 
-    // the config change is how virtio-blk tells the guest the disk's size;
-    // the parked agent waits for it before it touches the disk
+    // virtio-blk tells the guest the disk's size through this config change,
+    // and the parked agent waits for it before it touches the disk
     await api.patchDrive(VM_DEVICES.drives.rootfs, plan.diskPath);
 
     marks.setMark('patch');

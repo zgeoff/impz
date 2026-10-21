@@ -20,17 +20,12 @@ import { buildPendingState, findIdClaims, formatOAuthState, parseOAuthState } fr
 import { buildValueFile } from './secret-files';
 import type { SecretFiles } from './secret-files';
 
-// The broker's secrets for the API: each value in the file its row names
-// (docs/guides/connectors.md#rotate-or-rebind), and an oauth secret's state
-// (docs/guides/connectors.md#oauth-secrets).
-
 export interface AddSecretInput {
   readonly name: string;
   readonly kind: SecretKind;
   readonly value: string;
   readonly rules?: readonly BrokerRule[] | undefined;
 
-  // required for kind oauth, whose value is then the refresh token
   readonly oauth?: OAuthConfig | undefined;
   readonly replace?: boolean | undefined;
   readonly rebind?: boolean | undefined;
@@ -40,7 +35,6 @@ interface SecretStore {
   readonly addSecret: (input: AddSecretInput) => Promise<SecretAdded>;
   readonly listSecrets: () => Promise<Secret[]>;
 
-  // forces one refresh of an oauth secret and answers after it ends
   readonly refreshSecret: (name: string) => Promise<Secret>;
   readonly removeSecret: (name: string) => Promise<void>;
 }
@@ -51,7 +45,6 @@ interface SecretStoreDeps {
   readonly log: (message: string) => void;
   readonly refresher: OAuthRefresher;
 
-  // drops what a replace or a delete took from the grants
   readonly applyGrants: () => Promise<void>;
 }
 
@@ -69,8 +62,6 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
     return buildSecretView(secret, imps);
   };
 
-  // what the API shows of a secret; for kind oauth, its state from the value
-  // file, with no token in it
   const buildSecretView = (secret: SecretRecord, imps: readonly string[]): Secret => {
     const shown: Secret = {
       name: secret.name,
@@ -100,8 +91,6 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
     };
   };
 
-  // The row for a value just written to its file, which goes again when no
-  // row names it; with replace, the file the row named before.
   const writeSecretRow = async (
     secret: Readonly<NewSecret>,
     input: Readonly<AddSecretInput>,
@@ -134,8 +123,6 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
     }
   };
 
-  // the exact file the commit displaced, then its record; a failure leaves
-  // both to the next start
   const removeDisplacedFile = async (file: string): Promise<void> => {
     try {
       files.remove(file);
@@ -174,15 +161,12 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
 
       const oauth = input.kind === 'oauth' ? (input.oauth ?? null) : null;
 
-      // under the secret's lock, so a replace never lands in the middle of a
-      // refresh, which rewrites the file the row names
       const saved = await refresher.withLock(input.name, async () => {
         const valueFile = buildValueFile(input.name);
 
         const content =
           input.kind === 'oauth' ? formatOAuthState(buildPendingState(input.value)) : input.value;
 
-        // the value first, so no row ever names a file that is not there
         files.write(valueFile, content);
 
         const written = await writeSecretRow(
@@ -199,9 +183,6 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
         return written;
       });
 
-      // Only now, with the row committed: a refresh before it could rotate
-      // the token, and a failed commit removes the file that holds the result.
-      // A first refresh that fails still answers; the secret shows why.
       if (input.kind === 'oauth') {
         await refresher.refresh(input.name, true);
       }
@@ -260,7 +241,6 @@ function toDate(durationMs: number | null | undefined): Date | null {
   return durationMs === null || durationMs === undefined ? null : new Date(durationMs);
 }
 
-// a replace with another kind or rules, without rebind
 function buildBindingChangedError(name: string) {
   return new ORPCError('CONFLICT', {
     message: `secret ${name} would get other hosts or headers; a rebind (--rebind) drops its grants`,
