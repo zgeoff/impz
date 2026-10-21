@@ -3,10 +3,10 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
+import { createStubDockerBin } from '@impz/client/test-utils/create-stub-docker-bin';
+import { startStubDockerEngine } from '@impz/client/test-utils/start-stub-docker-engine';
+import { startTestImpd } from '@impz/daemon/testing';
 import { updateEnv } from '@impz/test-utils/update-env';
-import { createStubDockerBin } from '../../packages/client/src/test-utils/create-stub-docker-bin';
-import { startStubDockerEngine } from '../../packages/client/src/test-utils/start-stub-docker-engine';
-import { startTestImpd } from '../../packages/daemon/testing';
 import { sendRawBuild, writeBuildContext } from './build-context';
 
 async function setupTest() {

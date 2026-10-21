@@ -1,9 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { createImpClient } from '../../packages/client/src/index';
-import { createImage } from '../../packages/daemon/src/platform/db/images';
-import { buildImagePaths, buildMockNewImage, startTestImpd } from '../../packages/daemon/testing';
+import { createImpClient } from '@impz/client';
+import {
+  buildImagePaths,
+  buildMockNewImage,
+  createImage,
+  startTestImpd,
+} from '@impz/daemon/testing';
 import {
   removeImageIfPresent,
   removeImpIfPresent,

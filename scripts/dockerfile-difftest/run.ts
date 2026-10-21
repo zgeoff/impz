@@ -2,16 +2,14 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import * as z from 'zod';
 import {
   checkDockerfile,
-  renderPinnedDockerfile,
-} from '../../packages/daemon/src/imps/images/dockerfile-check';
-import {
   parseDockerfile,
+  renderPinnedDockerfile,
   splitNameWords,
-} from '../../packages/daemon/src/imps/images/dockerfile-parse';
-import type { Instruction } from '../../packages/daemon/src/imps/images/dockerfile-parse';
+} from '@impz/daemon/testing';
+import type { Instruction } from '@impz/daemon/testing';
+import * as z from 'zod';
 
 const GoInstructionSchema = z.object({
   keyword: z.string(),

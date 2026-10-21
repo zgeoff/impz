@@ -108,7 +108,8 @@ export type {
   OutdatedPart,
 } from './schemas/imp-schema';
 
-export { buildProtocolSchema } from './protocols/build-protocol-schema';
+export { ProtocolSchemaSchema, buildProtocolSchema } from './protocols/build-protocol-schema';
+export type { MessageDirection, ProtocolSchema } from './protocols/build-protocol-schema';
 export { CONSOLE_SHELL } from './protocols/login-shell';
 export { MCP_PATH } from './protocols/mcp-path';
 export { WarmHostSchema, WarmMoveSchema } from './schemas/move-schema';

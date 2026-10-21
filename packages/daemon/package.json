@@ -8,8 +8,7 @@
     ".": "./src/index.ts",
     "./testing": "./testing/index.ts",
     "./testing/build-stub-clock": "./testing/platform/build-stub-clock.ts",
-    "./package.json": "./package.json",
-    "./src/*": "./src/*.ts"
+    "./package.json": "./package.json"
   },
   "scripts": {
     "start": "bun src/main.ts"

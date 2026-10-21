@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { probeUnshare } from '../../packages/daemon/testing/host-net/probe-unshare';
-import { runInNetns } from '../../packages/daemon/testing/host-net/run-in-netns';
+import { probeUnshare, runInNetns } from '@impz/daemon/testing';
 
 // setup-net.sh runs as root in a fresh network namespace, through a user
 // namespace when not root, with a dummy uplink. Each test skips where that or

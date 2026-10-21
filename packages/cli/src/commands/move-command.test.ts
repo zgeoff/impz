@@ -3,11 +3,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
-import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildMockNewImage,
   buildStubImpdReleaseFetch,
+  createImage,
   startTestImpd,
 } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';

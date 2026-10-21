@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { createImpClient } from '../../packages/client/src/index';
+import { createImpClient } from '@impz/client';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { createInstanceClient, readImp, runImp, runShellInImp } from '../lib/imp-cli';

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { buildProtocolSchema } from '../packages/api/src/protocols/build-protocol-schema';
-import { buildJsonOutputSchema } from '../packages/cli/src/output/build-json-output-schema';
+import { buildProtocolSchema } from '@impz/api';
+import { buildJsonOutputSchema } from '@impz/cli/output-schema';
 
 export const PROTOCOL_SCHEMA_FILE = 'packages/api/protocol-schema.json';
 export const JSON_OUTPUT_SCHEMA_FILE = 'packages/cli/json-output-schema.json';

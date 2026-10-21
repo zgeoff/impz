@@ -1,8 +1,8 @@
+import { ProtocolSchemaSchema } from '@impz/api';
+import type { ProtocolSchema } from '@impz/api';
+import { JsonOutputSchemaSchema } from '@impz/cli/output-schema';
+import type { JsonOutputSchema } from '@impz/cli/output-schema';
 import * as z from 'zod';
-import { ProtocolSchemaSchema } from '../../packages/api/src/protocols/build-protocol-schema';
-import type { ProtocolSchema } from '../../packages/api/src/protocols/build-protocol-schema';
-import { JsonOutputSchemaSchema } from '../../packages/cli/src/output/build-json-output-schema';
-import type { JsonOutputSchema } from '../../packages/cli/src/output/build-json-output-schema';
 import { JSON_OUTPUT_SCHEMA_FILE, PROTOCOL_SCHEMA_FILE } from '../render-protocol-schema';
 import { collectBreakingChanges, collectJsonOutputChanges } from './collect-breaking-changes';
 import { isMarkedBreaking } from './is-marked-breaking';

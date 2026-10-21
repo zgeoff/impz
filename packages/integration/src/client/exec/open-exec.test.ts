@@ -9,7 +9,6 @@ import {
   createImpClient,
 } from '@impz/client';
 import { makeStubImpdWithoutFeature } from '@impz/client/test-utils/make-stub-impd-without-feature';
-import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   STUB_BOOT_ID,
   STUB_FLOOD_BYTES,
@@ -18,6 +17,7 @@ import {
   buildImpPaths,
   buildMockNewImage,
   buildStubExecAgent,
+  createImage,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';

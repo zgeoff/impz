@@ -1,5 +1,4 @@
-import { VmIdentitySchema } from '../../packages/daemon/src/vm/sleep/vm-identity';
-import { buildTemplateKey } from '../../packages/daemon/src/vm/templates/boot-templates';
+import { VmIdentitySchema, buildTemplateKey } from '@impz/daemon/testing';
 import { requireImp } from './imp-cli';
 import { runInContainer } from './instance';
 

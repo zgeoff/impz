@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { TUNNEL_CLOSE_RESTARTING } from '@impz/api';
 import { createImpClient, openReverseForward } from '@impz/client';
-import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
   buildStubForwardAgent,
+  createImage,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';

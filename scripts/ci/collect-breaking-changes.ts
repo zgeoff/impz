@@ -1,5 +1,5 @@
-import type { ProtocolSchema } from '../../packages/api/src/protocols/build-protocol-schema';
-import type { JsonOutputSchema } from '../../packages/cli/src/output/build-json-output-schema';
+import type { ProtocolSchema } from '@impz/api';
+import type { JsonOutputSchema } from '@impz/cli/output-schema';
 import { collectSchemaChanges } from './breaking-changes/collect-schema-changes';
 import { formatValue } from './breaking-changes/format-value';
 

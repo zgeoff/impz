@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { IMAGE_BUILD_PATH } from '../../packages/api/src/protocols/image-build-protocol';
+import { IMAGE_BUILD_PATH } from '@impz/api';
 
 export async function writeBuildContext(
   root: string,

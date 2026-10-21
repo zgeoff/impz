@@ -6,11 +6,11 @@ import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { FRAME_TYPES, decodeJsonPayload } from '@impz/agent-protocol';
 import type { ImpState } from '@impz/api';
-import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
+  createImage,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';

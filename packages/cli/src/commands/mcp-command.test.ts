@@ -3,13 +3,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
-import { createImage } from '@impz/daemon/src/platform/db/images';
-import { readImpByName } from '@impz/daemon/src/platform/db/imps';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
   buildStubExecGuest,
+  createImage,
+  readImpByName,
   startStubExecAgent,
   startTestImpd,
 } from '@impz/daemon/testing';

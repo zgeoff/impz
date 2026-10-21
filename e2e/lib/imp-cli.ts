@@ -1,7 +1,7 @@
 import { join } from 'node:path';
+import { createImpClient } from '@impz/client';
+import type { ImpClient } from '@impz/client';
 import * as z from 'zod';
-import { createImpClient } from '../../packages/client/src/index';
-import type { ImpClient } from '../../packages/client/src/index';
 import type { CommandResult, DevInstance } from './instance';
 import { REPO_ROOT, instance, readToken, runCommand } from './instance';
 

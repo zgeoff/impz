@@ -2,11 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
+  createImage,
   startStubInnerAgent,
 } from '@impz/daemon/testing';
 import { writeHostConfig } from '../config/host-store';
