@@ -1,7 +1,6 @@
 #!/bin/bash
 # Build the static agent and the imp system drive (squashfs) that holds it.
-# Outputs: $IMP_BUILD/imp-agent, $IMP_BUILD/imp-agentctl,
-#          $IMP_BUILD/imp-system.squashfs
+# Outputs: $IMP_BUILD/imp-agent, $IMP_BUILD/imp-system.squashfs
 #
 # It builds the system-drive stage of host/Dockerfile, the same recipe as
 # the release image, so the dev drive has the same bytes as the release one.

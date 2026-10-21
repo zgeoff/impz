@@ -10,7 +10,6 @@ require (
 	github.com/pkg/sftp v1.13.11
 	github.com/vishvananda/netlink v1.3.1
 	golang.org/x/sys v0.49.0
-	golang.org/x/term v0.47.0
 	google.golang.org/protobuf v1.36.12
 	gotest.tools/v3 v3.5.2
 )
@@ -35,6 +34,7 @@ require (
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect

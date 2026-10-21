@@ -44,7 +44,6 @@ linters:
             - github.com/pkg/sftp
             - github.com/vishvananda/netlink
             - golang.org/x/sys
-            - golang.org/x/term
             - google.golang.org/protobuf
             - gotest.tools/v3
         # the agent's layers from the bottom up: the wire and the reaper, the

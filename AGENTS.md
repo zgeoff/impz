@@ -25,7 +25,7 @@ takes the name `@impz/<folder>`, and another package imports a library as TypeSc
 build step.
 
 ```text
-agent/             the guest agent, in Go: imp-agent, imp-agentctl and ksm-exec under cmd/
+agent/             the guest agent, in Go: imp-agent and ksm-exec under cmd/
 packages/
   agent-protocol/  impd's side of the guest agent's vsock protocol: frames, messages, error codes
   api/             the oRPC contract, schemas and exec stream framing of the control API
