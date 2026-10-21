@@ -38,18 +38,6 @@ function setupTest() {
 
         return Promise.resolve();
       },
-      runBackup: () => {
-        steps.push('run backup');
-
-        return Promise.resolve({
-          snapshotId: 'c0ffee12',
-          imps: ['e2e-bk-src'],
-          skipped: [],
-          excluded: [],
-          dataAddedBytes: 4096,
-          durationMs: 480,
-        });
-      },
       writeMetric,
     },
   };
@@ -61,6 +49,15 @@ test('#createBackupDrill writes each span of a backup test to its metric once th
 
   const drill = createBackupDrill(ctx.stack, 'backupTrialSpansMs', {
     ...ctx.deps,
+    runBackup: () =>
+      Promise.resolve({
+        snapshotId: 'c0ffee12',
+        imps: ['e2e-bk-src'],
+        skipped: [],
+        excluded: [],
+        dataAddedBytes: 4096,
+        durationMs: 480,
+      }),
     now: clock.next,
   });
 
@@ -87,7 +84,12 @@ test('#createBackupDrill writes each span of a backup test to its metric once th
 
 test('#createBackupDrill clears the backup state before the reboot onto backups, and reboots back before MinIO stops', async () => {
   const ctx = setupTest();
-  const drill = createBackupDrill(ctx.stack, 'backupTrialSpansMs', { ...ctx.deps, now: () => 0 });
+
+  const drill = createBackupDrill(ctx.stack, 'backupTrialSpansMs', {
+    ...ctx.deps,
+    runBackup: () => Promise.reject(new Error('this test runs no backup')),
+    now: () => 0,
+  });
 
   await drill.reboot({ IMP_BACKUP_INTERVAL_S: '5' });
 
@@ -114,7 +116,11 @@ test('#createBackupDrill clears the backup state before the reboot onto backups,
 test('#createBackupDrill neither reboots back nor stops MinIO for a test that reached neither', async () => {
   const ctx = setupTest();
 
-  createBackupDrill(ctx.stack, 'backupTrialSpansMs', { ...ctx.deps, now: () => 0 });
+  createBackupDrill(ctx.stack, 'backupTrialSpansMs', {
+    ...ctx.deps,
+    runBackup: () => Promise.reject(new Error('this test runs no backup')),
+    now: () => 0,
+  });
 
   await ctx.stack.disposeAsync();
 
