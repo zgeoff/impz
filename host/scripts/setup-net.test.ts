@@ -7,6 +7,21 @@ import { runInNetns } from '../../packages/daemon/testing/host-net/run-in-netns'
 // namespace when not root, with a dummy uplink. Each test skips where that or
 // a tool it runs is missing, unless IMP_HOST_TESTS=required: `bun run test:host`.
 
+// A kernel can list the tables yet lack the rpfilter and hl matches a full run
+// appends, as a cloud imp's does. At module level: Bun 1.4.2's skipIf takes a
+// boolean and has no in-body skip.
+const fullNetfilter = probeUnshare([
+  'sh',
+  '-c',
+  [
+    'iptables -t raw -A PREROUTING -m rpfilter --invert -j DROP',
+    'ip6tables -t raw -A PREROUTING -m rpfilter --invert -j DROP',
+    'ip6tables -A INPUT -p ipv6-icmp --icmpv6-type 133 -m hl --hl-eq 255 -j ACCEPT',
+    'ip link',
+    'command -v sysctl',
+  ].join(' && '),
+]);
+
 // it changes nothing before the check, so it runs anywhere
 test('it refuses to start without the settings host/entrypoint takes from impd', () => {
   const result = Bun.spawnSync(['bash', join(import.meta.dir, 'setup-net.sh')], {
@@ -25,15 +40,11 @@ test('it refuses to start without the settings host/entrypoint takes from impd',
   });
 });
 
-test.skipIf(
-  !probeUnshare([
-    'sh',
-    '-c',
-    'iptables -t raw -S && ip6tables -t raw -S && ip link && command -v sysctl',
-  ]),
-)('it leaves one pair of broker rules after a port change and an older INPUT drop', () => {
-  const run = runInNetns({
-    script: `
+test.skipIf(!fullNetfilter)(
+  'it leaves one pair of broker rules after a port change and an older INPUT drop',
+  () => {
+    const run = runInNetns({
+      script: `
 ip link add up0 type dummy
 ip link set up0 up
 ip addr add 192.0.2.2/24 dev up0
@@ -45,40 +56,37 @@ bash "$SETUP_NET" >/dev/null
 iptables -S INPUT | grep imp-broker
 iptables -t raw -S PREROUTING | grep imp-broker
 `,
-    env: {
-      SETUP_NET: join(import.meta.dir, 'setup-net.sh'),
-      IMP_SUBNET: '10.66.0.0/16',
-      IMP_BROKER_PORT: '7081',
-      IMP_EGRESS_DNS_PORT: '7053',
-    },
-    mount: false,
-  });
+      env: {
+        SETUP_NET: join(import.meta.dir, 'setup-net.sh'),
+        IMP_SUBNET: '10.66.0.0/16',
+        IMP_BROKER_PORT: '7081',
+        IMP_EGRESS_DNS_PORT: '7053',
+      },
+      mount: false,
+    });
 
-  expect(run).toStrictEqual({
-    stdout: [
-      '-A INPUT -i imp+ -p tcp -m tcp --dport 7081 -m comment --comment imp-broker -j ACCEPT',
-      '-A PREROUTING ! -i imp+ -p tcp -m tcp --dport 7081 -m addrtype --dst-type LOCAL -m comment --comment imp-broker -j DROP',
-      '',
-    ].join('\n'),
-    stderr: '',
-    exitCode: 0,
-  });
-});
+    expect(run).toStrictEqual({
+      stdout: [
+        '-A INPUT -i imp+ -p tcp -m tcp --dport 7081 -m comment --comment imp-broker -j ACCEPT',
+        '-A PREROUTING ! -i imp+ -p tcp -m tcp --dport 7081 -m addrtype --dst-type LOCAL -m comment --comment imp-broker -j DROP',
+        '',
+      ].join('\n'),
+      stderr: '',
+      exitCode: 0,
+    });
+  },
+);
 
-test.skipIf(
-  !probeUnshare([
-    'sh',
-    '-c',
-    'iptables -t raw -S && ip6tables -t raw -S && ip link && command -v sysctl',
-  ]),
-)('it drops a connection to the broker port from outside the taps', () => {
-  // lo stands in for eth0 and tailscale0: anything that is not imp+. The
-  // first INPUT rule accepts it all, as tailscaled's ts-input does later.
+test.skipIf(!fullNetfilter)(
+  'it drops a connection to the broker port from outside the taps',
+  () => {
+    // lo stands in for eth0 and tailscale0: anything that is not imp+. The
+    // first INPUT rule accepts it all, as tailscaled's ts-input does later.
 
-  // Each probe waits on the listener and prints its exit: 0 connected, 124
-  // timed out (a drop), 1 refused, so a reset does not pass as a drop.
-  const run = runInNetns({
-    script: `
+    // Each probe waits on the listener and prints its exit: 0 connected, 124
+    // timed out (a drop), 1 refused, so a reset does not pass as a drop.
+    const run = runInNetns({
+      script: `
 ip link add up0 type dummy
 ip link set up0 up
 ip addr add 192.0.2.2/24 dev up0
@@ -95,18 +103,19 @@ for port in 7081 7082; do
 done
 kill "$LISTENER_PID"
 `,
-    env: {
-      SETUP_NET: join(import.meta.dir, 'setup-net.sh'),
-      BUN: process.execPath,
-      IMP_SUBNET: '10.66.0.0/16',
-      IMP_BROKER_PORT: '7081',
-      IMP_EGRESS_DNS_PORT: '7053',
-    },
-    mount: false,
-  });
+      env: {
+        SETUP_NET: join(import.meta.dir, 'setup-net.sh'),
+        BUN: process.execPath,
+        IMP_SUBNET: '10.66.0.0/16',
+        IMP_BROKER_PORT: '7081',
+        IMP_EGRESS_DNS_PORT: '7053',
+      },
+      mount: false,
+    });
 
-  expect(run).toStrictEqual({ stdout: '7081 124\n7082 0\n', stderr: '', exitCode: 0 });
-});
+    expect(run).toStrictEqual({ stdout: '7081 124\n7082 0\n', stderr: '', exitCode: 0 });
+  },
+);
 
 test.skipIf(!probeUnshare(['sh', '-c', 'iptables -t nat -S && ip link && command -v sysctl']))(
   'it refuses to start with IPv4 forwarding off',
@@ -162,15 +171,11 @@ bash "$SETUP_NET"
   },
 );
 
-test.skipIf(
-  !probeUnshare([
-    'sh',
-    '-c',
-    'iptables -t raw -S && ip6tables -t raw -S && ip link && command -v sysctl',
-  ]),
-)('it leaves one UDP and one TCP pair of egress DNS rules after a resolver port change', () => {
-  const run = runInNetns({
-    script: `
+test.skipIf(!fullNetfilter)(
+  'it leaves one UDP and one TCP pair of egress DNS rules after a resolver port change',
+  () => {
+    const run = runInNetns({
+      script: `
 ip link add up0 type dummy
 ip link set up0 up
 ip addr add 192.0.2.2/24 dev up0
@@ -181,35 +186,30 @@ bash "$SETUP_NET" >/dev/null
 iptables -S INPUT | grep imp-egress-dns
 iptables -t raw -S PREROUTING | grep imp-egress-dns
 `,
-    env: {
-      SETUP_NET: join(import.meta.dir, 'setup-net.sh'),
-      IMP_SUBNET: '10.66.0.0/16',
-      IMP_BROKER_PORT: '7081',
-      IMP_EGRESS_DNS_PORT: '7053',
-    },
-    mount: false,
-  });
+      env: {
+        SETUP_NET: join(import.meta.dir, 'setup-net.sh'),
+        IMP_SUBNET: '10.66.0.0/16',
+        IMP_BROKER_PORT: '7081',
+        IMP_EGRESS_DNS_PORT: '7053',
+      },
+      mount: false,
+    });
 
-  expect(run).toStrictEqual({
-    stdout: [
-      '-A INPUT -i imp+ -p tcp -m tcp --dport 7053 -m comment --comment imp-egress-dns -j ACCEPT',
-      '-A INPUT -i imp+ -p udp -m udp --dport 7053 -m comment --comment imp-egress-dns -j ACCEPT',
-      '-A PREROUTING ! -i imp+ -p udp -m udp --dport 7053 -m addrtype --dst-type LOCAL -m comment --comment imp-egress-dns -j DROP',
-      '-A PREROUTING ! -i imp+ -p tcp -m tcp --dport 7053 -m addrtype --dst-type LOCAL -m comment --comment imp-egress-dns -j DROP',
-      '',
-    ].join('\n'),
-    stderr: '',
-    exitCode: 0,
-  });
-});
+    expect(run).toStrictEqual({
+      stdout: [
+        '-A INPUT -i imp+ -p tcp -m tcp --dport 7053 -m comment --comment imp-egress-dns -j ACCEPT',
+        '-A INPUT -i imp+ -p udp -m udp --dport 7053 -m comment --comment imp-egress-dns -j ACCEPT',
+        '-A PREROUTING ! -i imp+ -p udp -m udp --dport 7053 -m addrtype --dst-type LOCAL -m comment --comment imp-egress-dns -j DROP',
+        '-A PREROUTING ! -i imp+ -p tcp -m tcp --dport 7053 -m addrtype --dst-type LOCAL -m comment --comment imp-egress-dns -j DROP',
+        '',
+      ].join('\n'),
+      stderr: '',
+      exitCode: 0,
+    });
+  },
+);
 
-test.skipIf(
-  !probeUnshare([
-    'sh',
-    '-c',
-    'iptables -t raw -S && ip6tables -t raw -S && ip link && command -v sysctl',
-  ]),
-)(
+test.skipIf(!fullNetfilter)(
   'it writes the IPv6 guest rules, the MSS clamp and the forwarding sysctls once, with an IPv6 uplink',
   () => {
     const run = runInNetns({
@@ -263,13 +263,7 @@ sysctl -n net.ipv6.conf.up0.accept_ra net.ipv6.conf.default.accept_ra net.ipv6.c
   },
 );
 
-test.skipIf(
-  !probeUnshare([
-    'sh',
-    '-c',
-    'iptables -t raw -S && ip6tables -t raw -S && ip link && command -v sysctl',
-  ]),
-)(
+test.skipIf(!fullNetfilter)(
   'it replaces an older 0x2/0x2 network mark rule with the 0x1000000 one, ahead of the drop between taps',
   () => {
     const run = runInNetns({
