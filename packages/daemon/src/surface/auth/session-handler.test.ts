@@ -27,21 +27,19 @@ test('#login sets a session cookie naming the token, for 30 days', async () => {
 
   const [tokenId = ''] = made.secret.slice('imp_'.length).split('.');
 
-  const handleSession = createSessionHandler({
+  const sessions = createSessionHandler({
     tokens,
     rootToken: 'root-secret',
     now: () => 1_800_000_000_000,
   });
 
-  const response = await handleSession(
+  const response = await sessions.respond(
     new Request('http://imp:7070/rpc/auth/login', {
       method: 'POST',
       headers: { 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
       body: JSON.stringify({ json: { token: made.secret } }),
     }),
   );
-
-  invariant(response);
 
   const [pair = ''] = (response.headers.get('set-cookie') ?? '').split(';');
   const [value] = readSessionCookies(pair);
@@ -60,17 +58,15 @@ test('#login sets an http-only strict cookie on / over plain HTTP', async () => 
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const handleSession = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
 
-  const response = await handleSession(
+  const response = await sessions.respond(
     new Request('http://imp:7070/rpc/auth/login', {
       method: 'POST',
       headers: { 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
       body: JSON.stringify({ json: { token: 'root-secret' } }),
     }),
   );
-
-  invariant(response);
 
   const cookie = Bun.Cookie.parse(response.headers.get('set-cookie') ?? '');
 
@@ -89,17 +85,15 @@ test('#login sets the Secure __Host- cookie for an https request', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const handleSession = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
 
-  const response = await handleSession(
+  const response = await sessions.respond(
     new Request('https://imp.example.com/rpc/auth/login', {
       method: 'POST',
       headers: { 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
       body: JSON.stringify({ json: { token: 'root-secret' } }),
     }),
   );
-
-  invariant(response);
 
   const cookie = Bun.Cookie.parse(response.headers.get('set-cookie') ?? '');
 
@@ -116,9 +110,9 @@ test('#login sets the Secure __Host- cookie behind a TLS front that says so', as
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const handleSession = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
 
-  const response = await handleSession(
+  const response = await sessions.respond(
     new Request('http://imp:7070/rpc/auth/login', {
       method: 'POST',
       headers: {
@@ -130,7 +124,7 @@ test('#login sets the Secure __Host- cookie behind a TLS front that says so', as
     }),
   );
 
-  expect(response?.headers.get('set-cookie')).toStartWith('__Host-imp_session=');
+  expect(response.headers.get('set-cookie')).toStartWith('__Host-imp_session=');
 });
 
 test.each([
@@ -149,17 +143,15 @@ test.each([
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const handleSession = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
 
-  const response = await handleSession(
+  const response = await sessions.respond(
     new Request('http://imp:7070/rpc/auth/login', {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json' },
       body: JSON.stringify({ json: { token: 'root-secret' } }),
     }),
   );
-
-  invariant(response);
 
   const body: unknown = await response.json();
 
@@ -172,17 +164,15 @@ test('#login refuses a token that authenticates nobody', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const handleSession = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
 
-  const response = await handleSession(
+  const response = await sessions.respond(
     new Request('http://imp:7070/rpc/auth/login', {
       method: 'POST',
       headers: { 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
       body: JSON.stringify({ json: { token: 'wrong' } }),
     }),
   );
-
-  invariant(response);
 
   const body: unknown = await response.json();
 
@@ -195,17 +185,15 @@ test('#login refuses a body without a token', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const handleSession = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
 
-  const response = await handleSession(
+  const response = await sessions.respond(
     new Request('http://imp:7070/rpc/auth/login', {
       method: 'POST',
       headers: { 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
       body: JSON.stringify({ json: { secret: 'root-secret' } }),
     }),
   );
-
-  invariant(response);
 
   expect(response.status).toBe(400);
   expect(response.headers.get('set-cookie')).toBeNull();
@@ -215,16 +203,14 @@ test('#login refuses a GET, which a link on any page can send', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const handleSession = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
   const data = encodeURIComponent(JSON.stringify({ json: { token: 'root-secret' } }));
 
-  const response = await handleSession(
+  const response = await sessions.respond(
     new Request(`http://imp:7070/rpc/auth/login?data=${data}`, {
       headers: { 'sec-fetch-site': 'same-origin' },
     }),
   );
-
-  invariant(response);
 
   expect(response.status).toBe(405);
   expect(response.headers.get('set-cookie')).toBeNull();
@@ -236,22 +222,20 @@ test('#logout clears the plain cookie over plain HTTP and reports the logout', a
 
   const onLogout = mock(() => {});
 
-  const handleSession = createSessionHandler({
+  const sessions = createSessionHandler({
     tokens,
     rootToken: 'root-secret',
     now: Date.now,
     onLogout,
   });
 
-  const response = await handleSession(
+  const response = await sessions.respond(
     new Request('http://imp:7070/rpc/auth/logout', {
       method: 'POST',
       headers: { 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
       body: JSON.stringify({}),
     }),
   );
-
-  invariant(response);
 
   expect(response.status).toBe(200);
 
@@ -276,17 +260,15 @@ test('#logout clears both cookies over HTTPS', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const handleSession = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
 
-  const response = await handleSession(
+  const response = await sessions.respond(
     new Request('https://imp.example.com/rpc/auth/logout', {
       method: 'POST',
       headers: { 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
       body: JSON.stringify({}),
     }),
   );
-
-  invariant(response);
 
   expect(
     response.headers.getSetCookie().map((header) => Bun.Cookie.parse(header).toJSON()),
@@ -310,14 +292,14 @@ test.each([
 
   const onLogout = mock(() => {});
 
-  const handleSession = createSessionHandler({
+  const sessions = createSessionHandler({
     tokens,
     rootToken: 'root-secret',
     now: Date.now,
     onLogout,
   });
 
-  const response = await handleSession(
+  const response = await sessions.respond(
     new Request('http://imp:7070/rpc/auth/logout', {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json' },
@@ -325,23 +307,37 @@ test.each([
     }),
   );
 
-  expect(response?.status).toBe(403);
+  expect(response.status).toBe(403);
   expect(onLogout).not.toHaveBeenCalled();
 });
 
-test('it leaves a call outside auth to the caller router', async () => {
+test.each([
+  ['/rpc/auth/login', true],
+  ['/rpc/auth/logout', true],
+  ['/rpc/system/info', false],
+  ['/rpc/authors', false],
+])('#isSessionCall takes %s as a session call: %p', async (path, isSession) => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const handleSession = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
 
-  const response = await handleSession(
-    new Request('http://imp:7070/rpc/system/info', {
+  expect(sessions.isSessionCall(new Request(`http://imp:7070${path}`))).toBe(isSession);
+});
+
+test('#respond answers a session path with no procedure with 404', async () => {
+  const ctx = await setupTest();
+  const tokens = await ctx.loadTokens('root-secret');
+
+  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+
+  const response = await sessions.respond(
+    new Request('http://imp:7070/rpc/auth/whoami', {
       method: 'POST',
       headers: { 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
       body: JSON.stringify({}),
     }),
   );
 
-  expect(response).toBeNull();
+  expect(response.status).toBe(404);
 });

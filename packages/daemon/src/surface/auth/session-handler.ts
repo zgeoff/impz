@@ -23,6 +23,8 @@ export interface SessionHandlerDeps {
   readonly logFailure?: (failure: unknown) => void;
 }
 
+const SESSION_PATH = '/rpc/auth/';
+
 interface SessionContext {
   readonly request: Request;
   readonly resHeaders?: Headers;
@@ -81,10 +83,14 @@ export function createSessionHandler(deps: Readonly<SessionHandlerDeps>) {
     ],
   });
 
-  return async (request: Request): Promise<Response | null> => {
-    const handled = await handler.handle(request, { prefix: '/rpc', context: { request } });
+  return {
+    isSessionCall: (request: Request): boolean =>
+      new URL(request.url).pathname.startsWith(SESSION_PATH),
+    respond: async (request: Request): Promise<Response> => {
+      const handled = await handler.handle(request, { prefix: '/rpc', context: { request } });
 
-    return handled.matched ? handled.response : null;
+      return handled.matched ? handled.response : new Response('not found', { status: 404 });
+    },
   };
 }
 

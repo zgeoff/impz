@@ -245,7 +245,7 @@ export function createApp(deps: AppDeps) {
     challenge: `Bearer resource_metadata="${deps.oauth.issuer}/.well-known/oauth-protected-resource/mcp", scope="read"`,
   });
 
-  const handleSession = createSessionHandler({
+  const sessionCalls = createSessionHandler({
     tokens: deps.tokens,
     rootToken: deps.rootToken,
     now: deps.now,
@@ -267,10 +267,8 @@ export function createApp(deps: AppDeps) {
     .all(
       '/rpc*',
       async (context) => {
-        const session = await handleSession(context.request);
-
-        if (session !== null) {
-          return session;
+        if (sessionCalls.isSessionCall(context.request)) {
+          return sessionCalls.respond(context.request);
         }
 
         const caller = await findCaller(context.request, context.server, true);
