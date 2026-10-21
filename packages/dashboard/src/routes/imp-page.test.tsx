@@ -170,7 +170,7 @@ test('it goes back to the list without asking for the imp it destroyed', async (
   await ctx.client.imps.create({ name: 'web' });
   await ctx.logIn();
 
-  server.events.on('response:mocked', (event) => {
+  server.events.on('response:mocked', (event: Readonly<Record<'response', Response>>) => {
     answered(event.response.status);
   });
 
