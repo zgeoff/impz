@@ -89,14 +89,18 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
   };
 
   const resolveImage = async (name?: string): Promise<ImageRecord> => {
+    const names = name === undefined ? [deps.config.defaultImage, FALLBACK_DEFAULT_IMAGE] : [name];
+
+    // The use goes in before the read, so a prune either sees it and keeps the image, or
+    // removed the image first and the read finds nothing.
+    await updateImageUse(deps.db, 'name', names, now());
+
     const image =
       name === undefined ? await readDefaultImage() : await readImageByName(deps.db, name);
 
     if (image === undefined) {
       throw buildNotFoundError('image', name ?? deps.config.defaultImage);
     }
-
-    await updateImageUse(deps.db, [image.id], now());
 
     return image;
   };

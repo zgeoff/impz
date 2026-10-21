@@ -136,17 +136,18 @@ export async function countImageDigestUses(db: ImpDatabase, digest: string): Pro
 
 export async function updateImageUse(
   db: ImpDatabase,
-  imageIDs: readonly string[],
+  column: 'id' | 'name' | 'digest',
+  values: readonly string[],
   at: number,
 ): Promise<void> {
-  if (imageIDs.length === 0) {
+  if (values.length === 0) {
     return;
   }
 
   await db
     .updateTable('images')
     .set({ last_used_at: at })
-    .where('id', 'in', imageIDs)
+    .where(column, 'in', values)
     .where('last_used_at', '<', at)
     .execute();
 }

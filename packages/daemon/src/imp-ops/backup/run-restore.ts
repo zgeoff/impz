@@ -256,11 +256,12 @@ async function createJoinedImage(
   image: ManifestImage,
   workDir: string,
 ): Promise<string> {
+  // The use goes in before the read, so an image prune keeps the image this restore picks.
+  await updateImageUse(deps.db, 'digest', [image.digest], deps.now().getTime());
+
   const existing = await readImageByDigest(deps.db, image.digest);
 
   if (existing !== undefined) {
-    await updateImageUse(deps.db, [existing.id], deps.now().getTime());
-
     return existing.name;
   }
 

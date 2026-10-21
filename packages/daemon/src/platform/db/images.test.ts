@@ -238,7 +238,7 @@ test('#listImageUses lists each image with its last use and the imps that use it
     buildMockNewImp({ name: 'two', imageId: image.id, slot: 1, ip: '10.66.0.6' }),
   );
 
-  await updateImageUse(ctx.db, [image.id], Date.parse('2030-01-01T00:00:00Z'));
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
 
   const uses = await listImageUses(ctx.db);
 
@@ -268,8 +268,8 @@ test('#updateImageUse never moves a last use back', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage({ name: 'agent-0a1b2c3' }));
 
-  await updateImageUse(ctx.db, [image.id], Date.parse('2030-01-02T00:00:00Z'));
-  await updateImageUse(ctx.db, [image.id], Date.parse('2030-01-01T00:00:00Z'));
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-02T00:00:00Z'));
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
 
   const uses = await listImageUses(ctx.db);
 
@@ -297,7 +297,7 @@ test('#removeUnusedImage removes an image no imp uses at the last use the caller
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
 
-  await updateImageUse(ctx.db, [image.id], Date.parse('2030-01-01T00:00:00Z'));
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
 
   const isRemoved = await removeUnusedImage(ctx.db, image.id, Date.parse('2030-01-01T00:00:00Z'));
   const stored = await readImageById(ctx.db, image.id);
@@ -310,7 +310,7 @@ test('#removeUnusedImage keeps an image an imp uses', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
 
-  await updateImageUse(ctx.db, [image.id], Date.parse('2030-01-01T00:00:00Z'));
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
   await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
   const isRemoved = await removeUnusedImage(ctx.db, image.id, Date.parse('2030-01-01T00:00:00Z'));
@@ -324,8 +324,8 @@ test('#removeUnusedImage keeps an image used again since the caller read its las
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
 
-  await updateImageUse(ctx.db, [image.id], Date.parse('2030-01-01T00:00:00Z'));
-  await updateImageUse(ctx.db, [image.id], Date.parse('2030-01-02T00:00:00Z'));
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-02T00:00:00Z'));
 
   const isRemoved = await removeUnusedImage(ctx.db, image.id, Date.parse('2030-01-01T00:00:00Z'));
   const stored = await readImageById(ctx.db, image.id);

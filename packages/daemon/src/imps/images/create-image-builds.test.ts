@@ -530,6 +530,59 @@ test('it keeps every agent image after a build while the prune cannot read which
   ]);
 });
 
+test('it keeps an old agent image that a build of the same digest rebuilds', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => builder.builders,
+    log: () => {},
+  });
+
+  await writeFile(join(ctx.dataDir, 'image-keep'), '');
+
+  await Bun.write(
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+  );
+
+  const first = await images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'agent-1111111',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'agent-1111111')
+    .execute();
+
+  const rebuilt = await images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'agent-1111111',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  const kept = await listImages(ctx.db);
+
+  expect(rebuilt.digest).toBe(first.digest);
+  expect(kept.map((image) => image.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
+});
+
 test('it releases the disk hold when the export is over the file limit', async () => {
   const ctx = await setupTest();
 

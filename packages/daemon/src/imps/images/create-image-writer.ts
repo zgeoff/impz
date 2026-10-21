@@ -11,6 +11,7 @@ import {
   createImage,
   readImageByName,
   updateImage,
+  updateImageUse,
 } from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
@@ -210,6 +211,8 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     }
 
     if (existing.digest === digest) {
+      await updateImageUse(deps.db, 'id', [existing.id], Date.now());
+
       return existing;
     }
 

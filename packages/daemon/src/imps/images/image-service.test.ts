@@ -1,11 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
+import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { loadConfig } from '../../config';
 import { createImage, listImageUses } from '../../platform/db/images';
 import { openDatabase } from '../../platform/db/open-database';
@@ -450,6 +451,48 @@ test('#resolveImage records the lookup as a use of the image', async () => {
   const uses = await listImageUses(ctx.db);
 
   expect(uses[0]?.lastUsedAt).toBe(Date.parse('2030-01-01T00:00:00Z'));
+});
+
+test('#resolveImage keeps an old image that a prune reaches while the lookup reads it', async () => {
+  const ctx = await setupTest();
+
+  const gate = buildQueryGate('agent-1111111');
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    db: gate.wrap(ctx.db),
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  await writeFile(join(ctx.dataDir, 'image-keep'), '');
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-1111111' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'agent-1111111')
+    .execute();
+
+  gate.arm();
+
+  const resolving = images.resolveImage('agent-1111111');
+
+  await gate.reached;
+
+  await images.runImagePrune();
+
+  gate.release();
+
+  const image = await resolving;
+  const uses = await listImageUses(ctx.db);
+
+  expect(image.name).toBe('agent-1111111');
+  expect(uses.map((use) => use.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
 });
 
 test('#resolveImage answers NOT_FOUND for a name no image has', async () => {

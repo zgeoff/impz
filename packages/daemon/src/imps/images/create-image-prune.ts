@@ -80,7 +80,7 @@ export function createImagePrune(deps: ImagePruneDeps): ImagePrune {
 
     const plan = pickPrunedImages(uses, keptNames, rule, at);
 
-    await updateImageUse(deps.db, plan.usedIDs, at);
+    await updateImageUse(deps.db, 'id', plan.usedIDs, at);
 
     for (const use of plan.removed) {
       await removeImage(use);

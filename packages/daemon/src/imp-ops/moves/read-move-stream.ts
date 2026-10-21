@@ -338,11 +338,12 @@ async function requireImage(
   count: ByteCounter,
   tempBase: string,
 ): Promise<{ readonly name: string; readonly files: readonly ReceivedFile[] }> {
+  // The use goes in before each read, so an image prune keeps the image this move picks.
+  await updateImageUse(deps.db, 'digest', [header.image.digest], deps.now());
+
   const existing = await readImageByDigest(deps.db, header.image.digest);
 
   if (existing !== undefined) {
-    await updateImageUse(deps.db, [existing.id], deps.now());
-
     return { name: existing.name, files: [] };
   }
 
@@ -363,11 +364,11 @@ async function requireImage(
 
     const digest = buildReceivedDigest(rootfs.sha256, config.sha256);
 
+    await updateImageUse(deps.db, 'digest', [digest], deps.now());
+
     const known = await readImageByDigest(deps.db, digest);
 
     if (known !== undefined) {
-      await updateImageUse(deps.db, [known.id], deps.now());
-
       return { name: known.name, files };
     }
 
