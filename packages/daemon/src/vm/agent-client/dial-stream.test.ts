@@ -2,7 +2,14 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import {
+  ErrorResponseSchema,
+  FRAME_TYPES,
+  OKSchema,
+  decodeJsonPayload,
+  encodeFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
 import { startStubAgent } from '../../../testing/vm/start-stub-agent';
 import { startStubDialAgent } from '../../../testing/vm/start-stub-dial-agent';
@@ -22,7 +29,7 @@ test('it asks the agent to dial the target', async () => {
   const ctx = setupTest();
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+    socket.end(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
   });
 
   const stream = await openDialStream(ctx.vsockPath, { network: 'tcp', address: '127.0.0.1:8080' });
@@ -66,7 +73,7 @@ test('it rejects with DIAL_FAILED when the agent cannot connect', async () => {
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'DIAL_FAILED', message: 'dial tcp 127.0.0.1:8080: connection refused' },
       }),
     );
@@ -85,7 +92,7 @@ test('it rejects with AGENT_OUTDATED for an agent from before dial', async () =>
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'UNKNOWN_OP', message: 'unknown op dial' },
       }),
     );
@@ -134,7 +141,7 @@ test('it ends the events without an eof when the target resets', async () => {
   const ctx = setupTest();
 
   await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
     socket.end(encodeFrame(FRAME_TYPES.stdout, new TextEncoder().encode('partial')));
   });
 

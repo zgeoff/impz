@@ -2,7 +2,15 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import {
+  DetachedSchema,
+  ErrorResponseSchema,
+  FRAME_TYPES,
+  StartedSchema,
+  decodeJsonPayload,
+  encodeFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
 import { startStubAgent } from '../../../testing/vm/start-stub-agent';
 import { startStubEchoExecAgent } from '../../../testing/vm/start-stub-echo-exec-agent';
@@ -22,7 +30,7 @@ test('#openExecStream asks the agent for an exec', async () => {
   const ctx = setupTest();
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.started, { pid: 42 }));
+    socket.end(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42 }));
   });
 
   const stream = await openExecStream(ctx.vsockPath, { argv: ['cat'], tty: false });
@@ -66,7 +74,7 @@ test('#openExecStream rejects with the agent error when the process cannot start
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'EXEC_FAILED', message: 'start nope: no such file' },
       }),
     );
@@ -130,7 +138,7 @@ test('#openExecStream rejects with AGENT_OUTDATED and closes the connection when
       closed.resolve();
     });
 
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 42 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42 }));
   });
 
   expect(
@@ -144,7 +152,7 @@ test('#openExecStream opens a plain exec with no session', async () => {
   const ctx = setupTest();
 
   await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.started, { pid: 42 }));
+    socket.end(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42 }));
   });
 
   const stream = await openExecStream(ctx.vsockPath, { argv: ['true'], tty: false });
@@ -160,7 +168,9 @@ test('#openExecStream sends the kill grace to the agent', async () => {
   const ctx = setupTest();
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 42, kill_grace_ms: 2000 }));
+    socket.write(
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42, killGraceMs: 2000 }),
+    );
   });
 
   const stream = await openExecStream(ctx.vsockPath, {
@@ -187,7 +197,9 @@ test("#openExecStream arms the group kill when the agent's STARTED echoes the ki
   const ctx = setupTest();
 
   await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 42, kill_grace_ms: 2000 }));
+    socket.write(
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42, killGraceMs: 2000 }),
+    );
   });
 
   const stream = await openExecStream(ctx.vsockPath, {
@@ -205,7 +217,7 @@ test('#openExecStream leaves the group kill off for an agent that does not echo 
   const ctx = setupTest();
 
   await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 42 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42 }));
   });
 
   const stream = await openExecStream(ctx.vsockPath, {
@@ -223,7 +235,7 @@ test('#openExecStream leaves the group kill off without a kill grace', async () 
   const ctx = setupTest();
 
   await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 42 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42 }));
   });
 
   const stream = await openExecStream(ctx.vsockPath, { argv: ['true'], tty: false });
@@ -237,7 +249,7 @@ test('#openExecStream sends an outer exec as the exec.outer op', async () => {
   const ctx = setupTest();
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.started, { pid: 42 }));
+    socket.end(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42 }));
   });
 
   const stream = await openExecStream(ctx.vsockPath, {
@@ -264,7 +276,7 @@ test('#openExecStream rejects an outer exec with AGENT_OUTDATED for an agent fro
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'UNKNOWN_OP', message: 'unknown op exec.outer' },
       }),
     );
@@ -282,7 +294,9 @@ test('#openAttachStream asks the agent to attach to the session', async () => {
   const ctx = setupTest();
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.started, { pid: 42, session: 'main' }));
+    socket.end(
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42, session: 'main' }),
+    );
   });
 
   const stream = await openAttachStream(ctx.vsockPath, { session: 'main', cols: 80, rows: 24 });
@@ -305,9 +319,12 @@ test('#openAttachStream streams the replay, then detached', async () => {
   const ctx = setupTest();
 
   await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 42, session: 'main' }));
+    socket.write(
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42, session: 'main' }),
+    );
+
     socket.write(encodeFrame(FRAME_TYPES.stdout, new TextEncoder().encode('replay')));
-    socket.end(encodeJsonFrame(FRAME_TYPES.detached, { reason: 'taken_over' }));
+    socket.end(encodeMessageFrame(FRAME_TYPES.detached, DetachedSchema, { reason: 'taken_over' }));
   });
 
   const stream = await openAttachStream(ctx.vsockPath, { session: 'main' });
@@ -323,7 +340,9 @@ test('#openAttachStream replays as before for an agent from before output offset
   const ctx = setupTest();
 
   await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.started, { pid: 42, session: 'main' }));
+    socket.end(
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42, session: 'main' }),
+    );
   });
 
   const stream = await openAttachStream(ctx.vsockPath, { session: 'main' });
@@ -340,7 +359,9 @@ test('#openAttachStream sends a resume in the agent shape, without wake', async 
   const ctx = setupTest();
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.started, { pid: 42, session: 'main' }));
+    socket.end(
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42, session: 'main' }),
+    );
   });
 
   const stream = await openAttachStream(ctx.vsockPath, {
@@ -367,18 +388,18 @@ test("#openAttachStream places the session's output from STARTED", async () => {
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.started, {
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
         pid: 42,
         session: 'main',
         output: {
-          boot_id: '11111111-1111-4111-8111-111111111111',
-          execution_generation: 'e'.repeat(32),
-          buffer_start: 10,
+          bootId: '11111111-1111-4111-8111-111111111111',
+          executionGeneration: 'e'.repeat(32),
+          bufferStart: 10,
           end: 20,
           offset: 10,
           prelude: 0,
           previous: {
-            execution_generation: 'd'.repeat(32),
+            executionGeneration: 'd'.repeat(32),
             end: 7,
             exit: { code: 0, signal: 9 },
           },
@@ -414,14 +435,14 @@ test("#openAttachStream rejects with NO_SESSION carrying the agent's data in the
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: {
           code: 'NO_SESSION',
           message: 'no session "main"',
           data: {
-            boot_id: '11111111-1111-4111-8111-111111111111',
+            bootId: '11111111-1111-4111-8111-111111111111',
             previous: {
-              execution_generation: 'd'.repeat(32),
+              executionGeneration: 'd'.repeat(32),
               end: 7,
               exit: { code: 3, signal: 0 },
             },
@@ -446,11 +467,11 @@ test("#openAttachStream rejects with INVALID_RESUME carrying the agent's data in
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: {
           code: 'INVALID_RESUME',
           message: 'offset past the end',
-          data: { end: 20, buffer_start: 10 },
+          data: { end: 20, bufferStart: 10 },
         },
       }),
     );
@@ -469,8 +490,8 @@ test('#openAttachStream drops error data that does not parse', async () => {
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
-        error: { code: 'NO_SESSION', message: 'no session "main"', data: { boot_id: 'a/b' } },
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
+        error: { code: 'NO_SESSION', message: 'no session "main"', data: { bootId: 'a/b' } },
       }),
     );
   });
@@ -486,7 +507,7 @@ test('#openAttachStream rejects with AGENT_OUTDATED for an agent from before ses
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'UNKNOWN_OP', message: 'unknown op' },
       }),
     );
@@ -502,7 +523,9 @@ test('#openTapStream asks the agent to tap the session from the resume point', a
   const ctx = setupTest();
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.started, { pid: 42, session: 'main' }));
+    socket.end(
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 42, session: 'main' }),
+    );
   });
 
   const stream = await openTapStream(ctx.vsockPath, 'main', {
@@ -528,13 +551,13 @@ test('#openTapStream reports the log as on when a logged STARTED says so', async
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.started, {
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
         pid: 42,
         session: 'main',
         output: {
-          boot_id: '11111111-1111-4111-8111-111111111111',
-          execution_generation: 'e'.repeat(32),
-          buffer_start: 0,
+          bootId: '11111111-1111-4111-8111-111111111111',
+          executionGeneration: 'e'.repeat(32),
+          bufferStart: 0,
           end: 9,
           offset: 9,
           prelude: 0,
@@ -568,7 +591,7 @@ test('#openTapStream rejects with AGENT_OUTDATED for an agent from before sessio
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'UNKNOWN_OP', message: 'unknown op' },
       }),
     );
@@ -610,13 +633,13 @@ test.each([
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.started, {
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
         pid: 42,
         session: 'main',
         output: {
-          boot_id: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
-          execution_generation: value,
-          buffer_start: 0,
+          bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+          executionGeneration: value,
+          bufferStart: 0,
           end: 0,
           offset: 0,
           prelude: 0,
@@ -660,13 +683,13 @@ test.each([
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.started, {
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
         pid: 42,
         session: 'main',
         output: {
-          boot_id: value,
-          execution_generation: '0123456789abcdef0123456789abcdef',
-          buffer_start: 0,
+          bootId: value,
+          executionGeneration: '0123456789abcdef0123456789abcdef',
+          bufferStart: 0,
           end: 0,
           offset: 0,
           prelude: 0,
@@ -709,13 +732,13 @@ test.each([
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.started, {
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
         pid: 42,
         session: value,
         output: {
-          boot_id: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
-          execution_generation: '0123456789abcdef0123456789abcdef',
-          buffer_start: 0,
+          bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+          executionGeneration: '0123456789abcdef0123456789abcdef',
+          bufferStart: 0,
           end: 0,
           offset: 0,
           prelude: 0,

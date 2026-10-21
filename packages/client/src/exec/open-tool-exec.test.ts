@@ -3,7 +3,14 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
-import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import {
+  ExitSchema,
+  FRAME_TYPES,
+  StartedSchema,
+  decodeJsonPayload,
+  encodeFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import { EXEC_MAX_STDIN_FRAME_BYTES, EXEC_STDIN_WINDOW_BYTES } from '@impz/api';
 import { createImage } from '@impz/daemon/src/platform/db/images';
 import { readVmIdentity, writeVmIdentity } from '@impz/daemon/src/vm/sleep/vm-identity';
@@ -73,8 +80,8 @@ test('it sends an archive whole through impd to the imp’s tool and returns its
   const agent = await startStubAgent(
     paths.vsockSocket,
     buildStubExecReplies({
-      started: [encodeJsonFrame(FRAME_TYPES.started, { pid: 9 })],
-      exited: [encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal: 0 })],
+      started: [encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 })],
+      exited: [encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal: 0 })],
       onStdin: (payload) => {
         archive.write(payload);
       },
@@ -251,11 +258,11 @@ test('it acks a tool’s stdout to impd so a download past the window completes'
 
   await startStubAgent(paths.vsockSocket, (socket, _request, frames) => {
     if (frames.length === 1) {
-      socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
       socket.write(encodeFrame(FRAME_TYPES.stdout, frame));
       socket.write(encodeFrame(FRAME_TYPES.stdout, frame));
       socket.write(encodeFrame(FRAME_TYPES.stdout, frame));
-      socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal: 0 }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal: 0 }));
     }
   });
 
@@ -339,7 +346,7 @@ test('it rejects with impd’s message when the imp’s agent drops the exec aft
 
   await startStubAgent(paths.vsockSocket, (socket, _request, frames) => {
     if (frames.length === 1) {
-      socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
     } else if (frames.at(-1)?.type === FRAME_TYPES.stdinEof) {
       socket.end();
     }

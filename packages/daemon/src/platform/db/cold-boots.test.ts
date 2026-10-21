@@ -1,6 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rmSync } from 'node:fs';
-import { FRAME_TYPES, encodeJsonFrame } from '@impz/agent-protocol';
+import {
+  ErrorResponseSchema,
+  FRAME_TYPES,
+  StartedSchema,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
@@ -167,14 +172,14 @@ test('it answers an attach that boots a crashed imp with NO_SESSION and its cold
     bootId: 'boot-old',
     replies: [
       {
-        frame: encodeJsonFrame(FRAME_TYPES.response, {
+        frame: encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
           error: {
             code: 'NO_SESSION',
             message: 'no session "main"',
             data: {
-              boot_id: '22222222-2222-4222-8222-222222222222',
+              bootId: '22222222-2222-4222-8222-222222222222',
               previous: {
-                execution_generation: 'c'.repeat(32),
+                executionGeneration: 'c'.repeat(32),
                 end: 12,
                 exit: { code: 137, signal: 9 },
               },
@@ -250,13 +255,13 @@ test('it names the cold boots in a session’s started output', async () => {
     bootId: 'boot-old',
     replies: [
       {
-        frame: encodeJsonFrame(FRAME_TYPES.started, {
+        frame: encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
           pid: 9,
           session: 'main',
           output: {
-            boot_id: '22222222-2222-4222-8222-222222222222',
-            execution_generation: 'c'.repeat(32),
-            buffer_start: 0,
+            bootId: '22222222-2222-4222-8222-222222222222',
+            executionGeneration: 'c'.repeat(32),
+            bufferStart: 0,
             end: 5,
             offset: 2,
             prelude: 0,
@@ -317,11 +322,11 @@ test('it keeps the data of a resume error the agent sends', async () => {
     bootId: 'boot-old',
     replies: [
       {
-        frame: encodeJsonFrame(FRAME_TYPES.response, {
+        frame: encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
           error: {
             code: 'INVALID_RESUME',
             message: 'offset 9 is past the end of the output, 5',
-            data: { end: 5, buffer_start: 0 },
+            data: { end: 5, bufferStart: 0 },
           },
         }),
         isEnd: true,

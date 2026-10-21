@@ -3,7 +3,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FRAME_TYPES, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import {
+  FRAME_TYPES,
+  OKSchema,
+  encodeFrame,
+  encodeJsonFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import type { AgentFrame } from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { startStubAgent } from './start-stub-agent';
@@ -209,7 +215,7 @@ test('it hands the handler the socket that replies to the client', async () => {
   const ctx = await setupTest();
 
   await startStubAgent(join(ctx.directoryPath, 'v.sock'), (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
   });
 
   const client = createConnection(join(ctx.directoryPath, 'v.sock'));
@@ -237,7 +243,7 @@ test('it hands the handler the socket that replies to the client', async () => {
   expect(reply).toStrictEqual(
     Buffer.concat([
       Buffer.from('OK 1073741824\n'),
-      encodeJsonFrame(FRAME_TYPES.response, { ok: true }),
+      encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }),
     ]),
   );
 });

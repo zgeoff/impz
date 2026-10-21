@@ -1,6 +1,11 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
-import { FRAME_TYPES, encodeJsonFrame } from '@impz/agent-protocol';
+import {
+  ErrorResponseSchema,
+  FRAME_TYPES,
+  OKSchema,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import { TUNNEL_MAX_FRAME_BYTES, TUNNEL_WINDOW_BYTES } from '@impz/api';
 import { createImage } from '@impz/daemon/src/platform/db/images';
 import { readVmIdentity, writeVmIdentity } from '@impz/daemon/src/vm/sleep/vm-identity';
@@ -102,7 +107,7 @@ test('it holds bytes past the window until impd acks them', async () => {
   writeVmIdentity(paths, { ...identity, agentVersion: '0.18.0' });
 
   const agent = await startStubAgent(paths.vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
     socket.pause();
   });
 
@@ -155,7 +160,7 @@ test('it ends as failed with impd’s code when the dial in the imp fails', asyn
 
   const agent = await startStubAgent(paths.vsockSocket, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'DIAL_FAILED', message: 'dial tcp 127.0.0.1:9: connection refused' },
       }),
     );

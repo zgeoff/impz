@@ -3,7 +3,15 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FRAME_TYPES, buildFrameDecoder, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import {
+  ExitSchema,
+  FRAME_TYPES,
+  StartedSchema,
+  buildFrameDecoder,
+  encodeFrame,
+  encodeJsonFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import type { AgentFrame } from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { buildStubExecReplies } from './build-stub-exec-replies';
@@ -22,10 +30,10 @@ test('it answers the request with the started frames, and nothing more before st
 
   const exec = buildStubExecReplies({
     started: [
-      encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }),
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }),
       encodeFrame(FRAME_TYPES.stdout, new TextEncoder().encode('out')),
     ],
-    exited: [encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal: 0 })],
+    exited: [encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal: 0 })],
   });
 
   await startStubAgent(ctx.socket, exec);
@@ -76,8 +84,8 @@ test('it passes each stdin payload on, then answers the end of stdin with the ex
   await startStubAgent(
     ctx.socket,
     buildStubExecReplies({
-      started: [encodeJsonFrame(FRAME_TYPES.started, { pid: 7 })],
-      exited: [encodeJsonFrame(FRAME_TYPES.exit, { code: 3, signal: 0 })],
+      started: [encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 })],
+      exited: [encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 3, signal: 0 })],
       onStdin,
       onStdinEnd,
     }),

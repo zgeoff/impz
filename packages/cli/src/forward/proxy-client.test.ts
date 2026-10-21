@@ -3,7 +3,14 @@ import { readFileSync } from 'node:fs';
 import { connect, createServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { faker } from '@faker-js/faker';
-import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
+import {
+  ErrorResponseSchema,
+  FRAME_TYPES,
+  OKSchema,
+  decodeJsonPayload,
+  encodeFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import {
   TUNNEL_CLOSE_LOST,
   TUNNEL_CLOSE_PROTOCOL,
@@ -125,7 +132,7 @@ test('#startProxy stops reading an upload at the window while the guest takes no
   // the guest's server takes the dial, then reads nothing, so impd holds
   // its acks once the agent's socket is full
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
     socket.pause();
   });
 
@@ -231,7 +238,7 @@ test('#startProxy sends the rest of an upload once the guest takes it again', as
 
   const dialed = await guest.promise;
 
-  dialed.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+  dialed.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
 
   await waitFor(() => {
     expect(onWindowFull).toHaveBeenCalled();
@@ -360,7 +367,7 @@ test('#startProxy reports impd’s refusal of a dial and resets the local connec
 
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'DIAL_FAILED', message: 'dial tcp 127.0.0.1:9: connection refused' },
       }),
     );
@@ -497,7 +504,7 @@ test('#startProxy says impd restarted when impd closes an open tunnel to restart
   const dialed = Promise.withResolvers<void>();
 
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
     dialed.resolve();
   });
 
