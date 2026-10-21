@@ -16,6 +16,7 @@ async function setupTest(env: Readonly<Record<string, string>> = {}) {
     harness: dashboardImpd.harness,
     client: dashboardImpd.harness.client,
     logIn: dashboardImpd.logIn,
+    waitForEventStream: dashboardImpd.waitForEventStream,
   };
 }
 
@@ -219,6 +220,7 @@ test('it shows a change impd streams without waiting for the next poll', async (
 
   const row = await rendered.findByRole('row', { name: /web/u });
 
+  await ctx.waitForEventStream();
   await ctx.client.imps.sleep({ name: 'web' });
 
   const state = await within(row).findByText('sleeping');

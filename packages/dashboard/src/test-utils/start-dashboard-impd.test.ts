@@ -1,5 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
+import { readInBackground } from '@impz/daemon/testing';
+import { waitFor } from '@impz/test-utils/wait-for';
 import { IMPD_ORIGIN } from './impd-origin';
 import { startDashboardImpd } from './start-dashboard-impd';
 
@@ -37,6 +39,30 @@ test('it stops sending the session cookie once impd clears it', async () => {
   await fetch(`${IMPD_ORIGIN}/auth/logout`, { method: 'POST' });
 
   expect(ctx.client.tokens.whoami()).rejects.toMatchObject({ status: 401 });
+});
+
+test('it waits until an event stream has started, so an event published after reaches it', async () => {
+  const ctx = await setupTest();
+
+  await ctx.dashboardImpd.harness.createTestImage('base');
+  await ctx.dashboardImpd.logIn();
+
+  const controller = new AbortController();
+
+  onTestFinished(() => {
+    controller.abort();
+  });
+
+  const events = await ctx.client.events.stream(undefined, { signal: controller.signal });
+
+  const stream = readInBackground(events);
+
+  await ctx.dashboardImpd.waitForEventStream();
+  await ctx.dashboardImpd.harness.client.imps.create({ name: 'web' });
+
+  await waitFor(() => {
+    expect(stream.items).toPartiallyContain({ ev: 'ImpAdded', reason: 'created' });
+  });
 });
 
 test('it refuses a login with a token impd does not know', async () => {

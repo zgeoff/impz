@@ -22,6 +22,7 @@ export { startStubSilentOrigin } from './network/start-stub-silent-origin';
 export { buildQueryGate } from './platform/build-query-gate';
 export { buildStubClock } from './platform/build-stub-clock';
 export { claimFreePorts } from './platform/claim-free-ports';
+export { readInBackground } from './platform/read-in-background';
 
 export {
   STUB_BOOT_ID,
