@@ -19,10 +19,10 @@
 #
 # Env: IMP_DEV_PORT_OFFSET (default 300) for the dev instance imp-zfs;
 #      IMP_ZFS_BENCH_GIB (default 40) sizes the second pool's file;
-#      IMP_ZFS_E2E_SUITES (default checkpoints,sleep) picks the suites (CI adds
-#      lifecycle, disks, backups, boot-templates and moves, whose second impd
-#      gets a root dataset and a data dir of its own);
-#      IMP_ZFS_TEST_UNIT=0 skips part 1 (the zfs CI job runs it on its own).
+#      IMP_ZFS_E2E_SUITES (default checkpoints,sleep) picks the suites (CI's
+#      zfs shards each pass their own, the moves suite among them, whose
+#      second impd gets a root dataset and a data dir of its own);
+#      IMP_ZFS_TEST_UNIT=0 skips part 1 (one zfs CI shard runs it on its own).
 #      The summary is also written to <dir>/summary.txt.
 #      IMP_ZFS_MODULE_VERSION_FILE (default /sys/module/zfs/version) is
 #      where the loaded module's version is read, for the script's tests.

@@ -71,5 +71,7 @@ change a test:
   when every group passes. One group also runs the host networking tests as root, and one sets up
   the dashboard's browser. A unit test pins these roles against the workflow file, so a change to
   the groups changes both.
-- The `zfs` job is not a required check. It installs ZFS on its runner and runs both ZFS scripts, so
-  a ZFS failure on a pull request shows there and nowhere else.
+- The ZFS work runs as three `zfs-shard` jobs, and the required `zfs` check passes only when every
+  shard passes. Each shard installs ZFS on its runner and runs its suites; one also runs
+  `scripts/test-zfs.sh`. A ZFS failure on a pull request shows there and nowhere else, and a unit
+  test pins the shards against the workflow file.

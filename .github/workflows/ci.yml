@@ -604,18 +604,34 @@ jobs:
           echo "e2e groups: $RESULT"
           test "$RESULT" = success
 
-  # The ZFS storage backend on real pools: scripts/test-zfs.sh runs its tests
-  # on a throwaway pool in a sparse file, with the zfs module Ubuntu's kernel
-  # ships; then scripts/zfs-host-test.sh runs real imps on a second such pool
-  # through the lifecycle, checkpoints, disks, sleep, backups, boot-templates
-  # and moves suites and prints the ZFS timings. Not a required check; the
-  # fake zfs in the unit tests runs in `checks` either way.
-  zfs:
+  # The ZFS storage backend on real pools, in three shards on three runners:
+  # scripts/zfs-host-test.sh runs real imps on a pool in a sparse file, with
+  # the zfs module Ubuntu's kernel ships, through the shard's suites, and
+  # prints the ZFS timings. Shard 1 also runs scripts/test-zfs.sh on a
+  # throwaway pool of its own. The backups and moves suites run nowhere else.
+  # The `zfs` job below is the required check over all three.
+  zfs-shard:
+    name: zfs (shard ${{ matrix.shard }})
     runs-on: ubuntu-24.04
     permissions:
       contents: read
     # a cache miss rebuilds the guest kernel, about 10 minutes on 4 cores
     timeout-minutes: 30
+    strategy:
+      # every shard reports, so one failure does not hide another's
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 1
+            suites: backups
+            unit: true
+          # the only shard that builds the base image
+          - shard: 2
+            suites: backups-repo,moves
+            unit: false
+          - shard: 3
+            suites: lifecycle,checkpoints,disks,sleep,boot-templates
+            unit: false
     env:
       # as the e2e job: reduced sizes for a 4-core, 16 GB runner
       E2E_RAM_BUDGET_MIB: 4096
@@ -625,7 +641,7 @@ jobs:
       # the tag e2e-build loads; one checkout per runner needs no tag of its own
       IMP_HOST_IMAGE: imp-host:dev
       IMP_HOST_IMAGE_READY: 1
-      IMP_ZFS_E2E_SUITES: lifecycle,checkpoints,disks,sleep,backups,boot-templates,moves
+      IMP_ZFS_E2E_SUITES: ${{ matrix.suites }}
       IMP_ZFS_TEST_UNIT: 0
     steps:
       - name: Checkout
@@ -681,6 +697,7 @@ jobs:
 
       # the unit part runs here, in its own temp dir, so a failure names it
       - name: ZFS backend tests
+        if: matrix.unit
         run: sudo env "PATH=$PATH" IMP_ZFS_TEST_DIR= scripts/test-zfs.sh
 
       # reads the caches only: e2e group 1 writes the same scopes on push, and
@@ -719,10 +736,27 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: zfs-e2e-results
+          name: zfs-e2e-results-${{ matrix.shard }}
           path: .cache/e2e/
           if-no-files-found: ignore
           retention-days: 14
+
+  # The required check: every zfs shard passed. It runs whatever they did, so a
+  # shard that failed, was cancelled or was skipped fails it, and never passes
+  # as a skip.
+  zfs:
+    if: always()
+    needs: [zfs-shard]
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Require every zfs shard to pass
+        env:
+          RESULT: ${{ needs.zfs-shard.result }}
+        run: |
+          echo "zfs shards: $RESULT"
+          test "$RESULT" = success
 
   # Main-only jobs go below with `if: github.event_name == 'push'` and
   # `needs:` on the gates above.

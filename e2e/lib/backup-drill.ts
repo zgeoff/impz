@@ -3,8 +3,16 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as z from 'zod';
 import { runImp } from './imp-cli';
-import { REPO_ROOT, instance, runChecked, runCommand, runInContainer } from './instance';
+import {
+  REPO_ROOT,
+  instance,
+  runChecked,
+  runCommand,
+  runDevScript,
+  runInContainer,
+} from './instance';
 import { waitFor } from './wait-for';
+import { writeMetric } from './write-metric';
 
 const MINIO_IMAGE =
   'cgr.dev/chainguard/minio@sha256:0f95aa412a12351a95bb43c3b54b66440eb0aa022bb3f3458942678a489e915b';
@@ -187,6 +195,60 @@ export async function runBackup() {
   const stdout = await runImp('backup', 'run', '--json');
 
   return BackupRunSchema.parse(JSON.parse(stdout));
+}
+
+export interface BackupDrill {
+  readonly reboot: (env: Readonly<Record<string, string>>) => Promise<void>;
+  readonly startMinio: (secrets: Readonly<BackupSecrets>) => Promise<void>;
+  readonly runBackup: typeof runBackup;
+}
+
+// The split of a backup test's time goes to one metric when the test ends,
+// since the reboot back off the backup settings runs in its cleanup.
+export function createBackupDrill(stack: AsyncDisposableStack, metric: string): BackupDrill {
+  const spans = { rebootMs: 0, minioMs: 0, runsMs: 0, rebootBackMs: 0 };
+
+  stack.defer(() => {
+    writeMetric(metric, spans);
+  });
+
+  return {
+    // impd sets up its repository at start, so each test reboots onto one of
+    // its own instead of taking suite settings.
+    reboot: async (env) => {
+      const started = Date.now();
+
+      await runDevScript('reboot', instance, env);
+
+      spans.rebootMs += Date.now() - started;
+
+      stack.defer(async () => {
+        const back = Date.now();
+
+        await runDevScript('reboot');
+
+        spans.rebootBackMs += Date.now() - back;
+      });
+    },
+    startMinio: async (secrets) => {
+      const started = Date.now();
+
+      await startMinio(secrets);
+
+      spans.minioMs += Date.now() - started;
+
+      stack.defer(() => stopMinio());
+    },
+    runBackup: async () => {
+      const started = Date.now();
+
+      const run = await runBackup();
+
+      spans.runsMs += Date.now() - started;
+
+      return run;
+    },
+  };
 }
 
 export async function readBackupStatus() {

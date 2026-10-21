@@ -38,6 +38,7 @@ import {
   FAST_GROUPS,
   SUITES,
   buildJourneyArgv,
+  buildJourneyEnv,
   listJourneys,
   readSuiteSettings,
 } from './lib/suites';
@@ -218,6 +219,7 @@ async function runJourneyProcess(
   journey: string,
   args: HarnessArgs,
   kept: readonly string[],
+  settings: Readonly<Record<string, string>> | null,
 ): Promise<number> {
   const exitCode = await runSuite({
     argv: buildJourneyArgv(process.execPath, journey),
@@ -228,6 +230,7 @@ async function runJourneyProcess(
       E2E_KEPT_PREFIXES: kept.join(','),
       E2E_ACCEPTANCE: args.acceptance ? '1' : '0',
       E2E_METRICS_FILE: METRICS_FILE,
+      ...buildJourneyEnv(settings),
     },
     onStart: (pid) => {
       running = pid;
@@ -430,10 +433,10 @@ async function main(): Promise<number> {
         return suite === undefined ? [name] : listJourneys(suite);
       },
       keep: args.keep,
-      runJourney: (journey, kept) => {
+      runJourney: (journey, kept, settings) => {
         startedAt.set(journey, new Date());
 
-        return runJourneyProcess(journey, args, kept);
+        return runJourneyProcess(journey, args, kept, settings);
       },
       checkJourney: (suite, journey) =>
         checkNoBootFallbacks(suite, startedAt.get(journey) ?? new Date()),

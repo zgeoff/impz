@@ -9,6 +9,7 @@ import {
   SUITES,
   SUITE_SETS,
   buildJourneyArgv,
+  buildJourneyEnv,
   buildKsmSettings,
   getSuitePrefix,
   listJourneys,
@@ -58,6 +59,24 @@ test('#readSuiteSettings reads the settings a suite runs its journeys on', () =>
 
 test('#readSuiteSettings reads null for a suite on the run’s own settings', () => {
   expect(readSuiteSettings('templates', instance)).toBeNull();
+});
+
+test('#readSuiteSettings puts the sleep suite on a 5 s idle timeout', () => {
+  expect(readSuiteSettings('sleep', instance)).toStrictEqual({ IMP_IDLE_TIMEOUT_S: '5' });
+});
+
+test('#buildJourneyEnv hands a suite’s own idle timeout to its journeys', () => {
+  expect(buildJourneyEnv({ IMP_IDLE_TIMEOUT_S: '5', IMP_KSM: '1' })).toStrictEqual({
+    E2E_IDLE_TIMEOUT_S: '5',
+  });
+});
+
+test('#buildJourneyEnv leaves the run’s idle timeout to a suite that sets none', () => {
+  expect(buildJourneyEnv({ IMP_BUILD_ISOLATION: 'host' })).toStrictEqual({});
+});
+
+test('#buildJourneyEnv leaves the run’s idle timeout to a suite on the run’s settings', () => {
+  expect(buildJourneyEnv(null)).toStrictEqual({});
 });
 
 test('#buildKsmSettings keeps the run’s settings on a host without KSM', () => {

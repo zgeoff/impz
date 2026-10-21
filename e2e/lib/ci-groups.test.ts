@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { parseCiWorkflow } from '../../scripts/test-utils/parse-ci-workflow';
-import { FAST_GROUPS, HOST_TESTS_GROUP } from './suites';
+import { FAST_GROUPS, HOST_TESTS_GROUP, SUITES } from './suites';
 
 test('it runs one e2e-group job for each fast group', () => {
   const jobs = parseCiWorkflow(
@@ -184,4 +184,97 @@ test('it runs exactly the result check in the required e2e step', () => {
   );
 
   expect(step?.run).toBe('echo "e2e groups: $RESULT"\ntest "$RESULT" = success\n');
+});
+
+test('it runs the required zfs check whatever the shards did', () => {
+  const jobs = parseCiWorkflow(
+    readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+  );
+
+  expect(jobs.zfs.if).toBe('always()');
+});
+
+test('it makes the required zfs check wait on every shard', () => {
+  const jobs = parseCiWorkflow(
+    readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+  );
+
+  expect(jobs.zfs.needs).toStrictEqual(['zfs-shard']);
+});
+
+test('it passes the required zfs check only when the shards succeeded', () => {
+  const jobs = parseCiWorkflow(
+    readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+  );
+
+  const step = jobs.zfs.steps.find(
+    (candidate) => candidate.name === 'Require every zfs shard to pass',
+  );
+
+  expect(step?.env?.['RESULT']).toBe(`\${{ needs.zfs-shard.result }}`);
+  expect(step?.run).toBe('echo "zfs shards: $RESULT"\ntest "$RESULT" = success\n');
+});
+
+test('it lets every zfs shard finish, so one failure does not hide another', () => {
+  const jobs = parseCiWorkflow(
+    readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+  );
+
+  expect(jobs['zfs-shard'].strategy['fail-fast']).toBeFalse();
+});
+
+test('it runs each zfs suite in one shard only, the backups, backups-repo and moves suites among them', () => {
+  const jobs = parseCiWorkflow(
+    readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+  );
+
+  const suites = jobs['zfs-shard'].strategy.matrix.include.flatMap((row) => row.suites.split(','));
+
+  expect(new Set(suites).size).toBe(suites.length);
+  expect(suites).toIncludeAllMembers(['backups', 'backups-repo', 'moves']);
+});
+
+test('it names only suites the harness runs in the zfs shards', () => {
+  const jobs = parseCiWorkflow(
+    readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+  );
+
+  const suites = jobs['zfs-shard'].strategy.matrix.include.flatMap((row) => row.suites.split(','));
+
+  expect(SUITES.map((suite) => suite.name)).toIncludeAllMembers(suites);
+});
+
+test('it hands each zfs shard its own suites', () => {
+  const jobs = parseCiWorkflow(
+    readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+  );
+
+  expect(jobs['zfs-shard'].env.IMP_ZFS_E2E_SUITES).toBe(`\${{ matrix.suites }}`);
+});
+
+test('it runs the ZFS backend tests in one shard only', () => {
+  const jobs = parseCiWorkflow(
+    readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+  );
+
+  const step = jobs['zfs-shard'].steps.find((candidate) => candidate.name === 'ZFS backend tests');
+  const unitShards = jobs['zfs-shard'].strategy.matrix.include.filter((row) => row.unit);
+
+  expect(step?.if).toBe('matrix.unit');
+  expect(unitShards).toHaveLength(1);
+});
+
+test('it names each zfs shard its own results artifact', () => {
+  const jobs = parseCiWorkflow(
+    readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+  );
+
+  const step = jobs['zfs-shard'].steps.find((candidate) => candidate.name === 'Upload results');
+  const shards = jobs['zfs-shard'].strategy.matrix.include.map((row) => row.shard);
+
+  const names = shards.map((shard) =>
+    (step?.with?.name ?? '').replaceAll(`\${{ matrix.shard }}`, String(shard)),
+  );
+
+  expect(new Set(names).size).toBe(shards.length);
 });
