@@ -32,6 +32,10 @@ export interface ZfsCommands {
   readonly estimateSend: (snapshot: string, base: string | null) => Promise<number>;
   readonly readWritten: (snapshot: string) => Promise<number>;
   readonly readUsage: (name: string) => Promise<{ used: number; available: number }>;
+
+  // ZFS frees a destroyed dataset's blocks in the background, and the pool's `freeing` holds them
+  // until then.
+  readonly readFreeing: (pool: string) => Promise<number>;
   readonly listSpace: (root: string) => Promise<ZfsSpace[]>;
   readonly readVersion: () => Promise<string>;
 
@@ -108,6 +112,11 @@ export function createZfsCommands(run: CommandRunner): ZfsCommands {
       const [used = '', available = ''] = stdout.trim().split('\t');
 
       return { used: parseBytes(used), available: parseBytes(available) };
+    },
+    readFreeing: async (pool) => {
+      const stdout = await readStdout(['zpool', 'get', '-Hp', '-o', 'value', 'freeing', pool]);
+
+      return parseBytes(stdout.trim());
     },
     listSpace: async (root) => {
       const stdout = await readStdout([

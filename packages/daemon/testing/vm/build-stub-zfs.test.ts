@@ -870,6 +870,14 @@ test('#buildStubZfs reports the used and available bytes of a dataset', async ()
   expect(result).toStrictEqual({ exitCode: 0, stdout: '1073741824\t9663676416\n', stderr: '' });
 });
 
+test('#buildStubZfs reports a pool that frees nothing in the background', async () => {
+  const fake = buildStubZfs({ root: 'tank/imp', rootDir: '/var/lib/imp' });
+
+  const result = await fake.run(['zpool', 'get', '-Hp', '-o', 'value', 'freeing', 'tank']);
+
+  expect(result).toStrictEqual({ exitCode: 0, stdout: '0\n', stderr: '' });
+});
+
 test('#buildStubZfs reports the bytes written to a snapshot', async () => {
   const fake = buildStubZfs({ root: 'tank/imp', rootDir: '/var/lib/imp' });
 

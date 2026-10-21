@@ -190,12 +190,13 @@ export function formatServices(services: readonly Readonly<Service>[]): string {
 
 export function formatImages(images: readonly Image[]): string {
   return formatTable(
-    ['NAME', 'REF', 'DIGEST', 'SIZE'],
+    ['NAME', 'REF', 'DIGEST', 'SIZE', 'PINNED'],
     images.map((image) => [
       image.name,
       image.ref,
       image.digest.slice(0, 19),
       `${String(Math.round(image.sizeBytes / 1_048_576))} MiB`,
+      image.pinned ? 'yes' : '-',
     ]),
   );
 }

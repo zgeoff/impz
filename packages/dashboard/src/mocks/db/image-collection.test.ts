@@ -13,6 +13,7 @@ test('it creates a default image', async () => {
     source: 'oci',
     createdAt: expect.toBeValidDate(),
     sizeBytes: expect.toSatisfy((bytes: number) => bytes > 0 && bytes % (1024 * 1024) === 0),
+    pinned: false,
   });
 });
 
@@ -21,6 +22,7 @@ test('it applies overrides on top of the defaults', async () => {
     name: 'base',
     source: 'imp',
     sizeBytes: 512,
+    pinned: false,
   });
 
   expect(image).toStrictEqual({
@@ -31,5 +33,6 @@ test('it applies overrides on top of the defaults', async () => {
     source: 'imp',
     createdAt: expect.toBeValidDate(),
     sizeBytes: 512,
+    pinned: false,
   });
 });

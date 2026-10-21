@@ -7,6 +7,7 @@ import {
   readImageById,
   readImageByName,
   updateImage,
+  updateImageUse,
 } from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
@@ -42,12 +43,15 @@ interface TemplateServiceDeps {
   readonly storageGate: StorageGate;
 
   readonly diskBudget: Pick<DiskBudget, 'requireRoom'>;
+  readonly runImageEviction: () => Promise<void>;
+  readonly now?: () => number;
   readonly log?: (message: string) => void;
   readonly freezer?: DiskFreezer;
 }
 
 export function createTemplateService(deps: TemplateServiceDeps): TemplateService {
   const log = deps.log ?? printLog;
+  const now = deps.now ?? Date.now;
   const storage = deps.storage;
 
   const withConsistentDisk = createConsistentDisk({
@@ -83,10 +87,10 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
     }>,
   ): Promise<ImageRecord> => {
     if (existing === undefined) {
-      return createImage(deps.db, { ...image, source: 'imp' });
+      return createImage(deps.db, { ...image, source: 'imp' }, now());
     }
 
-    return updateImage(deps.db, existing.id, image);
+    return updateImage(deps.db, existing.id, image, now());
   };
 
   const removeReplaced = async (existing: ImageRecord | undefined): Promise<void> => {
@@ -95,77 +99,89 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
     }
   };
 
+  const writeTemplate = async (impName: string, name: string): Promise<ImageRecord> => {
+    if (name === BUILDER_IMAGE) {
+      throw buildConflictError(
+        'image',
+        name,
+        `the image name ${name} is impd's, for its image builders; pick another`,
+      );
+    }
+
+    await deps.diskBudget.requireRoom(0);
+
+    // The storage gate is joined before the imp lock, in the order a backup run takes them.
+    return deps.storageGate.join(() =>
+      deps.imps.lockImp(impName, async (imp) => {
+        if (imp.state === 'creating') {
+          throw buildInvalidStateError(
+            imp.state,
+            ['running', 'sleeping', 'stopped', 'error'],
+            'template',
+          );
+        }
+
+        if (!imp.isBackedUp) {
+          throw buildNotBackedUpError(
+            imp.name,
+            'a template of it would put its disk in every backup',
+          );
+        }
+
+        // The use goes in before the read, so an image eviction keeps the template this
+        // replaces until the new one lands.
+        await updateImageUse(deps.db, 'name', [name], now());
+
+        const existing = await readImageByName(deps.db, name);
+
+        if (existing !== undefined && existing.source !== 'imp') {
+          throw buildConflictError(
+            'image',
+            name,
+            `image ${name} is a docker image; give the template a name of its own`,
+          );
+        }
+
+        const started = performance.now();
+        const digest = `${TEMPLATE_DIGEST_PREFIX}${Bun.randomUUIDv7()}`;
+
+        await storage.createImageFromImp(digest, imp.id, {
+          hold: (clone) => withConsistentDisk(imp, 'template', clone),
+          write: (directory) => writeConfig(imp.imageId, directory),
+        });
+
+        const rootfs = buildImagePaths(deps.config.dataDir, digest).rootfs;
+
+        const image = await writeRow(existing, {
+          name,
+          ref: `imp:${imp.name}`,
+          digest,
+          sourceImp: imp.name,
+          sizeBytes: statSync(rootfs).blocks * 512,
+        }).catch(async (error: unknown) => {
+          await storage.removeImage(digest);
+
+          throw error;
+        });
+
+        await removeReplaced(existing);
+
+        const durationMs = Math.round(performance.now() - started);
+
+        log(`impd: ${imp.name}: template ${name} in ${String(durationMs)}ms`);
+
+        return image;
+      }),
+    );
+  };
+
   return {
     createTemplate: async (impName, name) => {
-      if (name === BUILDER_IMAGE) {
-        throw buildConflictError(
-          'image',
-          name,
-          `the image name ${name} is impd's, for its image builders; pick another`,
-        );
+      try {
+        return await writeTemplate(impName, name);
+      } finally {
+        await deps.runImageEviction();
       }
-
-      await deps.diskBudget.requireRoom(0);
-
-      // The storage gate is joined before the imp lock, in the order a backup run takes them.
-      return deps.storageGate.join(() =>
-        deps.imps.lockImp(impName, async (imp) => {
-          if (imp.state === 'creating') {
-            throw buildInvalidStateError(
-              imp.state,
-              ['running', 'sleeping', 'stopped', 'error'],
-              'template',
-            );
-          }
-
-          if (!imp.isBackedUp) {
-            throw buildNotBackedUpError(
-              imp.name,
-              'a template of it would put its disk in every backup',
-            );
-          }
-
-          const existing = await readImageByName(deps.db, name);
-
-          if (existing !== undefined && existing.source !== 'imp') {
-            throw buildConflictError(
-              'image',
-              name,
-              `image ${name} is a docker image; give the template a name of its own`,
-            );
-          }
-
-          const started = performance.now();
-          const digest = `${TEMPLATE_DIGEST_PREFIX}${Bun.randomUUIDv7()}`;
-
-          await storage.createImageFromImp(digest, imp.id, {
-            hold: (clone) => withConsistentDisk(imp, 'template', clone),
-            write: (directory) => writeConfig(imp.imageId, directory),
-          });
-
-          const rootfs = buildImagePaths(deps.config.dataDir, digest).rootfs;
-
-          const image = await writeRow(existing, {
-            name,
-            ref: `imp:${imp.name}`,
-            digest,
-            sourceImp: imp.name,
-            sizeBytes: statSync(rootfs).blocks * 512,
-          }).catch(async (error: unknown) => {
-            await storage.removeImage(digest);
-
-            throw error;
-          });
-
-          await removeReplaced(existing);
-
-          const durationMs = Math.round(performance.now() - started);
-
-          log(`impd: ${imp.name}: template ${name} in ${String(durationMs)}ms`);
-
-          return image;
-        }),
-      );
     },
   };
 }

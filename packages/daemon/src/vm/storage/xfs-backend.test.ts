@@ -957,6 +957,63 @@ test('#measureUsage rethrows a FIEMAP failure on a file that still exists', asyn
   );
 });
 
+test('#measureImages counts the bytes of an image that no other file shares as freed', async () => {
+  const fiemap = buildStubFiemap();
+
+  const ctx = await setupTest({ readFileExtents: fiemap.readFileExtents });
+
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
+  });
+
+  fiemap.setExtents(join(ctx.dataDir, 'images', 'abc', 'rootfs.ext4'), [
+    { logical: 0, physical: 1_048_576, length: 8192, flags: 0 },
+    { logical: 8192, physical: 4_194_304, length: 4096, flags: 0x4 | 0x20_00 },
+  ]);
+
+  const report = await ctx.backend.measureImages(['sha256:abc']);
+
+  expect(report).toStrictEqual({
+    images: new Map([['sha256:abc', { freedBytes: 12_288, isShared: false }]]),
+    freeingBytes: 0,
+  });
+});
+
+test('#measureImages marks an image that an imp disk reflinks as shared', async () => {
+  const fiemap = buildStubFiemap();
+
+  const ctx = await setupTest({ readFileExtents: fiemap.readFileExtents });
+
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
+  });
+
+  fiemap.setExtents(join(ctx.dataDir, 'images', 'abc', 'rootfs.ext4'), [
+    { logical: 0, physical: 1_048_576, length: 8192, flags: 0x20_00 },
+    { logical: 8192, physical: 2_097_152, length: 4096, flags: 0 },
+  ]);
+
+  const report = await ctx.backend.measureImages(['sha256:abc']);
+
+  expect(report.images.get('sha256:abc')).toStrictEqual({ freedBytes: 4096, isShared: true });
+});
+
+test('#measureImages leaves out an image whose read is cut short and an image with no files', async () => {
+  const fiemap = buildStubFiemap();
+
+  const ctx = await setupTest({ readFileExtents: fiemap.readFileExtents });
+
+  await ctx.backend.createImage('sha256:abc', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
+  });
+
+  fiemap.setCut(join(ctx.dataDir, 'images', 'abc', 'rootfs.ext4'), true);
+
+  const report = await ctx.backend.measureImages(['sha256:abc', 'sha256:gone']);
+
+  expect(report.images).toStrictEqual(new Map());
+});
+
 test('#readUsage reports the used and available bytes of the data dir', async () => {
   const ctx = await setupTest();
   const usage = await ctx.backend.readUsage();

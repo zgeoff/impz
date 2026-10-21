@@ -38,6 +38,9 @@ import { MIGRATION_033_ADD_IMP_OOPS_HOLD } from './migrations/migration-033-add-
 import { MIGRATION_034_ADD_BETTER_AUTH } from './migrations/migration-034-add-better-auth';
 import { MIGRATION_035_DROP_OLD_OAUTH } from './migrations/migration-035-drop-old-oauth';
 import { MIGRATION_036_KEEP_BROKER_AUDIT_OF_DESTROYED_IMPS } from './migrations/migration-036-keep-broker-audit-of-destroyed-imps';
+import { MIGRATION_037_ADD_IMAGE_LAST_USED } from './migrations/migration-037-add-image-last-used';
+import { MIGRATION_038_ADD_IMAGE_REMOVALS } from './migrations/migration-038-add-image-removals';
+import { MIGRATION_039_ADD_IMAGE_PINS } from './migrations/migration-039-add-image-pins';
 
 export const MIGRATIONS: Record<string, Migration> = {
   '001_create_initial_schema': MIGRATION_001_CREATE_INITIAL_SCHEMA,
@@ -76,6 +79,9 @@ export const MIGRATIONS: Record<string, Migration> = {
   '034_add_better_auth': MIGRATION_034_ADD_BETTER_AUTH,
   '035_drop_old_oauth': MIGRATION_035_DROP_OLD_OAUTH,
   '036_keep_broker_audit_of_destroyed_imps': MIGRATION_036_KEEP_BROKER_AUDIT_OF_DESTROYED_IMPS,
+  '037_add_image_last_used': MIGRATION_037_ADD_IMAGE_LAST_USED,
+  '038_add_image_removals': MIGRATION_038_ADD_IMAGE_REMOVALS,
+  '039_add_image_pins': MIGRATION_039_ADD_IMAGE_PINS,
 };
 
 const PROVIDER: MigrationProvider = {

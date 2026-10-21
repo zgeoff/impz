@@ -42,6 +42,17 @@ export interface DiskUsageReport {
   readonly isPartial: boolean;
 }
 
+// A removal frees an image's own blocks only, and a clone or a reflink of them keeps them.
+export interface ImageSpace {
+  readonly freedBytes: number;
+  readonly isShared: boolean;
+}
+
+export interface ImageSpaceReport {
+  readonly images: ReadonlyMap<string, ImageSpace>;
+  readonly freeingBytes: number;
+}
+
 export interface LiveStorage {
   readonly impIds: ReadonlySet<string>;
   readonly checkpointIds: ReadonlySet<string>;
@@ -160,6 +171,7 @@ export interface StorageBackend {
   readonly measureUsage: (
     imps: readonly { readonly impId: string; readonly checkpointIds: readonly string[] }[],
   ) => Promise<DiskUsageReport>;
+  readonly measureImages: (digests: readonly string[]) => Promise<ImageSpaceReport>;
   readonly stop: () => Promise<void>;
 }
 

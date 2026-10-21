@@ -135,6 +135,8 @@ export const PROCEDURE_ACCESS: Readonly<Record<ImpProcedurePath, Access>> = {
   'images.addStream': { scope: 'manage', on: 'image', audit: 'refusals' },
   'images.buildStream': { scope: 'manage', on: 'host', audit: 'refusals' },
   'images.delete': manageHost,
+  'images.pin': manageHost,
+  'images.unpin': manageHost,
 
   // a running build's steps show its Dockerfile's commands: host-wide
   'images.builds': { scope: 'read', on: 'host' },

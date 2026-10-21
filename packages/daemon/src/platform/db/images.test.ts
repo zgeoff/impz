@@ -5,12 +5,18 @@ import { createTestDatabase } from '../../../testing/platform/create-test-databa
 import {
   countImageDigestUses,
   createImage,
+  listImageRemovals,
+  listImageUses,
   listImages,
   readImageByDigest,
   readImageById,
   readImageByName,
   removeImage,
+  removeImageRemoval,
+  removeUnusedImage,
   updateImage,
+  updateImagePin,
+  updateImageUse,
 } from './images';
 import { createImp } from './imps';
 
@@ -36,6 +42,7 @@ test('#createImage returns the stored image, a docker image by default', async (
     sourceImp: null,
     sizeBytes: 2048,
     createdAt: expect.toBeValidDate(),
+    isPinned: false,
   });
 });
 
@@ -160,6 +167,7 @@ test('#updateImage points the image at the new build and keeps its name', async 
     sourceImp: 'dev',
     sizeBytes: 4096,
     createdAt: image.createdAt,
+    isPinned: false,
   });
 });
 
@@ -217,4 +225,208 @@ test('#removeImage reports an image that is gone already as not removed', async 
   const isRemoved = await removeImage(ctx.db, image.id);
 
   expect(isRemoved).toBeFalse();
+});
+
+test('#listImageUses lists each image with its last use and the imps that use it', async () => {
+  const ctx = await createTestDatabase();
+
+  const image = await createImage(
+    ctx.db,
+    buildMockNewImage({ name: 'web-0a1b2c3', digest: 'sha256:1111', sizeBytes: 2048 }),
+  );
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base', source: 'imp' }));
+  await updateImagePin(ctx.db, 'base', true);
+  await createImp(ctx.db, buildMockNewImp({ name: 'one', imageId: image.id }));
+
+  await createImp(
+    ctx.db,
+    buildMockNewImp({ name: 'two', imageId: image.id, slot: 1, ip: '10.66.0.6' }),
+  );
+
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(uses).toStrictEqual([
+    {
+      id: expect.toBeString(),
+      name: 'base',
+      digest: expect.toBeString(),
+      source: 'imp',
+      sizeBytes: expect.toBeNumber(),
+      lastUsedAt: expect.toBeWithin(Date.now() - 60_000, Date.now() + 1),
+      impCount: 0,
+      isPinned: true,
+    },
+    {
+      id: image.id,
+      name: 'web-0a1b2c3',
+      digest: 'sha256:1111',
+      source: 'oci',
+      sizeBytes: 2048,
+      lastUsedAt: Date.parse('2030-01-01T00:00:00Z'),
+      impCount: 2,
+      isPinned: false,
+    },
+  ]);
+});
+
+test('#updateImageUse never moves a last use back', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'web-0a1b2c3' }));
+
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-02T00:00:00Z'));
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(uses[0]?.lastUsedAt).toBe(Date.parse('2030-01-02T00:00:00Z'));
+});
+
+test('#updateImage records the rebuild as a use of the image', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'web-0a1b2c3' }));
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+
+  await updateImage(ctx.db, image.id, {
+    ref: 'imp/agent:latest',
+    digest: 'sha256:2',
+    sizeBytes: 1,
+  });
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(uses[0]?.lastUsedAt).toBeWithin(Date.now() - 60_000, Date.now() + 1);
+});
+
+test('#removeUnusedImage removes an image no imp uses at the last use the caller read', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage());
+
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
+
+  const isRemoved = await removeUnusedImage(ctx.db, image.id, Date.parse('2030-01-01T00:00:00Z'));
+  const stored = await readImageById(ctx.db, image.id);
+
+  expect(isRemoved).toBeTrue();
+  expect(stored).toBeUndefined();
+});
+
+test('#removeUnusedImage keeps an image an imp uses', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage());
+
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
+  await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
+
+  const isRemoved = await removeUnusedImage(ctx.db, image.id, Date.parse('2030-01-01T00:00:00Z'));
+  const stored = await readImageById(ctx.db, image.id);
+
+  expect(isRemoved).toBeFalse();
+  expect(stored).toMatchObject({ id: image.id });
+});
+
+test('#removeUnusedImage keeps a pinned image', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'kept' }));
+
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
+  await updateImagePin(ctx.db, 'kept', true);
+
+  const isRemoved = await removeUnusedImage(ctx.db, image.id, Date.parse('2030-01-01T00:00:00Z'));
+  const stored = await readImageById(ctx.db, image.id);
+
+  expect(isRemoved).toBeFalse();
+  expect(stored).toMatchObject({ id: image.id });
+});
+
+test('#updateImagePin pins an image and returns it', async () => {
+  const ctx = await createTestDatabase();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'kept' }));
+
+  const pinned = await updateImagePin(ctx.db, 'kept', true);
+
+  expect(pinned?.isPinned).toBeTrue();
+});
+
+test('#updateImagePin unpins a pinned image', async () => {
+  const ctx = await createTestDatabase();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'kept' }));
+  await updateImagePin(ctx.db, 'kept', true);
+
+  const unpinned = await updateImagePin(ctx.db, 'kept', false);
+
+  expect(unpinned?.isPinned).toBeFalse();
+});
+
+test('#updateImagePin returns nothing for a name no image has', async () => {
+  const ctx = await createTestDatabase();
+  const pinned = await updateImagePin(ctx.db, 'missing', true);
+
+  expect(pinned).toBeUndefined();
+});
+
+test('#removeUnusedImage records the digest of the image it removes, for its rootfs removal', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1' }));
+
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
+  await removeUnusedImage(ctx.db, image.id, Date.parse('2030-01-01T00:00:00Z'));
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual(['sha256:1']);
+});
+
+test('#removeUnusedImage records no digest when it keeps the image', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1' }));
+
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-02T00:00:00Z'));
+  await removeUnusedImage(ctx.db, image.id, Date.parse('2030-01-01T00:00:00Z'));
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual([]);
+});
+
+test('#removeImage records the digest of the image it removes, for its rootfs removal', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1' }));
+
+  await removeImage(ctx.db, image.id);
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual(['sha256:1']);
+});
+
+test('#removeImageRemoval drops the record of a removed rootfs', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1' }));
+
+  await removeImage(ctx.db, image.id);
+  await removeImageRemoval(ctx.db, 'sha256:1');
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual([]);
+});
+
+test('#removeUnusedImage keeps an image used again since the caller read its last use', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage());
+
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-02T00:00:00Z'));
+
+  const isRemoved = await removeUnusedImage(ctx.db, image.id, Date.parse('2030-01-01T00:00:00Z'));
+  const stored = await readImageById(ctx.db, image.id);
+
+  expect(isRemoved).toBeFalse();
+  expect(stored).toMatchObject({ id: image.id });
 });

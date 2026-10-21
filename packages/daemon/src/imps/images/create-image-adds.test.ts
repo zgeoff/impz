@@ -108,6 +108,7 @@ test('it adds an image through a builder for one platform, with no host engine c
     sourceImp: null,
     sizeBytes: expect.any(Number) as unknown,
     createdAt: expect.any(Date) as unknown,
+    isPinned: false,
   });
 
   expect(resolved).toStrictEqual([`busybox@sha256:${'b'.repeat(64)}`]);

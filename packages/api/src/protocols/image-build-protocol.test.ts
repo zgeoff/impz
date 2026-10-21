@@ -76,6 +76,7 @@ test('#ImageBuildResultSchema turns the date string into a date', () => {
     source: 'oci',
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
     sizeBytes: 1_048_576,
+    pinned: false,
   });
 });
 
@@ -155,6 +156,7 @@ test('#ImageBuildEventSchema accepts an image event with its date as a string', 
       source: 'oci',
       createdAt: new Date('2026-01-02T03:04:05.000Z'),
       sizeBytes: 1_048_576,
+      pinned: false,
     },
   });
 });
@@ -235,6 +237,7 @@ test('#ImageOpEventSchema accepts an image event', () => {
       source: 'oci',
       createdAt: new Date('2026-01-02T03:04:05.000Z'),
       sizeBytes: 1_048_576,
+      pinned: false,
     },
   } as const;
 

@@ -6,8 +6,9 @@ import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
+import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { loadConfig } from '../../config';
-import { createImage } from '../../platform/db/images';
+import { createImage, listImageRemovals, listImageUses } from '../../platform/db/images';
 import { openDatabase } from '../../platform/db/open-database';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
@@ -429,6 +430,221 @@ test('#runImageBuild answers BAD_REQUEST when the pinned Dockerfile does not par
   });
 });
 
+test('#resolveImage records the lookup as a use of the image', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+    now: () => Date.parse('2030-01-01T00:00:00Z'),
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-0a1b2c3' }));
+
+  await images.resolveImage('web-0a1b2c3');
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(uses[0]?.lastUsedAt).toBe(Date.parse('2030-01-01T00:00:00Z'));
+});
+
+test('#addImage evicts an old image under storage pressure, even when the add fails', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: ctx.db,
+    storage: {
+      ...ctx.storage,
+      readUsage: () => Promise.resolve({ usedBytes: 90, availableBytes: 10 }),
+      measureImages: () =>
+        Promise.resolve({
+          images: new Map([['sha256:1', { freedBytes: 50, isShared: false }]]),
+          freeingBytes: 0,
+        }),
+    },
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+
+  const failure = await images.addImage('--help', 'x').then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(failure).toMatchObject({ code: 'BAD_REQUEST' });
+  expect(uses).toStrictEqual([]);
+});
+
+test('#runImageBuild evicts an old image under storage pressure, even when the build fails', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: ctx.db,
+    storage: {
+      ...ctx.storage,
+      readUsage: () => Promise.resolve({ usedBytes: 90, availableBytes: 10 }),
+      measureImages: () =>
+        Promise.resolve({
+          images: new Map([['sha256:1', { freedBytes: 50, isShared: false }]]),
+          freeingBytes: 0,
+        }),
+    },
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+
+  const failure = await images.runImageBuild('--file=/etc/passwd', 'x').then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(failure).toMatchObject({ code: 'BAD_REQUEST' });
+  expect(uses).toStrictEqual([]);
+});
+
+test('#buildImageFromContext evicts an old image under storage pressure, even when the build fails', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: ctx.db,
+    storage: {
+      ...ctx.storage,
+      readUsage: () => Promise.resolve({ usedBytes: 90, availableBytes: 10 }),
+      measureImages: () =>
+        Promise.resolve({
+          images: new Map([['sha256:1', { freedBytes: 50, isShared: false }]]),
+          freeingBytes: 0,
+        }),
+    },
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+
+  const failure = await images
+    .buildImageFromContext('/nowhere.tar', BUILDER_IMAGE, undefined, {
+      signal: new AbortController().signal,
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(failure).toMatchObject({ code: 'BAD_REQUEST' });
+  expect(uses).toStrictEqual([]);
+});
+
+test('#updateImagePin answers NOT_FOUND for a name no image has', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  expect(images.updateImagePin('missing', true)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+});
+
+test('#resolveImage keeps an old image that an eviction reaches while the lookup reads it', async () => {
+  const ctx = await setupTest();
+
+  const gate = buildQueryGate('web-1111111');
+
+  const images = createImageService({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: gate.wrap(ctx.db),
+    storage: {
+      ...ctx.storage,
+      readUsage: () => Promise.resolve({ usedBytes: 90, availableBytes: 10 }),
+      measureImages: () =>
+        Promise.resolve({
+          images: new Map([['sha256:1', { freedBytes: 50, isShared: false }]]),
+          freeingBytes: 0,
+        }),
+    },
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'web-1111111')
+    .execute();
+
+  gate.arm();
+
+  const resolving = images.resolveImage('web-1111111');
+
+  await gate.reached;
+
+  await images.runImageEviction();
+
+  gate.release();
+
+  const image = await resolving;
+  const uses = await listImageUses(ctx.db);
+
+  expect(image.name).toBe('web-1111111');
+  expect(uses.map((use) => use.name)).toStrictEqual(['web-1111111']);
+});
+
 test('#resolveImage answers NOT_FOUND for a name no image has', async () => {
   const ctx = await setupTest();
 
@@ -535,4 +751,77 @@ test('#removeImage removes the rootfs once no image uses its digest', async () =
   await images.removeImage('web');
 
   expect(existsSync(rootfs)).toBeFalse();
+});
+
+test('#removeImage keeps a record of the rootfs while its removal fails', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web', digest: 'sha256:1' }));
+
+  // a file where the images directory belongs makes the rootfs removal fail
+  writeFileSync(join(ctx.dataDir, 'images'), '');
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  const removing = images.removeImage('web');
+
+  expect(removing).rejects.toMatchObject({ code: 'ENOTDIR' });
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual(['sha256:1']);
+});
+
+test('#removeImage leaves no record of the rootfs once it is gone', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web', digest: 'sha256:1' }));
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  await images.removeImage('web');
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual([]);
+});
+
+test('#removeImage keeps a record of the rootfs while a publisher of its digest defers the removal', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web', digest: 'sha256:1' }));
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  const removals = await images.withImagePublisher('sha256:1', 'web-2222222', async () => {
+    await images.removeImage('web');
+
+    return listImageRemovals(ctx.db);
+  });
+
+  expect(removals).toStrictEqual(['sha256:1']);
 });

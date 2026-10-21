@@ -22,6 +22,7 @@ const ImageRowSchema = ImageSchema.extend({
     .int()
     .nonnegative()
     .default(() => faker.number.int({ min: 1, max: 4096 }) * 1024 * 1024),
+  pinned: ImageSchema.shape.pinned.default(false),
 });
 
 export const imageCollection = new Collection({ schema: ImageRowSchema });

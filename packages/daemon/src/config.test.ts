@@ -40,6 +40,7 @@ test('it fills every setting from its default when the env is empty', () => {
       image:
         'ghcr.io/zgeoff/imp-base:0.29.0@sha256:1851f631ea77f3a99b6f1f9af8ca8868434f4cd066158bcf9def8678c29b0c21',
     },
+    imageEviction: null,
     sessionLog: {
       generationMaxBytes: 16 * 1024 ** 2,
       impMaxBytes: 64 * 1024 ** 2,
@@ -191,6 +192,32 @@ test('it reads the SSH gateway port', () => {
 
 test('it turns the SSH gateway off when IMP_SSH_PORT is 0', () => {
   expect(loadConfig({ IMP_SSH_PORT: '0' }).sshPort).toBeNull();
+});
+
+test('it reads the image eviction marks', () => {
+  const config = loadConfig({
+    IMP_IMAGE_EVICT_HIGH_PERCENT: '90',
+    IMP_IMAGE_EVICT_LOW_PERCENT: '80',
+  });
+
+  expect(config.imageEviction).toStrictEqual({ highPercent: 90, lowPercent: 80 });
+});
+
+test.each([
+  [{ IMP_IMAGE_EVICT_HIGH_PERCENT: '90' }, /set both or neither/v],
+  [{ IMP_IMAGE_EVICT_LOW_PERCENT: '80' }, /set both or neither/v],
+  [
+    { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '80' },
+    /IMP_IMAGE_EVICT_LOW_PERCENT 80 must be below IMP_IMAGE_EVICT_HIGH_PERCENT 80/v,
+  ],
+])('it refuses the image eviction marks %p', (env, message) => {
+  expect(() => loadConfig(env)).toThrow(message);
+});
+
+test.each(['0', '100'])('it refuses an image eviction mark of %p', (mark) => {
+  expect(() =>
+    loadConfig({ IMP_IMAGE_EVICT_HIGH_PERCENT: mark, IMP_IMAGE_EVICT_LOW_PERCENT: '1' }),
+  ).toThrow();
 });
 
 test.each([

@@ -15,7 +15,7 @@ export function createImpdServices(
   config: Config,
   deps: Readonly<ImpdDeps>,
   parts: Readonly<{
-    storage: Pick<ImpdStorage, 'storageGate' | 'diskBudget'>;
+    storage: Pick<ImpdStorage, 'storageGate' | 'diskBudget' | 'images'>;
     imps: Imps;
     egress: EgressService;
     secretFiles: SecretFiles;
@@ -43,6 +43,8 @@ export function createImpdServices(
     storage,
     storageGate: parts.storage.storageGate,
     diskBudget: parts.storage.diskBudget,
+    runImageEviction: parts.storage.images.runImageEviction,
+    now: deps.now ?? Date.now,
     log,
     ...freezer,
   });

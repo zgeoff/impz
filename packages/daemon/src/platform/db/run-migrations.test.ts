@@ -954,3 +954,42 @@ test('#runMigrations leaves better-auth no table or column to add', async () => 
   expect(pending.toBeCreated).toStrictEqual([]);
   expect(pending.toBeAdded).toStrictEqual([]);
 });
+
+test('#runMigrations takes each image’s last use from its newest imp, or its creation, in the image last-use migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '036_keep_broker_audit_of_destroyed_imps');
+
+  await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
+    VALUES ('used', 'web-1111111', 'imp/web:1', 'sha256:1', 1, 100),
+      ('idle', 'web-2222222', 'imp/web:2', 'sha256:2', 1, 200)`.execute(db);
+
+  await sql`INSERT INTO imps (id, name, image_id, state, vcpus, memory_mib, slot, ip,
+    created_at, last_active_at)
+    VALUES ('imp-1', 'one', 'used', 'stopped', 1, 512, 0, '10.66.0.2', 300, 0),
+      ('imp-2', 'two', 'used', 'stopped', 1, 512, 1, '10.66.0.6', 700, 0)`.execute(db);
+
+  await runMigrations(db);
+
+  const rows = await db.selectFrom('images').select(['id', 'last_used_at']).orderBy('id').execute();
+
+  expect(rows).toStrictEqual([
+    { id: 'idle', last_used_at: 200 },
+    { id: 'used', last_used_at: 700 },
+  ]);
+});
+
+test('#runMigrations leaves each image unpinned in the image pin migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '038_add_image_removals');
+
+  await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at, last_used_at)
+    VALUES ('one', 'web-1111111', 'imp/web:1', 'sha256:1', 1, 100, 100)`.execute(db);
+
+  await runMigrations(db);
+
+  const rows = await db.selectFrom('images').select(['id', 'pinned']).execute();
+
+  expect(rows).toStrictEqual([{ id: 'one', pinned: 0 }]);
+});

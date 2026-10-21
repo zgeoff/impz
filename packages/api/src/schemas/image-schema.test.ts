@@ -19,6 +19,7 @@ test('#ImageSchema accepts an image', () => {
     digest: 'sha256:abc',
     source: 'oci',
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
+    pinned: false,
     sizeBytes: 1_048_576,
   } as const;
 
@@ -33,6 +34,7 @@ test('#ImageSchema rejects a name that is not a valid name', () => {
     digest: 'sha256:abc',
     source: 'oci',
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
+    pinned: false,
     sizeBytes: 1_048_576,
   });
 
@@ -50,6 +52,7 @@ test('#ImageSchema rejects a source outside the source list', () => {
     digest: 'sha256:abc',
     source: 'docker',
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
+    pinned: false,
     sizeBytes: 1_048_576,
   });
 
@@ -64,6 +67,7 @@ test('#ImageSchema rejects a negative size', () => {
     digest: 'sha256:abc',
     source: 'oci',
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
+    pinned: false,
     sizeBytes: -1,
   });
 
@@ -78,8 +82,38 @@ test('#ImageSchema rejects a fractional size', () => {
     digest: 'sha256:abc',
     source: 'oci',
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
+    pinned: false,
     sizeBytes: 1.5,
   });
 
   expect(result.error?.issues).toPartiallyContain({ path: ['sizeBytes'], code: 'invalid_type' });
+});
+
+test('#ImageSchema reads an image with no pin, as an older impd sends it, as unpinned', () => {
+  const result = ImageSchema.safeParse({
+    id: 'img-1',
+    name: 'base',
+    ref: 'docker.io/library/alpine:3',
+    digest: 'sha256:abc',
+    source: 'oci',
+    createdAt: new Date('2026-01-02T03:04:05.000Z'),
+    sizeBytes: 1_048_576,
+  });
+
+  expect(result.data?.pinned).toBeFalse();
+});
+
+test('#ImageSchema rejects a pin that is not a boolean', () => {
+  const result = ImageSchema.safeParse({
+    id: 'img-1',
+    name: 'base',
+    ref: 'docker.io/library/alpine:3',
+    digest: 'sha256:abc',
+    source: 'oci',
+    createdAt: new Date('2026-01-02T03:04:05.000Z'),
+    sizeBytes: 1_048_576,
+    pinned: 'yes',
+  });
+
+  expect(result.error?.issues).toPartiallyContain({ path: ['pinned'], code: 'invalid_type' });
 });

@@ -10,5 +10,6 @@ export function toApiImage(image: ImageRecord): Image {
     source: image.source,
     createdAt: image.createdAt,
     sizeBytes: image.sizeBytes,
+    pinned: image.isPinned,
   };
 }

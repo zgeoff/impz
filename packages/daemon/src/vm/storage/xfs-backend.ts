@@ -21,7 +21,8 @@ import {
   buildImpPaths,
   buildImpsDir,
 } from './data-layout';
-import { readExtents } from './fiemap';
+import { EXTENT_FLAGS, readExtents } from './fiemap';
+import type { Extent } from './fiemap';
 import { readLoopHostFreeBytes } from './loop-backing-file';
 import { listFilesUnder, probeHoldingFiles, readDirectoryOrphan } from './orphan-files';
 import { printSweep } from './print-sweep';
@@ -423,6 +424,38 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
       return { imps: report, isPartial };
     },
 
+    measureImages: async (digests) => {
+      const deadline = Date.now() + USAGE_DEADLINE_MS;
+
+      const images = new Map<string, { freedBytes: number; isShared: boolean }>();
+
+      for (const digest of digests.filter((found) =>
+        existsSync(buildImagePaths(deps.dataDir, found).directory),
+      )) {
+        const extents: Extent[] = [];
+        let isComplete = true;
+
+        for (const path of listFilesUnder(buildImagePaths(deps.dataDir, digest).directory)) {
+          const read = await readOwnedExtents(readFileExtents, path, deadline);
+
+          extents.push(...read.extents);
+
+          isComplete &&= read.isComplete;
+        }
+
+        if (isComplete) {
+          images.set(digest, {
+            freedBytes: extents
+              .filter((extent) => !isSharedExtent(extent))
+              .reduce((sum, extent) => sum + extent.length, 0),
+            isShared: extents.some((extent) => isSharedExtent(extent)),
+          });
+        }
+      }
+
+      return { images, freeingBytes: 0 };
+    },
+
     readUsage: () => {
       const stats = statfsSync(deps.dataDir);
       const available = stats.bavail * stats.bsize;
@@ -461,4 +494,9 @@ async function readOwnedExtents(
 
     return { extents: [], isComplete: true };
   }
+}
+
+// FIEMAP gives a delayed allocation no physical address yet, so no other file shares it.
+function isSharedExtent(extent: Readonly<Extent>): boolean {
+  return (extent.flags & EXTENT_FLAGS.shared) !== 0 && (extent.flags & EXTENT_FLAGS.delalloc) === 0;
 }

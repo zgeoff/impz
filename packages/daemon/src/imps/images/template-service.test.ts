@@ -7,9 +7,11 @@ import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
+import { buildStubPressureSwitch } from '../../../testing/vm/build-stub-pressure-switch';
 import { createImage, readImageByName } from '../../platform/db/images';
 import { createImp, readImpByName } from '../../platform/db/imps';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
+import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { BUILDER_IMAGE } from './builder-imps';
 
 async function setupTest() {
@@ -23,13 +25,25 @@ async function setupTest() {
 
   const events: string[] = [];
 
+  // a test sets this to run work while a template's clone is under way
+  const clones = { after: (): Promise<unknown> => Promise.resolve() };
+
+  const cloneDisk = async (source: string, target: string) => {
+    await copyFile(source, target);
+
+    events.push(`clone ${source.slice(dataDir.length)}`);
+
+    await clones.after();
+  };
+
+  const pressure = buildStubPressureSwitch();
+
   const harness = await startTestImpd(stack, {
     dataDir,
-    cloneDisk: async (source, target) => {
-      await copyFile(source, target);
-
-      events.push(`clone ${source.slice(dataDir.length)}`);
-    },
+    cloneDisk,
+    env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
+    createStorage: (directory: string) =>
+      pressure.wrap(createXfsBackend({ dataDir: directory, cloneFile: cloneDisk })),
     boundaries: {
       freezer: {
         freeze: () => {
@@ -46,7 +60,7 @@ async function setupTest() {
     },
   });
 
-  return Object.assign(harness, { events });
+  return Object.assign(harness, { events, clones, pressure });
 }
 
 test('it freezes a running imp around the clone of its disk', async () => {
@@ -366,6 +380,89 @@ test('it moves a template made again to a new disk under the same image and drop
   expect(second.id).toBe(first.id);
   expect(second.digest).not.toBe(first.digest);
   expect(existsSync(buildImagePaths(ctx.dataDir, first.digest).directory)).toBeFalse();
+});
+
+test('it makes an old template again when an eviction runs during the clone', async () => {
+  const ctx = await setupTest();
+
+  const baseImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, baseImage.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, baseImage);
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+
+  const first = await ctx.impd.templates.createTemplate('dev', 'tools');
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'tools')
+    .execute();
+
+  ctx.pressure.setPressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 });
+
+  ctx.clones.after = () => ctx.images.runImageEviction();
+
+  const second = await ctx.impd.templates.createTemplate('dev', 'tools');
+  const stored = await readImageByName(ctx.db, 'tools');
+
+  expect(second.id).toBe(first.id);
+  expect(stored?.digest).toBe(second.digest);
+});
+
+test('it records impd clock as the last use of a template it makes', async () => {
+  const ctx = await setupTest();
+
+  const baseImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, baseImage.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, baseImage);
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+
+  ctx.advance(4 * 365 * 24 * 60 * 60 * 1000);
+
+  await ctx.impd.templates.createTemplate('dev', 'tools');
+
+  const row = await ctx.db
+    .selectFrom('images')
+    .select('last_used_at')
+    .where('name', '=', 'tools')
+    .executeTakeFirstOrThrow();
+
+  expect(row.last_used_at).toBeWithin(ctx.now() - 60_000, ctx.now() + 1);
+});
+
+test('it evicts an old unused image after it makes a template while storage is full', async () => {
+  const ctx = await setupTest();
+
+  const baseImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+  const oldImage = buildMockNewImage({ name: 'web-2222222', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, baseImage.digest).rootfs, 'rootfs');
+  await Bun.write(buildImagePaths(ctx.dataDir, oldImage.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, baseImage);
+  await createImage(ctx.db, oldImage);
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'web-2222222')
+    .execute();
+
+  ctx.pressure.setPressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 });
+
+  await ctx.impd.templates.createTemplate('dev', 'tools');
+
+  const old = await readImageByName(ctx.db, 'web-2222222');
+
+  expect(old).toBeUndefined();
 });
 
 test('it gives imps made after a template is made again its new disk, and older imps keep theirs', async () => {

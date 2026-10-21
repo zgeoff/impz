@@ -177,6 +177,36 @@ test('#checkAccess refuses a caller with an image ref prefix a build', async () 
   });
 });
 
+test.each([['images.pin'], ['images.unpin']] as const)(
+  '#checkAccess lets a host-wide manage caller through %s',
+  async (path) => {
+    const refusal = await checkAccess(
+      findAccess(path),
+      buildMockCaller({ scope: 'manage' }),
+      { name: 'tools' },
+      () => Promise.resolve(null),
+    );
+
+    expect(refusal).toBeNull();
+  },
+);
+
+test.each([['images.pin'], ['images.unpin']] as const)(
+  '#checkAccess refuses %s to a caller limited to some imps',
+  async (path) => {
+    const caller = buildMockCaller({ imps: ['dev-*'] });
+
+    const refusal = await checkAccess(findAccess(path), caller, { name: 'tools' }, () =>
+      Promise.resolve(null),
+    );
+
+    expect(refusal).toStrictEqual({
+      message: `token ${caller.name} is limited to some imps; this call is host-wide`,
+      reason: null,
+    });
+  },
+);
+
 test('#checkAccess makes a caller with patterns name the imp it creates', async () => {
   const caller = buildMockCaller({ imps: ['dev-*'] });
 

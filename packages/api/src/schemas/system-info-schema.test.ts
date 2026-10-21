@@ -84,6 +84,7 @@ test('it accepts the system info of a host with every part turned on', () => {
       readOnlyFiles: true,
       execDropSysAdmin: true,
       guestScratch: true,
+      imagePins: true,
     },
   } as const;
 

@@ -3,7 +3,7 @@ import type { KyselyPlugin } from 'kysely';
 import type { ImpDatabase } from '../../src/platform/db/open-database';
 
 export function buildQueryGate(name: string) {
-  const state = { armed: false, held: new Set<unknown>() };
+  const state = { armed: false, name, held: new Set<unknown>() };
   const reached = Promise.withResolvers<void>();
   const released = Promise.withResolvers<void>();
 
@@ -14,7 +14,8 @@ export function buildQueryGate(name: string) {
   const plugin: KyselyPlugin = {
     transformQuery: (args) => {
       const isNamed =
-        args.node.kind === 'SelectQueryNode' && JSON.stringify(args.node).includes(`"${name}"`);
+        args.node.kind === 'SelectQueryNode' &&
+        JSON.stringify(args.node).includes(`"${state.name}"`);
 
       if (state.armed && isNamed) {
         state.armed = false;
@@ -40,7 +41,8 @@ export function buildQueryGate(name: string) {
 
     wrap: (db: ImpDatabase): ImpDatabase =>
       Object.assign(db.withPlugin(plugin), { writes: db.writes }),
-    arm: () => {
+    arm: (armedName: string = name) => {
+      state.name = armedName;
       state.armed = true;
     },
     reached: reached.promise,

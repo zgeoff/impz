@@ -344,6 +344,8 @@ export const impdRouter = {
 
       return {};
     }),
+    pin: os.images.pin.handler((options) => updateImagePin(options.input.name, true)),
+    unpin: os.images.unpin.handler((options) => updateImagePin(options.input.name, false)),
   },
   events: {
     stream: os.events.stream.handler((options) =>
@@ -634,6 +636,20 @@ function writeDockerImage(name: string, ref: string): Promise<Image> {
   }
 
   return writeImageRow(name, { ref });
+}
+
+async function updateImagePin(name: string, isPinned: boolean): Promise<Image> {
+  const updated = await imageCollection.update((query) => query.where({ name }), {
+    data(row) {
+      row.pinned = isPinned;
+    },
+  });
+
+  if (updated === undefined) {
+    throw buildNotFoundError('image', name);
+  }
+
+  return updated;
 }
 
 async function readSystemInfo(): Promise<SystemInfo> {

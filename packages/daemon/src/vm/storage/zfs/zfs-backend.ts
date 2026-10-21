@@ -483,7 +483,15 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
     waitForReclaim: reclaim.waitForReclaim,
     stop: reclaim.waitForReclaim,
 
-    ...createZfsUsage({ zfs, root: deps.root, datasets, buildDiskName, resolveImpPaths }),
+    ...createZfsUsage({
+      zfs,
+      root: deps.root,
+      datasets,
+      buildDiskName,
+      buildImageName,
+      waitForReclaim: reclaim.waitForReclaim,
+      resolveImpPaths,
+    }),
 
     readUsage: async () => {
       const usage = await zfs.readUsage(deps.root);

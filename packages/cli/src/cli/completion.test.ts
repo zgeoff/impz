@@ -318,7 +318,7 @@ test.each(['bash', 'zsh', 'fish'] as const)(
 
 test.each([
   ['impz ch', ['checkpoint', 'checkpoints']],
-  ['impz --host work image ', ['add', 'build', 'builds', 'ls', 'rm']],
+  ['impz --host work image ', ['add', 'build', 'builds', 'ls', 'pin', 'rm', 'unpin']],
   ['impz login https://x --no', ['--no-verify']],
 ])('#renderCompletion completes %p in bash to %p', async (line, words) => {
   const tree = await readCompletionTree(mainCommand);
@@ -365,7 +365,7 @@ test.skipIf(Bun.which('zsh') === null)(
 
 test.skipIf(Bun.which('fish') === null).each([
   ['impz ch', ['checkpoint', 'checkpoints']],
-  ['impz --host work image ', ['add', 'build', 'builds', 'ls', 'rm']],
+  ['impz --host work image ', ['add', 'build', 'builds', 'ls', 'pin', 'rm', 'unpin']],
   ['impz login https://x --no', ['--no-verify']],
 ])('#renderCompletion completes %p in fish to %p', async (line, words) => {
   // fish offers file names beside the commands, so it runs in an empty dir

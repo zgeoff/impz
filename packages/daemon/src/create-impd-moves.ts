@@ -21,7 +21,7 @@ export function createImpdMoves(
   config: Config,
   deps: Readonly<ImpdDeps>,
   parts: Readonly<{
-    storage: Pick<ImpdStorage, 'storageGate' | 'diskBudget'>;
+    storage: Pick<ImpdStorage, 'storageGate' | 'diskBudget' | 'images'>;
     imps: Imps;
     broker: MoveServiceDeps['grants'];
     egress: EgressService;
@@ -38,6 +38,7 @@ export function createImpdMoves(
     storage: deps.storage,
     storageGate: parts.storage.storageGate,
     diskBudget: parts.storage.diskBudget,
+    images: parts.storage.images,
     imps: parts.imps,
     grants: parts.broker,
     egress: parts.egress,

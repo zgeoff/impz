@@ -68,6 +68,7 @@ test('it builds a default system info', () => {
       readOnlyFiles: true,
       execDropSysAdmin: true,
       guestScratch: true,
+      imagePins: true,
     },
   });
 
@@ -149,6 +150,7 @@ test('it applies overrides on top of the defaults', () => {
       readOnlyFiles: true,
       execDropSysAdmin: true,
       guestScratch: true,
+      imagePins: true,
     },
   });
 });

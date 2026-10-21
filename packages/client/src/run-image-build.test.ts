@@ -131,6 +131,7 @@ test('it uploads a Blob as the build context and answers the image', async () =>
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
+    pinned: false,
   });
 
   expect(note.stdout.toString()).toBe('as a blob');
@@ -183,6 +184,7 @@ test('it uploads bytes as the build context', async () => {
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
+    pinned: false,
   });
 
   expect(note.stdout.toString()).toBe('as bytes');
@@ -235,6 +237,7 @@ test('it uploads a stream as the build context', async () => {
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
+    pinned: false,
   });
 
   expect(note.stdout.toString()).toBe('as a stream');
@@ -353,6 +356,7 @@ test('it sends the size of a stream as its Content-Length, which impd builds to'
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
+    pinned: false,
   });
 
   expect(note.stdout.toString()).toBe('with its size');
@@ -639,6 +643,7 @@ test('it reports each progress line as it arrives, before the image', async () =
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
+    pinned: false,
   });
 
   expect(engine.unexpected).toStrictEqual([]);
@@ -724,6 +729,7 @@ test('it answers the image from an impd that answers JSON, from before the strea
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
+    pinned: false,
   });
 
   expect(progress).not.toHaveBeenCalled();

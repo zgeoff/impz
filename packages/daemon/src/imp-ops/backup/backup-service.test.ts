@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { expect, onTestFinished, test } from 'bun:test';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -9,13 +10,17 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
+import { copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import invariant from 'tiny-invariant';
 import { buildMockBackupConfig } from '../../../testing/imp-ops/build-mock-backup-config';
 import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-checkpoint';
 import { buildStubRestic } from '../../../testing/imp-ops/build-stub-restic';
+import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { startTestImpd } from '../../../testing/start-test-impd';
+import { buildStubPressureSwitch } from '../../../testing/vm/build-stub-pressure-switch';
+import { buildStubPublishHook } from '../../../testing/vm/build-stub-publish-hook';
 import { createTemplateService } from '../../imps/images/template-service';
 import { createNetworkService } from '../../network/networks/network-service';
 import { createCheckpoint, listCheckpoints } from '../../platform/db/checkpoints';
@@ -23,7 +28,8 @@ import { readImageByName } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
 import { readSecret } from '../../platform/db/secrets';
 import { updateImpState } from '../../platform/db/update-imp-state';
-import { BACKUP_TREE, buildImpPaths } from '../../vm/storage/data-layout';
+import { BACKUP_TREE, buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
+import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { BackupManifestSchema } from './backup-manifest';
 import { buildBackupsOffError, createBackupService } from './backup-service';
 import type { BackupServiceDeps } from './backup-service';
@@ -40,7 +46,19 @@ async function setupTest() {
     rmSync(repoDir, { recursive: true, force: true });
   });
 
-  const host = await startTestImpd(stack, { frozenClockMs: Date.UTC(2026, 9, 2) });
+  const publish = buildStubPublishHook();
+  const pressure = buildStubPressureSwitch();
+
+  const host = await startTestImpd(stack, {
+    frozenClockMs: Date.UTC(2026, 9, 2),
+    createStorage: (dataDir) =>
+      publish.wrap(
+        pressure.wrap(
+          createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+        ),
+      ),
+    env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
+  });
 
   const restic = buildStubRestic({ repoDir, now: () => new Date(host.now()) });
   const freezes: string[] = [];
@@ -54,6 +72,7 @@ async function setupTest() {
     tokens: host.tokens,
     networks: createNetworkService({ db: host.db, egress: host.egress, imps: host.imps }),
     storage: host.storage,
+    images: host.images,
     storageGate: host.storageGate,
     diskBudget: host.diskBudget,
     restic: restic.restic,
@@ -75,7 +94,16 @@ async function setupTest() {
     },
   };
 
-  return Object.assign(host, { stack, repoDir, restic, freezes, backupLogs, deps });
+  return Object.assign(host, {
+    stack,
+    repoDir,
+    restic,
+    freezes,
+    backupLogs,
+    deps,
+    publish,
+    pressure,
+  });
 }
 
 test('#runBackup freezes a running imp and copies stopped and sleeping imps as they are', async () => {
@@ -301,6 +329,107 @@ test('#restoreBackup restores an imp stopped, with its disk and its checkpoints 
   expect(readdirSync(join(ctx.dataDir, 'backup', 'restore'))).toStrictEqual([]);
 });
 
+test('#restoreBackup keeps an old image it reuses when an eviction reaches the restore as it picks the image', async () => {
+  const ctx = await setupTest();
+
+  const gate = buildQueryGate('sha256:web-1111111');
+
+  ctx.stack.defer(() => {
+    gate.release();
+  });
+
+  const backups = createBackupService({
+    ...ctx.deps,
+    db: gate.wrap(ctx.db),
+    backup: buildMockBackupConfig(),
+  });
+
+  await ctx.createTestImage('web-1111111');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'web-1111111', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev', image: 'web-1111111' });
+  await backups.runBackup();
+  await ctx.imps.destroyImp('dev');
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'web-1111111')
+    .execute();
+
+  ctx.pressure.setPressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 });
+  gate.arm();
+
+  const restoring = backups.restoreBackup({ name: 'dev' });
+
+  await gate.reached;
+
+  await ctx.images.runImageEviction();
+
+  gate.release();
+
+  await restoring;
+
+  const image = await readImageByName(ctx.db, 'web-1111111');
+  const dev = await readImpByName(ctx.db, 'dev');
+
+  expect(image?.name).toBe('web-1111111');
+  expect(dev?.imageId).toBe(image?.id);
+});
+
+test('#restoreBackup records its clock as the last use of an image row it writes', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('web-1111111');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'web-1111111', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev', image: 'web-1111111' });
+  await backups.runBackup();
+  await ctx.imps.destroyImp('dev');
+  await ctx.images.removeImage('web-1111111');
+  await backups.restoreBackup({ name: 'dev' });
+
+  const row = await ctx.db
+    .selectFrom('images')
+    .select('last_used_at')
+    .where('name', '=', 'web-1111111')
+    .executeTakeFirstOrThrow();
+
+  expect(row.last_used_at).toBe(ctx.now());
+});
+
+test('#restoreBackup keeps the rootfs it publishes when the cleanup of an earlier removal of its digest runs before its row', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('web-1111111');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'web-1111111', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev', image: 'web-1111111' });
+  await backups.runBackup();
+  await ctx.imps.destroyImp('dev');
+  await ctx.images.removeImage('web-1111111');
+
+  ctx.publish.setAfterPublish(async (digest) => {
+    await ctx.db.insertInto('image_removals').values({ digest, created_at: 0 }).execute();
+    await ctx.images.runImageEviction();
+  });
+
+  await backups.restoreBackup({ name: 'dev' });
+
+  const image = await readImageByName(ctx.db, 'web-1111111');
+
+  invariant(image);
+
+  expect(existsSync(buildImagePaths(ctx.dataDir, image.digest).rootfs)).toBeTrue();
+});
+
 test('#restoreBackup restores the newest backup at or before --at that holds the imp', async () => {
   const ctx = await setupTest();
 
@@ -498,6 +627,7 @@ test('#restoreBackup restores every imp and its image on a fresh host, renaming 
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
@@ -544,6 +674,7 @@ test('#restoreBackup rejects a restored image as CONFLICT when its name and its 
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
@@ -580,6 +711,7 @@ test('#runBackup records templates with their source imp and an identity reset s
     storage: ctx.storage,
     storageGate: ctx.storageGate,
     diskBudget: ctx.diskBudget,
+    runImageEviction: ctx.images.runImageEviction,
     log: () => {},
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -625,6 +757,7 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
     storage: ctx.storage,
     storageGate: ctx.storageGate,
     diskBudget: ctx.diskBudget,
+    runImageEviction: ctx.images.runImageEviction,
     log: () => {},
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -658,6 +791,7 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
@@ -1584,6 +1718,7 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: freshRestic.restic,
@@ -2059,6 +2194,7 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
@@ -2109,6 +2245,7 @@ test('#restoreBackup holds the database copy’s size from the disk budget while
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: freshRestic.restic,
@@ -2197,6 +2334,7 @@ test('#restoreBackup restores a token’s grantable list on a fresh host, so the
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
@@ -2252,6 +2390,7 @@ test('#restoreBackup brings back no token or secret in a restore of one imp from
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,

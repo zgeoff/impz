@@ -327,6 +327,7 @@ test('#images.add adds the image it pulls', async () => {
     source: 'oci',
     createdAt: expect.toBeValidDate(),
     sizeBytes: expect.toBeNumber(),
+    pinned: false,
   });
 });
 
@@ -362,6 +363,41 @@ test('#images.delete removes the image it names', async () => {
   await client.images.delete({ name: 'base' });
 
   expect(imageCollection.count()).toBe(0);
+});
+
+test('#images.pin pins the image it names', async () => {
+  const client = createImpClient({ url: IMPD_ORIGIN });
+
+  await createDashboardSession();
+
+  await imageCollection.create({ name: 'base' });
+
+  const pinned = await client.images.pin({ name: 'base' });
+
+  expect(pinned).toMatchObject({ name: 'base', pinned: true });
+});
+
+test('#images.unpin unpins the image it names', async () => {
+  const client = createImpClient({ url: IMPD_ORIGIN });
+
+  await createDashboardSession();
+
+  await imageCollection.create({ name: 'base', pinned: true });
+
+  const unpinned = await client.images.unpin({ name: 'base' });
+
+  expect(unpinned).toMatchObject({ name: 'base', pinned: false });
+});
+
+test('#images.pin rejects a missing image with NOT_FOUND', async () => {
+  const client = createImpClient({ url: IMPD_ORIGIN });
+
+  await createDashboardSession();
+
+  expect(client.images.pin({ name: 'gone' })).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+    data: { kind: 'image', name: 'gone' },
+  });
 });
 
 test('#images.delete rejects a missing image with NOT_FOUND', async () => {
