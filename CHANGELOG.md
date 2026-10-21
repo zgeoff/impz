@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.2](https://github.com/zgeoff/impz/compare/v2.10.1...v2.10.2) (2026-10-21)
+
+
+### Performance Improvements
+
+* **agent:** cut the guest's steps after a boot template claim ([#593](https://github.com/zgeoff/impz/issues/593)) ([2b72f87](https://github.com/zgeoff/impz/commit/2b72f87b11621d90ace9f72e8662afaf6d2799d4))
+
 ## [2.10.1](https://github.com/zgeoff/impz/compare/v2.10.0...v2.10.1) (2026-10-21)
 
 ### Bug Fixes
