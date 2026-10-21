@@ -15,11 +15,6 @@ import {
 } from '../lib/tailnet';
 import { probeTailscaleE2EKey } from '../lib/tailscale-key';
 
-// Tailnet identity rules (docs/guides/tailscale.md): a member that a rule
-// names reaches impd's API with no token, at the rule's scope. The suite's
-// settings hold the rule (suites.ts).
-
-// one stack for every release
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -33,8 +28,7 @@ async function setupTest() {
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
 const tailscaleStatus = await readLocalTailscaleStatus();
 
-// the definition of done needs the tailnet; any other run skips without it
-// (requireTailnetReady says what it needs)
+// The definition of done needs the tailnet; any other run skips without it.
 const tailnetMissing =
   !isTailnetReady(tailscaleStatus, probeTailscaleE2EKey()) && !config.acceptance;
 

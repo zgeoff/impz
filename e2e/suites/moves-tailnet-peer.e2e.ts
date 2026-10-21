@@ -13,11 +13,7 @@ import { parseSelfTags, waitForTailnetIp } from '../lib/tailnet';
 import { probeTailscaleE2EKey } from '../lib/tailscale-key';
 import { waitFor } from '../lib/wait-for';
 
-// A move between two tag:imp-e2e nodes on this machine, with neither
-// IMP_MOVE_TEST_CIDR nor IMP_PEER_URL: the real peer check, to the peer URL
-// each impd builds from its tailnet IP (docs/architecture/storage/moves.md#the-steps).
-
-// one stack for every release, so B's imps go before B
+// One stack for every release, so B's imps go before B.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -28,8 +24,8 @@ async function setupTest() {
   return { prefix: getSuitePrefix('moves-tailnet'), stack, client };
 }
 
-// the definition of done needs the tailnet; any other run skips without the
-// tag:imp-e2e OAuth client (op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth)
+// The definition of done needs the tailnet; any other run skips without the
+// tag:imp-e2e OAuth client (op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth).
 test.skipIf(!probeTailscaleE2EKey() && !config.acceptance)(
   'it moves an imp between two tailnet nodes, past the peer check on their tailnet addresses',
   async () => {
@@ -41,8 +37,6 @@ test.skipIf(!probeTailscaleE2EKey() && !config.acceptance)(
     );
 
     const plain = `${ctx.prefix}a`;
-
-    // B joins the tailnet under its own name, kept up by the harness
     const hosts = readMoveHosts(readMoveOptions('host-b-tailnet'));
 
     const clientB = await createInstanceClient(hosts.hostB);
@@ -56,13 +50,13 @@ test.skipIf(!probeTailscaleE2EKey() && !config.acceptance)(
     const statusA = await runInContainer(['tailscale', 'status', '--json']);
     const statusB = await runInContainer(['tailscale', 'status', '--json'], hosts.hostB);
 
-    // both join as the e2e tag, which the tailnet policy keeps away from
-    // tag:imp's live impd
+    // Both join as the e2e tag, which the tailnet policy keeps away from
+    // tag:imp's live impd.
     expect(parseSelfTags(statusA.stdout)).toStrictEqual(['tag:imp-e2e']);
     expect(parseSelfTags(statusB.stdout)).toStrictEqual(['tag:imp-e2e']);
 
-    // tag:imp-e2e nodes see each other only with the policy's tag:imp-e2e
-    // to tag:imp-e2e:7070 grant
+    // tag:imp-e2e nodes see each other only with the policy's tag:imp-e2e to
+    // tag:imp-e2e:7070 grant.
     await waitFor(
       "A among B's tailnet peers",
       async () => {

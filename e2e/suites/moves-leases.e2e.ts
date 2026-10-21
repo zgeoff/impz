@@ -9,10 +9,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// A stop move and the leases on its imp, between A and B on the harness's
-// move network (lib/move-hosts.ts).
-
-// one stack for every release, on both hosts
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -45,7 +41,6 @@ test('it ends the leases a client took on a stop move, and brings the hold over 
 
   await runImp('hold', leased, '30m');
 
-  // the source's own route refuses the move while a client's lease stands
   const refused = await sendHostRpc(ctx.hosts.hostA, 'moves/prepare', {
     name: leased,
     stop: true,
@@ -72,13 +67,12 @@ test('it ends the leases a client took on a stop move, and brings the hold over 
     ['root', 'hold'],
   ]);
 
-  // the hold ends 30 minutes after the hold, as B's clock counts it
   const until = Date.parse(leases[0]?.until ?? '');
 
   expect(until).toBeGreaterThan(before + 29 * 60_000);
   expect(until).toBeLessThanOrEqual(after + 30 * 60_000);
 
-  // B's root is the hold's owner: its `hold 0` releases it
+  // B's root is the hold's owner, so its `hold 0` releases it.
   await runImpWith({ target: ctx.hosts.hostB }, 'hold', leased, '0');
 
   const released = await listLeasesOn(ctx.hosts.hostB, leased);

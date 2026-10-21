@@ -9,7 +9,6 @@ interface Build {
   readonly directory: string;
   readonly file?: string;
 
-  // false for images/base: it is a real image, built under its own name
   readonly hashed: boolean;
 }
 
@@ -39,8 +38,6 @@ function readSourceHash(build: Build): string {
   return hash.digest('hex').slice(0, 8);
 }
 
-// A fixture image's name carries a hash of its sources, so a changed fixture
-// builds anew instead of reusing an image impd already has.
 export function resolveImageName(image: FixtureImage): string {
   const build = BUILDS[image];
 
@@ -59,7 +56,6 @@ export function resolveImageName(image: FixtureImage): string {
   return name;
 }
 
-// builds, through `impz image build`, each image impd does not have yet
 export async function createMissingImages(images: readonly FixtureImage[]): Promise<void> {
   const existing = await listImageNames();
 

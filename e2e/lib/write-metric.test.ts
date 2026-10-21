@@ -3,8 +3,8 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// writeMetric reads E2E_METRICS_FILE through config, once, when it loads, so
-// each test loads it in a child process with only the variables it gives
+// The config reads the environment once, when it loads, so each test loads
+// it in a child process with only the variables the test gives.
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'e2e-metric-'));

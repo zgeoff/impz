@@ -24,10 +24,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// The jailer (docs/architecture/isolation.md#the-jailer): each VM in its own uid,
-// cgroup and mount namespace. One imp boots jailed, sleeps and wakes full,
-// and outlives an impd restart.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -60,7 +56,6 @@ test('it runs a new imp jailed under a memory cap, sleeps and wakes it full unde
     expect(row.ramMib).toBeGreaterThan(0);
   });
 
-  // a little over the guest, with no swap
   const max = await readImpCgroupText(name, 'memory.max');
   const high = await readImpCgroupText(name, 'memory.high');
   const swapMax = await readImpCgroupText(name, 'memory.swap.max');
@@ -73,7 +68,6 @@ test('it runs a new imp jailed under a memory cap, sleeps and wakes it full unde
 
   const proof = await startMemoryProof(name);
 
-  // 380 MiB of tmpfs: most of the VM's RAM
   await runShellInImp(
     name,
     [
@@ -87,7 +81,7 @@ test('it runs a new imp jailed under a memory cap, sleeps and wakes it full unde
 
   const asleepEvents = await readImpCgroupText(name, 'memory.events');
 
-  // the imp's own jail: a boot template build has its own while it runs
+  // A boot template build has a jail of its own while it runs.
   const asleepMounts = await listJailMounts(`firecracker/${booted.impId}/`);
 
   expect(asleepEvents).toMatch(/^oom_kill 0$/mu);
@@ -97,7 +91,6 @@ test('it runs a new imp jailed under a memory cap, sleeps and wakes it full unde
   await waitForExec(name);
   await checkMemoryProof(proof);
 
-  // every page of the fill back in the VM, not only those the wake touched
   const size = await runShellInImp(name, 'cat /run/fill/f | wc -c');
   const wokeEvents = await readImpCgroupText(name, 'memory.events');
   const peak = await readImpCgroupText(name, 'memory.peak');

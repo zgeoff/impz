@@ -206,7 +206,6 @@ test('#render gives the same files for the same input', () => {
   expect(render(argsJson, current, sources)).toStrictEqual(render(argsJson, current, sources));
 });
 
-// bootstrap.sh too: a hand edit to it, or a part edited without a render, fails here
 test('#render leaves the checked-in units, host-env.sh, bootstrap.sh and compose.yaml as they are', () => {
   const current = {
     unit: readFileSync(new URL('../../deploy/imp-host.service', import.meta.url), 'utf8'),
@@ -232,7 +231,6 @@ test('#render leaves the checked-in units, host-env.sh, bootstrap.sh and compose
     'utf8',
   );
 
-  // on failure: bun run render:deploy
   expect(render(argsJson, current, sources)).toStrictEqual(current);
 });
 
@@ -304,7 +302,7 @@ test('#parseHostArgs refuses args without probed, naming the args file', () => {
   ).toThrowWithMessage(Error, /^deploy\/imp-host\.args\.json: .*\n.*at probed/u);
 });
 
-// Linux names an interface in at most 15 bytes
+// Linux limits an interface name to 15 bytes.
 test('#parseHostArgs refuses a bridge name longer than an interface name may be', () => {
   expect(() =>
     parseHostArgs(
@@ -315,7 +313,7 @@ test('#parseHostArgs refuses a bridge name longer than an interface name may be'
   ).toThrowWithMessage(Error, /is not a bridge name\n.*at network\.bridge/u);
 });
 
-// the pipeline goes into the unit's sh -c '...', which a quote would end
+// The pipeline goes into the unit's sh -c '...', which a quote would end.
 test('#parseHostArgs refuses an address pipeline with a quote', () => {
   expect(() =>
     parseHostArgs(

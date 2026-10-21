@@ -19,9 +19,6 @@ import { createStubRepoScript } from './test-utils/create-stub-repo-script';
 import { createStubZfs } from './test-utils/create-stub-zfs';
 import { createStubZpool } from './test-utils/create-stub-zpool';
 
-// The script runs from a copy of the repo's scripts dir, beside the lib.sh it
-// sources and stand-ins for the repo scripts it calls, which log to the same
-// call log as the stub binaries on PATH.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-zfs-host-test-'));
 
@@ -39,7 +36,6 @@ function setupTest() {
     copyFileSync(new URL(name, import.meta.url).pathname, join(scripts, name));
   }
 
-  // sudo runs what it is given
   const stubs = join(directory, 'stubs');
   const sudo = createStubBin(stubs, 'sudo', 'exec "$@"');
 
@@ -48,7 +44,7 @@ function setupTest() {
   createStubRepoScript(e2e, 'test-e2e.sh', sudo.calls);
   createStubRepoScript(scripts, 'test-zfs.sh', sudo.calls);
 
-  // the script reads the loaded module's version before it does anything
+  // The script reads the loaded module's version before it does anything else.
   const moduleVersion = join(directory, 'zfs-version');
 
   writeFileSync(moduleVersion, '2.3.4-1\n');
@@ -593,8 +589,6 @@ test('it refuses an imp-zfs container that is already there and touches nothing'
 
   mkdirSync(work);
   createStubZpool(ctx.stubs);
-
-  // another run's instance answers inspect
   createStubInstanceDocker(ctx.stubs, { containers: ['imp-zfs'] });
 
   const result = Bun.spawnSync([ctx.script], {
@@ -660,8 +654,6 @@ test('it refuses an imp-zfs-mv-b container that is already there and touches not
 
   mkdirSync(work);
   createStubZpool(ctx.stubs);
-
-  // another run's B answers inspect
   createStubInstanceDocker(ctx.stubs, { containers: ['imp-zfs-mv-b'] });
 
   const result = Bun.spawnSync([ctx.script], {
@@ -694,8 +686,6 @@ test('it refuses an imp-zfs-mv network that is already there and touches nothing
 
   mkdirSync(work);
   createStubZpool(ctx.stubs);
-
-  // another run's move network answers inspect
   createStubInstanceDocker(ctx.stubs, { containers: [], networks: ['imp-zfs-mv'] });
 
   const result = Bun.spawnSync([ctx.script], {
@@ -749,7 +739,7 @@ test('it stops the suites, the moves suites’ B, the instance and the pool when
   const work = join(ctx.directoryPath, 'work');
   const started = join(ctx.directoryPath, 'suites-started');
 
-  // the moves suites start B once the run is under way
+  // The moves suites start B once the run is under way.
   createStubInstanceDocker(ctx.stubs, {
     containers: [],
     startedLater: { marker: started, containers: ['imp-zfs-mv-b'] },
@@ -757,9 +747,6 @@ test('it stops the suites, the moves suites’ B, the instance and the pool when
 
   mkdirSync(work);
   createStubZpool(ctx.stubs);
-
-  // a run that holds the instance until something stops it, and a dev.sh
-  // that logs which instance each call is for
   createStubRepoScript(ctx.e2e, 'test-e2e.sh', ctx.calls, `: >'${started}'; exec sleep 30`);
 
   createStubRepoScript(
@@ -852,7 +839,7 @@ test('it destroys the pool and removes its file when SIGTERM comes during the po
 
   await waitFor(() => readFileSync(startedMarker), { timeoutMs: 10_000 });
 
-  // the create holds until the release, so the signal lands inside it
+  // The create holds until the release, so the signal lands inside it.
   subprocess.kill('SIGTERM');
 
   writeFileSync(release, '');
@@ -920,8 +907,6 @@ test('it removes its pool file while another pool uses a vdev path that only sta
 
   mkdirSync(work);
   createStubZpool(ctx.stubs);
-
-  // another pool, whose vdev path is this run's bench.img with more after a space
   writeFileSync(join(ctx.stubs, 'pools'), `tank ${work}/bench.img old\n`);
 
   const result = Bun.spawnSync([ctx.script], {

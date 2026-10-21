@@ -18,10 +18,6 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// IMP_KSM with real merges (docs/architecture/lifecycle/ram-governor.md#ksm).
-// KSM is global to the kernel: CI turns it on, and on any other host the
-// suite skips. Its settings put the instance on KSM and a 512 MiB budget.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -58,15 +54,13 @@ test.skipIf(!checkHostRunsKsm())(
     const mappingsA = await readGuestMappings(firstName);
     const mappingsB = await readGuestMappings(secondName);
 
-    // private and mergeable: memfd-backed memory would fail here
     expect(new Set([...mappingsA, ...mappingsB])).toStrictEqual(new Set(['rw-p mg']));
 
-    // before the fill, so no merge of it has begun yet
     const beforeA = await readVmPssMib(firstName);
     const beforeB = await readVmPssMib(secondName);
 
-    // 96 MiB of 9-byte lines, the same in both guests but no two pages alike
-    // within one: only a merge across the guests counts
+    // The same in both guests but no two pages alike within one, so only a merge
+    // across the guests counts.
     const fill = `seq -w 1 ${String(Math.floor((96 * 1024 ** 2) / 9))} > /dev/shm/fill`;
 
     await runShellInImp(firstName, fill);
@@ -80,8 +74,8 @@ test.skipIf(!checkHostRunsKsm())(
         const pssA = await readVmPssMib(firstName);
         const pssB = await readVmPssMib(secondName);
 
-        // most of each fill, in 4 KiB pages; unmerged, the fills add 192 MiB,
-        // and the shared fill counts half in each guest
+        // Unmerged, the fills add 192 MiB, and the shared fill counts half in each
+        // guest.
         if (Math.min(pagesA, pagesB) <= (96 * 256) / 2 || pssA + pssB >= beforeA + beforeB + 144) {
           throw new Error(
             `merging ${String(pagesA)} and ${String(pagesB)} pages, Pss ${String(pssA + pssB)} MiB`,
@@ -100,8 +94,6 @@ test.skipIf(!checkHostRunsKsm())(
     writeMetric('ksm_pss_after_mib', merge.after);
     writeMetric('ksm_ksmd_cpu_ms', readKsmdCpuMs() - cpuBefore);
     writeMetric('ksm_info', info.ksm);
-
-    // a metric until the CI kernel is known to keep the flag (590c03ca6a3f)
     writeMetric('ksm_unmergeable', info.ksm?.unmergeable);
 
     expect(info.ksm?.headroomMib).toBeGreaterThan(0);
@@ -109,9 +101,8 @@ test.skipIf(!checkHostRunsKsm())(
     await runImp('hold', firstName, '0');
     await runImp('hold', secondName, '0');
 
-    // The fill goes first, so the merged pages split; then 288 MiB of each
-    // guest's own: the two pass the budget even without their base, one fits.
-    // /dev/shm grows past half the guest's RAM; busybox head takes no 'M'.
+    // The fill goes first, so the merged pages split. /dev/shm grows past half
+    // the guest's RAM, and busybox head takes no 'M'.
     const ownWrite = [
       'rm /dev/shm/fill',
       'mount -o remount,size=320m /dev/shm',
@@ -121,8 +112,8 @@ test.skipIf(!checkHostRunsKsm())(
     await runShellInImp(firstName, ownWrite);
     await runShellInImp(secondName, ownWrite);
 
-    // two enforce passes, and 2 s to read every guest's Pss: the most a
-    // breach may last after the last write
+    // Two enforce passes, and 2 s to read every guest's Pss: the most a breach
+    // may last after the last write.
     const awakeMib = await waitFor(
       'the governor to keep the guests within the budget',
       async () => {
@@ -158,8 +149,6 @@ test.skipIf(!checkHostRunsKsm())(
   600_000,
 );
 
-// Plugged memory is guest memory KSM may merge, as its boot memory is
-// (docs/architecture/lifecycle/elastic-memory.md#how-the-guest-grows).
 test.skipIf(!checkHostRunsKsm())(
   'it makes the memory an elastic guest grows into private and mergeable, as its boot memory is',
   async () => {
@@ -183,8 +172,6 @@ test.skipIf(!checkHostRunsKsm())(
     await waitForExec(name);
     await holdImp(name);
 
-    // 120 MiB in tmpfs at 20 MiB a second, a rate the guest grows at: past
-    // what the base holds free
     await runShellInImp(
       name,
       'mkdir -p /mnt/fill && mount -t tmpfs -o size=200m tmpfs /mnt/fill && ' +
@@ -193,8 +180,7 @@ test.skipIf(!checkHostRunsKsm())(
 
     const growStarted = performance.now();
 
-    // the grow can land after the fill ends, so wait for it rather than
-    // read the plugged size once
+    // The grow can land after the fill ends.
     await waitFor(
       `${name} to grow under the fill`,
       async () => {

@@ -43,7 +43,7 @@ test('it writes a key file that ssh-keygen reads, with the public key node made'
 
   const derived = Bun.spawnSync(['ssh-keygen', '-y', '-f', path]);
 
-  // the public key's own encoding, from node: SPKI's last 32 bytes
+  // The raw public key is the last 32 bytes of its SPKI encoding.
   const spki = createPublicKey({
     key: { kty: 'OKP', crv: 'Ed25519', x: key.publicKey.toString('base64url') },
     format: 'jwk',

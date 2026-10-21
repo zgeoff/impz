@@ -11,7 +11,6 @@ import { isWithin } from './is-within';
 import { resolveRef } from './resolve-ref';
 import type { Schema, SchemaObject } from './schema';
 
-// a plain validator for the values of a `const` or an `enum`
 export function isValueAccepted(schemaRef: Schema, value: unknown, root: Schema): boolean {
   const schema = resolveRef(schemaRef, root);
 
@@ -35,7 +34,6 @@ export function isValueAccepted(schemaRef: Schema, value: unknown, root: Schema)
 }
 
 function isOfType(value: unknown, type: string): boolean {
-  // a schema's type is any string, so the match ends in the typeof check
   return match(type)
     .with('integer', () => Number.isInteger(value))
     .with('null', () => value === null)

@@ -1,8 +1,7 @@
 import type { CommandResult } from './instance';
 
-// What `git rev-parse --local-env-vars` lists: the variables that tie git to
-// one repository. A git hook exports them (GIT_DIR above all), and a git
-// child that inherits them works on that repository whatever its -C says.
+// A git hook exports these, GIT_DIR above all, and a git child that inherits
+// them works on that repository whatever its -C says.
 export const GIT_REPO_ENV_VARS: readonly string[] = [
   'GIT_ALTERNATE_OBJECT_DIRECTORIES',
   'GIT_CONFIG',
@@ -21,7 +20,6 @@ export const GIT_REPO_ENV_VARS: readonly string[] = [
   'GIT_COMMON_DIR',
 ];
 
-// env without the repository variables, so a git child finds its own repo
 export function createGitFreeEnv(
   env: Readonly<Record<string, string | undefined>>,
 ): Record<string, string> {
@@ -41,8 +39,6 @@ export interface GitCommandOptions {
   readonly stdin?: string;
 }
 
-// Runs git, or a tool that runs git, with this process's env minus the
-// repository variables, then the call's env.
 export async function runGitCommand(
   argv: readonly string[],
   options: Readonly<GitCommandOptions> = {},
@@ -63,7 +59,6 @@ export async function runGitCommand(
   return { exitCode, stdout, stderr };
 }
 
-// runGitCommand, rejecting on a non-zero exit; resolves with stdout
 export async function runGitChecked(argv: readonly string[]): Promise<string> {
   const result = await runGitCommand(argv);
 

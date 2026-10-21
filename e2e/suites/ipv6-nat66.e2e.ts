@@ -20,10 +20,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// IPv6 for imps (docs/architecture/network/networking.md#ipv6) behind NAT66: the
-// instance reboots onto the topology's near network with a ULA /64, and
-// back to its own network at the end.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -75,7 +71,7 @@ test('it gives an imp a /128 in the ULA prefix, from a boot template claim too, 
   expect(address).toBe(buildGuestIpv6(network, openRow.ip));
   expect(routes).toContain('default via fe80::1 dev eth0');
 
-  // the shape's second boot builds its template, unless one exists
+  // The shape's second boot builds its template, unless one exists.
   await runImp('new', spare, '--image', image, '--memory', '256');
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, spare));
@@ -110,8 +106,7 @@ test('it gives an imp a /128 in the ULA prefix, from a boot template claim too, 
   expect(page).toBe('v6-ok');
   expect(peer).toBe(`[${hostAddress}]`);
 
-  // the router beyond the host refuses the guest's full segments, and the
-  // host must let its packet-too-big through; httpd hands a CGI no NUL bytes
+  // httpd hands a CGI no NUL bytes.
   const uploaded = await runShellInImp(
     open,
     [

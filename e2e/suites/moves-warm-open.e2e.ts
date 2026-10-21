@@ -17,10 +17,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// A warm move of a sleeping open imp, memory and all, between A and B on
-// the harness's move network (lib/move-hosts.ts).
-
-// one stack for every release, on both hosts
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -46,8 +42,6 @@ test('it moves a sleeping open imp with its memory, and it reaches out at once o
   await waitForExec(open);
   await holdImp(open);
 
-  // a mark in tmpfs and a process that only memory holds: both survive a
-  // warm move, and a cold boot loses them
   await runImp(
     'exec',
     open,
@@ -57,7 +51,7 @@ test('it moves a sleeping open imp with its memory, and it reaches out at once o
     'echo warm-ok > /dev/shm/mark && (sleep 100000 >/dev/null 2>&1 &) && sync',
   );
 
-  // the sleeper's pid comes first, older than the shell that runs pgrep
+  // The sleeper's pid comes first, older than the shell that runs pgrep.
   const pids = await runImp('exec', open, '--', 'sh', '-c', "pgrep -f 'sleep 100000' || true");
 
   const [pid = ''] = pids.split('\n');
@@ -79,7 +73,6 @@ test('it moves a sleeping open imp with its memory, and it reaches out at once o
   expect(left).toBeUndefined();
   expect(moved.state).toBe('sleeping');
 
-  // the first exec wakes it on B
   const onB = { target: ctx.hosts.hostB };
 
   const mark = await runImpWith(onB, 'exec', open, '--', 'cat', '/dev/shm/mark');

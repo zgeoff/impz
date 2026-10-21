@@ -4,27 +4,20 @@ import { REPO_ROOT } from './instance';
 import { waitFor } from './wait-for';
 
 export interface Terminal {
-  // raw bytes, as keys typed at the terminal
   readonly type: (text: string) => void;
 
-  // as a user who resizes the terminal window
   readonly resize: (cols: number, rows: number) => void;
 
-  // resolves once the terminal has shown `text`, counting from `since`
   readonly waitForText: (text: string, since?: number) => Promise<void>;
 
-  // what the terminal showed so far, without carriage returns
   readonly readOutput: () => string;
   readonly exited: Promise<number>;
 
-  // kills the command, once it has exited too; safe after it exited
   readonly close: () => Promise<void>;
 }
 
 const DEFAULT_SIZE = { cols: 80, rows: 24 } as const;
 
-// Runs `imp ARGS...` on a pseudo-terminal of the given size, as a user at a
-// terminal would.
 export async function openTerminal(
   args: readonly string[],
   size?: Readonly<{ cols: number; rows: number }>,
@@ -34,7 +27,6 @@ export async function openTerminal(
   return openCommandTerminal([join(REPO_ROOT, 'scripts', 'impz'), ...args], impEnv, size);
 }
 
-// Runs any command on a pseudo-terminal, such as `ssh` into an imp.
 export function openCommandTerminal(
   argv: readonly string[],
   env: Readonly<Record<string, string>> = {},

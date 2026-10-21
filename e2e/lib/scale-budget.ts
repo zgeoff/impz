@@ -12,16 +12,16 @@ import type { SleepWatch } from './sleep-events';
 import { waitFor } from './wait-for';
 import type { WaitForOptions } from './wait-for';
 
-// The sampler's rate: how often the monitor reads impd's RAM figure and
-// Firecracker's memory, which sets how finely an overshoot is timed.
 const BUDGET_SAMPLE_MS = 500;
 
 export interface BudgetSample {
-  // ms since the epoch, taken before the reads, so an overshoot never looks
-  // shorter than it was
+  // Taken before the reads, so an overshoot never looks shorter than it was.
   readonly at: number;
   readonly ramUsedMib: number;
   readonly awake: number;
+
+  // Full PSS adds clean file pages that the governor leaves out, so it is
+  // only reported, never checked against the budget.
   readonly firecrackerPssMib: number;
   readonly firecrackerOwnedMib: number;
 }
@@ -29,28 +29,21 @@ export interface BudgetSample {
 export interface BudgetMonitor {
   readonly samples: readonly BudgetSample[];
 
-  // every imp's sleep, from the event stream
   readonly sleeps: readonly SleepSpan[];
 
-  // stops the sampler and the event stream; safe to call again
   readonly stop: () => Promise<void>;
 }
 
 export interface OvershootLimitsInput {
   readonly budgetMib: number;
 
-  // each scale imp's --memory
   readonly memoryMib: number;
 
-  // impd's IMP_BOOT_RESERVE_PERCENT
   readonly reservePercent: number;
 
-  // the governor's enforce period
   readonly enforceIntervalMs: number;
 }
 
-// The script that fills a scale imp: a tmpfs a little larger than the fill,
-// and that many MiB of random data in it, which no page sharing can fold.
 export function buildFillScript(fillMib: number): string {
   return (
     `mkdir -p /run/fill && mount -t tmpfs -o size=${String(fillMib + 16)}m tmpfs /run/fill && ` +
@@ -58,9 +51,6 @@ export function buildFillScript(fillMib: number): string {
   );
 }
 
-// A guest grows past its boot reserve after admission, so use may pass the
-// budget by the memory its reserve leaves out, until an enforce sleep due
-// within one period and one sample ends it (collectBudgetBreaches)
 export function buildOvershootLimits(input: Readonly<OvershootLimitsInput>): OvershootLimits {
   return {
     budgetMib: input.budgetMib,
@@ -69,9 +59,6 @@ export function buildOvershootLimits(input: Readonly<OvershootLimitsInput>): Ove
   };
 }
 
-// Breaches in impd's figure and in what the VMs own per smaps, so a wrong
-// figure cannot hide one; full PSS adds clean file pages the governor leaves
-// out, so it is only reported (docs/runbooks/development.md).
 export function collectBudgetViolations(
   samples: readonly BudgetSample[],
   sleeps: readonly SleepSpan[],
@@ -93,7 +80,6 @@ export function collectBudgetViolations(
   );
 }
 
-// from the first sample over the budget to the last
 export function readOvershootMs(overshoot: Overshoot): number {
   const [first] = overshoot.samples;
   const last = overshoot.samples.at(-1);
@@ -101,8 +87,7 @@ export function readOvershootMs(overshoot: Overshoot): number {
   return first === undefined || last === undefined ? 0 : last.at - first.at;
 }
 
-// null for a sample lost to a busy impd, which is no budget violation; a bad
-// smaps read throws
+// A sample lost to a busy impd is no budget violation.
 async function readBudgetSample(): Promise<BudgetSample | null> {
   const at = Date.now();
 
@@ -126,11 +111,9 @@ async function readBudgetSample(): Promise<BudgetSample | null> {
 }
 
 export interface BudgetMonitorDeps {
-  // one sample of impd and the VMs, null when impd was too busy to answer
   readonly readSample: () => Promise<BudgetSample | null>;
   readonly startWatch: () => Promise<SleepWatch>;
 
-  // the pause between samples
   readonly wait: (durationMs: number) => Promise<void>;
 }
 
@@ -140,8 +123,6 @@ const MONITOR_DEPS: BudgetMonitorDeps = {
   wait: (durationMs) => Bun.sleep(durationMs),
 };
 
-// Samples the budget every BUDGET_SAMPLE_MS and follows the sleeps that end
-// an overshoot. A failed read stops the sampler, and stop() rethrows it.
 export async function startBudgetMonitor(
   deps: Readonly<BudgetMonitorDeps> = MONITOR_DEPS,
 ): Promise<BudgetMonitor> {
@@ -153,7 +134,7 @@ export async function startBudgetMonitor(
     isRunning: true,
     stopped: null as Promise<void> | null,
 
-    // kept for stop() to rethrow, so it is never an unhandled rejection
+    // Kept for stop() to rethrow, so it is never an unhandled rejection.
     failure: null as Error | null,
   };
 
@@ -173,7 +154,6 @@ export async function startBudgetMonitor(
     }
   })();
 
-  // the event stream stops even when the sampler failed
   const stop = async () => {
     state.isRunning = false;
 
@@ -197,8 +177,6 @@ export async function startBudgetMonitor(
   };
 }
 
-// waits until the monitor holds a sample taken `afterMs` past `since`, so a
-// breach that starts at `since` has had the time to show
 export async function waitForSampleAfter(
   monitor: BudgetMonitor,
   since: number,
@@ -218,9 +196,6 @@ export async function waitForSampleAfter(
   );
 }
 
-// Samples on until neither figure is over the budget, for at most as long as
-// an open overshoot may wait for its sleep, so the final check judges a
-// closed one; a figure still over then is the final check's breach.
 export async function waitForUnderBudget(
   monitor: BudgetMonitor,
   limits: OvershootLimits,
@@ -243,9 +218,6 @@ export async function waitForUnderBudget(
   ).catch(() => {});
 }
 
-// The smallest RAM that the named imps' VMs own, each read after its fill: the
-// first may cold-boot while its boot template builds, and the imps restored
-// from it own less, so more fit.
 export async function readPerImpMib(names: readonly string[]): Promise<number> {
   const rows = await Promise.all(names.map((name) => requireImp(name)));
   const smaps = await runInContainer(['sh', '-c', FIRECRACKER_MEMORY_SCRIPT]);

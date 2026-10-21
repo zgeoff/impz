@@ -5,9 +5,6 @@ import { waitFor } from './wait-for';
 
 export type AwakeRow = Readonly<Pick<ImpRow, 'state' | 'lastActiveAt' | 'resources' | 'sleptAt'>>;
 
-// Whether impd's idle loop found the running imp active `idleTimeoutS` after
-// `sinceMs` (it moves lastActiveAt only while something keeps the imp awake),
-// with no sleep or wake since `before`.
 export function isAwakePastIdle(
   row: AwakeRow,
   before: AwakeRow,
@@ -22,9 +19,6 @@ export function isAwakePastIdle(
   );
 }
 
-// Waits, without touching `name` (a listing records no activity), until
-// isAwakePastIdle holds against its first read as running (it may still
-// be waking); fails a few idle-loop ticks past the timeout.
 export async function waitAwakePastIdle(name: string, sinceMs: number): Promise<void> {
   const before = await waitFor(`${name} to run`, async () => {
     const row = await requireImp(name);

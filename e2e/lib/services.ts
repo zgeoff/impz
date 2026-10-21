@@ -14,7 +14,6 @@ const ServiceRowSchema = z.object({
 
 export type ServiceRow = z.infer<typeof ServiceRowSchema>;
 
-// `impz service ls <imp> --json`, with the fields the suites read
 export function parseServices(stdout: string): ServiceRow[] {
   return z.array(ServiceRowSchema).parse(JSON.parse(stdout));
 }
@@ -25,7 +24,6 @@ export async function listServices(imp: string): Promise<ServiceRow[]> {
   return parseServices(stdout);
 }
 
-// waits until the service runs with a pid other than `other`, and returns it
 export function waitForServicePid(
   imp: string,
   service: string,

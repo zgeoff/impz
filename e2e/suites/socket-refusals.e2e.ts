@@ -3,9 +3,8 @@ import { DOCKERFILE_FRONTEND } from '../../packages/daemon/src/imps/docker-proxy
 import { buildProxyBuildScript, parseProxyAnswer } from '../lib/docker-proxy-build';
 import { readHostImageFromEnv, runChecked, runCommand, runInContainer } from '../lib/instance';
 
-// imp-docker-proxy (docs/architecture/host.md#the-docker-socket):
-// root in the dev container reaches Docker only through it. It closes the
-// Docker socket path only: SYS_ADMIN still lets root out of the container.
+// The proxy closes the Docker socket path only: SYS_ADMIN still lets root out
+// of the container.
 
 test('it gives the dev container no docker.sock of the host, and the proxy as its Docker', async () => {
   const missing = await runInContainer(['test', '-e', '/var/run/docker.sock']);
@@ -15,7 +14,7 @@ test('it gives the dev container no docker.sock of the host, and the proxy as it
   expect(version.exitCode).toBe(0);
 });
 
-// docker run exits 125 when the daemon refuses, the other commands 1
+// docker run exits 125 when the daemon refuses, the other commands 1.
 test.each([
   ['docker run --rm busybox true', 125],
   ['docker create --privileged busybox /bin/true', 1],
@@ -52,7 +51,6 @@ test.each([
 });
 
 test('it refuses an export or rm of a container the proxy did not create', async () => {
-  // made on the host's own Docker, not through the proxy
   const created = await runChecked(['docker', 'create', 'busybox', '/bin/true']);
 
   const outsider = created.trim();
@@ -80,7 +78,6 @@ test('it refuses an export or rm of a container the proxy did not create', async
   expect(state.trim()).toBe('created');
 });
 
-// #169: impd builds in builder imps then, so no build reaches the engine
 test('it refuses every build under IMP_BUILD_ISOLATION=imp, even one a host build may send', async () => {
   const result = await runInContainer([
     'sh',

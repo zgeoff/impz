@@ -4,15 +4,12 @@ import { REPO_ROOT } from './instance';
 import { waitFor } from './wait-for';
 
 export interface ConsoleStep {
-  // typed once the terminal shows this, or at once when null; text a shell
-  // computes (console-$((40 + 2)) prints console-42) never matches the echo
+  // Text a shell computes, such as console-$((40 + 2)) printing console-42,
+  // never matches the echo of the typed line.
   readonly after: string | null;
   readonly line: string;
 }
 
-// Runs `impz console NAME` on a pseudo-terminal, typing each line once the
-// terminal shows what it waits for; returns the exit code and what the
-// terminal showed, without carriage returns
 export async function runConsole(
   name: string,
   steps: readonly ConsoleStep[],

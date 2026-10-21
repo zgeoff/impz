@@ -24,11 +24,7 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
-// Boot templates (docs/architecture/lifecycle/boot-templates.md): every restored imp
-// is its own machine. Each test removes the templates of its shape after
-// its imps, so a later run never starts on one.
-
-// Each test boots a memory size of its own: a template one test leaves
+// Each test boots a memory size of its own, so a template one test leaves
 // under --keep is no other test's.
 
 async function setupTest() {
@@ -52,8 +48,6 @@ test('it makes the template of a shape on its second boot and restores it as imp
 
   const started = new Date();
 
-  // the 304 MiB shape starts with no template: the reset removes one a
-  // killed earlier run left, and this test's own goes after its imps
   registerRemoval(ctx.stack, config.keep, () => removeShapeTemplates(304));
 
   await removeShapeTemplates(304);
@@ -101,25 +95,18 @@ test('it makes the template of a shape on its second boot and restores it as imp
 
   const sizeKib = Number(df.trim().split('\n').at(-1)?.split(/\s+/v)[1]);
 
-  // no template after the first boot, and this test's own build after the second
   expect(afterFirst).toStrictEqual([]);
   expect(log).toContain(`impd: boot template ${key.slice(0, 12)} built in `);
   expect(log).toContain(`${second}: restored boot template ${key.slice(0, 12)}`);
   expect(log).toContain(`${third}: restored boot template ${key.slice(0, 12)}`);
-
-  // the guest's own word that the claim reseeded its CRNG
   expect(consoleLog.stdout).toContain('boot: claim: crng reseeded from a 64-byte seed');
   expect(hostname).toBe(second);
-
-  // the template's own MAC
   expect(secondMac).not.toBe('06:00:a9:fe:ff:fe');
   expect(thirdMac).not.toBe('06:00:a9:fe:ff:fe');
   expect(secondMac).not.toBe(thirdMac);
 
-  // ext4 keeps some of the 6 GiB for itself
+  // ext4 keeps some of the 6 GiB for itself.
   expect(sizeKib / (1024 * 1024)).toBeGreaterThan(5.8);
-
-  // the claim's gateway is the default route
   expect(route).toContain('via');
 });
 
@@ -132,8 +119,6 @@ test('it keys TCP with its own secret in each restored imp', async () => {
   const second = `${ctx.prefix}isn-b`;
   const third = `${ctx.prefix}isn-c`;
 
-  // the shape's template must be this test's own build, and goes after the
-  // imps that boot it
   await checkShapeTemplateAbsent(288);
 
   registerRemoval(ctx.stack, config.keep, () => removeShapeTemplates(288));
@@ -165,8 +150,7 @@ test('it keys TCP with its own secret in each restored imp', async () => {
   const secondSecret = await readIsnSecret(second);
   const thirdSecret = await readIsnSecret(third);
 
-  // the probe itself: one guest, twice, gives the same secret; two guests
-  // that share the kernel's net_secret land within a few hundred
+  // Two guests that share the kernel's net_secret land within a few hundred.
   const again = await readIsnSecret(second);
 
   expect(getU32Span(secondSecret, again)).toBeLessThan(100_000);
@@ -184,8 +168,6 @@ test('it records each restored boot as its own cold boot, again after a restart 
   const second = `${ctx.prefix}cold-b`;
   const third = `${ctx.prefix}cold-c`;
 
-  // the shape's template must be this test's own build, and goes after the
-  // imps that boot it
   await checkShapeTemplateAbsent(320);
 
   registerRemoval(ctx.stack, config.keep, () => removeShapeTemplates(320));
@@ -225,7 +207,6 @@ test('it records each restored boot as its own cold boot, again after a restart 
   const after = await readSessionOutput(second);
   const log = await readImpdLogSince(restarted);
 
-  // the start restored the template again, not the kernel
   expect(log).toContain(`${second}: restored boot template`);
   expect(other.bootId).not.toBe(before.bootId);
   expect(after.bootId).not.toBe(before.bootId);
@@ -246,8 +227,6 @@ test('it sleeps and wakes a restored imp like any other', async () => {
 
   const started = new Date();
 
-  // the shape's template must be this test's own build, and goes after the
-  // imps that boot it
   await checkShapeTemplateAbsent(336);
 
   registerRemoval(ctx.stack, config.keep, () => removeShapeTemplates(336));
@@ -273,8 +252,6 @@ test('it sleeps and wakes a restored imp like any other', async () => {
   await runImp('sleep', second);
 
   const asleep = await requireImp(second);
-
-  // the exec wakes it
   const marker = await runInImp(second, 'cat', '/root/marker');
   const log = await readImpdLogSince(started);
 
@@ -293,8 +270,6 @@ test('it times impz new from a template: the wall time and its spans', async () 
   const spans: Record<string, number[]> = {};
   const guestSpans: Record<string, number[]> = {};
 
-  // the shape's template must be this test's own build, and goes after the
-  // imps that boot it
   await checkShapeTemplateAbsent(352);
 
   registerRemoval(ctx.stack, config.keep, () => removeShapeTemplates(352));
@@ -312,7 +287,6 @@ test('it times impz new from a template: the wall time and its spans', async () 
   await runImp('rm', spare);
   await waitForShapeTemplate(352);
 
-  // ten creates, one after another, each removed before the next
   for (let index = 0; index < 10; index += 1) {
     const name = `${ctx.prefix}time-${String(index)}`;
 
@@ -324,7 +298,6 @@ test('it times impz new from a template: the wall time and its spans', async () 
 
     registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
 
-    // the wall time runs until the imp takes an exec
     await waitForExec(name);
 
     walls.push(performance.now() - wallStarted);
@@ -335,8 +308,6 @@ test('it times impz new from a template: the wall time and its spans', async () 
     const restoredSteps = parseLoggedSteps(log, name, 'restored boot template');
     const vmMs = Object.values(restoredSteps).reduce((sum, durationMs) => sum + durationMs, 0);
 
-    // the CLI's process and the API round trip, and impd's write-up after
-    // the VM
     const found = {
       ...restoredSteps,
       ...createdSteps,
@@ -348,8 +319,6 @@ test('it times impz new from a template: the wall time and its spans', async () 
       spans[step] = [...(spans[step] ?? []), durationMs];
     }
 
-    // the guest's own steps after the claim, which run inside impd's claim
-    // and agent spans
     const guestSteps = parseLoggedGuestSteps(log, name, 'restored boot template');
 
     for (const [step, durationMs] of Object.entries(guestSteps)) {
@@ -378,8 +347,6 @@ test('it times impz new from a template: the wall time and its spans', async () 
     ),
   );
 
-  // every create restored the template: each has the agent's span, and
-  // the guest's steps after its claim
   expect(spans['agent']).toHaveLength(10);
 
   expect(

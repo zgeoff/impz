@@ -1,39 +1,28 @@
-// Harness knobs. The defaults are the acceptance sizes; lower them to run the
-// scale suite on a smaller machine.
 export const config = {
-  // impd tuning, passed through scripts/dev/dev.sh
   ramBudgetMib: readNumber('E2E_RAM_BUDGET_MIB', 6144),
   idleTimeoutS: readNumber('E2E_IDLE_TIMEOUT_S', 10),
 
-  // scale suite
   scaleCount: readNumber('E2E_SCALE_COUNT', 30),
   scaleMemoryMib: readNumber('E2E_SCALE_MEMORY_MIB', 512),
   scaleFillMib: readNumber('E2E_SCALE_FILL_MIB', 256),
 
-  // chaos suite: rounds of random faults, and the seed that replays them
   chaosRounds: readNumber('E2E_CHAOS_ROUNDS', 8),
   chaosSeed: readNumber('E2E_CHAOS_SEED', Date.now() % 1_000_000_007),
 
-  // limits
   maxNewMs: readNumber('E2E_MAX_NEW_MS', 3000),
   maxCheckpointMs: readNumber('E2E_MAX_CHECKPOINT_MS', 500),
 
   keep: process.env['E2E_KEEP'] === '1',
 
-  // the prefixes whose imps the suite before kept for this journey, as a
-  // passing scale keeps its fleet for restart (run-suites.ts)
   keptPrefixes: (process.env['E2E_KEPT_PREFIXES'] ?? '')
     .split(',')
     .filter((prefix) => prefix !== ''),
 
-  // the full definition of done: tailscale fails instead of skipping
   acceptance: process.env['E2E_ACCEPTANCE'] === '1',
 
-  // where suites append metrics; the runner merges them into results.json
   metricsFile: process.env['E2E_METRICS_FILE'] ?? null,
 
-  // the name the registry suite's registry answers to, which must resolve to
-  // 127.0.0.1 on this machine
+  // The name must resolve to 127.0.0.1 on this machine.
   registryName: process.env['E2E_REGISTRY_NAME'] ?? 'imp-e2e-registry.test',
 } as const;
 

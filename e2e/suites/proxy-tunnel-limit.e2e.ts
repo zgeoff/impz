@@ -18,10 +18,8 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// `impz proxy` against impd's cap on open tunnels per imp.
-
-// one stack for every release, so the held connections close and the proxy
-// stops before the imp goes
+// One stack for every release, so the held connections close and the proxy
+// stops before the imp goes.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -36,8 +34,6 @@ test('it refuses only the connection past the tunnel cap with TUNNEL_LIMIT, and 
   const ctx = await setupTest();
 
   const name = `${ctx.prefix}cap`;
-
-  // impd's cap on open tunnels per imp
   const maxTunnels = 256;
 
   await runImp('new', name, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
@@ -46,9 +42,9 @@ test('it refuses only the connection past the tunnel cap with TUNNEL_LIMIT, and 
 
   await waitForExec(name);
 
-  // an echo server on 9100; each connection is proven before the next opens,
-  // since a burst past the guest's accept backlog leaves connections that the
-  // server never accepts, and the guest drops those about 17 s later
+  // Each connection is proven before the next opens: a burst past the guest's
+  // accept backlog leaves connections that the server never accepts, and the
+  // guest drops those about 17 s later.
   await runShellInImp(name, 'setsid nc -lk -p 9100 -e cat >/dev/null 2>&1 &');
 
   const proxy = await startProxy(name, '0:9100', '0:8080');
@@ -87,8 +83,6 @@ test('it refuses only the connection past the tunnel cap with TUNNEL_LIMIT, and 
     extra.socket.destroy();
   });
 
-  // the proxy closes the refused connection, and writes its notice on a
-  // pipe of its own
   await extra.closed;
 
   const notices = await waitFor('the TUNNEL_LIMIT notice', () => {

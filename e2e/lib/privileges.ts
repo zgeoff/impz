@@ -58,30 +58,24 @@ export interface HostConfig {
   readonly Devices: readonly { readonly PathOnHost: string }[] | null;
 }
 
-// scripts/dev/dev.sh's own device, for the loop file its XFS lives in
+// dev.sh's own device, for the loop file its XFS lives in.
 const DEV_DEVICES = ['/dev/loop-control'];
 const SECCOMP_PREFIX = 'seccomp=';
 
 export interface ExpectedPrivileges {
-  // as docker inspect spells them: CAP_SYS_ADMIN
   readonly caps: readonly string[];
 
-  // every --security-opt but seccomp, which docker inspect shows inline
   readonly securityOpts: readonly string[];
   readonly seccomp: unknown;
   readonly devices: readonly string[];
 
-  // devices a container may also have: probed ones the host has, and dev.sh's
   readonly optionalDevices: readonly string[];
 }
 
-// the words that follow each `flag` in `words`
 function readFlagValues(words: readonly string[], flag: string): string[] {
   return words.flatMap((word, index) => (words[index - 1] === flag ? [word] : []));
 }
 
-// deploy/imp-host.args.json's privileges, with the profile its seccomp
-// option names (seccompJson)
 export function readExpectedPrivileges(argsJson: string, seccompJson: string): ExpectedPrivileges {
   const args = ArgsSchema.parse(JSON.parse(argsJson));
   const words = args.privileges.flat();
@@ -131,7 +125,6 @@ function findDeviceDrift(host: HostConfig, expected: ExpectedPrivileges): string
   return null;
 }
 
-// why the container's privileges differ from the deploy's, or null
 export function findPrivilegeDrift(host: HostConfig, expected: ExpectedPrivileges): string | null {
   if (host.Privileged) {
     return 'it runs --privileged';
@@ -157,8 +150,8 @@ export function findPrivilegeDrift(host: HostConfig, expected: ExpectedPrivilege
   return findSeccompDrift(opts, expected.seccomp) ?? findDeviceDrift(host, expected);
 }
 
-// the host's Docker socket: a bind of it, or of a directory above it,
-// hands imp-host the socket that only imp-docker-proxy may hold
+// A bind of the host's Docker socket, or of a directory above it, hands
+// imp-host the socket that only imp-docker-proxy may hold.
 const HOST_SOCKETS = ['/var/run/docker.sock', '/run/docker.sock'];
 
 function isSocketMount(mount: Mount): boolean {
@@ -185,7 +178,6 @@ export interface ExpectedProxy {
   readonly user: string;
 }
 
-// the proxy section of deploy/imp-host.args.json, as docker inspect shows it
 export function readExpectedProxy(argsJson: string): ExpectedProxy {
   const words = ProxyArgsSchema.parse(JSON.parse(argsJson)).proxy.privileges.flat();
 
@@ -198,8 +190,6 @@ export function readExpectedProxy(argsJson: string): ExpectedProxy {
   };
 }
 
-// why the proxy's container differs from the proxy section of
-// deploy/imp-host.args.json, or null; it adds no capability and no device
 export function findProxyDrift(proxy: ProxyConfig, expected: ExpectedProxy): string | null {
   const host = proxy.host;
   const capDrop = (host.CapDrop ?? []).toSorted();
@@ -251,8 +241,6 @@ async function checkProxy(container: string): Promise<void> {
   }
 }
 
-// Every suite runs on the deploy's privileges, so a capability the code
-// newly needs fails here, not in production.
 export async function checkPrivileges(container: string): Promise<void> {
   const deploy = join(REPO_ROOT, 'deploy');
 

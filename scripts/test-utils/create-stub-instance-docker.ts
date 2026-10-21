@@ -2,20 +2,11 @@ import { createStubBin } from './create-stub-bin';
 import type { StubBin } from './create-stub-bin';
 
 export interface InstanceDockerStubOptions {
-  // the containers that exist
   readonly containers: readonly string[];
-
-  // more containers that exist once the `marker` file does, as a run that
-  // starts them
   readonly startedLater?: Readonly<{ marker: string; containers: readonly string[] }>;
-
-  // the networks that exist
   readonly networks?: readonly string[];
 }
 
-// The docker scripts/zfs-host-test.sh asks about its instances: `container
-// inspect` and `network inspect` succeed only for a listed container or
-// network, as Docker does, and the rest succeed silently. It logs each call to the shared stub log.
 export function createStubInstanceDocker(
   stubs: string,
   options: Readonly<InstanceDockerStubOptions>,

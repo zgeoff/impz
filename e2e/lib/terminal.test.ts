@@ -6,7 +6,6 @@ test('it kills the command on the terminal on close and resolves once it has exi
 
   onTestFinished(() => terminal.close());
 
-  // cat echoes what is typed once it reads the terminal
   terminal.type('ready\n');
 
   await terminal.waitForText('ready');

@@ -16,11 +16,8 @@ import {
 import { probeTailscaleE2EKey } from '../lib/tailscale-key';
 import { waitFor } from '../lib/wait-for';
 
-// Per-imp tailnet names need an OAuth client with the services scope and the
-// tailnet policy for tag:imp-svc (docs/guides/tailscale.md#per-imp-names).
-
-// one stack for every release, so the reboot back to the suite's settings
-// runs once the imp is gone
+// One stack for every release, so the reboot back to the suite's settings
+// runs once the imp is gone.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -34,8 +31,8 @@ async function setupTest() {
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
 const tailscaleStatus = await readLocalTailscaleStatus();
 
-// set IMP_E2E_TAILNET_NAMES=1 once the Services OAuth client and the tailnet
-// policy exist
+// Set IMP_E2E_TAILNET_NAMES=1 once the Services OAuth client and the tailnet
+// policy exist.
 const tailnetNamesMissing =
   !isTailnetReady(tailscaleStatus, probeTailscaleE2EKey()) ||
   process.env['IMP_E2E_TAILNET_NAMES'] !== '1';
@@ -47,13 +44,13 @@ test.skipIf(tailnetNamesMissing)(
 
     const named = `${ctx.prefix}n`;
 
-    // the suite's settings both ways, so the journeys after this one still
-    // run on them
+    // The suite's settings both ways, so the journeys after this one still run on
+    // them.
     const settings = readSuiteSettings('tailscale', instance);
 
     ctx.stack.defer(() => runDevScript('reboot', instance, { ...settings }));
 
-    // a prefix of its own, so no device or real service shares the name
+    // A prefix of its own, so no device or real service shares the name.
     await runDevScript('reboot', instance, {
       ...settings,
       IMP_TAILNET_NAMES: '1',
@@ -83,7 +80,7 @@ test.skipIf(tailnetNamesMissing)(
 
     const plain = live.replace(/^https:/v, 'http:');
 
-    // the first HTTPS request waits for the name's certificate
+    // The first HTTPS request waits for the name's certificate.
     const byHttp = await waitFor(`${plain} over the tailnet`, () => readTailnetBody(plain), {
       timeoutMs: 120_000,
     });
@@ -96,7 +93,6 @@ test.skipIf(tailnetNamesMissing)(
     expect(byHttp).toBe('e2e-tiny-ok');
     expect(byHttps).toBe('e2e-tiny-ok');
 
-    // a request to the name wakes it
     await runImp('sleep', named);
     await waitFor(`${named} to sleep`, () => assertState(named, 'sleeping'));
 
@@ -104,7 +100,6 @@ test.skipIf(tailnetNamesMissing)(
 
     expect(woken).toBe('e2e-tiny-ok');
 
-    // the name goes with the imp
     await runImp('rm', named);
 
     const names = await waitFor(`${named}'s name to go`, async () => {

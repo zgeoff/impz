@@ -1,10 +1,6 @@
-// A TCP service on a private address of this machine, which greets each
-// connection and counts what it takes: guests reach it on the dev
-// container's gateway. The caller stops it.
 export interface StubPrivateService {
   readonly port: number;
 
-  // the connections it accepted, and the bytes they sent
   readonly readAccepted: () => number;
   readonly readReceived: () => number;
   readonly stop: () => void;

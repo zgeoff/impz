@@ -3,8 +3,6 @@ import type { JsonOutputSchema } from '../../packages/cli/src/output/build-json-
 import { collectSchemaChanges } from './breaking-changes/collect-schema-changes';
 import { formatValue } from './breaking-changes/format-value';
 
-// The changes from base to head that break a client of the other version, by
-// the rules in docs/runbooks/releasing.md#breaking-changes.
 export function collectBreakingChanges(base: ProtocolSchema, head: ProtocolSchema): string[] {
   return [
     ...collectProcedureChanges(base, head),
@@ -14,8 +12,6 @@ export function collectBreakingChanges(base: ProtocolSchema, head: ProtocolSchem
   ];
 }
 
-// The changes from base to head that break a program reading `impz <command>
-// --json`, which reads what impd sends: docs/guides/cli.md#json-output.
 export function collectJsonOutputChanges(base: JsonOutputSchema, head: JsonOutputSchema): string[] {
   return Object.entries(base.outputs).flatMap(([command, before]) => {
     const after = head.outputs[command];

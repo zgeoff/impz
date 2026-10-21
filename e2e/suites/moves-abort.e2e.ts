@@ -10,10 +10,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// A move's first step, then the abort a user picks, between A and B on the
-// harness's move network (lib/move-hosts.ts).
-
-// one stack for every release, on both hosts
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 

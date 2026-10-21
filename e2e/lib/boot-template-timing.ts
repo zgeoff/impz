@@ -1,17 +1,11 @@
-// The distance between two u32 values, around the wrap: how far apart two
-// guests' TCP ISN secrets lie.
 export function getU32Span(left: number, right: number): number {
   const span = Math.abs(left - right);
 
   return Math.min(span, 2 ** 32 - span);
 }
 
-// what parts impd's steps from the guest's in a boot line
 const GUEST_MARK = '; guest ';
 
-// The `step=12ms` pairs of the last impd log line that names the imp and
-// `what`, with `total` from a `created in 40ms`; empty when no line matches.
-// The guest's own steps after `; guest ` are not impd's, and stay out.
 export function parseLoggedSteps(
   log: string,
   name: string,
@@ -30,9 +24,6 @@ export function parseLoggedSteps(
   return total === undefined ? steps : { ...steps, total: Number(total) };
 }
 
-// The guest's own `step=12ms` pairs, after `; guest `, of the last impd log
-// line that names the imp and `what`; empty when no line matches or the
-// line has none.
 export function parseLoggedGuestSteps(
   log: string,
   name: string,
@@ -43,7 +34,6 @@ export function parseLoggedGuestSteps(
   return parseStepPairs(guest);
 }
 
-// the nearest-rank percentile, 0 for no values
 export function pickPercentile(values: readonly number[], fraction: number): number {
   const sorted = values.toSorted((left, right) => left - right);
 

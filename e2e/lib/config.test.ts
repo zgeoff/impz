@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// config reads the env once, when it loads, so each test loads it in a child
-// process with only the variables the test gives
+// The config reads the environment once, when it loads, so each test loads
+// it in a child process with only the variables the test gives.
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'e2e-config-'));

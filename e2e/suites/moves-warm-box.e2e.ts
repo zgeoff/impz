@@ -20,11 +20,9 @@ import { startStubUpstream } from '../lib/start-stub-upstream';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// A warm move of a sleeping box imp with a granted secret, between A and B
-// on the harness's move network (lib/move-hosts.ts); the stub upstream for
-// api.github.com checks B's token, so it tells which broker sent a call.
+// The stub upstream for api.github.com checks B's token, so it tells which
+// broker sent a call.
 
-// one stack for every release, on both hosts
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -43,8 +41,6 @@ test('it moves a sleeping box imp with its allow list, and the target’s broker
 
   const box = `${ctx.prefix}box`;
   const secret = `${ctx.prefix}gh`;
-
-  // each host's broker holds its own token for the secret
   const tokenA = `e2e-a-${randomUUID()}`;
   const tokenB = `e2e-b-${randomUUID()}`;
 
@@ -86,8 +82,8 @@ test('it moves a sleeping box imp with its allow list, and the target’s broker
     'box',
     '--allow',
 
-    // B resolves only the exact names at create: a wildcard's addresses on B
-    // can only have come from A's lookups
+    // B resolves only the exact names at create, so a wildcard's addresses on B
+    // can only have come from A's lookups.
     'example.com,api.github.com,github.com,*.wikipedia.org',
   );
 
@@ -97,8 +93,6 @@ test('it moves a sleeping box imp with its allow list, and the target’s broker
   await runImp('grant', box, secret);
   await holdImp(box);
 
-  // a mark in tmpfs and a process that only memory holds: both survive a
-  // warm move, and a cold boot loses them
   await runImp(
     'exec',
     box,
@@ -108,13 +102,13 @@ test('it moves a sleeping box imp with its allow list, and the target’s broker
     'echo warm-ok > /dev/shm/mark && (sleep 100000 >/dev/null 2>&1 &) && sync',
   );
 
-  // the sleeper's pid comes first, older than the shell that runs pgrep
+  // The sleeper's pid comes first, older than the shell that runs pgrep.
   const pids = await runImp('exec', box, '--', 'sh', '-c', "pgrep -f 'sleep 100000' || true");
 
   const [pid = ''] = pids.split('\n');
 
-  // a lookup on A under the wildcard, whose answer only the move can carry
-  // into B's set for the slot
+  // A lookup on A under the wildcard, whose answer only the move can carry
+  // into B's set for the slot.
   await runImp('exec', box, '--', 'getent', 'hosts', 'en.wikipedia.org');
 
   const onA = await requireImp(box);
@@ -136,10 +130,10 @@ test('it moves a sleeping box imp with its allow list, and the target’s broker
   expect(left).toBeUndefined();
   expect(moved.state).toBe('sleeping');
 
-  // read before the guest can look anything up again on B
+  // Read before the guest can look anything up again on B.
   const held = await readAllowSet(ctx.hosts.hostB, onA.slot);
 
-  // the broker call first: the target installs its CA at the first wake
+  // The broker call first: the target installs its CA at the first wake.
   const onB = { target: ctx.hosts.hostB };
 
   const body = await runImpWith(

@@ -1,15 +1,11 @@
 export interface AsleepLine {
   readonly durationMs: number;
 
-  // what stayed plugged through the sleep; null for an imp without elastic memory
   readonly pluggedMib: number | null;
 
-  // the milliseconds of each step the line ends with, as `pause=3ms`
   readonly steps: Readonly<Record<string, number>>;
 }
 
-// The newest `impd: <name>: asleep in` line in an impd log (make-sleep-imp-vm.ts
-// logs one per sleep), or null when the log holds none for that imp.
 export function findAsleepLine(log: string, name: string): AsleepLine | null {
   const line = log
     .split('\n')

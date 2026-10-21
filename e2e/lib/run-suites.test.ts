@@ -1,8 +1,6 @@
 import { expect, test } from 'bun:test';
 import { hasRunPassed, runSuites } from './run-suites';
 
-// one recorder for every step, so a test reads their order; what each
-// scenario depends on is passed in its own test
 function setupTest() {
   const steps: string[] = [];
 
@@ -1208,7 +1206,6 @@ test('#runSuites makes the instance anew and reboots onto the suite’s settings
     rebootOnto: (settings) => {
       ctx.steps.push(`reboot onto ${JSON.stringify(settings)}`);
 
-      // the second reboot onto the settings is the one after the failed journey
       return ctx.steps.filter((step) => step.startsWith('reboot onto')).length === 2
         ? Promise.reject(new Error('dev.sh reboot exited 1'))
         : Promise.resolve();
@@ -1258,7 +1255,6 @@ test('#runSuites reboots back off the settings of a kept scale when an interrupt
       return Promise.resolve(0);
     },
     onSuiteEnd: () => {
-      // the signal lands once scale has passed
       signals.isInterrupted = true;
     },
   });
@@ -1288,7 +1284,6 @@ test('#runSuites reboots back off the settings of scale kept for restart after r
     runJourney: (journey) => {
       ctx.steps.push(`run ${journey}`);
 
-      // restart fails
       const exitCode = journey === 'restart' ? 1 : 0;
 
       return Promise.resolve(exitCode);

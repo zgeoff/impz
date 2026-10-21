@@ -35,9 +35,6 @@ import {
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// The public MCP route (docs/guides/mcp.md#public-route), which the suite's
-// settings turn on; a named token approves each sign-in with the CLI.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -47,7 +44,6 @@ async function setupTest() {
 
   const origin = buildRouteOrigin(instance);
 
-  // the redirect URI's server: it takes the code a sign-in sends back
   const catcher = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
@@ -77,7 +73,6 @@ test('it serves the route’s discovery documents and nothing private', async ()
   const ui = await fetch(`${ctx.origin}/ui/`);
   const env = await readImpEnv();
 
-  // the instance's root token is no way in
   const withRoot = await fetch(`${ctx.origin}/mcp`, {
     method: 'POST',
     headers: { authorization: `Bearer ${env['IMP_TOKEN'] ?? ''}` },
@@ -188,7 +183,6 @@ test('it signs a client in on an approval from the CLI, and the grant lists the 
 
   const location = new URL(allowed.headers.get('location') ?? '');
 
-  // the browser follows the redirect to the client
   const caught = await fetch(location);
 
   expect(allowed.status).toBe(302);
@@ -257,7 +251,6 @@ test('it signs an MCP client in through its own OAuth provider, and lists the to
 
   registerRemoval(ctx.stack, config.keep, () => removeTokenIfPresent(ctx.client, approver));
 
-  // what the client keeps between its runs, as a connector stores it
   const saved: {
     tokens?: OAuthTokens;
     verifier: string;
@@ -298,7 +291,6 @@ test('it signs an MCP client in through its own OAuth provider, and lists the to
 
   invariant(saved.authorizationURL);
 
-  // the client asks for the scope the route's 401 names, read
   const back = await runBrowserSignIn(saved.authorizationURL.href, {
     approverToken: token.secret,
     scope: 'read',
@@ -419,7 +411,6 @@ test('it stops the command a grant runs when the approving token goes, then answ
     arguments: { name: box, command: 'sleep 120', timeoutSeconds: 180 },
   });
 
-  // the command runs in the guest before the token goes
   await waitFor('the command to start', async () => {
     const processes = await runImp('exec', box, '--', 'ps');
 
@@ -432,7 +423,6 @@ test('it stops the command a grant runs when the approving token goes, then answ
 
   await runImp('token', 'rm', approver);
 
-  // a stream that ended with no result, or none at all
   const answered = await call.then(
     (response) => JSON.stringify(response.body).includes('"result"'),
     () => false,
@@ -444,8 +434,6 @@ test('it stops the command a grant runs when the approving token goes, then answ
   const processes = await runImp('exec', box, '--', 'ps');
 
   expect(answered).toBeFalse();
-
-  // the stream closed long before the command's 120 s
   expect(elapsedMs).toBeLessThan(30_000);
   expect(after.status).toBe(401);
   expect(processes).not.toContain('sleep 120');
@@ -471,7 +459,6 @@ test('it answers 429 to sign-ins past the burst', async () => {
     code_challenge_method: 'S256',
   });
 
-  // twelve, one after another
   const statuses: number[] = [];
 
   for (let index = 0; index < 12; index += 1) {

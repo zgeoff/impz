@@ -26,10 +26,6 @@ import {
 import { probeTailscaleE2EKey } from '../lib/tailscale-key';
 import { waitFor } from '../lib/wait-for';
 
-// An imp on impd's tailnet node (docs/guides/tailscale.md), reached from this
-// machine as another member of the tailnet.
-
-// one stack for every release
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -43,8 +39,7 @@ async function setupTest() {
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
 const tailscaleStatus = await readLocalTailscaleStatus();
 
-// the definition of done needs the tailnet; any other run skips without it
-// (requireTailnetReady says what it needs)
+// The definition of done needs the tailnet; any other run skips without it.
 const tailnetMissing =
   !isTailnetReady(tailscaleStatus, probeTailscaleE2EKey()) && !config.acceptance;
 
@@ -64,7 +59,7 @@ test.skipIf(tailnetMissing)(
 
     const node = findTailnetNode(Object.values(status.Peer), ip);
 
-    // the host container runs its own tailscaled and still needs public DNS
+    // The host container runs its own tailscaled and still needs public DNS.
     const dns = await runInContainer(['getent', 'hosts', 'pkgs.tailscale.com']);
 
     expect(ip).toStartWith('100.');
@@ -73,7 +68,7 @@ test.skipIf(tailnetMissing)(
 
     invariant(node);
 
-    // the e2e tag, which the tailnet policy keeps away from tag:imp's live impd
+    // The e2e tag, which the tailnet policy keeps away from tag:imp's live impd.
     expect(node.tags).toStrictEqual(['tag:imp-e2e']);
 
     console.log(`    tailnet host ${String(info.tailscale.hostname)} at ${ip}`);
@@ -94,8 +89,6 @@ test.skipIf(tailnetMissing)(
 
     const byUrl = await waitFor(`${url} over the tailnet`, () => readTailnetBody(url));
 
-    // every name a member can use for the node: IP, MagicDNS FQDN, short
-    // name; on the imp's own port, and on the proxy port with its Host header
     const byIpPort = await waitFor(`${ip} port over the tailnet`, () =>
       readTailnetBody(`http://${ip}:${String(row.port)}/`),
     );
@@ -128,7 +121,6 @@ test.skipIf(tailnetMissing)(
     expect(byShortPort).toBe('e2e-tiny-ok');
     expect(byShortProxy).toBe('e2e-tiny-ok');
 
-    // a tailnet request wakes it
     await runImp('hold', name, '0');
     await runImp('sleep', name);
     await waitFor(`${name} to sleep`, () => assertState(name, 'sleeping'));

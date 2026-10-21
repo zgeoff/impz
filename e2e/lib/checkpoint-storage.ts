@@ -2,9 +2,8 @@ import { readInfo } from './imp-cli';
 import { readGuestFile, writeGuestFile } from './imps';
 import { runInContainer } from './instance';
 
-// Whether `zfs list -H -t snapshot -o name,defer_destroy` shows the
-// checkpoint's snapshot not yet marked for destroy (one a fork still needs
-// stays, marked, until the fork goes).
+// ZFS keeps a snapshot that a fork still needs, marked for deferred destroy,
+// until the fork goes.
 export function hasLiveSnapshot(listing: string, checkpointId: string): boolean {
   return listing.split('\n').some((line) => {
     const [name = '', deferDestroy = ''] = line.split('\t');
@@ -13,20 +12,16 @@ export function hasLiveSnapshot(listing: string, checkpointId: string): boolean 
   });
 }
 
-// Thin glue over the host container and live guests below.
-
 async function checkInContainer(...argv: readonly string[]): Promise<boolean> {
   const result = await runInContainer(argv);
 
   return result.exitCode === 0;
 }
 
-// whether impd's data dir in the host container still holds the imp's dir
 export function hasImpDir(impId: string): Promise<boolean> {
   return checkInContainer('test', '-e', `/var/lib/imp/imps/${impId}`);
 }
 
-// a reflink file on XFS; on ZFS a live snapshot (hasLiveSnapshot)
 export async function probeCheckpointStorage(
   impId: string,
   checkpointId: string,
@@ -55,16 +50,12 @@ export async function probeCheckpointStorage(
 }
 
 export interface CrossWrites {
-  // what each imp reads of the file only the other wrote: "none" when unseen
   readonly seenInA: string;
   readonly seenInB: string;
 
-  // what b reads of its own file
   readonly ownInB: string;
 }
 
-// writes a file named for `tag` on each of two imps, then reads both from
-// each side
 export async function writeCrossFiles(
   left: string,
   right: string,

@@ -26,10 +26,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// Kills of impd, a Firecracker or the container; every imp must stay valid,
-// keep its disk, and keep its memory unless the kill could take it. Guests
-// of 512 MiB, under 2 GiB in all.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -47,8 +43,6 @@ test('it keeps every imp valid, with its disk and the memory no kill could take,
   const random = createParkMiller(config.chaosSeed);
 
   const proofs = new Map<string, MemoryProof>();
-
-  // what each imp's disk must still hold
   const markers = new Map<string, string>();
 
   console.log(`    chaos seed ${String(config.chaosSeed)} (E2E_CHAOS_SEED replays it)`);
@@ -63,7 +57,7 @@ test('it keeps every imp valid, with its disk and the memory no kill could take,
 
     markers.set(name, `${name} 0`);
 
-    // only the rounds' own operations sleep them
+    // Only the rounds' own operations sleep them.
     await holdImp(name);
 
     const proof = await startMemoryProof(name);
@@ -73,14 +67,13 @@ test('it keeps every imp valid, with its disk and the memory no kill could take,
 
   const failed = new Set<string>();
 
-  // the property runner: each round's plan comes from the seeded draws
   for (let round = 1; round <= config.chaosRounds; round += 1) {
     const live = names.filter((name) => !failed.has(name));
 
     for (const name of live) {
       const marker = `${name} ${String(config.chaosSeed)} ${String(round)}`;
 
-      // synced: the last write before a kill survives it
+      // Synced, so the last write before a kill survives it.
       await runShellInImp(name, `echo '${marker}' > /root/chaos-marker && sync`);
 
       markers.set(name, marker);
@@ -107,7 +100,6 @@ test('it keeps every imp valid, with its disk and the memory no kill could take,
       }),
     );
 
-    // the fault lands among the operations, at the seeded offset
     await Bun.sleep(plan.delayMs);
 
     const inFlight = plan.steps.length - settledSteps;
@@ -122,17 +114,13 @@ test('it keeps every imp valid, with its disk and the memory no kill could take,
     const settled = await readSettledImps(names);
     const vms = await listContainerVms();
 
-    // the fault overlapped an operation, and killed something
     expect(inFlight).toBeGreaterThan(0);
     expect(fault.killed).not.toBeEmpty();
-
-    // each awake imp has exactly the one VM its record says
     expect(listImpVmCounts(settled, vms)).toStrictEqual(listExpectedImpVmCounts(settled, vms));
     expect(collectStrayVms(settled, vms)).toStrictEqual([]);
 
     const errored = settled.filter((row) => row.state === 'error' && names.includes(row.name));
 
-    // an adopt leaves an imp whose VM outlived SIGKILL in `error`
     for (const row of errored) {
       console.log(`    ${row.name}: error after round ${String(round)}; left out from here`);
       failed.add(row.name);
@@ -145,7 +133,6 @@ test('it keeps every imp valid, with its disk and the memory no kill could take,
 
       invariant(proof);
 
-      // the disk always survives; the memory only where nothing could take it
       const isKept = await checkMemoryKept(proof);
 
       expect(`${name}: ${disk}`).toBe(`${name}: ${markers.get(name) ?? ''}`);
@@ -172,7 +159,6 @@ test('it keeps every imp valid, with its disk and the memory no kill could take,
   const awake = after.filter((row) => row.state === 'running').length;
   const processes = readContainerProcesses(containerId);
 
-  // the instance's own mount, and one VM per running imp
   expect(devices.length).toBeLessThanOrEqual(1);
   expect([...vms.values()].flat()).toHaveLength(awake);
   expect(processes).not.toBeEmpty();

@@ -14,8 +14,6 @@ const SleptEventSchema = z.object({
   }),
 });
 
-// an `impz events` line as a sleep, from the event's own time less what impd
-// measured before and in the pause; null for every other event
 export function parseSleepSpan(line: string): SleepSpan | null {
   const event = SleptEventSchema.safeParse(JSON.parse(line));
 
@@ -25,7 +23,7 @@ export function parseSleepSpan(line: string): SleepSpan | null {
 
   const endAt = Date.parse(event.data.at);
 
-  // an impd older than prepareMs sends none: its start then reads late
+  // An impd older than the prepareMs field sends none, so its start reads late.
   const prepareMs = event.data.detail.prepareMs ?? 0;
 
   return {
@@ -40,7 +38,6 @@ export interface SleepWatch {
   readonly stop: () => Promise<void>;
 }
 
-// follows `impz events` and keeps every imp's sleep
 export async function startSleepWatch(): Promise<SleepWatch> {
   const events = await startImp(['events']);
 

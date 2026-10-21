@@ -17,10 +17,6 @@ import { removeImpIfPresent, removeSecretIfPresent } from '../lib/reset-baseline
 import { startStubUpstream } from '../lib/start-stub-upstream';
 import { getSuitePrefix } from '../lib/suites';
 
-// The broker's oauth and custom secrets (docs/guides/connectors.md), against
-// the stub upstream on this machine, which stands in for every host here:
-// api.oauth-e2e.test and auth.oauth-e2e.test, and svc.imp.internal over http.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -102,7 +98,6 @@ test('it signs an oauth secret in, rotates its tokens on a forced refresh, refus
   expect(listed).not.toContain('e2e-refresh');
   expect(listed).not.toContain('e2e-access');
 
-  // runImp throws on a failed refresh, with its stderr
   await runImp('secret', 'refresh', secret);
 
   const rotated = await runShellInImp(
@@ -110,7 +105,6 @@ test('it signs an oauth secret in, rotates its tokens on a forced refresh, refus
     'curl -sS --fail https://api.oauth-e2e.test/oauth-e2e/me',
   );
 
-  // the first refresh token is dead at the endpoint, and impd used each once
   const [first, second] = upstream.oauth.refreshTokens();
 
   expect(MeSchema.parse(JSON.parse(rotated))).toStrictEqual({ generation: 2, authorized: true });
@@ -130,8 +124,8 @@ test('it signs an oauth secret in, rotates its tokens on a forced refresh, refus
 
   const env = await runShellInImp(name, 'env');
 
-  // the disk, by the tokens' common prefixes: a token on a command line
-  // would sit in the guest's memory, which the check below looks through
+  // A token on a command line would sit in the guest's memory, which the check
+  // below looks through.
   const onDisk = await runShellInImp(
     name,
     `grep -rIl -F -e e2e-access- -e e2e-refresh- / --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev 2>/dev/null | head -5; true`,

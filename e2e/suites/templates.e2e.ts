@@ -19,10 +19,7 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImageIfPresent, removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// `impz template` (docs/guides/templates.md) on the e2e-git image, which has
-// ssh-keygen. Its USER is `dev`, so root's steps go through sudo.
-
-// one stack for every release, so each imp goes before the template it boots
+// One stack for every release, so each imp goes before the template it boots.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -61,7 +58,6 @@ test('it copies a running imp into a template whose copies each get their own id
   expect(sourceIdentity.machineId).toBe(sourceId);
   expect(sourceIdentity.hostKey).toStartWith('SHA256:');
 
-  // the source is running: impd freezes it around the clone
   await runImp('template', 'create', source, template);
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, template));
@@ -98,7 +94,6 @@ test('it copies a running imp into a template whose copies each get their own id
   expect(secondIdentity.hostKey).not.toBe(firstIdentity.hostKey);
   expect(marker).toBe('golden');
 
-  // a later boot keeps the identity the first one made
   await runImp('stop', first);
   await runImp('start', first);
 

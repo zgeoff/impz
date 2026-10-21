@@ -9,9 +9,6 @@ import { getSuitePrefix } from '../lib/suites';
 import { startTextCapture } from '../lib/text-capture';
 import { waitFor } from '../lib/wait-for';
 
-// `impz exec --agent` (docs/architecture/guest/agent.md#execs-and-services): a root shell
-// beside the inner container, in the agent's own 32 MiB cgroup.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -44,8 +41,8 @@ test('it runs exec --agent as root outside the container and reports it as an Ag
 
   const seen = startTextCapture(events.stdout);
 
-  // the shell computes the line, so the terminal's echo of the input does
-  // not match it
+  // The shell computes the line, so the terminal's echo of the input does not
+  // match it.
   const shell = await tryImp(['exec', '--agent', '-t', name, '--', 'sh'], {
     stdin: 'echo outer-$((20 + 22)) $(id -u) $(cat /proc/self/oom_score_adj)\nexit\n',
   });

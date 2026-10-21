@@ -1,13 +1,9 @@
 import { ScalarType } from '@bufbuild/protobuf';
 import type { DescField, DescFile, DescMessage } from '@bufbuild/protobuf';
 
-// the path of a file's syntax statement in its source code info, which holds
-// the comment at the head of the file
+// The syntax statement is field 12 of a protobuf file descriptor, and its source location holds
+// the comment at the head of the file.
 const SYNTAX_PATH = 12;
-
-// The Markdown reference for one .proto file: its header comment, then one
-// section per message with a row per field, each field under the JSON name
-// both sides write.
 
 export function renderProtocolReference(file: DescFile, title: string): string {
   const lines = [
@@ -37,8 +33,6 @@ function renderComment(comment: string): string[] {
   return [...lines, ''];
 }
 
-// the leading comment of the declaration at path, as the source code info
-// keeps it
 function getComment(file: DescFile, path: readonly number[]): string {
   const location = file.proto.sourceCodeInfo?.location.find(
     (candidate) =>
@@ -103,8 +97,6 @@ function formatListMember(field: DescField): string {
   return formatMessageLink(field.message);
 }
 
-// what a reader finds in the JSON: a plain scalar is always written by the
-// agent, an optional one and a message only when set, a list as [] or left out
 function formatPresence(field: DescField): string {
   if (field.fieldKind === 'list') {
     return 'list';

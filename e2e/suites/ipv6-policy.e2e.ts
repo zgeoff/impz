@@ -15,10 +15,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// Egress policies over IPv6 (docs/architecture/network/networking.md#ipv6), on the
-// topology's near network behind NAT66. The instance reboots onto it, and
-// back to its own network at the end.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -83,13 +79,12 @@ test('it holds box and none imps to their policies over IPv6, while an open imp 
   await waitForExec(none);
   await holdImp(none);
 
-  // the open imp reaches each address and port, so a refusal is the policy's
   const boxToServer = await tryGetFromImp(box, `http://[${server}]/`);
   const boxToOther = await tryGetFromImp(box, `http://[${other}]/`);
   const boxToRouter = await tryGetFromImp(box, `http://[${ctx.plan.routerNear}]/`);
 
   // DNS goes to impd's resolver over IPv4 only; port 53 over IPv6 meets the
-  // policy like any other port, so no query leaks out
+  // policy like any other port.
   const boxLookup = await tryInImp(box, `nslookup example.com ${other}`);
   const boxToOther53 = await tryGetFromImp(box, `http://[${other}]:53/`);
   const boxToServer53 = await tryGetFromImp(box, `http://[${server}]:53/`);

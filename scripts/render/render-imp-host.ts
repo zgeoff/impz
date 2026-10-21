@@ -1,6 +1,3 @@
-// `bun run render:deploy`: deploy/imp-host.args.json into the units, compose.yaml and host-env.sh,
-// and deploy/bootstrap.sh from its parts and the files it installs. `--check` writes nothing and
-// fails on a difference, as scripts/render/render-imp-host.test.ts does under `bun test`.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Document, Scalar, YAMLMap } from 'yaml';
 import * as z from 'zod';
@@ -13,7 +10,6 @@ const COMPOSE_FILE = 'deploy/compose.yaml';
 const ENV_EXAMPLE_FILE = 'deploy/imp-host.env.example';
 const HOST_ENV_FILE = 'deploy/lib/host-env.sh';
 
-// bootstrap.sh's parts, in its order; the deploy files go in after UNITS_PART
 export const BOOTSTRAP_PARTS = [
   'deploy/bootstrap/start.sh',
   'deploy/lib/host-env.sh',
@@ -29,23 +25,18 @@ export const BOOTSTRAP_PARTS = [
 
 const UNITS_PART = 'deploy/bootstrap/units.sh';
 
-// unquoted in the unit and in Nix's escapeShellArgs alike
+// A word of these characters needs no quoting in a systemd unit or in Nix's escapeShellArgs.
 const PLAIN_WORD = /^[\w@%+=:,./-]+$/u;
 
-// `$IMP_PUBLIC_PORTS`: zero or more words from the env file (systemd splits an unbraced $NAME)
+// systemd splits an unbraced $NAME into words, so one variable of the env file can hold zero or
+// more words.
 const ENV_WORDS = /^\$[A-Z][A-Z0-9_]*$/u;
-
-// from `ExecStart=` through the image, the unit's last word
 const EXEC_START = /^ExecStart=\/usr\/bin\/docker run (?:.*\\\n)*\s*\$\{IMP_HOST_IMAGE\}$/mu;
 
-// the proxy's: the image, then the proxy's command
 const PROXY_EXEC_START =
   /^ExecStart=\/usr\/bin\/docker run (?:.*\\\n)*\s*\$\{IMP_HOST_IMAGE\} \S.*$/mu;
 
-// the ExecStartPre that writes PROBED_FILE
 const PROBE = /^ExecStartPre=\/bin\/sh -c 'a=; .*'$/mu;
-
-// the ExecStartPre that makes the IPv6 network
 const NETWORK_START = /^ExecStartPre=\/bin\/sh -c 'case "\$\$IMP_HOST_NETWORK" in .*'$/mu;
 const PROBED_FILE = '/run/imp-host/probed.env';
 const COMPOSE_HEAD = '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n';
@@ -57,52 +48,41 @@ const PROXY_COMPOSE_HEAD =
 const PROXY_COMPOSE_TAIL = '    # end of proxy privileges\n';
 const COMPOSE_NETWORK_HEAD = '# network: from deploy/imp-host.args.json (bun run render:deploy)\n';
 const COMPOSE_NETWORK_TAIL = '# end of network\n';
-
-// imp-host's two commented lines that join the network
 const COMPOSE_SERVICE_NETWORKS = /^ {4}# networks:\n {4}# {3}- .*$/mu;
-
-// host-env.sh's lines that the network and the address pipeline go into
 const HOST_ENV_NETWORK = /^readonly HOST_NETWORK=.*$/mu;
 const HOST_ENV_BRIDGE = /^readonly HOST_BRIDGE=.*$/mu;
 const HOST_ENV_ADDRESSES = /^host_addresses\(\) \{ .* \}$/mu;
 
 type Lines = readonly (readonly string[])[];
 
-// args passed only where path exists on the host
 interface Probed {
   readonly path: string;
   readonly args: readonly string[];
 }
 
-// the imp-docker-proxy container: the same image, with its own command
 interface ProxyArgs {
   readonly privileges: Lines;
   readonly lines: Lines;
   readonly command: readonly string[];
 }
 
-// the Docker network imp-host runs on with IPv6, and its bridge, which a firewall names
 interface HostNetwork {
   readonly name: string;
   readonly bridge: string;
 }
 
 export interface HostArgs {
-  // replaces --privileged (docs/architecture/host.md#privileges)
   readonly privileges: Lines;
 
   readonly probed: readonly Probed[];
   readonly lines: Lines;
   readonly proxy: ProxyArgs;
   readonly network: HostNetwork;
-
-  // the shell pipeline that prints the host's own addresses, for IMP_HOST_ADDRESSES
   readonly addresses: string;
 }
 
 const WordSchema = z.string().regex(PLAIN_WORD, { error: 'is not a plain word' });
 
-// lines may also hold an env file's words; privileges and probed args may not
 const LineWordSchema = z.string().refine((word) => PLAIN_WORD.test(word) || ENV_WORDS.test(word), {
   error: 'is not a plain word or $NAME',
 });
@@ -123,13 +103,13 @@ const ProxyArgsSchema = z.object({
   command: z.array(WordSchema).nonempty(),
 });
 
-// a Docker network's name, and a Linux interface name of at most 15 bytes
+// Linux limits an interface name, such as a bridge's, to 15 bytes.
 const HostNetworkSchema = z.object({
   name: z.string().regex(/^[a-z][a-z0-9-]*$/u, { error: 'is not a network name' }),
   bridge: z.string().regex(/^[a-z][a-z0-9-]{0,14}$/u, { error: 'is not a bridge name' }),
 });
 
-// it goes into the unit's sh -c '...' and into a shell function, each on one line
+// The pipeline goes on one line into the unit's sh -c '...' and into a shell function.
 const AddressesSchema = z
   .string()
   .regex(/^[^'\n$]+$/u, { error: 'must be one line without a quote or a $' });
@@ -153,7 +133,6 @@ export function parseHostArgs(json: string): HostArgs {
   return parsed.data;
 }
 
-// the first line (the name), the privileges, the rest, then the host devices the probe found
 export function renderExecStart(args: Omit<HostArgs, 'proxy'>): string {
   const [first = [], ...rest] = args.lines;
   const tail = [...args.privileges, ...rest].map((line) => `  ${line.join(' ')} \\`);
@@ -166,7 +145,6 @@ export function renderExecStart(args: Omit<HostArgs, 'proxy'>): string {
   ].join('\n');
 }
 
-// the proxy's: the first line (the name), its privileges, the rest, then the image and command
 export function renderProxyExecStart(proxy: ProxyArgs): string {
   const [first = [], ...rest] = proxy.lines;
   const tail = [...proxy.privileges, ...rest].map((line) => `  ${line.join(' ')} \\`);
@@ -188,16 +166,13 @@ export function renderProxyUnit(unit: string, proxy: ProxyArgs): string {
   return unit.replace(PROXY_EXEC_START, () => renderProxyExecStart(proxy));
 }
 
-// IMP_HOST_PROBED: the probed args whose path this host has, split into words in ExecStart.
-// IMP_HOST_ADDRESSES: the host's own global addresses, which no public imp reaches
-// (docs/architecture/network/egress.md#public), read at each start for a new DHCP lease.
+// The unit reads the host's addresses at each start, because a new DHCP lease can change them.
 export function renderProbe(probed: readonly Probed[], addresses: string): string {
   const tests = probed.map((entry) => `[ -e ${entry.path} ] && a="$$a ${entry.args.join(' ')}"; `);
 
   return `ExecStartPre=/bin/sh -c 'a=; ${tests.join('')}{ echo "IMP_HOST_PROBED=$$a"; echo "IMP_HOST_ADDRESSES=$$(${addresses})"; } >${PROBED_FILE}'`;
 }
 
-// with IPv6 (IMP_HOST_NETWORK names the network), the network on IMP_HOST_SUBNET6 when missing
 export function renderNetworkStart(network: HostNetwork): string {
   const create = `/usr/bin/docker network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" -o com.docker.network.bridge.name=${network.bridge} ${network.name}`;
 
@@ -217,15 +192,13 @@ export function renderUnit(unit: string, args: HostArgs): string {
     throw new Error(`${UNIT_FILE}: no ExecStartPre=/bin/sh -c 'case ...' for the IPv6 network`);
   }
 
-  // functions: a replacement string would read $$ as one $
+  // A replacement string reads $$ as one $, so each replacement is a function.
   return unit
     .replace(EXEC_START, () => renderExecStart(args))
     .replace(PROBE, () => renderProbe(args.probed, args.addresses))
     .replace(NETWORK_START, () => renderNetworkStart(args.network));
 }
 
-// the network and the address pipeline into host-env.sh, which the NixOS module and upgrade.sh
-// source, and bootstrap.sh copies
 export function renderHostEnv(hostEnv: string, args: HostArgs): string {
   const lines = [
     ['HOST_NETWORK', HOST_ENV_NETWORK, `readonly HOST_NETWORK=${args.network.name}`],
@@ -242,14 +215,12 @@ export function renderHostEnv(hostEnv: string, args: HostArgs): string {
   }, hostEnv);
 }
 
-// the compose keys of the docker run flags that privileges uses, with their values
 const COMPOSE_SCALARS: Readonly<Record<string, readonly [string, boolean | string]>> = {
   '--init': ['init', true],
   '--cgroupns=private': ['cgroup', 'private'],
   '--read-only': ['read_only', true],
 };
 
-// a flag whose value is a scalar key's
 const COMPOSE_VALUES: Readonly<Record<string, string>> = {
   '--network': 'network_mode',
   '--user': 'user',
@@ -264,7 +235,6 @@ const COMPOSE_LISTS: Readonly<Record<string, string>> = {
   '--tmpfs': 'tmpfs',
 };
 
-// a service's keys for privileges: the scalars in their order, then each list
 function renderComposeKeys(privileges: Lines): string {
   const doc = new Document(new YAMLMap());
   const keys = new YAMLMap();
@@ -283,7 +253,7 @@ function renderComposeKeys(privileges: Lines): string {
     } else if (valued !== undefined) {
       index += 1;
 
-      // quoted as oxfmt writes YAML, so 65534:65534 stays a string
+      // Quoted as oxfmt writes YAML, so 65534:65534 stays a string.
       const value = new Scalar(words[index] ?? '');
 
       value.type = Scalar.QUOTE_SINGLE;
@@ -307,7 +277,6 @@ function renderComposeKeys(privileges: Lines): string {
   return doc.toString();
 }
 
-// the top-level networks block, commented out: the operator turns IPv6 on by uncommenting it
 function renderComposeNetwork(network: HostNetwork): string {
   const doc = new Document({
     networks: {
@@ -325,13 +294,12 @@ function renderComposeNetwork(network: HostNetwork): string {
   return buildPrefixedLines(doc.toString(), '# ');
 }
 
-// Compose cannot probe: the IPv6 sysctls go in as they are, and /dev/zfs comes from
+// Compose cannot probe the host, so the IPv6 sysctls go in as they are, and /dev/zfs comes from
 // deploy/compose.zfs.yaml.
 function buildComposeProbed(probed: readonly Probed[]): Lines {
   return probed.filter((entry) => entry.args[0] !== '--device').map((entry) => entry.args);
 }
 
-// the block between head and tail, rendered from privileges
 function renderComposeBlock(
   compose: string,
   privileges: Lines,
@@ -346,12 +314,10 @@ function renderComposeBlock(
   );
 }
 
-// each line of text that is not empty, after prefix
 function buildPrefixedLines(text: string, prefix: string): string {
   return text.replaceAll(/^(?=.)/gmu, prefix);
 }
 
-// text with block in place of what lies between head and tail
 function mergeBetween(text: string, head: string, tail: string, block: string): string {
   const start = text.indexOf(head);
   const end = text.indexOf(tail, start);
@@ -367,7 +333,6 @@ export function renderCompose(compose: string, privileges: Lines): string {
   return renderComposeBlock(compose, privileges, COMPOSE_HEAD, COMPOSE_TAIL);
 }
 
-// the networks block, and the two lines of imp-host that join the network
 export function renderComposeNetworks(compose: string, network: HostNetwork): string {
   if (!COMPOSE_SERVICE_NETWORKS.test(compose)) {
     throw new Error(`${COMPOSE_FILE}: no commented networks of imp-host`);
@@ -381,13 +346,11 @@ export function renderComposeNetworks(compose: string, network: HostNetwork): st
   ).replace(COMPOSE_SERVICE_NETWORKS, () => `    # networks:\n    #   - ${network.name}`);
 }
 
-// a file of the checkout: its path from the root, and its text
 export interface SourceFile {
   readonly path: string;
   readonly text: string;
 }
 
-// a deploy file that bootstrap.sh prints from a function, so it runs without a checkout
 export interface DeployFile extends SourceFile {
   readonly function: string;
 }
@@ -397,11 +360,8 @@ const GENERATED_HEAD =
   '# Generated by bun run render:deploy (scripts/render/render-imp-host.ts) from the parts in\n' +
   '# deploy/bootstrap/ and deploy/lib/host-env.sh: edit those, then run it again.\n';
 
-// a part's own directive; the generated file has its shebang instead
 const PART_DIRECTIVE = /^# shellcheck shell=bash\n/u;
 
-// the parts in their order, each under the path it came from, with the deploy files after
-// UNITS_PART
 export function renderBootstrap(
   parts: readonly SourceFile[],
   deployFiles: readonly DeployFile[],
@@ -419,7 +379,6 @@ export function renderBootstrap(
   return `${GENERATED_HEAD}\n${sections.join('\n')}`;
 }
 
-// each deploy file as a function that prints it, in a quoted heredoc
 function renderDeployFiles(deployFiles: readonly DeployFile[]): string {
   const functions = deployFiles.map((file) => {
     if (/^EOF$/mu.test(file.text)) {
@@ -442,7 +401,6 @@ export interface Rendered {
   readonly compose: string;
 }
 
-// what bootstrap.sh is made of, beside the units render writes
 export interface BootstrapSources {
   readonly parts: readonly SourceFile[];
   readonly envExample: string;
@@ -459,7 +417,6 @@ export function render(argsJson: string, current: Rendered, sources: BootstrapSo
     ...buildComposeProbed(args.probed),
   ]);
 
-  // bootstrap.sh copies host-env.sh as rendered here, not as it was read
   const parts = sources.parts.map((part) =>
     part.path === HOST_ENV_FILE ? { path: part.path, text: hostEnv } : part,
   );

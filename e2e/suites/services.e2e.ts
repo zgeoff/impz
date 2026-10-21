@@ -21,11 +21,7 @@ import { listServices, waitForServicePid } from '../lib/services';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// The services API (docs/guides/services.md) on e2e-bare, busybox with no
-// services: busybox httpd added as a service answers through the proxy and
-// logs each request.
-
-// one stack for every release, so a follow stops before its imp goes
+// One stack for every release, so a follow stops before its imp goes.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -48,7 +44,6 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
   await waitForExec(name);
   await runShellInImp(name, 'mkdir -p /srv/www && echo hello from a service > /srv/www/index.html');
 
-  // an added service runs, and the proxy reaches it
   await runImp(
     'service',
     'add',
@@ -75,8 +70,6 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
   const written: unknown = JSON.parse(file);
 
   expect(body).toBe('hello from a service');
-
-  // the file name is the name, so the file holds none; busybox runs as root
   expect(written).toMatchObject({ env: ['GREETING=hi'], source: 'api' });
   expect(written).not.toHaveProperty('name');
 
@@ -92,7 +85,6 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
     },
   ]);
 
-  // logs has the request, and a follow prints the next one
   const logs = await runImp('logs', name, 'web');
   const follow = await startImp(['logs', name, 'web', '-f', '-n', '0']);
 
@@ -105,8 +97,8 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
   const followed = readText(follow.stdout);
   const marker = `/followed-${String(Date.now())}`;
 
-  // the follow starts in the background; a request before it may land in the
-  // tail it skips, so the request goes again until one shows
+  // A request before the follow starts may land in the tail it skips, so the
+  // request goes again until one shows.
   await waitFor('the follow to print a request', async () => {
     await sendProxyRequest(name, marker);
 
@@ -124,7 +116,6 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
   expect(logs).toContain(': GET /');
   expect(all).toMatch(/^web \| /mu);
 
-  // a restart starts the service again from its file
   await runImp('service', 'restart', name, 'web');
 
   const restartedPid = await waitForServicePid(name, 'web', firstPid);
@@ -132,8 +123,6 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
 
   expect(restarted).toBe('hello from a service');
 
-  // a sleeping imp keeps its service, and lists the record the sleep kept
-  // without a wake
   await runImp('sleep', name);
 
   const asleep = await listServices(name);
@@ -149,7 +138,6 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
   expect(woken).toBe('hello from a service');
   expect(awake[0]?.pid).toBe(restartedPid);
 
-  // a reboot starts it from the file
   await runImp('stop', name);
   await runImp('start', name);
   await waitForServicePid(name, 'web', null);
@@ -158,7 +146,6 @@ test('it runs an added service through logs, a restart, a sleep, a reboot and a 
 
   expect(rebooted).toBe('hello from a service');
 
-  // remove stops the service and deletes its file; its log stays
   await runImp('service', 'rm', name, 'web');
 
   const removed = await listServices(name);
@@ -221,8 +208,6 @@ test('it waits out a sleep in a log follow without waking the imp, and prints ea
   const stderr = readText(follow.stderr);
   const opened = `/opened-${String(Date.now())}`;
 
-  // a request the follow prints shows its stream is open, so the sleep
-  // after it ends that stream
   await waitFor('the follow to print a request', async () => {
     await sendProxyRequest(name, opened);
 
@@ -241,8 +226,8 @@ test('it waits out a sleep in a log follow without waking the imp, and prints ea
     }
   });
 
-  // a dwell whose length is the contract (decision 5): a read after impd's
-  // 5 s FOLLOW_RECHECK_MS (services/service-api.ts) would wake the imp by 6 s
+  // The dwell's length is the contract: it outlasts impd's follow recheck, so
+  // a read would have woken the imp by now.
   await Bun.sleep(6000);
 
   const waiting = await requireImp(name);
@@ -280,7 +265,6 @@ test('it starts a service file written by hand on its first restart', async () =
 
   await waitForExec(name);
 
-  // the dir as the first `impz service add` leaves it
   await runShellInImp(
     name,
     `mkdir -p /etc/imp/services.d && echo '{"argv":["sleep","3600"]}' > /etc/imp/services.d/late.json`,

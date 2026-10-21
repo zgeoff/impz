@@ -1,25 +1,19 @@
 import { requireImp, runShellInImp } from './imp-cli';
 import { instance, runChecked, runCommand, runDevScript, runInContainer } from './instance';
 
-// The ipv6 suite's network (docs/architecture/network/networking.md#ipv6): a router
-// leads from the instance's Docker IPv6 network to a narrower one (MTU 1280)
-// with the server, so packet-too-big comes from beyond the host.
-
 export interface V6Plan {
-  // three /64s: the instance's network, the server's, and one routed to the host
   readonly near: string;
   readonly far: string;
   readonly routed: string;
   readonly routerNear: string;
   readonly routerFar: string;
 
-  // the server answers on both; a box imp may reach only the first
   readonly server: string;
   readonly serverOther: string;
 }
 
 // Three /64s of the documentation range per instance, so instances side by
-// side never ask Docker for the same pool: 6a, 6b and 6c at offset 0.
+// side never ask Docker for the same pool.
 export function buildV6Plan(portOffset: number): V6Plan {
   const block = 0x6a + 3 * portOffset;
   const buildPrefix = (index: number) => `2001:db8:${(block + index).toString(16)}::`;
@@ -37,8 +31,6 @@ export function buildV6Plan(portOffset: number): V6Plan {
   };
 }
 
-// The address a guest gets in a /64, worked out by hand: the prefix, then
-// the guest's IPv4 address as the interface ID (10.66.0.6 is ::a42:6).
 export function buildGuestIpv6(network: string, ipv4: string): string {
   const [firstOctet = 0, secondOctet = 0, thirdOctet = 0, fourthOctet = 0] = ipv4
     .split('.')
@@ -47,7 +39,6 @@ export function buildGuestIpv6(network: string, ipv4: string): string {
   return `${network}${((firstOctet << 8) | secondOctet).toString(16)}:${((thirdOctet << 8) | fourthOctet).toString(16)}`;
 }
 
-// the ULA /64 impd logged for NAT66
 export function parseUlaNetwork(log: string): string {
   const found = /impd: ipv6: (?<network>fd[\da-f:]+::)\/64, NAT66/v.exec(log)?.groups?.['network'];
 
@@ -58,7 +49,6 @@ export function parseUlaNetwork(log: string): string {
   return found;
 }
 
-// the first global /128 of `ip -6 addr show`, '' for none
 export function parseGlobal128(addresses: string): string {
   const address = /inet6 (?<address>[\da-f:]+)\/128/v.exec(addresses)?.groups?.['address'];
 
@@ -69,8 +59,6 @@ export function parseGlobal128(addresses: string): string {
   return address;
 }
 
-// the packet count of ip6tables' INPUT rule that drops from the taps
-// the packets the RS ACCEPT rule of `ip6tables -vnxL INPUT` counted
 export function parseRsAccepts(listing: string): number {
   const line = listing
     .split('\n')
@@ -83,14 +71,11 @@ export function parseRsAccepts(listing: string): number {
   return Number(line.trim().split(/\s+/v)[0]);
 }
 
-// The counter table, named with the run's prefix so a leftover is plainly
-// the e2e run's.
 export function buildRaCounterTable(prefix: string): string {
   return `${prefix}ra`;
 }
 
-// A netdev table that counts the tap's router advertisements and
-// solicitations on ingress, before any inet hook can drop them.
+// The netdev ingress hook counts before any inet hook can drop the packets.
 export function buildRaCounterRuleset(table: string, tap: string): string {
   return [
     `table netdev ${table} {`,
@@ -108,7 +93,6 @@ export interface RaCounts {
   readonly solicits: number;
 }
 
-// the two counters of `nft list table netdev <table>`
 export function parseRaCounts(listing: string): RaCounts {
   const getCount = (type: string) => {
     const match = new RegExp(String.raw`${type} counter packets (?<n>\d+)`, 'v').exec(listing);
@@ -125,12 +109,9 @@ export function parseRaCounts(listing: string): RaCounts {
   return { adverts: getCount('nd-router-advert'), solicits: getCount('nd-router-solicit') };
 }
 
-// the device the instance routes an address through
 export function parseRouteDevice(route: string): string {
   return /\bdev (?<dev>\S+)/v.exec(route)?.groups?.['dev'] ?? '';
 }
-
-// Thin glue over Docker, the dev instance and live guests below.
 
 export interface V6Names {
   readonly near: string;
@@ -139,7 +120,6 @@ export interface V6Names {
   readonly server: string;
 }
 
-// the networks and containers, named after the dev container
 export function buildV6Names(container: string): V6Names {
   return {
     near: `${container}-v6`,
@@ -149,10 +129,9 @@ export function buildV6Names(container: string): V6Names {
   };
 }
 
-// busybox httpd: a page, a 2 MiB file, the peer's address and an upload sink
 function buildServerScript(plan: Readonly<V6Plan>): string {
-  // the server sends what fits the far network, but asks for full segments,
-  // as a server on a wider link would: the guest's must shrink on the way
+  // The server sends what fits the far network but asks for full segments, as a
+  // server on a wider link would, so the guest's segments must shrink on the way.
   const wideMss = 'mtu 1280 advmss 1440';
 
   return [
@@ -166,7 +145,6 @@ function buildServerScript(plan: Readonly<V6Plan>): string {
     `ip -6 route add ${plan.near}/64 via ${plan.routerFar} ${wideMss}`,
     `ip -6 route add ${plan.routed}/64 via ${plan.routerFar} ${wideMss}`,
 
-    // port 53 over TCP, where a guest might try DNS
     'httpd -p [::]:53 -h /www',
     'exec httpd -f -p [::]:80 -h /www',
   ].join(' && ');
@@ -191,8 +169,6 @@ export async function stopV6Topology(): Promise<void> {
   await runCommand(['docker', 'network', 'rm', names.near, names.far]);
 }
 
-// the networks, the router and the server; the caller stops them with
-// stopV6Topology, after the instance leaves the near network
 export async function startV6Topology(plan: Readonly<V6Plan>): Promise<void> {
   const names = buildV6Names(instance.container);
 
@@ -257,8 +233,6 @@ export async function startV6Topology(plan: Readonly<V6Plan>): Promise<void> {
   ]);
 }
 
-// The dev container's address on the near network, which NAT66 hides imps
-// behind, and which a routed /64 goes through.
 export async function readV6HostAddress(): Promise<string> {
   const names = buildV6Names(instance.container);
 
@@ -273,14 +247,11 @@ export async function readV6HostAddress(): Promise<string> {
   return address.trim();
 }
 
-// Reboots the dev instance onto the near network with its IPv6 settings
-// (the subnet: auto for NAT66, or the routed /64), and routes the far
-// network through the router, which a new container lacks.
 export async function startV6Instance(plan: Readonly<V6Plan>, subnet6: string): Promise<void> {
   await runDevScript('reboot', instance, {
     IMP_DEV_NETWORK: buildV6Names(instance.container).near,
 
-    // wider than the far network: only packet-too-big gets a full segment through
+    // Wider than the far network, so only packet-too-big gets a full segment through.
     IMP_UPLINK_MTU: '1500',
     IMP_SUBNET6: subnet6,
   });
@@ -300,7 +271,6 @@ export async function readRsAccepts(): Promise<number> {
   return parseRsAccepts(result.stdout);
 }
 
-// the host side of the imp's tap, by the route to its address
 export async function readImpTap(name: string): Promise<string> {
   const row = await requireImp(name);
   const route = await runInContainer(['ip', '-o', 'route', 'get', row.ip]);
@@ -308,9 +278,6 @@ export async function readImpTap(name: string): Promise<string> {
   return parseRouteDevice(route.stdout);
 }
 
-// Refuses a table that is already there: the caller made the container
-// anew just before, so one there is not a leftover but something else's.
-// The caller stops it with stopRaCounter.
 export async function startRaCounter(table: string, tap: string): Promise<void> {
   const listed = await runInContainer(['nft', 'list', 'table', 'netdev', table]);
 

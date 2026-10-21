@@ -59,7 +59,6 @@ interface ResumeFrom {
   readonly offset: number;
 }
 
-// what the client sends first: a session start, or an attach
 export type SessionOpen =
   | {
       readonly type: 'start';
@@ -78,13 +77,9 @@ export type SessionOpen =
       readonly wake?: boolean;
     };
 
-// One `/exec` session socket (packages/api exec-protocol), raw: the first
-// control message, then the session's output bytes as they arrive.
 export interface SessionSocket {
-  // `started`, or the `error` the open failed with
   readonly first: Control;
 
-  // waits until `count` output bytes arrived, the prelude included
   readonly readBytes: (count: number) => Promise<Uint8Array>;
   readonly received: () => number;
   readonly close: () => void;
@@ -163,7 +158,6 @@ export async function openSessionSocket(open: Readonly<SessionOpen>): Promise<Se
   };
 }
 
-// the started output a test expects; throws with the error otherwise
 export function requireOutput(opened: Readonly<SessionSocket>): SessionOutput {
   if (opened.first.type !== 'started') {
     throw new Error(`expected started, got ${JSON.stringify(opened.first)}`);
@@ -172,8 +166,6 @@ export function requireOutput(opened: Readonly<SessionSocket>): SessionOutput {
   return opened.first.output;
 }
 
-// what a refused open carries: the imp's boot and state when impd knows
-// them, and its cold boots, newest first
 const SessionErrorDataSchema = z
   .object({
     bootId: z.string().optional(),
@@ -187,8 +179,6 @@ export interface SessionError {
   readonly data: z.infer<typeof SessionErrorDataSchema>;
 }
 
-// the error a test expects an open to fail with; throws with the first
-// message otherwise
 export function requireSessionError(opened: Readonly<SessionSocket>): SessionError {
   if (opened.first.type !== 'error') {
     throw new Error(`expected an error, got ${JSON.stringify(opened.first)}`);

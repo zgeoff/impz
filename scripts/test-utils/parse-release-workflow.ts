@@ -31,9 +31,6 @@ const WorkflowSchema = z.looseObject({
 
 export type ReleaseJobs = z.infer<typeof WorkflowSchema>['jobs'];
 
-// The jobs of .github/workflows/release.yml that its tests read: base, image,
-// publish, latest, and tap and npm-pack, which read latest's outputs. Throws
-// when one is missing or has no needs or steps.
 export function parseReleaseWorkflow(yaml: string): ReleaseJobs {
   return WorkflowSchema.parse(Bun.YAML.parse(yaml)).jobs;
 }

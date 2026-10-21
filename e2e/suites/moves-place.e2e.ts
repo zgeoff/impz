@@ -22,10 +22,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// `impz new --place` across A and B on the harness's move network
-// (lib/move-hosts.ts), with both saved in a CLI config of the test's own.
-
-// one stack for every release, on both hosts
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -52,8 +48,8 @@ test('it creates on the saved host with the most free RAM for impz new --place',
 
   const bothEnv = await writeBothHostsConfig(ctx.hosts, configDir);
 
-  // a cold move gives B the tiny image, so only the room tells the two hosts
-  // apart; without it the tie would go to A, first by name
+  // A cold move gives B the tiny image, so only the room tells the two hosts
+  // apart; without it the tie would go to A, first by name.
   await runImp('new', seed, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, seed));
@@ -66,8 +62,8 @@ test('it creates on the saved host with the most free RAM for impz new --place',
 
   await runImpWith({ target: ctx.hosts.hostB }, 'rm', seed);
 
-  // A's sleeper counts its whole memory as taken, which leaves A less free
-  // RAM than B
+  // A's sleeper counts its whole memory as taken, which leaves A less free RAM
+  // than B.
   await runImp('new', filler, '--image', resolveImageName('e2e-tiny'), '--memory', '1024');
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, filler));
@@ -104,7 +100,6 @@ test('it creates on the saved host with the most free RAM for impz new --place',
 
   expect(result.stderr).not.toContain('skipped');
 
-  // what `impz new --place --json` prints, in part
   const printed: unknown = JSON.parse(result.stdout);
   const body = z.object({ host: z.string(), imp: z.object({ name: z.string() }) }).parse(printed);
 

@@ -3,7 +3,6 @@ import { findValues } from './find-values';
 import { formatValues } from './format-values';
 import type { SchemaObject } from './schema';
 
-// the discriminator's value, as `type "stdout_ack"`
 export function formatTag(schema: SchemaObject, tagKeys: readonly string[]): string {
   const properties = collectSchemaMap(schema, 'properties');
 

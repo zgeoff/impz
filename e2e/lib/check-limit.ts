@@ -1,7 +1,5 @@
 import { config } from './config';
 
-// Timing limits belong to the definition of done. Other runs, such as CI on
-// shared runners, report a miss instead of failing on it.
 export function checkLimit(what: string, durationMs: number, limitMs: number): void {
   if (durationMs <= limitMs) {
     return;

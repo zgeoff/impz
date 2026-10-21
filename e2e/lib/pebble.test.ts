@@ -6,7 +6,6 @@ import { updateEnv } from '@impz/test-utils/update-env';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
 import { buildPebbleEnv, parsePublishedPort, startPebbleStack } from './pebble';
 
-// the caller's stack goes before the temp dir that holds the stub docker
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 

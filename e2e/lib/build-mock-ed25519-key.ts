@@ -2,19 +2,15 @@ import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { faker } from '@faker-js/faker';
 
 export interface MockEd25519Key {
-  // the private key as an unencrypted OpenSSH key file holds it
   readonly privateKey: string;
 
-  // the raw 32-byte seed, which an agent holds in memory
   readonly seed: Buffer;
 
-  // the raw 32-byte public key
   readonly publicKey: Buffer;
 }
 
-// An ed25519 key that node makes, written out in the OpenSSH key format
-// (PROTOCOL.key in OpenSSH) without ssh-keygen, whose versions differ in the
-// formats they read; the seed comes from node, not from the file.
+// Written in OpenSSH's key format (PROTOCOL.key) by hand, because ssh-keygen
+// versions differ in the formats they read.
 export function buildMockEd25519Key(
   overrides: Readonly<{ comment?: string }> = {},
 ): MockEd25519Key {
@@ -34,7 +30,7 @@ export function buildMockEd25519Key(
     encodeString(overrides.comment ?? faker.internet.username()),
   ]);
 
-  // padded with 1, 2, 3, … to the 8-byte block of the "none" cipher
+  // The "none" cipher pads with 1, 2, 3, … to its 8-byte block.
   const padding = Buffer.from(
     Array.from({ length: (8 - (section.length % 8)) % 8 }, (_, index) => index + 1),
   );

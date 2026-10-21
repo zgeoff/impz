@@ -9,9 +9,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { openProxySocket } from '../lib/websocket';
 
-// What the wake proxy answers when no imp, or nothing in an awake imp, can
-// take the request (docs/architecture/network/ingress.md#the-wake-proxy).
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -25,7 +22,7 @@ async function setupTest() {
 test('it answers 404 for an unknown imp, and 502 when nothing in the imp listens', async () => {
   const ctx = await setupTest();
 
-  // e2e-bare serves nothing on the imp's http port
+  // e2e-bare serves nothing on the imp's http port.
   const name = `${ctx.prefix}quiet`;
 
   await runImp('new', name, '--image', resolveImageName('e2e-bare'), '--memory', '256');

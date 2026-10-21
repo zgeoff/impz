@@ -4,24 +4,18 @@ import { createStubBin } from './create-stub-bin';
 import type { StubBin } from './create-stub-bin';
 
 export interface ZpoolStubOptions {
-  // fails: the create fails; held: it writes startedMarker, then holds until
-  // the release file exists before the pool exists, and fails the create
-  // without a pool when no release comes within 30 s
+  // A held create writes startedMarker, waits for the release file before it makes the pool, and
+  // fails without a pool when no release comes within 30 s.
   readonly create?: 'fails' | { readonly startedMarker: string; readonly release: string };
 
-  // fails: the destroy fails; busy: it fails saying the pool is busy, as
-  // zpool does for a pool a dataset hold keeps; ignored: it exits 0 and the
-  // pool stays
+  // busy fails the destroy as zpool does for a pool that a dataset hold keeps; ignored exits 0
+  // and the pool stays.
   readonly destroy?: 'fails' | 'busy' | 'ignored';
 
-  // fail: once a pool exists, list -H and status fail, as when zpool or
-  // sudo cannot reach the kernel
+  // Once a pool exists, list -H and status fail, as when zpool or sudo cannot reach the kernel.
   readonly queries?: 'fail';
 }
 
-// A zpool (run-stub-zpool.sh) that keeps its pools in <dir>/pools, so list,
-// status -P and destroy see what create made; options go in files beside it.
-// It logs each call to the shared stub log, like createStubBin.
 export function createStubZpool(stubs: string, options: Readonly<ZpoolStubOptions> = {}): StubBin {
   const held = typeof options.create === 'object' ? options.create : undefined;
   let create = options.create === 'fails' ? 'fails' : '';

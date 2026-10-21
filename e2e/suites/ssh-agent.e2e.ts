@@ -30,11 +30,7 @@ import { startStubGitSshServer } from '../lib/start-stub-git-ssh-server';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// ssh-agent forwarding (docs/guides/ssh.md): the agent on this machine signs
-// for a process in the imp, and the key never reaches the imp. Each test
-// boots its own e2e-git imp, whose image user is dev.
-
-// one stack for every release, so ssh stops before the agent and the imp go
+// One stack for every release, so ssh stops before the agent and the imp go.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -45,13 +41,11 @@ async function setupTest() {
 
   stack.defer(() => ssh.cleanup());
 
-  // the user's agent on this machine, holding a key made for the test
   const laptop = await startLocalSshAgent(ssh);
 
   stack.defer(() => laptop.stop());
 
-  // ssh's control and forward sockets: a unix socket path holds 107 bytes,
-  // which a worktree's .cache can pass
+  // A unix socket path holds 107 bytes, which a worktree's .cache can pass.
   const sockets = await mkdtemp(join(tmpdir(), 'imp-ssha-'));
 
   stack.defer(() => rm(sockets, { recursive: true, force: true }));
@@ -86,9 +80,8 @@ test('it lists the laptop key over ssh -A, from a socket only the image user own
   });
 });
 
-// the git server runs on this machine; the imp reaches it through NAT. The
-// stub's ssh2 offers no post-quantum key exchange, so WarnWeakCrypto=no keeps
-// OpenSSH's warning about it off stderr
+// The stub's ssh2 offers no post-quantum key exchange, so WarnWeakCrypto=no
+// keeps OpenSSH's warning about it off stderr.
 test('it signs a git push from the imp with the laptop agent', async () => {
   const ctx = await setupTest();
 
@@ -161,14 +154,11 @@ test('it lets only the image user and root reach the forwarded socket', async ()
     { env: { SSH_AUTH_SOCK: ctx.laptop.socket } },
   );
 
-  // ssh-add exits 2 when it cannot reach the agent
+  // ssh-add exits 2 when it cannot reach the agent.
   expect(result.stdout).toContain('nobody=2\n');
   expect(result.stdout).toContain('root=0\n');
 });
 
-// The gateway dials a unix socket as the image user (dev), not as root: an
-// agent of dev's answers, a root-only socket does not, and a root agent on a
-// world-writable socket refuses dev by its peer uid.
 test("it carries a unix socket forward to the image user's sockets, not root's", async () => {
   const ctx = await setupTest();
 
@@ -232,7 +222,7 @@ test("it carries a unix socket forward to the image user's sockets, not root's",
 });
 
 // OpenSSH asks for forwarding only when it has an agent, so the connection
-// starts with one that then goes away; the guest socket must still be there
+// starts with one that then goes away.
 test('it fails ssh-add in the imp at once when the agent on this machine is gone', async () => {
   const ctx = await setupTest();
 
@@ -307,8 +297,6 @@ test('it removes the socket when the connection ends', async () => {
   await waitForGuestPathGone(name, dirname(socket));
 });
 
-// A forced sleep resets the agent connections: the guest drops the socket,
-// and the connection's next session gets a new one that works.
 test('it ends the socket on a forced sleep, and listens again for the next session', async () => {
   const ctx = await setupTest();
 
@@ -354,9 +342,6 @@ test('it ends the socket on a forced sleep, and listens again for the next sessi
   await waitForGuestPathGone(name, dirname(first));
 });
 
-// A reboot inside starts the inner container again, and its /run with the
-// socket goes: the guest ends the listener, and the connection's next
-// session gets a new socket in the new container.
 test('it ends the socket on a restart of the container inside, and listens again for the next session', async () => {
   const ctx = await setupTest();
 
@@ -390,11 +375,9 @@ test('it ends the socket on a restart of the container inside, and listens again
 
   expect(before.stdout).toContain('imp-e2e-laptop (ED25519)');
 
-  // the exec ends with the container it ran in
   await tryImp(['exec', name, '--', 'sudo', 'reboot', '-f']);
   await waitForGuestPathGone(name, dirname(first));
 
-  // impd hears of the ended listener over its stream, a moment after
   const after = await waitFor('a session with a new socket', async () => {
     const result = await runCommand(['ssh', ...muxArgs, 'echo "$SSH_AUTH_SOCK"; ssh-add -l'], {
       env,
@@ -424,8 +407,7 @@ test('it never lets the key reach the imp: not its disk, not its slept memory', 
 
   await waitForExec(name);
 
-  // the imp has the agent sign through the forward: ssh-keygen -Y sign with
-  // a public key asks the agent for the private half
+  // ssh-keygen -Y sign with a public key asks the agent for the private half.
   const signed = await runSsh(
     ctx.ssh,
     name,

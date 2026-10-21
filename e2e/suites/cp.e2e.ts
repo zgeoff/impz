@@ -27,10 +27,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// `impz cp` (docs/guides/cp.md) on the e2e-git image, whose USER is `dev`, not
-// root: what a copy makes belongs to the owner of the directory it lands in
-// unless --owner says otherwise.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -53,7 +49,7 @@ test('it copies a directory into a root-owned path as root with its modes, and b
   const name = `${ctx.prefix}rt`;
   const app = join(ctx.local, 'app');
 
-  // 48 MiB: big enough that the upload stops at the stdin window many times
+  // 48 MiB: big enough that the upload stops at the stdin window many times.
   const big = randomBytes(48 * 1_048_576);
   const bigHash = createHash('sha256').update(big).digest('hex');
 
@@ -67,8 +63,6 @@ test('it copies a directory into a root-owned path as root with its modes, and b
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
 
   await waitForExec(name);
-
-  // runImp throws on a failed copy, with its stderr
   await runImp('cp', app, `${name}:/srv`);
 
   const listed = await runInImp(
@@ -125,8 +119,6 @@ test('it gives a copy into the home to the image user', async () => {
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
 
   await waitForExec(name);
-
-  // runImp throws on a failed copy, with its stderr
   await runImp('cp', notes, `${name}:/home/dev`);
 
   const listed = await runInImp(name, 'stat', '-c', '%U %G', '/home/dev/notes with spaces.txt');
@@ -147,8 +139,6 @@ test('it gives a copy the --owner it names, and lands a relative path in the hom
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
 
   await waitForExec(name);
-
-  // runImp throws on a failed copy, with its stderr
   await runImp('cp', '--owner', 'root', bin, `${name}:work`);
 
   const listed = await runShellInImp(
@@ -159,8 +149,6 @@ test('it gives a copy the --owner it names, and lands a relative path in the hom
   expect(listed).toBe('/home/dev/work root\n/home/dev/work/run root');
 });
 
-// a guest process puts a symlink where the copy's top lands; the copy, as
-// root, must not write through it
 test('it refuses to write through a symlink in the imp', async () => {
   const ctx = await setupTest();
 

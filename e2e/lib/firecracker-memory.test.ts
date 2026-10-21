@@ -6,8 +6,6 @@ import {
 } from './firecracker-memory';
 
 test('#parseFirecrackerMemory sums Pss_Anon plus Pss_Shmem as owned memory over every VM, and full PSS apart', () => {
-  // two VMs restored from one template: each has 2.6 MiB of its own binary
-  // and a share of the template's clean pages on top of what it owns
   const output =
     '330000 300000 8 /firecracker --id imp-a\n300000 270000 8 /firecracker --id imp-b\n';
 
@@ -59,8 +57,6 @@ test('#parseFirecrackerMemory reads no VMs as zero', () => {
 });
 
 test('#readSmallestOwnedMib takes the smallest figure from smaps', () => {
-  // impd's last sample of imp-2 came before its fill and showed 195 MiB;
-  // smaps shows what it owns now
   const memory = parseFirecrackerMemory(
     '340000 328704 8 /firecracker --id imp-1\n300000 284672 8 /firecracker --id imp-2\n',
   );
@@ -90,7 +86,6 @@ test('#findImpIdFromArgv reads a jailed VM’s imp from the --id the jailer pass
 });
 
 test('#findImpIdFromArgv reads an unjailed VM’s imp from its API socket path', () => {
-  // IMP_JAILER=false: no --id
   const argv = [
     '/usr/local/bin/firecracker',
     '--api-sock',

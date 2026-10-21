@@ -5,7 +5,6 @@ import { runInContainer } from './instance';
 import { parseWholeNumber } from './parse-whole-number';
 import { waitFor } from './wait-for';
 
-// the template keys in `grep -l` output over the templates' meta.json files
 export function parseTemplateKeys(listing: string): string[] {
   return listing
     .split('\n')
@@ -13,8 +12,6 @@ export function parseTemplateKeys(listing: string): string[] {
     .filter((key) => key !== undefined);
 }
 
-// Throws when a template of the memory size is there before a journey's
-// first boot: the journey builds its own, so one there would serve it.
 export function checkNoShapeTemplate(memoryMib: number, keys: readonly string[]): void {
   if (keys.length > 0) {
     throw new Error(
@@ -23,10 +20,6 @@ export function checkNoShapeTemplate(memoryMib: number, keys: readonly string[])
   }
 }
 
-// Thin glue over the host container and live guests for the boot-templates
-// suite below.
-
-// isn-probe (the e2e-ws image) prints the secret part of the TCP ISN
 export async function readIsnSecret(name: string): Promise<number> {
   const stdout = await runInImp(name, 'isn-probe');
 
@@ -39,7 +32,6 @@ export async function readMac(name: string): Promise<string> {
   return stdout.trim();
 }
 
-// a session's output identity: its boot, and the imp's last cold boots
 export async function readSessionOutput(name: string): Promise<SessionOutput> {
   const opened = await openSessionSocket({
     type: 'start',
@@ -56,7 +48,6 @@ export async function readSessionOutput(name: string): Promise<SessionOutput> {
   return output;
 }
 
-// the keys of impd's boot templates of the memory size
 export async function readShapeTemplateKeys(memoryMib: number): Promise<string[]> {
   const found = await runInContainer([
     'sh',
@@ -73,7 +64,6 @@ export async function checkShapeTemplateAbsent(memoryMib: number): Promise<void>
   checkNoShapeTemplate(memoryMib, keys);
 }
 
-// until impd holds a boot template of the memory size; its key
 export function waitForShapeTemplate(memoryMib: number): Promise<string> {
   return waitFor(
     `the boot template of ${String(memoryMib)} MiB`,
@@ -90,7 +80,6 @@ export function waitForShapeTemplate(memoryMib: number): Promise<string> {
   );
 }
 
-// impd finds a template by its files, so one gone is one it builds again
 export async function removeShapeTemplates(memoryMib: number): Promise<void> {
   const keys = await readShapeTemplateKeys(memoryMib);
 

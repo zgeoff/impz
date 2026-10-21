@@ -10,10 +10,6 @@ import { removeImpIfPresent, removeTokenIfPresent } from '../lib/reset-baseline'
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// Leases (docs/guides/leases.md): each owner's own hold on an imp, through
-// the API as a client calls it; the CLI has no lease command. Each owner is
-// an exec-scoped token the test makes.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -109,7 +105,7 @@ test('it refuses a sleep or stop of a leased imp with LEASED, and impz sleep for
     data: { leases: [{ owner: { display: ownerA, label: 'job' } }], otherCount: 0 },
   });
 
-  // the CLI passes force: a person typed it
+  // The CLI passes force: a person typed it.
   await runImp('sleep', name);
 
   const imp = await readImp(name);
@@ -204,7 +200,7 @@ test('it sleeps a held imp on a sleep without force, and the hold survives', asy
   expect(slept.holdUntil?.getTime()).toBeGreaterThan(Date.now() + 25 * 60_000);
 });
 
-// the refusal fills the budget, so it runs only with a small one
+// The refusal fills the budget, so it runs only with a small one.
 test.skipIf(config.ramBudgetMib > 2048)(
   'it refuses an acquire that needs the RAM leased imps hold, names them, and keeps no lease',
   async () => {
@@ -217,8 +213,8 @@ test.skipIf(config.ramBudgetMib > 2048)(
     const fillA = `${ctx.prefix}fill-a`;
     const fillB = `${ctx.prefix}fill-b`;
 
-    // two leased imps own over half the budget; a cold boot reserves half of
-    // the third's memory, the whole budget
+    // Two leased imps own over half the budget; a cold boot reserves half of the
+    // third's memory, the whole budget.
     const fillMib = Math.floor(budget / 4) + 64;
 
     const token = await ctx.client.tokens.create({ name: owner, scope: 'exec' });
@@ -227,7 +223,6 @@ test.skipIf(config.ramBudgetMib > 2048)(
 
     const clientA = createImpClient({ url: instance.apiUrl, token: token.secret });
 
-    // first, while the budget has room for its boot
     await runImp('new', big, '--image', image, '--memory', String(budget));
 
     registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, big));
@@ -264,8 +259,6 @@ test.skipIf(config.ramBudgetMib > 2048)(
 
     const acquired = clientA.leases.acquire({ name: big, label: 'job', ttlSeconds: 60 });
 
-    // the two leased fillers, the only awake imps, are the protected imps it
-    // names, each as leased
     expect(acquired).rejects.toMatchObject({
       code: 'RAM_BUDGET_EXCEEDED',
       data: {

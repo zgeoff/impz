@@ -3,41 +3,33 @@ import * as z from 'zod';
 import { config } from './config';
 import { buildFirecrackerPgrepArgv, readFirecrackerPids } from './firecracker-pids';
 
-// the harness drives scripts/dev/dev.sh and scripts/impz from this checkout
 export const REPO_ROOT = join(import.meta.dir, '..', '..');
 export const FIXTURES_DIR = join(REPO_ROOT, 'e2e', 'fixtures');
 export const LIB_SCRIPT = join(REPO_ROOT, 'scripts', 'lib.sh');
 const DEV_SCRIPT = join(REPO_ROOT, 'scripts', 'dev', 'dev.sh');
 const offset = Number(process.env['IMP_DEV_PORT_OFFSET'] ?? '0');
 
-// with the default name, an offset run would drive and wipe imp-dev, not its own instance
+// With the default name, an offset run would drive and wipe imp-dev, not its
+// own instance.
 if (offset !== 0 && (process.env['IMP_DEV_NAME'] ?? '') === '') {
   throw new Error('IMP_DEV_PORT_OFFSET needs IMP_DEV_NAME: name the instance it belongs to');
 }
 
-// A dev instance (scripts/dev/dev.sh) and where it listens
 export interface DevInstance {
   readonly container: string;
 
-  // mounted at /data in the container
   readonly dataDir: string;
   readonly apiUrl: string;
   readonly proxyPort: number;
   readonly impPortBase: number;
 
-  // the SSH gateway, published on localhost by scripts/dev/dev.sh
   readonly sshPort: number;
 
-  // IMP_DEV_PORT_OFFSET, for what else instances side by side must not share
   readonly portOffset: number;
 
-  // what scripts/dev/dev.sh reads for this instance, over this process's env;
-  // each call passes it, so no instance's settings leak into another's
   readonly env: Readonly<Record<string, string>>;
 }
 
-// The run's own instance. Every published port shifts by
-// IMP_DEV_PORT_OFFSET, so worktrees run instances side by side.
 export const instance: DevInstance = {
   container: process.env['IMP_DEV_NAME'] ?? 'imp-dev',
   dataDir: process.env['IMP_DEV_DATA'] ?? join(REPO_ROOT, '.data', 'dev'),
@@ -46,7 +38,6 @@ export const instance: DevInstance = {
   impPortBase: 20_000 + offset,
   sshPort: 2222 + offset,
 
-  // IMP_DEV_PORT_OFFSET, for what else instances side by side must not share
   portOffset: offset,
   env: {},
 };
@@ -55,16 +46,12 @@ export interface InstanceOptions {
   readonly container: string;
   readonly dataDir: string;
 
-  // a Docker network and the address on it: the instance publishes no
-  // ports, and answers there only
   readonly network: string;
   readonly ip: string;
 
-  // tuning for impd, passed through scripts/dev/dev.sh
   readonly env?: Readonly<Record<string, string>>;
 }
 
-// Another instance beside the run's own, such as a move's second host
 export function createInstance(options: InstanceOptions): DevInstance {
   return {
     container: options.container,
@@ -94,7 +81,6 @@ export interface CommandResult {
   readonly stderr: string;
 }
 
-// stdin is closed unless given
 export async function runCommand(
   argv: readonly string[],
   options: Readonly<{ stdin?: string; env?: Readonly<Record<string, string>> }> = {},
@@ -127,9 +113,6 @@ export async function runChecked(argv: readonly string[]): Promise<string> {
   return result.stdout;
 }
 
-// The dev host image as scripts/lib.sh picks it: IMP_HOST_IMAGE, else this
-// checkout's own tag (dev_image_tag). main.ts reads it once into the env, so
-// dev.sh, the suites and the harness all name the same image.
 export async function readHostImage(): Promise<string> {
   const stdout = await runChecked([
     'bash',
@@ -142,7 +125,6 @@ export async function readHostImage(): Promise<string> {
   return stdout.trim();
 }
 
-// the host image main.ts put in the env (readHostImage)
 export function readHostImageFromEnv(): string {
   const image = process.env['IMP_HOST_IMAGE'] ?? '';
 
@@ -153,16 +135,13 @@ export function readHostImageFromEnv(): string {
   return image;
 }
 
-// Passes dev.sh's output through, so a slow `up` shows progress. impd gets
-// the run's RAM budget and idle timeout (config.ts), then the tuning
-// variables in this process's env, then the instance's, then the call's.
 export async function runDevScript(
   command: string,
   target: DevInstance = instance,
   env: Readonly<Record<string, string>> = {},
 ): Promise<void> {
   // Bun.spawn's default env is the one the process started with, not
-  // process.env as changed since
+  // process.env as changed since.
   const subprocess = Bun.spawn([DEV_SCRIPT, command], {
     stdout: 'inherit',
     stderr: 'inherit',
@@ -199,9 +178,8 @@ export function runInContainer(
   return runCommand(['docker', 'exec', target.container, ...argv]);
 }
 
-// This machine as the container sees it. Guests reach it through FORWARD
-// and MASQUERADE: #26's egress policies must keep that route open, or the
-// ssh-agent suite cannot reach its git server.
+// Guests reach this machine through FORWARD and MASQUERADE. Egress policies
+// must keep that route open, or the ssh-agent suite cannot reach its git server.
 export async function readContainerGateway(): Promise<string> {
   const route = await runInContainer(['ip', '-4', 'route', 'show', 'default']);
 
@@ -214,7 +192,6 @@ export async function readContainerGateway(): Promise<string> {
   return gateway;
 }
 
-// timestamped, so a failure's log orders impd's lines against the suite's
 export async function readImpdLogTail(lines: number): Promise<string> {
   const result = await runCommand([
     'docker',
@@ -228,8 +205,6 @@ export async function readImpdLogTail(lines: number): Promise<string> {
   return `${result.stdout}${result.stderr}`;
 }
 
-// what impd logged from `since` on; throws when docker cannot read the log,
-// as an empty log would read as a clean one
 export async function readImpdLogSince(
   since: Readonly<Date>,
   target: Readonly<DevInstance> = instance,
@@ -245,8 +220,6 @@ export async function readImpdLogSince(
   return `${result.stdout}${result.stderr}`;
 }
 
-// The milliseconds impd logged for an operation: the newest log line that
-// contains the text and ends in `in <n>ms`, or null.
 export async function readImpdLoggedMs(text: string): Promise<number | null> {
   const result = await runCommand(['docker', 'logs', instance.container]);
 
@@ -260,15 +233,12 @@ export async function readImpdLoggedMs(text: string): Promise<number | null> {
   return durationMs === undefined ? null : Number(durationMs);
 }
 
-// Firecracker's argv holds the imp's directory (imps/<id>/run/api.sock)
 export async function checkFirecrackerRunning(id: string): Promise<boolean> {
   const result = await runInContainer(buildFirecrackerPgrepArgv(id));
 
   return result.exitCode === 0;
 }
 
-// SIGKILL to the imp's Firecracker, as a crash would end it; throws when
-// none runs
 export async function stopFirecrackerHard(id: string): Promise<void> {
   const found = await runInContainer(buildFirecrackerPgrepArgv(id));
 
@@ -277,7 +247,6 @@ export async function stopFirecrackerHard(id: string): Promise<void> {
   await runChecked(['docker', 'exec', instance.container, 'kill', '-9', ...pids]);
 }
 
-// null between an old impd exiting and the new one starting
 export async function readImpdPid(): Promise<string | null> {
   const result = await runInContainer(['pgrep', '-f', 'bun .*/daemon/src/main.ts']);
 
@@ -298,7 +267,6 @@ export async function checkHealthReady(target: DevInstance = instance): Promise<
 
     return response.ok && health.success && health.data.ready;
   } catch {
-    // impd is down mid-restart
     return false;
   }
 }

@@ -5,15 +5,13 @@ import * as z from 'zod';
 import { runImp } from './imp-cli';
 import { instance, runChecked, runCommand } from './instance';
 
-// A registry a registry journey owns, on the host's loopback under a name,
-// since the proxy refuses an IP or localhost; CI puts the name in /etc/hosts.
+// On the host's loopback under a name, since the proxy refuses an IP or
+// localhost; CI puts the name in /etc/hosts.
 
 export interface Registry {
-  // host:port, as an image reference names it
   readonly address: string;
   readonly container: string;
 
-  // its certificate, PEM, which the engine trusts in certs.d
   readonly certPath: string;
 }
 
@@ -25,7 +23,6 @@ export interface MovedTag {
 
 const RepoDigestsSchema = z.array(z.string());
 
-// the host port `docker port <container> 5000/tcp` printed first
 export function parsePublishedPort(published: string): string {
   const port = published.trim().split('\n')[0]?.split(':').at(-1) ?? '';
 
@@ -36,14 +33,12 @@ export function parsePublishedPort(published: string): string {
   return port;
 }
 
-// the manifest references the registry's log shows were asked for, in order
 export function parseManifestRequests(logs: string, repository: string): string[] {
   const pattern = new RegExp(`uri="/v2/${repository}/manifests/(?<reference>[^"]+)"`, 'gv');
 
   return [...logs.matchAll(pattern)].map((match) => match.groups?.['reference'] ?? '');
 }
 
-// the one of an image's RepoDigests (JSON) under the repository
 export function getRepoDigest(digests: string, repository: string): string {
   const own = RepoDigestsSchema.parse(JSON.parse(digests)).find((digest) =>
     digest.startsWith(`${repository}@`),
@@ -56,21 +51,21 @@ export function getRepoDigest(digests: string, repository: string): string {
   return own;
 }
 
-// what a build asked for besides the pin: the engine may use the host's copy
-// and ask nothing, or ask for the pin, never for the tag
+// The engine may use the host's copy and ask nothing, or ask for the pin, but
+// never for the tag.
 export function collectUnpinnedRequests(pinned: string, seen: readonly string[]): string[] {
   const digest = pinned.slice(pinned.indexOf('@') + 1);
 
   return seen.filter((reference) => reference !== digest);
 }
 
-// The engine asks a registry by name for HTTPS, so a journey trusts its own
-// certificate in certs.d, which needs sudo; a name that resolves elsewhere
-// would send the pushes there. In CI a missing step throws, never skips.
 export async function checkRegistryReady(name: string): Promise<boolean> {
   const resolved = await lookup(name).catch(() => null);
   const sudo = await runCommand(['sudo', '--non-interactive', 'true']);
 
+  // The engine asks a registry by name for HTTPS, so a journey trusts its own
+  // certificate in certs.d, which needs sudo. A name that resolves elsewhere
+  // would send the pushes there.
   if (resolved?.address === '127.0.0.1' && sudo.exitCode === 0) {
     return true;
   }
@@ -88,13 +83,8 @@ export async function checkRegistryReady(name: string): Promise<boolean> {
   return false;
 }
 
-// the label each registry container carries: the instance whose journey made
-// it, so a sweep takes only this harness's own
 const REGISTRY_OWNER_LABEL = 'imp-e2e-instance';
 
-// Starts registry:2 with a certificate of its own under dir, as `container`,
-// and defers its removal into `stack` once it runs. A container already
-// under that name is refused untouched.
 export async function startRegistry(
   stack: Readonly<Pick<AsyncDisposableStack, 'defer'>>,
   name: string,
@@ -163,10 +153,8 @@ export async function startRegistry(
 }
 
 export interface StaleRegistries {
-  // the names of the containers it removed
   readonly removed: readonly string[];
 
-  // under the registry name pattern, but not labelled with this instance
   readonly left: readonly string[];
 }
 
@@ -183,9 +171,6 @@ async function listRegistryContainers(filters: readonly string[]): Promise<strin
   return listed.split('\n').filter((line) => line !== '');
 }
 
-// Registries a killed journey left, since its stack never ran: only those
-// this instance's journeys labelled. A foreign or unlabelled one under the
-// name pattern stays, and is logged.
 export async function removeStaleRegistries(prefix: string): Promise<StaleRegistries> {
   const named = `name=^${prefix}registry-`;
 
@@ -209,7 +194,6 @@ export async function removeStaleRegistries(prefix: string): Promise<StaleRegist
   return { removed: own, left };
 }
 
-// a context directory with this Dockerfile and a file v holding value
 export function writeContext(
   directory: string,
   name: string,
@@ -225,7 +209,6 @@ export function writeContext(
   return context;
 }
 
-// busybox by its index digest, so a build for another platform moves no tag
 export async function readBusyboxDigest(): Promise<string> {
   await runChecked(['docker', 'pull', '--quiet', 'busybox:1.37']);
 
@@ -241,8 +224,6 @@ export async function readBusyboxDigest(): Promise<string> {
   return getRepoDigest(digests, 'busybox');
 }
 
-// builds the context as tag, for the engine's platform unless given one, and
-// pushes it
 export async function createPushedImage(
   context: string,
   tag: string,
@@ -280,16 +261,12 @@ export async function readFileInImage(name: string, path: string): Promise<strin
   return output.trim();
 }
 
-// the engine's architecture, as image configs name it
 export async function readHostArch(): Promise<string> {
   const arch = await runChecked(['docker', 'version', '--format', '{{.Server.Arch}}']);
 
   return arch.trim();
 }
 
-// A tag the host has on old content, which the registry moved to new: the
-// pin must keep the build on the old. Each tag's removal goes into `stack`
-// as soon as the tag exists.
 export async function createMovedTag(
   stack: Readonly<Pick<AsyncDisposableStack, 'defer'>>,
   registry: Readonly<Registry>,
@@ -307,7 +284,7 @@ export async function createMovedTag(
     await runCommand(['docker', 'rmi', tag]);
   });
 
-  // the containerd store drops an image whose last tag moves
+  // The containerd store drops an image whose last tag moves.
   const kept = `${registry.address}/${repository}:kept`;
 
   await runChecked(['docker', 'tag', tag, kept]);
@@ -333,8 +310,6 @@ export async function createMovedTag(
   return { tag, kept, pinned };
 }
 
-// builds the context as name, and returns the manifest references the
-// registry saw during the build
 export async function runBuildAndListRequests(
   registry: Readonly<Registry>,
   directory: string,

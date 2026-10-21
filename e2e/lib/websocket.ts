@@ -10,8 +10,6 @@ interface CloseInfo {
   readonly reason: string;
 }
 
-// A client socket that queues what arrives, so a message the server sends
-// the moment the socket opens is not lost before a test reads it.
 export interface QueuedSocket {
   readonly socket: WebSocket;
   readonly readMessage: () => Promise<Message>;
@@ -28,8 +26,6 @@ function openQueuedSocket(
   });
 
   const queue: Message[] = [];
-
-  // readers waiting for the queue to fill
   const waiters: (() => void)[] = [];
 
   socket.binaryType = 'arraybuffer';
@@ -58,7 +54,6 @@ function openQueuedSocket(
         };
 
         const timer = setTimeout(() => {
-          // a later message must not go to a reader that gave up
           waiters.splice(waiters.indexOf(wakeReader), 1);
 
           reject(new Error(`no WebSocket message from ${url} in ${String(TIMEOUT_MS)} ms`));
@@ -89,7 +84,7 @@ function openQueuedSocket(
       resolve({ socket, readMessage, closed });
     });
 
-    // after open this rejects a settled promise, which is a no-op
+    // After open this rejects a settled promise, which is a no-op.
     socket.addEventListener('close', (event) => {
       clearTimeout(timer);
       reject(new Error(`the WebSocket to ${url} closed: ${String(event.code)} ${event.reason}`));
@@ -97,7 +92,6 @@ function openQueuedSocket(
   });
 }
 
-// through the wake proxy's Host routing
 export function openProxySocket(
   name: string,
   protocols: readonly string[] = [],
@@ -108,7 +102,6 @@ export function openProxySocket(
   });
 }
 
-// through the imp's own published port, 20000 + slot
 export function openImpPortSocket(slot: number): Promise<QueuedSocket> {
   return openQueuedSocket(`ws://localhost:${String(instance.impPortBase + slot)}/`, {});
 }
@@ -119,7 +112,6 @@ export function sendAndRead(queued: QueuedSocket, message: string | Uint8Array):
   return queued.readMessage();
 }
 
-// throws unless the reply is a binary message
 export async function sendAndReadBinary(queued: QueuedSocket, data: Uint8Array): Promise<Buffer> {
   const reply = await sendAndRead(queued, data);
 

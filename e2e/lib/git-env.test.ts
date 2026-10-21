@@ -41,7 +41,6 @@ test('#runGitCommand runs git in its own repo when this process names another', 
   await runGitChecked(['git', 'init', '-q', '-b', 'main', repo]);
   await runGitChecked(['git', 'init', '-q', '-b', 'main', other]);
 
-  // as a pre-push hook exports it
   updateEnv('GIT_DIR', join(other, '.git'));
 
   const result = await runGitCommand(['git', '-C', repo, 'rev-parse', '--absolute-git-dir']);

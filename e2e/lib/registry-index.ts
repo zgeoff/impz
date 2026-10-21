@@ -1,12 +1,10 @@
 import * as z from 'zod';
 
-// an image manifest, as `docker push` writes it on either image store
 const MANIFEST_TYPES = [
   'application/vnd.oci.image.manifest.v1+json',
   'application/vnd.docker.distribution.manifest.v2+json',
 ];
 
-// the index type that matches its manifests' type
 const INDEX_TYPES: Readonly<Record<string, string>> = {
   'application/vnd.oci.image.manifest.v1+json': 'application/vnd.oci.image.index.v1+json',
   'application/vnd.docker.distribution.manifest.v2+json':
@@ -16,25 +14,22 @@ const INDEX_TYPES: Readonly<Record<string, string>> = {
 const MediaTypeSchema = z.object({ mediaType: z.string() });
 
 interface IndexEntry {
-  // a tag in the index's repository
   readonly tag: string;
   readonly architecture: string;
 }
 
 export interface PushIndexOptions {
-  // host:port
   readonly registry: string;
 
-  // the registry's certificate, PEM
   readonly ca: string;
   readonly repository: string;
   readonly tag: string;
   readonly entries: readonly IndexEntry[];
 }
 
-// Pushes an index of linux images under the tag, through the registry API:
-// `docker manifest push` before Docker 29 speaks HTTP to a TLS registry, and
-// `docker buildx imagetools` does not read /etc/docker/certs.d.
+// Pushed through the registry API: `docker manifest push` before Docker 29
+// speaks HTTP to a TLS registry, and `docker buildx imagetools` does not read
+// /etc/docker/certs.d.
 export async function writeRegistryIndex(options: Readonly<PushIndexOptions>): Promise<string> {
   const base = `https://${options.registry}/v2/${options.repository}/manifests`;
   const tls = { ca: options.ca };

@@ -1,5 +1,3 @@
-// Runs the repo's test script over the tests beside the given files: a test file
-// runs itself, and a source file runs its sibling test file.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 

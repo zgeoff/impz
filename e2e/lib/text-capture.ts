@@ -1,13 +1,9 @@
 export interface TextCapture {
-  // what the stream sent so far
   readonly read: () => string;
 
-  // settles once the stream ends
   readonly done: Promise<void>;
 }
 
-// Collects a child's output stream as text while the test goes on, such as
-// the lines `impz proxy` or `impz events` print.
 export function startTextCapture(stream: ReadableStream<Uint8Array>): TextCapture {
   const decoder = new TextDecoder();
 

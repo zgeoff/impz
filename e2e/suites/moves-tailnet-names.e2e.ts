@@ -23,10 +23,7 @@ import {
 import { probeTailscaleE2EKey } from '../lib/tailscale-key';
 import { waitFor } from '../lib/wait-for';
 
-// A per-imp tailnet name across a move between two tag:imp-e2e nodes
-// (docs/guides/tailscale.md#per-imp-names).
-
-// one stack for every release, so B's imps go before B
+// One stack for every release, so B's imps go before B.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -40,9 +37,9 @@ async function setupTest() {
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
 const tailscaleStatus = await readLocalTailscaleStatus();
 
-// the tailnet name handover needs the Tailscale Services OAuth client of #30
-// (op://$IMP_OP_VAULT/imp-e2e-tailscale-services); set IMP_E2E_TAILNET_NAMES=1 when
-// 1Password holds it
+// The tailnet name handover needs the Tailscale Services OAuth client
+// (op://$IMP_OP_VAULT/imp-e2e-tailscale-services); set IMP_E2E_TAILNET_NAMES=1
+// when 1Password holds it.
 const tailnetNamesMissing =
   !isTailnetReady(tailscaleStatus, probeTailscaleE2EKey()) ||
   process.env['IMP_E2E_TAILNET_NAMES'] !== '1';
@@ -53,9 +50,6 @@ test.skipIf(tailnetNamesMissing)(
     const ctx = await setupTest();
 
     const named = `${ctx.prefix}n`;
-
-    // per-imp names on both impds under one test prefix, as the harness
-    // starts them once IMP_E2E_TAILNET_NAMES is set (readMoveOptions)
     const hosts = readMoveHosts(readMoveOptions('host-b-tailnet'));
 
     const clientB = await createInstanceClient(hosts.hostB);
@@ -109,7 +103,7 @@ test.skipIf(tailnetNamesMissing)(
 
     const row = await requireImp(named, hosts.hostB);
 
-    // the name answers from B, over plain HTTP: its certificate is B's to get
+    // Over plain HTTP: the name's certificate is B's to get.
     const body = await waitFor(
       `${moved} over the tailnet from B`,
       () => readTailnetBody(moved.replace(/^https:/v, 'http:')),

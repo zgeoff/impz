@@ -19,8 +19,6 @@ async function setupTest() {
 test('#readKeyPatterns gives a seed pattern that matches the seed the key holds', async () => {
   const ctx = await setupTest();
 
-  // the seed by another road: node made the key, and its file is built from
-  // node's seed
   const key = buildMockEd25519Key();
   const path = join(ctx.directoryPath, 'id');
 
@@ -61,7 +59,6 @@ test('#readKeyPatterns rejects a file that is not a key', async () => {
 test('#countKeyTraces counts the key’s file line and its seed in a file in the container, beside the control', async () => {
   const ctx = await setupTest();
 
-  // the container's own shell is this machine's: the stub drops `exec <name>`
   const docker = createStubBin(ctx.directoryPath, 'docker', 'shift 2\nexec "$@"');
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
@@ -93,7 +90,6 @@ test('#countKeyTraces counts the key’s file line and its seed in a file in the
 test('#countKeyTraces finds no control and no trace in a file that holds neither', async () => {
   const ctx = await setupTest();
 
-  // the container's own shell is this machine's: the stub drops `exec <name>`
   const docker = createStubBin(ctx.directoryPath, 'docker', 'shift 2\nexec "$@"');
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);

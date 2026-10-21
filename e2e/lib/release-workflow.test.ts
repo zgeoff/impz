@@ -8,9 +8,6 @@ import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
 import { parseReleaseWorkflow } from '../../scripts/test-utils/parse-release-workflow';
 import { createGitFreeEnv } from './git-env';
 
-// The base job publishes imp-base, which other images pin by digest, so a published tag must
-// never move (docs/runbooks/releasing.md). The Plan step's tests run its shell as Actions does (bash -eo
-// pipefail), with a stub docker and gh on PATH and a checked-out tree in a scratch directory.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-release-workflow-'));
 
@@ -18,7 +15,6 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  // the checked-out tree the Plan step reads, and the file Actions collects its outputs from
   mkdirSync(join(directory, 'tree', 'images', 'base'), { recursive: true });
   mkdirSync(join(directory, 'tree', 'host'));
   mkdirSync(join(directory, 'tree', 'scripts', 'release'), { recursive: true });
@@ -125,7 +121,6 @@ test('it pushes a tag the registry does not have', () => {
   expect(readFileSync(ctx.outputs, 'utf8')).toBe('action=push\n');
 });
 
-// a republished tag from before scripts/release/ keeps its check script in host/
 test('it pushes a missing tag of a tree that keeps its check script in host/', () => {
   const ctx = setupTest();
 
@@ -393,8 +388,6 @@ test('it never holds a release up on the base job', () => {
   expect(jobs.publish.needs).not.toContain('base');
 });
 
-// The lock that keeps an older release from moving `latest` back: one group for every release
-// run, which keeps each waiting job rather than cancelling it.
 test('it holds the latest job under one queued group that every release run shares', () => {
   const jobs = parseReleaseWorkflow(
     readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8'),
@@ -453,9 +446,6 @@ test.each([['tap'], ['npm-pack']] as const)(
   },
 );
 
-// The traces run the Tag latest step of two overlapping release runs one after the other, as the
-// latest-tag group runs them, with a stub gh that answers the newest release from a file the test
-// moves on as release-please would, and a stub docker that records the move.
 test('it leaves latest on the newer release when the older run holds the lock after the newer run', () => {
   const ctx = setupTest();
 
@@ -687,7 +677,6 @@ test('it leaves the formula of a tag from before the rename, class Imp, out of t
   const runGit = (...args: readonly string[]) =>
     Bun.spawnSync(['git', ...args], { env: gitEnv }).stdout.toString();
 
-  // the tap as it is: impz's formula only
   mkdirSync(join(ctx.directoryPath, 'seed', 'Formula'), { recursive: true });
 
   writeFileSync(
@@ -719,7 +708,6 @@ test('it leaves the formula of a tag from before the rename, class Imp, out of t
     join(ctx.directoryPath, 'tap.git'),
   );
 
-  // the generator a tag from before the rename checks out, at its old path
   mkdirSync(join(ctx.tree, 'scripts'), { recursive: true });
 
   writeFileSync(
@@ -786,7 +774,6 @@ test('it writes the formula of a tag after the rename to impz.rb with the genera
   const runGit = (...args: readonly string[]) =>
     Bun.spawnSync(['git', ...args], { env: gitEnv }).stdout.toString();
 
-  // the tap as it is: impz's formula only
   mkdirSync(join(ctx.directoryPath, 'seed', 'Formula'), { recursive: true });
 
   writeFileSync(

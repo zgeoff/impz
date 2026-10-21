@@ -11,9 +11,8 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// CPU limits (docs/guides/cpu-limits.md) through each imp's cgroup. Where
-// Docker does not delegate the cpu controller to a private cgroup namespace,
-// impd reports limits not enforced and the limit tests skip; CI must enforce.
+// Where Docker does not delegate the cpu controller to a private cgroup
+// namespace, impd reports limits not enforced and the limit tests skip.
 
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
 const startInfo = await readInfo();
@@ -30,7 +29,6 @@ async function setupTest() {
   return { prefix: getSuitePrefix('cpu'), stack, client };
 }
 
-// the entrypoint moved every process out of the root cgroup when it could
 test('it still lands docker exec in a cgroup where it may run after the cgroup move', async () => {
   const exec = await runInContainer(['true']);
 
@@ -60,8 +58,6 @@ test.skipIf(cpuLimitsMissing)(
     const directory = await readImpCgroupDir(name);
     const cpuMax = await readContainerFile(`${directory}/cpu.max`);
     const procs = await readContainerFile(`${directory}/cgroup.procs`);
-
-    // one guest core busy for 5 s against half a core: an upper bound only
     const busy = await runBusyLoop(name, 5);
 
     writeMetric('cpuLimitedShare', busy.share);
@@ -137,9 +133,6 @@ test.skipIf(cpuLimitsMissing)(
     const top = await runImp('top', '--once');
 
     const line = top.split('\n').find((candidate) => candidate.startsWith(`${name} `)) ?? '';
-
-    // NAME STATE CPU WEIGHT THROTTLED ...: a sample fills THROTTLED, which is
-    // `-` without one
     const columns = line.split(/\s{2,}/v);
 
     expect(columns[0]).toBe(name);

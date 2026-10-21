@@ -12,11 +12,8 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// Session output offsets (docs/architecture/guest/sessions.md#generations-boots-and-offsets): a
-// client resumes from the byte it last saw, and learns what it missed.
-
-// one stack for every release, so each session socket closes before its imp
-// goes
+// One stack for every release, so each session socket closes before its imp
+// goes.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -32,12 +29,8 @@ test('it resumes session output from the offset a client saw, and names the gap,
 
   const name = `${ctx.prefix}a`;
   const mib = 1_048_576;
-
-  // impd's ring of session output per session
   const ringBytes = 262_144;
 
-  // exactly 1 MiB of output, untouched by the tty (no CR before LF, no echo),
-  // then a process that writes nothing more
   const producer = [
     'sh',
     '-c',
@@ -109,7 +102,6 @@ test('it resumes session output from the offset a client saw, and names the gap,
 
   expect(new TextDecoder().decode(ring)).toBe('x'.repeat(ringBytes));
 
-  // a sleep and a memory wake keep the generation, so the resume is exact
   await runImp('sleep', name);
   await assertState(name, 'sleeping');
 
@@ -141,7 +133,6 @@ test('it resumes session output from the offset a client saw, and names the gap,
   expect(exactOutput.coldBoots).toStrictEqual(gapOutput.coldBoots);
   expect(new TextDecoder().decode(tail)).toBe('x'.repeat(100));
 
-  // wake: false on a stopped imp boots nothing
   await runImp('stop', name);
 
   const refused = await openSessionSocket({ type: 'attach', name, session: 'out', wake: false });
@@ -160,7 +151,6 @@ test('it resumes session output from the offset a client saw, and names the gap,
   expect(refusal.data.state).toBe('stopped');
   expect(refusal.data.coldBoots[0]?.bootId).toBe(exactOutput.bootId);
 
-  // a stop and a start end the generation
   await runImp('start', name);
 
   const afterStart = await openSessionSocket({
@@ -220,7 +210,6 @@ test('it resumes session output from the offset a client saw, and names the gap,
     firstOffset: 0,
   });
 
-  // a checkpoint restore ends the generation with the cause restore
   await runImp('checkpoint', name, 'offsets');
   await runImp('restore', name, 'offsets');
 
@@ -243,8 +232,6 @@ test('it resumes session output from the offset a client saw, and names the gap,
   expect(restoreGone.data.coldBoots[0]?.cause).toBe('restore');
   expect(restoreGone.data.coldBoots[1]?.bootId).toBe(restartedOutput.bootId);
 
-  // a killed VM ends the generation with the cause recovery, which the
-  // attach that boots the imp keeps
   const beforeKill = await openSessionSocket({
     type: 'start',
     name,
@@ -265,7 +252,6 @@ test('it resumes session output from the offset a client saw, and names the gap,
 
   await stopFirecrackerHard(imp.id);
 
-  // the attach finds the VM gone, and boots the imp to answer
   const recoveryGone = await waitFor('an attach after the kill', async () => {
     const opened = await openSessionSocket({
       type: 'attach',

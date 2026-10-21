@@ -25,10 +25,6 @@ import { startStubUpstream } from '../lib/start-stub-upstream';
 import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
-// The credential broker in a real guest (docs/guides/connectors.md): a stub
-// github.com on this machine stands in for the real one, each test makes up
-// its own token, and the checks look for it everywhere it must not be.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -64,7 +60,6 @@ test('it takes a secret on stdin, never shows it back, gives a granted guest the
   await waitForExec(name);
   await holdImp(name);
 
-  // runImpWith throws on a failed add, with its stderr
   const added = await runImpWith(
     { stdin: `${token}\n` },
     'secret',
@@ -119,7 +114,6 @@ test('it takes a secret on stdin, never shows it back, gives a granted guest the
 
   const seenBefore = upstream.seen.length;
 
-  // with no grant, api.github.com is the real one, reached without a token
   await runShellInImp(name, 'curl -s -o /dev/null https://api.github.com/user || true');
 
   const refused = await tryImp([
@@ -201,7 +195,7 @@ test('it pushes a git pack over 1 MB through the broker with Basic auth', async 
 
   expect(landed.trim()).toBe(pushed.split('\n').at(-1) ?? '');
 
-  // git probes with a small POST before it sends a large pack
+  // git probes with a small POST before it sends a large pack.
   expect(pushes).not.toBeEmpty();
 
   expect(pushes).toSatisfyAll(
@@ -236,7 +230,6 @@ test('it tunnels hosts without a grant, and lets nothing inside be reached', asy
   await waitForExec(name);
   await holdImp(name);
 
-  // the broker's variables reach only an imp with a grant
   await ctx.client.secrets.add({ name: secret, kind: 'github', value: token });
 
   registerRemoval(ctx.stack, config.keep, () => removeSecretIfPresent(ctx.client, secret));
@@ -248,7 +241,6 @@ test('it tunnels hosts without a grant, and lets nothing inside be reached', asy
 
   await waitForExec(neighbour);
 
-  // the real example.com through a plain tunnel, its certificate the real one
   const outside = await runShellInImp(
     name,
     'curl -sS -o /dev/null -w "%{http_code}" https://example.com/',
@@ -258,13 +250,11 @@ test('it tunnels hosts without a grant, and lets nothing inside be reached', asy
 
   const containerIp = container.stdout.trim().split(' ')[0] ?? '';
 
-  // impd's own API, through the tunnel, by its container address
   const api = await runShellInImp(
     name,
     `curl -s -o /dev/null -w "%{http_code}" --max-time 20 -p -x "$HTTPS_PROXY" http://${containerIp}:7070/health || true`,
   );
 
-  // the neighbour's gateway: the broker drops a guest that is not on its own
   const next = await requireImp(neighbour);
 
   const other = await runShellInImp(
@@ -307,7 +297,6 @@ test('it leaves no secret in the memory of a slept guest, which still gets the b
 
   await runImp('grant', name, secret);
 
-  // a call through the broker first, so the guest's memory has seen it work
   const before = await runShellInImp(name, 'curl -sS --fail https://api.github.com/user');
   const row = await requireImp(name);
 
@@ -360,7 +349,7 @@ test('it refuses an exec that requires the broker when the CA bundle step failed
 
   await runImp('grant', name, secret);
 
-  // /etc/imp as a file: the bundle step's mkdir fails at the next boot
+  // /etc/imp as a file makes the bundle step's mkdir fail at the next boot.
   await runShellInImp(name, 'mv /etc/imp /etc/imp.e2e && touch /etc/imp');
   await runImp('sleep', name);
 

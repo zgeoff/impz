@@ -11,7 +11,6 @@ async function setupTest() {
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  // a commit to push, made the way a user's checkout would hold one
   const work = join(directory, 'work');
 
   const gitEnv = {

@@ -19,14 +19,12 @@ export function sendProxyRequest(
   });
 }
 
-// the imp's own published port, 20000 + slot
 export function sendImpPortRequest(slot: number, path = '/'): Promise<Response> {
   return fetch(`http://localhost:${String(instance.impPortBase + slot)}${path}`, {
     signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
 }
 
-// the trimmed body of a 2xx; throws on any other status
 export async function readOkBody(pending: Promise<Response>): Promise<string> {
   const response = await pending;
   const body = await response.text();

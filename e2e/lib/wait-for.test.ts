@@ -54,8 +54,6 @@ test('it waits the interval between retries', async () => {
 });
 
 test('it names what it waited for and the last failure once the deadline passes', () => {
-  // each retry moves the clock on by its interval, so the fourth attempt is
-  // the first at the deadline
   const clock = { nowMs: 1000 };
   let attempts = 0;
 

@@ -73,7 +73,6 @@ test('#planChaosRound holds its exec on an imp not in error', () => {
 });
 
 test('#planChaosRound runs the other steps on an imp in error', () => {
-  // the held exec's imp, the step count, then each step's op and imp
   const draws = [0, 0.5, 0, 0];
   const readNextDraw = () => draws.shift() ?? 0;
 

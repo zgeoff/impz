@@ -19,17 +19,13 @@ import { removeImageIfPresent, removeImpIfPresent } from '../lib/reset-baseline'
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// #156, #169, #180: a build's RUN steps and an add's pull run in a builder imp
-// whose network reaches the internet only, and leave nothing on the host's
-// Docker. Each test reads what its build saw from the image it made.
-
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
 const route6 = await runInContainer(['ip', '-6', 'route', 'show', 'default']);
 
-// the public IPv6 fetch needs an IPv6 default route in the host container
+// The public IPv6 fetch needs an IPv6 default route in the host container.
 const ipv6RouteMissing = route6.stdout.trim() === '';
 
-// one stack for every release, so each imp goes before the image it boots
+// One stack for every release, so each imp goes before the image it boots.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -46,9 +42,6 @@ async function setupTest() {
   return { prefix: getSuitePrefix('images'), stack, client, buildRoot };
 }
 
-// #156: the listener is the test's, on every address of this machine, so the
-// Docker host behind the bridge gateway; impd's API and the metadata address
-// are the others
 test('it lets an isolated build reach the internet but not the host, impd or a private address, and removes its builder', async () => {
   const ctx = await setupTest();
 
@@ -110,14 +103,9 @@ test('it lets an isolated build reach the internet but not the host, impd or a p
   ]);
 
   expect(requests).toStrictEqual([]);
-
-  // every build's builder is gone with it
   expect(kinds.filter((imp) => imp.kind === 'builder')).toStrictEqual([]);
 });
 
-// #156 and #180: a RUN step has no IPv6 of its own; what it reaches goes
-// through the broker on the builder's gateway, its second hop after the
-// engine's bridge, and the public policy holds the broker to the internet.
 test("it lets an isolated build's broker tunnel reach the internet, but not the host, its taps or impd", async () => {
   const ctx = await setupTest();
 
@@ -183,7 +171,6 @@ test("it lets an isolated build's broker tunnel reach the internet, but not the 
 
   const probe = await runInImp(name, 'cat', '/probe.txt');
 
-  // no `ipv6` line: the RUN step has no address but loopback
   expect(probe.split('\n')).toStrictEqual([
     'direct closed',
     ...refused.map((target) => `${target} 403`),
@@ -229,14 +216,12 @@ test.skipIf(ipv6RouteMissing)(
   },
 );
 
-// #169: an add pulls in a builder imp, so the host engine never has the image
 test('it pulls an added image in a builder: the host engine gains no image, the audit log names the digest, and the image boots', async () => {
   const ctx = await setupTest();
 
   const name = `${ctx.prefix}added`;
 
-  // the host engine's busybox images, each with its digests and ID, sorted:
-  // other work on this engine may change other repositories meanwhile
+  // Other work on this engine may change other repositories meanwhile.
   const busyboxArgv = [
     'docker',
     'image',
@@ -266,7 +251,7 @@ test('it pulls an added image in a builder: the host engine gains no image, the 
     stderr: expect.toInclude('No such image: busybox:1.36.1'),
   });
 
-  // the audit row, written after the answer, names the bytes the pull took
+  // impd writes the audit row after the answer.
   const add = await waitFor('the add in the audit log', async () => {
     const auditJson = await runImp('audit', '--kind', 'api', '--json', '--limit', '20');
 

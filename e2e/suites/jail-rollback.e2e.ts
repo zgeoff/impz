@@ -15,10 +15,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// A rollback to an impd without the jailer, then the upgrade back: each
-// reboot sleeps the imp in the old impd. The journey ends on the run's
-// settings; after a failure, the harness reboots onto them.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -43,8 +39,7 @@ test('it wakes a jailed snapshot as root in an impd without the jailer, and that
 
   const proof = await startMemoryProof(name);
 
-  // in-test, not suite settings: the journey needs the jailer off, then on,
-  // and the jail suite's other files need it on
+  // In-test, not suite settings: the jail suite's other files need the jailer on.
   await runDevScript('reboot', instance, { IMP_JAILER: 'false' });
   await runImp('wake', name);
   await waitForExec(name);

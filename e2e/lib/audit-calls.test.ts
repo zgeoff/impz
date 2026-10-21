@@ -73,7 +73,6 @@ test('#pickNewCalls keeps the rows added ahead of the earlier ones', () => {
 });
 
 test('#pickNewCalls keeps the new rows when they push earlier rows out of a full window', () => {
-  // a full read of 100 rows, one per minute on 9 October
   const before = Array.from({ length: 100 }, (_, index) => ({
     at: new Date(Date.UTC(2026, 9, 9, 8, 100 - index)).toISOString(),
     procedure: 'imps.wake',

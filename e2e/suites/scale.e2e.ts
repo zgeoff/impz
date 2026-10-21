@@ -33,12 +33,8 @@ import { buildStats } from '../lib/stats';
 import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
-// The RAM governor at scale (docs/runbooks/development.md): more imps than the
-// budget holds, each with a tmpfs of random data, so the governor must sleep
-// the least recently active to admit the next.
-
-// one stack for every release, so the monitor stops and the holds go before
-// the imps they name
+// One stack for every release, so the monitor stops and the holds go before
+// the imps they name.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -51,14 +47,12 @@ async function setupTest() {
 
 test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps the least recently active, and wakes each on request`, async () => {
   const ctx = await setupTest();
-
-  // the suite's settings: the governor, not the idle timeout, sleeps imps
   const start = await readInfo();
 
   expect(start.ramBudgetMib).toBe(config.ramBudgetMib);
   expect(config.scaleMemoryMib * 2).toBeLessThanOrEqual(config.ramBudgetMib);
 
-  // read at run time: the ksm suite changes IMP_BOOT_RESERVE_PERCENT
+  // Read at run time: the ksm suite changes IMP_BOOT_RESERVE_PERCENT.
   const limits = buildOvershootLimits({
     budgetMib: config.ramBudgetMib,
     memoryMib: config.scaleMemoryMib,
@@ -72,9 +66,8 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
 
   ctx.stack.defer(() => monitor.stop());
 
-  // No removal for the fleet: run-suites.ts keeps it for restart, per GEO-135
-  // decision 1 ("the ordered full-acceptance scale/restart dependency"), and
-  // resets it when restart does not follow.
+  // No removal for the fleet: the harness keeps it for restart, and resets it
+  // when restart does not follow.
   const names = Array.from(
     { length: config.scaleCount },
     (_, index) => `${ctx.prefix}${String(index + 1).padStart(2, '0')}`,
@@ -82,8 +75,7 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
 
   const createMs: number[] = [];
 
-  // two imps before the measure: the second restores from the boot template
-  // that the first built
+  // The second restores from the boot template that the first built.
   const measured = names.slice(0, Math.min(2, config.scaleCount));
 
   for (const name of measured) {
@@ -121,8 +113,8 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
     fillMib: config.scaleFillMib,
   });
 
-  // the governor sleeps nothing unless the count passes the fit: raise
-  // E2E_SCALE_COUNT or lower E2E_RAM_BUDGET_MIB when this fails
+  // The governor sleeps nothing unless the count passes the fit: raise
+  // E2E_SCALE_COUNT or lower E2E_RAM_BUDGET_MIB when this fails.
   expect(perImp).toBeGreaterThan(0);
   expect(config.scaleCount).toBeGreaterThan(fit);
 
@@ -149,8 +141,6 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
   const scaleImps = rows.filter((row) => row.name.startsWith(ctx.prefix));
   const sleeping = scaleImps.filter((row) => row.state === 'sleeping');
   const running = scaleImps.filter((row) => row.state === 'running');
-
-  // the budget filled: the peak came within one imp of it
   const peak = Math.max(...monitor.samples.map((sample) => sample.ramUsedMib));
 
   console.log(
@@ -169,14 +159,11 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
   expect(sleeping).not.toBeEmpty();
   expect(peak).toBeGreaterThan(config.ramBudgetMib - perImp);
 
-  // LRU: every sleeping imp was last active no later than every running one
   const lastSlept = Math.max(...sleeping.map((row) => Date.parse(row.lastActiveAt)));
   const firstAwake = Math.min(...running.map((row) => Date.parse(row.lastActiveAt)));
 
   expect(lastSlept).toBeLessThanOrEqual(firstAwake);
 
-  // exec wakes the least recently active imp the governor slept, memory and
-  // all: its tmpfs fill is still there, and RAM stays in budget
   const [lru] = sleeping.toSorted(
     (left, right) => Date.parse(left.lastActiveAt) - Date.parse(right.lastActiveAt),
   );
@@ -185,7 +172,6 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
 
   const fillMib = await runShellInImp(lru.name, 'du -m /run/fill/blob | cut -f1');
 
-  // a breach the wake starts shows once an enforce sleep was due
   await waitForSampleAfter(monitor, Date.now(), limits.maxStartMs);
 
   expect(Number(fillMib)).toBe(config.scaleFillMib);
@@ -194,7 +180,6 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
     [],
   );
 
-  // each request to a sleeping imp must wake it within the budget
   const requests: { state: string; durationMs: number; body: string }[] = [];
 
   for (const name of names) {
@@ -216,7 +201,6 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
   expect(requests.map((request) => request.body)).toStrictEqual(names.map(() => 'e2e-tiny-ok'));
   expect(wakeMs).not.toBeEmpty();
 
-  // an imp that cannot fit even after sleeping everything else
   const huge = `${ctx.prefix}huge`;
 
   const rejected = await tryImp([
@@ -240,17 +224,12 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
 
   expect(leftBehind).toBeUndefined();
 
-  // An imp that fits the budget but not its boot reserve (a share of its
-  // memory, held until the RAM shows up) is refused while every awake imp is
-  // held, so the governor has nothing to sleep.
   const awakeRows = await listImps();
 
   const held = awakeRows
     .filter((row) => row.name.startsWith(ctx.prefix) && row.state === 'running')
     .map((row) => row.name);
 
-  // each hold's release deferred as soon as it is taken, so a later hold that
-  // fails still lets the earlier ones go
   for (const name of held) {
     await runImp('hold', name, '10m');
 
@@ -263,7 +242,7 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
 
   const inUse = info.ramUsedMib + info.ramReservedMib;
 
-  // the boot reserve is half the memory by default: twice the room, plus margin
+  // The boot reserve is half the memory by default: twice the room, plus margin.
   const tightMemory = (config.ramBudgetMib - inUse) * 2 + 512;
   const tight = `${ctx.prefix}tight`;
 
@@ -292,9 +271,6 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
     stderr: expect.toInclude('RAM_BUDGET_EXCEEDED'),
   });
 
-  // a breach the released holds start shows once an enforce sleep was due;
-  // then sample until no overshoot is open, so the final check judges a
-  // closed one
   await waitForSampleAfter(monitor, Date.now(), limits.maxStartMs);
   await waitForUnderBudget(monitor, limits);
 
@@ -326,7 +302,6 @@ test(`it keeps ${String(config.scaleCount)} imps inside the RAM budget, sleeps t
       `${String(pssOver)}), max awake ${String(maxAwake)}`,
   );
 
-  // each run of ramUsedMib over the budget, which a governor sleep ended
   for (const overshoot of overshoots) {
     console.log(
       `    ramUsedMib ${String(overshoot.maxOverMib)} MiB over the budget in ` +

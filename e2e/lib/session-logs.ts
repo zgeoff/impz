@@ -15,7 +15,6 @@ const SessionLogRowSchema = z.object({
 
 export type SessionLogRow = z.infer<typeof SessionLogRowSchema>;
 
-// `impz sessions logs <imp> --json`, with the fields the suites read
 export function parseSessionLogs(stdout: string): SessionLogRow[] {
   return z.array(SessionLogRowSchema).parse(JSON.parse(stdout));
 }
@@ -26,7 +25,6 @@ export async function listSessionLogs(imp: string): Promise<SessionLogRow[]> {
   return parseSessionLogs(stdout);
 }
 
-// the log of one execution generation of a session; throws when there is none
 export async function requireSessionLog(imp: string, generation: string): Promise<SessionLogRow> {
   const logs = await listSessionLogs(imp);
 

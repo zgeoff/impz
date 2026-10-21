@@ -9,9 +9,6 @@ import { startStubDockerEngine } from '../../packages/client/src/test-utils/star
 import { startTestImpd } from '../../packages/daemon/testing';
 import { sendRawBuild, writeBuildContext } from './build-context';
 
-// impd's real app on the stub VMM and a loopback port, building on the host
-// engine at `dockerSocket`; `root` holds the test's contexts, engine and
-// docker CLI
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -22,13 +19,11 @@ async function setupTest() {
   stack.defer(() => rm(root, { recursive: true, force: true }));
 
   const dockerSocket = join(root, 'docker.sock');
-
-  // impd boots with a root token, the bearer a raw build sends
   const rootToken = faker.string.alphanumeric(32);
 
-  // builds run on the host engine, as no builder imp has an agent here;
-  // impd listens with its own body limit, so the build route, not Bun,
-  // refuses a large context
+  // No builder imp has an agent here, so builds run on the host engine. impd
+  // listens with its own body limit, so the build route, not Bun, refuses a
+  // large context.
   const harness = await startTestImpd(stack, {
     dataDir: join(root, 'data'),
     rootToken,

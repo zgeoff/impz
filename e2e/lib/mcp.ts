@@ -27,12 +27,9 @@ export interface ToolResult {
 export interface McpSession {
   readonly runTool: (name: string, args: Readonly<Record<string, unknown>>) => Promise<ToolResult>;
 
-  // closes stdin, as a client that goes away does, and waits for the exit
   readonly close: () => Promise<number>;
 }
 
-// `impz mcp ARGS...` against the dev instance, driven over stdio as an agent's
-// MCP client drives it
 export async function startMcpSession(args: readonly string[]): Promise<McpSession> {
   const env = await readImpEnv();
 
@@ -112,15 +109,11 @@ export interface HttpMcpSession {
   readonly runTool: (name: string, args: Readonly<Record<string, unknown>>) => Promise<ToolResult>;
   readonly listTools: () => Promise<readonly string[]>;
 
-  // SSE comments impd sent across this session's tool calls
   readonly readKeepalives: () => number;
 
-  // DELETE: ends the session
   readonly close: () => Promise<number>;
 }
 
-// impd's `/mcp` endpoint with `token`, driven over HTTP as a remote agent's
-// MCP client drives it: tool calls take their answer as server-sent events
 export async function startHttpMcpSession(token: string): Promise<HttpMcpSession> {
   const url = `${instance.apiUrl}/mcp`;
   const state = { session: '', nextId: 1, keepalives: 0 };
@@ -151,7 +144,7 @@ export async function startHttpMcpSession(token: string): Promise<HttpMcpSession
 
     state.keepalives += text.split('\n').filter((line) => line.startsWith(': keepalive')).length;
 
-    // the response is the stream's last event; progress comes before it
+    // The response is the stream's last event; progress comes before it.
     const events = text.split('\n').filter((line) => line.startsWith('data: '));
     const last = events.at(-1) ?? 'data: null';
 

@@ -9,10 +9,7 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// impd reaches Docker only through imp-docker-proxy, and only to build and
-// add images: imps run without it.
-
-// one stack for every release, so the proxy starts again before the imp goes
+// One stack for every release, so the proxy starts again before the imp goes.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 

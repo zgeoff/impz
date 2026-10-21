@@ -1,8 +1,5 @@
 import * as z from 'zod';
 
-// A script that POSTs `path` to an imp-docker-proxy on `socket` with a
-// context of FROM busybox, each [key, value] param sent as given and in
-// order; it prints the answer's body, a space and the HTTP status.
 export function buildProxyBuildScript(
   params: readonly (readonly [string, string])[],
   path: string,
@@ -25,8 +22,6 @@ export interface ProxyAnswer {
   readonly message: string;
 }
 
-// The status and the refusal message from what buildProxyBuildScript
-// printed: the proxy's JSON body, a space, and the status.
 export function parseProxyAnswer(stdout: string): ProxyAnswer {
   const cut = stdout.lastIndexOf(' ');
 

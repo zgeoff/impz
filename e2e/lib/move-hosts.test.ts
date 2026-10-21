@@ -16,8 +16,6 @@ import {
   readMoveOptions,
 } from './move-hosts';
 
-// a temp dir for the fixture's CLI config, and deps that record each step
-// in order
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'move-hosts-'));
 
@@ -210,7 +208,6 @@ test('#createHostBFixture starts B on the move network once leftovers are gone, 
 
   updateEnv('IMP_DEV_PORT_OFFSET', '1400');
 
-  // a config an earlier run left
   await mkdir(ctx.cliDir);
   await writeFile(join(ctx.cliDir, 'stale'), '');
   await createHostBFixture({ tailnet: false }, 'e2e-mv-', ctx.deps).start();
@@ -229,7 +226,6 @@ test('#createHostBFixture makes B from nothing and resets it again when its rese
 
   updateEnv('IMP_DEV_PORT_OFFSET', '1400');
 
-  // the refusal a receiving imp whose source is gone gets
   const resets = buildStubAnswerQueue([
     () => Promise.reject(new Error('e2e-mv-cold is moving')),
     () => Promise.resolve(),

@@ -3,11 +3,9 @@ export interface RunSuiteOptions {
   readonly cwd: string;
   readonly env: Readonly<Record<string, string | undefined>>;
 
-  // the suite's pid, once it runs, which leads its process group
   readonly onStart: (pid: number) => void;
 }
 
-// Runs one suite file as its own process group and returns its exit code.
 export function runSuite(options: Readonly<RunSuiteOptions>): Promise<number> {
   const subprocess = Bun.spawn([...options.argv], {
     cwd: options.cwd,
@@ -22,8 +20,6 @@ export function runSuite(options: Readonly<RunSuiteOptions>): Promise<number> {
   return subprocess.exited;
 }
 
-// Signals a suite's whole process group; a group already gone (ESRCH) counts
-// as stopped.
 export function stopSuiteGroup(pid: number, signal: NodeJS.Signals): void {
   try {
     process.kill(-pid, signal);

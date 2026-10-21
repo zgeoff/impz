@@ -1,22 +1,13 @@
 interface StubBlockDevice {
-  // what `blkid -p` reads: the filesystem TYPE and its LABEL, or a signature with no TYPE, such
-  // as a partition table
   readonly type?: string;
   readonly label?: string;
   readonly signature?: boolean;
-
-  // where the device or a partition on it is mounted
   readonly mountpoints?: readonly string[];
-
-  // the partitions or holders below the device
   readonly partitions?: readonly string[];
 }
 
 interface StubBlockDevices {
-  // the partition that holds the root filesystem, and its disk
   readonly root: { readonly source: string; readonly disk: string };
-
-  // the other block devices, by path
   readonly devices: Readonly<Record<string, StubBlockDevice>>;
 }
 
@@ -27,9 +18,6 @@ export interface StubBlockDeviceScripts {
   readonly blkid: string;
 }
 
-// Scripts for createStubBin that answer, for a table of block devices, the calls deploy/
-// bootstrap.sh makes before it formats a device. A path the table lacks is no block device,
-// a tag blkid does not find exits 2 as blkid does, and any other call fails as unexpected.
 export function buildStubBlockDevices(stub: StubBlockDevices): StubBlockDeviceScripts {
   const entries = Object.entries(stub.devices);
   const blockPaths = [stub.root.source, stub.root.disk, ...entries.map(([path]) => path)];

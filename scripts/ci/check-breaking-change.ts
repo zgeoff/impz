@@ -1,6 +1,3 @@
-// .github/workflows/breaking-change.yml's check, which
-// docs/runbooks/releasing.md#breaking-changes describes. Reads BASE_SHA,
-// HEAD_SHA, PR_NUMBER, PR_TITLE and PR_BODY, and runs git in the working dir.
 import * as z from 'zod';
 import { ProtocolSchemaSchema } from '../../packages/api/src/protocols/build-protocol-schema';
 import type { ProtocolSchema } from '../../packages/api/src/protocols/build-protocol-schema';
@@ -85,8 +82,6 @@ function runGit(args: readonly string[]): string {
   return result.stdout.toString();
 }
 
-// The `--json` outputs' breaks; none from a base before the file. A head
-// without it breaks every reader, so it counts as one change.
 function readOutputChanges(mergeBase: string, head: string): string[] {
   const base = loadJsonOutputSchema(mergeBase);
 
@@ -115,7 +110,6 @@ function loadJsonOutputSchema(commit: string): JsonOutputSchema | undefined {
   return text === undefined ? undefined : JsonOutputSchemaSchema.parse(JSON.parse(text));
 }
 
-// the file at a commit; undefined when the commit has none
 function readCommittedFile(commit: string, path: string): string | undefined {
   const result = Bun.spawnSync(['git', 'show', `${commit}:${path}`], {
     stderr: 'pipe',

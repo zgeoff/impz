@@ -30,8 +30,6 @@ import { mergeIntersection } from './merge-intersection';
 import { resolveRef } from './resolve-ref';
 import type { Schema, SchemaObject } from './schema';
 
-// Every value of the narrow side must pass the wide side: base's into head's
-// for what impd reads, head's into base's for what it sends.
 export function collectSchemaChanges(
   label: string,
   direction: MessageDirection,
@@ -81,8 +79,8 @@ function collectChanges(
   return collectObjectChanges(narrow, wide, path, inner);
 }
 
-// What names a schema that a recursive schema meets again: its `$ref`, or the
-// whole of an intersection over `$ref`s, which a merge rebuilds at each level.
+// An intersection's merge rebuilds an intersection over `$ref`s at each level of a recursive
+// schema, so the whole intersection names it.
 function findCycleKey(schema: Schema): string | undefined {
   const ref = findRef(schema);
 
@@ -112,8 +110,6 @@ function collectObjectChanges(
   const narrowBranches = findBranches(narrow);
   const wideBranches = findBranches(wide);
 
-  // a union: each of its options must pass, against the discriminator both
-  // sides share; impd must still send every variant it sent
   if (narrowBranches !== undefined) {
     const siblings = buildWithout(narrow, ['anyOf', 'oneOf']);
 
@@ -186,8 +182,6 @@ function resolveBranches(branches: readonly Schema[], root: Schema): readonly Sc
     .filter((branch) => isSchemaObject(branch));
 }
 
-// What impd sends must keep every variant an older client waits for: a base
-// variant whose tag no head variant carries is no longer sent.
 function collectDroppedVariants(
   narrowBranches: readonly Schema[],
   wideBranches: readonly Schema[],
@@ -212,9 +206,6 @@ function mergeSchemas(siblings: SchemaObject, branch: Schema): Schema {
   return typeof branch === 'boolean' ? branch : { ...siblings, ...branch };
 }
 
-// An intersection's parts merge into one schema where their keywords combine;
-// of parts that stay apart, one alone must pass, failing which the first one's
-// changes stand for it.
 function collectIntersectionChanges(
   narrow: SchemaObject,
   wide: SchemaObject,
@@ -233,29 +224,27 @@ function collectIntersectionChanges(
   return trials.some((trial) => trial.length === 0) ? [] : first;
 }
 
-// A closed set of values: each must pass, but impd may add one to a closed
-// set it sends, as a client passes over a value it does not know.
 function collectValueChanges(
   narrow: SchemaObject,
   wide: SchemaObject,
   path: string,
   comparison: Comparison,
 ): string[] {
+  // A client passes over a value it does not know, so impd may add one to a closed set it sends.
   if (comparison.direction === 'toClient' && isClosedSet(wide, comparison.wideRoot)) {
     return [];
   }
 
   const verb = comparison.direction === 'toServer' ? 'no longer accepts' : 'may now be';
 
-  // a listed value that the narrow side's other keywords refuse, as an
-  // intersection's merge may leave, was never taken
+  // An intersection's merge can leave a listed value that the other keywords refuse, and no
+  // value ever took it.
   return (findValues(narrow) ?? [])
     .filter((value) => isValueAccepted(narrow, value, comparison.narrowRoot))
     .filter((value) => !isValueAccepted(wide, value, comparison.wideRoot))
     .map((value) => formatChange(path, `${verb} ${formatValue(value)}`));
 }
 
-// a schema that admits only listed values: a `const`, an `enum`, or a union of them
 function isClosedSet(schemaRef: Schema, root: Schema): boolean {
   const schema = resolveRef(schemaRef, root);
 
@@ -271,8 +260,6 @@ function isClosedSet(schemaRef: Schema, root: Schema): boolean {
   );
 }
 
-// One option of the wide union must take the whole narrow schema; when none
-// does, the closest option's changes are the ones to show.
 function collectUnionChanges(
   narrow: SchemaObject,
   wide: SchemaObject,
@@ -286,8 +273,6 @@ function collectUnionChanges(
     ? []
     : collectChanges(narrow, siblings, path, comparison);
 
-  // A variant whose tag no option shares is a new one, which a client passes
-  // over; impd still reads every variant it read before.
   const tagKeys =
     comparison.unionTags?.path === path
       ? comparison.unionTags.keys
@@ -312,7 +297,6 @@ function collectUnionChanges(
   return [...siblingChanges, ...closest];
 }
 
-// the type, and a closed set that the wide side brings where the narrow had none
 function collectTypeChanges(
   narrow: SchemaObject,
   wide: SchemaObject,
@@ -416,7 +400,6 @@ function collectPropertyChanges(
   const properties = Object.entries(narrowProperties).flatMap(([key, schema]) => {
     const wideProperty = wideProperties[key] ?? recordValues;
 
-    // a property no value can take, as one an intersection's closed part refuses
     if (schema === false) {
       return [];
     }
@@ -428,7 +411,7 @@ function collectPropertyChanges(
     return comparison.direction === 'toServer' ? [formatChange(`${path}.${key}`, 'removed')] : [];
   });
 
-  // an optional property that head's output drops, for a reader that names it
+  // A `--json` reader names the fields it reads, so dropping an optional property breaks it.
   const dropped = comparison.hasStableFields
     ? Object.keys(wideProperties)
         .filter((key) => !(key in narrowProperties) && !wideRequired.includes(key))
@@ -444,7 +427,6 @@ function collectPropertyChanges(
   ];
 }
 
-// a record's values
 function collectRecordChanges(
   narrowExtra: Schema | undefined,
   wideExtra: Schema | undefined,
@@ -461,7 +443,6 @@ function collectRecordChanges(
   return closes ? [formatChange(path, 'no longer takes keys beyond its named properties')] : [];
 }
 
-// a record's keys
 function collectKeyChanges(
   narrow: SchemaObject,
   wide: SchemaObject,
@@ -479,8 +460,6 @@ function collectKeyChanges(
   return collectChanges(narrowKeys, wideKeys, `${path}{key}`, comparison);
 }
 
-// The keywords read one by one; a change to any other counts as breaking,
-// as nothing here can tell which way it goes.
 const MODELED = new Set([
   'type',
   'const',

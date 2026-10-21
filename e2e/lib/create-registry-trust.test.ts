@@ -22,7 +22,6 @@ test('#createRegistryTrust trusts the certificate in a directory named for the r
 
   const certPath = join(ctx.directoryPath, 'cert.pem');
 
-  // the registry's certificate as openssl writes it
   await writeFile(certPath, '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n');
 
   const trust = await createRegistryTrust({
@@ -56,7 +55,6 @@ test('#createRegistryTrust refuses a registry whose directory is already there, 
     asRoot: [],
   });
 
-  // settled before the directory is read
   await Promise.allSettled([attempt]);
 
   expect(attempt).rejects.toThrow(/^refusing to trust imp-e2e-registry\.test:43210: mkdir: /u);
@@ -71,7 +69,6 @@ test('#createRegistryTrust removes the directory it made', async () => {
 
   const certPath = join(ctx.directoryPath, 'cert.pem');
 
-  // the registry's certificate as openssl writes it
   await writeFile(certPath, '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n');
 
   const trust = await createRegistryTrust({
@@ -91,7 +88,6 @@ test('#createRegistryTrust never removes the certs root, nor another registry in
 
   const certPath = join(ctx.directoryPath, 'cert.pem');
 
-  // the registry's certificate as openssl writes it
   await writeFile(certPath, '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n');
 
   const other = join(ctx.certsRoot, 'registry.example:5000');
@@ -117,7 +113,6 @@ test('#createRegistryTrust removes once, so a directory made again after the rem
 
   const certPath = join(ctx.directoryPath, 'cert.pem');
 
-  // the registry's certificate as openssl writes it
   await writeFile(certPath, '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n');
 
   const trust = await createRegistryTrust({
@@ -146,7 +141,6 @@ test('#createRegistryTrust removes the directory it made when the certificate co
     asRoot: [],
   });
 
-  // settled before the directory is read
   await Promise.allSettled([attempt]);
 
   expect(attempt).rejects.toThrow(/^cp .* exited 1: /u);
@@ -161,10 +155,8 @@ test('#createRegistryTrust writes an owner file with this process’s pid and st
 
   const certPath = join(ctx.directoryPath, 'cert.pem');
 
-  // the registry's certificate as openssl writes it
   await writeFile(certPath, '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n');
 
-  // this process's stat, whose 22nd field is its start time
   const procRoot = join(ctx.directoryPath, 'proc');
 
   await mkdir(join(procRoot, String(process.pid)), { recursive: true });
@@ -218,7 +210,6 @@ test('#createRegistryTrust takes over the directory an exited run of this harnes
 
   const certPath = join(ctx.directoryPath, 'cert.pem');
 
-  // the registry's certificate as openssl writes it
   await writeFile(certPath, '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n');
 
   const gone = Bun.spawn(['true']);
@@ -248,7 +239,6 @@ test('#createRegistryTrust removes what exited runs left on other ports of the s
 
   const certPath = join(ctx.directoryPath, 'cert.pem');
 
-  // the registry's certificate as openssl writes it
   await writeFile(certPath, '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n');
 
   const gone = Bun.spawn(['true']);
@@ -299,7 +289,6 @@ test('#removeStaleRegistryTrusts keeps a directory whose owner still runs', asyn
 
   const certPath = join(ctx.directoryPath, 'cert.pem');
 
-  // the registry's certificate as openssl writes it
   await writeFile(certPath, '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n');
 
   const trust = await createRegistryTrust({
@@ -322,7 +311,6 @@ test('#removeStaleRegistryTrusts keeps a directory whose owner still runs', asyn
 test('#removeStaleRegistryTrusts removes a directory whose pid now runs another process', async () => {
   const ctx = await setupTest();
 
-  // this process's pid, with a start time it never had: the pid was reused
   const reused = join(ctx.certsRoot, 'imp-e2e-registry.test:40004');
 
   await mkdir(reused, { recursive: true });

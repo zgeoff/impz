@@ -10,11 +10,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// Moves between A and B on a Docker network, which the harness keeps up for
-// the suite (lib/move-hosts.ts); IMP_MOVE_TEST_CIDR allows them off the
-// tailnet, and moves-tailnet covers the real peer check.
-
-// one stack for every release, on both hosts
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -53,8 +48,8 @@ test('it moves a stopped imp cold with its disk and checkpoint, and boots it on 
   expect(out).toContain(`${cold}: moved to ${HOST_B}`);
   expect(left).toBeUndefined();
 
-  // what B received, not what each host runs on: a source that dropped the
-  // target's backend would send files between two ZFS hosts
+  // What B received, not what each host runs on: a source that dropped the
+  // target's backend would send files between two ZFS hosts.
   const form = process.env['IMP_STORAGE_BACKEND'] === 'zfs' ? 'zfs streams' : 'files';
 
   const logB = await readImpdLogSince(since, ctx.hosts.hostB);

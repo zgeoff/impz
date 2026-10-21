@@ -3,9 +3,6 @@ import { createServer } from 'node:net';
 import { tryImp } from '../lib/imp-cli';
 import { getSuitePrefix } from '../lib/suites';
 
-// `impz proxy` refusals that boot no imp: the local ports bind before the
-// command checks the imp, so a busy port fails first.
-
 test('it refuses a busy local port before it checks the imp', async () => {
   const name = `${getSuitePrefix('proxy')}nope`;
   const busy = createServer();
@@ -32,7 +29,6 @@ test('it refuses a busy local port before it checks the imp', async () => {
   expect(refused.exitCode).toBe(1);
   expect(refused.stdout).toBe('');
 
-  // the port it suggests depends on the busy one
   expect(refused.stderr).toMatch(
     new RegExp(
       String.raw`^impz: local port ${port} is in use; map another one: impz proxy ${name} \d+:8080 \(0:8080 takes any free port\)\n$`,

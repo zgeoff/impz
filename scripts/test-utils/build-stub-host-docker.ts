@@ -1,39 +1,21 @@
 interface StubHostDocker {
-  // the image deploy/upgrade.sh pulls
   readonly image: string;
-
-  // the imp.host-contract label of the image the imp-host container runs, and of the pulled one
   readonly runningLabel: string;
   readonly pulledLabel: string;
-
-  // what each deploy/*.service in the pulled image holds
   readonly pulledUnit: string;
-
-  // the pulled image is the one the container runs already
   readonly pulledIsRunning?: boolean;
-
-  // the imps `impz ls` lists as running, and the one of them that `impz sleep` fails for
   readonly awakeImps?: readonly string[];
   readonly sleeplessImp?: string;
-
-  // what `impz info --json` prints, `{}` unless set; null fails it
   readonly impInfo?: string | null;
-
-  // the CLI the container has: impz, or imp in an image from before the CLI's rename
   readonly runningCLI?: 'imp' | 'impz';
-
-  // the end of the deploy file whose `docker run ... cat` fails, such as .service
   readonly unreadableFile?: string;
 
-  // what `docker compose config --environment` prints; without it, that fails as in a Compose
-  // older than 2.24, after printing composeConfigError
+  // Left unset, `docker compose config --environment` fails as it does in a Compose older than
+  // 2.24.
   readonly composeConfig?: string;
   readonly composeConfigError?: string;
 }
 
-// A stub docker's script, for createStubBin, that answers deploy/upgrade.sh as a host would:
-// imp-host runs sha256:old, the pull is sha256:new, `compose config` logs the variables it
-// saw, and any call upgrade.sh does not make fails as unexpected.
 export function buildStubHostDocker(stub: StubHostDocker): string {
   const composeConfig =
     stub.composeConfig === undefined

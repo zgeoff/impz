@@ -9,11 +9,7 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// `impz proxy`: local ports to ports in an imp, over impd's /tunnel. Each
-// test boots its own imp; the cases that wait out the idle timeout are in
-// proxy-wake.
-
-// one stack for every release, so the proxy stops before its imp goes
+// One stack for every release, so the proxy stops before its imp goes.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 

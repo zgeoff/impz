@@ -3,12 +3,10 @@ interface PullRequest {
   readonly title: string;
   readonly body: string;
 
-  // each commit's full message, oldest first
+  // Each commit's full message, oldest first.
   readonly commits: readonly string[];
 }
 
-// Whether release-please reads the squash merge of the pull request as
-// breaking: docs/runbooks/releasing.md#breaking-changes.
 export function isMarkedBreaking(pr: Readonly<PullRequest>): boolean {
   const message = findOverride(pr.body) ?? buildSquashMessage(pr);
   const [header = ''] = message.split('\n');

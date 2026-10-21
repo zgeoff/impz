@@ -6,17 +6,12 @@ import type { CommandResult } from './instance';
 import { REPO_ROOT, instance, runChecked, runCommand, runInContainer } from './instance';
 import { waitFor } from './wait-for';
 
-// the Host aliases the suite's ssh config defines: the gateway with the
-// authorized key, and with a key it does not authorize
 export const SSH_HOST = 'imp-e2e';
 export const SSH_HOST_OTHER_KEY = 'imp-e2e-other-key';
-
-// marks the suite's line in authorized_keys, so cleanup removes only it
 const KEY_COMMENT = 'imp-e2e-ssh-suite';
 const AUTHORIZED_KEYS = '/var/lib/imp/ssh/authorized_keys';
 
 export interface SshClient {
-  // `ssh -F <config>`: the start of every ssh, scp and sftp command
   readonly configArgs: readonly string[];
 
   readonly directory: string;
@@ -30,10 +25,9 @@ async function createKey(path: string, comment: string): Promise<string> {
 }
 
 // Before any Host block: OpenSSH applies IgnoreUnknown only in a block that
-// matches, but rejects an unknown option in every block it reads
+// matches, but rejects an unknown option in every block it reads.
 const IGNORE_UNKNOWN = 'IgnoreUnknown WarnWeakCrypto';
 
-// a Host alias for the dev instance's gateway that logs in with one key
 function buildHostBlock(directory: string, alias: string, identity: string): string[] {
   return [
     `Host ${alias}`,
@@ -45,17 +39,17 @@ function buildHostBlock(directory: string, alias: string, identity: string): str
     '  StrictHostKeyChecking accept-new',
     '  BatchMode yes',
     '  LogLevel ERROR',
+
+    // OpenSSH warns of a key exchange without post-quantum safety, which ssh2
+    // cannot offer.
     '  WarnWeakCrypto no',
   ];
 }
 
 export interface KeyClient extends SshClient {
-  // each alias's public key file, to bind to a token
   readonly publicKeyPaths: ReadonlyMap<string, string>;
 }
 
-// Keys that authorized_keys does not list, one Host alias each, for binding
-// to tokens (docs/guides/ssh.md#keys-bound-to-tokens)
 export async function setupKeyClient(aliases: readonly string[]): Promise<KeyClient> {
   const scratch = join(REPO_ROOT, '.cache', 'e2e');
 
@@ -91,11 +85,7 @@ export async function setupKeyClient(aliases: readonly string[]): Promise<KeyCli
   };
 }
 
-// A key for the dev instance's gateway, authorized in its data directory,
-// and an ssh config for the gateway's published port. The config turns off
-// OpenSSH's post-quantum warning, which ssh2 cannot satisfy.
 export async function setupSshClient(): Promise<SshClient> {
-  // the worktree's cache, not /tmp: the scp test writes its payloads here
   const scratch = join(REPO_ROOT, '.cache', 'e2e');
 
   mkdirSync(scratch, { recursive: true });
@@ -109,7 +99,6 @@ export async function setupSshClient(): Promise<SshClient> {
 
   await createKey(otherKey, 'not-authorized');
 
-  // a run cut short leaves its key; this run's replaces it
   const added = await runInContainer([
     'sh',
     '-c',
@@ -142,7 +131,6 @@ export async function setupSshClient(): Promise<SshClient> {
   };
 }
 
-// `ssh <user>@imp-e2e ARGS...`, as a user would run it
 export function runSsh(
   client: SshClient,
   user: string,
@@ -154,7 +142,6 @@ export function runSsh(
   return runCommand(['ssh', ...client.configArgs, `${user}@${host}`, ...args], options);
 }
 
-// `ssh ARGS...` in the background, until the test stops it
 export function startSsh(
   client: SshClient,
   args: readonly string[],
@@ -179,15 +166,12 @@ export function startSsh(
 }
 
 export interface ForwardedList {
-  // ssh-add's exit code, stdout and stderr
   readonly listed: CommandResult;
 
-  // what the forwarding ssh logged
   readonly forwardLog: string;
 }
 
-// `ssh-add -l` on this machine through `ssh -N -L <local>:<guestPath>` to a
-// socket in the imp. `local` must fit a unix socket path (107 bytes).
+// `local` must fit a unix socket path (107 bytes).
 export async function listAgentThroughUnixForward(
   client: SshClient,
   user: string,
@@ -204,14 +188,13 @@ export async function listAgentThroughUnixForward(
     `${user}@${SSH_HOST}`,
   ]);
 
-  // the release if a step below fails; it is safe after the one below
   onTestFinished(async () => {
     await forward.stop();
 
     rmSync(local, { force: true });
   });
 
-  // the client listens once it has logged in, which may wake the imp
+  // The client listens once it has logged in, which may wake the imp.
   await waitFor(`the forward to listen on ${local}`, () => {
     if (!existsSync(local)) {
       throw new Error(`no ${local} yet`);
@@ -229,16 +212,12 @@ export async function listAgentThroughUnixForward(
   return { listed: result, forwardLog };
 }
 
-// The user's ssh-agent on this machine, holding a key made for the run.
 export interface LocalSshAgent {
-  // SSH_AUTH_SOCK for `ssh -A`
   readonly socket: string;
   readonly publicKey: string;
 
-  // the private key file, to look for its bytes where they must not be
   readonly keyPath: string;
 
-  // ends the agent and removes its socket's dir; safe to call again
   readonly stop: () => Promise<void>;
 }
 
@@ -246,9 +225,8 @@ export interface LocalSshAgent {
 // ends, even without afterAll, the pipe closes and the agent goes with it.
 const AGENT_WRAPPER = 'ssh-agent -D -a "$1" & agent=$!; cat >/dev/null; kill "$agent"';
 
-// `label` names the socket, the key file and the key's comment. The socket
-// sits in a dir of its own under TMPDIR: a unix socket path holds 107
-// bytes, which the client's dir in a worktree's .cache can pass.
+// The socket sits in a dir of its own under TMPDIR: a unix socket path holds
+// 107 bytes, which a dir in a worktree's .cache can pass.
 export async function startLocalSshAgent(
   client: SshClient,
   label = 'laptop',
@@ -294,8 +272,6 @@ async function waitForSocket(path: string): Promise<void> {
   );
 }
 
-// The IPv6 link-local address of the host end of the tap whose IPv4
-// address is `hostIp`: the other way a guest could reach the host container.
 export async function readTapLinkLocal(hostIp: string): Promise<string> {
   const v4 = await runInContainer(['ip', '-o', '-4', 'addr', 'show', 'to', hostIp]);
 
