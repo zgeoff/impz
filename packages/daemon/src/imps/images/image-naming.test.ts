@@ -34,7 +34,6 @@ test('#buildImageRuntimeConfig builds the image.json the agent reads whole (agen
     User: 'dev',
   });
 
-  // as image-service writes it
   const json = JSON.stringify(config);
   const written: unknown = JSON.parse(json);
 

@@ -18,11 +18,8 @@ function setupTest() {
 
   const paths = buildImpPaths(directory, 'imp-a');
 
-  // vm.json sits in the imp's dir, which a create makes
   mkdirSync(paths.directory, { recursive: true });
 
-  // the agent drive a snapshot reopens by path; a snapshot whose drive is
-  // missing boots cold
   const systemDrivePath = join(directory, 'system-drive.squashfs');
 
   writeFileSync(systemDrivePath, 'drive');

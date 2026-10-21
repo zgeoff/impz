@@ -17,12 +17,10 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // made here, so each clone's source reads relative to it
   const dataDir = await mkdtemp(join(tmpdir(), 'template-service-'));
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  // the freezes, thaws and clones of disks, in the order they happen
   const events: string[] = [];
 
   const harness = await startTestImpd(stack, {
@@ -48,7 +46,6 @@ async function setupTest() {
     },
   });
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, { events });
 }
 
@@ -87,7 +84,6 @@ test('it adds a template image named for its imp', async () => {
 
   const image = await ctx.impd.templates.createTemplate('dev', 'tools');
 
-  // the row's id, size and times come from the store and the disk
   expect(image).toMatchObject({
     name: 'tools',
     ref: 'imp:dev',
@@ -180,7 +176,6 @@ test('it refuses a template of an imp that is still being created', async () => 
   const ctx = await setupTest();
   const base = await createImage(ctx.db, buildMockNewImage({ name: 'base' }));
 
-  // a row as a create writes it first, before its disk and its boot
   await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: base.id }));
 
   const creating = ctx.impd.templates.createTemplate('dev', 'tools');
@@ -421,7 +416,6 @@ test('it refuses a template over the name of a docker image', async () => {
   });
 });
 
-// refused before any docker call
 test('it refuses a docker image add over the name of a template', async () => {
   const ctx = await setupTest();
 
@@ -537,7 +531,6 @@ test('it resets a fork of a template copy that never booted', async () => {
   expect(ctx.fake.boots.slice(before)).toStrictEqual([{ hostname: 'fork', isIdentityReset: true }]);
 });
 
-// a fork of a booted copy holds that copy's new identity already
 test('it boots a fork of a booted template copy without a reset', async () => {
   const ctx = await setupTest();
 
@@ -644,7 +637,6 @@ test('it thaws an imp whose clone fails while it is frozen', async () => {
 
   const dev = await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
 
-  // a disk gone from under the imp fails its clone
   await rm(buildImpPaths(ctx.dataDir, dev.id).disk);
 
   const before = ctx.events.length;
@@ -668,7 +660,6 @@ test('it leaves no template image when the clone fails', async () => {
 
   const dev = await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
 
-  // a disk gone from under the imp fails its clone
   await rm(buildImpPaths(ctx.dataDir, dev.id).disk);
 
   const creating = ctx.impd.templates.createTemplate('dev', 'tools');
@@ -693,7 +684,6 @@ test('it fails with the clone error when the clone fails', async () => {
 
   const dev = await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
 
-  // a disk gone from under the imp fails its clone
   await rm(buildImpPaths(ctx.dataDir, dev.id).disk);
 
   const creating = ctx.impd.templates.createTemplate('dev', 'tools');
@@ -713,7 +703,6 @@ test('it removes the cloned disk and rethrows when the image row fails to write'
 
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
 
-  // the database refuses every template row
   await runSql(
     ctx.db,
     `CREATE TRIGGER refuse_templates BEFORE INSERT ON images WHEN NEW.source = 'imp'

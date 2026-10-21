@@ -8,7 +8,6 @@ import invariant from 'tiny-invariant';
 import { generateEd25519Key } from '../../surface/ssh/host-key';
 import { createAuthorizedKeys, formatKeyFingerprint, parseAuthorizedKeys } from './authorized-keys';
 
-// An owner-only dir for authorized_keys, which the test writes.
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'imp-keys-'));
 
@@ -86,7 +85,6 @@ test('it refuses a key whose data does not parse, with ssh2’s reason', () => {
 });
 
 test('it formats a fingerprint as ssh-keygen prints it', () => {
-  // SHA-256 of the empty string, unpadded base64
   expect(formatKeyFingerprint(Buffer.alloc(0))).toBe(
     'SHA256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU',
   );
@@ -208,7 +206,7 @@ test('it reads the file again once it changes', async () => {
 
   keys.probeListed(blob);
 
-  // an explicit new mtime, whatever the filesystem's clock granularity
+  // A coarse filesystem clock can repeat the old mtime, so the test sets a later one.
   const later = new Date(Date.now() + 60_000);
 
   writeFileSync(ctx.keysPath, `${key}\n`, { mode: 0o600 });

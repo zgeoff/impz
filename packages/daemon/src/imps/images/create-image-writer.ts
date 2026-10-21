@@ -48,23 +48,19 @@ const InspectSchema = z.tuple([
 interface HostImageOptions {
   readonly onResolved?: ((reference: string) => void) | undefined;
 
-  // kills the inspect and the pull when it aborts
   readonly signal?: AbortSignal | undefined;
 
-  // once the inspect and any pull are done, before the rootfs is written
   readonly onPulled?: (() => void) | undefined;
   readonly setPhase?: ((phase: ImageBuildPhase) => void) | undefined;
 }
 
 export interface ImageWriter {
-  // an image of the host's engine, pulled there when it lacks it
   readonly createImageOnHost: (
     ref: string,
     imageName: string,
     options?: Readonly<HostImageOptions>,
   ) => Promise<ImageRecord>;
 
-  // a builder's export, streamed out into a rootfs and a row
   readonly writeGuestImage: (
     exec: GuestExec,
     imageName: string,
@@ -72,7 +68,6 @@ export interface ImageWriter {
     signal: AbortSignal,
   ) => Promise<ImageRecord>;
 
-  // drops the rootfs of a digest once no row and no guest write uses it
   readonly removeIdleRootfs: (digest: string) => Promise<void>;
 }
 
@@ -81,19 +76,14 @@ interface ImageWriterDeps {
   readonly db: ImpDatabase;
   readonly storage: StorageBackend;
 
-  // a build joins it until the image's row is written, a removal until its
-  // rootfs is gone
   readonly storageGate: StorageGate;
 
-  // a build holds room for the unpacked tree and its ext4 file
   readonly diskBudget: Pick<DiskBudget, 'withRoom' | 'withGrowingRoom'>;
   readonly log: (message: string) => void;
 
-  // the environment of images.add's docker calls; impd's own by default
   readonly dockerEnv?: Readonly<Record<string, string>>;
 }
 
-// a builder's export, unpacked at root, on its way to a rootfs and a row
 interface GuestRootfs {
   readonly root: string;
   readonly digest: string;
@@ -103,17 +93,10 @@ interface GuestRootfs {
   readonly signal: AbortSignal;
 }
 
-// Images land here, whether an add or a build made them: each digest's
-// rootfs once, then the image row by its name.
 export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   const storageGate = deps.storageGate;
-
-  // one build per docker image ID at a time
   const building = createSingleFlight<number>();
 
-  // per guest digest, the writers whose row is not written yet, and whether
-  // one made its rootfs or a removal waits on them: the last to end removes
-  // it if no row took it, under a lock, so no new writer finds it as it goes
   const guestWriters = new Map<string, number>();
   const freshRootfs = new Set<string>();
 
@@ -138,9 +121,8 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     return InspectSchema.parse(JSON.parse(stdout))[0];
   };
 
-  // A fresh directory for an unpacked tree. 0700: a host user must not
-  // reach the tree, whose setuid and capability files are live while it is
-  // unpacked.
+  // 0700 because the tree's setuid and capability files are live while it is unpacked, and no
+  // host user may reach them.
   const makeWorkDir = (): { work: string; root: string } => {
     const images = buildImagesDir(deps.config.dataDir);
     const work = join(images, `.build-${Bun.randomUUIDv7()}`);
@@ -153,9 +135,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     return { work, root };
   };
 
-  // an unpacked tree → sparse ext4
-  // (docs/architecture/storage/images.md#from-an-oci-image-to-a-disk); returns the rootfs
-  // size on disk
   const writeRootfs = async (root: string, digest: string, ociConfig: unknown): Promise<number> => {
     writeImageConfig(root, JSON.stringify(buildImageRuntimeConfig(ociConfig)));
 
@@ -163,7 +142,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
 
     const plan = planRootfs(usage);
 
-    // the backend gives the directory: on ZFS it is a dataset of its own
     await deps.storage.createImage(digest, async (directory) => {
       const image = join(directory, 'rootfs.ext4');
 
@@ -188,7 +166,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     return readDiskUsage(buildImagePaths(deps.config.dataDir, digest).rootfs);
   };
 
-  // an image of the host's engine → its rootfs, unless it has one
   const createRootfs = async (ref: string, digest: string, ociConfig: unknown): Promise<number> => {
     const paths = buildImagePaths(deps.config.dataDir, digest);
 
@@ -200,8 +177,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
 
     const containerId = created.trim();
 
-    // the work directory only once the create has passed, so a refused
-    // create leaves none behind
     try {
       const workDir = makeWorkDir();
 
@@ -217,12 +192,9 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     }
   };
 
-  // one rootfs per digest at a time; a second build of it waits for the first
   const createRootfsOnce = (digest: string, create: () => Promise<number>) =>
     building.run(digest, create);
 
-  // the image row by its name: made, or moved to the new digest, whose old
-  // rootfs goes when nothing else uses it
   const writeImageRow = async (
     imageName: string,
     ref: string,
@@ -248,7 +220,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     return updated;
   };
 
-  // drops an image directory no image row points at any more
   const removeUnusedRootfs = async (digest: string): Promise<void> => {
     const uses = await countImageDigestUses(deps.db, digest);
 
@@ -257,9 +228,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     }
   };
 
-  // removeUnusedRootfs, but while a guest build of the digest counts, which
-  // may have found the rootfs and not yet written its row, the last such
-  // build decides
   const removeIdleRootfs = (digest: string): Promise<void> =>
     guestRootfsLock.runExclusive(digest, async () => {
       if (guestWriters.has(digest)) {
@@ -271,9 +239,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
       await removeUnusedRootfs(digest);
     });
 
-  // An image of the host's engine, pulled there when it lacks it: the
-  // builders' own image, and every add and build under
-  // IMP_BUILD_ISOLATION=host
   const createImageOnHost = async (
     ref: string,
     imageName: string,
@@ -288,10 +253,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
       options.onResolved?.(resolved);
     }
 
-    // the unpack is shared with any add of the same image: no client stops it
     options.setPhase?.('unpack');
-
-    // the tree unpacked, and the ext4 file written from it with its journal
     const treeBytes = inspect.Size ?? 0;
     const buildBytes = 2 * treeBytes + planRootfsOverhead(treeBytes);
     const withRoom = deps.diskBudget.withRoom;
@@ -325,14 +287,13 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
           return Promise.resolve(readDiskUsage(rootfs));
         }
 
-        // marked first: a write that fails after it published the rootfs, as
-        // a ZFS mount can, still leaves it to the cleanup below
+        // A ZFS mount can fail after the rootfs is published, so the rootfs is marked before
+        // the write and the cleanup still removes it.
         freshRootfs.add(digest);
 
         return writeRootfs(guest.root, digest, guest.config);
       });
 
-      // a cancel during mkfs.ext4 commits nothing
       guest.signal.throwIfAborted();
 
       return await writeImageRow(guest.imageName, guest.ref, digest, sizeBytes);
@@ -352,8 +313,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
           return;
         }
 
-        // logged, so the error that ended the write or the row is the one
-        // its caller gets
         try {
           await removeUnusedRootfs(digest);
         } catch (error) {
@@ -365,7 +324,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     }
   };
 
-  // the built image, streamed out of its builder into a rootfs and a row
   const writeGuestImage = (
     exec: GuestExec,
     imageName: string,
@@ -374,8 +332,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   ): Promise<ImageRecord> => {
     const maxBytes = deps.config.build.imageMaxBytes;
 
-    // the tree unpacked, and the ext4 file written from it, held as the
-    // export grows
     return deps.diskBudget.withGrowingRoom((grow) =>
       storageGate.join(async () => {
         const workDir = makeWorkDir();
@@ -408,7 +364,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   return { createImageOnHost, writeGuestImage, removeIdleRootfs };
 }
 
-// a name a client may give an image: BUILDER_IMAGE is impd's
 export function requireClientImageName(name: string): string {
   const imageName = NameSchema.parse(name);
 
@@ -421,8 +376,6 @@ export function requireClientImageName(name: string): string {
   return imageName;
 }
 
-// A template is never rebuilt from docker: its name is made again from an
-// imp (docs/guides/templates.md)
 export function requireDockerImage(existing: ImageRecord | undefined): void {
   if (existing?.source === 'imp') {
     throw buildConflictError(
@@ -433,7 +386,6 @@ export function requireDockerImage(existing: ImageRecord | undefined): void {
   }
 }
 
-// bytes on disk and files in the unpacked image
 async function readTreeUsage(root: string): Promise<{ bytes: number; inodes: number }> {
   const bytes = await runChecked(['du', '-s', '-B1', root]);
   const inodes = await runChecked(['du', '-s', '--inodes', root]);
@@ -441,7 +393,6 @@ async function readTreeUsage(root: string): Promise<{ bytes: number; inodes: num
   return { bytes: parseDuCount(bytes), inodes: parseDuCount(inodes) };
 }
 
-// the count du prints before its path
 export function parseDuCount(stdout: string): number {
   const count = Number(stdout.split(/\s/u)[0]);
 

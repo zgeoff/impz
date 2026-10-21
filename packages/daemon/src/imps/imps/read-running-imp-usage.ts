@@ -2,8 +2,6 @@ import { listImps } from '../../platform/db/imps';
 import type { ImpHost, ImpMemory, ImpVms } from './imp-context';
 import type { ResourceDelta } from './resource-sampler';
 
-// One pass of the sampler over every running VM; an imp that is not running
-// any more leaves the cache. Returns what each used since the last pass.
 export async function readRunningImpUsage(
   context: ImpHost & ImpVms & ImpMemory,
 ): Promise<ResourceDelta[]> {
@@ -32,8 +30,6 @@ export async function readRunningImpUsage(
     }
   }
 
-  // an oops after impd read the flag clear is pinned on its VMs before a
-  // stopped one leaves the sampler, so a later lost VM is judged by it
   if (context.kernelOops.readOopsSeenAt() !== null) {
     context.kernelOops.readOopsOwners(context.resources.listThreadOwners);
   }
@@ -43,7 +39,6 @@ export async function readRunningImpUsage(
   return deltas;
 }
 
-// counts the imp's usage from now: at a spawn and at an adopt
 export function startCounting(
   context: ImpVms & ImpMemory,
   imp: Readonly<{ id: string; slot: number }>,

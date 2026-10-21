@@ -15,14 +15,9 @@ import { readSeenSessions } from './count-sessions';
 import { toSeenSessions } from './session-cache';
 import { toApiSession } from './to-api-session';
 
-// The `sessions` API (docs/architecture/guest/sessions.md#in-the-guest). The sessions
-// live in the guest; impd keeps what it last saw, so a list never wakes an
-// imp.
 export interface SessionService {
   readonly listSessions: (name: string) => Promise<Session[]>;
   readonly killSession: (name: string, session: string) => Promise<void>;
-
-  // the session logs live on the host: none of these wakes or boots the imp
   readonly listSessionLogs: (name: string, session?: string) => Promise<SessionLog[]>;
   readonly readSessionLog: (
     name: string,
@@ -40,8 +35,6 @@ interface SessionServiceParts {
 export function createSessionService(parts: SessionServiceParts): SessionService {
   const context = parts.context;
 
-  // a running imp's agent answers now; one that does not falls back to
-  // what impd saw last
   const readSessions = async (imp: ImpRecord) => {
     if (imp.state === 'running') {
       try {
@@ -54,7 +47,7 @@ export function createSessionService(parts: SessionServiceParts): SessionService
 
         return seen;
       } catch {
-        // the agent is busy or wedged
+        // A busy or wedged agent falls back to the sessions impd saw last.
       }
     }
 
@@ -95,7 +88,6 @@ export function createSessionService(parts: SessionServiceParts): SessionService
       const opened = { release: () => {} };
 
       try {
-        // counted like an exec, so no background sleep lands mid-kill
         const running = await parts.requireRunning(name, (found) => {
           opened.release = context.tracker.open(found.id, 'exec');
         });

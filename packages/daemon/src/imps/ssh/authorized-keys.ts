@@ -3,11 +3,8 @@ import { readFileSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { utils } from 'ssh2';
 
-// One public key from authorized_keys, or one bound to a token.
 export interface AuthorizedKey {
   readonly type: string;
-
-  // the key in SSH wire format, as a client sends it
   readonly blob: Buffer;
   readonly comment: string;
   readonly verify: (data: Buffer, signature: Buffer, hashAlgo: string | undefined) => boolean;
@@ -15,14 +12,11 @@ export interface AuthorizedKey {
 
 export interface ParsedAuthorizedKeys {
   readonly keys: readonly AuthorizedKey[];
-
-  // lines that grant nothing, and why ("line 3: ...")
   readonly problems: readonly string[];
 }
 
-// A key line starts with its type. Anything else starts with options
-// (`from=`, `command=`, `restrict`...), which the gateway does not enforce,
-// so it refuses the line rather than grant more than it says.
+// The gateway does not enforce authorized_keys options such as `from=` or `command=`, so a line
+// that starts with them is refused rather than granting more than it says.
 const KEY_TYPE = /^(?:ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521))$/u;
 
 export function parseAuthorizedKeys(text: string): ParsedAuthorizedKeys {
@@ -49,7 +43,6 @@ export function parseAuthorizedKeys(text: string): ParsedAuthorizedKeys {
   return { keys, problems };
 }
 
-// one key line, or why it grants nothing
 export function parsePublicKey(line: string): AuthorizedKey | string {
   const [type = '', data = '', ...rest] = line.trim().split(/\s+/u);
 
@@ -73,7 +66,6 @@ export function parsePublicKey(line: string): AuthorizedKey | string {
   };
 }
 
-// `SHA256:<base64>` without padding, as `ssh-keygen -l` prints it
 export function formatKeyFingerprint(blob: Buffer): string {
   const digest = createHash('sha256').update(blob).digest('base64');
 
@@ -81,25 +73,18 @@ export function formatKeyFingerprint(blob: Buffer): string {
 }
 
 export interface AuthorizedKeys {
-  // the key a client offers, if the file authorizes it
   readonly readKey: (blob: Buffer) => AuthorizedKey | null;
 
-  // whether the file lists the key, even while its mode grants nothing: a
-  // fixed mode would grant it again
+  // Ignores the file's mode, because fixing the mode would grant a listed key again.
   readonly probeListed: (blob: Buffer) => boolean;
 }
 
 interface FileState {
   readonly stamp: string;
-
-  // every key line, and whether the file's mode lets them log in
   readonly keys: readonly AuthorizedKey[];
   readonly isSafe: boolean;
 }
 
-// Read again whenever it changes, so a key added on the host works on the
-// next connection. A file or directory that group or others can write grants
-// nothing: whoever can write it can add a key.
 export function createAuthorizedKeys(path: string, log: (message: string) => void): AuthorizedKeys {
   const state: { current: FileState | null } = { current: null };
 
@@ -124,7 +109,6 @@ export function createAuthorizedKeys(path: string, log: (message: string) => voi
   };
 }
 
-// what changes when the file or its directory's mode changes
 function readStamp(path: string): string {
   try {
     const file = statSync(path);

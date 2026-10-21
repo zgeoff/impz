@@ -2,11 +2,7 @@ import { expect, test } from 'bun:test';
 import type { CpuStat } from '../../vm/vmm/cpu-cgroups';
 import { createResourceSampler } from './resource-sampler';
 
-// a sampler over counters the test sets, on a clock it moves
 function setupTest() {
-  // each reader needs a value to answer before a test sets its own: the
-  // clock at 0, counters a new VM starts from, and no memory figure or
-  // thread yet
   const state = {
     now: 0,
     cpu: { usageUsec: 0, throttledUsec: 0 } as CpuStat | null,
@@ -105,7 +101,6 @@ test('#readVmUsage counts a counter that dropped as reset, so its whole value is
 
   ctx.sampler.readVmUsage(vm);
 
-  // the tap was made again: its counter starts from zero
   ctx.state.now = 1000;
   ctx.state.net = { rxBytes: 40, txBytes: 0 };
 
@@ -187,7 +182,6 @@ test('#startCounting takes a new baseline for a VM, though its tap holds earlier
   const ctx = setupTest();
   const vm = { impId: 'a', pid: 10, apiSocket: '/api', tap: 'imp0' };
 
-  // the last boot's traffic, still on the tap that outlived it
   ctx.state.net = { rxBytes: 9000, txBytes: 900 };
   ctx.state.now = 1000;
 
@@ -198,7 +192,6 @@ test('#startCounting takes a new baseline for a VM, though its tap holds earlier
 
   ctx.sampler.readVmUsage(vm);
 
-  // impd adopts the same VM: its counts start again at the adopt
   ctx.state.now = 7000;
 
   ctx.sampler.startCounting(vm);
@@ -213,7 +206,6 @@ test('#startCounting counts the traffic after the baseline only', () => {
   const ctx = setupTest();
   const vm = { impId: 'a', pid: 10, apiSocket: '/api', tap: 'imp0' };
 
-  // a VM that used no CPU, and whose memory impd could not read
   ctx.state.cpu = { usageUsec: 4_000_000, throttledUsec: 0 };
   ctx.state.memory = { ramMib: null, rssMib: null };
   ctx.state.net = { rxBytes: 9100, txBytes: 910 };
@@ -276,7 +268,6 @@ test('#listThreadOwners lists the imp whose VM had the thread at an earlier look
 
   ctx.sampler.readVmUsage(vm);
 
-  // the thread is gone from the task list, and the process with it
   ctx.state.threads = [10];
 
   ctx.sampler.readVmUsage(vm);

@@ -6,14 +6,11 @@ import { isLockedImp, toLockedImp } from './imp-lock';
 import type { LockedImp } from './imp-lock';
 import { requireTransition } from './imp-transitions';
 
-// An imp's state write: only under its lifecycle lock, and only along the
-// lifecycle table (docs/architecture/lifecycle/lifecycle.md#states)
 export async function updateLockedImpState(
   db: ImpDatabase,
   imp: LockedImp,
   change: Readonly<ImpStateChange>,
 ): Promise<LockedImp> {
-  // the type alone trusts a caller's cast
   const record: ImpRecord = imp;
 
   if (!isLockedImp(record)) {

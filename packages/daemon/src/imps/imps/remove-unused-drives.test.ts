@@ -15,10 +15,6 @@ import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-met
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths, buildSystemDrivePath } from '../../vm/storage/data-layout';
 
-// An upgrade as imp-host does it: SIGTERM sleeps every awake imp, and a new
-// impd starts on a new system drive (an agent change), over the same data;
-// its start reconciles, then runs the drive sweep, removeUnusedDrives.
-
 async function setupTest(options: Pick<TestImpdOptions, 'env' | 'cgroups'> = {}) {
   const stack = new AsyncDisposableStack();
 
@@ -26,12 +22,9 @@ async function setupTest(options: Pick<TestImpdOptions, 'env' | 'cgroups'> = {})
 
   const harness = await startTestImpd(stack, options);
 
-  // every create boots this image
   await harness.createTestImage('ubuntu');
 
-  // assigned, not spread: the harness's parts follow a restarted impd
   return Object.assign(harness, {
-    // the drive the harness's impd started on, before any upgrade
     oldDrive: harness.readIdentity().systemDrive,
   });
 }
@@ -54,7 +47,6 @@ test('it keeps every imp through an agent upgrade, and asleep on the kept drive'
   const broken = await waitForOutcome(breaking, 10_000);
   const image = await ctx.images.resolveImage('ubuntu');
 
-  // a create impd never finished
   const creating = await createImp(
     ctx.db,
     buildMockNewImp({ name: 'creating', imageId: image.id, slot: 9, ip: '10.66.0.38' }),
@@ -67,7 +59,6 @@ test('it keeps every imp through an agent upgrade, and asleep on the kept drive'
   await ctx.imps.sleepAllImps();
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  // the drives each impd's start swept
   const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
 
   const imps = await ctx.client.imps.list();
@@ -98,7 +89,6 @@ test('it wakes a kept imp on the old agent after an agent upgrade', async () => 
   const awake = await ctx.client.imps.create({ name: 'awake' });
   const asleep = await ctx.client.imps.create({ name: 'asleep' });
 
-  // markers in the disks, to see that no upgrade path touches them
   writeFileSync(buildImpPaths(ctx.dataDir, awake.id).disk, 'disk of awake');
   writeFileSync(buildImpPaths(ctx.dataDir, asleep.id).disk, 'disk of asleep');
 
@@ -126,7 +116,6 @@ test('it starts a stopped imp on the new agent after an agent upgrade', async ()
   const ctx = await setupTest();
   const off = await ctx.client.imps.create({ name: 'off' });
 
-  // a marker in the disk, to see that no upgrade path touches it
   writeFileSync(buildImpPaths(ctx.dataDir, off.id).disk, 'disk of off');
 
   await ctx.client.imps.stop({ name: 'off' });
@@ -169,7 +158,6 @@ test('it boots cold a sleeping imp whose drive is gone, and keeps its disk', asy
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  // a marker in the disk, to see that the cold boot keeps it
   writeFileSync(paths.disk, 'disk of dev');
 
   await ctx.imps.sleepAllImps();
@@ -189,7 +177,6 @@ test('it boots cold a sleeping imp whose drive is gone, and keeps its disk', asy
 });
 
 test('it wakes a jailed imp with its memory on the old drive after an agent upgrade', async () => {
-  // a jailed VM starts only in its own cgroup
   const ctx = await setupTest({
     cgroups: buildStubCpuCgroups({ isMemoryEnforced: true }).cgroups,
     env: { IMP_JAILER: 'true' },
@@ -213,11 +200,8 @@ test('it marks a VM re-adopted after a drive change as on the old agent', async 
   const ctx = await setupTest();
 
   await ctx.client.imps.create({ name: 'dev' });
-
-  // SIGHUP: impd restarts on the new drive and the VM keeps running
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  // the drives each impd's start swept
   const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
 
   const awake = await ctx.client.imps.get({ name: 'dev' });
@@ -232,7 +216,6 @@ test('it records in the snapshot the drive a re-adopted VM booted from', async (
 
   const oldDrivePath = ctx.readIdentity().systemDrivePath;
 
-  // SIGHUP: impd restarts on the new drive and the VM keeps running
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
   await ctx.client.imps.sleep({ name: 'dev' });
 
@@ -246,8 +229,6 @@ test('it wakes a re-adopted VM from the old drive its snapshot names', async () 
   const ctx = await setupTest();
 
   await ctx.client.imps.create({ name: 'dev' });
-
-  // SIGHUP: impd restarts on the new drive and the VM keeps running
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
   const upgraded = ctx.client;
@@ -271,7 +252,6 @@ test('it keeps the newer drive on a downgrade while a snapshot names it', async 
   await ctx.imps.sleepAllImps();
   await ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
 
-  // the drives each impd's start swept
   const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
 
   expect(pruned).toBeEmpty();
@@ -310,7 +290,6 @@ test('it prunes the newer drive once nothing names it', async () => {
   await ctx.client.imps.stop({ name: 'dev' });
   await ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
 
-  // the drives each impd's start swept
   const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
 
   expect(pruned).toStrictEqual([
@@ -329,7 +308,6 @@ test('it says a snapshot from an older impd boots cold', async () => {
 
   invariant(meta);
 
-  // an older impd wrote no drive path and hashed with Bun.hash
   const { systemDrivePath: _path, agentVersion: _agent, ...legacy } = meta;
 
   writeSnapshotMeta(paths, { ...legacy, systemDrive: '9f3c51a07e2b44d1' });
@@ -350,7 +328,6 @@ test('it boots cold once a snapshot from an older impd, and keeps the disk', asy
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  // a marker in the disk, to see that the cold boot keeps it
   writeFileSync(paths.disk, 'disk of dev');
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -359,7 +336,6 @@ test('it boots cold once a snapshot from an older impd, and keeps the disk', asy
 
   invariant(meta);
 
-  // an older impd wrote no drive path and hashed with Bun.hash
   const { systemDrivePath: _path, agentVersion: _agent, ...legacy } = meta;
 
   writeSnapshotMeta(paths, { ...legacy, systemDrive: '9f3c51a07e2b44d1' });
@@ -416,7 +392,6 @@ test('it keeps the disk to a woken VM with the wrong agent that will not stop', 
   const imp = await readImpByName(ctx.db, 'dev');
   const invariants = await readBrokenInvariants(ctx, true);
 
-  // no cold boot: the VM that would not stop still has the disk open
   expect(outcome).toBe('failed');
 
   expect(waking).rejects.toMatchObject({
@@ -439,7 +414,6 @@ test('it runs a boot whose vm.json cannot be written, and logs why', async () =>
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  // a directory in the way: the rename over it fails, as a full disk would
   rmSync(paths.vmIdentity);
   mkdirSync(`${paths.vmIdentity}/blocked`, { recursive: true });
 
@@ -493,7 +467,6 @@ test('it clears on a sleep the reason the last boot was cold', async () => {
 
   const upgraded = ctx.client;
 
-  // the cold boot that sets the reason
   await upgraded.imps.wake({ name: 'dev' });
   await upgraded.imps.sleep({ name: 'dev' });
 
@@ -514,7 +487,6 @@ test('it never removes a drive in use when the data dir moved, by its file name'
 
   invariant(meta);
 
-  // the snapshot names the drive under the data dir's old place
   writeSnapshotMeta(paths, {
     ...meta,
     systemDrivePath: `/old/imp/system/drives/${ctx.oldDrive}.squashfs`,
@@ -522,7 +494,6 @@ test('it never removes a drive in use when the data dir moved, by its file name'
 
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  // the drives each impd's start swept
   const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
 
   expect(pruned).toBeEmpty();
@@ -541,7 +512,6 @@ test('it counts in system.info the imps an agent upgrade left outdated or withou
   await ctx.imps.sleepAllImps();
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  // a sleeping imp whose snapshot is gone has nothing to load
   rmSync(buildImpPaths(ctx.dataDir, lost.id).snapshotDir, { recursive: true });
 
   const info = await ctx.client.system.info();
@@ -573,8 +543,6 @@ test('it counts in system.info a running imp on an older firecracker as a cold b
   const ctx = await setupTest();
 
   await ctx.client.imps.create({ name: 'dev' });
-
-  // a new Firecracker re-adopts the VM the old one runs
   await ctx.restartImpd({ ...ctx.readIdentity(), firecrackerVersion: 'v1.18.0' });
 
   const info = await ctx.client.system.info();
@@ -589,8 +557,6 @@ test('it says a running imp on an older firecracker boots cold after its sleep',
   const ctx = await setupTest();
 
   await ctx.client.imps.create({ name: 'dev' });
-
-  // a new Firecracker re-adopts the VM the old one runs
   await ctx.restartImpd({ ...ctx.readIdentity(), firecrackerVersion: 'v1.18.0' });
 
   const client = ctx.client;

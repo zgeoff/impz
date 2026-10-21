@@ -373,7 +373,6 @@ test('it holds the guest output past the window while the client has not acked',
   dial.emit({ type: 'data', data: new TextEncoder().encode('y') });
   dial.emit({ type: 'data', data: new TextEncoder().encode('z') });
 
-  // the tunnel has taken all three, so only the window holds the last
   await waitFor(() => {
     expect(dial.countUnread()).toBe(0);
   });
@@ -448,9 +447,6 @@ test('it holds the ack of the client bytes until the guest has taken them', asyn
 
   session.handleMessage(new TextEncoder().encode('abc'));
   session.handleMessage(new TextEncoder().encode('de'));
-
-  // guest bytes reach the client over later turns of the event loop, by
-  // which time an unheld ack would have gone out
   dial.emit({ type: 'data', data: new TextEncoder().encode('reply') });
 
   const received = await waitFor(() => {

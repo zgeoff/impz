@@ -18,7 +18,6 @@ async function setupTest() {
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
-  // an imp's logs directory, as impd lays it out under its data dir
   return { root, sessionLogsDir: join(root, 'imps', 'x', 'session-logs') };
 }
 
@@ -249,7 +248,6 @@ test('#readSessionLogRange reads a segment the bound removed between the plan an
   mkdirSync(directory, { recursive: true });
   writeFileSync(join(directory, '100.seg'), 'later');
 
-  // the first look still counts the segment at 0, whose file has gone
   const fresh = buildMockGenerationMeta({
     session: 'main',
     executionGeneration: 'd'.repeat(32),

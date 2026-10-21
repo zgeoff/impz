@@ -26,8 +26,6 @@ async function setupTest() {
 
   const logged: string[] = [];
 
-  // imp-docker-proxy on a unix socket as its main serves it; the returned
-  // send carries a request to it over a real connection
   const startProxy = (options: Readonly<DockerProxyOptions>) => {
     const socket = join(directory, 'proxy.sock');
 
@@ -372,7 +370,6 @@ test('it removes a container it created by its full ID, with its volumes', async
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-// another proxy's token, which an image's own label could also set
 test('it refuses the export of a container whose label holds another token', async () => {
   const ctx = await setupTest();
 
@@ -601,7 +598,6 @@ test('it sends a build without a Content-Type to the engine as a tar', async () 
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-// a form body would replace or add to the checked query: the engine reads r.Form
 test.each([
   ['application/x-www-form-urlencoded'],
   ['application/x-www-form-urlencoded; charset=utf-8'],
@@ -645,8 +641,6 @@ test.each([
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-// the body, encoded as fetch encodes a form, would move the build to the
-// host's network, a remote context, a tag outside imp/ and the classic builder
 test('it refuses a build with a form body as fetch encodes a URLSearchParams', async () => {
   const ctx = await setupTest();
 
@@ -747,7 +741,6 @@ test('it ends a build on the engine when its client goes', async () => {
   const started = Promise.withResolvers<void>();
   const gone = Promise.withResolvers<void>();
 
-  // a build that never answers until its client goes
   ctx.engine.setAnswer(async (request, seen) => {
     if (!seen.target.startsWith('/v1.55/build')) {
       return null;
@@ -782,7 +775,6 @@ test('it ends a build on the engine when its client goes', async () => {
 
   await started.promise;
 
-  // the client drops its connection to the proxy
   client.abort();
 
   await building.catch(() => {});
@@ -955,7 +947,6 @@ test('it ends a create the engine never answers at the control deadline, and the
 
   const gone = Promise.withResolvers<void>();
 
-  // a create that never answers until its caller goes
   ctx.engine.setAnswer(async (request) => {
     await new Promise((resolve) => {
       request.signal.addEventListener('abort', resolve);
@@ -981,8 +972,6 @@ test('it ends a create the engine never answers at the control deadline, and the
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-// Bun's fetch gives up on an answer silent for 360 s, as a build's quiet RUN
-// step is; images/docker-build.test.ts checks that limit in a child Bun
 test('it holds a build, a pull and an export past the control deadline that ends a create', async () => {
   const ctx = await setupTest();
 
@@ -1000,7 +989,6 @@ test('it holds a build, a pull and an export past the control deadline that ends
 
   const release = Promise.withResolvers<void>();
 
-  // the long calls answer once released; a create answers only when it goes
   ctx.engine.setAnswer(async (request, seen) => {
     const isLong =
       seen.target.startsWith('/v1.55/build') ||
@@ -1062,9 +1050,8 @@ test('it holds a build, a pull and an export past the control deadline that ends
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-// Bun reads its fetch idle limit (360 s by default) only at startup, so the
-// proxy runs in a child Bun with 1 s; the child's plain fetch is the control
-// that the limit expires, after about 8 s on Bun 1.4.2
+// Bun reads its fetch idle limit only at startup, so the proxy runs in a child Bun with a 1 s
+// limit. On Bun 1.4.2 the child's plain fetch gives up after about 8 s.
 test('it passes on a pull and an export that stay silent past Bun’s idle limit, where a plain fetch gives up', async () => {
   const ctx = await setupTest();
 
@@ -1074,8 +1061,6 @@ test('it passes on a pull and an export that stay silent past Bun’s idle limit
 
   const socket = join(ctx.directoryPath, 'silent-engine.sock');
 
-  // the export's ownership inspect answers at once; the pull and the export
-  // stay silent
   startStubSilentOrigin(stack, {
     unix: socket,
     answerAtOnce: (request) =>
@@ -1097,7 +1082,6 @@ test('it passes on a pull and an export that stay silent past Bun’s idle limit
     },
   );
 
-  // the child goes first, before the engine it calls
   stack.defer(() => {
     child.kill();
   });
@@ -1116,8 +1100,6 @@ test('it passes on a pull and an export that stay silent past Bun’s idle limit
   ]);
 }, 30_000);
 
-// fake timers run 400 s of an engine that sends nothing: no timer on the
-// proxy's side ends a pull or an export; the test above covers Bun's limit
 test('it passes on a pull and an export the engine answers after 400 s of fake time', async () => {
   const ctx = await setupTest();
 
@@ -1140,7 +1122,6 @@ test('it passes on a pull and an export the engine answers after 400 s of fake t
     release.resolve();
   });
 
-  // the pull and the export answer once released
   ctx.engine.setAnswer(async (_request, seen) => {
     if (seen.target.startsWith('/v1.55/images/create') || seen.target.endsWith('/export')) {
       held.count += 1;
@@ -1359,8 +1340,6 @@ test('it refuses every build under imp isolation', async () => {
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-// #173: impd reads the proxy's message alone back out of its body and out
-// of the CLI's stderr, and answers it as the client's BAD_REQUEST
 test('it refuses a pull from a loopback registry with a refusal that reads back alone', async () => {
   const ctx = await setupTest();
 

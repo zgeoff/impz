@@ -30,7 +30,6 @@ test.each<[ImpState, ImpState]>([
   expect(canTransition(from, to)).toBeFalse();
 });
 
-// a caller past the types can pass any string, so the table must refuse it
 test.each<[string, string, string]>([
   ['constructor', 'name', 'Object'],
   ['__proto__', 'constructor', 'any'],

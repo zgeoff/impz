@@ -16,20 +16,13 @@ import type { ImpHost, ImpMemory, ImpVms } from './imp-context';
 import type { LockedImp } from './imp-lock';
 import type { ImpVmOps } from './imp-vm-ops';
 
-// What a restart makes of the VMs the last impd left: every Firecracker on an
-// imp's API socket and of its owner (isImpVm), found by its pid file or in
-// /proc, that no record owns.
 export interface VmReconciler {
-  // under the imp's lock: kills the VMs its record does not own, resumes one
-  // a cut sleep left paused, and adopts one a cut wake left running
   readonly reconcileImp: (imp: LockedImp) => Promise<LockedImp>;
 
-  // Firecrackers on the socket of an imp that has no record at all
   readonly killUnknownVms: (ids: ReadonlySet<string>) => Promise<void>;
 }
 
-// how long GET / may stay silent before a VM counts as dead: Firecracker
-// answers nothing while it loads a large snapshot
+// Firecracker answers nothing on GET / while it loads a large snapshot.
 const STATE_WAIT_MS = 10_000;
 const STATE_RETRY_MS = 250;
 
@@ -51,9 +44,8 @@ export function createVmReconciler(
     }
   };
 
-  // the pid file a start wrote, and every process on the exact socket: impd
-  // can die before the file, and a retried start leaves two. Either is the
-  // imp's only when its owner is.
+  // impd can die before a start writes its pid file, and a retried start
+  // leaves two VMs, so the socket's processes count as well.
   const readVms = (imp: LockedImp, paths: ImpPaths): number[] => {
     const pids = new Set(
       context.vms
@@ -75,7 +67,6 @@ export function createVmReconciler(
     return [...pids].toSorted((left, right) => left - right);
   };
 
-  // false when the VM survived SIGKILL
   const stopOrphan = async (name: string, pid: number, paths: ImpPaths): Promise<boolean> => {
     try {
       await context.vms.stopVm(pid, paths, false);
@@ -90,15 +81,12 @@ export function createVmReconciler(
     }
   };
 
-  // The VM a wake left when impd died: the load ran unless GET / says it
-  // never started. One that loaded gets the rest of the wake; one that fails
-  // it ran the guest, which may have written the disk, so the snapshot goes.
   const wakeOrphan = async (imp: LockedImp, paths: ImpPaths, pid: number): Promise<LockedImp> => {
     const state = await readVmStateWithin(paths);
 
     const loading = readLoadingMeta(paths);
 
-    // the guest never ran, so its disk is as the snapshot left it
+    // The guest never ran, so its disk is as the snapshot left it.
     if (state === 'Not started') {
       await stopOrphan(imp.name, pid, paths);
 
@@ -161,8 +149,6 @@ export function createVmReconciler(
       context.admission?.release(imp.id);
       removeSnapshot(paths);
 
-      // a VM that will not die keeps its pid on the record, so a start or a
-      // destroy kills it again
       if (!(await stopOrphan(imp.name, pid, paths))) {
         return ops.updateState(imp, {
           reason: 'failed',
@@ -181,8 +167,6 @@ export function createVmReconciler(
     }
   };
 
-  // a sleep resumes a paused VM when its snapshot fails; one cut short by
-  // impd's death never did
   const checkPaused = async (imp: LockedImp, paths: ImpPaths): Promise<void> => {
     if (imp.pid === null || (await context.vms.readVmState(paths)) !== 'Paused') {
       return;
@@ -203,7 +187,6 @@ export function createVmReconciler(
 
       removePartialFiles(paths);
 
-      // a running, creating or failed record owns its pid
       const owned = imp.state === 'sleeping' || imp.state === 'stopped' ? null : imp.pid;
       const orphans = readVms(imp, paths).filter((pid) => pid !== owned);
       const [only] = orphans;
@@ -216,7 +199,6 @@ export function createVmReconciler(
         await stopOrphan(imp.name, pid, paths);
       }
 
-      // more than one wake ran: whichever loaded, the snapshot is spent
       if (imp.state === 'sleeping' && orphans.length > 1) {
         removeSnapshot(paths);
 
@@ -228,7 +210,6 @@ export function createVmReconciler(
         });
       }
 
-      // a load ran and its VM is gone: the guest may have written its disk
       if (imp.state === 'sleeping' && readLoadingMeta(paths) !== null) {
         context.log(`impd: ${imp.name}: a wake was cut and its VM is gone; it boots cold next`);
 
@@ -263,8 +244,6 @@ export function createVmReconciler(
   };
 }
 
-// what a crash can leave half written: a sleep's new snapshot files, and the
-// next version of a record that is renamed over the old one
 function removePartialFiles(paths: ImpPaths): void {
   const slot = buildWatchdogSlot(paths.directory);
 
@@ -281,7 +260,6 @@ function removePartialFiles(paths: ImpPaths): void {
   }
 }
 
-// the imp id when `apiSocket` is exactly the socket of one under `dataDir`
 function parseImpId(dataDir: string, apiSocket: string): string | null {
   const prefix = `${buildImpsDir(dataDir)}/`;
 

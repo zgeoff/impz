@@ -2,49 +2,34 @@ import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { AgentExecRequest, ExecStream } from '../../vm/agent-client/exec-stream';
 
-// the most of a step's stdout impd keeps when nothing streams it, and of its
-// stderr, from the end
 const STDOUT_MAX_BYTES = 1024 ** 2;
 const STDERR_TAIL_BYTES = 64 * 1024;
-
-// SIGKILL, to the step's process group
 const SIGKILL = 9;
 
 interface GuestRun {
   readonly exitCode: number;
   readonly stdout: string;
 
-  // its last STDERR_TAIL_BYTES
   readonly stderr: string;
 }
 
 interface GuestRunOptions {
-  // a file the step reads as its stdin, sent at the pace the guest takes it
   readonly stdinPath?: string;
 
-  // each stdout chunk, awaited before the next is read; stdout is then not
-  // kept
   readonly onStdout?: (chunk: Uint8Array) => Promise<void>;
 
-  // each stderr chunk as it comes; its tail is kept as well
   readonly onStderr?: (chunk: Uint8Array) => void;
 
-  // a step that does not exit by then is killed
   readonly timeoutMs?: number;
   readonly signal: AbortSignal;
 }
 
-// one command in the builder, as root
 export type GuestExec = (argv: readonly string[], options: GuestRunOptions) => Promise<GuestRun>;
 
-// The step's stdout grew past what impd keeps
 export class GuestOutputError extends Error {
   override readonly name = 'GuestOutputError';
 }
 
-// Runs each step through `open`, which reaches the builder's agent: stdin
-// from a file, stdout kept or streamed, stderr's tail kept. A step's
-// timeout runs on `startTimer`, setTimeout by default.
 export function createGuestExec(
   open: (request: AgentExecRequest) => Promise<ExecStream>,
   startTimer: StartTimer = startRealTimer,
@@ -54,7 +39,6 @@ export function createGuestExec(
 
     const stream = await open({ argv: [...argv], tty: false, user: '0' });
 
-    // an abort while the exec opened came before its listener
     if (options.signal.aborted) {
       stream.close();
       options.signal.throwIfAborted();
@@ -79,8 +63,8 @@ export function createGuestExec(
           }, options.timeoutMs);
 
     try {
-      // the step may write while it reads: a build's log flows as its
-      // context goes in
+      // docker build writes its log while it reads the context from stdin, so stdin is sent
+      // beside the event loop rather than before it.
       const sending =
         options.stdinPath === undefined
           ? Promise.resolve(null)
@@ -145,7 +129,6 @@ export function createGuestExec(
   };
 }
 
-// the file into the step's stdin; the error that stopped it, else null
 async function sendStdin(
   stream: Readonly<ExecStream>,
   path: string,
@@ -167,7 +150,6 @@ async function sendStdin(
   }
 }
 
-// the last maxBytes of what is written
 function createTail(maxBytes: number) {
   const chunks: Uint8Array[] = [];
   const held = { bytes: 0 };

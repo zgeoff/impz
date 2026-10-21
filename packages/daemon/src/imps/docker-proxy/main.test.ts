@@ -13,7 +13,6 @@ test('it refuses to start without IMP_HOST_IMAGE', () => {
   );
 });
 
-// the values impd itself refuses, so the two never disagree
 test.each([
   ['IMP_BUILD_ISOLATION', 'none', 'IMP_BUILD_ISOLATION is none, not imp or host'],
   [

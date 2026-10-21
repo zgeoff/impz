@@ -14,30 +14,20 @@ import { PIN_INSPECT_FORMAT, PinInspectSchema, formatPlatform, pickRepoDigest } 
 import { planRootfsOverhead } from './rootfs-plan';
 import { UNPACK_TAR_ARGS, assertUnpacked } from './unpack-export';
 
-// the tag of the one image a builder makes
 const GUEST_BUILD_TAG = 'imp-build:latest';
-
-// the tail of a failed build's log the client gets
 const LOG_MAX_CHARS = 8000;
 const ContainerIdSchema = z.string().regex(/^[a-f0-9]{64}$/v);
-
-// the image's Config, as `docker image inspect` gives it; null for none
 const OciConfigSchema = z.record(z.string(), z.unknown()).nullable();
 
 export interface GuestBuildOptions {
-  // the build context with its pinned Dockerfile, a tar file
   readonly tarPath: string;
 
-  // the Dockerfile's path inside the context
   readonly dockerfile: string;
   readonly signal: AbortSignal;
 
-  // hears each line of the build's plain progress, and its steps
   readonly output?: BuildOutput | undefined;
 }
 
-// The build, on the builder's engine, its context on stdin. A failed build's
-// log comes back in the error, capped.
 export async function runGuestBuild(
   exec: GuestExec,
   options: Readonly<GuestBuildOptions>,
@@ -74,17 +64,12 @@ export async function runGuestBuild(
 }
 
 export interface GuestPullOptions {
-  // the reference with its tag or digest written out
   readonly ref: string;
 
-  // the builder engine's own, `linux/amd64`
   readonly platform: string;
   readonly signal: AbortSignal;
 }
 
-// An add's pull on the builder's engine, for a platform named in full, as
-// the builder's one image; returns the registry digest it reports, for the
-// log only.
 export async function loadGuestImage(
   exec: GuestExec,
   options: Readonly<GuestPullOptions>,
@@ -131,38 +116,27 @@ export async function loadGuestImage(
   return pickRepoDigest(ref, inspect.RepoDigests ?? []);
 }
 
-// a build's digest names no Docker image ID, nor a template's `imp-<uuid>`
 const DIGEST_PREFIX = 'imp-build-';
 const DIGEST_DOMAIN = 'imp build image v1\n';
 
 export interface ExportedImage {
-  // DIGEST_PREFIX and the sha256 of DIGEST_DOMAIN, the Config's JSON with
-  // its length in front, and the export, as impd read them: the builder
-  // names nothing on the host
+  // impd hashes the export as it reads it, so the builder names nothing on the host.
   readonly digest: string;
   readonly config: z.infer<typeof OciConfigSchema>;
 }
 
 export interface ExportLimits {
-  // the archive's bytes, and the disk its entries take: their logical sizes,
-  // so sparse files count in full, in whole blocks
   readonly maxBytes: number;
 
-  // tar's own count of what it unpacked, so a stream cannot hide entries
-  // from a second parser
+  // Counted from tar's own listing, so an archive cannot hide entries from a second parser.
   readonly maxFiles: number;
 }
 
-// how long a builder's export may send nothing before impd ends it
 const EXPORT_IDLE_MS = 120_000;
-
-// how far ahead of the export the disk is held at a time
 const GROW_STEP_BYTES = 256 * 1024 ** 2;
 
-// the export's end when its tar fails first
 const TAR_STOPPED = new Error('tar stopped before the export ended');
 
-// the digest's hash, once the export has gone into it
 function createImageHash(configText: string): Bun.CryptoHasher {
   const config = new TextEncoder().encode(configText);
   const length = new Uint8Array(8);
@@ -178,12 +152,10 @@ function createImageHash(configText: string): Bun.CryptoHasher {
   return hash;
 }
 
-// a filesystem block; every entry is counted as at least one
 const BLOCK_BYTES = 4096;
 
-// An entry's share of the disk from its `tar -vv` line: the third field is
-// its logical size, a sparse file's full length. Links, devices and empty
-// files still take a block.
+// The third field of a `tar -vv` line is the entry's logical size, a sparse file's full
+// length.
 function readAllocatedBytes(line: string): number {
   const size = line.trim().split(/\s+/v)[2] ?? '';
   const bytes = /^\d+$/v.test(size) ? Number(size) : 0;
@@ -191,9 +163,8 @@ function readAllocatedBytes(line: string): number {
   return Math.max(1, Math.ceil(bytes / BLOCK_BYTES)) * BLOCK_BYTES;
 }
 
-// tar -vv prints one line per entry it unpacks, names escaped, and a
-// "Creating directory:" line for each parent a member names that the
-// archive does not; past either limit it is killed
+// tar -vv prints one line per entry it unpacks, and a "Creating directory:" line for each
+// parent a member names that the archive lacks.
 async function countUnpacked(
   stdout: ReadableStream<Uint8Array>,
   limits: Readonly<ExportLimits>,
@@ -230,9 +201,6 @@ async function countUnpacked(
   }
 }
 
-// The built image's filesystem, streamed out of the builder into root by
-// the same tar as every image add, as root; no host engine reads it.
-// Everything the builder sends here is data the build could have shaped.
 export async function writeGuestTree(
   exec: GuestExec,
   root: string,
@@ -274,20 +242,15 @@ export async function writeGuestTree(
   const sent = { bytes: 0 };
   const unpacked: { over?: 'bytes' | 'files'; ended?: boolean } = {};
 
-  // ends the export, which a stalled builder would keep open, as soon as
-  // its tar is gone or it sends nothing for EXPORT_IDLE_MS
   const stopExport = new AbortController();
 
   const readMax = (limit: 'bytes' | 'files') => (limit === 'bytes' ? maxBytes : limits.maxFiles);
 
-  // tar's listing may come only as it exits, which can be after the end of
-  // the archive and before the end of the export
+  // tar's listing can arrive only as tar exits, after the end of the archive and before the
+  // end of the export.
   const listed = { bytes: 0 };
   const held = { bytes: 0 };
 
-  // twice the larger of the archive and the disk its entries take: the tree,
-  // then its ext4 file, with the ext4 file's journal; in steps, ahead of what
-  // tar has listed, with the tree the disk shows written so far
   const growHold = async () => {
     const tree = Math.max(sent.bytes, listed.bytes);
     const needed = 2 * tree + planRootfsOverhead(tree);
@@ -338,7 +301,6 @@ export async function writeGuestTree(
     );
   };
 
-  // each chunk starts the limit again
   const idle = { cancel: startTimer(stopIdle, EXPORT_IDLE_MS) };
 
   const stderrText = new Response(tar.stderr).text();
@@ -380,12 +342,10 @@ export async function writeGuestTree(
     assertWithinLimits();
     assertUnpacked({ exitCode, stdout: '', stderr });
 
-    // what tar listed after the last chunk
     await growHold();
   } catch (error) {
     tar.kill();
 
-    // a write to the tar it killed fails first
     assertWithinLimits();
 
     if (stopExport.signal.reason === TAR_STOPPED) {

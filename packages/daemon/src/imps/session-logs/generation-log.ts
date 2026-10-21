@@ -15,14 +15,8 @@ import {
 import { getLogBounds } from './plan-log-read';
 import type { LogBounds, LogSegment } from './plan-log-read';
 
-// One generation's log (docs/architecture/guest/sessions.md#session-logs): segment
-// files, `<start>.seg`, and `meta.json`, which counts the bytes of each that
-// reached the disk first. A torn tail past that count is never read.
-
 const META_FILE = 'meta.json';
 const SEGMENT_SUFFIX = '.seg';
-
-// the most a host crash loses of a tapped session's output
 const COMMIT_DELAY_MS = 1000;
 const OffsetSchema = z.int().nonnegative();
 
@@ -33,19 +27,14 @@ const GenerationMetaSchema = z.object({
   bootId: AgentBootIdSchema,
   startedAt: z.int(),
 
-  // where the log began while it holds no segment
   origin: OffsetSchema,
   segments: z.array(z.object({ start: OffsetSchema, length: OffsetSchema })),
   state: z.enum(['live', 'ended']),
 
-  // once ended: when; and the final end and exit code (null for a signal)
-  // when impd saw the exit, not when the VM went first
   endedAt: z.int().optional(),
   end: OffsetSchema.optional(),
   exitCode: z.int().nullable().optional(),
 
-  // logging stopped before the generation ended: the host disk reached its
-  // reserve, or the imp's logs their bound
   stopped: z.enum(['disk_full', 'imp_limit']).optional(),
 });
 
@@ -61,46 +50,33 @@ export interface GenerationEnd {
 }
 
 export interface GenerationLog {
-  // the meta with live segment lengths: what a read on this host may see,
-  // since every counted byte is in the page cache
   readonly readMeta: () => GenerationMeta;
 
-  // where an empty log starts, before its first byte
   readonly setOrigin: (offset: number) => void;
 
-  // appends output that starts at the log's end
   readonly append: (data: Uint8Array) => Promise<void>;
 
-  // the tap skipped to `offset`: the next byte starts a new segment there
   readonly skipTo: (offset: number) => void;
 
-  // false when no segment could go: one is always kept
   readonly removeOldestSegment: () => Promise<boolean>;
   readonly finish: (end: Readonly<GenerationEnd>) => Promise<void>;
   readonly stop: (reason: StopReason) => Promise<void>;
 
-  // flushes what was appended now, not at the next commit
   readonly commit: () => Promise<void>;
 
-  // stops writing and drops what is pending: the directory is about to go
   readonly abandon: () => void;
 }
 
 export interface GenerationLogOptions {
   readonly directory: string;
 
-  // a log keeps at most maxBytes of segments of segmentBytes each, so at
-  // least maxBytes less one segment of its newest output
   readonly segmentBytes: number;
   readonly maxBytes: number;
 
-  // throws DISK_FULL when a new segment would reach the host's reserve
   readonly requireRoom: (bytes: number) => Promise<void>;
   readonly now: () => number;
   readonly log: (message: string) => void;
 
-  // starts the timer that flushes appended bytes and returns its cancel;
-  // an unref'd setTimeout by default, a test passes one it fires
   readonly startTimer?: StartTimer;
 }
 
@@ -112,7 +88,6 @@ export function getSegmentPath(directory: string, start: number): string {
   return join(directory, `${String(start)}${SEGMENT_SUFFIX}`);
 }
 
-// The meta as written; null for a directory without a readable one.
 export function readGenerationMeta(directory: string): GenerationMeta | null {
   const path = join(directory, META_FILE);
 
@@ -135,7 +110,6 @@ export function getGenerationBounds(meta: GenerationMeta): LogBounds {
   return getLogBounds(meta.segments, meta.origin);
 }
 
-// A new log for a generation impd has not logged before.
 export async function createGenerationLog(
   options: GenerationLogOptions,
   identity: Readonly<Pick<StoredMeta, 'session' | 'executionGeneration' | 'bootId'>>,
@@ -156,8 +130,6 @@ export async function createGenerationLog(
   return log;
 }
 
-// Reopens a live log an earlier impd wrote: each segment is cut to its
-// count, and files the meta does not name go.
 export async function loadGenerationLog(
   options: GenerationLogOptions,
   meta: GenerationMeta,
@@ -173,8 +145,8 @@ export async function loadGenerationLog(
       continue;
     }
 
-    // a file shorter than its count lost bytes after their flush: keep what
-    // is there
+    // A host crash can leave a segment file shorter than its count, so the
+    // log keeps what is there.
     const length = Math.min(size, segment.length);
 
     if (size > length) {
@@ -234,19 +206,15 @@ function startGenerationLog(options: GenerationLogOptions, initial: GenerationMe
   const state = {
     file: null as FileHandle | null,
 
-    // the meta's entry for the segment the open file writes
     current: null as StoredMeta['segments'][number] | null,
     skipTo: null as number | null,
 
-    // the pending commit timer's cancel
     cancelTimer: null as (() => void) | null,
 
-    // set once the log finished or stopped: later output is not kept
     settled: initial.state === 'ended' || initial.stopped !== undefined,
     abandoned: false,
   };
 
-  // every write waits for the one before it, under one key
   const writes = buildKeyedMutex();
 
   const runInOrder = <T>(task: () => Promise<T>, fallback: T): Promise<T> =>
@@ -264,7 +232,6 @@ function startGenerationLog(options: GenerationLogOptions, initial: GenerationMe
       return;
     }
 
-    // closed even when the flush fails: no handle outlives its log
     try {
       await file.datasync();
     } finally {
@@ -272,8 +239,8 @@ function startGenerationLog(options: GenerationLogOptions, initial: GenerationMe
     }
   };
 
-  // the bytes reach the disk before the meta that counts them; the meta's
-  // own text is written next to it, flushed, and renamed over it
+  // Segment bytes reach the disk before the meta that counts them, so a crash
+  // leaves at most an uncounted tail, which no read sees.
   const writeMeta = async (): Promise<void> => {
     await state.file?.datasync();
 
@@ -335,12 +302,10 @@ function startGenerationLog(options: GenerationLogOptions, initial: GenerationMe
 
     const path = getSegmentPath(options.directory, start);
 
-    // a file the meta never counted is a crash's leftover
     await removeQuietly(path);
 
     const file = await open(path, 'wx', 0o600);
 
-    // abandoned while it opened: nothing may hold the file
     if (state.abandoned) {
       await file.close();
 

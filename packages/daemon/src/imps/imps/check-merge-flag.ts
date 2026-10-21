@@ -1,6 +1,5 @@
 import type { ImpHost, ImpMemory } from './imp-context';
 
-// imps whose guest memory KSM cannot merge: the flag did not survive the exec
 export interface MergeFlags {
   readonly recordLost: (id: string) => void;
   readonly clearLost: (id: string) => void;
@@ -21,9 +20,7 @@ export function createMergeFlags(): MergeFlags {
   };
 }
 
-// With IMP_KSM, checks that KSM may merge the VM's guest memory: before 6.19
-// (590c03ca6a3f) ksmd can clear the flag during the exec. `impz info` counts
-// such imps; a flag impd cannot read is logged.
+// Before Linux 6.19 (590c03ca6a3f), ksmd can clear the merge flag during the exec.
 export async function checkMergeFlag(
   context: ImpHost & ImpMemory,
   imp: Readonly<{ id: string; name: string }>,
@@ -54,9 +51,6 @@ export async function checkMergeFlag(
   context.mergeFlags.clearLost(imp.id);
 }
 
-// After a restart: with IMP_KSM, as checkMergeFlag. Without it, a VM that an
-// impd with IMP_KSM started keeps its merge flag until the imp restarts, and
-// ksmd merges it again whenever it runs; impd says so once, at the adopt.
 export async function checkAdoptedMergeFlag(
   context: ImpHost & ImpMemory,
   imp: Readonly<{ id: string; name: string }>,

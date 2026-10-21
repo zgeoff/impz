@@ -3,7 +3,6 @@ import { DockerfileError } from './dockerfile-error';
 import { parseDockerfile, splitDockerfileLines, splitNameWords } from './dockerfile-parse';
 import type { Instruction, ParsedDockerfile } from './dockerfile-parse';
 
-// where a Dockerfile names an image the engine would pull on its own
 type ImageUse = 'FROM' | 'COPY --from' | 'RUN --mount from';
 
 export interface ExternalImage {
@@ -11,17 +10,17 @@ export interface ExternalImage {
   readonly use: ImageUse;
 }
 
-// `scheme://` (http, https, git, ssh) or git's `user@host:path`: what ADD
-// fetches from the engine's own network (frontend/dockerfile/dfgitutil)
+// ADD fetches a `scheme://` source or git's `user@host:path` from the engine's own network
+// (BuildKit's frontend/dockerfile/dfgitutil).
 const REMOTE_SOURCE = /:\/\/|^[^\/]*@[^\/]*:/v;
 
 function buildRefusal(line: number, message: string): DockerfileError {
   return new DockerfileError(`line ${String(line)}: ${message}`);
 }
 
-// The frontend's shell lexer drops quotes and applies the escape token in
-// every FROM, ADD and COPY word and builder flag; refusing both makes the
-// word impd checks the word the frontend uses.
+// The frontend's shell lexer drops quotes and applies the escape token in every FROM, ADD
+// and COPY word and builder flag, so refusing both makes the word impd checks the word the
+// frontend uses.
 function checkPlain(text: string, escape: string, what: string, line: number): void {
   const isAmbiguous =
     text.includes('"') || text.includes("'") || text.includes(escape) || !/^[ -~]*$/v.test(text);
@@ -34,7 +33,6 @@ function checkPlain(text: string, escape: string, what: string, line: number): v
   }
 }
 
-// the variables the frontend sets to the build's platforms
 const PLATFORM_ARGS = new Set([
   'BUILDPLATFORM',
   'BUILDOS',
@@ -46,9 +44,8 @@ const PLATFORM_ARGS = new Set([
   'TARGETVARIANT',
 ]);
 
-// The one place FROM --platform is decided. impd sends no platform, so both
-// variables are the host's, the platform impd inspects; the pinned copy
-// names it outright (platform), and impd refuses every other value.
+// impd sends no platform, so the frontend sets both variables to the host's platform, which
+// is the one impd inspects.
 function resolvePlatform(value: string, platform: string | null, line: number): string {
   if (value === '$BUILDPLATFORM' || value === '$TARGETPLATFORM') {
     return platform ?? value;
@@ -60,9 +57,8 @@ function resolvePlatform(value: string, platform: string | null, line: number): 
   );
 }
 
-// An ARG of a platform variable would change what --platform reads. The
-// frontend splits ARG as parseWords does, and lexes each name; impd drops
-// the quotes and escapes from the name, and refuses a variable in it.
+// An ARG of a platform variable would change what --platform reads. The frontend splits ARG
+// into words and lexes each name, dropping its quotes and escapes.
 function checkArg(instruction: Readonly<Instruction>, escape: string): void {
   for (const word of splitNameWords(instruction.args, escape)) {
     const [written = ''] = word.split('=');
@@ -85,7 +81,6 @@ function checkArg(instruction: Readonly<Instruction>, escape: string): void {
   }
 }
 
-// the value of each `--name=value` flag called name
 function readFlagValues(instruction: Readonly<Instruction>, name: string): string[] {
   return instruction.flags
     .filter((flag) => flag === `--${name}` || flag.startsWith(`--${name}=`))
@@ -115,7 +110,6 @@ function checkWords(instruction: Readonly<Instruction>, escape: string): void {
     }
   }
 
-  // the sources; the last word is the destination
   if (keyword === 'add') {
     for (const source of instruction.words.slice(0, -1)) {
       checkPlain(source, escape, 'the ADD source', line);
@@ -137,8 +131,7 @@ function checkWords(instruction: Readonly<Instruction>, escape: string): void {
   }
 }
 
-// the lowercased names of every stage; COPY --from and RUN --mount from
-// may name any of them, as the frontend reads them
+// The frontend matches COPY --from and RUN --mount from against any stage's name, ignoring case.
 function listStageNames(instructions: readonly Instruction[]): Set<string> {
   const names = new Set<string>();
 
@@ -153,12 +146,9 @@ function listStageNames(instructions: readonly Instruction[]): Set<string> {
   return names;
 }
 
-// what the walk turns each image the build names into: the ref as
-// written, or the ref pinned
 type PickImage = (ref: string, use: ImageUse, line: number) => string;
 
 interface Stages {
-  // the lowercased names, which COPY --from and RUN --mount from match
   readonly names: ReadonlySet<string>;
   readonly count: number;
 }
@@ -166,7 +156,7 @@ interface Stages {
 const INT64_MIN = -(2n ** 63n);
 const INT64_MAX = 2n ** 63n - 1n;
 
-// what Go's strconv.Atoi reads, which COPY --from takes as a stage index
+// The frontend takes as a stage index any COPY --from value that Go's strconv.Atoi reads.
 function isStageIndex(from: string): boolean {
   if (!/^[+\-]?[0-9]+$/v.test(from)) {
     return false;
@@ -188,15 +178,12 @@ function checkStageIndex(from: string, count: number, line: number): void {
   }
 }
 
-// an instruction as the pinned copy writes it
 interface PinnedInstruction {
   readonly instruction: Instruction;
   readonly flags: readonly string[];
   readonly words: readonly string[];
 }
 
-// the instructions whose flags or words name an image or a platform, with
-// the images given by pickImage and the platform given
 function pickInstruction(
   instruction: Readonly<Instruction>,
   earlierStages: ReadonlySet<string>,
@@ -209,7 +196,7 @@ function pickInstruction(
   if (instruction.keyword === 'from') {
     const [image = '', ...rest] = instruction.words;
 
-    // a base matches an earlier stage as written
+    // The frontend matches a FROM base only against an earlier stage.
     const isExternal = image !== '' && image !== 'scratch' && !earlierStages.has(image);
     const base = isExternal ? pickImage(image, 'FROM', line) : image;
 
@@ -274,8 +261,6 @@ function pickInstruction(
   return { instruction, flags: instruction.flags, words: instruction.words };
 }
 
-// Refuses what impd cannot check or would let the engine fetch on its own,
-// and gives each instruction with its images as pickImage picks them.
 function resolveInstructions(
   parsed: Readonly<ParsedDockerfile>,
   pickImage: PickImage,
@@ -289,7 +274,6 @@ function resolveInstructions(
   const earlierStages = new Set<string>();
 
   return parsed.instructions.map((instruction) => {
-    // a trigger runs in a later build, from this image or a later stage
     if (instruction.keyword === 'onbuild') {
       throw buildRefusal(
         instruction.line,
@@ -316,8 +300,6 @@ function resolveInstructions(
   });
 }
 
-// Refuses what impd cannot check or would let the engine fetch on its own,
-// and returns the images the build names outside its stages, each once.
 export function checkDockerfile(dockerfile: string): ExternalImage[] {
   const images: ExternalImage[] = [];
 
@@ -341,7 +323,6 @@ export function checkDockerfile(dockerfile: string): ExternalImage[] {
   return images;
 }
 
-// the instruction on one line, as the pinned copy writes it
 function formatInstruction(pinned: Readonly<PinnedInstruction>): string {
   const instruction = pinned.instruction;
   const args = instruction.keyword === 'from' ? pinned.words.join(' ') : instruction.args;
@@ -349,8 +330,6 @@ function formatInstruction(pinned: Readonly<PinnedInstruction>): string {
   return [instruction.command, ...pinned.flags, args].filter((part) => part !== '').join(' ');
 }
 
-// what the pinned copy must parse back to: the same instructions, with
-// only the flags and words the pin changed
 function listShapes(instructions: readonly Instruction[], pinned?: readonly PinnedInstruction[]) {
   return instructions.map((instruction, index) => {
     const changed = pinned?.[index];
@@ -366,9 +345,6 @@ function listShapes(instructions: readonly Instruction[], pinned?: readonly Pinn
   });
 }
 
-// The Dockerfile with each image outside its stages replaced by its pin and
-// FROM --platform's variable by platform. A changed instruction is written
-// on one line, as the frontend joins it, and must parse back the same.
 export function renderPinnedDockerfile(
   dockerfile: string,
   pins: ReadonlyMap<string, string>,
@@ -389,7 +365,6 @@ export function renderPinnedDockerfile(
   const pinned = resolveInstructions(parsed, findPin, platform);
   const lines = splitDockerfileLines(dockerfile);
 
-  // from the last, so each instruction's lines are where it read them
   for (const entry of pinned.toReversed()) {
     const instruction = entry.instruction;
 

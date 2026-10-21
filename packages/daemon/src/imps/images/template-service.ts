@@ -26,13 +26,10 @@ import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpCheckpointHooks } from '../imps/imp-service';
 import { BUILDER_IMAGE } from './builder-imps';
 
-// A template's digest: no docker image ID ever starts with it
-// (docs/guides/templates.md#how-a-template-is-stored)
+// No Docker image ID starts with this prefix, so a template's digest never collides with one.
 const TEMPLATE_DIGEST_PREFIX = 'imp-';
 
 export interface TemplateService {
-  // An image of the imp's disk, made under its lock; a name made again
-  // points at the new disk, and imps made before keep theirs.
   readonly createTemplate: (impName: string, name: string) => Promise<ImageRecord>;
 }
 
@@ -42,10 +39,8 @@ interface TemplateServiceDeps {
   readonly imps: Pick<ImpCheckpointHooks, 'lockImp' | 'requireRunningImp'>;
   readonly storage: StorageBackend;
 
-  // the image's storage exists before its row
   readonly storageGate: StorageGate;
 
-  // a template is thin, but none is made past the reserve
   readonly diskBudget: Pick<DiskBudget, 'requireRoom'>;
   readonly log?: (message: string) => void;
   readonly freezer?: DiskFreezer;
@@ -62,7 +57,6 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
     freezer: deps.freezer,
   });
 
-  // the source image's docker config, for a backup's manifest
   const writeConfig = async (imageId: string, directory: string): Promise<void> => {
     const image = await readImageById(deps.db, imageId);
 
@@ -95,7 +89,6 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
     return updateImage(deps.db, existing.id, image);
   };
 
-  // the disk a template name pointed at before, once no row names it
   const removeReplaced = async (existing: ImageRecord | undefined): Promise<void> => {
     if (existing !== undefined && (await countImageDigestUses(deps.db, existing.digest)) === 0) {
       await storage.removeImage(existing.digest);
@@ -114,7 +107,7 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
 
       await deps.diskBudget.requireRoom(0);
 
-      // joined before the lock, as a backup run does
+      // The storage gate is joined before the imp lock, in the order a backup run takes them.
       return deps.storageGate.join(() =>
         deps.imps.lockImp(impName, async (imp) => {
           if (imp.state === 'creating') {
@@ -125,8 +118,6 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
             );
           }
 
-          // every backup run holds every image, so a template would carry
-          // the disk into a backup after all
           if (!imp.isBackedUp) {
             throw buildNotBackedUpError(
               imp.name,
@@ -136,8 +127,6 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
 
           const existing = await readImageByName(deps.db, name);
 
-          // `impz image add` over a template, or this over a docker image,
-          // would change what the name is
           if (existing !== undefined && existing.source !== 'imp') {
             throw buildConflictError(
               'image',

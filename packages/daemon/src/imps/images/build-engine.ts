@@ -8,7 +8,6 @@ import type { GuestExec } from './guest-exec';
 import { PIN_INSPECT_FORMAT, PinInspectSchema, normalizePlatform } from './image-pin';
 import type { PinInspect } from './image-pin';
 
-// the tail of a failed pull's message the client gets
 const FAILURE_MAX_CHARS = 4000;
 
 interface EngineResult {
@@ -17,22 +16,15 @@ interface EngineResult {
   readonly stderr: string;
 }
 
-// one docker CLI command against the engine: the host's, or a builder's
 export type EngineRun = (argv: readonly string[], signal: AbortSignal) => Promise<EngineResult>;
 
-// What impd asks of the engine a build runs on before the build: it pins
-// every image the Dockerfile names on the engine that builds it
-// (docs/guides/images.md#isolated-builds).
 export interface BuildEngine {
-  // the engine's platform, which a build without one runs for
   readonly readPlatform: (signal: AbortSignal) => Promise<string>;
 
-  // what impd reads of the image the engine has for ref, pulled first when
-  // it lacks it
   readonly loadImage: (image: Readonly<ExternalImage>, signal: AbortSignal) => Promise<PinInspect>;
 
-  // Engines before 29.6.0 fetch the BUILDKIT_SYNTAX frontend only through
-  // a client session, which a host build lacks; pulled by digest first.
+  // Docker engines before 29.6.0 fetch the BUILDKIT_SYNTAX frontend only through a client
+  // session, which a host build lacks, so the frontend is pulled by digest first.
   readonly loadFrontend: (signal: AbortSignal) => Promise<void>;
 }
 
@@ -128,7 +120,6 @@ export function createBuildEngine(run: EngineRun): BuildEngine {
   };
 }
 
-// a builder's engine, through its agent
 export function toEngineRun(exec: GuestExec): EngineRun {
   return (argv, signal) => exec(argv, { signal });
 }

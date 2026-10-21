@@ -1,14 +1,8 @@
 import { createCountedLimit } from '../../platform/process/counted-limit';
 import { MAX_RELAYS_PER_FORWARD } from './run-guest-listener';
 
-// The reverse forwards `/tunnel` control sockets hold, shared by every tunnel
-// socket: an accept must come from the caller that listened, for the same
-// imp, and a forward has at most MAX_RELAYS_PER_FORWARD relays open.
 export interface ReverseForwards {
-  // a release to call once the control socket ends
   readonly register: (listener: string, impId: string, owner: string) => () => void;
-
-  // a release to call once the relay ends, or why it is refused
   readonly tryAccept: (
     listener: string,
     impId: string,

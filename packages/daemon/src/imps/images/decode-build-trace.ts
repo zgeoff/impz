@@ -1,7 +1,5 @@
 import { BinaryReader, WireType } from '@bufbuild/protobuf/wire';
 
-// One vertex of a BuildKit build as a trace message reports it: a Dockerfile
-// step such as `[2/5] RUN make`, or the frontend's own work
 interface TraceVertex {
   readonly digest: string;
   readonly name: string;
@@ -9,11 +7,9 @@ interface TraceVertex {
   readonly started: boolean;
   readonly completed: boolean;
 
-  // empty for none
   readonly error: string;
 }
 
-// output a vertex wrote, in the chunks the engine sent
 interface TraceLog {
   readonly vertex: string;
   readonly message: Uint8Array;
@@ -24,9 +20,8 @@ export interface BuildTrace {
   readonly logs: readonly TraceLog[];
 }
 
-// The vertexes and logs of one `moby.buildkit.trace` message: BuildKit's
-// control StatusResponse as protobuf (vertexes = 1, logs = 3). Statuses and
-// warnings pass by, as do fields a newer BuildKit adds.
+// A `moby.buildkit.trace` message is BuildKit's control StatusResponse in protobuf, with
+// vertexes as field 1 and logs as field 3.
 export function decodeBuildTrace(bytes: Uint8Array): BuildTrace {
   const reader = new BinaryReader(bytes);
 
@@ -48,8 +43,8 @@ export function decodeBuildTrace(bytes: Uint8Array): BuildTrace {
   return { vertexes, logs };
 }
 
-// Vertex: digest = 1, name = 3, cached = 4, started = 5, completed = 6,
-// error = 7; a timestamp counts only as present
+// BuildKit's Vertex message: digest = 1, name = 3, cached = 4, started = 5, completed = 6,
+// error = 7.
 function decodeVertex(bytes: Uint8Array): TraceVertex {
   const reader = new BinaryReader(bytes);
 
@@ -89,7 +84,7 @@ function decodeVertex(bytes: Uint8Array): TraceVertex {
   return vertex;
 }
 
-// VertexLog: vertex = 1, msg = 4
+// BuildKit's VertexLog message: vertex = 1, msg = 4.
 function decodeLog(bytes: Uint8Array): TraceLog {
   const reader = new BinaryReader(bytes);
 

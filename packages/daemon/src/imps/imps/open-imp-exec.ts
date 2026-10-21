@@ -22,8 +22,6 @@ interface ExecParts {
   readonly ops: ImpVmOps;
 }
 
-// an exec in the running imp at `paths`: the broker's variables, and the
-// checks of a command that requires the broker
 export function openImpExec(
   parts: ExecParts,
   name: string,
@@ -37,13 +35,10 @@ export function openImpExec(
   const ops = parts.ops;
   const requiresBroker = isBrokerRequired(request.require);
 
-  // the egress broker's variables are for the imp's own code, not the
-  // agent's world
   if (requiresBroker && request.outer === true) {
     throw buildBrokerNotReadyError('an exec in the agent gets no broker variables');
   }
 
-  // an old agent would run a session's command as a plain exec
   if (request.session !== undefined) {
     requireFeature(paths, 'sessions');
   }
@@ -62,8 +57,6 @@ export function openImpExec(
     return openExecStream(paths.vsockSocket, request);
   }
 
-  // the broker's variables under the caller's own; a command that
-  // requires the broker starts only with them as impd set them
   const startWithBroker = async (target: ImpRecord): Promise<ExecStream> => {
     const broker = await context.readExecEnv(target, paths.vsockSocket);
 
@@ -81,9 +74,6 @@ export function openImpExec(
     }
 
     const session = request.session;
-
-    // the agent's sessions, for a start that requires the broker and
-    // may attach: a refused attach must not reach the agent
     const listed: SessionInfo[] = [];
 
     if (requiresBroker && session !== undefined) {
@@ -130,7 +120,6 @@ export function openImpExec(
       return stream;
     };
 
-    // a session this start created gets its log tap once it opens
     return withColdBoots(context, target, openNoted()).then((stream) => {
       startNewLogTap(context, target, stream);
 
@@ -142,9 +131,6 @@ export function openImpExec(
     return startWithBroker(imp);
   }
 
-  // Under the lock no restore, reboot or sleep replaces the guest
-  // between the bundle step and the start; an imp a stop got to first
-  // boots again, as for any exec. It may wait behind a locked operation.
   return lock.withImp(name, async (locked) => {
     const running = locked.state === 'running' ? locked : await ops.requireRunningImp(locked);
 
@@ -152,8 +138,6 @@ export function openImpExec(
   });
 }
 
-// The guest the bundle step ran in is the one the command starts in: the
-// caller holds the lock, and this catches any write that got past it.
 async function requireSameBoot(context: ImpHost, imp: ImpRecord): Promise<void> {
   const fresh = await readImpById(context.db, imp.id);
 
@@ -162,8 +146,8 @@ async function requireSameBoot(context: ImpHost, imp: ImpRecord): Promise<void> 
   }
 }
 
-// a session that just started with log is tapped at once, while the agent's
-// ring still holds its first output
+// A new logged session is tapped at once, while the agent's ring buffer still
+// holds its first output.
 function startNewLogTap(
   context: ImpVms & ImpGuest,
   imp: Readonly<ImpRecord>,

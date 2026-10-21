@@ -27,7 +27,6 @@ async function setupTest() {
 
   stack.defer(() => engine.stop());
 
-  // a release deferred here runs before the engine stops and the dir goes
   return { stack, directoryPath: directory, engine };
 }
 
@@ -145,8 +144,6 @@ test('#runDockerBuild sends the lines and the step of the engine trace to its ou
 
   await Bun.write(tarPath, 'the context');
 
-  // two trace messages a Docker 29.8 engine sent: a RUN step's start, then
-  // its output
   ctx.engine.setAnswer(
     () =>
       new Response(
@@ -225,9 +222,6 @@ test('#runDockerBuild reads a message split across chunks whole', async () => {
   expect(building).resolves.toBe(`sha256:${'c'.repeat(64)}`);
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
-
-// #173 turns #163's refusal-as-500 into the client's error, as impd's own
-// checks of the same rules answer
 
 test('#runDockerBuild fails with the proxy refusal as the client bad request', async () => {
   const ctx = await setupTest();
@@ -452,7 +446,6 @@ test('#runDockerBuild gets the image of a build silent past the idle limit, whic
 
   ctx.stack.defer(() => control.stop());
 
-  // silent until the control's connection is gone, past the limit
   const build = await startStubSilentBuildEngine({
     socketPath: join(ctx.directoryPath, 'build-engine.sock'),
     imageId: `sha256:${'c'.repeat(64)}`,
@@ -469,7 +462,6 @@ test('#runDockerBuild gets the image of a build silent past the idle limit, whic
 
   ctx.stack.defer(() => cancelled.stop());
 
-  // the held answers end before the engines stop
   ctx.stack.defer(() => {
     ended.resolve();
   });
@@ -493,12 +485,10 @@ test('#runDockerBuild gets the image of a build silent past the idle limit, whic
     },
   );
 
-  // the child goes first, before the engines it calls
   ctx.stack.defer(() => {
     child.kill();
   });
 
-  // the control starts once both builds are silent, so it goes quiet last
   await Promise.all([build.started, cancelled.started]);
   await child.stdin.write('control\n');
   await child.stdin.flush();

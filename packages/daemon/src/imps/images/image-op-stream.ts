@@ -6,21 +6,15 @@ import { BUILD_LOG_QUEUE_MAX_BYTES, createLogBudget } from './create-log-budget'
 export interface ImageOpStreamOptions {
   readonly firstPhase: ImageBuildPhase;
 
-  // aborts when the client goes
   readonly signal: AbortSignal;
 
-  // the gap between progress events; BUILD_KEEPALIVE_MS
   readonly keepaliveMs: number;
   readonly now: () => number;
 
-  // writes the audit row: null for the image, else what was thrown
   readonly record: (failure: unknown) => void;
 
-  // the keepalive's timer; runOnInterval by default
   readonly repeat?: Repeat;
 
-  // the build's output goes as log events; a client from before them reads
-  // any event but the image as progress
   readonly logs?: boolean;
 }
 
@@ -28,9 +22,6 @@ type Outcome =
   | { readonly ok: true; readonly image: Image }
   | { readonly ok: false; readonly error: unknown };
 
-// What images.addStream and images.buildStream yield: progress now, at each
-// phase, step and keepalive, then the image; with `logs`, each output line in
-// order. The audit row is written as the work ends, even after its client went.
 export async function* runImageOp(
   run: (signal: AbortSignal, report: BuildReport) => Promise<Image>,
   options: Readonly<ImageOpStreamOptions>,
@@ -43,8 +34,6 @@ export async function* runImageOp(
     changed: Promise.withResolvers<void>(),
   };
 
-  // the lines not yet yielded, and their bytes; none is kept once the
-  // client went
   const lines: string[] = [];
   const queued = { bytes: 0 };
   const logs = createLogBudget();
@@ -118,7 +107,6 @@ export async function* runImageOp(
 
   yield buildProgress();
 
-  // then each line, and progress at each phase, step and keepalive
   for (;;) {
     const tick = Promise.withResolvers<'tick'>();
 

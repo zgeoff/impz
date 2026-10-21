@@ -15,9 +15,6 @@ import {
 } from '../../vm/sleep/snapshot-meta';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 
-// impd killed at the points a sleep, a wake or a start can be cut, and the
-// next impd's reconcile
-
 async function setupTest(options: TestImpdOptions = {}) {
   const stack = new AsyncDisposableStack();
 
@@ -25,7 +22,6 @@ async function setupTest(options: TestImpdOptions = {}) {
 
   const harness = await startTestImpd(stack, options);
 
-  // the image every imp boots from
   await harness.createTestImage('ubuntu');
 
   return harness;
@@ -37,7 +33,6 @@ test('it leaves the imp stopped when impd died after a sleep renamed its files, 
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  // an earlier sleep leaves a snapshot and its meta.json behind
   await ctx.client.imps.sleep({ name: 'dev' });
   await ctx.client.imps.wake({ name: 'dev' });
 
@@ -47,18 +42,14 @@ test('it leaves the imp stopped when impd died after a sleep renamed its files, 
 
   await sleeping.reached;
 
-  // the old impd's sleep writes and renames its files, then never returns
   await ctx.restartImpd();
 
   sleeping.release();
 
-  // the fake kills the VM, then writes and renames in the same turn
   await waitFor(() => {
     expect(ctx.fake.alive.size).toBe(0);
   });
 
-  // the new impd's start ran while the sleep was held; a reconcile now
-  // sees what the sleep left
   await ctx.imps.reconcileImps();
 
   const imp = await readImpByName(ctx.db, 'dev');
@@ -86,7 +77,6 @@ test('it drops meta.json on a good wake, so a VM that dies later does not count 
 
   invariant(typeof woken?.pid === 'number');
 
-  // the guest dies with impd watching nothing
   ctx.fake.alive.delete(woken.pid);
 
   const read = await ctx.client.imps.get({ name: 'dev' });
@@ -110,8 +100,6 @@ test('it resumes a VM a cut sleep left paused, and removes the half-written file
   const running = await readImpByName(ctx.db, 'dev');
 
   invariant(typeof running?.pid === 'number');
-
-  // the snapshot the cut sleep was writing
   mkdirSync(paths.snapshotDir, { recursive: true });
   writeFileSync(`${paths.vmstate}.new`, 'partial');
   writeFileSync(`${paths.memFile}.new`, 'partial');
@@ -137,7 +125,6 @@ test('it adopts a VM a cut wake left running with its memory', async () => {
 
   await ctx.client.imps.sleep({ name: 'dev' });
 
-  // the wake loaded the snapshot; impd died before the record
   const pid = ctx.fake.spawnOrphan({ paths });
 
   await ctx.restartImpd();
@@ -158,7 +145,6 @@ test('it kills a VM a cut wake left before its load, and keeps the snapshot', as
 
   await ctx.client.imps.sleep({ name: 'dev' });
 
-  // the wake set its record aside; the load never ran the guest
   setSnapshotLoading(paths);
 
   const pid = ctx.fake.spawnOrphan({ paths, state: 'Not started' });
@@ -292,7 +278,6 @@ test('it leaves the imp stopped, never on the old snapshot, after a wake cut dur
 
   await waking.reached;
 
-  // the load runs the guest, which may write its disk; impd dies here
   const metaMidLoad = readSnapshotMeta(paths);
   const loadingMidLoad = readLoadingMeta(paths);
 
@@ -320,7 +305,6 @@ test('it adopts the VM of a wake cut during its load that runs on, and drops its
 
   const pid = ctx.fake.spawnOrphan({ paths });
 
-  // GET / is silent for a while, as during a large load
   ctx.fake.queue('vmState', 'fail', 'fail');
 
   await ctx.restartImpd();
@@ -331,9 +315,6 @@ test('it adopts the VM of a wake cut during its load that runs on, and drops its
   expect(readLoadingMeta(paths)).toBeNull();
   expect(readSnapshotMeta(paths)).toBeNull();
 });
-
-// A process in imp `evil`'s jail that execs `firecracker --api-sock` with
-// another imp's socket: its argv says the victim, its uid and cgroup do not.
 
 test('it ignores a VM forged on a sleeping imp socket from another jail, and keeps the snapshot', async () => {
   const ctx = await setupTest();
@@ -348,8 +329,6 @@ test('it ignores a VM forged on a sleeping imp socket from another jail, and kee
 
   invariant(typeof attacker?.jailUid === 'number');
 
-  // with no VM behind dev's socket, an adopt would find no state and drop the
-  // snapshot; with the pid file pointing at it too
   const forged = ctx.fake.spawnOrphan({
     paths,
     owner: { uid: attacker.jailUid, cgroup: `/imps/${evil.id}` },
@@ -476,7 +455,6 @@ test('it stops an imp whose recycled pid another jail forged, and leaves that pr
   invariant(typeof attacker?.jailUid === 'number');
   invariant(typeof running?.pid === 'number');
 
-  // dev's VM died while impd was down, and evil's jail got its pid
   ctx.fake.setOwner(running.pid, { uid: attacker.jailUid, cgroup: `/imps/${evil.id}` });
 
   await ctx.restartImpd();
@@ -489,8 +467,6 @@ test('it stops an imp whose recycled pid another jail forged, and leaves that pr
 
 test('it removes the orphan jails before the orphan cgroups, so a cut-short build leaves its cgroup empty', async () => {
   const stub = buildStubCpuCgroups();
-
-  // the fake's sweep record, which the cgroups sweep joins once impd is up
   const order: { sweeps: string[] } = { sweeps: [] };
 
   const ctx = await setupTest({
@@ -508,6 +484,5 @@ test('it removes the orphan jails before the orphan cgroups, so a cut-short buil
 
   await ctx.restartImpd();
 
-  // the first impd's start swept the jails before the cgroups sweep joined
   expect(ctx.fake.sweeps).toStrictEqual(['jails', 'jails', 'cgroups']);
 });

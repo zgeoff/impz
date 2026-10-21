@@ -2,7 +2,6 @@ import type { ImpEvent } from '@impz/api';
 import type { EventBus } from '../../platform/events/event-bus';
 import type { StartTimer } from '../../platform/process/clock';
 
-// Resolves on the imp's next event, after `timeoutMs`, or on the abort.
 export function waitForImpChange(
   context: Readonly<{ events: Pick<EventBus, 'subscribe'>; startTimer: StartTimer }>,
   name: string,

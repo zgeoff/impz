@@ -6,11 +6,6 @@ import { startStubSessionAgent } from '../../../testing/vm/start-stub-session-ag
 import { readVmIdentity, writeVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 
-// A start that requires the broker and names a session passes only to a
-// session whose run started with the requirement.
-
-// impd over the stub VMM, and `stack`, whose releases (the agents a test
-// starts) run before the harness's
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -18,10 +13,8 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack);
 
-  // every create boots an image row; the default image is base
   await harness.createTestImage('base');
 
-  // assigned, not spread: the harness's parts follow a restarted impd
   return Object.assign(harness, { stack });
 }
 
@@ -36,8 +29,6 @@ test('it refuses to start a session that requires the broker without a grant', a
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent that runs sessions; the stub VMM records an older one
   writeVmIdentity(paths, { ...identity, agentVersion: '0.16.0' });
 
   expect(
@@ -64,8 +55,6 @@ test('it passes an attach that requires the broker to a session started with it'
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent that runs sessions; the stub VMM records an older one
   writeVmIdentity(paths, { ...identity, agentVersion: '0.16.0' });
 
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_SECRET' });
@@ -104,8 +93,6 @@ test('it refuses an attach that requires the broker to a session started without
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent that runs sessions; the stub VMM records an older one
   writeVmIdentity(paths, { ...identity, agentVersion: '0.16.0' });
 
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_SECRET' });
@@ -127,7 +114,6 @@ test('it refuses an attach that requires the broker to a session started without
     },
   });
 
-  // refused before the agent saw it
   expect(agent.readExecs()).toHaveLength(1);
 });
 
@@ -142,8 +128,6 @@ test('it leaves the viewer of a session its output after a refused attach', asyn
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent that runs sessions; the stub VMM records an older one
   writeVmIdentity(paths, { ...identity, agentVersion: '0.16.0' });
 
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_SECRET' });
@@ -177,8 +161,6 @@ test('it passes an attach that requires the broker after an impd restart', async
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent that runs sessions; the stub VMM records an older one
   writeVmIdentity(paths, { ...identity, agentVersion: '0.16.0' });
 
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_SECRET' });
@@ -193,7 +175,6 @@ test('it passes an attach that requires the broker after an impd restart', async
 
   started.close();
 
-  // a new impd adopts the running VM and its sessions
   const restarted = await ctx.restartImpd();
 
   const resumed = await restarted.imps.openExec('dev', {
@@ -220,8 +201,6 @@ test('it refuses an attach that requires the broker to a session a cold boot sta
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent that runs sessions; the stub VMM records an older one
   writeVmIdentity(paths, { ...identity, agentVersion: '0.16.0' });
 
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_SECRET' });
@@ -238,8 +217,6 @@ test('it refuses an attach that requires the broker to a session a cold boot sta
 
   const restarted = await ctx.restartImpd();
 
-  // a cold boot: the guest's sessions are gone, and one started without
-  // the requirement takes the name
   await restarted.imps.lockImp('dev', async (locked) => {
     const halted = await restarted.imps.haltImp(locked, false);
 
@@ -284,8 +261,6 @@ test('it keeps the record of an exited run while it is listed, so a resume of it
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent that runs sessions; the stub VMM records an older one
   writeVmIdentity(paths, { ...identity, agentVersion: '0.16.0' });
 
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_SECRET' });
@@ -308,7 +283,6 @@ test('it keeps the record of an exited run while it is listed, so a resume of it
     expect(agent.readRun('main')?.isAttached).toBeFalse();
   });
 
-  // main exits while detached; another required session starts after it
   agent.exitRun('main', { code: 0, signal: 0 });
 
   const other = await ctx.imps.openExec('dev', {
@@ -345,8 +319,6 @@ test('it refuses a resume of an exited run started without the requirement befor
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent that runs sessions; the stub VMM records an older one
   writeVmIdentity(paths, { ...identity, agentVersion: '0.16.0' });
 
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_SECRET' });
@@ -382,6 +354,5 @@ test('it refuses a resume of an exited run started without the requirement befor
     },
   });
 
-  // the agent never saw the resume, so it kept the exited run's output
   expect(agent.readExecs()).toHaveLength(1);
 });

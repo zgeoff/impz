@@ -7,11 +7,7 @@ import { sendFilesRemove, sendFilesWrite } from '../../vm/agent-client/file-requ
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
 import type { ImpRuntime } from '../imps/imp-runtime';
 
-// The `files` API (docs/architecture/guest/agent.md#read-only-files) through
-// the guest agent: impd writes each file, and the guest sees it read-only
-// under FILES_GUEST_DIR. A call wakes or boots the imp, as an exec does.
 export interface FileApi {
-  // answers the file's path in the guest
   readonly writeFile: (
     name: string,
     path: string,
@@ -52,7 +48,6 @@ export function createFileApi(parts: FileApiParts): FileApi {
   };
 }
 
-// a path the agent refuses and a full tree are the caller's to fix
 function toApiError(error: unknown): unknown {
   if (isAgentError(error, 'BAD_REQUEST') || isAgentError(error, 'NO_SPACE')) {
     return new ORPCError('BAD_REQUEST', { message: error.detail });

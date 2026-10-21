@@ -26,46 +26,33 @@ interface CreateImpInput {
   readonly vcpus?: number | undefined;
   readonly memoryMib?: number | undefined;
 
-  // what the guest may grow to; memoryMib by default (docs/architecture/lifecycle/elastic-memory.md)
   readonly maxMemoryMib?: number | undefined;
   readonly httpPort?: number | undefined;
   readonly policy?: EgressPolicy | undefined;
   readonly cpuLimit?: number | null | undefined;
   readonly cpuWeight?: number | undefined;
 
-  // the networks it joins, by id, in the insert's transaction
   readonly networkIds?: readonly string[] | undefined;
 
-  // the disk's size: IMP_DEFAULT_DISK_GIB by default, the source's size for
-  // a disk that prepareDisk makes
   readonly diskMib?: number | undefined;
 
-  // creates the new imp's disk; a clone of the image rootfs by default
   readonly prepareDisk?: (impId: string) => Promise<void>;
 
-  // false leaves the new imp stopped, as a restore from backup does
   readonly start?: boolean;
 
-  // a fork of a template copy that has not booted yet owes the reset too
   readonly isIdentityResetPending?: boolean;
 
-  // false leaves the imp's disk and checkpoints out of every backup run
-  // (docs/architecture/storage/backups.md#imps-left-out); true by default
   readonly isBackedUp?: boolean | undefined;
 
-  // a move keeps the imp's id, and stages it marked `receiving`; a warm
-  // move keeps its slot too, and a grow its guest still owes
   readonly id?: string;
   readonly moveState?: 'receiving';
   readonly slot?: number;
   readonly isDiskGrowPending?: boolean;
 
-  // an image builder's, which only impd makes (images/builder-imps.ts)
   readonly kind?: ImpKind;
 }
 
 interface DestroyOptions {
-  // the move's own destroy of an imp it marked
   readonly isMove?: boolean;
 }
 
@@ -76,38 +63,26 @@ interface ImpUpdate {
   readonly httpPort?: number | undefined;
 }
 
-// The imp API's commands. Each takes the imp's lock for its whole run.
 export interface ImpCommands {
   readonly createImp: (input: CreateImpInput) => Promise<Imp>;
   readonly listImps: () => Promise<Imp[]>;
   readonly readImp: (name: string) => Promise<Imp>;
   readonly startImp: (name: string) => Promise<Imp>;
 
-  // `force` ends the imp's leases from leases.*, which fail it with LEASED
-  // otherwise (docs/guides/leases.md#sleep-and-stop)
   readonly stopImp: (name: string, force?: boolean) => Promise<Imp>;
   readonly destroyImp: (name: string, options?: DestroyOptions) => Promise<void>;
 
-  // the imp with this id, checked under its lock: never another that took
-  // its name since; nothing when it is gone, or not of `kind` when given
   readonly destroyImpId: (id: string, kind?: ImpKind) => Promise<void>;
   readonly readUrls: (name: string) => Promise<ImpUrls>;
 
-  // snapshot memory to disk and stop Firecracker
-  // (docs/architecture/lifecycle/sleep-and-wake.md#sleep); `force` as for stopImp
   readonly sleepImp: (name: string, force?: boolean) => Promise<Imp>;
 
-  // a sleeping imp resumes from its snapshot, a stopped one boots cold; an
-  // imp in error boots cold too, unless restartError is false
   readonly wakeImp: (name: string, restartError?: boolean) => Promise<Imp>;
 
-  // grows the disk file; the guest grows its filesystem into it now when
-  // running, at its next wake when sleeping, at its next boot when stopped
   readonly resizeDisk: (name: string, diskMib: number) => Promise<Imp>;
 
-  // a running VM takes a new limit or weight at once, a sleeping or stopped
-  // one when it next starts; the vCPU count only while stopped, since a
-  // memory snapshot fixes it. The HTTP port holds from the next request.
+  // A memory snapshot fixes the vCPU count, so it changes only while the imp
+  // is stopped.
   readonly updateImp: (name: string, change: ImpUpdate) => Promise<Imp>;
 }
 
@@ -126,7 +101,6 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
   const presenter = parts.presenter;
   const leases = parts.leases;
 
-  // stops the VM and removes everything the imp holds, its row last
   const removeLockedImp = async (imp: LockedImp): Promise<void> => {
     const paths = context.findPaths(imp.id);
 
@@ -134,13 +108,10 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
       await context.vms.stopVm(imp.pid, paths, false);
     }
 
-    // the VM is gone: an empty cgroup and its jail can go; a jail mount
-    // would keep a ZFS disk busy
+    // A jail mount would keep a ZFS disk busy, so the jail goes before the disk.
     await context.cgroups.remove(imp.id);
     await context.vms.removeJail(paths);
     await context.taps.removeTap(context.findAddress(imp.slot).tap);
-
-    // out of the firewall before another imp can take the slot
     await context.egress.releaseSlot(imp.slot);
 
     const checkpoints = await listCheckpoints(context.db, imp.id);
@@ -171,8 +142,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
       const maxMemoryMib = resolveMaxMemoryMib(memoryMib, input.maxMemoryMib);
       const id = input.id ?? Bun.randomUUIDv7();
 
-      // a template's disk holds its source's machine-id and ssh host keys; a
-      // fork keeps its source's, reset or not
+      // A template's disk holds its source's machine-id and SSH host keys.
       const isIdentityResetPending =
         input.isIdentityResetPending ?? (image.source === 'imp' && input.prepareDisk === undefined);
 
@@ -184,24 +154,22 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
           image,
         );
 
-      // a thin clone takes next to nothing, but none is made past the reserve
       await context.diskBudget.requireRoom(0);
 
       return lock.withNewImp(id, writeRecord, async (imp) => {
         const paths = context.findPaths(imp.id);
 
-        // a destroyed imp's id comes back on a move home
         context.sessionLogs.admitImp(imp.id);
 
         const started = performance.now();
         const recordMs = Math.round(started - received);
 
         try {
-          // the slot's firewall, fresh, before anything can bring its tap up
+          // The slot's firewall is in place before anything can bring its tap up.
           await context.egress.addSlot(imp.slot);
 
-          // a warm move's guest knows its gateway by the slot's MAC: a tap a
-          // failed destroy left in the slot may have another, so it goes
+          // A warm move's guest knows its gateway by the slot's MAC, and a tap
+          // that a failed destroy left in the slot may have another MAC.
           if (input.slot !== undefined) {
             await context.taps.removeTap(context.findAddress(imp.slot).tap);
           }
@@ -227,8 +195,6 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
           context.log(`impd: ${imp.name}: disk cloned in ${String(timing.cloneMs)}ms`);
         };
 
-        // a fork or a restore takes its source's size, an image's disk grows
-        // past the image's filesystem, and the filesystem with it
         const growNewDisk = async () => {
           const sizeStarted = performance.now();
           const cloneBytes = readFileBytes(paths.disk);
@@ -254,7 +220,6 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
           return growNewDisk();
         };
 
-        // a create that does not start: creating → stopped, as the table lists
         if (input.start === false) {
           try {
             await setupNewDisk();
@@ -269,9 +234,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
           return presenter.readApi(stopped);
         }
 
-        // the clone first: a ZFS disk is a mount, which a jail prepared before
-        // it never sees (#147); the boot starts while the disk is sized, as a
-        // template restore only needs it once its guest is parked
+        // A ZFS disk is a mount, which a jail prepared before the clone never sees.
         try {
           await createDiskCopy();
         } catch (error) {
@@ -282,7 +245,6 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
         const sizing = growNewDisk();
 
-        // handled now: the boot may fail before it looks at the disk
         void Promise.allSettled([sizing]);
 
         try {
@@ -296,20 +258,14 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
           const totalMs = Math.round(performance.now() - received);
 
-          // the server's side of `impz new`: clone= is the time from the start
-          // to the cloned disk, before the boot; size= runs inside boot=, which
-          // waits on it, and the boot's own steps are on its line
           context.log(
             `impd: ${imp.name}: created in ${String(totalMs)}ms record=${String(recordMs)}ms clone=${String(timing.cloneMs)}ms size=${String(timing.sizeMs)}ms boot=${String(bootMs)}ms`,
           );
 
           return presented;
         } catch (error) {
-          // a resize still at work keeps its files until it ends
           await Promise.allSettled([sizing]);
 
-          // the governor turned the boot away before any tap or VM existed: a
-          // create that cannot run leaves no imp behind
           if (isRamBudgetError(error)) {
             await removeImpFiles(context, imp.id, []);
             await removeImp(context.db, imp.id);
@@ -343,15 +299,12 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
         return presenter.readApi(running);
       }),
 
-    // a call that changes nothing answers as it always did, leased or not;
-    // a forced one ends the leases only once the imp has stopped
     stopImp: (name, force = false) =>
       lock.withImp(name, async (imp) => {
         if (imp.state === 'stopped') {
           return presenter.readApi(imp);
         }
 
-        // the table's creating → stopped is a create's own, never a stop
         if (imp.state === 'creating') {
           throw buildInvalidStateError(imp.state, ['running', 'sleeping', 'error'], 'stop');
         }
@@ -386,7 +339,6 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
       return presenter.readUrls(imp);
     },
 
-    // as for stop
     sleepImp: (name, force = false) =>
       lock.withImp(name, async (imp) => {
         if (imp.state === 'sleeping') {
@@ -438,12 +390,11 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
         const paths = context.findPaths(imp.id);
 
-        // the file is sparse: room past the reserve is all it needs now
+        // The disk file is sparse, so the grow needs only room past the reserve.
         await context.diskBudget.requireRoom(0);
 
         growDiskFile(paths.disk, diskBytes);
 
-        // a stopped guest grows on its next boot, a sleeping one on its wake
         const updated = await updateImpDisk(context.db, imp.id, {
           diskBytes,
           isGrowPending: imp.state === 'sleeping',
@@ -453,7 +404,6 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
         context.log(`impd: ${imp.name}: disk grown to ${String(diskMib)} MiB`);
 
-        // no VM has the disk open: the host grows its filesystem now
         if (grown.pid === null && grown.state !== 'sleeping') {
           await growStoppedFilesystem(context, imp.name, paths.disk);
         }
@@ -492,8 +442,8 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
   };
 }
 
-// The disk goes through the backend first: on ZFS a dataset is mounted inside
-// the imp's directory, and rm -r fails on it.
+// On ZFS a dataset is mounted inside the imp's directory and rm -r fails on it,
+// so the storage backend removes the disk first.
 async function removeImpFiles(
   context: ImpVms & ImpGuest,
   impId: string,
@@ -509,9 +459,6 @@ async function removeImpFiles(
   rmSync(paths.snapshotDir, { recursive: true, force: true });
 }
 
-// The size a new disk gets. A size below the image's filesystem (a
-// template's disk) is refused; the default grows to it. A prepareDisk disk
-// keeps its source's size unless a larger one is asked for.
 function resolveDiskBytes(
   context: ImpHost,
   input: CreateImpInput,
@@ -535,8 +482,6 @@ function resolveDiskBytes(
   return requested ?? Math.max(context.config.defaultDiskBytes, floor);
 }
 
-// The host's grow is the cheap one; when it fails or skips an unclean
-// filesystem, the guest's next boot grows it instead.
 async function growStoppedFilesystem(context: ImpHost & ImpVms, name: string, disk: string) {
   try {
     const isGrown = await context.growFilesystem(disk);

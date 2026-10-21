@@ -24,7 +24,6 @@ async function setupTest() {
 
   stack.defer(() => rm(root, { recursive: true, force: true }));
 
-  // the log's own directory, which making the log creates
   return { stack, directory: join(root, 'a'.repeat(32)) };
 }
 
@@ -51,7 +50,6 @@ test('it keeps appended output in segments and drops the oldest past the bound',
     log.abandon();
   });
 
-  // 25 bytes in segments of 10, at most 20 kept: [10, 20) and [20, 25)
   await log.append(new TextEncoder().encode('0123456789abcdefghijKLMNO'));
   await log.commit();
 
@@ -88,7 +86,6 @@ test('it starts each offset a skip names as a new segment', async () => {
     log.abandon();
   });
 
-  // the first skip moves an empty log's origin; the second leaves a hole
   log.skipTo(500);
 
   await log.append(new TextEncoder().encode('abc'));
@@ -131,8 +128,6 @@ test('it cuts a torn tail back to what the meta counted when it loads a log', as
   await written.append(new TextEncoder().encode('counted'));
   await written.commit();
 
-  // after the commit: bytes the meta never counted, as a crash leaves them,
-  // and a segment it never named
   appendFileSync(join(ctx.directory, '0.seg'), '\0\0garbage');
   appendFileSync(join(ctx.directory, '7.seg'), 'stray');
 
@@ -295,7 +290,6 @@ test('it rejects an append whose new segment would reach the disk reserve', asyn
 
   const full = new ORPCError('DISK_FULL', { message: 'full' });
 
-  // room for the first segment only
   const room = buildStubRoomCheck({ passes: 1, error: full });
 
   const log = await createGenerationLog(
@@ -551,7 +545,6 @@ test('it rejects an append whose segment opened while the log was abandoned', as
     log.abandon();
   });
 
-  // the append waits for room for its first segment while the log is abandoned
   const appending = log.append(new TextEncoder().encode('abc'));
 
   await waitFor(() => {

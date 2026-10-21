@@ -2,7 +2,6 @@ import { assign, emit, setup } from 'xstate';
 import type { ExecStream } from '../../vm/agent-client/exec-stream';
 import type { GenerationLog } from './generation-log';
 
-// one generation impd logs now
 export interface LiveLog {
   readonly key: string;
   readonly impId: string;
@@ -11,115 +10,89 @@ export interface LiveLog {
   readonly log: GenerationLog;
 }
 
-// a tap on its way: each opening has its own, so work that outlived its
-// imp's life never frees a slot a later life took
 export interface OpeningTap {
   readonly opening: true;
 }
 
-// a live log's tap, or its opening's marker while one is on its way
 type TapSlot = Readonly<ExecStream> | OpeningTap;
 
-// what impd holds of the session logs while it runs; the files on disk are
-// generation-log.ts's
 interface SessionLogContext {
   readonly live: ReadonlyMap<string, LiveLog>;
   readonly taps: ReadonlyMap<string, TapSlot>;
 
-  // never tapped again in this impd's life: deleted while live, or stopped
   readonly dropped: ReadonlySet<string>;
 
-  // imps whose directory this impd has read since it started
   readonly recovered: ReadonlySet<string>;
 
-  // generations whose log is being made, so the cap counts them
   readonly creating: ReadonlySet<string>;
 
-  // destroyed imps not back yet: nothing is tapped or written for them
   readonly forgotten: ReadonlySet<string>;
 
-  // how often each imp was destroyed: work that began before a destroy
-  // writes nothing, even once the imp is back under its id (a move home)
   readonly lives: ReadonlyMap<string, number>;
 
-  // when each imp last logged a refusal for its cap
   readonly capNotices: ReadonlyMap<string, number>;
 
-  // the bytes each imp's logs took since its limit was last checked
   readonly uncheckedBytes: ReadonlyMap<string, number>;
 }
 
-// the imp's directory was read, so its live logs are in `live`
 interface ImpRecoverEvent {
   readonly type: 'imp.recover';
   readonly impId: string;
 }
 
-// the imp is being destroyed: its taps close and its live logs go
 interface ImpForgetEvent {
   readonly type: 'imp.forget';
   readonly impId: string;
 }
 
-// an imp was made under the id, a move home included
 interface ImpAdmitEvent {
   readonly type: 'imp.admit';
   readonly impId: string;
 }
 
-// a log made or loaded; one loaded as stopped is never tapped again
 interface LogAddEvent {
   readonly type: 'log.add';
   readonly entry: LiveLog;
   readonly isStopped: boolean;
 }
 
-// the generation ended: its log and its tap go
 interface LogEndEvent {
   readonly type: 'log.end';
   readonly entry: LiveLog;
 }
 
-// the imp limit or a full disk stopped the log: its tap goes for good
 interface LogStopEvent {
   readonly type: 'log.stop';
   readonly entry: LiveLog;
 }
 
-// deleted while live: its tap closes, its log goes, and it is never tapped
-// again
 interface LogRemoveEvent {
   readonly type: 'log.remove';
   readonly key: string;
 }
 
-// a log is being made, so the cap counts it
 interface CreationStartEvent {
   readonly type: 'creation.start';
   readonly key: string;
 }
 
-// the log is made, or its making failed
 interface CreationEndEvent {
   readonly type: 'creation.end';
   readonly key: string;
 }
 
-// the imp refused a log for its cap at `at`
 interface CapRefuseEvent {
   readonly type: 'cap.refuse';
   readonly impId: string;
   readonly at: number;
 }
 
-// takes the key's slot unless it is taken or the key is dropped
 interface TapOpenEvent {
   readonly type: 'tap.open';
   readonly key: string;
   readonly slot: TapSlot;
 }
 
-// the opening's tap takes its slot, if the opening still holds it
 interface TapAttachEvent {
   readonly type: 'tap.attach';
   readonly key: string;
@@ -127,28 +100,24 @@ interface TapAttachEvent {
   readonly tap: Readonly<ExecStream>;
 }
 
-// frees the slot, if the owner still holds it
 interface TapReleaseEvent {
   readonly type: 'tap.release';
   readonly key: string;
   readonly owner: TapSlot;
 }
 
-// the tap's copy ended: it closes, if it still holds its slot
 interface TapEndEvent {
   readonly type: 'tap.end';
   readonly key: string;
   readonly tap: Readonly<ExecStream>;
 }
 
-// the bytes an imp's logs took since its limit was last checked
 interface BytesAddEvent {
   readonly type: 'bytes.add';
   readonly impId: string;
   readonly bytes: number;
 }
 
-// the imp's limit was checked
 interface BytesClearEvent {
   readonly type: 'bytes.clear';
   readonly impId: string;
@@ -172,17 +141,13 @@ type SessionLogEvent =
   | BytesAddEvent
   | BytesClearEvent;
 
-// what the machine tells its owner: the imp refused a log for its cap, and
-// has not said so in the last CAP_NOTICE_MS
 interface CapNoticeEvent {
   readonly type: 'cap.notice';
   readonly impId: string;
 }
 
-// how often an imp at its cap of live logs says so
 const CAP_NOTICE_MS = 60_000;
 
-// what a guard or an action takes from its event
 interface KeyParams {
   readonly key: string;
 }
@@ -205,7 +170,8 @@ interface CapParams {
   readonly at: number;
 }
 
-// the types setup infers from: xstate reads only their types, never a value
+// xstate's setup reads only the types of these fields, never a value, so an
+// empty object serves.
 interface SessionLogTypes {
   readonly context?: SessionLogContext;
   readonly events?: SessionLogEvent;
@@ -214,12 +180,9 @@ interface SessionLogTypes {
 
 const types: SessionLogTypes = {};
 
-// the in-process state of the session logs, which only its events change
 export const sessionLogMachine = setup({
   types,
   guards: {
-    // a log from an earlier life of the imp, or ended, owns neither the
-    // key's slot nor its place
     isCurrent: (args, params: EntryParams) =>
       args.context.live.get(params.entry.key) === params.entry,
     isLive: (args, params: KeyParams) => args.context.live.has(params.key),
@@ -289,7 +252,6 @@ export const sessionLogMachine = setup({
           live: (args) =>
             new Map([...args.context.live].filter(([, entry]) => entry.impId !== args.event.impId)),
 
-          // a tap on its way finds its slot gone and closes
           taps: (args) =>
             new Map([...args.context.taps].filter(([key]) => !isImpKey(key, args.event.impId))),
           recovered: (args) => buildSetWithout(args.context.recovered, args.event.impId),

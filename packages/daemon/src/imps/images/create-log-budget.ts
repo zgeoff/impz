@@ -1,18 +1,11 @@
-// the most of a build's output a stream holds for a client that reads more
-// slowly than the build writes; a log event holds a few KiB at most
 export const BUILD_LOG_QUEUE_MAX_BYTES = 1024 ** 2;
 
 export interface LogBudget {
-  // The lines to queue for one line of output: none when the queue has no
-  // room, else the line, after a marker for the lines dropped before it
   readonly admit: (line: string, hasRoom: boolean) => string[];
 
-  // the marker for lines dropped since the last one admitted, as the build ends
   readonly drain: () => string[];
 }
 
-// A slow client loses lines of build output rather than holding them all in
-// impd's memory, or holding back the build. The marker says how many it lost.
 export function createLogBudget(): LogBudget {
   const state = { dropped: 0 };
 

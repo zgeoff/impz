@@ -6,36 +6,26 @@ import type { BuildTrace } from './decode-build-trace';
 import { makeTraceLines } from './make-trace-lines';
 import { readRefusalError } from './run-docker';
 
-// the tail of a failed build's message the client gets
 const FAILURE_MAX_CHARS = 4000;
 
 export interface DockerBuildOptions {
-  // DOCKER_HOST, a unix socket: imp-docker-proxy's on imp-host; null is
-  // the engine's default socket
   readonly dockerHost: string | null;
 
-  // the build context, a tar file
   readonly tarPath: string;
   readonly tag: string;
 
-  // the Dockerfile's path inside the context; Dockerfile when undefined
   readonly dockerfile: string | undefined;
 
-  // aborts the request, which ends the build on the engine
   readonly signal: AbortSignal;
 
-  // hears the build's output and steps as the engine reports them
   readonly output?: BuildOutput | undefined;
 }
 
-// The build itself failed: the Dockerfile, its context or its size. The
-// message is the client's to read.
 export class DockerBuildError extends Error {
   override readonly name = 'DockerBuildError';
 }
 
-// the messages of POST /build's JSON stream that impd reads: BuildKit's
-// trace is protobuf in base64, under `aux`
+// Docker's POST /build stream carries BuildKit's trace as base64 protobuf under `aux`.
 const BuildMessageSchema = z.object({
   id: z.string().optional(),
   aux: z.unknown().optional(),
@@ -45,9 +35,6 @@ const BuildMessageSchema = z.object({
 
 const ImageIdSchema = z.object({ ID: z.string().regex(/^sha256:[a-f0-9]{64}$/v) });
 const RefusalSchema = z.object({ message: z.string() });
-
-// one message of the stream at most; BuildKit's trace messages carry step
-// output, which comes in chunks far below this
 const LINE_MAX_CHARS = 8 * 1024 ** 2;
 
 function parseLine(line: string): unknown {
@@ -58,7 +45,6 @@ function parseLine(line: string): unknown {
   }
 }
 
-// each JSON line of the body, as it comes
 async function* readJsonLines(body: ReadableStream<Uint8Array>): AsyncGenerator {
   const decoder = new TextDecoder();
 
@@ -91,9 +77,8 @@ async function* readJsonLines(body: ReadableStream<Uint8Array>): AsyncGenerator 
   }
 }
 
-// The image ID from a build's message stream. An error message fails the
-// build: the engine answers 200 and reports a failed build in the stream.
-// `onTrace` hears each trace message BuildKit sends as the build runs.
+// The Docker engine answers 200 for a build that fails, and reports the failure in the
+// message stream.
 export async function readBuiltImageId(
   messages: Readonly<AsyncIterable<unknown> | Iterable<unknown>>,
   onTrace?: (trace: BuildTrace) => void,
@@ -128,8 +113,6 @@ export async function readBuiltImageId(
   return imageId;
 }
 
-// A trace message's progress, or null for one impd cannot read: the build
-// goes on without it
 function findBuildTrace(aux: unknown): BuildTrace | null {
   if (typeof aux !== 'string') {
     return null;
@@ -142,8 +125,6 @@ function findBuildTrace(aux: unknown): BuildTrace | null {
   }
 }
 
-// The engine's answer before any build ran: a refusal by imp-docker-proxy
-// (403), a context over its limit (413), or the engine's own error.
 async function readRefusal(response: Response): Promise<Error> {
   const text = await response.text();
 
@@ -159,9 +140,7 @@ async function readRefusal(response: Response): Promise<Error> {
     const parsed = RefusalSchema.safeParse(JSON.parse(text));
 
     message = parsed.success ? parsed.data.message : message;
-  } catch {
-    // not JSON: the text as it is
-  }
+  } catch {}
 
   const status = String(response.status);
 
@@ -172,8 +151,6 @@ async function readRefusal(response: Response): Promise<Error> {
   return new Error(`docker build: the engine answered ${status}: ${message}`);
 }
 
-// impd sends builds itself, and fetch reaches only a unix socket or a URL
-// it would have to trust: DOCKER_HOST must be unix:///<path>
 export function readDockerSocket(dockerHost: string | null): string {
   if (dockerHost === null) {
     return '/var/run/docker.sock';
@@ -188,9 +165,6 @@ export function readDockerSocket(dockerHost: string | null): string {
   return dockerHost.slice('unix://'.length);
 }
 
-// One BuildKit build with no session, the context as the body, so the proxy
-// can refuse /session and /grpc. Returns the image ID; the image is tagged
-// `tag`.
 export async function runDockerBuild(options: Readonly<DockerBuildOptions>): Promise<string> {
   const query = new URLSearchParams([
     ['t', options.tag],
@@ -202,9 +176,8 @@ export async function runDockerBuild(options: Readonly<DockerBuildOptions>): Pro
     query.set('dockerfile', options.dockerfile);
   }
 
-  // the host part is ignored: the request goes to the unix socket.
-  // timeout: false lifts Bun's 360 s limit on a silent response, which a
-  // RUN step with no output outlasts; `signal` still ends the build
+  // Bun sends the request to the unix socket and ignores the URL's host. timeout: false
+  // lifts Bun's 360 s limit on a silent response, which a RUN step with no output outlasts.
   const response = await fetch(`http://docker/build?${query.toString()}`, {
     method: 'POST',
     timeout: false,

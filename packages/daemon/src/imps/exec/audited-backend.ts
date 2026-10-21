@@ -8,9 +8,6 @@ import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import type { AgentExecRequest } from '../../vm/agent-client/exec-stream';
 import type { ExecBackend } from './exec-session';
 
-// Every exec, console and attach an `/exec` socket opens leaves an audit row:
-// a terminal exec is a console. An exec in the agent's world is an event
-// too, once the agent took it, so a refused one never reads as a run.
 export function buildAuditedBackend(
   backend: ExecBackend,
   audit: ApiAudit,
@@ -54,7 +51,6 @@ export function buildAuditedBackend(
   };
 }
 
-// `impz cp` runs the tar tool; its arguments name the path in the audit
 function readProcedure(request: AgentExecRequest, feature: AgentFeature | undefined): string {
   if (request.outer === true) {
     return 'exec-agent';

@@ -12,7 +12,7 @@ import { formatTimings } from './format-timings';
 import type { ImpHost, ImpVms } from './imp-context';
 import type { LockedImp } from './imp-lock';
 
-// the claim's seed for the guest's entropy pool; the agent wants 32 or more
+// The agent wants at least 32 bytes of seed for the guest's entropy pool.
 const CLAIM_SEED_BYTES = 64;
 
 interface ColdVmStart {
@@ -21,14 +21,10 @@ interface ColdVmStart {
   readonly address: SlotAddress;
   readonly cgroup: ImpCgroup | null;
 
-  // the host's part before the VM, for the boot's log line
   readonly hostSteps: Readonly<Record<string, number>>;
   readonly diskReady: Promise<unknown>;
 }
 
-// A cold boot: a restore of the shape's boot template when one is ready,
-// else the kernel's boot. A template that fails to restore goes, and the
-// imp boots the kernel (docs/architecture/lifecycle/boot-templates.md#restore).
 export async function startColdVm(
   context: ImpHost & ImpVms,
   start: Readonly<ColdVmStart>,
@@ -39,14 +35,12 @@ export async function startColdVm(
   const cgroup = start.cgroup;
   const hostSteps = start.hostSteps;
 
-  // a template has no hot-plug region: an elastic imp boots the kernel
-  // (docs/architecture/lifecycle/elastic-memory.md#limits)
+  // A template has no hot-plug region, so an elastic imp boots the kernel.
   const template =
     imp.maxMemoryMib > imp.memoryMib
       ? null
       : context.templates?.requestTemplate({ vcpus: imp.vcpus, memoryMib: imp.memoryMib });
 
-  // a disk that fails is the create's failure, not the template's
   const disk = { isFailed: false };
 
   const readDiskBytes = async () => {
@@ -62,7 +56,6 @@ export async function startColdVm(
 
   const diskBytes = readDiskBytes();
 
-  // handled now: a restore that fails first never awaits it
   void Promise.allSettled([diskBytes]);
 
   if (template !== null && template !== undefined) {
@@ -109,7 +102,6 @@ export async function startColdVm(
         `impd: ${imp.name}: boot template ${template.key.slice(0, 12)} failed, booting the kernel: ${getErrorMessage(error)}`,
       );
 
-      // a failure of the imp's own (its disk, its claim) leaves the template
       const isTemplateFault = error instanceof TemplateRestoreError && error.isTemplateFault;
 
       context.templates?.reportFailure(template, isTemplateFault);
@@ -142,8 +134,6 @@ export async function startColdVm(
   return vm;
 }
 
-// The guest's own steps after impd's, which they overlap: a template's run
-// inside the claim's and the agent's spans, a cold boot's inside the agent's.
 function formatGuestSteps(steps: Readonly<Record<string, number>> | undefined): string {
   return steps === undefined || Object.keys(steps).length === 0
     ? ''

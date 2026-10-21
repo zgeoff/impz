@@ -5,8 +5,6 @@ import type { ExecStream } from '../../vm/agent-client/exec-stream';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
 import type { ImpHost } from './imp-context';
 
-// A session's output, and NO_SESSION, name the imp's cold boots, read after
-// any boot the open caused, so that boot comes first
 export async function withColdBoots(
   context: ImpHost,
   imp: ImpRecord,

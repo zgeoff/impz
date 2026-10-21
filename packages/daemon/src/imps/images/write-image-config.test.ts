@@ -24,7 +24,6 @@ async function setupTest() {
   const root = join(base, 'root');
   const outside = join(base, 'outside');
 
-  // the unpacked tree, and a directory beside it a link could reach
   mkdirSync(root);
   mkdirSync(outside);
 

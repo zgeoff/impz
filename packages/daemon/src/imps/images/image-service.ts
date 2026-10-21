@@ -20,10 +20,8 @@ export type ImageService = ImageAdds &
     readonly listImages: () => Promise<ImageRecord[]>;
     readonly removeImage: (name: string) => Promise<void>;
 
-    // the named image, else the configured default, else `ubuntu`
     readonly resolveImage: (name?: string) => Promise<ImageRecord>;
 
-    // what resolveImage picks for a create that names no image, if anything
     readonly findDefaultImage: () => Promise<ImageRecord | undefined>;
   };
 
@@ -32,31 +30,21 @@ export interface ImageServiceDeps {
   readonly db: ImpDatabase;
   readonly storage: StorageBackend;
 
-  // a build joins it until the image's row is written, a removal until its
-  // rootfs is gone
   readonly storageGate: StorageGate;
 
-  // a build holds room for the unpacked tree and its ext4 file
   readonly diskBudget: Pick<DiskBudget, 'withRoom' | 'withGrowingRoom'>;
 
-  // where an isolated build runs; null until the imps are up
   readonly readBuilders: () => Builders | null;
   readonly log: (message: string) => void;
 
-  // BUILDER_IMAGE_PULL_MS, but for tests; undefined keeps the default
   readonly builderImagePullMs?: number | undefined;
 
-  // starts the limit on the builder image's pull; AbortSignal.timeout by
-  // default, and a signal the test aborts in tests
   readonly startPullLimit?: (pullMs: number) => AbortSignal;
 
-  // the environment of images.add's docker calls; impd's own by default
   readonly dockerEnv?: Readonly<Record<string, string>>;
 
-  // the image impd's first start pulls as the default; null pulls none
   readonly seedRef?: string | null;
 
-  // the start time of each build images.builds lists; Date.now by default
   readonly now?: () => number;
 }
 

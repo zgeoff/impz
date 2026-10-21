@@ -61,8 +61,6 @@ test('#readProxyRefusal caps a refusal at 1000 characters', () => {
   expect(readProxyRefusal(body)).toBe(`imp-docker-proxy: ${'x'.repeat(982)}`);
 });
 
-// other errors, the proxy's own engine failure, and a refusal a registry
-// wrote into its own error or a page around the body
 test.each([
   [''],
   ["imp-docker-proxy: registry localhost:5320 is the host's own"],

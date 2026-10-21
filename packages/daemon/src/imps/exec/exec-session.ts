@@ -24,16 +24,10 @@ import type {
 import { TOOL_FEATURES, buildToolRequest } from './exec-tools';
 import { findSignalNumber, getSignalName } from './signal-names';
 
-// The two ends the session bridges: a WebSocket peer and the imp service.
-
 export interface ExecPeer {
   readonly sendText: (text: string) => void;
-
-  // false when the socket dropped the message rather than queue it
   readonly sendBinary: (data: Uint8Array) => boolean;
   readonly close: (code?: number, reason?: string) => void;
-
-  // bytes queued for the client and not yet sent
   readonly readBufferedAmount: () => number;
 }
 
@@ -48,45 +42,26 @@ export interface ExecBackend {
 }
 
 export interface ExecSession {
-  // a text message parsed as JSON, or a binary message as bytes
   readonly handleMessage: (message: unknown) => void;
   readonly handleClose: () => void;
-
-  // the peer's send buffer drained: output may flow again
   readonly handleDrain: () => void;
 }
 
 const DRAIN_POLL_MS = 100;
 
-// One `/exec` WebSocket (packages/api exec-protocol): `start` or `attach`
-// opens an agent stream, then stdin and control go to the agent and output
-// and the exit come back. A session socket can end with `detached` instead.
 export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSession {
-  // messages that arrive between `start` and `started` wait in `pending`
   const state: {
     stream: ExecStream | null;
     starting: boolean;
     closed: boolean;
     name: string;
     pending: unknown[];
-
-    // a tool's stdin written to the agent and not acked yet
     tool: boolean;
     unacked: number;
     acking: boolean;
-
-    // a tool's stdout sent to the client and not acked yet
     outUnacked: number;
-
-    // the start asked for a kill grace, so `started` says whether the
-    // agent kills the group itself
     killGrace: boolean;
-
-    // the start asked for a log, so `started.output.log` answers it
     log: boolean;
-
-    // a session with offsets: where its data started, and the bytes sent
-    // since, the prelude's included
     output: Extract<SessionOutput, { continuity: 'offsets' }> | null;
     sentBytes: number;
   } = {
@@ -115,7 +90,6 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
     peer.close(1011, 'exec failed');
   };
 
-  // the offset after the last byte this socket sent; the prelude has none
   const readOffset = (): { offset?: number } => {
     const output = state.output;
 
@@ -128,8 +102,6 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
     send({ type: 'detached', reason, ...readOffset() });
   };
 
-  // A dropped message would leave a hole in the output, so the socket closes
-  // instead: a client resumes from the offset it has.
   const sendOutput = (channel: ExecChannel, data: Uint8Array): void => {
     if (peer.sendBinary(encodeExecFrame(channel, data))) {
       state.sentBytes += data.byteLength;
@@ -169,8 +141,6 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
 
   const drainWaiter: { wake: (() => void) | null } = { wake: null };
 
-  // output waits while the client is behind; the agent connection then stops
-  // reading, so a slow client slows the guest process instead of growing memory
   const waitForPeerDrain = async (): Promise<void> => {
     while (!state.closed && peer.readBufferedAmount() > EXEC_HIGH_WATER_BYTES) {
       const drained = Promise.withResolvers<void>();
@@ -189,8 +159,6 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
 
   const ackWaiter: { wake: (() => void) | null } = { wake: null };
 
-  // a tool's output waits for the client's acks, as other output waits for
-  // the socket to drain
   const waitForStdoutAcks = async (): Promise<void> => {
     while (!state.closed && state.outUnacked > EXEC_STDOUT_WINDOW_BYTES) {
       await new Promise<void>((resolve) => {
@@ -225,9 +193,8 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
         await waitForPeerDrain();
       }
 
-      // A stream that ends without an exit or detached frame lost the agent
-      // connection: a session runs on, a plain exec got SIGHUP. A socket
-      // that closed first, the client's or a dropped send's, takes nothing.
+      // A stream that ends without an exit or detached frame lost the agent connection, and the
+      // agent then keeps a session running and sends a plain exec SIGHUP.
       if (state.closed) {
         return;
       }
@@ -269,7 +236,6 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
 
     state.stream = stream;
 
-    // a session from an agent without offsets replays as before
     const sessionOutput =
       stream.session === null ? null : (stream.output ?? { continuity: 'none' });
 
@@ -292,8 +258,6 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
     await drainOutput(stream);
   };
 
-  // a tool's stdin is acked once it is on its way to the guest; a client
-  // past the window would grow impd's memory, so it is cut off
   const sendStdinAcks = async (stream: ExecStream): Promise<void> => {
     state.acking = true;
 
@@ -498,7 +462,6 @@ function buildErrorMessage(error: unknown): ExecServerMessage {
     };
   }
 
-  // NO_SESSION and INVALID_RESUME carry data in the API's shape
   if (error instanceof AgentError) {
     const data: unknown = error.data;
 
@@ -513,12 +476,10 @@ function buildErrorMessage(error: unknown): ExecServerMessage {
   return { type: 'error', message: getErrorMessage(error) };
 }
 
-// the agent's reasons are the API's; one it does not know reads as lost
 function readDetachReason(reason: string): DetachReason {
   return DETACH_REASONS.find((known) => known === reason) ?? 'lost';
 }
 
-// a session started with log whose agent predates session logs says so
 function withLogAnswer(output: SessionOutput | null, asked: boolean): SessionOutput | null {
   if (!asked || output?.continuity !== 'offsets' || output.log !== undefined) {
     return output;

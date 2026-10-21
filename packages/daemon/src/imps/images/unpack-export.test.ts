@@ -37,7 +37,6 @@ test('#assertUnpacked fails an unpack whose capability tar had no permission to 
   );
 });
 
-// a namespaced (v3) capability whose root the host does not map
 test.each([
   [
     "tar: setxattrat: Cannot set 'security.capability' extended attribute for file 'usr/bin/ping': Invalid argument",
@@ -103,8 +102,6 @@ test('#assertUnpacked fails an unpack whose tar exited non-zero with its stderr'
   }).toThrowWithMessage(Error, 'docker export | tar exited 2: tar: Unexpected EOF in archive');
 });
 
-// the export is impd's own call on its own container: nothing in it came
-// from the client, so a refusal of it is impd's error, never BAD_REQUEST
 test('#assertUnpacked keeps an export the proxy refused as impd’s own error, with no code', () => {
   expect(() => {
     assertUnpacked({
@@ -130,7 +127,7 @@ test('#assertUnpacked names the proxy refusal of an export in its error', () => 
   );
 });
 
-// imp-host's set from deploy/imp-host.args.json, with bit 31
+// The mask is imp-host's capability set from deploy/imp-host.args.json, which holds bit 31.
 test('#readSetfcapWarning gives no start warning when CapEff holds CAP_SETFCAP', () => {
   expect(readSetfcapWarning('Name:\timpd\nCapEff:\t00000000882810fb\n')).toBeNull();
 });
@@ -170,7 +167,6 @@ test('#writeExportedTree fails the unpack when the export fails', async () => {
 
   updateEnv('PATH', docker.path);
 
-  // pipefail reports tar's exit, which the empty export fails
   expect(writeExportedTree('c'.repeat(64), ctx.directoryPath)).rejects.toThrowWithMessage(
     Error,
     /^docker export \| tar exited 2: stub docker: export c{64} is not modelled\n/v,

@@ -4,32 +4,26 @@ import type { DialStream, DialTarget } from '../../vm/agent-client/dial-stream';
 import { formatFailure, runChannelRelay } from './channel-io';
 import type { SshConnectionContext } from './ssh-connection-context';
 
-// RFC 4254 5.1: the client may not open this channel
 const ADMINISTRATIVELY_PROHIBITED = 1;
 
-// The hosts a local forward (`ssh -L`, `-D`) may name: the imp's own
-// loopback. Anything else would make impd a way into other guests, the host
-// container or the network beyond.
+// A forward to any host beyond the imp's own loopback would reach other guests, the host container
+// or the network beyond.
 const LOOPBACK_HOSTS: Readonly<Record<string, string>> = {
   localhost: '127.0.0.1',
   '127.0.0.1': '127.0.0.1',
   '::1': '[::1]',
 };
 
-// impd's own sockets in the guest, such as a forwarded ssh-agent's. Not a
-// boundary: the agent dials a unix socket as the image USER, who owns every
-// forwarded agent anyway. It keeps a root image's forward off them.
+// Not a security boundary, since the agent dials as the image's user, who owns each forwarded
+// agent; it keeps a root image's forward off impd's own sockets.
 const IMP_RUN_DIR = '/run/imp/';
 
-// the dial target for a direct-streamlocal channel, or null when it is
-// refused; the agent refuses a path whose symlinks lead there
 export function resolveSocketTarget(socketPath: string): DialTarget | null {
   const path = posix.normalize(posix.join('/', socketPath));
 
   return path.startsWith(IMP_RUN_DIR) ? null : { network: 'unix', address: path };
 }
 
-// the dial target for a direct-tcpip channel, or null when it is refused
 export function resolveTcpTarget(host: string, port: number): DialTarget | null {
   const loopback = LOOPBACK_HOSTS[host.toLowerCase()];
 
@@ -40,9 +34,6 @@ export function resolveTcpTarget(host: string, port: number): DialTarget | null 
   return { network: 'tcp', address: `${loopback}:${String(port)}` };
 }
 
-// A forward channel: the client's bytes to an address in the guest, through
-// the agent's dial, and back. The channel opens only once the dial worked,
-// so a refused port fails the open (connect failed), as with sshd.
 export async function handleForward(
   accept: AcceptConnection<ServerChannel>,
   reject: RejectConnection,
