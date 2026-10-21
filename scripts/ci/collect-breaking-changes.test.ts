@@ -511,6 +511,12 @@ test.each([
     ['procedure secrets.add input .value: pattern none → "^[a-z]+$"'],
   ],
   ['a format', { format: 'email' }, ['procedure secrets.add input .value: format none → "email"']],
+  ['the name of a zod check as its format', { format: 'starts_with' }, []],
+  [
+    'the name of a zod check as its format beside a pattern',
+    { format: 'ends_with', pattern: '.*[.]tar$' },
+    ['procedure secrets.add input .value: pattern none → ".*[.]tar$"'],
+  ],
 ])(
   '#collectBreakingChanges reports a constraint of an input string only when it tightens or is new, given %s',
   (_label, constraints, expected) => {
@@ -1702,4 +1708,256 @@ test('#collectBreakingChanges passes a changed input property that a closed part
   };
 
   expect(collectBreakingChanges(base, head)).toStrictEqual([]);
+});
+
+test('#collectBreakingChanges passes an output whose nullable string turns from a union into a type list', () => {
+  const base = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: { owner: { anyOf: [{ type: 'string' }, { type: 'null' }] } },
+          required: ['owner'],
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  const head = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: { owner: { type: ['string', 'null'] } },
+          required: ['owner'],
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  expect(collectBreakingChanges(base, head)).toStrictEqual([]);
+});
+
+test('#collectBreakingChanges passes an output whose nullable object holds a field that turns from a union into a type list', () => {
+  const base = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: {
+            lease: {
+              anyOf: [
+                {
+                  type: 'object',
+                  properties: { holder: { anyOf: [{ type: 'string' }, { type: 'null' }] } },
+                  required: ['holder'],
+                },
+                { type: 'null' },
+              ],
+            },
+          },
+          required: ['lease'],
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  const head = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: {
+            lease: {
+              anyOf: [
+                {
+                  type: 'object',
+                  properties: { holder: { type: ['string', 'null'] } },
+                  required: ['holder'],
+                },
+                { type: 'null' },
+              ],
+            },
+          },
+          required: ['lease'],
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  expect(collectBreakingChanges(base, head)).toStrictEqual([]);
+});
+
+test('#collectBreakingChanges reports an output whose type list adds null', () => {
+  const base = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: { owner: { type: 'string' } },
+          required: ['owner'],
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  const head = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: { owner: { type: ['string', 'null'] } },
+          required: ['owner'],
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  expect(collectBreakingChanges(base, head)).toStrictEqual([
+    'procedure imps.get output .owner: type string → string | null',
+  ]);
+});
+
+test('#collectBreakingChanges passes an output whose pattern makes an optional group required', () => {
+  const base = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: {
+            bootedAt: { type: 'string', pattern: '^[0-9]{2}:[0-9]{2}(?::[0-9]{2})?$' },
+          },
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  const head = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: { bootedAt: { type: 'string', pattern: '^[0-9]{2}:[0-9]{2}:[0-9]{2}$' } },
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  expect(collectBreakingChanges(base, head)).toStrictEqual([]);
+});
+
+test('#collectBreakingChanges reports an input whose pattern makes an optional group required', () => {
+  const base = {
+    procedures: {
+      'imps.wake': {
+        input: {
+          type: 'object',
+          properties: { at: { type: 'string', pattern: '^[0-9]{2}:[0-9]{2}(?::[0-9]{2})?$' } },
+        },
+        output: { type: 'object' },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  const head = {
+    procedures: {
+      'imps.wake': {
+        input: {
+          type: 'object',
+          properties: { at: { type: 'string', pattern: '^[0-9]{2}:[0-9]{2}:[0-9]{2}$' } },
+        },
+        output: { type: 'object' },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  expect(collectBreakingChanges(base, head)).toStrictEqual([
+    'procedure imps.wake input .at: pattern "^[0-9]{2}:[0-9]{2}(?::[0-9]{2})?$" → "^[0-9]{2}:[0-9]{2}:[0-9]{2}$"',
+  ]);
+});
+
+test('#collectBreakingChanges reports an output whose pattern unwraps an optional group of alternatives', () => {
+  const base = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: { size: { type: 'string', pattern: '^[0-9]+(?:k|m)?b$' } },
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  const head = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: { size: { type: 'string', pattern: '^[0-9]+k|mb$' } },
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  expect(collectBreakingChanges(base, head)).toStrictEqual([
+    'procedure imps.get output .size: pattern "^[0-9]+(?:k|m)?b$" → "^[0-9]+k|mb$"',
+  ]);
 });
