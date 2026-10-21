@@ -72,8 +72,9 @@ export function createZfsUsage(
       // usage counts it until then.
       await ctx.waitForReclaim();
 
-      const [space, freeingBytes] = await Promise.all([
+      const [space, entries, freeingBytes] = await Promise.all([
         ctx.zfs.listSpace(ctx.root),
+        ctx.zfs.list(ctx.root),
         ctx.zfs.readFreeing(ctx.root.split('/')[0] ?? ctx.root),
       ]);
 
@@ -84,7 +85,17 @@ export function createZfsUsage(
           const name = ctx.buildImageName(digest);
           const found = byName.get(name);
 
-          if (found === undefined) {
+          // The reclaim keeps a removed dataset while a snapshot other than `@base` is unmarked,
+          // so its removal frees nothing that can be counted.
+          const isHeld = entries.some(
+            (entry) =>
+              entry.type === 'snapshot' &&
+              entry.name.startsWith(`${name}@`) &&
+              entry.name !== `${name}@base` &&
+              !entry.deferDestroy,
+          );
+
+          if (found === undefined || isHeld) {
             return [];
           }
 

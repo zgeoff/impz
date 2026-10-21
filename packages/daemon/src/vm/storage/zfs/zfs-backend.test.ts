@@ -1664,6 +1664,32 @@ test('#measureImages marks an image whose base an imp disk clones as shared', as
   });
 });
 
+test('#measureImages leaves out an image whose dataset holds a snapshot other than its base', async () => {
+  const ctx = setupTest();
+
+  await ctx.backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
+  await ctx.backend.createImage('sha256:9f2c', () => Promise.resolve());
+  await ctx.fake.run(['zfs', 'snapshot', 'tank/imp/images/9f2c@kept']);
+
+  const report = await ctx.backend.measureImages(['sha256:9f2c']);
+
+  expect(report.images).toStrictEqual(new Map());
+});
+
+test('#measureImages counts an image whose only other snapshot is marked for destroy', async () => {
+  const ctx = setupTest();
+
+  await ctx.backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
+  await ctx.backend.createImage('sha256:9f2c', () => Promise.resolve());
+  await ctx.fake.run(['zfs', 'snapshot', 'tank/imp/images/9f2c@kept']);
+  await ctx.fake.run(['zfs', 'clone', 'tank/imp/images/9f2c@kept', 'tank/imp/disks/a']);
+  await ctx.fake.run(['zfs', 'destroy', '-d', 'tank/imp/images/9f2c@kept']);
+
+  const report = await ctx.backend.measureImages(['sha256:9f2c']);
+
+  expect([...report.images.keys()]).toStrictEqual(['sha256:9f2c']);
+});
+
 test('#measureImages leaves out an image with no dataset', async () => {
   const ctx = setupTest();
 
