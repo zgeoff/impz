@@ -207,37 +207,52 @@ export interface BackupDrill {
 // since the reboot back off the backup settings runs in its cleanup.
 export function createBackupDrill(stack: AsyncDisposableStack, metric: string): BackupDrill {
   const spans = { rebootMs: 0, minioMs: 0, runsMs: 0, rebootBackMs: 0 };
+  const reached = { isRebooted: false, isMinioUp: false };
 
   stack.defer(() => {
     writeMetric(metric, spans);
+  });
+
+  stack.defer(async () => {
+    if (reached.isMinioUp) {
+      await stopMinio();
+    }
+  });
+
+  // Before MinIO stops: impd's shutdown waits for a scheduled run, which
+  // retries for seconds against a MinIO that is gone.
+  stack.defer(async () => {
+    if (!reached.isRebooted) {
+      return;
+    }
+
+    const back = Date.now();
+
+    await runDevScript('reboot');
+
+    spans.rebootBackMs += Date.now() - back;
   });
 
   return {
     // impd sets up its repository at start, so each test reboots onto one of
     // its own instead of taking suite settings.
     reboot: async (env) => {
-      const started = Date.now();
+      const rebootStarted = Date.now();
+
+      reached.isRebooted = true;
 
       await runDevScript('reboot', instance, env);
 
-      spans.rebootMs += Date.now() - started;
-
-      stack.defer(async () => {
-        const back = Date.now();
-
-        await runDevScript('reboot');
-
-        spans.rebootBackMs += Date.now() - back;
-      });
+      spans.rebootMs += Date.now() - rebootStarted;
     },
     startMinio: async (secrets) => {
-      const started = Date.now();
+      const minioStarted = Date.now();
+
+      reached.isMinioUp = true;
 
       await startMinio(secrets);
 
-      spans.minioMs += Date.now() - started;
-
-      stack.defer(() => stopMinio());
+      spans.minioMs += Date.now() - minioStarted;
     },
     runBackup: async () => {
       const started = Date.now();
