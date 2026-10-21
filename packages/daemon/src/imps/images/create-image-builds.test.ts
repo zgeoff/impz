@@ -14,6 +14,7 @@ import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import {
   STUB_BUILDER_CONTAINER,
   buildStubImageBuilder,
@@ -27,6 +28,7 @@ import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { startDiskSampler } from '../../../testing/vm/start-disk-sampler';
 import { loadConfig } from '../../config';
 import { createImage, listImages, readImageByName } from '../../platform/db/images';
+import { createImp } from '../../platform/db/imps';
 import { openDatabase } from '../../platform/db/open-database';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
@@ -399,6 +401,133 @@ test('it releases the disk hold once a build succeeds', async () => {
 
   expect(ctx.grows).toHaveLength(1);
   expect(status.pendingBytes).toBe(0);
+});
+
+test('it removes the oldest unused agent images once a build leaves more than the rollback count, and keeps those in use', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+  });
+
+  const logged: string[] = [];
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '2' }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => builder.builders,
+    log: (message) => {
+      logged.push(message);
+    },
+  });
+
+  await writeFile(join(ctx.dataDir, 'image-keep'), 'agent-2222222\n');
+
+  for (const [name, lastUsedAt] of [
+    ['agent-1111111', '2026-08-01T00:00:00Z'],
+    ['agent-2222222', '2026-08-02T00:00:00Z'],
+    ['agent-3333333', '2026-08-03T00:00:00Z'],
+    ['agent-4444444', '2026-08-04T00:00:00Z'],
+    ['agent-5555555', '2026-08-05T00:00:00Z'],
+  ] as const) {
+    const digest = `sha256:${name.slice(-1).repeat(64)}`;
+
+    await createImage(ctx.db, buildMockNewImage({ name, digest, sizeBytes: 1024 ** 3 }));
+    await mkdir(buildImagePaths(ctx.dataDir, digest).directory, { recursive: true });
+    await writeFile(buildImagePaths(ctx.dataDir, digest).rootfs, '');
+
+    await ctx.db
+      .updateTable('images')
+      .set({ last_used_at: Date.parse(lastUsedAt) })
+      .where('name', '=', name)
+      .execute();
+  }
+
+  const used = await readImageByName(ctx.db, 'agent-1111111');
+
+  invariant(used);
+
+  await createImp(ctx.db, buildMockNewImp({ imageId: used.id }));
+
+  await Bun.write(
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+  );
+
+  await images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'agent-6666666',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  const kept = await listImages(ctx.db);
+
+  expect(kept.map((image) => image.name)).toStrictEqual([
+    'agent-1111111',
+    'agent-2222222',
+    'agent-5555555',
+    'agent-6666666',
+  ]);
+
+  const removedRootfs = buildImagePaths(ctx.dataDir, `sha256:${'3'.repeat(64)}`).rootfs;
+  const usedRootfs = buildImagePaths(ctx.dataDir, `sha256:${'1'.repeat(64)}`).rootfs;
+
+  expect(existsSync(removedRootfs)).toBeFalse();
+  expect(existsSync(usedRootfs)).toBeTrue();
+
+  expect(logged.filter((line) => line.startsWith('impd: image prune:'))).toStrictEqual([
+    'impd: image prune: removed agent-4444444 (1.0 GiB, last used 2026-08-04T00:00:00.000Z)',
+    'impd: image prune: removed agent-3333333 (1.0 GiB, last used 2026-08-03T00:00:00.000Z)',
+  ]);
+});
+
+test('it keeps every agent image after a build while the prune cannot read which images configs outside impd use', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => builder.builders,
+    log: () => {},
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-1111111' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+
+  await Bun.write(
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+  );
+
+  await images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'agent-3333333',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  const kept = await listImages(ctx.db);
+
+  expect(kept.map((image) => image.name)).toStrictEqual([
+    'agent-1111111',
+    'agent-2222222',
+    'agent-3333333',
+  ]);
 });
 
 test('it releases the disk hold when the export is over the file limit', async () => {

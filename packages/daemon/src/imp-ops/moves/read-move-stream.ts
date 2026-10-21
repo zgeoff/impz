@@ -9,7 +9,12 @@ import type { Broker } from '../../network/broker/broker-service';
 import type { EgressService } from '../../network/egress/egress-service';
 import { createCheckpoint } from '../../platform/db/checkpoints';
 import { writeMovedBoots } from '../../platform/db/cold-boots';
-import { createImage, readImageByDigest, readImageByName } from '../../platform/db/images';
+import {
+  createImage,
+  readImageByDigest,
+  readImageByName,
+  updateImageUse,
+} from '../../platform/db/images';
 import { readImpById } from '../../platform/db/imps';
 import { updateMoveTicket } from '../../platform/db/move-tickets';
 import type { MoveTicketRow } from '../../platform/db/move-tickets';
@@ -336,6 +341,8 @@ async function requireImage(
   const existing = await readImageByDigest(deps.db, header.image.digest);
 
   if (existing !== undefined) {
+    await updateImageUse(deps.db, [existing.id], deps.now());
+
     return { name: existing.name, files: [] };
   }
 
@@ -359,6 +366,8 @@ async function requireImage(
     const known = await readImageByDigest(deps.db, digest);
 
     if (known !== undefined) {
+      await updateImageUse(deps.db, [known.id], deps.now());
+
       return { name: known.name, files };
     }
 

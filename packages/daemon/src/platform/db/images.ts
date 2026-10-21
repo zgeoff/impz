@@ -26,6 +26,8 @@ export interface NewImage {
 }
 
 export async function createImage(db: ImpDatabase, image: NewImage): Promise<ImageRecord> {
+  const now = Date.now();
+
   const row = await db
     .insertInto('images')
     .values({
@@ -36,7 +38,8 @@ export async function createImage(db: ImpDatabase, image: NewImage): Promise<Ima
       size_bytes: image.sizeBytes,
       source: image.source ?? 'oci',
       source_imp: image.sourceImp ?? null,
-      created_at: Date.now(),
+      created_at: now,
+      last_used_at: now,
     })
     .returningAll()
     .executeTakeFirstOrThrow();
@@ -112,6 +115,7 @@ export async function updateImage(
       digest: image.digest,
       size_bytes: image.sizeBytes,
       source_imp: image.sourceImp ?? null,
+      last_used_at: Date.now(),
     })
     .where('id', '=', id)
     .returningAll()
@@ -128,4 +132,80 @@ export async function countImageDigestUses(db: ImpDatabase, digest: string): Pro
     .executeTakeFirstOrThrow();
 
   return row.count;
+}
+
+export async function updateImageUse(
+  db: ImpDatabase,
+  imageIDs: readonly string[],
+  at: number,
+): Promise<void> {
+  if (imageIDs.length === 0) {
+    return;
+  }
+
+  await db
+    .updateTable('images')
+    .set({ last_used_at: at })
+    .where('id', 'in', imageIDs)
+    .where('last_used_at', '<', at)
+    .execute();
+}
+
+export interface ImageUse {
+  readonly id: string;
+  readonly name: string;
+  readonly digest: string;
+  readonly source: ImageSource;
+  readonly sizeBytes: number;
+  readonly lastUsedAt: number;
+  readonly impCount: number;
+}
+
+export async function listImageUses(db: ImpDatabase): Promise<ImageUse[]> {
+  const rows = await db
+    .selectFrom('images')
+    .leftJoin('imps', 'imps.image_id', 'images.id')
+    .select((eb) => [
+      'images.id',
+      'images.name',
+      'images.digest',
+      'images.source',
+      'images.size_bytes',
+      'images.last_used_at',
+      eb.fn.count<number>('imps.id').as('imp_count'),
+    ])
+    .groupBy('images.id')
+    .orderBy('images.name')
+    .execute();
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    digest: row.digest,
+    source: row.source,
+    sizeBytes: row.size_bytes,
+    lastUsedAt: row.last_used_at,
+    impCount: row.imp_count,
+  }));
+}
+
+export async function removeUnusedImage(
+  db: ImpDatabase,
+  id: string,
+  lastUsedAt: number,
+): Promise<boolean> {
+  const result = await db
+    .deleteFrom('images')
+    .where('id', '=', id)
+    .where('last_used_at', '=', lastUsedAt)
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb.selectFrom('imps').select('imps.id').whereRef('imps.image_id', '=', 'images.id'),
+        ),
+      ),
+    )
+    .executeTakeFirst();
+
+  return result.numDeletedRows > 0n;
 }

@@ -69,6 +69,9 @@ const EnvSchema = z.object({
     .string()
     .regex(BUILD_IMAGE_PATTERN, 'must name an image by digest, <ref>@sha256:<hex>')
     .default(DEFAULT_BUILD_IMAGE),
+  IMP_IMAGE_PRUNE_PREFIX: z.string().default('agent-'),
+  IMP_IMAGE_PRUNE_ROLLBACK: CountSchema.default(3),
+  IMP_IMAGE_KEEP_FILE: z.string().optional(),
   IMP_SESSION_LOG_MAX_MIB: CountSchema.default(16),
   IMP_SESSION_LOG_IMP_MAX_MIB: CountSchema.default(64),
   IMP_SESSION_LOG_IMP_MAX_LIVE: CountSchema.default(8),
@@ -118,6 +121,12 @@ interface BuildConfig {
   readonly image: string;
 }
 
+export interface ImagePruneConfig {
+  readonly prefix: string;
+  readonly rollbackCount: number;
+  readonly keepFile: string;
+}
+
 export interface Config {
   readonly dataDir: string;
   readonly apiPort: number;
@@ -149,6 +158,7 @@ export interface Config {
   readonly diskReserveBytes: number | null;
   readonly buildContextMaxBytes: number;
   readonly build: BuildConfig;
+  readonly imagePrune: ImagePruneConfig;
   readonly sessionLog: SessionLogLimits;
   readonly dockerHost: string | null;
   readonly dns: readonly string[];
@@ -368,6 +378,11 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
       imageMaxBytes: parsed.IMP_BUILD_IMAGE_MAX_MIB * 1024 ** 2,
       imageMaxFiles: parsed.IMP_BUILD_IMAGE_MAX_FILES,
       image: parsed.IMP_BUILD_IMAGE,
+    },
+    imagePrune: {
+      prefix: parsed.IMP_IMAGE_PRUNE_PREFIX,
+      rollbackCount: parsed.IMP_IMAGE_PRUNE_ROLLBACK,
+      keepFile: parsed.IMP_IMAGE_KEEP_FILE ?? join(parsed.IMP_DATA_DIR, 'image-keep'),
     },
     sessionLog: {
       generationMaxBytes: parsed.IMP_SESSION_LOG_MAX_MIB * 1024 ** 2,

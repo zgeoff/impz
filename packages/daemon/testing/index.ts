@@ -11,6 +11,7 @@ export type { StubDockerEngineOptions, StubEngineAnswer } from './imps/start-stu
 export { createMoveHosts, createUbuntuImage } from './imp-ops/create-move-hosts';
 export type { MoveHostsOptions } from './imp-ops/create-move-hosts';
 export { createPendingSignIn } from './identity/create-pending-sign-in';
+export { buildMockImageUse } from './imps/build-mock-image-use';
 export { buildMockNewImage } from './imps/build-mock-new-image';
 export { buildMockNewImp } from './imps/build-mock-new-imp';
 export { buildStubTracedBuild } from './imps/build-stub-traced-build';

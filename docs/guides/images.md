@@ -226,6 +226,38 @@ An image you built with plain `docker build` goes in with `impz image add <ref>`
 published base by digest; to stack it on another base, edit that FROM line. An imp's own disk can be
 an image too: a [template](./templates.md) copies a set-up imp into new ones.
 
+## Prune old images
+
+impd removes old images whose names start with `IMP_IMAGE_PRUNE_PREFIX` (`agent-` by default) after
+each image build and once an hour, so a pool that holds one image per build never fills. Each prune
+keeps an image that an imp uses, the default image of `IMP_DEFAULT_IMAGE`, and each image that the
+keep file lists. Of the rest, it keeps the `IMP_IMAGE_PRUNE_ROLLBACK` images with the newest last
+use, and any image used within the last hour, and removes the others. A template never goes,
+whatever its name.
+
+An image's last use is the newest of its build, an imp create from it, and a prune that found it in
+use or kept. impd logs each removal with the image's size and last use:
+
+```text
+impd: image prune: removed agent-0a1b2c3 (1.5 GiB, last used 2026-09-01T00:00:00.000Z)
+```
+
+The keep file, `<IMP_DATA_DIR>/image-keep` unless `IMP_IMAGE_KEEP_FILE` names another, holds the
+images that a config outside impd boots, such as an atc target's `image`. impd cannot see those
+configs, so write the file whenever one of them changes:
+
+```text
+# the image each atc target names
+agent-0a1b2c3
+```
+
+Put one image name on each line. impd skips blank lines and lines that start with `#`. Write an
+empty file when no config outside impd boots an image.
+
+**CAUTION:** Until the keep file exists, the prune removes nothing and logs `kept every image` once.
+A line that holds no image name keeps every image the same way. impd reads the file at each prune,
+so a change needs no restart.
+
 ## Isolated builds
 
 By default (`IMP_BUILD_ISOLATION=imp`) each build runs in its own builder imp, which impd destroys

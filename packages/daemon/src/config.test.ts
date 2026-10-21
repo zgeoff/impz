@@ -40,6 +40,7 @@ test('it fills every setting from its default when the env is empty', () => {
       image:
         'ghcr.io/zgeoff/imp-base:0.29.0@sha256:1851f631ea77f3a99b6f1f9af8ca8868434f4cd066158bcf9def8678c29b0c21',
     },
+    imagePrune: { prefix: 'agent-', rollbackCount: 3, keepFile: '/var/lib/imp/image-keep' },
     sessionLog: {
       generationMaxBytes: 16 * 1024 ** 2,
       impMaxBytes: 64 * 1024 ** 2,
@@ -191,6 +192,28 @@ test('it reads the SSH gateway port', () => {
 
 test('it turns the SSH gateway off when IMP_SSH_PORT is 0', () => {
   expect(loadConfig({ IMP_SSH_PORT: '0' }).sshPort).toBeNull();
+});
+
+test('it reads the image prune settings', () => {
+  const config = loadConfig({
+    IMP_IMAGE_PRUNE_PREFIX: 'runner-',
+    IMP_IMAGE_PRUNE_ROLLBACK: '5',
+    IMP_IMAGE_KEEP_FILE: '/etc/imp/image-keep',
+  });
+
+  expect(config.imagePrune).toStrictEqual({
+    prefix: 'runner-',
+    rollbackCount: 5,
+    keepFile: '/etc/imp/image-keep',
+  });
+});
+
+test('it keeps the image keep file in IMP_DATA_DIR by default', () => {
+  expect(loadConfig({ IMP_DATA_DIR: '/srv/imp' }).imagePrune.keepFile).toBe('/srv/imp/image-keep');
+});
+
+test('it refuses an IMP_IMAGE_PRUNE_ROLLBACK of 0', () => {
+  expect(() => loadConfig({ IMP_IMAGE_PRUNE_ROLLBACK: '0' })).toThrow();
 });
 
 test.each([

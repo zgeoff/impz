@@ -1,8 +1,9 @@
 import type { Config } from '../../config';
-import { listImages, readImageByName, removeImage } from '../../platform/db/images';
+import { listImages, readImageByName, removeImage, updateImageUse } from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
 import { countImpsUsingImage } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
@@ -13,6 +14,7 @@ import { FALLBACK_DEFAULT_IMAGE, createImageAdds } from './create-image-adds';
 import type { ImageAdds } from './create-image-adds';
 import { createImageBuilds } from './create-image-builds';
 import type { ImageBuilds } from './create-image-builds';
+import { createImagePrune } from './create-image-prune';
 import { createImageWriter } from './create-image-writer';
 
 export type ImageService = ImageAdds &
@@ -23,6 +25,8 @@ export type ImageService = ImageAdds &
     readonly resolveImage: (name?: string) => Promise<ImageRecord>;
 
     readonly findDefaultImage: () => Promise<ImageRecord | undefined>;
+
+    readonly runImagePrune: () => Promise<void>;
   };
 
 export interface ImageServiceDeps {
@@ -50,6 +54,27 @@ export interface ImageServiceDeps {
 
 export function createImageService(deps: ImageServiceDeps): ImageService {
   const writer = createImageWriter(deps);
+  const now = deps.now ?? Date.now;
+  const builds = createImageBuilds(deps, writer);
+
+  const prune = createImagePrune({
+    config: deps.config,
+    db: deps.db,
+    storageGate: deps.storageGate,
+    removeIdleRootfs: writer.removeIdleRootfs,
+    log: deps.log,
+    now,
+  });
+
+  const withPrune = async (build: () => Promise<ImageRecord>): Promise<ImageRecord> => {
+    const image = await build();
+
+    await prune.runPrune().catch((error: unknown) => {
+      deps.log(`impd: image prune: ${getErrorMessage(error)}`);
+    });
+
+    return image;
+  };
 
   const readDefaultImage = async (): Promise<ImageRecord | undefined> => {
     for (const name of [deps.config.defaultImage, FALLBACK_DEFAULT_IMAGE]) {
@@ -71,12 +96,16 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
       throw buildNotFoundError('image', name ?? deps.config.defaultImage);
     }
 
+    await updateImageUse(deps.db, [image.id], now());
+
     return image;
   };
 
   return {
     ...createImageAdds(deps, writer),
-    ...createImageBuilds(deps, writer),
+    ...builds,
+    runImageBuild: (...args) => withPrune(() => builds.runImageBuild(...args)),
+    buildImageFromContext: (...args) => withPrune(() => builds.buildImageFromContext(...args)),
     listImages: () => listImages(deps.db),
     removeImage: async (name) => {
       const image = await readImageByName(deps.db, name);
@@ -99,5 +128,6 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
     },
     resolveImage,
     findDefaultImage: readDefaultImage,
+    runImagePrune: prune.runPrune,
   };
 }

@@ -9,7 +9,12 @@ import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
 import type { NetworkService } from '../../network/networks/network-service';
 import { createCheckpoint } from '../../platform/db/checkpoints';
-import { createImage, readImageByDigest, readImageByName } from '../../platform/db/images';
+import {
+  createImage,
+  readImageByDigest,
+  readImageByName,
+  updateImageUse,
+} from '../../platform/db/images';
 import { listImps, readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
@@ -254,6 +259,8 @@ async function createJoinedImage(
   const existing = await readImageByDigest(deps.db, image.digest);
 
   if (existing !== undefined) {
+    await updateImageUse(deps.db, [existing.id], deps.now().getTime());
+
     return existing.name;
   }
 

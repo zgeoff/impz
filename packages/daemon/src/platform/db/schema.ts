@@ -78,6 +78,7 @@ export interface Images {
   created_at: number;
   digest: string;
   id: string;
+  last_used_at: Generated<number>;
   name: string;
   ref: string;
   size_bytes: number;

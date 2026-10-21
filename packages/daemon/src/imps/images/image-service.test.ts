@@ -7,7 +7,7 @@ import { updateEnv } from '@impz/test-utils/update-env';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
 import { loadConfig } from '../../config';
-import { createImage } from '../../platform/db/images';
+import { createImage, listImageUses } from '../../platform/db/images';
 import { openDatabase } from '../../platform/db/open-database';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
@@ -427,6 +427,29 @@ test('#runImageBuild answers BAD_REQUEST when the pinned Dockerfile does not par
     code: 'BAD_REQUEST',
     message: 'the Dockerfile: impd could not pin the images this Dockerfile names',
   });
+});
+
+test('#resolveImage records the lookup as a use of the image', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+    now: () => Date.parse('2030-01-01T00:00:00Z'),
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-0a1b2c3' }));
+
+  await images.resolveImage('agent-0a1b2c3');
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(uses[0]?.lastUsedAt).toBe(Date.parse('2030-01-01T00:00:00Z'));
 });
 
 test('#resolveImage answers NOT_FOUND for a name no image has', async () => {
