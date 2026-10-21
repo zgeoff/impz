@@ -62,13 +62,13 @@ test('it resets the connection of an open answer on a unix socket on a cut', asy
 
   invariant(response.body);
 
-  const reader = response.body.getReader();
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
 
   const first = await reader.read();
 
   upstream.cut();
 
-  expect(new TextDecoder().decode(first.value)).toBe('data: first\n\n');
+  expect(first.value).toBe('data: first\n\n');
   expect(reader.read()).rejects.toMatchObject({ code: 'ECONNRESET' });
 });
 
