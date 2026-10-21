@@ -2,7 +2,6 @@ package inner
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -25,20 +24,6 @@ type spawner struct {
 
 	mu    sync.Mutex
 	procs map[int]*proc.Process
-}
-
-// awaitStart waits for the agent's start, which it sends once the user disk
-// is mounted.
-func awaitStart(sock int) error {
-	m, fds, err := recv(sock, make([]byte, 4096))
-	sysutil.CloseFds(fds)
-	if err != nil {
-		return fmt.Errorf("wait for the start: %w", err)
-	}
-	if m.Op != opStart {
-		return fmt.Errorf("the agent said %q before the start", m.Op)
-	}
-	return nil
 }
 
 // serve answers the agent until the socket closes.

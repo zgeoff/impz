@@ -2,6 +2,7 @@ package inner
 
 import (
 	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"testing"
@@ -71,14 +72,7 @@ func testManager(t *testing.T, gate <-chan struct{}, entered chan<- struct{}) (*
 			return nil, err
 		}
 		f := &fakeInit{died: make(chan reaper.Status, 1), sp: pair[1], served: make(chan error, 1), killed: make(chan struct{})}
-		// as the real init, it sets up nothing until the manager starts it
-		go func() {
-			if err := awaitStart(pair[1]); err != nil {
-				f.served <- err
-				return
-			}
-			f.served <- serve(pair[1], &proc.Direct{Reaper: testReaper})
-		}()
+		go func() { f.served <- serve(pair[1], &proc.Direct{Reaper: testReaper}) }()
 		mu.Lock()
 		made = append(made, f)
 		mu.Unlock()
@@ -156,18 +150,17 @@ func TestLaunchStartsTheInitThatPrestartForked(t *testing.T) {
 	assert.Check(t, cmp.Len(inits, 0), "Launch forked a second init")
 }
 
-func TestAPrestartedInitThatDiesBeforeTheStartIsABadStart(t *testing.T) {
-	m, inits := testManager(t, nil, nil)
+func TestLaunchReportsAPrestartThatFailed(t *testing.T) {
+	m, _ := testManager(t, nil, nil)
 	m.firstBackoff = time.Hour
+	m.cgroupDir = filepath.Join(t.TempDir(), "gone")
 	m.Prestart()
-	f := receive(t, inits, 5*time.Second, "prestarted init")
-	f.die()
 
 	m.Launch()
 
 	st := m.Status()
 	assert.Check(t, !st.Up)
-	assert.Check(t, st.LastErr != "", "the failed start left no error")
+	assert.Check(t, cmp.Contains(st.LastErr, "gone"))
 }
 
 func TestARestartRunsOnDownThenOnUp(t *testing.T) {

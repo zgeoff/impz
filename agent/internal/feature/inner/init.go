@@ -36,10 +36,11 @@ const (
 )
 
 // MountUserDisk mounts the user disk at UserRoot in this mount namespace,
-// unless it is mounted there already. The agent mounts it first. The inner
-// init's namespace is a copy of the agent's: the one a boot forks before
-// the agent's mount mounts the disk again, which only adds a mount of the
-// same filesystem, and a restart's has it already.
+// unless it is mounted there already. The agent and the inner init both
+// call it. The init's namespace is a copy of the agent's, taken at its
+// fork: a boot forks the init before the agent's mount, so the two mounts
+// run side by side, and the kernel reads the filesystem once for both. A
+// restart's copy has the mount already.
 func MountUserDisk() error {
 	// noinit_itable: the disk is a sparse file, so the inode tables of a grown
 	// disk read as zeros already; zeroing them in the background would only
@@ -58,10 +59,9 @@ type Config struct {
 
 const runSizeEnv = "IMP_INNER_RUN_SIZE"
 
-// Run is the inner init: PID 1 of the container's namespaces. Once the
-// agent starts it, it sets up the user's root, pivots into it, and serves
-// the agent on fd 3. It returns only on failure; the agent restarts the
-// container then.
+// Run is the inner init: PID 1 of the container's namespaces. It sets up
+// the user's root, pivots into it, and serves the agent on fd 3. It
+// returns only on failure; the agent restarts the container then.
 func Run() error {
 	tStart := Mono()
 	// The socket stays the init's own: a process it starts must never
@@ -74,11 +74,6 @@ func Run() error {
 	}
 	ignoreSignals()
 	tSig := Mono()
-	// a boot forks the init before it mounts the user disk, so this
-	// start-up runs beside the mount
-	if err := awaitStart(sockFd); err != nil {
-		return err
-	}
 	agentFile, err := setupRoot(os.Getenv(runSizeEnv))
 	if err != nil {
 		return err

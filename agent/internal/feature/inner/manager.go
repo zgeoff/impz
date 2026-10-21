@@ -11,8 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/zgeoff/impz/agent/internal/base/reaper"
 	"github.com/zgeoff/impz/agent/internal/base/safe"
 	"github.com/zgeoff/impz/agent/internal/host/cgroup"
@@ -55,8 +53,8 @@ type Manager struct {
 	firstBackoff time.Duration
 	// readyTimeout bounds each init's setup
 	readyTimeout time.Duration
-	// early is the fork Prestart started, which the first start takes
-	early chan forkedInit
+	// early is the init Prestart started, which the first start takes
+	early chan readyInit
 
 	mu      sync.Mutex
 	current *client
@@ -131,39 +129,29 @@ func (m *Manager) startOnce() error {
 	return err
 }
 
-// Prestart forks the container's init ahead of Launch, which takes it: the
-// boot calls it before it mounts the user disk, so the init's start-up runs
-// beside the mount. The init waits for Launch to start it. Call it at most
-// once, before Launch.
+// Prestart starts the container's init ahead of Launch, which takes it:
+// the boot calls it before it mounts the user disk, so the init starts up
+// and sets up its root beside the agent's mount. Call it at most once,
+// before Launch.
 func (m *Manager) Prestart() {
-	early := make(chan forkedInit, 1)
+	early := make(chan readyInit, 1)
 	m.early = early
 	safe.Go("inner: prestart", func() {
-		p, err := m.forkInit()
-		early <- forkedInit{p, err}
-	}, func() { early <- forkedInit{nil, errors.New("panic")} })
+		p, c, err := m.startReady()
+		early <- readyInit{p, c, err}
+	}, func() { early <- readyInit{err: errors.New("panic")} })
 }
 
-// forkedInit is the outcome of a fork that Prestart started.
-type forkedInit struct {
+// readyInit is an inner init that said it is ready, or why it is not.
+type readyInit struct {
 	p   *initProc
+	c   *client
 	err error
 }
 
 func (m *Manager) tryStart() error {
-	p, err := m.takeInit()
+	p, c, err := m.takeReady()
 	if err != nil {
-		return err
-	}
-	if err := send(p.sock, message{Op: opStart}, nil); err != nil {
-		p.kill()
-		unix.Close(p.sock)
-		m.cleanCgroup()
-		return fmt.Errorf("start the inner init: %w", err)
-	}
-	c, err := connect(p, m.readyTimeout)
-	if err != nil {
-		m.cleanCgroup()
 		return err
 	}
 	root, err := fsroot.Open(m.rootOf(p.pid))
@@ -195,34 +183,40 @@ func (m *Manager) tryStart() error {
 	return nil
 }
 
-// takeInit returns the init that Prestart forked, the first time, or forks
-// one.
-func (m *Manager) takeInit() (*initProc, error) {
+// takeReady returns the init that Prestart started, the first time, or
+// starts one.
+func (m *Manager) takeReady() (*initProc, *client, error) {
 	if early := m.early; early != nil {
 		m.early = nil
-		f := <-early
-		return f.p, f.err
+		r := <-early
+		return r.p, r.c, r.err
 	}
-	return m.forkInit()
+	return m.startReady()
 }
 
-// forkInit forks one inner init into the container's cgroup.
-func (m *Manager) forkInit() (*initProc, error) {
+// startReady forks one inner init into the container's cgroup and waits
+// until it is ready.
+func (m *Manager) startReady() (*initProc, *client, error) {
 	// what a container left behind (a cgroup that outlived the last wait,
 	// say) must not fail this one
 	m.cleanCgroup()
 	trace("i.clean")
 	cg, err := os.Open(m.cgroupDir)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", m.cgroupDir, err)
+		return nil, nil, fmt.Errorf("open %s: %w", m.cgroupDir, err)
 	}
 	defer cg.Close()
 	p, err := m.startInit(cg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	trace("i.fork")
-	return p, nil
+	c, err := connect(p, m.readyTimeout)
+	if err != nil {
+		m.cleanCgroup()
+		return nil, nil, err
+	}
+	return p, c, nil
 }
 
 // watch waits for the container to end: its init dying, or its socket
