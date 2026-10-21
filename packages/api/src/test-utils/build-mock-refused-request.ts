@@ -1,9 +1,6 @@
 import { faker } from '@faker-js/faker';
 import type { RefusedRequest } from '../schemas/secret-schema';
 
-// A CONNECT the broker refused under the imp's egress policy, for an
-// arbitrary imp and host. The date counts back from faker's reference date,
-// which the preload fixes.
 export function buildMockRefusedRequest(overrides: Partial<RefusedRequest> = {}): RefusedRequest {
   return {
     at: faker.date.past(),

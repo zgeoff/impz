@@ -2,7 +2,6 @@ import { faker } from '@faker-js/faker';
 import { SYSTEM_FEATURES } from '../schemas/system-info-schema';
 import type { SystemInfo } from '../schemas/system-info-schema';
 
-// the parts an override merges into their defaults; every other key replaces
 type MergedKey =
   | 'bootStatus'
   | 'guestKernel'
@@ -21,9 +20,6 @@ type SystemInfoOverrides = {
     : Exclude<SystemInfo[K], undefined>;
 };
 
-// A current impd's answer with every optional part present: all features on, egress enforced,
-// storage not low, KSM, public IP and HTTPS off, /tmp as a scratch folder that a cold boot keeps,
-// and a RAM budget that fits the default memory. Nested overrides merge into defaults.
 export function buildMockSystemInfo(overrides: SystemInfoOverrides = {}): SystemInfo {
   const bootStatus: SystemInfo['bootStatus'] = {
     coldBoots: 0,

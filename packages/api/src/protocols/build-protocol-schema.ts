@@ -35,8 +35,6 @@ import {
 } from './tunnel-protocol';
 
 const JsonSchemaSchema = z.record(z.string(), z.unknown()).readonly();
-
-// `toServer`: a client sends it and impd reads it; `toClient`: the reverse
 const MessageDirectionSchema = z.enum(['toServer', 'toClient']);
 
 const ProcedureSchemaSchema = z
@@ -44,7 +42,6 @@ const ProcedureSchemaSchema = z
     input: JsonSchemaSchema,
     output: JsonSchemaSchema,
 
-    // an event iterator, whose output is the schema of each event
     stream: z.boolean(),
   })
   .readonly();
@@ -55,13 +52,12 @@ const MessageSchemaSchema = z
 
 const ErrorSchemaSchema = z
   .object({
-    // null for a common oRPC code, whose status oRPC fixes
+    // Null for a common oRPC code, whose status oRPC fixes.
     status: z.number().nullable(),
     data: JsonSchemaSchema,
   })
   .readonly();
 
-// the shape of packages/api/protocol-schema.json, which the check reads back
 export const ProtocolSchemaSchema = z
   .object({
     procedures: z.record(z.string(), ProcedureSchemaSchema).readonly(),
@@ -73,8 +69,6 @@ export const ProtocolSchemaSchema = z
 
 export type ProtocolSchema = z.infer<typeof ProtocolSchemaSchema>;
 
-// What a client and impd agree on, as JSON Schema, for the breaking-change
-// check: docs/runbooks/releasing.md#breaking-changes.
 export function buildProtocolSchema(): ProtocolSchema {
   return {
     procedures: collectProcedures(impContract, []),
@@ -119,7 +113,6 @@ export function buildProtocolSchema(): ProtocolSchema {
 
 type ProcedureSchema = z.infer<typeof ProcedureSchemaSchema>;
 
-// a procedure's path is its RPC path, `imps.create` for /rpc/imps/create
 function collectProcedures(
   node: unknown,
   path: readonly string[],
@@ -162,8 +155,8 @@ function isProcedure(node: unknown): node is Procedure {
 
 type JsonSchema = z.infer<typeof JsonSchemaSchema>;
 
-// oRPC's serializer carries a Date as itself. A custom type or a transform,
-// which JSON Schema cannot express, becomes any value, tagged with its kind.
+// oRPC's serializer carries a Date as itself, and JSON Schema cannot express
+// a custom type or a transform.
 function buildJsonSchema(schema: unknown, io: 'input' | 'output'): JsonSchema {
   if (schema === undefined) {
     return {};

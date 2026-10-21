@@ -3,12 +3,10 @@ import { ApiActorSchema } from './api-call-schema';
 import { NameSchema } from './name-schema';
 import { SecretNameSchema } from './secret-schema';
 
-// What a token may do. Scopes nest: manage includes exec, exec includes read.
 export const ScopeSchema = z.enum(['read', 'exec', 'manage']);
 
 export type Scope = z.infer<typeof ScopeSchema>;
 
-// An imp name with `*` for any run of characters, such as `dev-*`
 export const ImpPatternSchema = z
   .string()
   .regex(
@@ -16,26 +14,18 @@ export const ImpPatternSchema = z
     'must be an imp name, with * for any run of characters, such as dev-*',
   );
 
-// the most SSH keys one token holds
 export const MAX_SSH_KEYS = 16;
-
-// the most secret names one token may grant
 const MAX_GRANTABLE = 32;
 
-// The whole list a tokens.update sets, as GrantableSchema; empty clears it
-// (docs/guides/tokens.md#change-the-list)
 export const GrantableUpdateSchema = z
   .array(SecretNameSchema)
   .max(MAX_GRANTABLE)
   .refine((names) => new Set(names).size === names.length, 'must not name a secret twice');
 
-// The secrets a token limited to some imps may grant to them and revoke
-// (docs/guides/tokens.md#granting-secrets): exact names, no two the same
 export const GrantableSchema = GrantableUpdateSchema.min(1);
 
-// The start every image ref a token adds must have, such as ghcr.io/org/app-
-// (docs/guides/tokens.md#adding-images). The host needs a dot, a port or to
-// be localhost, or docker would read the ref as one on Docker Hub.
+// The host needs a dot, a port or to be localhost, or docker would read the
+// ref as one on Docker Hub.
 export const ImageRefPrefixSchema = z
   .string()
   .max(200)
@@ -44,12 +34,9 @@ export const ImageRefPrefixSchema = z
     'must be a registry host and the start of a path, such as ghcr.io/org/app-',
   );
 
-// An SSH public key line, as in a `.pub` file: `<type> <base64> [comment]`
 export const SshPublicKeySchema = z.string().trim().min(1).max(16_384);
 
-// What the API shows of a key bound to a token; never the key itself
 export const SshKeySchema = z.object({
-  // `SHA256:<base64>`, as `ssh-keygen -l` prints it
   fingerprint: z.string(),
   type: z.string(),
   comment: z.string(),
@@ -57,30 +44,22 @@ export const SshKeySchema = z.object({
 
 export type SshKey = z.infer<typeof SshKeySchema>;
 
-// What the API shows of a token. The secret is shown once, by tokens.create.
 export const TokenSchema = z.object({
   name: NameSchema,
   scope: ScopeSchema,
 
-  // the imps it may touch; null for every imp and the host itself
   imps: z.array(ImpPatternSchema).readonly().nullable(),
 
-  // the SSH keys that log in as it (docs/guides/ssh.md#keys-bound-to-tokens)
   sshKeys: z.array(SshKeySchema).readonly(),
 
-  // the secrets it may grant to its imps; an older impd sends none
   grantable: z.array(SecretNameSchema).readonly().default([]),
 
-  // the ref start of the images it may add under its imp patterns; null
-  // for none, and from an older impd, which sends none
   imageRefPrefix: ImageRefPrefixSchema.nullable().default(null),
   createdAt: z.date(),
 });
 
 export type Token = z.infer<typeof TokenSchema>;
 
-// Who a call runs as: the token, the dashboard session made with one, an ssh
-// key, or a tailnet identity
 export const IdentitySchema = z.object({
   kind: ApiActorSchema,
   name: z.string(),

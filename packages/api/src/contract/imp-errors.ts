@@ -27,28 +27,22 @@ const ResourceDataSchema = z.object({
   kind: ResourceKindSchema,
   name: z.string(),
 
-  // a secrets.add replace whose kind or rules changed, without rebind
   reason: z.enum(['binding_changed']).optional(),
 });
 
-// why a grant or a revoke was refused: the imp is outside the caller's
-// patterns, the secret is not one it may grant, or its scope is too low
 const ForbiddenReasonSchema = z.enum(['imp_out_of_scope', 'not_grantable', 'scope']);
 
 export type ForbiddenReason = z.infer<typeof ForbiddenReasonSchema>;
 
 const ForbiddenDataSchema = z.object({ reason: ForbiddenReasonSchema });
 
-// an exec with `require: ['broker']` the broker was not ready for; detail
-// names the cause (docs/guides/connectors.md#requiring-the-broker). The
-// client, not impd, gives impd_outdated: an impd too old to check.
+// The client raises impd_outdated itself, for an impd too old to check an
+// exec requirement; impd never sends it.
 const PreconditionDataSchema = z.object({
   reason: z.enum(['broker_not_ready', 'impd_outdated']),
   detail: z.string(),
 });
 
-// an awake imp the governor could not sleep: leased (a lease of any kind)
-// or busy (in use, under an operation, or its sleep failed)
 const ProtectedImpSchema = z.object({
   name: NameSchema,
   ramMib: z.int().nonnegative(),
@@ -56,18 +50,12 @@ const ProtectedImpSchema = z.object({
   busy: z.boolean(),
 });
 
-// Every control procedure can raise any of these, so the contract attaches
-// them once at its base rather than per procedure.
 export const IMP_ERRORS = defineErrors({
   NOT_FOUND: { message: 'Not found', data: ResourceDataSchema },
   CONFLICT: { message: 'Already exists', data: ResourceDataSchema },
 
-  // the caller's token lacks the scope, or the imp is outside its patterns;
-  // a grant or a revoke says which (docs/guides/tokens.md#granting-secrets)
   FORBIDDEN: { message: 'Not allowed', data: ForbiddenDataSchema.optional() },
 
-  // the host is not set up for this, such as backups with no repository;
-  // data only for an exec requirement impd could not meet
   PRECONDITION_FAILED: {
     message: 'Not possible on this host',
     data: PreconditionDataSchema.optional(),
@@ -80,16 +68,12 @@ export const IMP_ERRORS = defineErrors({
       usedMib: z.int().nonnegative(),
       requestedMib: z.int().nonnegative(),
 
-      // left out by an impd from before leases: the RAM still missing, the
-      // awake imps the governor could not sleep that the caller may read,
-      // and how many others there were
       neededMib: z.int().nonnegative().optional(),
       protected: z.array(ProtectedImpSchema).readonly().optional(),
       protectedHidden: z.int().nonnegative().optional(),
     }),
   },
 
-  // impd is putting every imp to sleep to stop; try again once it is back
   SERVICE_UNAVAILABLE: { message: 'impd is stopping' },
   INVALID_STATE: {
     message: 'The imp is not in a state that allows this',
@@ -98,21 +82,16 @@ export const IMP_ERRORS = defineErrors({
       state: ImpStateSchema,
       allowed: z.array(ImpStateSchema),
 
-      // an attach with wake: false to an imp that is not running: its cold
-      // boots, absent while it is creating
       coldBoots: ColdBootsSchema.optional(),
     }),
   },
 
-  // a session resume named an offset past the end of its generation, which
-  // never rewinds: a client bug, not a state to clamp
   INVALID_RESUME: {
     message: 'The resume offset is past the end of the output',
     status: 409,
     data: InvalidResumeDataSchema,
   },
 
-  // the data filesystem or pool would drop below its reserve (IMP_DISK_RESERVE_GIB)
   DISK_FULL: {
     message: 'Not enough free disk on the host',
     status: 507,
@@ -123,20 +102,16 @@ export const IMP_ERRORS = defineErrors({
     }),
   },
 
-  // a sleep or stop without force on an imp with a lease from `leases.*`
   LEASED: {
     message: 'The imp is leased',
     status: 409,
     data: LeaseSummarySchema,
   },
 
-  // a renew of a lease the caller does not hold, or that ended
   LEASE_NOT_HELD: { message: 'The caller holds no such lease', status: 409 },
 
-  // the imp's agent is from before the feature; a stop and start updates it
   AGENT_OUTDATED: { message: "The imp's agent is too old for this", status: 409 },
 
-  // the imp is moving to or from another host; try again after retryAfterS
   MOVING: {
     message: 'The imp is moving between hosts',
     status: 409,

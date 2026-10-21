@@ -9,39 +9,28 @@ export const ImpStateSchema = z.enum(['creating', 'running', 'sleeping', 'stoppe
 
 export type ImpState = z.infer<typeof ImpStateSchema>;
 
-// `builder`: an imp impd made for one image build and destroys after it
-// (docs/guides/images.md#isolated-builds); only rm reaches it
 export const ImpKindSchema = z.enum(['user', 'builder']);
 
 export type ImpKind = z.infer<typeof ImpKindSchema>;
 
-// a part of the host an imp's VM predates until its next cold boot; `impd`
-// is a VM an impd from before vm.json booted, whose next wake boots cold
 const OutdatedPartSchema = z.enum(['firecracker', 'kernel', 'agent', 'impd', 'ipv6']);
 
 export type OutdatedPart = z.infer<typeof OutdatedPartSchema>;
 
-// what the imp used: wakes and awake time from the record; the rest from
-// impd's last sample of the running VM, every 5 s
 const ImpResourcesSchema = z.object({
   wakeCount: z.int().nonnegative(),
   awakeMs: z.int().nonnegative(),
 
-  // left out while the VM is not running or not sampled yet; the counters
-  // run from `since`, when impd first saw this Firecracker: as its boot or
-  // wake returned, or when impd adopted it
   sample: z
     .object({
       measuredAt: z.date(),
       since: z.date(),
 
-      // of one core: 150 is one and a half; left out on the first sample
       cpuPercent: z.number().nonnegative().optional(),
 
-      // time the CPU limit held the VM back
       cpuThrottledMs: z.int().nonnegative(),
 
-      // from the guest's side: rx is what it received, tx what it sent
+      // Counted from the guest's side: rx is what it received, tx what it sent.
       netRxBytes: z.int().nonnegative(),
       netTxBytes: z.int().nonnegative(),
     })
@@ -54,35 +43,24 @@ export const ImpSchema = z.object({
   image: NameSchema,
   state: ImpStateSchema,
 
-  // left out by an impd from before builders, whose imps are all `user`
   kind: ImpKindSchema.optional(),
   vcpus: z.int().positive(),
   memoryMib: z.int().positive(),
 
-  // what the guest may grow to with hot-plugged memory; left out for an imp
-  // that does not grow
   maxMemoryMib: z.int().positive().optional(),
 
-  // memory plugged into the awake guest beyond memoryMib, as last seen
   pluggedMib: z.int().nonnegative().optional(),
 
-  // false for an imp left out of every backup run, set at create; left out
-  // for an imp that backups hold, and by an impd from before the setting
   backup: z.boolean().optional(),
 
-  // the disk's size; the guest's filesystem fills it
   diskMib: z.int().positive(),
 
-  // what the imp's disk, checkpoints and memory take on the host, as last
-  // measured: exclusive is what a destroy frees, shared what it holds with
-  // an image, another imp or the backup tree. Left out until measured.
   diskUsage: z
     .object({
       exclusiveBytes: z.int().nonnegative(),
       sharedBytes: z.int().nonnegative(),
       measuredAt: z.date(),
 
-      // the pass hit its time limit; a fork holds a snapshot (ZFS)
       isPartial: z.boolean(),
       isUpperBound: z.boolean(),
     })
@@ -93,43 +71,26 @@ export const ImpSchema = z.object({
   httpPort: z.int().positive(),
   url: z.url(),
 
-  // set while the internet reaches https://<name>.<domain>, with what the
-  // imp asks for before the wake; left out for a tailnet-only imp
   public: z.object({ auth: PublicAuthSchema }).optional(),
   createdAt: z.date(),
   lastActiveAt: z.date(),
 
-  // RAM the awake VM owns now (anonymous pages), as the governor counts it
   ramMib: z.int().nonnegative().optional(),
 
-  // the awake VM's resident memory on the host, clean pages of its memory
-  // file included; more than ramMib after a wake, until the host drops them
   rssMib: z.int().nonnegative().optional(),
   sleptAt: z.date().optional(),
 
-  // the latest end of the imp's leases, while one is live
   holdUntil: z.date().optional(),
 
-  // its live leases, as the caller may see them; left out by an impd from
-  // before leases
   leases: LeaseSummarySchema.optional(),
   error: z.string().optional(),
 
-  // sessions in the imp, as last seen; left out while impd has not seen
-  // the imp's agent yet
   sessions: z.int().nonnegative().optional(),
 
-  // sleeping: why the next wake boots cold instead of restoring the memory;
-  // awake: why the last boot was cold instead of a wake
   coldBootReason: z.string().optional(),
 
-  // a running imp whose agent stopped answering: since when, once the
-  // watchdog reports it
   agentSilentSince: z.date().optional(),
 
-  // the inner container, where every process runs, as the agent last said:
-  // set only while the imp is awake and its agent (0.14.0 or later) answers;
-  // restarts counts its init's deaths, lastError the last failed start
   inner: z
     .object({
       up: z.boolean(),
@@ -139,21 +100,14 @@ export const ImpSchema = z.object({
     .optional(),
   outdated: z.array(OutdatedPartSchema).readonly().optional(),
 
-  // cores the VM may use (null: no limit) and its share under contention,
-  // the cgroup cpu.weight; left out by an impd from before CPU limits
   cpu: z.object({ limit: z.number().positive().nullable(), weight: z.int() }).optional(),
   resources: ImpResourcesSchema.optional(),
 
-  // set while the imp moves to or from another host; nothing wakes or
-  // changes it then
   move: MoveStateSchema.optional(),
 });
 
 export type Imp = z.infer<typeof ImpSchema>;
 
-// why a fork did not get one of its source's grants: the caller could not
-// grant the secret, the fork held another credential for one of its hosts,
-// or the secret was gone (docs/guides/connectors.md#secrets-and-grants)
 export const GrantNotCopiedReasonSchema = z.enum(['not-grantable', 'clash', 'no-secret']);
 
 export const GrantNotCopiedSchema = z.object({
@@ -163,14 +117,9 @@ export const GrantNotCopiedSchema = z.object({
 
 export type GrantNotCopied = z.infer<typeof GrantNotCopiedSchema>;
 
-// What imps.fork answers: the imp, and the source's grants it did not get.
-// An older client drops the extra fields; an impd from before them sends
-// neither.
 export const ForkResultSchema = ImpSchema.extend({
   grantsNotCopied: z.array(GrantNotCopiedSchema).readonly().optional(),
 
-  // set when the copy failed as a whole: the fork exists, with none of
-  // the source's grants
   grantsError: z.string().optional(),
 });
 

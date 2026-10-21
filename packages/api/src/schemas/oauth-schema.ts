@@ -2,15 +2,8 @@ import * as z from 'zod';
 import { NameSchema } from './name-schema';
 import { ScopeSchema } from './token-schema';
 
-// OAuth for the public MCP route (docs/guides/mcp.md#public-route): the
-// clients an operator adds, the grants people approve, and the approvals
-// that wait for them.
-
-// the most redirect URIs one client holds
 const MAX_REDIRECT_URIS = 8;
 
-// https anywhere, or http on a loopback host, with no fragment; matched
-// exactly, as the client sends it
 export const RedirectUriSchema = z
   .string()
   .max(2048)
@@ -25,8 +18,6 @@ export const RedirectUrisSchema = z
   .max(MAX_REDIRECT_URIS)
   .refine((uris) => new Set(uris).size === uris.length, 'must not name a redirect URI twice');
 
-// a grant's pattern: an imp name, or a name prefix and a trailing `*`; a
-// grant narrower than its token needs no other form
 export const GrantPatternSchema = z
   .string()
   .regex(
@@ -34,8 +25,6 @@ export const GrantPatternSchema = z
     'must be an imp name, or a name prefix and a trailing *, such as dev-*',
   );
 
-// what `GET /oauth/authorize` shows: 8 symbols of 32, 40 bits, with or
-// without the dash, in any case
 export const ApprovalCodeSchema = z
   .string()
   .trim()
@@ -47,7 +36,6 @@ export const ApprovalCodeSchema = z
 export const OAuthClientSchema = z.object({
   name: NameSchema,
 
-  // what the connector's OAuth settings take; it has no secret
   clientId: z.string(),
   redirectUris: z.array(z.string()).readonly(),
   createdAt: z.date(),
@@ -59,24 +47,20 @@ export const OAuthGrantSchema = z.object({
   id: z.string(),
   client: NameSchema,
 
-  // the token that approved it, which bounds it for as long as both live
   token: NameSchema,
   scope: ScopeSchema,
   imps: z.array(GrantPatternSchema).readonly().nullable(),
   createdAt: z.date(),
 
-  // the last access token or refresh it answered; null until its first
   lastUsedAt: z.date().nullable(),
 });
 
 export type OAuthGrant = z.infer<typeof OAuthGrantSchema>;
 
-// a sign-in that waits for `impz oauth approve`, as its approver sees it
 export const OAuthApprovalSchema = z.object({
   client: NameSchema,
   redirectUri: z.string(),
 
-  // the highest scope the client asked for; an approval may give less
   requestedScope: ScopeSchema,
   requestedAt: z.date(),
   expiresAt: z.date(),
