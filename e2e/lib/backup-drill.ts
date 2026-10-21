@@ -199,7 +199,7 @@ async function runBackup() {
 
 const BACKUP_STATE_FILE = '/var/lib/imp/backup/state.json';
 
-export type BackupRun = z.infer<typeof BackupRunSchema>;
+type BackupRun = z.infer<typeof BackupRunSchema>;
 
 export interface BackupDrill {
   readonly reboot: (env: Readonly<Record<string, string>>) => Promise<void>;
@@ -207,7 +207,7 @@ export interface BackupDrill {
   readonly runBackup: () => Promise<BackupRun>;
 }
 
-export interface BackupDrillDeps {
+interface BackupDrillDeps {
   readonly removeState: () => Promise<void>;
 
   // An empty env reboots onto the run's own settings.
