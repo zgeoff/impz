@@ -1,5 +1,9 @@
+import type { Logger } from '@logtape/logtape';
 import { P, match } from 'ts-pattern';
 import { z } from 'zod';
+import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { tapStream } from '../../platform/process/tap-stream';
 import { formatEngineFailure, formatRefusal } from './refusal';
 import { formatQuery, getRequestRoute } from './router';
 import type { RoutedRequest } from './router';
@@ -39,6 +43,9 @@ export interface DockerProxyOptions {
   readonly builderImage: string | null;
   readonly buildContextMaxBytes: number;
   readonly log: (message: string) => void;
+
+  // impd.docker-proxy by default
+  readonly logger?: Pick<Logger, 'warning'>;
   readonly controlCallMs?: number;
 }
 
@@ -105,7 +112,7 @@ function pickHeaders(request: Request, names: readonly string[]): Record<string,
   return headers;
 }
 
-function toClientResponse(upstream: Response): Response {
+function toClientResponse(upstream: Response, onReadError: (error: unknown) => void): Response {
   const headers = new Headers();
 
   for (const [name, value] of upstream.headers) {
@@ -114,7 +121,18 @@ function toClientResponse(upstream: Response): Response {
     }
   }
 
-  return new Response(upstream.body, {
+  const body =
+    upstream.body === null
+      ? null
+      : tapStream(upstream.body, {
+          onEnd: (end) => {
+            if (end.kind === 'error') {
+              onReadError(end.error);
+            }
+          },
+        });
+
+  return new Response(body, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers,
@@ -135,6 +153,8 @@ interface UpstreamCall {
 export function createDockerProxy(
   options: DockerProxyOptions,
 ): (request: Request) => Promise<Response> {
+  const logger = options.logger ?? getImpdLogger('docker-proxy');
+
   const sendUpstream = (versionPrefix: string, call: UpstreamCall): Promise<Response> => {
     const search = call.query === undefined ? '' : formatQuery(call.query);
 
@@ -155,7 +175,13 @@ export function createDockerProxy(
   const sendAndRelay = async (versionPrefix: string, call: UpstreamCall): Promise<Response> => {
     const upstream = await sendUpstream(versionPrefix, call);
 
-    return toClientResponse(upstream);
+    return toClientResponse(upstream, (failure) => {
+      logger.warning('the engine closed {method} {path} mid-stream: {reason}', {
+        method: call.method,
+        path: `${versionPrefix}${call.path}`,
+        reason: getErrorMessage(failure),
+      });
+    });
   };
 
   const buildRefusal = (request: Request, path: string, reason: string): Response => {

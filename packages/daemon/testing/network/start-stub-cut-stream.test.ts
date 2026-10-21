@@ -1,4 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import invariant from 'tiny-invariant';
 import { startStubCutStream } from './start-stub-cut-stream';
 
@@ -42,6 +45,30 @@ test('it resets the connection of an open answer on a cut', async () => {
 
   upstream.cut();
 
+  expect(reader.read()).rejects.toMatchObject({ code: 'ECONNRESET' });
+});
+
+test('it resets the connection of an open answer on a unix socket on a cut', async () => {
+  const ctx = setupTest();
+
+  const directory = await mkdtemp(join(tmpdir(), 'cut-stream-'));
+
+  ctx.stack.defer(() => rm(directory, { recursive: true, force: true }));
+
+  const socket = join(directory, 'engine.sock');
+  const upstream = startStubCutStream(ctx.stack, 'data: first\n\n', { unix: socket });
+
+  const response = await fetch('http://docker/follow', { unix: socket });
+
+  invariant(response.body);
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+
+  const first = await reader.read();
+
+  upstream.cut();
+
+  expect(first.value).toBe('data: first\n\n');
   expect(reader.read()).rejects.toMatchObject({ code: 'ECONNRESET' });
 });
 

@@ -1,10 +1,11 @@
-import { expect, jest, onTestFinished, test } from 'bun:test';
+import { expect, jest, mock, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { startStubDockerEngine } from '../../../testing/imps/start-stub-docker-engine';
+import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
 import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
 import { DOCKERFILE_FRONTEND } from './dockerfile-frontend';
 import { PROXY_LABEL, createDockerProxy } from './proxy';
@@ -1488,4 +1489,112 @@ test('it refuses a build with a param that moves its context', async () => {
   expect(refusal).toStrictEqual({ message: 'imp-docker-proxy: param remote is not allowed' });
   expect(ctx.engine.seen).toStrictEqual([]);
   expect(ctx.engine.unexpected).toStrictEqual([]);
+});
+
+// Bun prints a response body's unhandled error to the process's stderr, out
+// of reach of the test runner, so the proxy runs in a child Bun whose stderr
+// the test reads
+test('it logs one impd.docker-proxy line, and nothing unhandled, when the engine closes a stream', async () => {
+  const child = Bun.spawn(
+    [
+      process.execPath,
+      join(import.meta.dir, '../../../testing/imps/run-cut-docker-proxy-stream.ts'),
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+
+  onTestFinished(() => {
+    child.kill();
+  });
+
+  const [stdout, stderr] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+
+  expect(stdout).toBe(
+    'WARNING impd.docker-proxy the engine closed POST /v1.55/images/create mid-stream: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()\n' +
+      '{"client":"ECONNRESET"}\n',
+  );
+
+  expect(stderr).toBe('');
+}, 30_000);
+
+test('it warns through its logger when the engine closes a stream', async () => {
+  const ctx = await setupTest();
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const socket = join(ctx.directoryPath, 'cut-engine.sock');
+
+  const engine = startStubCutStream(stack, '{"status":"Pulling from library/busybox"}\n', {
+    unix: socket,
+  });
+
+  const warning = mock();
+
+  const proxy = ctx.startProxy({
+    upstreamSocket: socket,
+    token: 'test-token',
+    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
+    builderImage: null,
+    buildContextMaxBytes: 4 * 1024 ** 2,
+    log: ctx.log,
+    logger: { warning },
+  });
+
+  const response = await proxy(
+    new Request('http://docker/v1.55/images/create?fromImage=busybox&tag=latest', {
+      method: 'POST',
+    }),
+  );
+
+  invariant(response.body);
+
+  const reader = response.body.getReader();
+
+  await reader.read();
+
+  engine.cut();
+
+  await Promise.allSettled([reader.read()]);
+
+  expect(warning).toHaveBeenCalledExactlyOnceWith(
+    'the engine closed {method} {path} mid-stream: {reason}',
+    {
+      method: 'POST',
+      path: '/v1.55/images/create',
+      reason: expect.toStartWith('The socket connection was closed unexpectedly.'),
+    },
+  );
+});
+
+test('it warns nothing when the engine ends a stream', async () => {
+  const ctx = await setupTest();
+
+  const warning = mock();
+
+  const proxy = ctx.startProxy({
+    upstreamSocket: ctx.engine.socket,
+    token: 'test-token',
+    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
+    builderImage: null,
+    buildContextMaxBytes: 4 * 1024 ** 2,
+    log: ctx.log,
+    logger: { warning },
+  });
+
+  await ctx.engine.addContainer({
+    id: 'a'.repeat(64),
+    labels: { [PROXY_LABEL]: 'test-token' },
+    exportBytes: new TextEncoder().encode('tar bytes'),
+  });
+
+  const response = await proxy(new Request('http://docker/v1.55/containers/aaaa/export'));
+
+  await response.text();
+
+  expect(warning).not.toHaveBeenCalled();
 });
