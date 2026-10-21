@@ -4,8 +4,7 @@ import { defineCommand } from '../cli/define-command';
 import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
 
-// stdout carries only JSON-RPC messages; anything else goes to stderr. The
-// server loads on use, so other commands do not build its tool schemas.
+// stdout carries only JSON-RPC messages; anything else goes to stderr
 export const mcpCommand = defineCommand({
   name: 'mcp',
   description:
@@ -20,11 +19,11 @@ export const mcpCommand = defineCommand({
   },
   run: (ctx) =>
     runAction(ctx.extensions.impz, async (client) => {
+      // loaded on use, so other commands do not build its tool schemas
       const mcp = await import('@impz/mcp');
 
       let guard: ImpGuard;
 
-      // a missing or broken guard is a usage error: exit 2 with the reason
       try {
         guard = mcp.buildImpGuard(readGuardOptions(ctx.values));
       } catch (error) {

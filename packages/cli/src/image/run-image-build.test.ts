@@ -7,9 +7,6 @@ import { listTree } from '../test-utils/list-tree';
 import { checkDockerBuildx, runDockerBuild } from '../test-utils/run-docker-build';
 import { createContextStream } from './run-image-build';
 
-// `COPY . /` as docker buildx sees it, from the directory and from the tar
-// the CLI packs; each test skips where buildx is missing
-
 async function setupTest() {
   const work = await mkdtemp(join(tmpdir(), 'imp-context-docker-'));
 
@@ -91,7 +88,6 @@ test.skipIf(!checkDockerBuildx())(
       destination: ctx.fromTar,
     });
 
-    // the Content-Length the CLI sends
     const counted = await countTarBytes(entries);
     const fromDir = await listTree(ctx.fromDir);
     const fromTar = await listTree(ctx.fromTar);
@@ -172,8 +168,6 @@ test.skipIf(!checkDockerBuildx())(
   120_000,
 );
 
-// the CLI falls back to dockerfile before it reads an ignore file, so
-// dockerfile.dockerignore applies, not Dockerfile.dockerignore
 test.skipIf(!checkDockerBuildx())(
   'it uses the ignore file of a lowercase dockerfile it falls back to',
   async () => {

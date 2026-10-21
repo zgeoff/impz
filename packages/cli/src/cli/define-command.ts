@@ -8,7 +8,6 @@ interface ImpzParams {
   readonly extensions: { readonly impz: ImpzExtension };
 }
 
-// gunshi's define, with `ctx.extensions.impz` typed for every command
 export const defineCommand = defineWithTypes<ImpzParams>();
 
 interface GroupDefinition {
@@ -17,8 +16,6 @@ interface GroupDefinition {
   readonly subCommands: Readonly<Record<string, SubCommandable>>;
 }
 
-// A command that only holds others, such as `impz token`: alone, it prints
-// its usage and fails as a usage error.
 export function defineGroup(definition: Readonly<GroupDefinition>) {
   return defineCommand({
     ...definition,

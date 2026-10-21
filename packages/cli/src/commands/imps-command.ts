@@ -21,7 +21,6 @@ import { parseDuration } from '../parse/parse-duration';
 import { formatPolicy, parsePolicy } from '../parse/parse-policy';
 import { readTermEnv } from '../sessions/read-term-env';
 
-// `impz ls --all` when some hosts answered and some did not
 const PARTIAL_CODE = 3;
 
 export const lsCommand = defineCommand({
@@ -69,20 +68,14 @@ export const lsCommand = defineCommand({
 });
 
 interface AllImpsRun {
-  // where the saved hosts are read from
   readonly env: CliEnv;
   readonly isJson: boolean;
   readonly hasBuilders: boolean;
   readonly print: (line: string) => void;
   readonly printError: (line: string) => void;
-
-  // each host's timeout; runOnHosts' timer by default
   readonly startTimer?: StartTimer;
 }
 
-// One list per saved host, at once. What came back is printed, JSON or
-// table, then one line per host that failed; the result is the exit code
-// docs/guides/hosts.md#one-view gives.
 export async function listAllImps(run: Readonly<AllImpsRun>): Promise<number> {
   const input = run.hasBuilders ? { builders: true } : undefined;
 
@@ -134,7 +127,7 @@ export const stopCommand = defineCommand({
   args: { name: nameArg, json: jsonArg },
   run: (ctx) =>
     runAction(ctx.extensions.impz, async (client) => {
-      // a person typed it: the imp's leases end rather than refuse it
+      // a person typed it, so the imp's leases end rather than refuse it
       const imp = await client.imps.stop({ name: ctx.values.name, force: true });
 
       ctx.extensions.impz.io.print(formatOutput(imp, ctx.values.json, formatImp));
@@ -157,7 +150,7 @@ export const sleepCommand = defineCommand({
   args: { name: nameArg, json: jsonArg },
   run: (ctx) =>
     runAction(ctx.extensions.impz, async (client) => {
-      // as for stop
+      // a person typed it, so the imp's leases end rather than refuse it
       const imp = await client.imps.sleep({ name: ctx.values.name, force: true });
 
       ctx.extensions.impz.io.print(formatOutput(imp, ctx.values.json, formatImp));
@@ -209,7 +202,6 @@ export const urlCommand = defineCommand({
         ctx.extensions.impz.io.print(urls.https);
       }
 
-      // the same name on the internet, which differs only by port
       if (urls.public !== null && urls.public !== urls.https) {
         ctx.extensions.impz.io.print(urls.public);
       }
@@ -259,8 +251,6 @@ export const policyCommand = defineCommand({
     }),
 });
 
-// The source's grants a fork did not get, one line each, and why none came
-// when the copy failed as a whole; none from an impd before the report
 export function listForkWarnings(
   source: string,
   fork: Readonly<Pick<ForkResult, 'name' | 'grantsNotCopied' | 'grantsError'>>,
@@ -343,7 +333,6 @@ export const execCommand = defineCommand({
   },
 });
 
-// --require 'broker': what impd must ensure before it starts the command
 function parseRequire(text: string): ExecRequirement[] {
   const names = text
     .split(',')
@@ -361,8 +350,6 @@ function parseRequire(text: string): ExecRequirement[] {
   return EXEC_REQUIREMENTS.filter((name) => names.includes(name));
 }
 
-// With no terminal on stdin, as in a script, the shell runs without a
-// session unless one is named.
 export const consoleCommand = defineCommand({
   name: 'console',
   description: 'Open a shell in an imp, in a session that outlives the terminal (ctrl-] detaches)',
@@ -420,7 +407,6 @@ interface ConsoleSessionArgs {
   readonly 'no-session'?: boolean | undefined;
 }
 
-// the named session, the default on a terminal, or null for none
 export function pickConsoleSession(
   args: Readonly<ConsoleSessionArgs>,
   isTerminal: boolean,

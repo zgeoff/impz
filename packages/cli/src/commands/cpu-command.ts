@@ -13,15 +13,10 @@ import { formatImp } from '../output/format-imp';
 import { formatOutput, formatTable } from '../output/format-output';
 import { parseCount } from '../parse/parse-size';
 
-// how often `impz top` asks again when no event comes
 const TOP_REFRESH_MS = 2000;
-
-// a burst of events, such as a wake's, re-lists once
 const TOP_EVENT_DEBOUNCE_MS = 200;
 const HIDE_CURSOR = '\u001B[?25l';
 const SHOW_CURSOR = '\u001B[?25h';
-
-// the signals that end top, each with its shell exit code
 const ENDING_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
 
 export const setCommand = defineCommand({
@@ -56,9 +51,6 @@ export const setCommand = defineCommand({
     }),
 });
 
-// Each imp's use, busiest first: CPU over its limit, the time the limit held
-// it back, RAM, disk use over its size, traffic since its VM started, wakes
-// and time awake.
 export function formatTop(imps: readonly Imp[]): string {
   const sorted = imps.toSorted(
     (left, right) =>
@@ -117,10 +109,8 @@ export const topCommand = defineCommand({
         return;
       }
 
-      // an event refreshes soon; the clock catches what moves without one
       const refresh = { wake: (): void => {} };
 
-      // the cursor comes back however top ends
       for (const signal of ENDING_SIGNALS) {
         process.once(signal, () => {
           process.stdout.write(`${SHOW_CURSOR}\n`);

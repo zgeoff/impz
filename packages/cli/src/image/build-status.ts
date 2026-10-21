@@ -1,11 +1,7 @@
 import type { ImageBuildPhase, ImageBuildProgress } from '@impz/api';
 import type { ProgressOutput } from '../cp/copy-progress';
 
-// What a streamed image call shows from impd's events. A terminal gets one
-// line redrawn in place, the output above it; a log or an agent gets a plain
-// line at each phase and step and every so often, and the output as it is.
 export interface BuildStatus {
-  // the time counts from the first event of the phase
   readonly show: (progress: ImageBuildProgress) => void;
   readonly printLog: (line: string) => void;
   readonly finish: () => void;
@@ -20,10 +16,7 @@ const PHASE_WORDS: Readonly<Record<ImageBuildPhase, string>> = {
   copy: 'copying',
 };
 
-// off a terminal, the gap between two lines that report no change
 const QUIET_LINE_MS = 30_000;
-
-// the most of a step the terminal line shows, so the line fits on one row
 const TTY_STEP_MAX_CHARS = 60;
 
 export function formatBuildStatus(
@@ -40,7 +33,6 @@ export function formatBuildStatus(
   return step === undefined ? line : `${line}, ${step}`;
 }
 
-// `quiet` shows nothing at all
 export function createBuildStatus(
   output: ProgressOutput,
   label: string,
@@ -105,7 +97,6 @@ export function createBuildStatus(
       }
     },
 
-    // above the terminal line, which is drawn again under it
     printLog: (line) => {
       if (quiet) {
         return;

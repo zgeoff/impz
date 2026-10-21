@@ -27,17 +27,13 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root bearer; each test reads it back for the forward
   const rootToken = faker.string.alphanumeric(32);
 
-  // the tunnel is a WebSocket, so impd listens as it starts
   const harness = await startTestImpd(stack, { rootToken });
 
-  // an agent new enough to dial and listen, which impd checks before each
+  // impd checks the agent's version before each dial and listen
   harness.fake.agent.version = '0.18.0';
 
-  // the image every imp a test creates boots from, with a rootfs where its
-  // digest names
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
@@ -47,7 +43,6 @@ async function setupTest() {
   const url = harness.url;
 
   return {
-    // for what the test starts that must stop before impd does
     stack,
     rootToken,
     dataDir: harness.dataDir,
@@ -61,8 +56,6 @@ test('it relays a client in the imp to the local unix socket, both ways', async 
   const ctx = await setupTest();
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // the agent listens on a socket it makes, has one client waiting at once,
-  // and that client says hello, then closes once the local side did
   const agent = buildStubListenAgent({
     listening: { path: '/run/imp/fwd1.sock' },
     clientSends: 'hello',
@@ -78,7 +71,6 @@ test('it relays a client in the imp to the local unix socket, both ways', async 
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  // the local app: answers each chunk in capitals, then closes
   const app = createServer({ allowHalfOpen: true }, (socket) => {
     socket.on('data', (chunk: Buffer) => {
       socket.end(chunk.toString().toUpperCase());
@@ -154,7 +146,6 @@ test('it rejects a listen the agent refuses, with the agent’s code', async () 
 });
 
 test('it rejects a forward whose tunnel cannot reach impd', () => {
-  // nothing listens there, so the tunnel closes without a handshake
   const starting = startReverseForward(
     { url: 'http://127.0.0.1:1', token: 'imp-token', host: null },
     'box',
@@ -172,7 +163,6 @@ test('it fails the forward when the imp is destroyed while it waits for a wake',
   const ctx = await setupTest();
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // the agent listens on port 9000 in the imp for each listen
   const agent = buildStubListenAgent({ listening: { port: 9000 } });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, agent.readFrame, {
@@ -201,7 +191,6 @@ test('it fails the forward when the imp is destroyed while it waits for a wake',
 
   invariant(listen);
 
-  // the agent ends the listener, as a forced sleep does
   listen.end();
 
   await waitFor(() => {
@@ -220,7 +209,6 @@ test('it fails the forward with impd’s refusal of the state watch once its tok
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
   const made = await ctx.client.tokens.create({ name: 'runner', scope: 'exec' });
 
-  // the agent listens on port 9000 in the imp for each listen
   const agent = buildStubListenAgent({ listening: { port: 9000 } });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, agent.readFrame, {
@@ -268,7 +256,6 @@ test('it waits for an imp that slept to wake before it listens again after a los
   const ctx = await setupTest();
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // the agent listens on port 9000 in the imp for each listen
   const agent = buildStubListenAgent({ listening: { port: 9000 } });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, agent.readFrame, {
@@ -300,7 +287,6 @@ test('it waits for an imp that slept to wake before it listens again after a los
 
   await ctx.client.imps.sleep({ name: 'box' });
 
-  // the sleep ended the listener in the imp
   listen.end();
 
   await waitFor(() => {
@@ -329,7 +315,6 @@ test('it listens again once the grace passes on an imp that stayed running', asy
   const ctx = await setupTest();
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // the agent listens on port 9000 in the imp for each listen
   const agent = buildStubListenAgent({ listening: { port: 9000 } });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, agent.readFrame, {
@@ -358,7 +343,6 @@ test('it listens again once the grace passes on an imp that stayed running', asy
 
   invariant(listen);
 
-  // the agent ends the listener while the imp runs on
   listen.end();
 
   await waitFor(() => {
@@ -382,7 +366,6 @@ test('it fails the forward for good when the agent refuses the listen after a lo
   const ctx = await setupTest();
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // the agent listens on port 9000 once, then refuses
   const agent = buildStubListenAgent({ listening: { port: 9000 } });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, agent.readFrame, {
@@ -435,7 +418,6 @@ test('it ends the wait for a wake when the forward stops', async () => {
   const ctx = await setupTest();
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // the agent listens on port 9000 in the imp for each listen
   const agent = buildStubListenAgent({ listening: { port: 9000 } });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, agent.readFrame, {
@@ -456,7 +438,6 @@ test('it ends the wait for a wake when the forward stops', async () => {
     },
   );
 
-  // a stop the test already made is a no-op
   ctx.stack.defer(() => {
     forwarding.stop();
   });
@@ -475,8 +456,8 @@ test('it ends the wait for a wake when the forward stops', async () => {
 
   forwarding.stop();
 
-  // a second stream of impd's events, which sees the wake when the stopped
-  // forward's stream would have: impd sends each change to every stream
+  // impd sends each change to every stream, so a second stream sees the wake
+  // the stopped forward's stream would have
   const reading = new AbortController();
 
   ctx.stack.defer(() => {
@@ -490,7 +471,6 @@ test('it ends the wait for a wake when the forward stops', async () => {
 
   await ctx.client.imps.start({ name: 'box' });
 
-  // each try reads the stream's next event
   await waitFor(async () => {
     const next = await reader.next();
 
@@ -515,7 +495,6 @@ test('it fails the forward when the imp’s state watch ends while it waits', as
   const ctx = await setupTest();
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // the agent listens on port 9000 in the imp for each listen
   const agent = buildStubListenAgent({ listening: { port: 9000 } });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, agent.readFrame, {
@@ -529,8 +508,8 @@ test('it fails the forward when the imp’s state watch ends while it waits', as
     {
       writeNotice: () => {},
 
-      // a watch that ends: impd's own stream opens again instead, so only an
-      // injected one reaches this
+      // impd's own stream opens again when it ends, so only an injected watch
+      // can end
       watchImp: () => Promise.resolve(),
       wait: buildStubWait().wait,
     },
@@ -555,7 +534,6 @@ test('it listens again after the retry time when impd closes the tunnel to resta
   const ctx = await setupTest();
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // the agent listens on port 9000 in the imp for each listen
   const agent = buildStubListenAgent({ listening: { port: 9000 } });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, agent.readFrame, {

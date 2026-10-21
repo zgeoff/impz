@@ -5,29 +5,15 @@ import { toSignalExitCode } from '../cli/to-signal-exit-code';
 import type { CliConfig } from '../config/cli-config';
 
 const TAKEN_OVER_CODE = 254;
-
-// the most a pause between two attaches grows to
 const REATTACH_MAX_DELAY_MS = 8000;
 
-// What one `impz exec` has decided so far, apart from its sockets, stdin and
-// terminal: whether its session started, and how long a lost one is tried
-// again. Only advanceExec moves it.
 export interface ExecMachine {
   readonly imp: string;
-
-  // the session the command runs in, or null for one that ends with the CLI
   readonly session: string | null;
   readonly config: CliConfig;
-
-  // how long a lost session is tried again, and the first pause between
-  // tries; each later pause doubles, up to REATTACH_MAX_DELAY_MS
   readonly windowMs: number;
   readonly firstDelayMs: number;
-
-  // a session that never started has nothing to attach to again
   readonly started: boolean;
-
-  // set while a lost session is being attached again
   readonly reattachUntil: number | null;
   readonly tries: number;
 }
@@ -35,14 +21,10 @@ export interface ExecMachine {
 export type ExecEvent =
   | { readonly kind: 'started' }
   | { readonly kind: 'outcome'; readonly outcome: ExecOutcome; readonly now: number }
-
-  // another client holds the session the CLI would attach to again
   | { readonly kind: 'taken_over' };
 
 export type ExecStep =
   | { readonly kind: 'attached'; readonly wasAway: boolean }
-
-  // the exit code, and the line for stderr once the terminal is reset
   | { readonly kind: 'stop'; readonly code: number; readonly message: string | null }
   | { readonly kind: 'reattach'; readonly delayMs: number; readonly isFirst: boolean };
 
@@ -51,9 +33,6 @@ export interface ExecTransition {
   readonly step: ExecStep;
 }
 
-// The next state of an exec and what runExec does about the event, from the
-// two alone: an outcome either ends the CLI with its exit code or, for a
-// session that is only away, tries it again after a pause.
 export function advanceExec(machine: Readonly<ExecMachine>, event: ExecEvent): ExecTransition {
   return match<ExecEvent, ExecTransition>(event)
     .with({ kind: 'started' }, () => ({
@@ -87,15 +66,12 @@ export function advanceExec(machine: Readonly<ExecMachine>, event: ExecEvent): E
     .exhaustive();
 }
 
-// `session main (impz attach box main)`: the session, and how to get back
 export function formatSession(machine: Readonly<Pick<ExecMachine, 'imp' | 'session'>>): string {
   const session = machine.session ?? '';
 
   return `session ${session} (impz attach ${machine.imp} ${session})`;
 }
 
-// whether the outcome leaves the session running, so the CLI may attach
-// again: never after another client took it over, or once the window is over
 function canReattach(machine: Readonly<ExecMachine>, outcome: ExecOutcome, now: number): boolean {
   if (machine.session === null || !machine.started) {
     return false;
@@ -114,18 +90,14 @@ function canReattach(machine: Readonly<ExecMachine>, outcome: ExecOutcome, now: 
 
 interface OutcomeResult {
   readonly code: number;
-
-  // the line for stderr, printed once the terminal is reset
   readonly message: string | null;
 }
 
 const IMP_FAILED_CODE = 255;
 
-// the imp answers, but the container its commands run in is down
 const INNER_DOWN_HINT =
   ' (the container in the imp starts again on its own; impz stop and impz start, or impz restore, bring it back)';
 
-// the exit code for an outcome, and the line that explains a failure
 function buildOutcomeResult(
   outcome: ExecOutcome,
   config: CliConfig,
@@ -185,14 +157,11 @@ function buildOutcomeResult(
     .exhaustive();
 }
 
-// Exit codes as ssh and shells use them (docs/guides/cli.md has the table): 1 a
-// --require impd cannot meet, 127 could not start, 141 our output went away,
-// 254 another client took the session over, 255 imp failed. A detach exits 0.
+// exit codes follow ssh and the shells: 127 for a command that could not
+// start, 141 for a broken pipe, 255 for a failure on the remote side
 const PRECONDITION_FAILED_CODE = 1;
 const EXEC_FAILED_CODE = 127;
 
-// what a refusal exits with: 127 for a command that could not start, 1 for
-// a requirement impd cannot meet, as for any refused call, else 255
 function pickFailedCode(code: string | null): number {
   if (code === 'EXEC_FAILED') {
     return EXEC_FAILED_CODE;
@@ -203,8 +172,7 @@ function pickFailedCode(code: string | null): number {
 
 const BROKEN_PIPE_CODE = 141;
 
-// a callback threw; a reader such as `head` that went away is quiet, as for
-// a local command
+// a reader such as `head` that went away is quiet, as with a local command
 function buildLocalErrorResult(error: unknown): OutcomeResult {
   if (isBrokenPipe(error)) {
     return { code: BROKEN_PIPE_CODE, message: null };

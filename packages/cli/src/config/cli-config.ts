@@ -9,16 +9,13 @@ export interface CliConfig {
   readonly url: string;
   readonly token: string | null;
 
-  // the saved host the URL and token came from, or null for IMP_URL and the
-  // local default
   readonly host: string | null;
 }
 
 const DEFAULT_URL = 'http://localhost:7070';
 
-// The impd to call and its token, always from one source, so a token never
-// goes to an impd it was not saved for; `warn` gets the notes for stderr.
-// The order is in docs/guides/configuration.md#cli.
+// the URL and the token always come from one source, so a token never goes
+// to an impd it was not saved for
 export function loadCliConfig(
   env: CliEnv,
   host: string | null,

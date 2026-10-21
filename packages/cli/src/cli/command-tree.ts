@@ -47,8 +47,8 @@ import { attachCommand, sessionsCommand } from '../commands/sessions-command';
 import { tokenCommand } from '../commands/tokens-command';
 import { defineGroup } from './define-command';
 
-// Every imp command. `completion` walks this tree to write its scripts, so
-// it loads lazily: a static import would be a cycle.
+// `completion` walks this tree, so it loads lazily: a static import would be
+// a cycle
 export const subCommands = {
   new: newCommand,
   ls: lsCommand,

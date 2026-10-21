@@ -15,8 +15,6 @@ import { writeHostConfig } from '../config/host-store';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';
 
-// The CLI's home, where config.json keeps the saved hosts, so none of this
-// machine's reaches it; each impd host a test starts releases into `stack`
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -56,7 +54,6 @@ test('#new refuses an IMP_URL that is not an http URL', async () => {
 });
 
 test('#new refuses --auth without --public before any call to impd', async () => {
-  // nothing listens there: a call would fail on the connection instead
   const result = await runCLIInProcess({
     args: ['new', 'box', '--auth', 'basic'],
     env: { IMP_URL: 'http://127.0.0.1:1' },
@@ -157,7 +154,6 @@ test('#new refuses --no-backup on an impd from before the setting, and creates n
 test('#new refuses --place with --host', async () => {
   const ctx = await setupTest();
 
-  // nothing listens there: a call would fail on the connection instead
   writeHostConfig(ctx.home, {
     current: 'box',
     hosts: { box: { url: 'http://127.0.0.1:1', token: 'imps-token' } },
@@ -181,8 +177,8 @@ test('#new skips a host without the image and moves past a RAM refusal under --p
   const small = await startImpdHost(ctx.stack, { env: {} });
   const bare = await startImpdHost(ctx.stack, { env: {} });
 
-  // big: the most free RAM by system.info, but a held imp whose KSM saving
-  // the governor keeps free leaves no room for a boot
+  // big has the most free RAM by system info, but the governor keeps a held
+  // imp's KSM saving free, which leaves no room for a boot
   const bigImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(big.dataDir, bigImage.digest).rootfs, 'rootfs');
@@ -194,7 +190,6 @@ test('#new skips a host without the image and moves past a RAM refusal under --p
 
   big.ksm.profitMib = 16_000;
 
-  // small: two awake imps, so less free RAM than big
   const smallImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(small.dataDir, smallImage.digest).rootfs, 'rootfs');
@@ -204,7 +199,6 @@ test('#new skips a host without the image and moves past a RAM refusal under --p
   await small.client.imps.create({ name: 'web' });
   await small.client.imps.create({ name: 'db' });
 
-  // bare: the most free RAM of all, but not the image asked for
   const bareImage = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(bare.dataDir, bareImage.digest).rootfs, 'rootfs');
@@ -229,7 +223,6 @@ test('#new skips a host without the image and moves past a RAM refusal under --p
 
   const created = await small.client.imps.get({ name: 'dev' });
 
-  // dates as JSON writes them
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const sent: unknown = JSON.parse(JSON.stringify({ host: 'small', imp: created }));
 
@@ -265,7 +258,6 @@ test('#new places on a reachable host under --place when another saved host does
 
   await createImage(box.db, image);
 
-  // nothing listens at gone's address
   writeHostConfig(ctx.home, {
     current: 'box',
     hosts: {
@@ -281,7 +273,6 @@ test('#new places on a reachable host under --place when another saved host does
 
   const created = await box.client.imps.get({ name: 'dev' });
 
-  // dates as JSON writes them
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const sent: unknown = JSON.parse(JSON.stringify({ host: 'box', imp: created }));
 
@@ -302,7 +293,6 @@ test('#new refuses --place when no saved host can take the imp', async () => {
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // bare has an image, but not the one asked for
   await Bun.write(buildImagePaths(bare.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(bare.db, image);
@@ -374,7 +364,6 @@ test('#new passes over a host whose token is limited, then exposes, under --plac
   const ctx = await setupTest();
   const big = await startImpdHost(ctx.stack, { env: {} });
 
-  // Cloudflare, where impd's startup and the expose write the records
   const cloudflare = createStubCloudflareApi({ tokens: ['unused'] });
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
@@ -397,7 +386,6 @@ test('#new passes over a host whose token is limited, then exposes, under --plac
 
   await createImage(big.db, bigImage);
 
-  // big's saved token reaches only some imps
   const limited = await big.client.tokens.create({
     name: 'agent',
     scope: 'manage',
@@ -425,10 +413,8 @@ test('#new passes over a host whose token is limited, then exposes, under --plac
 
   const body: unknown = JSON.parse(placed.stdout);
 
-  // the create's answer, from before the expose
   const { public: _exposed, ...created } = await small.client.imps.get({ name: 'dev' });
 
-  // dates as JSON writes them
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const imp: unknown = JSON.parse(JSON.stringify(created));
 
@@ -484,7 +470,6 @@ test('#new names the host of a failure after a placed create, and still writes t
 
   const created = await box.client.imps.get({ name: 'dev' });
 
-  // dates as JSON writes them
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const sent: unknown = JSON.parse(
     JSON.stringify({

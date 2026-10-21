@@ -32,20 +32,17 @@ import { startStubPrefixProxy } from '../test-utils/start-stub-prefix-proxy';
 import { runExec } from './exec-client';
 import type { ExecIo } from './exec-client';
 
-// impd, booted on stand-ins and listening on a loopback port, and the io of
-// an exec that reaches it with the root token
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root bearer; each test reads it back for the CLI
   const rootToken = faker.string.alphanumeric(32);
 
-  // a test may stop impd's listener itself, and listen again on its port
   const harness = await startTestImpd(stack, { rootToken });
 
-  // an agent that runs sessions, tools and outer execs, which impd checks
+  // impd checks the agent's version before it runs sessions, tools and outer
+  // execs
   harness.fake.agent.version = '0.18.0';
 
   const port = harness.config.apiPort;
@@ -554,7 +551,6 @@ test('it exits 255 with the token hint when impd rejects the token', async () =>
 });
 
 test('it exits 255 and names the address when nothing listens there', async () => {
-  // a port that a probe held a moment ago and nothing holds now
   const port = claimFreePorts(1).take();
   const url = `http://127.0.0.1:${String(port)}`;
   const errors: string[] = [];
@@ -591,7 +587,6 @@ test('it keeps the IMP_URL path prefix of an impd behind a proxy', async () => {
     socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal: 0 }));
   });
 
-  // a reverse proxy that serves impd under /imp, and nothing outside it
   const proxy = startStubPrefixProxy(ctx.stack, { target: ctx.url, prefix: '/imp' });
 
   const code = await runExec(
@@ -671,9 +666,8 @@ test('it exits 255 and names the failure when an output write fails other than b
   expect(ctx.errors).toStrictEqual(['impz: write ENOSPC']);
 });
 
-// on the exec peer: real impd sends detached only after started, and every
-// started reopens the window to attach again; only impd's protocol fault of a
-// detached before started ends a session as lost once that window is over
+// real impd sends detached only after started, and each started reopens the
+// window to attach again, so only a stub peer can send a detached first
 test('it exits 255 and says the connection was lost once the window to attach again is over, after impd sends a detached before started', async () => {
   const peer = buildStubExecPeer((link, message) => {
     if (message.type === 'start') {
@@ -703,8 +697,6 @@ test('it exits 255 and says the connection was lost once the window to attach ag
       },
       connect: peer.connect,
       isAttachedElsewhere: () => Promise.resolve(false),
-
-      // a window that is over by the time the first attach fails
       reattachWindowMs: 0,
       wait: () => Promise.resolve(),
     },
@@ -1178,7 +1170,6 @@ test('it attaches again by itself when impd restarts under a session', async () 
 
   const terminal = buildStubTerminal();
 
-  // the CLI's pause before it attaches again: impd comes back on its port
   const wait = (): Promise<void> => {
     ctx.impd.api.app.listen({ port: ctx.port, hostname: '127.0.0.1' });
 
@@ -1196,7 +1187,6 @@ test('it attaches again by itself when impd restarts under a session', async () 
     { ...ctx.io, stdin: terminal.stdin, wait },
   );
 
-  // the session started: the terminal went raw
   await waitFor(() => {
     expect(terminal.modes).toStrictEqual([true]);
   });
@@ -1316,8 +1306,6 @@ test.each([['\u001D'], ['\u001B[93;5u'], ['\u001B[27;5;93~']])(
         tty: true,
         session: { name: 'main', attachOnly: false, detachKey: 0x1d },
       },
-
-      // the pause before the next try never ends
       { ...ctx.io, stdin: terminal.stdin, wait: () => new Promise<void>(() => {}) },
     );
 
@@ -1359,8 +1347,6 @@ test('it gives up with 130 on ctrl-c while it attaches again', async () => {
       tty: true,
       session: { name: 'main', attachOnly: false, detachKey: 0x1d },
     },
-
-    // the pause before the next try never ends
     { ...ctx.io, stdin: terminal.stdin, wait: () => new Promise<void>(() => {}) },
   );
 
@@ -1493,7 +1479,6 @@ test('it doubles the pause before each try, up to 8 s, while impd stays down und
 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // an agent whose session runs on until impd goes away
   const agent = await startStubAgent(
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket, _request, frames) => {
@@ -1533,7 +1518,6 @@ test('it doubles the pause before each try, up to 8 s, while impd stays down und
     },
   );
 
-  // the session started: the terminal went raw
   await waitFor(() => {
     expect(terminal.modes).toStrictEqual([true]);
   });
@@ -1557,7 +1541,6 @@ test('it fails with the last reason once the window to attach again is over, whi
 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // an agent whose session runs on until impd goes away
   const agent = await startStubAgent(
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket, _request, frames) => {
@@ -1598,7 +1581,6 @@ test('it fails with the last reason once the window to attach again is over, whi
     },
   );
 
-  // the session started: the terminal went raw
   await waitFor(() => {
     expect(terminal.modes).toStrictEqual([true]);
   });
@@ -1663,8 +1645,6 @@ test('it ends the CLI at once on a signal before impd answers the start, without
   await createImage(ctx.db, image);
 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
-
-  // the agent never answers the start, as when impd hangs waking the imp
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, () => {});
 
   const cli = startCli({
@@ -1714,7 +1694,6 @@ test('it sends the first SIGINT to the command and ends the CLI on the second', 
 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // the command ignores SIGINT, so only the second one ends anything
   const agent = await startStubAgent(
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket, _request, frames) => {
@@ -1777,9 +1756,8 @@ test('it takes the terminal out of raw mode when an output write calls process.e
     socket.write(encodeFrame(FRAME_TYPES.stdout, new TextEncoder().encode('out')));
   });
 
-  // a process of its own, for process.exit: the stub terminal on stdin, and
-  // output that prints its modes, then exits; the exit's terminal reset
-  // writes output once more
+  // the terminal reset runs on process.exit, so the exec runs in a process of
+  // its own
   const script = `
       import { runExec } from ${JSON.stringify(join(import.meta.dir, 'exec-client.ts'))};
       import { buildStubTerminal } from ${JSON.stringify(join(import.meta.dir, '..', 'test-utils', 'build-stub-terminal.ts'))};

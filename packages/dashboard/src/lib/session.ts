@@ -1,6 +1,3 @@
-// impd's session routes (packages/daemon auth/session-routes.ts). The token
-// goes to impd once and the browser keeps only the HttpOnly cookie it sets.
-
 export type LoginResult = 'ok' | 'wrong-token' | 'failed';
 
 export async function sendLogin(token: string): Promise<LoginResult> {

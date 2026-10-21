@@ -22,8 +22,6 @@ import { startImpdHost } from '../test-utils/start-impd-host';
 import { startStubSilentHost } from '../test-utils/start-stub-silent-host';
 import { listAllImps, listForkWarnings, pickConsoleSession } from './imps-command';
 
-// The CLI's home, where config.json keeps the saved hosts, so none of this
-// machine's reaches it; each impd host a test starts releases into `stack`
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -108,7 +106,6 @@ test.each([
 ])('#exec refuses %p before any call to impd', async (args, stderr) => {
   const ctx = await setupTest();
 
-  // nothing listens there: a call would fail on the connection instead
   const result = await runCLIInProcess({
     args,
     env: { ...ctx.home, IMP_URL: 'http://127.0.0.1:1', IMP_TOKEN: 'imps-token' },
@@ -120,7 +117,6 @@ test.each([
 test('#console refuses --log without a session before any call to impd', async () => {
   const ctx = await setupTest();
 
-  // nothing listens there: a call would fail on the connection instead
   const result = await runCLIInProcess({
     args: ['console', 'dev', '--no-session', '--log'],
     env: { ...ctx.home, IMP_URL: 'http://127.0.0.1:1', IMP_TOKEN: 'imps-token' },
@@ -166,7 +162,6 @@ test('#ls lists every saved host and exits 3 when one of them fails', async () =
   await box.client.imps.create({ name: 'web' });
   await box.client.imps.create({ name: 'db' });
 
-  // db is on its way to another host
   const db = await readImpByName(box.db, 'db');
 
   invariant(db);
@@ -244,8 +239,6 @@ test('#listAllImps gives up on a host that never answers once its timer runs out
     startTimer: timeouts.startTimer,
   });
 
-  // box answered, so only the silent host's timer still runs; the hosts go
-  // in name order
   await waitFor(() => {
     expect(timeouts.timers.map((timer) => timer.state)).toStrictEqual(['cancelled', 'pending']);
   });
@@ -340,7 +333,6 @@ test('#ls writes the imps and the errors of every host as JSON for --all --json'
   const boxImps = await box.client.imps.list();
   const laptopImps = await laptop.client.imps.list();
 
-  // what the CLI received, dates as JSON writes them, with each imp's host
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const sent: unknown = JSON.parse(
     JSON.stringify([
@@ -394,8 +386,6 @@ test('#ls lists every host’s builders under --all --builders', async () => {
   const ctx = await setupTest();
   const box = await startImpdHost(ctx.stack, { env: {} });
   const laptop = await startImpdHost(ctx.stack, { env: {} });
-
-  // a builder imp on each host, as a host build leaves one
   const boxImage = await createImage(box.db, buildMockNewImage({ name: 'base' }));
 
   await createImp(
@@ -428,7 +418,6 @@ test('#ls lists every host’s builders under --all --builders', async () => {
   const boxBuilder = await box.client.imps.get({ name: 'box-builder' });
   const laptopBuilder = await laptop.client.imps.get({ name: 'laptop-builder' });
 
-  // what the CLI received, dates as JSON writes them, with each imp's host
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const sent: unknown = JSON.parse(
     JSON.stringify([
@@ -444,8 +433,6 @@ test('#ls lists no builder under plain --all', async () => {
   const ctx = await setupTest();
   const box = await startImpdHost(ctx.stack, { env: {} });
   const laptop = await startImpdHost(ctx.stack, { env: {} });
-
-  // a builder imp on each host, as a host build leaves one
   const boxImage = await createImage(box.db, buildMockNewImage({ name: 'base' }));
 
   await createImp(
@@ -478,7 +465,6 @@ test('#ls lists no builder under plain --all', async () => {
 test('#ls refuses --all with --host', async () => {
   const ctx = await setupTest();
 
-  // nothing listens there: a call would fail on the connection instead
   writeHostConfig(ctx.home, {
     current: 'box',
     hosts: { box: { url: 'http://127.0.0.1:1', token: 'imps-token' } },
@@ -505,7 +491,6 @@ test('#ls lists the current host alone without --all', async () => {
 
   await box.client.imps.create({ name: 'db' });
 
-  // nothing listens at laptop's URL: asking it would print its error
   writeHostConfig(ctx.home, {
     current: 'box',
     hosts: {
@@ -517,7 +502,6 @@ test('#ls lists the current host alone without --all', async () => {
   const listed = await runCLIInProcess({ args: ['ls', '--json'], env: ctx.home });
   const imps = await box.client.imps.list();
 
-  // dates as JSON writes them
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const sent: unknown = JSON.parse(JSON.stringify(imps));
 
@@ -563,7 +547,6 @@ test('#ls marks an awake imp whose inner container is down', async () => {
 
   const imp = await box.client.imps.create({ name: 'web' });
 
-  // its agent answers, with the container down after three restarts
   await startStubInnerAgent(buildImpPaths(box.dataDir, imp.id).vsockSocket, {
     inner: { up: false, restarts: 3, lastError: 'start inner init: exit status 1' },
     stack: ctx.stack,
@@ -596,7 +579,6 @@ test('#ls passes through as sent a host field that a newer impd adds to its imps
 
   await box.client.imps.create({ name: 'db' });
 
-  // a release after this CLI's adds `host` to each imp
   const newer = startStubImpdRelease(ctx.stack, box.sendRequest, {
     withFields: { 'imps/list': { host: 'peer' } },
   });
@@ -609,7 +591,6 @@ test('#ls passes through as sent a host field that a newer impd adds to its imps
   const listed = await runCLIInProcess({ args: ['ls', '--json'], env: ctx.home });
   const imps = await box.client.imps.list();
 
-  // dates as JSON writes them
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const sent: unknown = JSON.parse(
     JSON.stringify(imps.map((imp) => Object.assign(imp, { host: 'peer' }))),
@@ -634,7 +615,6 @@ test('#ls names the saved host under --all over a host field that a newer impd a
 
   await box.client.imps.create({ name: 'db' });
 
-  // a release after this CLI's adds `host` to each imp
   const newer = startStubImpdRelease(ctx.stack, box.sendRequest, {
     withFields: { 'imps/list': { host: 'peer' } },
   });
@@ -647,7 +627,6 @@ test('#ls names the saved host under --all over a host field that a newer impd a
   const listed = await runCLIInProcess({ args: ['ls', '--all', '--json'], env: ctx.home });
   const imps = await box.client.imps.list();
 
-  // dates as JSON writes them, each imp under its saved host's name
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const sent: unknown = JSON.parse(
     JSON.stringify(imps.map((imp) => Object.assign(imp, { host: 'box' }))),

@@ -17,33 +17,28 @@ import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startWarmMoveHosts } from '../test-utils/start-warm-move-hosts';
 import { runMove } from './move-command';
 
-// two impds, a and b, each with the image its imps boot from
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // each call the CLI makes, as `<host> <procedure>`, in the order impd took them
   const calls: string[] = [];
 
   const startImpd = async (host: string) => {
-    // named for its host, as a refused warm move prints it
     const dataDir = await mkdtemp(join(tmpdir(), `cli-move-${host}-`));
 
     stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-    // on the wall clock until a test moves it on
     const harness = await startTestImpd(stack, {
       dataDir,
       rootToken: 'root-token',
 
-      // the URL the target hands the source, a tailnet address as a move needs
+      // a move needs a tailnet address for the target
       env: { IMP_PEER_URL: 'http://100.100.0.2:7070' },
     });
 
     const impd = harness.impd;
 
-    // the image a test's imps boot from
     await Bun.write(join(harness.dataDir, 'images', 'ubuntu', 'rootfs.ext4'), 'rootfs');
 
     await createImage(
@@ -51,7 +46,6 @@ async function setupTest() {
       buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
     );
 
-    // the image's config, which a move sends with it
     await Bun.write(buildImagePaths(harness.dataDir, 'sha256:ubuntu').config, '{}');
 
     const sendClientRequest = (request: Request) => {
@@ -68,8 +62,6 @@ async function setupTest() {
 
     return {
       client,
-
-      // a test moves a host's clock on, such as past the target's commit window
       advance: harness.advance,
       moves: impd.moves,
       respond: (request: Request) => impd.api.app.handle(request),
@@ -83,15 +75,10 @@ async function setupTest() {
     calls,
     from: source.client,
     to: target.client,
-
-    // the target's API, as a client in front of it reaches it
     handleOnTarget: target.respond,
-
-    // moves the target's clock on, as a test may
     advanceTarget: target.advance,
 
-    // the target's move routes, as the source reaches them over the
-    // tailnet from 100.100.0.1
+    // the source reaches the target's move routes over the tailnet
     receiveFromSource: (request: Request) => target.moves.respond(request, '100.100.0.1'),
   };
 }
@@ -358,8 +345,8 @@ test('it points at --resume when the target’s commit window ended before the c
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
 
-  // the commit window is 24 hours from the receipt
-  // (docs/architecture/storage/moves.md#one-live-copy); the commit lands a second past it
+  // the commit window is 24 hours from the receipt, and the commit lands a
+  // second past it
   server.use(
     http.post('http://100.100.0.2:7070/move/commit', (info) => {
       ctx.advanceTarget(24 * 60 * 60 * 1000 + 1000);
@@ -431,8 +418,8 @@ test('it commits a verified move with a fresh ticket from the target on --resume
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
 
-  // the first commit lands a second past the 24-hour commit window
-  // (docs/architecture/storage/moves.md#one-live-copy), so the target holds a verified copy
+  // the first commit lands a second past the 24-hour commit window, so the
+  // target holds a verified copy
   server.use(
     http.post(
       'http://100.100.0.2:7070/move/commit',
@@ -496,7 +483,6 @@ test('it says the move is complete when an abort finds the target committed it',
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
 
-  // the target commits, but its answer is lost on the way back
   server.use(
     http.post(
       'http://100.100.0.2:7070/move/commit',

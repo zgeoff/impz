@@ -39,14 +39,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root bearer; each test reads it back for the proxy
   const rootToken = faker.string.alphanumeric(32);
 
-  // the tunnel is a WebSocket, so impd listens as it starts; a stop the test
-  // already made is a no-op
   const harness = await startTestImpd(stack, { rootToken });
 
-  // an agent new enough to dial and listen, which impd checks before each
+  // impd checks the agent's version before each dial and listen
   harness.fake.agent.version = '0.18.0';
 
   const server = harness.impd.app.server;
@@ -56,7 +53,6 @@ async function setupTest() {
   const url = harness.url;
 
   return {
-    // for what the test starts that must stop before impd does
     stack,
     rootToken,
     dataDir: harness.dataDir,
@@ -79,8 +75,6 @@ test('#startProxy relays a half-closed request and its reply on both loopbacks',
 
   const imp = await ctx.client.imps.create({ name: 'box' });
 
-  // the guest's server behind the agent's dial: it answers once the request
-  // is whole, then closes its side
   const agent = await startStubDialAgent(
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (asked) => `got ${asked}`,
@@ -161,7 +155,6 @@ test('#startProxy stops reading an upload at the window while the guest takes no
 
   invariant(port !== undefined);
 
-  // a client whose upload the guest never lets finish
   const upload = connect({ host: '127.0.0.1', port });
 
   ctx.stack.defer(() => {
@@ -271,7 +264,6 @@ test('#startProxy fails at once naming a local port in use, before any call to i
 
   await listening.promise;
 
-  // nothing listens at this impd: a call would fail with another message
   const started = startProxy(
     { url: 'http://127.0.0.1:1', token: 'root-token', host: null },
     'box',
@@ -371,7 +363,6 @@ test('#startProxy reports impd’s refusal of a dial and resets the local connec
 
   const imp = await ctx.client.imps.create({ name: 'box' });
 
-  // the agent cannot connect to the port in the guest
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
     socket.end(
       encodeJsonFrame(FRAME_TYPES.response, {
@@ -423,14 +414,13 @@ test('#startProxy ends only the tunnel that gets a message that is not JSON, and
 
   const imp = await ctx.client.imps.create({ name: 'box' });
 
-  // the guest's server takes each dial and answers a request once it is whole
   await startStubDialAgent(
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (asked) => `got ${asked}`,
     { stack: ctx.stack },
   );
 
-  // a fault on the path to impd: impd itself never sends text that is not JSON
+  // impd itself never sends text that is not JSON, so a proxy injects it
   const faulty = startStubTunnelFaultProxy(ctx.stack, ctx.url);
   const writeNotice = mock<(text: string) => void>();
 
@@ -511,7 +501,6 @@ test('#startProxy says impd restarted when impd closes an open tunnel to restart
 
   const dialed = Promise.withResolvers<void>();
 
-  // the guest's server takes the dial and holds the connection open
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
     socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
     dialed.resolve();
@@ -564,7 +553,6 @@ test('#startProxy prints one notice for a burst of connections that cannot reach
 
   const writeNotice = mock<(text: string) => void>();
 
-  // the clock stands still through the burst
   const proxy = await startProxy(
     { url: ctx.url, token: ctx.rootToken, host: null },
     'box',
@@ -580,7 +568,6 @@ test('#startProxy prints one notice for a burst of connections that cannot reach
 
   invariant(port !== undefined);
 
-  // impd goes away once the proxy checked the imp
   await ctx.server.stop(true);
 
   const replies = await Promise.allSettled([
@@ -625,7 +612,6 @@ test('#startProxy prints the notice again once the quiet time passed without a f
   await ctx.server.stop(true);
   await Promise.allSettled([sendLocalRequest('127.0.0.1', port, new Uint8Array(1))]);
 
-  // the quiet time is 5 s
   clock.nowMs += 5001;
 
   await Promise.allSettled([sendLocalRequest('127.0.0.1', port, new Uint8Array(1))]);

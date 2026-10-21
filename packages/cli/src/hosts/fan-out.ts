@@ -6,13 +6,10 @@ import type { ImpClient } from '../config/create-imp-client';
 import { readHostConfig } from '../config/host-store';
 import type { CliEnv } from '../config/host-store';
 
-// how long one saved host gets to answer before the rest go on without it
 const HOST_TIMEOUT_MS = 5000;
 
-// starts a timer that fires once after `ms`, and returns its cancel
 export type StartTimer = (durationMs: number, fire: () => void) => () => void;
 
-// a saved host, as loadCliConfig would give it for `--host <name>`
 export interface SavedTarget {
   readonly host: string;
   readonly config: CliConfig;
@@ -22,8 +19,6 @@ export type HostAnswer<T> =
   | { readonly host: string; readonly value: T }
   | { readonly host: string; readonly error: string };
 
-// Every saved host, in name order. IMP_URL, IMP_HOST and IMP_TOKEN name one
-// impd, so a call to all of them reads the saved hosts alone.
 export function listSavedTargets(
   env: CliEnv,
   warn: (line: string) => void = console.error,
@@ -39,9 +34,6 @@ export function listSavedTargets(
     .toSorted((first, second) => first.host.localeCompare(second.host));
 }
 
-// Calls every host at once and waits for each, no longer than the timeout
-// that `startTimer` runs: a sleeping laptop costs the timeout, never a hang.
-// The answers keep the targets' order.
 export function runOnHosts<T>(
   targets: readonly SavedTarget[],
   call: (client: ImpClient, signal: AbortSignal) => Promise<T>,

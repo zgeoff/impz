@@ -8,8 +8,6 @@ type AddInput = Parameters<ImpClient['images']['add']>[0];
 
 type BuildInput = Parameters<ImpClient['images']['build']>[0];
 
-// images.add (an image or a template) through its stream on an impd that
-// has one, with its phase line on a terminal; the plain call on an older one
 export async function runImageAdd(
   client: Pick<ImpClient, 'images' | 'system'>,
   input: AddInput,
@@ -25,8 +23,6 @@ export async function runImageAdd(
   return readImageOp(events, label, output);
 }
 
-// images.build from a directory on the impd host, as runImageAdd, with the
-// build's output too; `quiet` shows nothing of its progress
 export async function runOnHostBuild(
   client: Pick<ImpClient, 'images' | 'system'>,
   input: Omit<BuildInput, 'logs'>,

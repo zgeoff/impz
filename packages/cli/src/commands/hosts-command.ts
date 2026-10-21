@@ -115,9 +115,8 @@ export const hostsCommand = defineCommand({
   },
 });
 
-// Saves a host and makes it current. Every check (a damaged config, an
-// empty token, a refused token, an impd out of reach) comes before the
-// write, so a failed login never changes config.json.
+// every check comes before the write, so a failed login never changes
+// config.json
 async function runLogin(io: CommandIO, options: LoginOptions): Promise<string> {
   if (!isHttpUrl(options.url)) {
     throw new UsageError(`not an http(s) URL: ${options.url}`);
@@ -158,8 +157,8 @@ async function runLogin(io: CommandIO, options: LoginOptions): Promise<string> {
   return name;
 }
 
-// The table never shows a token, only whether one is saved: `imp hosts`
-// output ends up in terminals, logs and screenshots.
+// the hosts output ends up in terminals, logs and screenshots, so it shows
+// only whether a token is saved
 function formatHosts(config: HostConfig, json: boolean): string {
   const hosts = Object.entries(config.hosts).map(([name, host]) => ({
     name,

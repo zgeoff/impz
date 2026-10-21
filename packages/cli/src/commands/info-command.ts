@@ -73,7 +73,6 @@ export const infoCommand = defineCommand({
     }),
 });
 
-// what sleeping imps take back on a wake; nothing from an impd before it
 function formatSleeping(mib: number | undefined): string {
   return mib === undefined ? '' : `, ${String(mib)} asleep`;
 }
@@ -82,8 +81,6 @@ function formatGib(bytes: number): string {
   return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
 }
 
-// what a create gets when it names no memory or image; no line from an
-// impd before it
 function formatDefaults(defaults: SystemInfo['defaults']): string[][] {
   if (defaults === undefined) {
     return [];
@@ -107,9 +104,6 @@ function formatEgress(egress: SystemInfo['egress']): string[][] {
   ];
 }
 
-// Off when setup-cgroups.sh could not delegate the controllers, such as a
-// failed remount of the container's cgroupfs: limits are kept, not applied,
-// and jailed VMs cannot start. No line from an impd before it.
 function formatLimits(cpu: SystemInfo['cpu']): string[][] {
   if (cpu === undefined) {
     return [];
@@ -125,7 +119,6 @@ function formatLimits(cpu: SystemInfo['cpu']): string[][] {
   ];
 }
 
-// a line when IMP_KSM is on: what KSM saves and what the governor keeps free for it
 function formatKsm(ksm: SystemInfo['ksm']): string[][] {
   if (ksm === null || ksm === undefined) {
     return [];
@@ -142,7 +135,6 @@ function formatKsm(ksm: SystemInfo['ksm']): string[][] {
   ];
 }
 
-// a line for the per-imp names, then one per name that is not live
 function formatTailnetNames(names: SystemInfo['tailscale']['names']): string[][] {
   if (names === null) {
     return [];
@@ -154,7 +146,6 @@ function formatTailnetNames(names: SystemInfo['tailscale']['names']): string[][]
   ];
 }
 
-// public imps, or why there are none; undefined from an impd before them
 function formatPublic(info: SystemInfo['public']): string {
   if (info === undefined) {
     return 'unknown';

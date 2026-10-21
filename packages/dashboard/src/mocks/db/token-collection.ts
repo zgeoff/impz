@@ -3,8 +3,6 @@ import { TokenSchema } from '@impz/api';
 import { Collection } from '@msw/data';
 import * as z from 'zod';
 
-// impd's API tokens, each with the secret `/auth/login` takes for it: a
-// manage token for every imp, with no SSH keys and nothing to grant
 const BASE64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 const TokenRowSchema = TokenSchema.extend({
@@ -14,8 +12,7 @@ const TokenRowSchema = TokenSchema.extend({
   sshKeys: TokenSchema.shape.sshKeys.default([]),
   createdAt: z.date().default(() => faker.date.past()),
 
-  // impd's `imp_<id>.<secret>`: 12 and 32 random bytes in base64url
-  // (packages/daemon auth/token-store.ts)
+  // impd's token format: 12 and 32 random bytes in base64url
   secret: z.string().default(() => {
     const id = faker.string.fromCharacters(BASE64URL, 16);
     const secret = faker.string.fromCharacters(BASE64URL, 43);
@@ -26,8 +23,6 @@ const TokenRowSchema = TokenSchema.extend({
 
 export const tokenCollection = new Collection({ schema: TokenRowSchema });
 
-// the token's id, which impd keys its sessions on: the `<id>` of its secret,
-// so a new token under an old name has a new one
 export function readTokenId(secret: string): string {
   return secret.slice('imp_'.length, secret.indexOf('.'));
 }

@@ -4,40 +4,26 @@ import { isatty } from 'node:tty';
 import type { CliEnv } from '../config/host-store';
 import type { ProgressOutput } from '../cp/copy-progress';
 
-// what a command reads keys or bytes from: process.stdin, or a test's stream
 export type CommandStdin = Pick<Readable, 'on' | 'off' | 'pause' | 'resume'> & {
   readonly isTTY?: boolean;
   readonly setRawMode?: (mode: boolean) => unknown;
 };
 
-// Everything a command reads from or writes to its process, so a test runs
-// the command in its own process with its own streams and environment.
 export interface CommandIO {
   readonly env: CliEnv;
-
-  // one line on stdout or stderr, as console.log prints it
   readonly print: (line: string) => void;
   readonly printError: (line: string) => void;
-
-  // bytes or text on stdout or stderr as they are, with no newline added
   readonly writeOut: (chunk: string | Uint8Array) => void;
   readonly writeErr: (chunk: string | Uint8Array) => void;
-
-  // whether stdin is a terminal a prompt can read keys from, and whether
-  // stderr is one a progress line can redraw
   readonly isStdinTerminal: boolean;
   readonly isStderrTerminal: boolean;
-
-  // all of stdin once it ends, for input piped in
   readonly readStdin: () => Promise<string>;
-
-  // stdin as a stream, opened when a command first asks
   readonly openStdin: () => CommandStdin;
 }
 
-// The process's own streams and environment. Nothing opens stdin until a
-// command asks, as an open stdin keeps the process alive. Raw writes go out
-// whole and at once, so `impz exec` keeps the order of stdout and stderr.
+// an open stdin keeps the process alive, so nothing opens it until a command
+// asks; raw writes go out whole and at once, so `impz exec` keeps the order
+// of stdout and stderr
 export function readProcessIO(): CommandIO {
   const encoder = new TextEncoder();
 
@@ -62,7 +48,6 @@ export function readProcessIO(): CommandIO {
   };
 }
 
-// where a command draws its progress: stderr, redrawn on a terminal
 export function toProgressOutput(io: CommandIO): ProgressOutput {
   return { isTTY: io.isStderrTerminal, write: io.writeErr };
 }

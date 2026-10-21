@@ -3,7 +3,6 @@ import { ImpSchema } from '@impz/api';
 import { Collection } from '@msw/data';
 import * as z from 'zod';
 
-// impd's imps: a running imp with every optional field left out
 export const ImpRowSchema = ImpSchema.extend({
   id: z.string().default(() => faker.string.uuid()),
   name: ImpSchema.shape.name.default(() => faker.string.alpha({ length: 8, casing: 'lower' })),
@@ -38,7 +37,6 @@ export const ImpRowSchema = ImpSchema.extend({
   createdAt: z.date().default(() => faker.date.past()),
   lastActiveAt: z.date().default(() => faker.date.recent()),
 
-  // impd gives every imp its CPU settings: no limit, weight 100
   cpu: ImpSchema.shape.cpu.unwrap().default(() => ({ limit: null, weight: 100 })),
 });
 

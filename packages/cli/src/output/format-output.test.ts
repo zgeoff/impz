@@ -37,7 +37,6 @@ test('#formatTable pads each column to its widest cell', () => {
 });
 
 test('#formatCheckpoints lists checkpoints with their size in MiB and their disk size', () => {
-  // an older checkpoint: no label, and no size
   const { label, sizeBytes, ...older } = buildMockCheckpoint({
     id: 'cp-d5e6f7',
     createdAt: new Date(0),
@@ -134,7 +133,6 @@ test('#formatBootStatus lists the older parts alone when no imp boots cold', () 
 });
 
 test('#formatBootStatus says an older impd does not report boot status', () => {
-  // an impd from before the counts leaves the field out
   const status = formatBootStatus(undefined, '0.1.0');
 
   expect(status).toBe('unknown (impd 0.1.0 predates it)');
@@ -399,7 +397,6 @@ test('#formatGrants lists each grant’s methods and paths, and a star for a lis
 });
 
 test('#formatApiCalls names who made each api call', () => {
-  // a dashboard call carries no actor name, and this one names no imp
   const { actorName, imp, ...dashboard } = buildMockApiCall({
     at: new Date(0),
     procedure: 'imps.stop',

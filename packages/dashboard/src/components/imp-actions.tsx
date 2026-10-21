@@ -12,8 +12,6 @@ import styles from './imp-actions.module.css';
 
 interface ImpActionsProps {
   readonly imp: Imp;
-
-  // where to go once the imp is destroyed, when the page shows only it
   readonly afterDestroy?: '/';
 }
 
@@ -31,8 +29,6 @@ const ACTIONS_BY_STATE: Readonly<Record<Imp['state'], readonly LifecycleAction[]
   running: ['sleep', 'stop'],
   sleeping: ['wake', 'stop'],
   stopped: ['start'],
-
-  // an imp in error boots again, losing what it was doing
   error: ['restart', 'stop'],
   creating: [],
 };
@@ -47,7 +43,6 @@ const RUN_ACTION: Readonly<
   stop: (client, name) => client.imps.stop({ name }),
 };
 
-// The lifecycle buttons that fit the imp's state, and destroy behind a confirm.
 export function ImpActions(props: ImpActionsProps) {
   const impd = useImpd();
   const refresh = useRefresh();

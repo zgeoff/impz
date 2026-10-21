@@ -5,12 +5,8 @@ import { useEffect } from 'react';
 import { isUnauthorized } from './build-query-client';
 import { useImpd } from './impd';
 
-// how long the dashboard waits before it opens a stream that ended again
 const RECONNECT_MS = 2000;
 
-// Follows impd's event stream while the app is open: each event marks the
-// queries it touches stale, so a view changes as impd does, not on a clock.
-// A 401 stops it: the queries' own 401 sends the browser to the login page.
 export function useImpdEvents(): void {
   const impd = useImpd();
   const queryClient = useQueryClient();
@@ -39,14 +35,13 @@ export function useImpdEvents(): void {
       await queryClient.invalidateQueries({ queryKey: impd.query.system.key() });
     };
 
-    // a 401 ends the watch; any other end opens a fresh stream
     const watchUntilUnmounted = async (): Promise<void> => {
       try {
         await watchEvents(impd.client, {
           signal,
           reconnect: { delayMs: RECONNECT_MS, shouldRetry: (error) => !isUnauthorized(error) },
           onOpen: async (attempt) => {
-            // what this browser missed while it was away
+            // impd sends an event only to the streams open at the time
             if (attempt > 1) {
               await queryClient.invalidateQueries();
             }

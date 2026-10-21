@@ -1,7 +1,5 @@
 import { UsageError } from '../cli/errors';
 
-// One `impz proxy` port: `5432` listens on 5432 and reaches 5432 in the imp;
-// `15432:5432` listens on 15432. A local 0 takes any free port.
 export interface Forward {
   readonly local: number;
   readonly remote: number;

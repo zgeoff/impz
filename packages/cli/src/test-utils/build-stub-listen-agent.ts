@@ -8,7 +8,6 @@ import {
 import type { StubAgentHandler } from '@impz/daemon/testing';
 import * as z from 'zod';
 
-// the op of a request in its wire form
 const RequestSchema = z.looseObject({ op: z.string() });
 
 interface AgentRefusal {
@@ -17,17 +16,10 @@ interface AgentRefusal {
 }
 
 interface StubListenAgentOptions {
-  // where each listen says it listens: a port, or a unix socket's path
   readonly listening: Readonly<{ port: number }> | Readonly<{ path: string }>;
-
-  // when set, each listen has one client waiting at once, which sends these
-  // bytes once accepted and closes once the forward's side closes
   readonly clientSends?: string;
 }
 
-// An imp's agent for a reverse forward, for startStubAgent: each listen is
-// `fwd<N>`, open in `listens` until the test ends it, or refuseListens'
-// error; other ops, such as a sleep's, end with no answer.
 export function buildStubListenAgent(options: Readonly<StubListenAgentOptions>) {
   const listens: Socket[] = [];
   const refusal: { error: AgentRefusal | null } = { error: null };

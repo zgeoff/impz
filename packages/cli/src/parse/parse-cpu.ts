@@ -1,6 +1,5 @@
 import { UsageError } from '../cli/errors';
 
-// `--cpu-limit 1.5` in cores, or `none` to take the limit away
 export function parseCpuLimit(text: string): number | null {
   if (text.trim() === 'none') {
     return null;
@@ -17,7 +16,6 @@ export function parseCpuLimit(text: string): number | null {
   return cores;
 }
 
-// `--cpu-weight`: the share under contention, 1 to 10000; 100 is the default
 export function parseCpuWeight(text: string): number {
   const weight = Number(text);
 

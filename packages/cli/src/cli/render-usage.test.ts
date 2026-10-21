@@ -4,7 +4,6 @@ import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { mainCommand } from './command-tree';
 import { collectNodes, readCompletionTree } from './completion';
 
-// every command of impz, the root first
 test.each([
   ['impz'],
   ['impz new'],

@@ -4,7 +4,7 @@ import * as z from 'zod';
 import { buildTarArgs } from './build-tar-args';
 
 // agent/internal/contract/testdata/host/tar.json holds the argv the agent's
-// tar tool parses; each test builds one of them
+// tar tool parses
 
 test('it builds the argv of a download as the tar tool takes it', () => {
   const fixture = z

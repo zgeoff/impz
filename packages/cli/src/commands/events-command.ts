@@ -4,28 +4,18 @@ import pRetry, { AbortError } from 'p-retry';
 import { defineCommand } from '../cli/define-command';
 import { runAction } from '../cli/run-action';
 
-// ends in a row before impz events gives up
 const MAX_FAILURES = 5;
-
-// a stream that lasted this long was healthy; the count starts again
 const HEALTHY_MS = 10_000;
 const FIRST_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 15_000;
 
-// what printEvents needs of the client and the clock, so a test can script
-// the stream
 export interface EventSource extends ClientEventSource {
   readonly checkServer: () => Promise<Pick<ServerCheck, 'clientVersion' | 'serverVersion'>>;
   readonly now: () => number;
   readonly wait: (durationMs: number) => Promise<void>;
-
-  // one line on stderr for each reconnect
   readonly warn: (line: string) => void;
 }
 
-// A stream ends when impd drops a reader that fell behind, restarts, or the
-// network drops. Each end reconnects after a backoff, to a fresh snapshot;
-// MAX_FAILURES ends in a row, none of them healthy, is an error.
 export async function printEvents(
   source: EventSource,
   name: string | null,
@@ -75,7 +65,6 @@ export async function printEvents(
   });
 }
 
-// one stream's end, and why: impd closed it, or how it failed
 class StreamEndedError extends Error {
   override name = 'StreamEndedError';
 }
@@ -106,8 +95,6 @@ export const eventsCommand = defineCommand({
     ),
 });
 
-// Prints the stream until it ends, and says why it ended. An impd that
-// refuses the call (no stream, no access) is an error, not an end.
 async function readStream(
   source: EventSource,
   name: string | null,
@@ -142,8 +129,8 @@ async function readStream(
   }
 }
 
-// impd's own plain-text 404 for a path no procedure matches, or the
-// NOT_FOUND an oRPC router sends for one
+// impd answers a path no procedure matches with a plain-text 404, and an
+// oRPC router answers it with NOT_FOUND
 function isMissingStream(error: unknown): boolean {
   return (
     error instanceof UnknownProcedureError || (error instanceof ORPCError && error.status === 404)

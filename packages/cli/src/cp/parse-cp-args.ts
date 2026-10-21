@@ -1,9 +1,6 @@
 import { NameSchema } from '@impz/api';
 import { UsageError } from '../cli/errors';
 
-// `impz cp ./dir box:/srv/dir` uploads; `impz cp box:/var/log/x .` downloads.
-// A side is in an imp when it reads NAME:PATH with a valid imp name; a local
-// path with a colon in its first part starts with ./ instead.
 export interface CpPlan {
   readonly direction: 'upload' | 'download';
   readonly name: string;

@@ -1,8 +1,6 @@
 import type { TerminalScreen } from '../components/console/setup-terminal-bridge';
 import type { TerminalSize } from '../components/console/terminal-source';
 
-// An xterm.js screen: it records what is written to it as text, lets the test
-// type keys and resize it, and records which listeners were disposed.
 export function buildStubTerminalScreen() {
   const written: string[] = [];
   const disposed: string[] = [];
@@ -34,7 +32,6 @@ export function buildStubTerminalScreen() {
     },
   };
 
-  // as a user types: throws when nothing listens for keys
   const emitKeys = (data: string): void => {
     if (listeners.data === undefined) {
       throw new Error('nothing listens for keys');
@@ -43,7 +40,6 @@ export function buildStubTerminalScreen() {
     listeners.data(data);
   };
 
-  // as the window resizes: throws when nothing listens for sizes
   const emitResize = (size: TerminalSize): void => {
     if (listeners.resize === undefined) {
       throw new Error('nothing listens for sizes');

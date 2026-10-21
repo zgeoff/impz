@@ -1,11 +1,7 @@
-// A mistake in how the command was called, not a failure of the call: the
-// CLI exits 2 for it, as for an unknown flag.
 export class UsageError extends Error {
   override name = 'UsageError';
 }
 
-// The command ends the CLI with this code and prints nothing for it, as
-// `impz exec` does with the code of the command it ran.
 export class CommandExitError extends Error {
   override name = 'CommandExitError';
 
@@ -23,8 +19,6 @@ export class CommandExitError extends Error {
   }
 }
 
-// gunshi refused the command line, such as for an unknown flag or a missing
-// argument; `command` is the path of the command it was for
 export class CommandLineError extends Error {
   override name = 'CommandLineError';
 

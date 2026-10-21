@@ -14,14 +14,11 @@ import { HttpResponse, http } from 'msw';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startStubInfoFaultImpd } from '../test-utils/start-stub-info-fault-impd';
 
-// impd's real app, listening on a loopback port for the spawned CLI, and an
-// in-process client of it
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root bearer; each test reads it back for the CLI
   const rootToken = faker.string.alphanumeric(32);
 
   const harness = await startTestImpd(stack, { rootToken });
@@ -137,7 +134,6 @@ test('it refuses an audit limit outside 1 to 1000', async () => {
   });
 });
 
-// impd's address is a closed port: a call would fail to connect, not refuse
 test.each([
   [['secret', 'add', 'gh', '--kind', 'github', '--rebind'], 'impz: --rebind needs --replace\n'],
   [
@@ -374,7 +370,6 @@ test('it says until when an added oauth secret’s access token is valid', async
 test('it says why an added oauth secret failed its sign-in', async () => {
   const ctx = await setupTest();
 
-  // the endpoint has issued nothing for this refresh token, so it refuses it
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(endpoint.handler);
@@ -413,8 +408,7 @@ test('it says why an added oauth secret failed its sign-in', async () => {
 test('it prints a refreshed oauth secret that is ready', async () => {
   const ctx = await setupTest();
 
-  // an access token whose JWT expiry is 2030-01-01T00:00:00Z, for the add's
-  // sign-in and then the refresh
+  // an access token whose JWT expiry is 2030-01-01T00:00:00Z
   const accessToken = `e30.${Buffer.from(JSON.stringify({ exp: 1_893_456_000 })).toString('base64url')}.sig`;
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 

@@ -1,7 +1,5 @@
 import type { CommandIO } from '../cli/command-io';
 
-// A terminal's input, as much of it as the prompt needs; process.stdin is
-// one.
 interface TokenInput {
   readonly isTTY?: boolean;
   readonly setRawMode: (raw: boolean) => unknown;
@@ -15,14 +13,11 @@ export class PromptCancelledError extends Error {
   override name = 'PromptCancelledError';
 }
 
-// The signals that cancel a prompt from elsewhere; process is one
 export interface SignalSource {
   readonly on: (signal: NodeJS.Signals, listener: () => void) => unknown;
   readonly off: (signal: NodeJS.Signals, listener: () => void) => unknown;
 }
 
-// what a prompt touches: the terminal it reads, where the prompt goes, piped
-// stdin, and the signals that cancel it; the process's own by default
 export interface TokenTerminal {
   readonly input: TokenInput;
   readonly write: (text: string) => void;
@@ -30,8 +25,6 @@ export interface TokenTerminal {
   readonly signals: SignalSource;
 }
 
-// what a prompt touches when the command's stdin is piped: no keys to read,
-// only the text piped in
 const NO_KEYS: TokenInput = {
   isTTY: false,
   setRawMode: () => null,
@@ -49,9 +42,7 @@ export function buildTokenTerminal(io: CommandIO): TokenTerminal {
   return { input: NO_KEYS, write: () => {}, readPiped: io.readStdin, signals: process };
 }
 
-// A token for `impz login` or `impz secret add`: the first line of piped
-// stdin, else typed at a prompt that does not echo. Never an argument,
-// which would land in the shell history and in `ps`.
+// never an argument, which would land in the shell history and in `ps`
 export async function readToken(prompt: string, terminal: TokenTerminal): Promise<string> {
   if (terminal.input.isTTY === true) {
     return readHiddenToken(terminal, prompt);
@@ -77,9 +68,8 @@ function buildProcessTerminal(): TokenTerminal {
 
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
 
-// Raw mode turns echo off. Every way out (Enter, Ctrl-C, a signal from
-// elsewhere) puts the terminal back first, so a cancelled prompt never
-// leaves the shell without echo.
+// raw mode turns echo off, so every way out puts the terminal back first and
+// a cancelled prompt never leaves the shell without echo
 function readHiddenToken(terminal: TokenTerminal, prompt: string): Promise<string> {
   const input = terminal.input;
   const settled = Promise.withResolvers<string>();
@@ -137,8 +127,6 @@ const CTRL_C = '\u0003';
 
 const BACKSPACE = new Set(['\u007F', '\b']);
 
-// an arrow key, a function key or a bracketed-paste marker (ESC [ 200 ~):
-// CSI and SS3 sequences, else ESC and the one key after it
 // oxlint-disable-next-line no-control-regex -- matching ESC is the point
 const ESCAPE_SEQUENCE = /\u001B(?:\[[0-?]*[ -/]*[@-~]|O.|.)?/gu;
 
@@ -169,7 +157,6 @@ function applyKeys(start: string, keys: string): KeyResult {
   return { token, end: null };
 }
 
-// below space, and DEL: never part of a token
 function isControl(key: string): boolean {
   const code = key.codePointAt(0) ?? 0;
 

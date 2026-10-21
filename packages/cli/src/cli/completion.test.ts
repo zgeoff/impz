@@ -303,7 +303,6 @@ test.each(['bash', 'zsh', 'fish'] as const)(
   async (shell) => {
     const tree = await readCompletionTree(mainCommand);
 
-    // every level of the tree, however deep: the walk visits what it appends
     const nodes: CompletionNode[] = [tree];
 
     for (const node of nodes) {

@@ -20,8 +20,6 @@ import invariant from 'tiny-invariant';
 import { readHostConfig, resolveConfigPath, writeHostConfig } from '../config/host-store';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 
-// The CLI's home, and a real impd on a loopback port that the CLI child
-// reaches as a user's would
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -31,10 +29,7 @@ async function setupTest() {
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  // the CLI's home: config.json lives under XDG_CONFIG_HOME
   const env = { HOME: directory, XDG_CONFIG_HOME: directory };
-
-  // impd boots with a root bearer; each test reads it back to log in with it
   const rootToken = faker.string.alphanumeric(32);
 
   const harness = await startTestImpd(stack, { rootToken });
@@ -121,7 +116,6 @@ test('#login saves nothing when impd refuses the token', async () => {
 test('#login saves nothing when the token is empty', async () => {
   const ctx = await setupTest();
 
-  // nothing listens there: a check would fail on the connection instead
   const login = await runCLIInProcess({
     args: ['login', 'http://127.0.0.1:1'],
     env: ctx.env,
@@ -186,7 +180,6 @@ test('#login leaves a damaged config.json as it was and asks impd nothing', asyn
 
   await writeFile(resolveConfigPath(ctx.env), '{ damaged', { mode: 0o600 });
 
-  // nothing listens there: a check would fail on the connection instead
   const login: unknown = await runCLIInProcess({
     args: ['login', 'http://127.0.0.1:1'],
     env: ctx.env,
@@ -358,7 +351,6 @@ test('#--host names the host when impd refuses the saved token on exec’s socke
 test('#--host sends the saved token over IMP_TOKEN on exec’s socket', async () => {
   const ctx = await setupTest();
 
-  // the image the imp boots from, with a rootfs where its digest names
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
@@ -375,7 +367,8 @@ test('#--host sends the saved token over IMP_TOKEN on exec’s socket', async ()
 
   invariant(identity);
 
-  // an agent that runs outer execs; the stub VMM records an older one
+  // impd runs outer execs only on an agent at 0.18.0 or later, and the stub
+  // VMM records an older one
   writeVmIdentity(paths, { ...identity, agentVersion: '0.18.0' });
 
   await startStubExecAgent(paths.vsockSocket, buildStubExecGuest());

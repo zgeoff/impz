@@ -5,8 +5,8 @@ import { runAction } from '../cli/run-action';
 import { formatImps } from '../output/format-imps';
 import { formatBackupRun, formatBackupStatus, formatOutput } from '../output/format-output';
 
-// a zone is required to be unambiguous; without one the time is UTC, never
-// this machine's zone (docs/architecture/storage/backups.md#restore)
+// a time without a zone reads as UTC, never as this machine's zone, so it
+// names the same moment on every machine
 const ZONED_TIME = /(?:Z|[+\-]\d{2}:?\d{2})$/iv;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/v;
 
@@ -66,7 +66,7 @@ const restoreCommand = defineCommand({
       }
 
       // two hosts with one repository and one host name drop each other's
-      // live locks (docs/architecture/storage/backups.md#a-run)
+      // live locks
       if (args.all === true) {
         ctx.extensions.impz.io.printError(
           'impz: before a whole-host restore, stop the old impd or remove its IMP_BACKUP_* settings',
@@ -93,7 +93,7 @@ const restoreCommand = defineCommand({
         );
       }
 
-      // a backup holds no secret's value (docs/guides/backups.md#whole-host-restore)
+      // a backup holds no secret's value
       if (result.database !== undefined) {
         const database = result.database;
 

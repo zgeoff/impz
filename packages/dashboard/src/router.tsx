@@ -9,8 +9,6 @@ import { LoginPage } from './routes/login-page';
 import { RamPage } from './routes/ram-page';
 import { TokensPage } from './routes/tokens-page';
 
-// Routes in code: eight of them need no generator. impd serves the app
-// under /ui/ (packages/daemon dashboard-files.ts).
 // xterm.js is most of the bundle; only the console needs it
 const ConsolePage = lazy(async () => {
   const module = await import('./routes/console-page');
@@ -73,7 +71,6 @@ const routeTree = rootRoute.addChildren([
   appRoute.addChildren([impsRoute, impRoute, consoleRoute, imagesRoute, ramRoute, tokensRoute]),
 ]);
 
-// tests pass a memory history
 export function buildRouter(history?: RouterHistory) {
   return createRouter({ routeTree, basepath: '/ui', ...(history !== undefined && { history }) });
 }

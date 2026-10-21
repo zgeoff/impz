@@ -23,7 +23,6 @@ export function toImpRow(imp: Imp): Row {
   ];
 }
 
-// an elastic imp's size now and its max: `768/1024 MiB`
 function formatMemory(imp: Imp): string {
   if (imp.maxMemoryMib === undefined) {
     return `${String(imp.memoryMib)} MiB`;

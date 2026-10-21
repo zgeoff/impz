@@ -17,43 +17,27 @@ import { parseReverse } from '../parse/parse-reverse';
 import { formatGuest, formatLocal, startReverseForward } from './reverse-client';
 import type { ReverseIo } from './reverse-client';
 
-// what runProxy touches besides the network; tests swap it
 export interface ProxyIo {
-  // a line for the user on stderr, after `impz: `
   readonly writeNotice: (text: string) => void;
-
-  // the clock the quiet time between unreachable notices runs on; Date.now
-  // by default
   readonly now?: () => number;
-
-  // for `--reverse`; undefined for the process's own
   readonly reverse?: ReverseIo;
-
-  // told the bytes still waiting for impd's acks each time a connection
-  // stops reading at the window; nothing by default
   readonly onWindowFull?: (unackedBytes: number) => void;
-
-  // opens each tunnel's socket; Bun's WebSocket by default
   readonly connect?: ForwardTunnelOptions['connect'];
 }
 
 export interface Proxy {
-  // the port each forward listens on, in order: a local 0 resolves here
   readonly ports: readonly number[];
   readonly stop: () => void;
 }
 
-// one notice for a burst of connections that cannot reach impd: another
-// comes only after this long without a failure
 const UNREACHABLE_QUIET_MS = 5000;
-
-// a local port 0 whose IPv4 port is taken on ::1 tries a new one this often
 const FREE_PORT_TRIES = 5;
 
-// a busy port fails the command; a machine with no IPv6 loopback serves IPv4
+// a machine with no IPv6 loopback fails a listen on ::1 with these codes, and
+// serves IPv4 only
 const NO_IPV6_CODES = new Set(['EADDRNOTAVAIL', 'EAFNOSUPPORT']);
 
-// throws when the imp does not exist; imps.get never wakes the imp
+// a get never wakes the imp
 async function checkImpExists(config: CliConfig, name: string): Promise<void> {
   await createImpClient(config).imps.get({ name });
 }
@@ -83,7 +67,6 @@ function buildBindError(error: unknown, name: string, forward: Forward): Error {
     );
   }
 
-  // a port below 1024; plus 8000 keeps it recognisable (80 to 8080)
   if (code === 'EACCES') {
     return new Error(
       `local port ${local} needs privileges; map a port above 1023: impz proxy ${name} ${String(forward.local + 8000)}:${remote}`,
@@ -93,7 +76,6 @@ function buildBindError(error: unknown, name: string, forward: Forward): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-// what a tunnel's close code means for the user
 export function formatTunnelClose(code: number): string {
   if (code === TUNNEL_CLOSE_LOST) {
     return 'the connection in the imp was lost';
@@ -168,7 +150,6 @@ async function startForward(
 
       ipv4.close();
 
-      // any free port: the next one may be free on ::1 too
       if (forward.local === 0 && code === 'EADDRINUSE' && tries < FREE_PORT_TRIES) {
         continue;
       }
@@ -188,15 +169,10 @@ interface TunnelTarget {
 
 interface TunnelNotices {
   readonly writeNotice: (text: string) => void;
-
-  // impd did not answer the WebSocket
   readonly writeUnreachable: () => void;
   readonly onWindowFull: (unackedBytes: number) => void;
 }
 
-// One local TCP connection over the client's forward tunnel. The socket
-// stays paused until impd answers `opened`, and pauses again while the
-// tunnel has no room. Returns a stop.
 function openTunnel(socket: Socket, target: TunnelTarget, notices: TunnelNotices): () => void {
   const label = `${target.name}:${String(target.port)}`;
 
@@ -251,8 +227,7 @@ function openTunnel(socket: Socket, target: TunnelTarget, notices: TunnelNotices
     }
   });
 
-  // a TCP half-close, after every byte before it: the reply may still come
-  // back
+  // a TCP half-close: the reply may still come back
   socket.on('end', () => {
     tunnel.sendEof();
   });
@@ -269,9 +244,6 @@ function openTunnel(socket: Socket, target: TunnelTarget, notices: TunnelNotices
   };
 }
 
-// Listens on each forward's local port on 127.0.0.1 and ::1 first, so a
-// busy port fails at once, then checks the imp exists without waking it.
-// Each connection then opens a tunnel, which wakes the imp.
 export async function startProxy(
   config: CliConfig,
   name: string,
@@ -284,8 +256,6 @@ export async function startProxy(
 
   const ports: number[] = [];
   const now = io.now ?? Date.now;
-
-  // a first failure always prints, however the clock reads
   const state = { ready: false, unreachableAt: Number.NEGATIVE_INFINITY };
 
   const notices: TunnelNotices = {
@@ -310,7 +280,6 @@ export async function startProxy(
   };
 
   const handleConnection = (socket: Socket, remote: number): void => {
-    // a connection before the imp check passed
     if (!state.ready) {
       socket.destroy();
 
@@ -356,27 +325,21 @@ export async function startProxy(
 }
 
 export interface ProxyOptions {
-  // the saved host `--host` named, or null, and the environment that picks
-  // the impd without one
   readonly host: string | null;
   readonly env: CliEnv;
   readonly warn: (line: string) => void;
   readonly name: string;
   readonly specs: readonly string[];
-
-  // `--reverse` specs: GUEST:LOCAL
   readonly reverse: readonly string[];
 }
 
 interface RunningProxy {
   readonly stop: () => void;
-
-  // settles when a reverse forward fails for good
   readonly failed: Promise<Error>;
 }
 
-// Local forwards first, so a busy port fails before anything listens in the
-// imp; then each reverse forward, which wakes the imp.
+// local forwards start first, so a busy port fails before anything listens
+// in the imp or wakes it
 async function startForwards(
   config: CliConfig,
   options: ProxyOptions,
@@ -426,14 +389,11 @@ async function startForwards(
     throw error;
   }
 
-  // never settles without a reverse forward
   const failed = failures.length === 0 ? new Promise<Error>(() => {}) : Promise.race(failures);
 
   return { stop, failed };
 }
 
-// `impz proxy`: runs until SIGINT or SIGTERM, then exits 0, or until a reverse
-// forward fails for good
 export async function runProxy(options: ProxyOptions, io: ProxyIo = PROCESS_IO): Promise<void> {
   const config = loadCliConfig(options.env, options.host, options.warn);
 
@@ -444,7 +404,6 @@ export async function runProxy(options: ProxyOptions, io: ProxyIo = PROCESS_IO):
   }
 }
 
-// the forwards until a signal stops them, or the first of them fails
 async function runForwards(config: CliConfig, options: ProxyOptions, io: ProxyIo): Promise<void> {
   const proxy = await startForwards(config, options, io);
 

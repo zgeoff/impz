@@ -37,8 +37,6 @@ interface OAuthArgs {
   readonly tokenFormat?: string | undefined;
 }
 
-// --hosts a.example.com,b.example.com --header x-api-key --scheme raw: one
-// rule per host, all with the same header; kinds custom and oauth
 function buildCustomRules(kind: SecretKind, args: CustomRuleArgs): BrokerRule[] | undefined {
   const given = [args.hosts, args.header, args.scheme, args.user].some((arg) => arg !== undefined);
 
@@ -83,7 +81,6 @@ function buildCustomRules(kind: SecretKind, args: CustomRuleArgs): BrokerRule[] 
   });
 }
 
-// --token-url, --client-id and --token-format: kind oauth only
 function buildOAuthConfig(kind: SecretKind, args: OAuthArgs): OAuthConfig | undefined {
   const given = [args.tokenUrl, args.clientId, args.tokenFormat].some((arg) => arg !== undefined);
 
@@ -112,7 +109,6 @@ function buildOAuthConfig(kind: SecretKind, args: OAuthArgs): OAuthConfig | unde
   return parsed.data;
 }
 
-// what an oauth secret's first refresh came to, for stderr; never a token
 function formatOAuthOutcome(secret: Readonly<Secret>): string | null {
   const oauth = secret.oauth;
 
@@ -132,7 +128,6 @@ function formatOAuthOutcome(secret: Readonly<Secret>): string | null {
   return `impz: ${secret.name} is ${oauth.status}${reason}`;
 }
 
-// why a refresh left the secret not ready, or null when it is
 function formatRefreshFailure(secret: Readonly<Secret>): string | null {
   const oauth = secret.oauth;
 
@@ -344,7 +339,6 @@ interface GrantFilterArgs {
   readonly paths?: string | undefined;
 }
 
-// --methods GET,HEAD --paths '/repos/*/*/issues,/user': undefined for neither
 function buildGrantFilter(args: GrantFilterArgs): GrantFilter | undefined {
   if (args.methods === undefined && args.paths === undefined) {
     return undefined;

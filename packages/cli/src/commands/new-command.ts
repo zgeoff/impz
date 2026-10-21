@@ -85,7 +85,6 @@ export const newCommand = defineCommand({
   },
 });
 
-// the create's input, with its network list read-only until the call
 type CreateInput = Readonly<Omit<Parameters<ImpClient['imps']['create']>[0], 'networks'>> & {
   readonly networks?: readonly string[];
 };
@@ -151,9 +150,6 @@ function readNewRequest(args: NewArgs): NewRequest {
   };
 }
 
-// The create on one host, then what follows it there: trust warnings for
-// --net, and the expose for --public. `placed` is the saved host placement
-// picked, null for the usual one-host create.
 async function runNew(
   client: ImpClient,
   io: CommandIO,
@@ -164,8 +160,8 @@ async function runNew(
   const auth = request.auth;
   const host = placed?.host ?? null;
 
-  // expose needs manage on the host; impd checks it again on the call.
-  // Placement checked it on every host it ranked.
+  // expose needs manage on the host, and impd checks it again on the call;
+  // placement already checked it on every host it ranked
   if (auth !== null && placed === null) {
     const identity = await client.tokens.whoami();
 
@@ -197,7 +193,6 @@ async function runNew(
       await printTrustWarnings(client, io, imp.name);
     }
 
-    // a failure here leaves the imp tailnet-only; `impz expose` tries again
     exposed = auth === null ? null : await client.imps.expose({ name: imp.name, ...auth });
   } catch (error) {
     if (placed === null) {
@@ -225,9 +220,8 @@ async function runNew(
   io.print(text);
 }
 
-// After a placed create only the stderr line `placing on <host>` says where
-// the imp is, so the error names the host and --json still gets the imp. It
-// is a plain Error: placement never tries the next host for it.
+// only a stderr line names the host of a placed create, so the error names it
+// too; a plain Error, because placement must not try the next host for it
 function printPlacedFailure(
   io: CommandIO,
   imp: Imp,
@@ -244,8 +238,6 @@ function printPlacedFailure(
   return new Error(`${imp.name} was created on ${placed.host}; ${message}`);
 }
 
-// Probes every saved host, ranks those that could take the imp, and
-// creates on the best; docs/guides/hosts.md#placement says how it picks.
 async function runPlacedNew(io: CommandIO, request: NewRequest): Promise<void> {
   const targets = listSavedTargets(io.env, io.printError);
   const place = toPlaceRequest(request);

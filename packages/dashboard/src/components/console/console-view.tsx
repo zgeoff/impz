@@ -16,7 +16,7 @@ type Status =
   | { readonly kind: 'ended'; readonly end: TerminalEnd };
 
 interface ConsoleViewProps {
-  // keep it stable across renders (useMemo): a new source reconnects
+  // a new source reconnects, so a caller keeps it stable across renders
   readonly source: TerminalSource;
 }
 
@@ -29,7 +29,6 @@ export function ConsoleView(props: ConsoleViewProps) {
   useEffect(() => {
     const element = container.current;
 
-    // the screen element renders with the view, before any effect runs
     if (element === null) {
       throw new Error('the console has no screen element');
     }

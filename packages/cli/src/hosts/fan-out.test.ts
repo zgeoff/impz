@@ -18,7 +18,6 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  // where config.json keeps the saved hosts
   return { env: { XDG_CONFIG_HOME: directory } };
 }
 
@@ -29,7 +28,6 @@ test('#runOnHosts gives each host its own answer or error, and a silent one the 
   const replies = [
     () => Promise.resolve('imps'),
 
-    // never answers, and never watches the signal
     () => new Promise<string>(() => {}),
     () => Promise.reject(new ORPCError('UNAUTHORIZED', { status: 401 })),
   ];
@@ -53,7 +51,6 @@ test('#runOnHosts gives each host its own answer or error, and a silent one the 
     timeouts.startTimer,
   );
 
-  // box and old settle on their own; then the silent host's timer runs out
   await waitFor(() => {
     expect(timeouts.timers.map((timer) => timer.state)).toStrictEqual([
       'cancelled',
@@ -142,7 +139,6 @@ test('#runOnHosts aborts the requests still open beside a call that fails', asyn
   const answers = await runOnHosts([buildMockSavedTarget({ host: 'box' })], (_client, signal) => {
     signals.push(signal);
 
-    // one request rejects at once while the other never settles
     return Promise.all([
       Promise.reject(new Error('no such procedure')),
       new Promise<never>(() => {}),

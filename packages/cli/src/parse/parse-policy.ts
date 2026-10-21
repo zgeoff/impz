@@ -2,8 +2,6 @@ import { EGRESS_MODE_TRAITS, EgressModeSchema } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
 import { UsageError } from '../cli/errors';
 
-// `--policy MODE` and `--allow a,b`: an allow-list alone means box, and
-// only box takes one. Undefined when neither is given.
 export function parsePolicy(
   mode: string | undefined,
   allow: string | undefined,

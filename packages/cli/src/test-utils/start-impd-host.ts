@@ -4,21 +4,15 @@ import { startTestImpd } from '@impz/daemon/testing';
 import type { TestImpd } from '@impz/daemon/testing';
 
 interface ImpdHostOptions {
-  // impd settings over the boot values, such as IMP_KSM
   readonly env: Readonly<Record<string, string>>;
 }
 
-// One real impd a CLI child saves as a host, through the test harness with
-// its own data dir, database, loopback port and generated root token; `ksm`
-// sets each awake VM's KSM saving. Releases go into `stack`.
 export async function startImpdHost(
   stack: Readonly<AsyncDisposableStack>,
   options: Readonly<ImpdHostOptions>,
 ) {
   const ksm = { profitMib: 0 };
   const rootToken = faker.string.alphanumeric(32);
-
-  // the harness, once started, whose VMs the KSM readers ask after
   const started: { harness: TestImpd | null } = { harness: null };
   const isAlive = (pid: number): boolean => started.harness?.fake.alive.has(pid) === true;
 
@@ -29,8 +23,6 @@ export async function startImpdHost(
     // held a minute past every span a test opens, so an imp's awake time
     // reads the same on every call
     frozenClockMs: Date.now() + 60_000,
-
-    // the VMs' KSM saving as /proc would show it
     readUnsharedRamMib: (pid) => (isAlive(pid) ? 300 : null),
     checkGuestMerge: () => Promise.resolve(true),
     readKsmProfitMib: (pid) => {
@@ -54,8 +46,6 @@ export async function startImpdHost(
 
     // impd runs it on a ticker; a test runs one pass when it needs one
     runIdleCheck: () => harness.impd.idle.runCheck(),
-
-    // the root token's client, in process
     client: createImpClient({ url: 'http://impd.test', token: rootToken, fetch: sendRequest }),
   };
 }

@@ -1,17 +1,14 @@
 import type { Imp } from '@impz/api';
 
-// what an upgrade means for the imp (docs/guides/operations.md#upgrade), and
-// an agent the watchdog reports silent
 export function formatNote(imp: Imp): string {
   const notes: string[] = [];
 
   // first: during a move the imp shows on both hosts, and this says which
-  // side each row is (docs/guides/hosts.md#one-view)
+  // side each row is
   if (imp.move !== undefined) {
     notes.push(imp.move);
   }
 
-  // impd's, for one image build (docs/guides/images.md#isolated-builds)
   if (imp.kind === 'builder') {
     notes.push('image builder');
   }
@@ -20,7 +17,6 @@ export function formatNote(imp: Imp): string {
     notes.push(`agent silent since ${imp.agentSilentSince.toISOString()}`);
   }
 
-  // the agent answers, but nothing of the imp's own runs (impz info has why)
   if (imp.inner?.up === false) {
     notes.push('container down');
   }

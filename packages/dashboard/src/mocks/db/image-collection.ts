@@ -3,7 +3,6 @@ import { ImageSchema } from '@impz/api';
 import { Collection } from '@msw/data';
 import * as z from 'zod';
 
-// impd's images: one pulled from a registry
 const ImageRowSchema = ImageSchema.extend({
   id: z.string().default(() => faker.string.uuid()),
   name: ImageSchema.shape.name.default(() => faker.string.alpha({ length: 6, casing: 'lower' })),

@@ -15,7 +15,8 @@ import { useNow } from '../lib/use-now';
 import { useRefresh } from '../lib/use-refresh';
 import styles from './page.module.css';
 
-// a made token's secret, shown until the page is left: impd keeps a hash
+// impd keeps only a hash of a new token's secret, so the page can show the
+// secret only until it is left
 interface MadeToken {
   readonly name: string;
   readonly secret: string;
@@ -150,7 +151,6 @@ export function TokensPage() {
   );
 }
 
-// `dev-*, ci-*` as a list; empty for every imp
 function readImpPatterns(form: FormData): string[] {
   return (readText(form, 'imps') ?? '')
     .split(',')
@@ -193,7 +193,6 @@ function MadeTokenCard(props: MadeTokenCardProps) {
   );
 }
 
-// each key by its comment and fingerprint; `impz token key add` binds them
 function formatSshKeys(keys: readonly SshKey[]): string {
   if (keys.length === 0) {
     return 'none';

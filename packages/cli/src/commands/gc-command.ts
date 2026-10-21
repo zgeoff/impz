@@ -28,7 +28,8 @@ export const gcCommand = defineCommand({
         throw new UsageError('--secret-files goes with --orphans');
       }
 
-      // an impd older than secretFilesGc drops both, and lists and deletes none
+      // an impd from before secret-file collection drops both fields unread,
+      // and lists and deletes no secret files
       const result = await client.system.gc({
         dryRun: ctx.values['dry-run'] === true,
         orphans: ctx.values.orphans === true,

@@ -14,85 +14,51 @@ import { openBunWebSocket } from './open-bun-web-socket';
 import { createModeWatcher } from './terminal-modes';
 
 export interface ExecOptions {
-  // the saved host `--host` named, or null
   readonly host: string | null;
   readonly name: string;
   readonly argv: readonly string[];
   readonly tty: boolean;
   readonly env?: Readonly<Record<string, string>>;
-
-  // a session that outlives the CLI: closing it detaches (needs a tty)
   readonly session?: SessionOptions;
 
-  // runs in the imp's agent, outside its container: `impz exec --agent`.
-  // The SDK passes the start through as it is, and leaves the field out of
-  // its types on purpose.
+  // the SDK passes the start through as it is, but leaves this field out of
+  // its types
   readonly outer?: boolean;
-
-  // what impd must ensure before it starts the command: `impz exec --require`
   readonly require?: readonly ExecRequirement[];
 }
 
 interface SessionOptions {
   readonly name: string;
-
-  // attach to the session only; argv is not used
   readonly attachOnly: boolean;
-
-  // the byte that detaches, read from a raw terminal; null turns it off
   readonly detachKey: number | null;
-
-  // impd keeps the output of a session this start creates
   readonly log?: boolean;
 }
 
-// what runExec touches besides signals; tests swap it
 export interface ExecIo {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly stdin: CommandStdin;
   readonly writeOutput: (fd: 1 | 2, data: Uint8Array) => void;
   readonly connect?: ExecSessionOptions['connect'];
-
-  // how long a lost session is tried again, and the first pause between
-  // tries; each later pause doubles, up to a cap advanceExec holds
   readonly reattachWindowMs?: number;
   readonly reattachDelayMs?: number;
 
-  // whether another client is attached to the session; it must not wake
-  // the imp
+  // must not wake the imp
   readonly isAttachedElsewhere?: (imp: string, session: string) => Promise<boolean>;
-
-  // the lines the CLI prints about the session itself; console.error by
-  // default
   readonly printError?: (line: string) => void;
-
-  // the clock the reattach window is judged by, and the pause between tries;
-  // Date.now and Bun.sleep by default
   readonly now?: () => number;
   readonly wait?: (durationMs: number) => Promise<void>;
 }
 
-// impd failed, as advanceExec reports it too
 const IMP_FAILED_CODE = 255;
-
-// ctrl-c in a raw terminal
 const CTRL_C = 0x03;
-
-// the first one goes to the command; a second ends the session, so the CLI
-// still stops when the command ignores it or impd stopped answering
 const HANDLED_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'] as const;
 
 // impd restarts in seconds, and a wake takes less than one
 const REATTACH_WINDOW_MS = 60_000;
 const REATTACH_DELAY_MS = 1000;
-
-// input typed while the session is away waits for it, up to this much
 const MAX_PENDING_INPUT = 64 * 1024;
-
-// before a replay: the terminal shows the session, not what was there
 const CLEAR_SCREEN = '\u001B[H\u001B[2J';
 
-// the command's stdio and environment, and its line for each error
 export function createExecIO(io: CommandIO): ExecIo {
   return {
     env: io.env,
@@ -108,9 +74,6 @@ export function createExecIO(io: CommandIO): ExecIo {
   };
 }
 
-// Runs one command in an imp, wired to this process's stdio and signals,
-// and resolves with the exit code for this process. A session attaches
-// again by itself when impd restarts or the imp sleeps under it.
 export function runExec(
   options: Readonly<ExecOptions>,
   io: ExecIo = createExecIO(readProcessIO()),
@@ -123,7 +86,6 @@ export function runExec(
   try {
     config = loadCliConfig(io.env, options.host, printError);
   } catch (error) {
-    // a usage error, or a config.json that cannot be read (EACCES, EISDIR)
     printError(`impz: ${error instanceof Error ? error.message : String(error)}`);
 
     return Promise.resolve(IMP_FAILED_CODE);
@@ -149,7 +111,6 @@ export function runExec(
     pendingBytes: 0,
   };
 
-  // what the exec has decided so far; advanceExec moves it on each event
   let machine: ExecMachine = {
     imp: options.name,
     session: session?.name ?? null,
@@ -256,8 +217,8 @@ export function runExec(
 
   const signalHandlers = HANDLED_SIGNALS.map((signal) => {
     const handleSignal = (): void => {
-      // a session outlives the CLI: a hangup or a kill detaches from it.
-      // Before `started`, impd would only queue the signal.
+      // a hangup or a kill detaches from a session, which outlives the CLI;
+      // before the start, impd would only queue the signal
       if (session !== null || !current.session.isStarted() || state.signalled) {
         stopSession(toSignalExitCode(signal) ?? IMP_FAILED_CODE);
 
@@ -301,7 +262,6 @@ export function runExec(
     void waitAndResume();
   };
 
-  // while the session is away: ctrl-c gives up, anything else waits for it
   const holdInput = (data: Uint8Array): void => {
     if (isRaw && data.includes(CTRL_C)) {
       stopSession(toSignalExitCode('SIGINT') ?? IMP_FAILED_CODE);
@@ -338,7 +298,6 @@ export function runExec(
 
     await waiting.waitForDrain();
 
-    // a reattach took over stdin; it reads on for the detach key
     if (state.ended || current.session !== waiting || isAway()) {
       return;
     }
@@ -352,9 +311,8 @@ export function runExec(
     current.session.closeStdin();
   };
 
-  // stdin goes over once the process exists; a terminal on stdin is only
-  // read with a tty, as with `docker exec` without -i. A session attached
-  // again keeps the stdin it had.
+  // a terminal on stdin is read only with a tty, as `docker exec` without -i
+  // does
   const startStdin = (): void => {
     if (state.stdinStarted) {
       return;
@@ -419,9 +377,7 @@ export function runExec(
     }
   };
 
-  // One attach, until its outcome: the end of the exec, or a session that is
-  // away, which p-retry attaches to again after the pause advanceExec picks.
-  // A terminal that was away must not take the session from a newer one.
+  // a terminal that was away must not take the session from a newer one
   const runAttach = async (attempt: number): Promise<void> => {
     if (attempt > 1) {
       const elsewhere = state.ended
@@ -456,7 +412,6 @@ export function runExec(
     }
 
     if (step.isFirst) {
-      // stdin reads on, for the detach key and ctrl-c
       if (state.draining) {
         state.draining = false;
 
@@ -497,7 +452,6 @@ export function runExec(
   return done.promise;
 }
 
-// a session that is away, tried again after `delayMs`
 class SessionAwayError extends Error {
   override name = 'SessionAwayError';
 
@@ -518,8 +472,8 @@ function requireStop(step: ExecStep): Extract<ExecStep, { kind: 'stop' }> {
   return step;
 }
 
-// asks impd's last view of the sessions, which never wakes the imp; when
-// impd cannot answer, the attach itself finds out
+// impd's session list never wakes the imp; when impd cannot answer, the
+// attach itself finds out
 function createAttachedCheck(
   config: CliConfig,
 ): (imp: string, session: string) => Promise<boolean> {
@@ -534,7 +488,7 @@ function createAttachedCheck(
   };
 }
 
-// null when stdout is no terminal or reports no size (a pty nobody sized)
+// a pty nobody sized reports 0 columns and 0 rows
 function readTerminalSize(): { cols: number; rows: number } | null {
   const cols = process.stdout.columns;
   const rows = process.stdout.rows;

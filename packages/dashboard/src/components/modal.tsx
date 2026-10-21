@@ -11,8 +11,6 @@ interface ModalProps {
   readonly children: ReactNode;
 }
 
-// A dialog over the page. The body is unmounted while closed, so a form in
-// it starts empty each time.
 export function Modal(props: ModalProps) {
   return (
     <Dialog.Root

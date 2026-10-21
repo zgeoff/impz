@@ -1,4 +1,3 @@
-// keyed by the unit letter a user types
 const UNIT_SECONDS: ReadonlyMap<string, number> = new Map([
   ['s', 1],
   ['m', 60],
@@ -6,7 +5,6 @@ const UNIT_SECONDS: ReadonlyMap<string, number> = new Map([
   ['d', 86_400],
 ]);
 
-// `90`, `90s`, `15m`, `2h`, `1d` → seconds
 export function parseDuration(text: string): number {
   const match = /^(?<amount>\d+)(?<unit>[smhd]?)$/u.exec(text.trim());
   const amount = match?.groups?.['amount'];

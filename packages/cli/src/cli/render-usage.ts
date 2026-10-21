@@ -1,9 +1,6 @@
 import type { ArgSchema, CommandContext, SubCommandable } from 'gunshi';
 import { listEntries } from './list-entries';
 
-// The `--help` of a command as impz has always printed it. A command shows
-// its parent's name beside its own, and the root and its direct commands
-// show the version.
 export function renderUsage(ctx: Readonly<CommandContext<never>>): string {
   const path = ctx.commandPath;
   const parent = path.length === 1 ? (ctx.env.name ?? '') : (path.at(-2) ?? '');
@@ -77,15 +74,12 @@ export function renderUsage(ctx: Readonly<CommandContext<never>>): string {
     );
   }
 
-  // the blank line that ends it, as impz has always printed it
   return `${lines.join('\n')}\n`;
 }
 
-// the flags gunshi gives every command, which the help never listed
 const BUILTIN_FLAGS = new Set(['help', 'version']);
 
-// the command's own arguments; `--host` goes anywhere, so only the root
-// lists it
+// `--host` goes anywhere, so only the root lists it
 function listShownArgs(ctx: Readonly<CommandContext<never>>): [string, ArgSchema][] {
   const globals = ctx.env.globalOptions ?? new Map<string, ArgSchema>();
   const args: Readonly<Record<string, ArgSchema>> = ctx.args;
@@ -108,7 +102,6 @@ function isPositionalRequired(arg: Readonly<ArgSchema>): boolean {
   return arg.required !== false && arg.default === undefined;
 }
 
-// `=<name>` after a flag that takes a value, its name in snake case
 function renderValueHint(name: string, arg: Readonly<ArgSchema>): string {
   if (arg.type === 'positional' || arg.type === 'boolean') {
     return '';
@@ -127,8 +120,6 @@ function renderDescription(arg: Readonly<ArgSchema>, isRequired: boolean): strin
     .join(' ');
 }
 
-// what `--no-<flag>` does, which a negatable flag may say beside its own
-// description
 function getNegativeDescription(arg: Readonly<ArgSchema>): string {
   const text: unknown = 'negativeDescription' in arg ? arg.negativeDescription : undefined;
 
@@ -157,8 +148,6 @@ function listOwnSubCommands(command: SubCommandable | undefined): [string, SubCo
   return listEntries(subCommands);
 }
 
-// two-space indented columns: the first right-aligned, the rest padded to
-// the widest, with no trailing spaces
 function formatColumns(rows: readonly (readonly string[])[]): string {
   const widths: number[] = [];
 

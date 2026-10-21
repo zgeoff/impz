@@ -1,7 +1,5 @@
 import { formatBytes } from '@impz/shared';
 
-// `impz cp`'s progress line on a terminal: bytes of file content copied, of
-// the total when it is known. Off the terminal it prints nothing.
 export interface CopyProgress {
   readonly setTotal: (bytes: number) => void;
   readonly add: (bytes: number) => void;
@@ -13,7 +11,7 @@ export interface ProgressOutput {
   readonly write: (text: string) => void;
 }
 
-// at most this often, so a fast copy does not spend its time printing
+// a fast copy must not spend its time printing
 const REDRAW_MS = 250;
 
 export function formatProgress(copied: number, total: number | null, label = 'impz cp'): string {
@@ -26,7 +24,6 @@ export function formatProgress(copied: number, total: number | null, label = 'im
   return `${label}: ${String(percent)}% ${formatBytes(copied)} of ${formatBytes(total)}`;
 }
 
-// `label` starts the line: the command that copies
 export function createCopyProgress(
   output: ProgressOutput,
   now = Date.now,
@@ -53,7 +50,6 @@ export function createCopyProgress(
       }
     },
 
-    // ends the line once: a second call prints nothing
     finish: () => {
       if (output.isTTY && state.drawn) {
         renderLine();

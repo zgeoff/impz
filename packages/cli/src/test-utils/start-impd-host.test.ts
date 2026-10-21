@@ -6,7 +6,6 @@ import { buildImagePaths, buildMockNewImage } from '@impz/daemon/testing';
 import invariant from 'tiny-invariant';
 import { startImpdHost } from './start-impd-host';
 
-// the stack the host's releases go into, disposed when the test ends
 function setupTest() {
   const stack = new AsyncDisposableStack();
 

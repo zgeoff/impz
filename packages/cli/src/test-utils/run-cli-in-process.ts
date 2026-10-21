@@ -7,9 +7,6 @@ import type { CommandIO } from '../cli/command-io';
 import { runCLI } from '../main';
 import type { CliResult, StartCliOptions } from './start-cli';
 
-// Runs one `impz` command line in this process as runCli runs the binary,
-// with PATH, a HOME of its own unless the test names one, and piped stdin;
-// its HOME goes when the test ends.
 export async function runCLIInProcess(options: Readonly<StartCliOptions>): Promise<CliResult> {
   const home = mkdtempSync(join(tmpdir(), 'impz-cli-home-'));
 

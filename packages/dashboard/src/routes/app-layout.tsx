@@ -12,12 +12,8 @@ export function AppLayout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const impd = useImpd();
-
-  // tokens are for a caller that manages the whole host; impd checks too
   const identity = useQuery({ ...impd.query.tokens.whoami.queryOptions(), ...SLOW });
   const managesHost = identity.data?.scope === 'manage' && identity.data.imps === null;
-
-  // a host-wide state every page shows, such as a reboot a kernel oops needs
   const info = useQuery({ ...impd.query.system.info.queryOptions(), ...LIVE });
   const rebootReason = info.data?.rebootReason ?? null;
 

@@ -4,22 +4,19 @@ import { createTanstackQueryUtils } from '@orpc/tanstack-query';
 import type { ReactNode } from 'react';
 import { createContext, use } from 'react';
 
-// The SDK client and its TanStack Query helpers (queryOptions,
-// mutationOptions and keys for every procedure).
 export interface Impd {
   readonly client: ImpClient;
   readonly query: ReturnType<typeof buildQueryUtils>;
 }
 
-// The browser talks to the impd that served the page, with the session
-// cookie and no token (docs/architecture/control/auth.md#the-dashboard-session)
 export function buildBrowserImpd(origin: string): Impd {
   const client = createImpClient({ url: origin });
 
   return { client, query: buildQueryUtils(client) };
 }
 
-// the contract's namespaces only: the SDK's exec helpers are not procedures
+// the SDK's exec helpers are not oRPC procedures, so only the contract's
+// namespaces go in
 function buildQueryUtils(client: ImpClient) {
   return createTanstackQueryUtils({
     imps: client.imps,
