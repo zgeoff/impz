@@ -2,10 +2,11 @@
 
 ## [2.8.3](https://github.com/zgeoff/impz/compare/v2.8.2...v2.8.3) (2026-10-21)
 
-
 ### Bug Fixes
 
-* **ci:** read zod 4.6 json schema forms in the breaking-change gate ([#573](https://github.com/zgeoff/impz/issues/573)) ([93249da](https://github.com/zgeoff/impz/commit/93249da72a15f35c650c7f90b6e4c0e47d7b44fc))
+- **ci:** read zod 4.6 json schema forms in the breaking-change gate
+  ([#573](https://github.com/zgeoff/impz/issues/573))
+  ([93249da](https://github.com/zgeoff/impz/commit/93249da72a15f35c650c7f90b6e4c0e47d7b44fc))
 
 ## [2.8.2](https://github.com/zgeoff/impz/compare/v2.8.1...v2.8.2) (2026-10-20)
 
