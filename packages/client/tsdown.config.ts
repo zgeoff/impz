@@ -1,8 +1,7 @@
 import { defineConfig } from 'tsdown';
 
 // @impz/api and @impz/shared are private, so their code and their types go
-// into the bundle. tsrs, a root dev dependency, writes the declarations: the
-// dts plugin runs it as a custom executable for its tsgo generator.
+// into the bundle.
 export default defineConfig({
   entry: ['src/index.ts'],
   format: 'esm',
