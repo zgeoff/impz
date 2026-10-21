@@ -29,7 +29,7 @@ type spawner struct {
 // serve answers the agent until the socket closes.
 func serve(sock int, runner proc.Runner) error {
 	s := &spawner{sock: sock, runner: runner, procs: make(map[int]*proc.Process)}
-	if err := s.write(message{Op: opReady}, nil); err != nil {
+	if err := s.write(message{Op: opReady, Error: readyNote}, nil); err != nil {
 		return err
 	}
 	buf := newBuffer()

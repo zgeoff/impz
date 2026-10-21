@@ -116,16 +116,23 @@ func Run() error {
 		sup.Suspend()
 	})
 	mgr.OnUp(func() {
-		prepareRoot(root, params, image)
+		prepareRoot(root, params, image, func(string) {})
 		if err := sup.Reload(); err != nil {
 			log.Printf("services: %v", err)
 		}
 	})
 	// with the container down, the image config stays at its defaults
 	// until it starts
+	steps.mark("i.new")
+	m0 := inner.Mono()
 	mgr.Launch()
+	for _, t := range inner.TakeTrace() {
+		steps.steps = append(steps.steps, &proto.BootStep{Name: t.Name, Ms: uint32(max(t.Mono-m0, 0) / 1e6)})
+		m0 = t.Mono
+	}
+	steps.last = time.Now().Add(-time.Duration(inner.Mono() - m0))
 	steps.mark("inner")
-	prepareRoot(root, params, image)
+	prepareRoot(root, params, image, steps.mark)
 	steps.mark("root")
 	identityReset := ""
 	if params.ResetIdentity {
@@ -212,18 +219,21 @@ func Run() error {
 // rather than the image (hostname, hosts and resolv.conf), then reads the
 // image config. A fork or rename gives the imp a new hostname on the same
 // disk.
-func prepareRoot(root fsroot.FS, params cmdline.Params, image *imagecfg.Live) {
+func prepareRoot(root fsroot.FS, params cmdline.Params, image *imagecfg.Live, mark func(string)) {
 	if name := params.Hostname; name != "" {
 		if err := fsroot.WriteFileAtomic(root, "/etc/hostname", []byte(name+"\n"), 0o644); err != nil {
 			log.Printf("hostname: %v", err)
 		}
+		mark("r.hostname")
 		if err := hosts.Update(root, "/etc/hosts", name); err != nil {
 			log.Printf("hosts: %v", err)
 		}
+		mark("r.hosts")
 	}
 	if err := netcfg.WriteResolvConf(root, params.DNS); err != nil {
 		log.Printf("resolv.conf: %v", err)
 	}
+	mark("r.resolv")
 	cfg, err := imagecfg.Load(root)
 	if err != nil {
 		log.Printf("%s: %v (using defaults)", imagecfg.Path, err)

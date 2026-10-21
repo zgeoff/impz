@@ -44,6 +44,7 @@ const runSizeEnv = "IMP_INNER_RUN_SIZE"
 // the user's root, pivots into it, and serves the agent on fd 3. It
 // returns only on failure; the agent restarts the container then.
 func Run() error {
+	tStart := Mono()
 	// The socket stays the init's own: a process it starts must never
 	// inherit it, or it could spawn as root and forge exits.
 	unix.CloseOnExec(sockFd)
@@ -53,13 +54,16 @@ func Run() error {
 		return fmt.Errorf("oom_score_adj: %w", err)
 	}
 	ignoreSignals()
+	tSig := Mono()
 	agentFile, err := setupRoot(os.Getenv(runSizeEnv))
 	if err != nil {
 		return err
 	}
+	tRoot := Mono()
 	if err := setupCgroup(); err != nil {
 		return err
 	}
+	noteReady(TraceMark{"i.start", tStart}, TraceMark{"i.sig", tSig}, TraceMark{"i.mnt", tRoot}, TraceMark{"i.cg", Mono()})
 	r := reaper.New()
 	runner := &proc.Direct{Reaper: r, Agent: SysMount + AgentBinary, AgentFile: agentFile}
 	return serve(sockFd, runner)
