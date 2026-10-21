@@ -5,12 +5,12 @@ import userEvent from '@testing-library/user-event';
 import { renderApp } from '../test-utils/render-app';
 import { startDashboardImpd } from '../test-utils/start-dashboard-impd';
 
-async function setupTest(env: Readonly<Record<string, string>> = {}) {
+async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dashboardImpd = await startDashboardImpd(stack, { env });
+  const dashboardImpd = await startDashboardImpd(stack);
 
   return {
     harness: dashboardImpd.harness,
@@ -83,11 +83,15 @@ test('it lists a failed imp with its error and a restart button', async () => {
 });
 
 test('it shows the RAM in use against the budget of the host', async () => {
-  const ctx = await setupTest({ IMP_RAM_BUDGET_MIB: '4096' });
+  const stack = new AsyncDisposableStack();
 
-  await ctx.harness.createTestImage('base');
-  await ctx.client.imps.create({ name: 'web' });
-  await ctx.logIn();
+  onTestFinished(() => stack.disposeAsync());
+
+  const dashboardImpd = await startDashboardImpd(stack, { env: { IMP_RAM_BUDGET_MIB: '4096' } });
+
+  await dashboardImpd.harness.createTestImage('base');
+  await dashboardImpd.harness.client.imps.create({ name: 'web' });
+  await dashboardImpd.logIn();
 
   const rendered = renderApp();
 
@@ -184,10 +188,14 @@ test('it destroys an imp once the destroy is confirmed', async () => {
 test('it creates a new imp from only the fields that were filled in', async () => {
   const user = userEvent.setup();
 
-  const ctx = await setupTest({ IMP_DEFAULT_IMAGE: 'node' });
+  const stack = new AsyncDisposableStack();
 
-  await ctx.harness.createTestImage('node');
-  await ctx.logIn();
+  onTestFinished(() => stack.disposeAsync());
+
+  const dashboardImpd = await startDashboardImpd(stack, { env: { IMP_DEFAULT_IMAGE: 'node' } });
+
+  await dashboardImpd.harness.createTestImage('node');
+  await dashboardImpd.logIn();
 
   const rendered = renderApp();
 
@@ -202,7 +210,7 @@ test('it creates a new imp from only the fields that were filled in', async () =
   await user.click(within(dialog).getByRole('button', { name: 'Create' }));
   await rendered.findByRole('row', { name: /box/u });
 
-  const imp = await ctx.client.imps.get({ name: 'box' });
+  const imp = await dashboardImpd.harness.client.imps.get({ name: 'box' });
 
   expect(imp).toMatchObject({ name: 'box', image: 'node', memoryMib: 512, vcpus: 2 });
 });
