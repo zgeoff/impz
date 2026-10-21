@@ -229,10 +229,10 @@ an image too: a [template](./templates.md) copies a set-up imp into new ones.
 ## Evict images under storage pressure
 
 impd keeps every image until you set two marks on the space of `IMP_DATA_DIR`: the ZFS dataset, or
-the XFS filesystem in its loop file. After each image add or build, impd reads how full that space
-is. At `IMP_IMAGE_EVICT_HIGH_PERCENT` or above, it removes images, least recently used first, until
-the space it expects to free brings usage under `IMP_IMAGE_EVICT_LOW_PERCENT`. Set both marks or
-neither, with the low mark below the high one:
+the XFS filesystem in its loop file. After each image add, image build or template, impd reads how
+full that space is. At `IMP_IMAGE_EVICT_HIGH_PERCENT` or above, it removes images, least recently
+used first, until the space it expects to free brings usage under `IMP_IMAGE_EVICT_LOW_PERCENT`. Set
+both marks or neither, with the low mark below the high one:
 
 ```sh
 IMP_IMAGE_EVICT_HIGH_PERCENT=85
@@ -257,7 +257,9 @@ impz image unpin tools
 `impz image ls` shows each pin. An image's last use is the newest of its build, an imp create, a
 restore or a move that picks it, and an eviction that found an imp using it. impd counts what each
 removal frees from the image's own blocks, so an image whose blocks a clone or a reflink shares
-frees nothing and stays. impd logs each removal with the image's size and last use:
+frees nothing and stays. On ZFS, an image whose dataset holds a snapshot other than its base stays
+too, because ZFS keeps the dataset while that snapshot lives. impd logs each removal with the
+image's size and last use:
 
 ```text
 impd: image eviction: removed web-0a1b2c3 (1.5 GiB, last used 2026-09-01T00:00:00.000Z)
@@ -265,7 +267,7 @@ impd: image eviction: removed web-0a1b2c3 (1.5 GiB, last used 2026-09-01T00:00:0
 
 impd records the rootfs of each image it removes, by eviction or by `impz image rm`, until the
 rootfs is gone. When that removal fails, or impd stops first, impd removes the rootfs after the next
-image add or build.
+image add, image build or template.
 
 ## Isolated builds
 
