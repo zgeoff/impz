@@ -20,7 +20,7 @@ import (
 const (
 	// CgroupDir holds a leaf per outer exec. Its memory.max keeps a
 	// runaway outer command from taking the memory the agent needs.
-	CgroupDir = "/sys/fs/cgroup/outer"
+	CgroupDir = cgroup.Root + "/outer"
 	memoryMax = 32 << 20
 
 	// RunDir is HOME and TMPDIR of an outer exec: a tmpfs of its own, as

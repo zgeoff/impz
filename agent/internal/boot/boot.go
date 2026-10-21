@@ -12,6 +12,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/zgeoff/impz/agent/internal/cgroup"
 	"github.com/zgeoff/impz/agent/internal/disk"
 	"github.com/zgeoff/impz/agent/internal/files"
 	"github.com/zgeoff/impz/agent/internal/inner"
@@ -42,7 +43,7 @@ func setupAgentWorld() error {
 	if err := mountOnce("sysfs", "/sys", "sysfs", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, ""); err != nil {
 		return err
 	}
-	if err := mountOnce("cgroup2", "/sys/fs/cgroup", "cgroup2",
+	if err := mountOnce("cgroup2", cgroup.Root, "cgroup2",
 		unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC|unix.MS_RELATIME, "nsdelegate"); err != nil {
 		return err
 	}
@@ -96,17 +97,8 @@ func protectAgent() {
 // setupUserCgroup makes the inner container's cgroup with every controller
 // and a memory limit that leaves userReserve to the agent and the kernel.
 func setupUserCgroup() error {
-	const root = "/sys/fs/cgroup"
-	controllers, err := os.ReadFile(root + "/cgroup.controllers")
-	if err != nil {
+	if err := cgroup.EnableControllers(cgroup.Root, "boot: "); err != nil {
 		return err
-	}
-	var enable []string
-	for _, c := range strings.Fields(string(controllers)) {
-		enable = append(enable, "+"+c)
-	}
-	if err := os.WriteFile(root+"/cgroup.subtree_control", []byte(strings.Join(enable, " ")), 0); err != nil { //nolint:gosec // G703: the path is the cgroup root the agent mounted, not input
-		log.Printf("boot: enable %v: %v", enable, err)
 	}
 	if err := os.MkdirAll(inner.CgroupDir, 0o755); err != nil {
 		return err

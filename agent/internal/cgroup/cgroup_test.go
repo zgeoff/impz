@@ -320,3 +320,74 @@ func TestNewSweepsAnEndedExecOnceTheCgroupUnderItEmpties(t *testing.T) {
 	assert.Check(t, cmp.ErrorIs(err, fs.ErrNotExist), "the emptied cgroup outlived the sweep")
 	assert.Check(t, cmp.Equal(countEnded(tree), 0))
 }
+
+func TestPopulatedReadsThePopulatedLine(t *testing.T) {
+	dir := t.TempDir()
+	assert.NilError(t, os.WriteFile(filepath.Join(dir, "cgroup.events"), []byte("populated 1\nfrozen 0\n"), 0o600))
+
+	populated, err := Populated(dir)
+
+	assert.NilError(t, err)
+	assert.Check(t, populated)
+}
+
+func TestPopulatedFailsWithoutAPopulatedLine(t *testing.T) {
+	dir := t.TempDir()
+	assert.NilError(t, os.WriteFile(filepath.Join(dir, "cgroup.events"), []byte("frozen 0\n"), 0o600))
+
+	_, err := Populated(dir)
+
+	assert.Error(t, err, dir+": no populated line")
+}
+
+func TestEnableControllersHandsEveryControllerDown(t *testing.T) {
+	dir := t.TempDir()
+	assert.NilError(t, os.WriteFile(filepath.Join(dir, "cgroup.controllers"), []byte("cpu io memory pids\n"), 0o600))
+	assert.NilError(t, os.WriteFile(filepath.Join(dir, "cgroup.subtree_control"), nil, 0o600))
+
+	err := EnableControllers(dir, "test: ")
+
+	assert.NilError(t, err)
+	got, err := os.ReadFile(filepath.Join(dir, "cgroup.subtree_control"))
+	assert.NilError(t, err)
+	assert.Check(t, cmp.Equal(string(got), "+cpu +io +memory +pids"))
+}
+
+func TestEnableControllersFailsWithoutTheControllersFile(t *testing.T) {
+	err := EnableControllers(t.TempDir(), "test: ")
+
+	assert.Check(t, cmp.ErrorIs(err, fs.ErrNotExist))
+}
+
+func TestEnableControllersWritesNothingWithoutControllers(t *testing.T) {
+	dir := t.TempDir()
+	assert.NilError(t, os.WriteFile(filepath.Join(dir, "cgroup.controllers"), []byte("\n"), 0o600))
+
+	err := EnableControllers(dir, "test: ")
+
+	assert.NilError(t, err)
+	_, err = os.Stat(filepath.Join(dir, "cgroup.subtree_control"))
+	assert.Check(t, cmp.ErrorIs(err, fs.ErrNotExist))
+}
+
+// A controller the kernel refuses must not stop the boot that asked for it.
+func TestEnableControllersSucceedsWhenTheWriteIsRefused(t *testing.T) {
+	dir := t.TempDir()
+	assert.NilError(t, os.WriteFile(filepath.Join(dir, "cgroup.controllers"), []byte("cpu\n"), 0o600))
+	assert.NilError(t, os.Mkdir(filepath.Join(dir, "cgroup.subtree_control"), 0o755))
+
+	err := EnableControllers(dir, "test: ")
+
+	assert.NilError(t, err)
+}
+
+func TestDisableControllersTakesBackEveryControllerHandedDown(t *testing.T) {
+	dir := t.TempDir()
+	assert.NilError(t, os.WriteFile(filepath.Join(dir, "cgroup.subtree_control"), []byte("cpu memory\n"), 0o600))
+
+	DisableControllers(dir, "test: ")
+
+	got, err := os.ReadFile(filepath.Join(dir, "cgroup.subtree_control"))
+	assert.NilError(t, err)
+	assert.Check(t, cmp.Equal(string(got), "-cpu -memory"))
+}

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/zgeoff/impz/agent/internal/cgroup"
 	"github.com/zgeoff/impz/agent/internal/files"
 	"github.com/zgeoff/impz/agent/internal/proc"
 	"github.com/zgeoff/impz/agent/internal/reaper"
@@ -118,7 +118,7 @@ func setupRoot(runSize string) (*os.File, error) {
 	}{
 		{"proc", "/proc", "proc", unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC, ""},
 		{"sysfs", "/sys", "sysfs", unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC, ""},
-		{"cgroup2", "/sys/fs/cgroup", "cgroup2", unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC | unix.MS_RELATIME, ""},
+		{"cgroup2", cgroup.Root, "cgroup2", unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC | unix.MS_RELATIME, ""},
 		// a copy of the agent's /dev, filled below: the kernel has one
 		// devtmpfs, and a node deleted inside must not go for the agent
 		{"tmpfs", "/dev", "tmpfs", unix.MS_NOSUID, "mode=0755,size=64k"},
@@ -269,26 +269,11 @@ func linkDev(dev string) error {
 // root every controller. The root then holds no process, so dockerd can
 // make its own cgroups under it, as in docker-in-docker.
 func setupCgroup() error {
-	const root = "/sys/fs/cgroup"
-	if err := os.MkdirAll(root+"/init", 0o755); err != nil {
+	if err := os.MkdirAll(cgroup.Root+"/init", 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(root+"/init/cgroup.procs", []byte("0"), 0); err != nil {
+	if err := os.WriteFile(cgroup.Root+"/init/cgroup.procs", []byte("0"), 0); err != nil {
 		return fmt.Errorf("move into /init: %w", err)
 	}
-	controllers, err := os.ReadFile(root + "/cgroup.controllers")
-	if err != nil {
-		return err
-	}
-	var enable []string
-	for _, c := range strings.Fields(string(controllers)) {
-		enable = append(enable, "+"+c)
-	}
-	if len(enable) > 0 {
-		if err := os.WriteFile(root+"/cgroup.subtree_control", []byte(strings.Join(enable, " ")), 0); err != nil { //nolint:gosec // G703: the path is the cgroup root the init mounted, not input
-			// a controller the guest kernel lacks must not stop the boot
-			log.Printf("inner: enable %v: %v", enable, err)
-		}
-	}
-	return nil
+	return cgroup.EnableControllers(cgroup.Root, "inner: ")
 }

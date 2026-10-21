@@ -20,6 +20,9 @@ import (
 )
 
 const (
+	// Root is where the guest mounts the cgroup2 hierarchy.
+	Root = "/sys/fs/cgroup"
+
 	// poll is how often a leaf is checked for members.
 	poll = 20 * time.Millisecond
 
@@ -229,7 +232,7 @@ func (g *Group) Kill() error {
 // passes, and reports whether the leaf emptied.
 func (g *Group) WaitEmpty(deadline time.Time) bool {
 	for {
-		populated, err := g.populated()
+		populated, err := Populated(g.path)
 		if waitEmptyRead != nil {
 			waitEmptyRead(populated, err)
 		}
@@ -247,8 +250,10 @@ func (g *Group) WaitEmpty(deadline time.Time) bool {
 // tests, which use it to know a read happened.
 var waitEmptyRead func(populated bool, err error)
 
-func (g *Group) populated() (bool, error) {
-	f, err := os.Open(filepath.Join(g.path, "cgroup.events"))
+// Populated reports whether the cgroup at dir or any cgroup under it holds a
+// process, as its cgroup.events says.
+func Populated(dir string) (bool, error) {
+	f, err := os.Open(filepath.Join(dir, "cgroup.events"))
 	if err != nil {
 		return false, err
 	}
@@ -262,5 +267,39 @@ func (g *Group) populated() (bool, error) {
 	if err := sc.Err(); err != nil {
 		return false, err
 	}
-	return false, fmt.Errorf("%s: no populated line", g.path)
+	return false, fmt.Errorf("%s: no populated line", dir)
+}
+
+// EnableControllers hands every controller of the cgroup at dir down to its
+// children. It fails only when it cannot read the controllers: one the
+// kernel refuses must not stop a boot, so a refused write is logged after
+// logPrefix.
+func EnableControllers(dir, logPrefix string) error {
+	return changeControllers(dir, "cgroup.controllers", "+", "enable", logPrefix)
+}
+
+// DisableControllers takes back every controller the cgroup at dir hands
+// down. It logs a refused write after logPrefix.
+func DisableControllers(dir, logPrefix string) {
+	_ = changeControllers(dir, "cgroup.subtree_control", "-", "disable", logPrefix)
+}
+
+// changeControllers writes each controller that dir's file from lists to
+// dir's subtree_control, after op.
+func changeControllers(dir, from, op, verb, logPrefix string) error {
+	b, err := os.ReadFile(filepath.Join(dir, from))
+	if err != nil {
+		return err
+	}
+	var change []string
+	for _, c := range strings.Fields(string(b)) {
+		change = append(change, op+c)
+	}
+	if len(change) == 0 {
+		return nil
+	}
+	if err := os.WriteFile(filepath.Join(dir, "cgroup.subtree_control"), []byte(strings.Join(change, " ")), 0); err != nil { //nolint:gosec // G703: dir is a cgroup the agent made or mounted, not input
+		log.Printf("%s%s %v: %v", logPrefix, verb, change, err)
+	}
+	return nil
 }

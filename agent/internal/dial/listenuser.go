@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/zgeoff/impz/agent/internal/proto"
+	"github.com/zgeoff/impz/agent/internal/sysutil"
 )
 
 // A reverse forward listens in the guest as the image's USER, as a unix dial
@@ -100,13 +101,8 @@ func parseLoopbackPort(address string) (int, error) {
 // wrapBound checks the helper's fds (a listening socket, and for unix its
 // directory) and wraps them.
 func wrapBound(fds []int, network, address string) (*Bound, error) {
-	closeAll := func() {
-		for _, fd := range fds {
-			unix.Close(fd)
-		}
-	}
 	failed := func(message string) (*Bound, error) {
-		closeAll()
+		sysutil.CloseFds(fds)
 		return nil, &proto.Error{Code: proto.ErrListenFailed, Message: message}
 	}
 	if accepting, err := unix.GetsockoptInt(fds[0], unix.SOL_SOCKET, unix.SO_ACCEPTCONN); err != nil || accepting != 1 {

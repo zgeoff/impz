@@ -18,6 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/zgeoff/impz/agent/internal/proc"
+	"github.com/zgeoff/impz/agent/internal/sysutil"
 )
 
 // Command is the agent's argument for the inner init.
@@ -137,18 +138,18 @@ func recv(sock int, buf []byte) (message, []int, error) {
 		if err != nil {
 			return message{}, nil, err
 		}
-		fds := parseRights(oob[:oobn])
+		fds := sysutil.ParseRights(oob[:oobn])
 		if n == 0 {
-			closeAll(fds)
+			sysutil.CloseFds(fds)
 			return message{}, nil, errClosed
 		}
 		if flags&(unix.MSG_TRUNC|unix.MSG_CTRUNC) != 0 {
-			closeAll(fds)
+			sysutil.CloseFds(fds)
 			return message{}, nil, errors.New("a message was cut short")
 		}
 		var m message
 		if err := json.Unmarshal(buf[:n], &m); err != nil {
-			closeAll(fds)
+			sysutil.CloseFds(fds)
 			return message{}, nil, err
 		}
 		return m, fds, nil
@@ -170,26 +171,6 @@ func newSocketpair() ([2]int, error) {
 		_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_RCVBUFFORCE, 2*maxMessage)
 	}
 	return pair, nil
-}
-
-func parseRights(oob []byte) []int {
-	msgs, err := unix.ParseSocketControlMessage(oob)
-	if err != nil {
-		return nil
-	}
-	var fds []int
-	for _, m := range msgs {
-		if got, err := unix.ParseUnixRights(&m); err == nil {
-			fds = append(fds, got...)
-		}
-	}
-	return fds
-}
-
-func closeAll(fds []int) {
-	for _, fd := range fds {
-		unix.Close(fd)
-	}
 }
 
 // errnoOf turns an error into the number that travels in a reply.

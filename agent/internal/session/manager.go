@@ -6,8 +6,6 @@
 package session
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -24,6 +22,7 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proc"
 	"github.com/zgeoff/impz/agent/internal/proto"
 	"github.com/zgeoff/impz/agent/internal/safe"
+	"github.com/zgeoff/impz/agent/internal/sysutil"
 )
 
 // MaxSessions bounds the sessions of one guest, exited ones that still hold
@@ -246,7 +245,7 @@ func (m *Manager) find(req *proto.Request) (*session, bool, *proto.Error) {
 		return nil, false, proto.StartError(err, errors.Is(err, proc.ErrDown))
 	}
 	m.seq++
-	s = newSession(req.GetSession(), req, run{proc: p, master: master, generation: newGeneration(), seq: m.seq, bootID: m.bootID})
+	s = newSession(req.GetSession(), req, run{proc: p, master: master, generation: sysutil.RandomHex(16), seq: m.seq, bootID: m.bootID})
 	s.onDelivered = func() { m.removeIfOver(s) }
 	m.mu.Lock()
 	m.sessions[s.name] = s
@@ -336,13 +335,6 @@ func (m *Manager) noSession(name string) *proto.Error {
 // isResumeOf reports whether a resume names s's generation.
 func isResumeOf(resume *proto.ResumeFrom, s *session) bool {
 	return resume != nil && resume.GetExecutionGeneration() == s.generation
-}
-
-// newGeneration returns 16 random bytes as 32 lowercase hex characters.
-func newGeneration() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return hex.EncodeToString(b)
 }
 
 // input applies the viewer's frames until the connection ends. It never

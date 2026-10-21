@@ -7,8 +7,6 @@
 package listen
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -28,6 +26,7 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proc"
 	"github.com/zgeoff/impz/agent/internal/proto"
 	"github.com/zgeoff/impz/agent/internal/safe"
+	"github.com/zgeoff/impz/agent/internal/sysutil"
 )
 
 // The roots of the sockets the agent makes itself, one directory per
@@ -132,10 +131,7 @@ func (m *Manager) Serve(req *proto.Request, r *proto.Reader, w *proto.Writer) er
 // serve opens a listener, replies with where it listens, then announces each
 // client until the host closes the connection. What it made goes with it.
 func (m *Manager) serve(r *proto.Reader, w *proto.Writer, open func(*listener) (*proto.Listening, error)) error {
-	id, err := randomID()
-	if err != nil {
-		return replyErr(w, err)
-	}
+	id := sysutil.RandomHex(8)
 	l := &listener{id: id, w: w, pending: map[uint32]net.Conn{}}
 	resp, err := open(l)
 	if err != nil {
@@ -429,12 +425,4 @@ func drain(r *proto.Reader) error {
 			return err
 		}
 	}
-}
-
-func randomID() (string, error) {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }

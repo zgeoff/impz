@@ -14,6 +14,7 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proc"
 	"github.com/zgeoff/impz/agent/internal/reaper"
 	"github.com/zgeoff/impz/agent/internal/safe"
+	"github.com/zgeoff/impz/agent/internal/sysutil"
 )
 
 // ErrDown is the error for a spawn or signal when the container is gone.
@@ -69,7 +70,7 @@ func newClient(sock int) *client {
 // are set up.
 func (c *client) waitReady() error {
 	m, fds, err := recv(c.sock, make([]byte, 4096))
-	closeAll(fds)
+	sysutil.CloseFds(fds)
 	if err != nil {
 		return err
 	}
@@ -88,7 +89,7 @@ func (c *client) run() {
 	buf := newBuffer()
 	for {
 		m, fds, err := recv(c.sock, buf)
-		closeAll(fds)
+		sysutil.CloseFds(fds)
 		if err != nil {
 			if !errors.Is(err, errClosed) {
 				log.Printf("inner: read: %v", err)

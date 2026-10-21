@@ -1,7 +1,6 @@
 package boot
 
 import (
-	"crypto/rand"
 	"fmt"
 	"log"
 	"net"
@@ -35,6 +34,7 @@ import (
 	"github.com/zgeoff/impz/agent/internal/server"
 	"github.com/zgeoff/impz/agent/internal/services"
 	"github.com/zgeoff/impz/agent/internal/session"
+	"github.com/zgeoff/impz/agent/internal/sysutil"
 )
 
 // Run is PID 1 from the system drive. It mounts the agent's world and the
@@ -255,9 +255,6 @@ func readBootID() string {
 // shares the kernel's boot_id, so it draws a random UUID instead, after the
 // claim reseeded the CRNG. A wake from memory keeps it, as it keeps boot_id.
 func newBootID() string {
-	var b [16]byte
-	rand.Read(b[:])
-	b[6] = b[6]&0x0f | 0x40
-	b[8] = b[8]&0x3f | 0x80
+	b := sysutil.NewUUID()
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }

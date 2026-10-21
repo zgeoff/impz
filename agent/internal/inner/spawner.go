@@ -9,6 +9,7 @@ import (
 
 	"github.com/zgeoff/impz/agent/internal/proc"
 	"github.com/zgeoff/impz/agent/internal/safe"
+	"github.com/zgeoff/impz/agent/internal/sysutil"
 )
 
 // spawner is the inner init's half of the socket: it starts what the agent
@@ -43,10 +44,10 @@ func serve(sock int, runner proc.Runner) error {
 			// mount) must not hold the others, or a signal
 			safe.Go("inner: spawn", func() { s.spawn(m, fds) }, nil)
 		case opSignal:
-			closeAll(fds)
+			sysutil.CloseFds(fds)
 			s.signal(m)
 		default:
-			closeAll(fds)
+			sysutil.CloseFds(fds)
 			s.reply(m.ID, 0, nil, errors.New("unknown op "+m.Op))
 		}
 	}

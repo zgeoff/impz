@@ -7,11 +7,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/zgeoff/impz/agent/internal/cgroup"
 	"github.com/zgeoff/impz/agent/internal/fsroot"
 	"github.com/zgeoff/impz/agent/internal/proc"
 	"github.com/zgeoff/impz/agent/internal/reaper"
@@ -22,7 +22,7 @@ import (
 // the container's cgroup namespace. ExecCgroupDir under it holds a leaf per
 // exec; it stays when the container starts again.
 const (
-	CgroupDir     = "/sys/fs/cgroup/user"
+	CgroupDir     = cgroup.Root + "/user"
 	ExecCgroupDir = CgroupDir + "/exec"
 )
 
@@ -361,40 +361,14 @@ func (m *Manager) cleanCgroup() {
 	if err := os.Mkdir(filepath.Join(m.cgroupDir, "exec"), 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
 		log.Printf("inner: %v", err)
 	}
-	disableControllers(m.cgroupDir)
-}
-
-// disableControllers clears what the last init enabled in dir's
-// subtree_control: a cgroup that hands controllers down takes no process, so
-// the next init could not start in it (EBUSY).
-func disableControllers(dir string) {
-	b, err := os.ReadFile(dir + "/cgroup.subtree_control")
-	if err != nil {
-		return
-	}
-	var off []string
-	for _, c := range strings.Fields(string(b)) {
-		off = append(off, "-"+c)
-	}
-	if len(off) == 0 {
-		return
-	}
-	if err := os.WriteFile(dir+"/cgroup.subtree_control", []byte(strings.Join(off, " ")), 0); err != nil { //nolint:gosec // G703: the path is the container's own cgroup, not input
-		log.Printf("inner: disable %v: %v", off, err)
-	}
+	// a cgroup that hands controllers down takes no process, so the next
+	// init could not start in it (EBUSY)
+	cgroup.DisableControllers(m.cgroupDir, "inner: ")
 }
 
 func populated(dir string) bool {
-	b, err := os.ReadFile(dir + "/cgroup.events")
-	if err != nil {
-		return false
-	}
-	for _, line := range strings.Split(string(b), "\n") {
-		if line == "populated 1" {
-			return true
-		}
-	}
-	return false
+	p, _ := cgroup.Populated(dir)
+	return p
 }
 
 // removeChildren removes every cgroup under dir, deepest first.

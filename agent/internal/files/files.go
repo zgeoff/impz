@@ -5,8 +5,6 @@
 package files
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -18,6 +16,7 @@ import (
 
 	"github.com/zgeoff/impz/agent/internal/fsroot"
 	"github.com/zgeoff/impz/agent/internal/proto"
+	"github.com/zgeoff/impz/agent/internal/sysutil"
 )
 
 const (
@@ -70,10 +69,7 @@ func (s *Store) Write(p string, data []byte) error {
 	if fi, err := root.Lstat("/" + p); err == nil && !fi.Mode().IsRegular() {
 		return badRequest("%s is not a regular file", p)
 	}
-	staged, err := stagedName(dir, name)
-	if err != nil {
-		return err
-	}
+	staged := dir + "." + name + "." + sysutil.RandomHex(8)
 	if err := writeStaged(root, staged, data); err != nil {
 		_ = root.Remove(staged)
 		return mapErr(err)
@@ -131,14 +127,6 @@ func checkPath(p string) error {
 		}
 	}
 	return nil
-}
-
-func stagedName(dir, name string) (string, error) {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return dir + "." + name + "." + hex.EncodeToString(b), nil
 }
 
 func writeStaged(root *fsroot.Root, staged string, data []byte) error {

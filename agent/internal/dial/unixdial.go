@@ -15,6 +15,7 @@ import (
 	"github.com/zgeoff/impz/agent/internal/imagecfg"
 	"github.com/zgeoff/impz/agent/internal/proc"
 	"github.com/zgeoff/impz/agent/internal/proto"
+	"github.com/zgeoff/impz/agent/internal/sysutil"
 )
 
 // A unix socket dial runs as the image's USER, the user an SSH login gets,
@@ -144,24 +145,20 @@ func receiveFds(conn int, timeout time.Duration, max int, failCode string) ([]in
 	if err != nil {
 		return nil, &proto.Error{Code: failCode, Message: "read the helper's answer: " + err.Error()}
 	}
-	fds := parseRights(oob[:oobn])
+	fds := sysutil.ParseRights(oob[:oobn])
 	var keep []int
 	if n >= 1 && buf[0] == answerOK && len(fds) >= 1 {
 		keep = fds[:min(max, len(fds))]
 		fds = fds[len(keep):]
 	}
-	for _, fd := range fds {
-		unix.Close(fd)
-	}
+	sysutil.CloseFds(fds)
 
 	switch {
 	case n == 0:
 		return nil, &proto.Error{Code: failCode, Message: "the helper exited without an answer"}
 	case keep != nil:
 		if !isStreamSocket(keep[0]) {
-			for _, fd := range keep {
-				unix.Close(fd)
-			}
+			sysutil.CloseFds(keep)
 			return nil, &proto.Error{Code: failCode, Message: "the helper answered with something other than a stream socket"}
 		}
 		return keep, nil
@@ -201,21 +198,6 @@ func waitReadable(conn int, timeout time.Duration, failCode string) error {
 			return nil
 		}
 	}
-}
-
-func parseRights(oob []byte) []int {
-	msgs, err := unix.ParseSocketControlMessage(oob)
-	if err != nil {
-		return nil
-	}
-	var fds []int
-	for _, msg := range msgs {
-		rights, err := unix.ParseUnixRights(&msg)
-		if err == nil {
-			fds = append(fds, rights...)
-		}
-	}
-	return fds
 }
 
 func isStreamSocket(fd int) bool {

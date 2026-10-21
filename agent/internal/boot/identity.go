@@ -1,7 +1,6 @@
 package boot
 
 import (
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 	"github.com/zgeoff/impz/agent/internal/fsroot"
 	"github.com/zgeoff/impz/agent/internal/proc"
 	"github.com/zgeoff/impz/agent/internal/proto"
+	"github.com/zgeoff/impz/agent/internal/sysutil"
 )
 
 // keygenTimeout bounds ssh-keygen -A; past it the old keys stay, the reset
@@ -51,23 +51,14 @@ func resetIdentity(runner proc.Runner, root fsroot.FS, env []string) string {
 }
 
 func resetIdentityAt(root fsroot.FS, keygen keygenFunc) error {
-	id, err := newMachineID()
-	if err != nil {
-		return err
-	}
-	return errors.Join(writeMachineID(root, id), resetHostKeys(root, keygen))
+	return errors.Join(writeMachineID(root, newMachineID()), resetHostKeys(root, keygen))
 }
 
 // newMachineID returns 32 lowercase hex digits, a random v4 UUID as
 // systemd-machine-id-setup writes one.
-func newMachineID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	b[6] = b[6]&0x0f | 0x40
-	b[8] = b[8]&0x3f | 0x80
-	return hex.EncodeToString(b), nil
+func newMachineID() string {
+	id := sysutil.NewUUID()
+	return hex.EncodeToString(id[:])
 }
 
 // writeMachineID replaces /etc/machine-id, and D-Bus's copy when it is a file
@@ -110,11 +101,7 @@ func resetHostKeys(root fsroot.FS, keygen keygenFunc) error {
 		log.Printf("identity: no ssh-keygen; ssh host keys kept")
 		return nil
 	}
-	suffix := make([]byte, 8)
-	if _, err := rand.Read(suffix); err != nil {
-		return err
-	}
-	stage := filepath.Join(dir, stagePrefix+hex.EncodeToString(suffix))
+	stage := filepath.Join(dir, stagePrefix+sysutil.RandomHex(8))
 	made := filepath.Join(stage, "etc/ssh")
 	if err := root.MkdirAll(made, 0o755); err != nil {
 		return err

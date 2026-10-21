@@ -13,10 +13,8 @@ import (
 )
 
 func TestNewMachineIDIsAFreshVersion4UUIDInHexEachCall(t *testing.T) {
-	a, err := newMachineID()
-	assert.NilError(t, err)
-	b, err := newMachineID()
-	assert.NilError(t, err)
+	a := newMachineID()
+	b := newMachineID()
 
 	assert.Check(t, cmp.Regexp(`^[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$`, a))
 	assert.Check(t, a != b, "two ids are both %q", a)
