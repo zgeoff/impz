@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { Socket } from 'node:net';
 import type { JsonValue, MessageInitShape } from '@bufbuild/protobuf';
 import {
+  ActivitySchema,
   DetachedSchema,
   ErrorResponseSchema,
   ExitSchema,
@@ -15,7 +16,13 @@ import {
   encodeJsonFrame,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
-import type { ErrorSchema, PreviousSchema, Request, ResumeFrom } from '@impz/agent-protocol';
+import type {
+  ErrorSchema,
+  PreviousSchema,
+  Request,
+  ResumeFrom,
+  SessionInfoSchema,
+} from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
 type StubStart = Readonly<{
@@ -69,34 +76,62 @@ export async function startStubSessionAgent(
   const connections = { open: 0 };
   const hasOffsets = options.release === undefined;
 
-  const listSessions = () =>
+  const listSessions = (): MessageInitShape<typeof SessionInfoSchema>[] =>
     [...runs]
       .toSorted(([left], [right]) => left.localeCompare(right))
       .map(([name, run]) => ({
         name,
         pid: 9,
-        argv: run.argv,
+        argv: [...run.argv],
         state: run.exit === null ? 'running' : 'exited',
         attached: run.viewer !== null,
         cols: run.cols,
         rows: run.rows,
-        started_unix_ms: run.startedUnixMs,
-
+        startedUnixMs: run.startedUnixMs,
         exit: run.exit ?? undefined,
-        execution_generation: hasOffsets ? run.generation : undefined,
-        boot_id: hasOffsets ? bootId : undefined,
-        end: hasOffsets ? run.output.length : undefined,
-        log: hasOffsets && run.isLogged ? true : undefined,
+        executionGeneration: run.generation,
+        bootId,
+        end: run.output.length,
+        log: run.isLogged ? true : undefined,
       }));
 
-  // An agent from before sessions or offsets leaves out fields the schema marks implicit, which
-  // the schema's encoder writes, so the activity answer is plain JSON.
-  const listActivity = () => ({
-    tcp_established: 0,
-    exec_sessions: connections.open,
-    load1: 0,
-    ...(options.release !== 'before-sessions' && { sessions: listSessions() }),
-  });
+  const writeActivity = (socket: Socket): void => {
+    if (hasOffsets) {
+      socket.write(
+        encodeMessageFrame(FRAME_TYPES.response, ActivitySchema, {
+          tcpEstablished: 0,
+          execSessions: connections.open,
+          load1: 0,
+          sessions: listSessions(),
+        }),
+      );
+
+      return;
+    }
+
+    // An agent from before sessions or offsets leaves out fields the schema's encoder always
+    // writes, so its answer is plain JSON.
+    socket.write(
+      encodeJsonFrame(FRAME_TYPES.response, {
+        tcp_established: 0,
+        exec_sessions: connections.open,
+        load1: 0,
+        ...(options.release === 'before-offsets' && {
+          sessions: listSessions().map((session) => ({
+            name: session.name,
+            pid: session.pid,
+            argv: session.argv,
+            state: session.state,
+            attached: session.attached,
+            cols: session.cols,
+            rows: session.rows,
+            started_unix_ms: session.startedUnixMs,
+            exit: session.exit,
+          })),
+        }),
+      }),
+    );
+  };
 
   const sendNoSession = (socket: Socket, session: string): void => {
     const last = previous.get(session);
@@ -371,7 +406,7 @@ export async function startStubSessionAgent(
       const session = parsed.session ?? '';
 
       if (parsed.op === 'activity') {
-        socket.write(encodeJsonFrame(FRAME_TYPES.response, listActivity()));
+        writeActivity(socket);
 
         return;
       }
