@@ -6,7 +6,6 @@ import { P, match } from 'ts-pattern';
 import type { CallOptions } from '../types';
 import { UnknownProcedureError } from '../unknown-procedure-error';
 
-// the stream call of a client: any client of impd passes
 export interface EventSource {
   readonly events: {
     readonly stream: (input?: undefined, options?: CallOptions) => Promise<AsyncIterable<ImpEvent>>;
@@ -14,35 +13,18 @@ export interface EventSource {
 }
 
 export interface WatchReconnect {
-  // the wait before each new stream
   readonly delayMs: number;
-
-  // whether a failed stream opens again; by default all but impd's refusal
-  // of the call (a 4xx answer, or no such procedure on an older impd)
   readonly shouldRetry?: (error: unknown) => boolean;
 }
 
 export interface WatchEventsOptions {
-  // each event in order; the next waits until this settles, and a throw
-  // ends the watch with it
   readonly onEvent: (event: ImpEvent) => Promise<void> | void;
-
-  // only the events of this imp
   readonly name?: string;
   readonly signal?: AbortSignal;
-
-  // each stream once it opened, numbered from 1; every stream starts with a
-  // snapshot of every imp, and a throw ends the watch with it
   readonly onOpen?: (attempt: number) => Promise<void> | void;
-
-  // opens a fresh stream after one ends, as when impd restarts or drops a
-  // reader that fell behind; without it the watch ends with its stream
   readonly reconnect?: WatchReconnect;
 }
 
-// One consumer of impd's event stream. Resolves once the signal aborts, or
-// once the stream ends with no reconnect; rejects with the stream's failure
-// or a callback's throw.
 export async function watchEvents(
   client: EventSource,
   options: Readonly<WatchEventsOptions>,
@@ -77,7 +59,6 @@ export async function watchEvents(
         }
       }
     } finally {
-      // a callback that threw leaves the stream open; close it
       if (!reading.done) {
         await disposeEvents(events);
       }
@@ -106,7 +87,6 @@ export async function watchEvents(
   }
 }
 
-// how one stream ended: its failure, or null when impd closed it
 class StreamEndError extends Error {
   override name = 'StreamEndError';
 
@@ -121,7 +101,7 @@ class StreamEndError extends Error {
   }
 }
 
-// a callback's throw ends the watch at once, with that throw
+// p-retry's AbortError ends the retries at once.
 async function runCallback(run: () => Promise<void> | void): Promise<void> {
   try {
     await run();
@@ -132,7 +112,6 @@ async function runCallback(run: () => Promise<void> | void): Promise<void> {
   }
 }
 
-// the imp an event is about
 function readEventImpName(event: Readonly<ImpEvent>): string {
   return match(event)
     .with({ ev: P.union('ImpAdded', 'ImpChanged', 'ImpRemoved') }, (changed) => changed.imp.name)
@@ -143,18 +122,14 @@ function readEventImpName(event: Readonly<ImpEvent>): string {
     .exhaustive();
 }
 
-// a stream that failed can fail its close too; the read's own error is the
-// one the caller gets
 async function disposeEvents(events: AsyncIterator<ImpEvent>): Promise<void> {
   try {
     await events.return?.();
   } catch {
-    // the stream has ended either way
+    // the stream ended either way
   }
 }
 
-// impd refusing the call refuses it again; a 5xx, a dropped connection or a
-// restart may answer next time
 function isNotRefused(error: unknown): boolean {
   if (error instanceof UnknownProcedureError) {
     return false;
@@ -163,14 +138,13 @@ function isNotRefused(error: unknown): boolean {
   return !(error instanceof ORPCError && error.status >= 400 && error.status < 500);
 }
 
-// the end of a watch as its caller sees it: nothing once the signal aborted
-// or impd closed the stream, else the failure as it came
 function requireCleanEnd(error: unknown, signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) {
     return;
   }
 
-  // without a reconnect nothing unwraps a callback's throw
+  // p-retry unwraps a callback's throw, but without a reconnect no p-retry
+  // runs.
   if (error instanceof AbortError) {
     throw error.originalError;
   }

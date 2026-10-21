@@ -1,8 +1,5 @@
 import { onTestFinished } from 'bun:test';
 
-// impd's socket for protocol faults it never sends: answers the first
-// message with `frames`, records every message, and stops at the test's end
-
 export function startStubImpdSocket(frames: readonly string[]) {
   const received: string[] = [];
 

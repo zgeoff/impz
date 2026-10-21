@@ -9,7 +9,6 @@ import type { AgentFrame } from '@impz/daemon/src/vm/agent-client/frame-codec';
 import type { StubAgentHandler } from '@impz/daemon/testing';
 import * as z from 'zod';
 
-// what an exec or an attach asks the agent, in its wire form
 const RequestSchema = z.looseObject({
   op: z.string(),
   argv: z.array(z.string()).optional(),
@@ -22,14 +21,9 @@ type StubRequest = z.infer<typeof RequestSchema>;
 
 interface Run {
   readonly command: string;
-
-  // the agent ended the run: an exit, a detach or an error
   ended: boolean;
 }
 
-// An imp's guest agent for exec and attach, for startStubAgent. It records
-// each request, what each command got (stdin as text, `eof`, `resize:CxR`,
-// `signal:N`), and each command whose connection impd closed as it ran.
 export function buildStubExecAgent() {
   const requests: StubRequest[] = [];
   const input: string[] = [];
@@ -64,8 +58,8 @@ export function buildStubExecAgent() {
     runs.set(socket, run);
     requests.push(parsed);
 
-    // impd may close the connection while a command still writes, as a
-    // client that stopped reading does
+    // impd may close the connection while a command still writes, as it does
+    // for a client that stopped reading.
     socket.on('error', () => {});
 
     socket.on('close', () => {
@@ -91,7 +85,6 @@ const SignalSchema = z.object({ signal: z.int() });
 
 const decoder = new TextDecoder();
 
-// what a running command does with a frame from impd after its start
 function readInput(
   socket: Socket,
   run: Run,
@@ -148,12 +141,8 @@ function stopRun(socket: Socket, run: Run, frame: Uint8Array): void {
   socket.end(frame);
 }
 
-// the bytes `big` writes to each of stdout and stderr
 export const STUB_FLOOD_BYTES = 512 * 1024;
 
-// An exec, by argv[0]: `nope`, `fail`, `tick` and `big` answer at once;
-// `cat`, `wait`, `old` (an agent from before the group kill) and /bin/sh
-// run until a signal, ^C or a `cat`'s stdin ends
 function startExec(socket: Socket, run: Run, request: StubRequest): void {
   if (run.command === 'nope') {
     sendRefusal(socket, run, { code: 'EXEC_FAILED', message: 'no such file' });
@@ -201,17 +190,11 @@ function writeText(socket: Socket, type: 8 | 9, text: string): void {
   socket.write(encodeFrame(type, encoder.encode(text)));
 }
 
-// the boot and generation of the `counted` session, as the agent names them
 export const STUB_BOOT_ID = '6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f';
-
-// the end of the `counted` session's output, and of the `ended` one's
 const OUTPUT_END = 100;
 
 export const STUB_GENERATION = 'd'.repeat(32);
 
-// An attach, by session: `main` runs until a write of `taken` detaches it,
-// `counted` resumes at 95 of 100 and exits, `ended` exited earlier, and any
-// other is not there
 function startAttach(socket: Socket, run: Run, request: StubRequest): void {
   if ((request.resume_from?.offset ?? 0) > OUTPUT_END) {
     sendRefusal(socket, run, {

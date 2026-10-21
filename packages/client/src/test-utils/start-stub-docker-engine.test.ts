@@ -6,7 +6,6 @@ import { runChildTests } from '@impz/test-utils/run-child-tests';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { startStubDockerEngine } from './start-stub-docker-engine';
 
-// a directory for the engine's socket
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'stub-docker-engine-'));
 

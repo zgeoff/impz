@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubDockerBin } from './create-stub-docker-bin';
 
-// a directory for the stub
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'stub-docker-bin-'));
 

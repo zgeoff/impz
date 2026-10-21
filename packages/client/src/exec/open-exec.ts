@@ -16,76 +16,32 @@ export interface ExecOptions {
   readonly tty?: boolean;
   readonly env?: Readonly<Record<string, string>>;
   readonly cwd?: string;
-
-  // the terminal size, with a tty
   readonly cols?: number;
   readonly rows?: number;
-
-  // starts this session, or attaches to it if it runs; needs a tty. A
-  // session outlives the handle: `close()` detaches, and `exit` rejects
-  // with DETACHED when impd ends the socket while the session runs on
   readonly session?: string;
-
-  // after a stop signal (SIGTERM, SIGINT, SIGHUP, SIGQUIT, SIGKILL), how
-  // long the rest of the group gets before the agent kills it; not with a
-  // tty. See ExecStarted.groupKill.
   readonly killGraceMs?: number;
-
-  // with a session: the output after the byte at this offset of this
-  // generation, rather than a replay; `started.output.resume` says how it
-  // was met (docs/architecture/guest/sessions.md#generations-boots-and-offsets)
   readonly resumeFrom?: ResumeFrom;
-
-  // what impd must ensure before it starts the command, or the exec fails
-  // with PRECONDITION_FAILED and nothing runs: `broker`, the broker's
-  // variables and CA bundle (docs/guides/connectors.md#requiring-the-broker)
   readonly require?: readonly ExecRequirement[];
-
-  // with a session this start creates: impd keeps its output on the host,
-  // for `sessions.readLog`; `started.output.log` says whether it does. Check
-  // `system.info.features.sessionLog` first (docs/guides/session-logs.md).
   readonly log?: boolean;
-
-  // runs the command without CAP_SYS_ADMIN and CAP_SYS_PTRACE
-  // (docs/architecture/guest/agent.md#read-only-files); an impd without the
-  // feature fails the exec with PRECONDITION_FAILED and nothing runs
   readonly dropSysAdmin?: boolean;
-
-  // closes the session, as `close()` does; before the start, `started` and
-  // `exit` reject with the abort's reason (an AbortError), as `openExec` does
   readonly signal?: Readonly<AbortSignal>;
-
-  // output a stream may hold unread before the session ends with
-  // OUTPUT_OVERFLOW (default 8 MiB); a caller reads or cancels both streams
   readonly maxUnreadBytes?: number;
 }
 
 export interface ExecExit {
-  // null when a signal ended the process
   readonly code: number | null;
   readonly signal: string | null;
-
-  // for a session with offsets: the offset after the last byte received
   readonly offset?: number;
 }
 
-// One running command. The output streams end when the session does, and
-// cancelling both ends it; `exit` rejects with an ExecError when the command
-// did not run to its exit, or with the abort's reason before it started.
 export interface ExecHandle {
   readonly started: Promise<ExecStarted>;
   readonly stdout: ReadableStream<Uint8Array>;
   readonly stderr: ReadableStream<Uint8Array>;
   readonly exit: Promise<ExecExit>;
-
-  // waits for the start, and resolves once the socket has room again, so a
-  // writer in a loop stays within the socket's buffer
   readonly write: (data: string | Uint8Array) => Promise<void>;
   readonly closeStdin: () => Promise<void>;
   readonly resize: (cols: number, rows: number) => void;
-
-  // with a tty, SIGINT and SIGQUIT go as the terminal's keys, so they reach
-  // the foreground job as a typed ^C would, not only the shell
   readonly sendSignal: (signal: string) => void;
   readonly close: () => void;
 }
@@ -98,8 +54,6 @@ export interface ExecDeps {
   readonly connect?: (url: string) => ExecSocket;
 }
 
-// The socket authenticates with a single-use exec ticket, which works in a
-// browser and in Node, whose WebSocket sends no custom headers.
 export function openExec(
   deps: Readonly<ExecDeps>,
   name: string,
@@ -129,13 +83,9 @@ export interface AttachOptions extends Pick<
   ExecOptions,
   'cols' | 'rows' | 'signal' | 'maxUnreadBytes' | 'resumeFrom'
 > {
-  // false: reject with InvalidStateError rather than boot or wake the imp
   readonly wake?: boolean;
 }
 
-// Attaches to a session that runs: stdout gets the replay of its recent
-// output, or with resumeFrom the output after it, then live output.
-// NoSessionError when there is no such session.
 export function openAttach(
   deps: Readonly<ExecDeps>,
   name: string,
@@ -176,7 +126,6 @@ async function openHandle(
 
   const issued = await deps.rpc.exec.ticket({ name }, callOptions);
 
-  // the ticket call may have outlived an abort that it did not see
   abort?.throwIfAborted();
   const maxUnreadBytes = options.maxUnreadBytes ?? DEFAULT_MAX_UNREAD_BYTES;
   const started = Promise.withResolvers<Settled<ExecStarted>>();
@@ -197,8 +146,6 @@ async function openHandle(
         `${channel} holds more than ${String(maxUnreadBytes)} unread bytes; read or cancel it`,
       );
     },
-
-    // nobody reads the output any more, so the command may as well stop
     onCancel: () => {
       state.cancelled += 1;
 
@@ -246,14 +193,10 @@ async function openHandle(
     ended.resolve(result);
   };
 
-  // the session's outcome never settles after a stop, so the stop settles
-  // the handle itself
   const stopSession = (): void => {
     stopWith('CLOSED', 'the exec session was closed');
   };
 
-  // an abort during the connect is the caller's abort, as one during the
-  // ticket call is; once the command runs, it closes the session
   const stopForAbort = (): void => {
     if (session.isStarted()) {
       stopSession();
@@ -301,8 +244,6 @@ async function openHandle(
   });
 }
 
-// A stream the session pushes into. The queue counts bytes, so its
-// desiredSize goes below zero once more than maxUnreadBytes wait unread.
 function buildOutputStream(channel: 'stdout' | 'stderr', hooks: Readonly<OutputHooks>) {
   const state: { controller: ReadableStreamDefaultController<Uint8Array> | null; open: boolean } = {
     controller: null,
@@ -353,8 +294,6 @@ function readAbortReason(abort: Readonly<AbortSignal> | undefined): Error {
 
 export type ConsoleOptions = Omit<ExecOptions, 'tty'>;
 
-// A login shell with a tty, as `impz console` opens. TERM defaults to
-// xterm-256color, what xterm.js and most terminals speak.
 export function openConsole(
   deps: Readonly<ExecDeps>,
   name: string,
@@ -373,13 +312,9 @@ export interface RunResult extends ExecExit {
 }
 
 export interface RunOptions extends Omit<ExecOptions, 'tty' | 'cols' | 'rows'> {
-  // sent, then stdin closes; without it, stdin closes at once
   readonly stdin?: string | Uint8Array;
 }
 
-// Runs a command to its exit and collects its output. Both streams drain at
-// once: a command that fills stderr while the caller waits on stdout would
-// otherwise stall.
 export async function runCommand(
   deps: Readonly<ExecDeps>,
   name: string,
@@ -388,10 +323,10 @@ export async function runCommand(
 ): Promise<RunResult> {
   const handle = await openExec(deps, name, argv, options);
 
+  // Both streams drain at once, because a command that fills stderr while
+  // the caller waits on stdout would stall.
   const output = Promise.all([readAll(handle.stdout), readAll(handle.stderr)]);
 
-  // a command that exits before it reads its stdin still returns its exit
-  // and output: `exit` reports how it ended
   if (options.stdin !== undefined) {
     await handle.write(options.stdin).catch(checkWriteFailure);
   }
@@ -403,11 +338,9 @@ export async function runCommand(
   return { ...exit, stdout, stderr };
 }
 
-// stdin goes in frames of at most this: impd, as Bun serves it, closes a
-// socket that sends one frame over 16 MiB
+// impd, as Bun serves it, closes a socket that sends one frame over 16 MiB.
 const STDIN_FRAME_BYTES = 1024 ** 2;
 
-// a write to a command that already exited, which `exit` reports instead
 function checkWriteFailure(error: unknown): void {
   if (!(error instanceof ExecError && error.code === 'CLOSED')) {
     throw error;
@@ -423,6 +356,8 @@ interface HandleParts {
   readonly streams: readonly [ReadableStream<Uint8Array>, ReadableStream<Uint8Array>];
 }
 
+// The terminal turns a typed key into a signal for the foreground job, where a
+// plain signal reaches only the shell.
 const TTY_SIGNAL_KEYS: Readonly<Record<string, string>> = { SIGINT: '\u0003', SIGQUIT: '\u001C' };
 
 function createHandle(session: ExecSession, parts: Readonly<HandleParts>): ExecHandle {
@@ -448,15 +383,11 @@ function createHandle(session: ExecSession, parts: Readonly<HandleParts>): ExecH
     return result.value;
   };
 
-  // made once, so every read of `started` and `exit` is the same promise;
-  // a caller that reads neither sees no unhandled rejection
   const startedPromise = waitForStart();
   const exitPromise = waitForExit();
 
   void waitIgnoringRejection(startedPromise);
   void waitIgnoringRejection(exitPromise);
-
-  // what ended the session, when it failed: a write after it says why
   const end: { error: Error | null } = { error: null };
 
   void (async () => {
@@ -493,12 +424,11 @@ function createHandle(session: ExecSession, parts: Readonly<HandleParts>): ExecH
     }
   };
 
-  // a key for a session that already ended goes nowhere, as a signal would
   const sendKey = async (key: string): Promise<void> => {
     try {
       await write(key);
     } catch {
-      // the session ended; `exit` reports why
+      // the exit promise reports why
     }
   };
 
@@ -508,8 +438,6 @@ function createHandle(session: ExecSession, parts: Readonly<HandleParts>): ExecH
     stderr: parts.streams[1],
     exit: exitPromise,
     write,
-
-    // stdin of a command that already exited is closed: nothing to send
     closeStdin: async () => {
       await startedPromise;
 
@@ -537,7 +465,7 @@ async function waitIgnoringRejection(promise: Promise<unknown>): Promise<void> {
   try {
     await promise;
   } catch {
-    // the caller sees the rejection where it reads the promise
+    // the caller reads the rejection itself
   }
 }
 

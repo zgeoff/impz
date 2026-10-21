@@ -16,15 +16,11 @@ import { createImpClient } from './create-imp-client';
 import { buildStubImpdBeforeBuildStream } from './test-utils/build-stub-impd-before-build-stream';
 import { startStubDockerEngine } from './test-utils/start-stub-docker-engine';
 
-// impd on stub VMs and a loopback port, building on the host engine at
-// `dockerSocket`, with `keepaliveMs` between a streamed build's progress
-// lines; `workDir` holds the test's engine, docker CLI and build contexts
 async function setupTest(options: { readonly keepaliveMs?: number } = {}) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root token, the bearer the test's client sends
   const rootToken = 'root-token';
 
   const workDir = await mkdtemp(join(tmpdir(), 'imp-client-engine-'));
@@ -33,8 +29,6 @@ async function setupTest(options: { readonly keepaliveMs?: number } = {}) {
 
   const dockerSocket = join(workDir, 'docker.sock');
 
-  // builds run on the host engine, as no builder imp has an agent here; a
-  // frozen clock, so each progress line's elapsed time is 0
   const harness = await startTestImpd(stack, {
     rootToken,
     env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: `unix://${dockerSocket}` },
@@ -56,8 +50,7 @@ test('it throws PAYLOAD_TOO_LARGE for a context over the limit impd keeps', asyn
 
   const client = createImpClient({ url: ctx.url, token: ctx.rootToken });
 
-  // a stream the caller made, so fetch keeps the declared size; it is over
-  // impd's 1 GiB default, so impd refuses the upload unread
+  // fetch keeps the declared size only for a stream the caller made.
   const context = new ReadableStream<Uint8Array>({
     start: (controller) => {
       controller.enqueue(new TextEncoder().encode('tar'));
@@ -100,7 +93,6 @@ test('it uploads a Blob as the build context and answers the image', async () =>
   await mkdir(join(ctx.workDir, 'tree'));
   await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
 
-  // the frontend is on the host, and the engine tags what it builds
   const docker = createStubDockerCli({
     directory: ctx.workDir,
     images: [
@@ -153,7 +145,6 @@ test('it uploads bytes as the build context', async () => {
   await mkdir(join(ctx.workDir, 'tree'));
   await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
 
-  // the frontend is on the host, and the engine tags what it builds
   const docker = createStubDockerCli({
     directory: ctx.workDir,
     images: [
@@ -206,7 +197,6 @@ test('it uploads a stream as the build context', async () => {
   await mkdir(join(ctx.workDir, 'tree'));
   await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
 
-  // the frontend is on the host, and the engine tags what it builds
   const docker = createStubDockerCli({
     directory: ctx.workDir,
     images: [
@@ -259,7 +249,6 @@ test('it sends the name, the Dockerfile, the token and what it accepts', async (
   await mkdir(join(ctx.workDir, 'tree'));
   await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
 
-  // the frontend is on the host, and the engine tags what it builds
   const docker = createStubDockerCli({
     directory: ctx.workDir,
     images: [
@@ -317,7 +306,6 @@ test('it sends the size of a stream as its Content-Length, which impd builds to'
   await mkdir(join(ctx.workDir, 'tree'));
   await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
 
-  // the frontend is on the host, and the engine tags what it builds
   const docker = createStubDockerCli({
     directory: ctx.workDir,
     images: [
@@ -342,7 +330,7 @@ test('it sends the size of a stream as its Content-Length, which impd builds to'
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
   const client = createImpClient({ url: ctx.url, token: ctx.rootToken });
 
-  // a stream the caller made, in two parts, so fetch keeps the declared size
+  // fetch keeps the declared size only for a stream the caller made.
   const context = new ReadableStream<Uint8Array>({
     start: (controller) => {
       controller.enqueue(tar.subarray(0, 512));
@@ -386,7 +374,6 @@ test(
     await mkdir(join(ctx.workDir, 'tree'));
     await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
 
-    // the frontend is on the host, and the engine tags what it builds
     const docker = createStubDockerCli({
       directory: ctx.workDir,
       images: [
@@ -416,7 +403,8 @@ test(
       Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout,
     );
 
-    // the client in a process of its own, as the idle deadline is read at startup
+    // Bun reads the idle deadline at startup, so the client runs in a process
+    // of its own.
     await writeFile(
       join(ctx.workDir, 'build.ts'),
       [
@@ -459,8 +447,6 @@ test(
       }
     })();
 
-    // 28 keepalives 0.5 s apart, while the engine says nothing, carry the
-    // build past the client's deadline
     await waitFor(
       () => {
         expect(output.join('')).toIncludeRepeated('"phase":"build"', 28);
@@ -496,7 +482,6 @@ test(
     await mkdir(join(ctx.workDir, 'tree'));
     await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
 
-    // the frontend is on the host, and the engine tags what it builds
     const docker = createStubDockerCli({
       directory: ctx.workDir,
       images: [
@@ -526,8 +511,8 @@ test(
       Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout,
     );
 
-    // the client in a process of its own, as the idle deadline is read at
-    // startup, through impd from before the stream, which answers JSON at the end
+    // Bun reads the idle deadline at startup, so the client runs in a process
+    // of its own.
     await writeFile(
       join(ctx.workDir, 'build.ts'),
       [
@@ -599,7 +584,6 @@ test('it reports each progress line as it arrives, before the image', async () =
   await mkdir(join(ctx.workDir, 'tree'));
   await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
 
-  // the frontend is on the host, and the engine tags what it builds
   const docker = createStubDockerCli({
     directory: ctx.workDir,
     images: [
@@ -663,7 +647,6 @@ test('it reports each progress line as it arrives, before the image', async () =
 test('it throws the ORPCError of the error line that ends the stream', async () => {
   const ctx = await setupTest();
 
-  // the frontend is on the host
   const docker = createStubDockerCli({
     directory: ctx.workDir,
     images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
@@ -703,7 +686,6 @@ test('it answers the image from an impd that answers JSON, from before the strea
   await mkdir(join(ctx.workDir, 'tree'));
   await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
 
-  // the frontend is on the host, and the engine tags what it builds
   const docker = createStubDockerCli({
     directory: ctx.workDir,
     images: [
@@ -751,7 +733,6 @@ test('it answers the image from an impd that answers JSON, from before the strea
 test('it throws the ORPCError that an impd from before the stream answers', async () => {
   const ctx = await setupTest();
 
-  // the frontend is on the host
   const docker = createStubDockerCli({
     directory: ctx.workDir,
     images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],

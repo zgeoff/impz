@@ -3,25 +3,13 @@ import type { Image, ImageBuildProgress } from '@impz/api';
 import { readBuildAnswer } from './read-build-answer';
 import { resolveImpdUrl } from './resolve-impd-url';
 
-// a tar of the build context: a file the user picked, bytes, or a stream
-// that is uploaded as it is made
 export type BuildContext = Blob | Uint8Array<ArrayBuffer> | ReadableStream<Uint8Array>;
 
 export interface BuildImageOptions {
-  // the Dockerfile's path in the context; `Dockerfile` by default
   readonly dockerfile?: string;
-
-  // the context's exact length in bytes, sent as Content-Length: impd then
-  // holds that much disk for the upload, not its whole limit
   readonly size?: number;
   readonly signal?: AbortSignal;
-
-  // each progress event impd streams: what it does, and for how long; an
-  // impd from before the stream sends none
   readonly onProgress?: (progress: ImageBuildProgress) => void;
-
-  // each line of the build's output as impd streams it, without its
-  // newline; an impd from before the log events sends none
   readonly onLog?: (line: string) => void;
 }
 
@@ -31,8 +19,6 @@ export interface BuildImageDeps {
   readonly fetch?: (request: Request) => Promise<Response>;
 }
 
-// Uploads a build context to `POST /images/build`, which builds it on the
-// impd host. A failure throws an ORPCError, as a contract call would.
 export async function runImageBuild(
   deps: Readonly<BuildImageDeps>,
   name: string,
@@ -47,7 +33,6 @@ export async function runImageBuild(
     url.searchParams.set('dockerfile', options.dockerfile);
   }
 
-  // an impd that streams answers as it builds, one that does not ignores it
   const headers: Record<string, string> = {
     'content-type': 'application/x-tar',
     accept: `${IMAGE_BUILD_STREAM_TYPE}, application/json`,
@@ -58,16 +43,15 @@ export async function runImageBuild(
   }
 
   if (options.size !== undefined) {
+    // impd reserves disk for the upload by its Content-Length, else by its whole limit.
     headers['content-length'] = String(options.size);
   }
 
-  // `duplex` is in the fetch spec, but not yet in every RequestInit type
+  // `duplex` is in the fetch spec, but not in every RequestInit type.
   const init: RequestInit & { readonly duplex: 'half' } = {
     method: 'POST',
     headers,
     body: context,
-
-    // a stream body goes out as it is read, not first into memory
     duplex: 'half',
     ...(options.signal !== undefined && { signal: options.signal }),
   };

@@ -1,16 +1,12 @@
 import { chmodSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// an image the engine has: its ID, and the files of a container made from it
 export interface StubDockerImage {
   readonly id: string;
   readonly repoDigests: readonly string[];
   readonly files: Readonly<Record<string, string>>;
 }
 
-// The docker CLI of an amd64 host engine with the Dockerfile frontend and
-// `images` by reference (run-stub-docker.sh), for impd's host builds and adds;
-// it pulls nothing, and any call it lacks fails and names itself
 export function createStubDockerBin(
   directory: string,
   images: Readonly<Record<string, StubDockerImage>>,
@@ -52,10 +48,7 @@ export function createStubDockerBin(
   chmodSync(join(bin, 'docker'), 0o755);
 
   return {
-    // put it first on PATH
     binDir: bin,
-
-    // each call's argv, oldest first
     readCalls: () =>
       readFileSync(log, 'utf8')
         .split('\n')

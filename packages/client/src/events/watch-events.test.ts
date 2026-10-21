@@ -79,7 +79,6 @@ test('it opens a fresh stream after one ends, numbering each open', async () => 
 
   const onOpen = mock<(attempt: number) => void>();
 
-  // each answer made only once asked for, so no rejection goes unhandled
   const streams = buildStubAnswerQueue([
     () => Promise.resolve(Readable.from([])),
     () => Promise.reject(new TypeError('Unable to connect')),

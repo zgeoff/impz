@@ -18,29 +18,22 @@ import { startStubImpdSocket } from '../test-utils/start-stub-impd-socket';
 import { openExecSession } from './open-exec-session';
 import type { ExecSession, ExecStarted } from './open-exec-session';
 
-// impd on stub VMs, listening on a loopback port for /exec, with the imp
-// `dev` and the stub agent on its vsock; also served at http://impd.test/
-// through the run's MSW server, so a test can answer as an older impd
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root token, the bearer the test's client sends
   const rootToken = 'root-token';
 
   const harness = await startTestImpd(stack, { rootToken });
 
   const impd = harness.impd;
-
-  // the image `dev` boots
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
 
-  // an agent with sessions, kill graces and session logs
   harness.fake.agent.version = '0.18.0';
 
   server.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
@@ -48,7 +41,6 @@ async function setupTest() {
   const url = harness.url;
   const client = createImpClient({ url, token: rootToken });
 
-  // the imp every exec runs in, and its agent
   const dev = await client.imps.create({ name: 'dev' });
 
   const agent = buildStubExecAgent();
@@ -179,7 +171,6 @@ test('it sends a resize made while the start waits on impd after the start', asy
 
   const held: { session: ExecSession | null } = { session: null };
 
-  // the resize lands after the socket opened, while impd answers the check
   server.use(
     http.post('http://impd.test/rpc/system/features', (info) => {
       const request = info.request;
@@ -195,7 +186,6 @@ test('it sends a resize made while the start waits on impd after the start', asy
     token: ctx.rootToken,
     start: { name: 'dev', argv: ['wait'], tty: false, require: ['broker'] },
 
-    // the agent records a resize only once its command started
     onStarted: () => {
       held.session?.sendSignal('SIGTERM');
     },
@@ -221,7 +211,6 @@ test('it counts stdin held while the start waits on impd toward backpressure', a
   const held: { session: ExecSession | null } = { session: null };
   const seen = { accepted: true, drainedDuringCheck: true };
 
-  // more than the high-water mark lands while impd answers the check
   server.use(
     http.post('http://impd.test/rpc/system/features', async (info) => {
       const request = info.request;
@@ -259,7 +248,6 @@ test('it counts stdin held while the start waits on impd toward backpressure', a
 });
 
 test('it reports an impd it cannot reach as unreachable', async () => {
-  // nothing listens on a free port
   const baseUrl = `http://127.0.0.1:${String(claimFreePorts(1).take())}`;
 
   const session = openExecSession({

@@ -2,7 +2,6 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 
 function setupTest() {
-  // impd's answer to any call at once, as oRPC encodes it
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',

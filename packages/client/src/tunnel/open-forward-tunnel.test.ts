@@ -19,21 +19,16 @@ import { createImpClient } from '../create-imp-client';
 import { openForwardTunnel } from './open-forward-tunnel';
 import type { ForwardTunnelEnd } from './open-forward-tunnel';
 
-// impd, booted on stand-ins and listening on a loopback port, and the root
-// token's client and config for it
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root bearer; each test's config sends it
   const rootToken = faker.string.alphanumeric(32);
 
   const harness = await startTestImpd(stack, { rootToken });
 
   const url = harness.url;
-
-  // the image a test's imp boots from, with a rootfs where its digest names
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
@@ -56,11 +51,8 @@ test('it relays bytes and the eof both ways to the port in the imp', async () =>
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent with port forwarding
   writeVmIdentity(paths, { ...identity, agentVersion: '0.18.0' });
 
-  // the guest's server answers once the request is whole, then closes
   const agent = await startStubDialAgent(paths.vsockSocket, (asked) => `got ${asked}`);
 
   onTestFinished(() => {
@@ -107,12 +99,8 @@ test('it holds bytes past the window until impd acks them', async () => {
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent with port forwarding
   writeVmIdentity(paths, { ...identity, agentVersion: '0.18.0' });
 
-  // the guest's server takes the dial, then reads nothing, so impd holds
-  // its acks once the agent's socket is full
   const agent = await startStubAgent(paths.vsockSocket, (socket) => {
     socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
     socket.pause();
@@ -146,7 +134,6 @@ test('it holds bytes past the window until impd acks them', async () => {
 
   expect(isAccepted).toBeFalse();
 
-  // past the window by one frame at most, as impd allows
   await waitFor(() => {
     expect(tunnel.countUnackedBytes()).toBeGreaterThan(TUNNEL_WINDOW_BYTES);
   });
@@ -164,11 +151,8 @@ test('it ends as failed with impd’s code when the dial in the imp fails', asyn
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent with port forwarding
   writeVmIdentity(paths, { ...identity, agentVersion: '0.18.0' });
 
-  // the agent cannot connect to the port in the guest
   const agent = await startStubAgent(paths.vsockSocket, (socket) => {
     socket.end(
       encodeJsonFrame(FRAME_TYPES.response, {
@@ -214,7 +198,6 @@ test('it ends as failed with impd’s code when the dial in the imp fails', asyn
 test('it ends as unreachable when nothing answers at impd’s address', async () => {
   const ended = Promise.withResolvers<ForwardTunnelEnd>();
 
-  // nothing listens on a free port
   const tunnel = openForwardTunnel({
     baseUrl: `http://127.0.0.1:${String(claimFreePorts(1).take())}`,
     token: 'root-token',

@@ -7,7 +7,6 @@ export type ImpdFeatures = SystemFeaturesInfo['features'];
 
 export type ImpdFeature = keyof ImpdFeatures;
 
-// what an impd without each feature is, after "this impd"
 const FEATURE_GAPS = {
   sessionOffsets: 'has no session offsets',
   leases: 'has no leases',
@@ -34,7 +33,6 @@ const FEATURE_GAPS = {
   guestScratch: 'does not name the guest scratch folder',
 } as const satisfies Record<ImpdFeature, string>;
 
-// the feature calls of a client: any client of impd passes
 export interface FeatureSource {
   readonly system: {
     readonly features: (input?: undefined, options?: CallOptions) => Promise<SystemFeaturesInfo>;
@@ -42,18 +40,13 @@ export interface FeatureSource {
   };
 }
 
-// each feature a call relies on, with what an impd without it would do
-// instead, such as `drop --grantable and make the token without that limit`
 export type FeatureNeeds = Partial<Readonly<Record<ImpdFeature, string>>>;
 
-// impd lacks a feature the call relies on; nothing was sent
 export class MissingFeatureError extends Error {
   override name = 'MissingFeatureError';
 
   readonly feature: ImpdFeature;
 
-  // what this impd is, such as `is older than 0.30.0`, and what it would
-  // do with the call
   readonly gap: string;
 
   readonly outcome: string;
@@ -67,9 +60,6 @@ export class MissingFeatureError extends Error {
   }
 }
 
-// An impd drops input fields it does not know, so a call that relies on a
-// newer one asks first. One read covers every need, an empty `needs` reads
-// nothing, and the first need missing throws a MissingFeatureError.
 export async function requireFeatures(
   client: FeatureSource,
   needs: FeatureNeeds,
@@ -88,14 +78,12 @@ export async function requireFeatures(
   }
 }
 
-// impd's feature flags, from system.features; an impd older than it
-// answers NOT_FOUND, and its system.info carries them, or none at all
 export async function readFeatures(
   client: FeatureSource,
   options: CallOptions = {},
 ): Promise<Partial<ImpdFeatures>> {
   try {
-    // the client does not check answers; one with no flags has none on
+    // The client does not check answers, and one with no flags has none on.
     const answer: Partial<SystemFeaturesInfo> = await client.system.features(undefined, options);
 
     return answer.features ?? {};
@@ -105,13 +93,12 @@ export async function readFeatures(
     }
   }
 
+  // An impd without the features call carries the flags in its info, or none.
   const info = await client.system.info(undefined, options);
 
   return info.features ?? {};
 }
 
-// the features of `wanted` a system.info answer lacks, for a caller that
-// read it anyway
 export function collectMissingFeatures(
   info: Pick<SystemInfo, 'features'>,
   wanted: readonly ImpdFeature[],
@@ -119,8 +106,6 @@ export function collectMissingFeatures(
   return wanted.filter((feature) => info.features?.[feature] !== true);
 }
 
-// impd's own plain-text 404 for a path no procedure matches, or the
-// NOT_FOUND an oRPC router sends for one
 function isMissingProcedure(error: unknown): boolean {
   return (
     error instanceof UnknownProcedureError || (error instanceof ORPCError && error.status === 404)

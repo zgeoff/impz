@@ -28,21 +28,16 @@ import { createImpClient } from '../create-imp-client';
 import { buildStubExecPeer } from '../test-utils/build-stub-exec-peer';
 import { openToolExec } from './open-tool-exec';
 
-// impd, booted on stand-ins and listening on a loopback port, and the root
-// token's client and config for it
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root bearer; each test's config sends it
   const rootToken = faker.string.alphanumeric(32);
 
   const harness = await startTestImpd(stack, { rootToken });
 
   const url = harness.url;
-
-  // the image a test's imp boots from, with a rootfs where its digest names
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
@@ -65,8 +60,6 @@ test('it sends an archive whole through impd to the imp’s tool and returns its
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent with impz cp
   writeVmIdentity(paths, { ...identity, agentVersion: '0.18.0' });
 
   const archive = tar.extract();
@@ -154,7 +147,6 @@ test('it rejects with impd’s code and message when impd refuses the exec', asy
 
   await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  // the stub VMM records an agent from before impz cp
   const opening = openToolExec({
     baseUrl: ctx.baseUrl,
     token: ctx.token,
@@ -172,8 +164,6 @@ test('it rejects with impd’s code and message when impd refuses the exec', asy
   );
 });
 
-// on the exec peer: a real impd withholds stdin acks only while the agent's
-// socket is backed up, and how many bytes that takes is not fixed
 test('it holds stdin at the window when impd withholds its acks', async () => {
   const peer = buildStubExecPeer((link, message) => {
     if (message.type === 'start') {
@@ -194,7 +184,6 @@ test('it holds stdin at the window when impd withholds its acks', async () => {
 
   onTestFinished(exec.close);
 
-  // a window and two frames: the last frame needs an ack to go
   const writing = exec.writeStdin(
     new Uint8Array(EXEC_STDIN_WINDOW_BYTES + 2 * EXEC_MAX_STDIN_FRAME_BYTES),
   );
@@ -212,8 +201,6 @@ test('it holds stdin at the window when impd withholds its acks', async () => {
   ).toSatisfyAll((bytes: number) => bytes <= EXEC_MAX_STDIN_FRAME_BYTES);
 });
 
-// on the exec peer: the frames impd forwards in one write, and so the acks
-// in flight, depend on the socket's timing
 test('it holds its stdout ack while the caller is still writing the output', async () => {
   const peer = buildStubExecPeer((link, message) => {
     if (message.type === 'start') {
@@ -263,12 +250,8 @@ test('it acks a tool’s stdout to impd so a download past the window completes'
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent with impz cp
   writeVmIdentity(paths, { ...identity, agentVersion: '0.18.0' });
 
-  // three 512 KiB frames: past impd's 1 MiB window, so the exit reaches the
-  // client only after its acks reached impd
   const frame = new Uint8Array(512 * 1024).fill(7);
 
   await startStubAgent(paths.vsockSocket, (socket, _request, frames) => {
@@ -357,8 +340,6 @@ test('it rejects with impd’s message when the imp’s agent drops the exec aft
   const identity = readVmIdentity(paths);
 
   invariant(identity);
-
-  // an agent with impz cp
   writeVmIdentity(paths, { ...identity, agentVersion: '0.18.0' });
 
   await startStubAgent(paths.vsockSocket, (socket, _request, frames) => {

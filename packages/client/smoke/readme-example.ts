@@ -1,9 +1,6 @@
 import { ExecError, createImpClient, isDefinedError, safe } from '@impz/client';
 import type { Imp } from '@impz/client';
 
-// The README's examples, which scripts/release/check-client-package.sh checks
-// in a strict project against the published declarations only. It is never
-// run.
 const imp = createImpClient({ url: 'http://localhost:7070', token: 'token' });
 
 export async function runReadmeExample(): Promise<Imp> {

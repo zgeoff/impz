@@ -176,7 +176,6 @@ test('#backups.run hands on the answer that comes before its deadline, and stops
 
   const control = new AbortController();
 
-  // the control's end lets the origin answer
   const controlCall = fetch(`${ctx.origin.origin}/rpc/imps/list`, {
     method: 'POST',
     body: '{}',
@@ -191,7 +190,6 @@ test('#backups.run hands on the answer that comes before its deadline, and stops
 
   await Promise.allSettled([controlCall]);
 
-  // the stand-in's answer, not a run's shape
   const answer: unknown = await call;
 
   expect(answer).toStrictEqual({ ok: true });
@@ -317,7 +315,6 @@ test('#backups.run gets an answer that stays silent past Bun’s idle limit, whe
     },
   );
 
-  // the child goes first, before the origin it calls
   ctx.stack.defer(() => {
     child.kill();
   });

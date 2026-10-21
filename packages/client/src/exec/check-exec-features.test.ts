@@ -6,14 +6,11 @@ import { createRpcClient } from '../create-rpc-client';
 import { makeStubImpdWithoutFeature } from '../test-utils/make-stub-impd-without-feature';
 import { checkExecFeatures } from './check-exec-features';
 
-// impd booted in process on stub VMs, served at http://impd.test/ through
-// the run's MSW server
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root token, the bearer the test's client sends
   const rootToken = 'root-token';
 
   const harness = await startTestImpd(stack, { rootToken });
@@ -147,7 +144,6 @@ test('it refuses an impd that cannot drop CAP_SYS_ADMIN as PRECONDITION_FAILED',
 });
 
 test('it reports an impd it cannot reach as unreachable', async () => {
-  // nothing listens on a free port
   const rpc = createRpcClient({
     url: `http://127.0.0.1:${String(claimFreePorts(1).take())}`,
     token: 'root-token',
@@ -162,7 +158,6 @@ test('it reports an impd it cannot reach as unreachable', async () => {
 });
 
 test('it refuses a start when impd fails the check', async () => {
-  // a proxy in front of impd answers while impd is down
   server.use(
     http.post(
       'http://impd.test/rpc/system/features',
@@ -182,7 +177,6 @@ test('it refuses a start when impd fails the check', async () => {
 });
 
 test('it refuses a start when impd answers the check with no feature flags', async () => {
-  // a features answer without its flags, which no impd sends
   server.use(
     http.post('http://impd.test/rpc/system/features', () =>
       HttpResponse.json({ json: { version: '0.40.1' } }),

@@ -1,8 +1,5 @@
 import { IMAGE_BUILD_PATH } from '@impz/api';
 
-// impd from before the build stream in front of a real impd's `handle`: it
-// reads no Accept header on `POST /images/build`, so the real one answers
-// JSON; every other call passes through unchanged
 export function buildStubImpdBeforeBuildStream(
   handle: (request: Request) => Promise<Response>,
 ): (request: Request) => Promise<Response> {
@@ -15,7 +12,7 @@ export function buildStubImpdBeforeBuildStream(
 
     headers.delete('accept');
 
-    // `duplex` is in the fetch spec, but not yet in every RequestInit type
+    // `duplex` is in the fetch spec, but not in every RequestInit type.
     const init: RequestInit & { readonly duplex: 'half' } = {
       method: request.method,
       headers,

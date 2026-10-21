@@ -15,20 +15,11 @@ import tar from 'tar-stream';
 import type { Header } from 'tar-stream';
 import * as z from 'zod';
 
-// Extracts the tar `imp-agent tar create` sends into dest. The archive comes
-// from the imp, which this machine does not trust: the rules, in order, are
-// in docs/guides/cp.md.
 export interface LocalExtractor {
-  // resolves once the extract took the chunk: at once while it keeps up,
-  // else when it drains
   readonly write: (chunk: Uint8Array) => Promise<void>;
-
-  // ends the archive; resolves with the count of refused entries
   readonly end: () => Promise<number>;
 }
 
-// how far the extract is: the bytes of file content taken, of the total the
-// archive's first entry gives
 export interface ExtractProgress {
   readonly setTotal: (bytes: number) => void;
   readonly add: (bytes: number) => void;
@@ -51,7 +42,6 @@ interface CopyRoot {
   readonly top: string;
 }
 
-// a finished extract: the refused entries, or why it could not run
 type ExtractOutcome = { readonly refused: number } | { readonly error: Error };
 
 class RefusedError extends Error {
@@ -62,8 +52,6 @@ export function createLocalExtractor(
   destination: string,
   progress: ExtractProgress,
   warn: (text: string) => void,
-
-  // the PAX record on the first entry that holds the archive's total bytes
   totalRecord: string,
 ): LocalExtractor {
   const extract = tar.extract();
@@ -78,7 +66,6 @@ export function createLocalExtractor(
     stopped: false,
   };
 
-  // writes that wait for the extract to drain, woken too when it stops
   const drainWaiters: (() => void)[] = [];
 
   const wakeDrainWaiters = (): void => {
@@ -87,7 +74,7 @@ export function createLocalExtractor(
     }
   };
 
-  // an extract that stopped early (its error comes from end) takes no more
+  // An error event with no listener throws; end reports the error instead.
   extract.on('error', () => {});
   extract.on('drain', wakeDrainWaiters);
   extract.on('close', wakeDrainWaiters);
@@ -217,7 +204,7 @@ export function createLocalExtractor(
     }
   };
 
-  // deepest first, so a child's change does not move its parent's time
+  // Deepest first, so a change inside a child does not move its parent's time.
   const applyDirModes = async (): Promise<void> => {
     const sorted = dirs.toSorted(
       (left, right) => right.path.split('/').length - left.path.split('/').length,
@@ -248,7 +235,6 @@ export function createLocalExtractor(
       try {
         await writeEntry(header, entry);
       } catch (error) {
-        // the copy's own root is the one failure that ends it
         if (state.root === null) {
           throw error;
         }
@@ -282,8 +268,6 @@ export function createLocalExtractor(
     return state.refused;
   };
 
-  // never rejects, so an extract that fails before end() is no unhandled
-  // rejection; end() throws its error instead
   const runExtract = async (): Promise<ExtractOutcome> => {
     try {
       const refused = await readEntries();
@@ -324,7 +308,7 @@ export function createLocalExtractor(
   };
 }
 
-// as cp -r: into dest/<top> when dest is a directory, else as dest
+// Matches cp -r.
 async function resolveCopyRoot(destination: string, top: string): Promise<CopyRoot> {
   const destStats = await stat(destination).catch(() => null);
 
@@ -345,13 +329,10 @@ function readErrorCode(error: unknown): string | null {
     : null;
 }
 
-// keeps the permission and sticky bits, not setuid or setgid
 function toSafeMode(mode: number): number {
   return mode & 0o1777;
 }
 
-// name's top component and the rest, or a refusal for a name that could
-// leave the copy
 function splitEntryName(name: string): readonly [string, string] {
   if (name.startsWith('/')) {
     throw new RefusedError('an absolute name');
@@ -372,7 +353,6 @@ function splitEntryName(name: string): readonly [string, string] {
   return [top, rest.join('/')];
 }
 
-// every directory from root down to path's parent must be a real one
 async function checkParents(root: string, path: string): Promise<void> {
   const below = path
     .slice(root.length)

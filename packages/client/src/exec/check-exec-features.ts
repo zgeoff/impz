@@ -5,9 +5,6 @@ import type { ExecOutcome } from './open-exec-session';
 
 const CHECK_TIMEOUT_MS = 5000;
 
-// An older impd drops a start field it does not know and runs the command
-// anyway, so a start that sets one asks impd first. Null when impd has every
-// feature; otherwise the outcome that ends the session unstarted.
 export async function checkExecFeatures(
   rpc: FeatureSource,
   needs: FeatureNeeds,
@@ -33,8 +30,8 @@ function buildRefusal(error: unknown): ExecOutcome {
     };
   }
 
-  // any answer from impd, or from a proxy in front of it, is an ORPCError;
-  // no answer is a TypeError or a timeout
+  // Any answer from impd, or from a proxy in front of it, is an ORPCError;
+  // no answer is a TypeError or a timeout.
   if (error instanceof ORPCError && error.status === 401) {
     return { kind: 'unauthorized' };
   }

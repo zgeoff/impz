@@ -11,47 +11,30 @@ import { P, match } from 'ts-pattern';
 import { resolveImpdWebSocketUrl } from '../resolve-impd-web-socket-url';
 import { parseTunnelServerMessage } from './parse-tunnel-server-message';
 
-// Where a reverse forward listens in the imp: a unix socket at a path (null
-// for one the agent makes under /run/imp/forward), or a port on the imp's
-// 127.0.0.1, where 0 takes any free port.
 export type ReverseGuest =
   | { readonly network: 'unix'; readonly path: Exclude<TunnelListen['path'], undefined> }
   | { readonly network: 'tcp'; readonly port: Exclude<TunnelListen['port'], undefined> };
 
-// where it listens: the socket path, or the port
 export interface ReverseListening {
   readonly path: string | null;
   readonly port: number | null;
 }
 
-// How a forward ended. `lost`: its listener in the imp ended, as after a
-// forced sleep; listen again once the imp runs.
 export type ReverseForwardEnd =
   | { readonly kind: 'stopped' }
   | { readonly kind: 'lost' }
   | { readonly kind: 'failed'; readonly code: string | null; readonly message: string }
   | { readonly kind: 'closed'; readonly code: number; readonly reason: string };
 
-// What the caller does with one client of the forward: the local side.
 export interface ReverseRelayHandlers {
-  // bytes from the client in the imp; the relay acks them once this settles
   readonly onData: (data: Uint8Array) => Promise<void> | void;
-
-  // the client in the imp closed its side
   readonly onEof: () => void;
-
-  // the relay ended; `lost` when it ended without both sides done
   readonly onClose: (lost: boolean) => void;
 }
 
-// One client of the forward, over its own `/tunnel` socket.
 export interface ReverseRelay {
-  // bytes to the client in the imp; false once more than the window waits
-  // for impd's acks: wait for room first
   readonly send: (data: Uint8Array) => boolean;
   readonly waitForRoom: () => Promise<void>;
-
-  // the local side closed its write side
   readonly sendEof: () => void;
   readonly close: () => void;
 }
@@ -61,20 +44,13 @@ export interface ReverseForwardOptions {
   readonly token: string | null;
   readonly name: string;
   readonly guest: ReverseGuest;
-
-  // the runtime that opens the sockets is the caller's choice
   readonly connect: (url: string, headers: Readonly<Record<string, string>>) => WebSocket;
-
-  // a client in the imp waits: `accept` relays it with the caller's handlers
   readonly onConnection: (accept: (handlers: ReverseRelayHandlers) => ReverseRelay) => void;
 }
 
 export interface ReverseForward {
-  // where it listens; rejects when impd refused the forward
   readonly listening: Promise<ReverseListening>;
   readonly ended: Promise<ReverseForwardEnd>;
-
-  // ends the forward and every relay
   readonly stop: () => void;
 }
 
@@ -84,9 +60,6 @@ interface SocketTarget {
   readonly connect: ReverseForwardOptions['connect'];
 }
 
-// A reverse forward over `/tunnel` (packages/api tunnel-protocol), with
-// `exec` on the imp. Alone it keeps the imp awake no more than open relays
-// do, and a sleep ends it as `lost` (docs/guides/reverse-forwards.md).
 export function openReverseForward(options: Readonly<ReverseForwardOptions>): ReverseForward {
   const url = resolveImpdWebSocketUrl(options.baseUrl, TUNNEL_PATH);
 
@@ -102,13 +75,11 @@ export function openReverseForward(options: Readonly<ReverseForwardOptions>): Re
 
   const state = { listener: '', done: false };
 
-  // a forward that ends before it listens rejects `listening` too; a caller
-  // that awaits only `ended` must not see an unhandled rejection
   const waitForListening = async (): Promise<void> => {
     try {
       await listening.promise;
     } catch {
-      // `ended` says why
+      // the end says why
     }
   };
 
@@ -167,8 +138,6 @@ export function openReverseForward(options: Readonly<ReverseForwardOptions>): Re
       .with({ type: 'error' }, (failure) => {
         stopForward({ kind: 'failed', code: failure.code ?? null, message: failure.message });
       })
-
-      // messages only a relay socket gets
       .with({ type: P.union('opened', 'eof', 'ack') }, () => {
         ws.close(TUNNEL_CLOSE_PROTOCOL, 'bad message');
       })
@@ -215,8 +184,6 @@ export function openReverseForward(options: Readonly<ReverseForwardOptions>): Re
   };
 }
 
-// One relay: `accept` on its own socket, then bytes both ways under the
-// tunnel window (packages/api tunnel-protocol).
 function openRelay(
   target: SocketTarget,
   accept: TunnelClientMessage,
@@ -290,8 +257,6 @@ function openRelay(
           wakeWaiters();
         }
       })
-
-      // an error, or a message only the listening socket gets
       .with({ type: P.union('error', 'listening', 'connection') }, () => {
         ws.close(TUNNEL_CLOSE_NORMAL, 'relay failed');
 
@@ -326,7 +291,7 @@ function openRelay(
     stopRelay(event.code !== TUNNEL_CLOSE_NORMAL);
   });
 
-  // the error event carries no detail; close follows it
+  // The error event carries no detail, and a close event follows it.
   ws.addEventListener('error', () => {});
 
   return {

@@ -1,5 +1,3 @@
-// impd's codes come through as they are (NOT_FOUND, RAM_BUDGET_EXCEEDED,
-// FORBIDDEN, EXEC_FAILED, …); the rest name what went wrong on the way
 export type ExecClientErrorCode =
   | 'UNAUTHORIZED'
   | 'UNREACHABLE'
@@ -11,8 +9,6 @@ export type ExecClientErrorCode =
   | 'OUTPUT_OVERFLOW'
   | 'LOCAL_ERROR';
 
-// An exec that did not run to its exit. `data` is the error's data from
-// impd, as over RPC: the budget numbers of RAM_BUDGET_EXCEEDED, for one.
 export class ExecError extends Error {
   readonly code: string;
 

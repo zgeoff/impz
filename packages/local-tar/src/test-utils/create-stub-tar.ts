@@ -1,14 +1,11 @@
 import tar from 'tar-stream';
 import type { Header } from 'tar-stream';
 
-// One entry of a stub tar: its header, and the text a file holds.
 export type StubTarEntry = Partial<Header> & {
   readonly name: string;
   readonly content?: string;
 };
 
-// The bytes of a tar holding these entries in order, as tar-stream packs
-// them; a header field left out takes tar-stream's default.
 export async function createStubTar(entries: readonly StubTarEntry[]): Promise<Uint8Array> {
   const pack = tar.pack();
 

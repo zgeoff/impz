@@ -25,29 +25,22 @@ import { InvalidResumeError } from './invalid-resume-error';
 import { InvalidStateError } from './invalid-state-error';
 import { NoSessionError } from './no-session-error';
 
-// impd on stub VMs, listening on a loopback port for /exec, with the imp
-// `dev` and the stub agent on its vsock; also served at http://impd.test/
-// through the run's MSW server, so a test can answer as an older impd
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root token, the bearer the test's client sends
   const rootToken = 'root-token';
 
   const harness = await startTestImpd(stack, { rootToken });
 
   const impd = harness.impd;
-
-  // the image `dev` boots
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
 
-  // an agent with sessions, kill graces and session logs
   harness.fake.agent.version = '0.18.0';
 
   server.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
@@ -55,7 +48,6 @@ async function setupTest() {
   const url = harness.url;
   const client = createImpClient({ url, token: rootToken });
 
-  // the imp every exec runs in, and its agent
   const dev = await client.imps.create({ name: 'dev' });
 
   const agent = buildStubExecAgent();
@@ -104,7 +96,7 @@ test('#runCommand drains both streams at once', async () => {
 test('#runCommand sends a stdin over 16 MiB in frames impd takes', async () => {
   const ctx = await setupTest();
 
-  // impd, as Bun serves it, closes a socket that sends one frame over 16 MiB
+  // impd, as Bun serves it, closes a socket that sends one frame over 16 MiB.
   const stdin = 'a'.repeat(17 * 1024 ** 2);
 
   const result = await ctx.client.run('dev', ['cat'], { stdin });
@@ -113,7 +105,6 @@ test('#runCommand sends a stdin over 16 MiB in frames impd takes', async () => {
   expect(result.stdout).toHaveLength(stdin.length);
 });
 
-// a fast command over a slow link: its exit can arrive with its start
 test('#runCommand returns the exit and output of a command that exits as it starts', async () => {
   const ctx = await setupTest();
   const result = await ctx.client.run('dev', ['fail'], { stdin: 'unread' });
@@ -138,7 +129,6 @@ test('#runCommand rejects with the agent code of a command that cannot start', a
 test('#runCommand rejects with NOT_FOUND for an imp that does not exist', async () => {
   const ctx = await setupTest();
 
-  // the ticket is refused before any socket opens
   const running = ctx.client.run('ghost', ['cat']);
 
   expect(running).rejects.toBeInstanceOf(ORPCError);
@@ -444,7 +434,6 @@ test('#openExec starts nothing that drops CAP_SYS_ADMIN on an impd without execD
   expect(ctx.agent.requests).toStrictEqual([]);
 });
 
-// the imp's agent is 0.18.0, which would ignore the field, so impd refuses
 test('#openExec hands a start that drops CAP_SYS_ADMIN to impd, which refuses an older agent', async () => {
   const ctx = await setupTest();
   const handle = await ctx.client.openExec('dev', ['tick'], { dropSysAdmin: true });

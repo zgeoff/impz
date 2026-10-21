@@ -2,34 +2,24 @@ import { ExecClientMessageSchema, decodeExecFrame, encodeExecFrame } from '@impz
 import type { ExecClientMessage, ExecServerMessage } from '@impz/api';
 import type { ExecSocket } from '../exec/open-exec-session';
 
-// what the client sent: a control message as the protocol parses it, or a
-// stdin frame as text and its byte count
 export type StubExecReceived =
   | ExecClientMessage
   | { readonly type: 'stdin'; readonly text: string; readonly bytes: number };
 
 interface StubExecLink {
   readonly send: (message: ExecServerMessage) => void;
-
-  // any text, so a test can send one the protocol has no schema for
   readonly sendText: (text: string) => void;
-
-  // any channel byte, so a test can send one the protocol does not use
   readonly sendFrame: (channel: number, text: string) => void;
   readonly close: (code: number, reason: string) => void;
 }
 
 export type StubExecHandler = (link: StubExecLink, message: StubExecReceived) => void;
 
-// The `/exec` end of the protocol on literal frames, with no socket and no
-// impd, for frames a real impd never sends. `received` holds what the
-// client sent; `closed` resolves once the client closed a socket.
 export function buildStubExecPeer(onMessage: StubExecHandler = () => {}) {
   const received: StubExecReceived[] = [];
   const urls: string[] = [];
   const closed = Promise.withResolvers<void>();
 
-  // each call opens a new in-memory socket, as a reattach does
   const openSocket = (url: string): ExecSocket => {
     const target = new EventTarget();
 
@@ -37,7 +27,7 @@ export function buildStubExecPeer(onMessage: StubExecHandler = () => {}) {
 
     urls.push(url);
 
-    // events reach the client later, in order, as a real socket's do
+    // Events reach the client later, in order, as a real socket's do.
     const sendEvent = (buildEvent: () => Event): void => {
       queueMicrotask(() => {
         target.dispatchEvent(buildEvent());

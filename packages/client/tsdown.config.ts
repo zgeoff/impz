@@ -1,8 +1,7 @@
 import { defineConfig } from 'tsdown';
 
-// One ESM bundle and one .d.ts for browsers, Bun and Node. @impz/api and
-// @impz/shared are private, so their code and their types go into the bundle;
-// the dependencies stay external.
+// @impz/api and @impz/shared are private, so their code and their types go
+// into the bundle.
 export default defineConfig({
   entry: ['src/index.ts'],
   format: 'esm',

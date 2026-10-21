@@ -34,7 +34,6 @@ test('it keeps modes and symlinks and reads the total from the first entry', asy
     { name: 'proj/link', type: 'symlink', linkname: 'run' },
   ]);
 
-  // in two chunks, as it arrives from the imp
   const extractor = createLocalExtractor(destination, progress, warn, 'IMP.total');
 
   await extractor.write(archive.subarray(0, 700));

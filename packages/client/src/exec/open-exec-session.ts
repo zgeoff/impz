@@ -23,36 +23,20 @@ import { resolveImpdWebSocketUrl } from '../resolve-impd-web-socket-url';
 import { checkExecFeatures } from './check-exec-features';
 import { checkImpdAccess } from './check-impd-access';
 
-// a command to start: the start message without the tool and outer fields,
-// which only impd's own clients send. A session start needs a tty, and only
-// a session takes resumeFrom or log.
 export type ExecStart = ReadonlyFields<
   Omit<z.input<typeof ExecStartMessageSchema>, 'type' | 'tool' | 'outer'>
 >;
 
-// attaches to a session that runs: its replay, then live output
 export type ExecAttach = ReadonlyFields<Omit<z.input<typeof ExecAttachMessageSchema>, 'type'>>;
 
-// session is null for a plain exec; created is false for an attach to a
-// session that already ran
 export interface ExecStarted {
   readonly pid: number;
   readonly session: string | null;
   readonly created: boolean;
-
-  // with killGraceMs: the agent kills what is left of the process group
-  // after a stop signal, and the exit arrives only once it is gone. False
-  // without killGraceMs, or for an imp whose agent predates it.
   readonly groupKill: boolean;
-
-  // where a session's data starts in its output; `none` for a plain exec,
-  // an imp whose agent predates offsets, or an impd from before them
   readonly output: SessionOutput;
 }
 
-// How a session ended. Only `exit` means the command ran to the end; its
-// code is null when a signal ended the process. offset, on an exit or a
-// detach of a session with offsets, is the offset after the last byte got.
 export type ExecOutcome =
   | {
       readonly kind: 'exit';
@@ -60,31 +44,19 @@ export type ExecOutcome =
       readonly signal: string | null;
       readonly offset?: number;
     }
-
-  // impd refused the command: an unknown imp, no RAM budget, EXEC_FAILED, …
   | {
       readonly kind: 'failed';
       readonly code: string | null;
       readonly message: string;
       readonly data?: unknown;
     }
-
-  // ticketRefused: the token is fine, so impd refused the exec ticket
   | { readonly kind: 'unauthorized'; readonly ticketRefused?: boolean }
   | { readonly kind: 'unreachable'; readonly detail: string }
-
-  // impd ended a session socket; the session runs on (DetachReason)
   | { readonly kind: 'detached'; readonly reason: DetachReason; readonly offset?: number }
-
-  // the connection dropped after the open, without an exit
-  // closeCode 1012 (EXEC_CLOSE_RESTARTING) means impd is restarting
   | { readonly kind: 'closed'; readonly reason: string; readonly closeCode?: number }
   | { readonly kind: 'bad_message'; readonly detail: string }
-
-  // a callback threw, such as EPIPE on stdout
   | { readonly kind: 'local_error'; readonly error: unknown };
 
-// the part of a WebSocket a session uses, so impd can bridge one in process
 export type ExecSocket = Pick<
   WebSocket,
   'binaryType' | 'readyState' | 'bufferedAmount' | 'send' | 'close' | 'addEventListener'
@@ -93,40 +65,30 @@ export type ExecSocket = Pick<
 export interface ExecSessionOptions {
   readonly baseUrl: string;
   readonly token: string | null;
-
-  // from `exec.ticket`, for a socket that cannot send the bearer header
   readonly ticket?: string;
   readonly start: ExecStart | ExecAttach;
   readonly onStarted: (started: ExecStarted) => void;
   readonly onOutput: (channel: 'stdout' | 'stderr', data: Uint8Array) => void;
 
-  // a browser WebSocket takes no headers (it uses an exec ticket), so the
-  // runtime that opens the socket is the caller's choice
+  // A browser WebSocket takes no headers and authenticates with the exec
+  // ticket, so the caller picks the runtime that opens the socket.
   readonly connect: (url: string, headers: Readonly<Record<string, string>>) => ExecSocket;
-
-  // for the feature check before a start, and the check that tells a
-  // rejected token from an unreachable impd
   readonly fetch?: (request: Request) => Promise<Response>;
 }
 
 export interface ExecSession {
   readonly outcome: Promise<ExecOutcome>;
   readonly isStarted: () => boolean;
-
-  // false once the socket buffers more than it should: wait for drain first
   readonly sendStdin: (data: Uint8Array) => boolean;
   readonly waitForDrain: () => Promise<void>;
   readonly closeStdin: () => void;
   readonly resize: (cols: number, rows: number) => void;
   readonly sendSignal: (signal: string) => void;
-
-  // closes the socket, and impd then stops the process; `outcome` never
-  // settles after this, so the caller picks its own exit code
   readonly stop: () => void;
 }
 
-// impd waits for `start` before it wakes the imp, so the open is quick; the
-// start itself can take a cold boot, and impd bounds that on its side
+// impd waits for the start message before it wakes the imp, so the open is
+// quick; impd bounds the cold boot that the start can take on its side.
 const OPEN_TIMEOUT_MS = 10_000;
 const DRAIN_POLL_MS = 50;
 
@@ -134,9 +96,6 @@ class BadMessageError extends Error {
   override name = 'BadMessageError';
 }
 
-// One command over the `/exec` WebSocket (packages/api exec-protocol), with
-// no stdio and nothing Bun-only: the caller wires the socket, output, stdin
-// and signals, and maps the outcome to messages and an exit code.
 export function openExecSession(options: Readonly<ExecSessionOptions>): ExecSession {
   const url = resolveImpdWebSocketUrl(options.baseUrl, EXEC_PATH);
 
@@ -149,7 +108,6 @@ export function openExecSession(options: Readonly<ExecSessionOptions>): ExecSess
 
   const ws = options.connect(url.href, headers);
 
-  // asks impd what it can do, and why it refused an upgrade
   const rpc = createRpcClient({
     url: options.baseUrl,
     token: options.token,
@@ -159,12 +117,9 @@ export function openExecSession(options: Readonly<ExecSessionOptions>): ExecSess
   const outcome = Promise.withResolvers<ExecOutcome>();
   const state = { opened: false, sentOpen: false, started: false, finished: false, refused: false };
 
-  // what the caller sent after the socket opened and before the open
-  // message went, as while a start that requires anything waits on impd:
-  // impd refuses a resize, a signal or stdin before the start
+  // impd refuses a resize, a signal or stdin that arrives before the start
+  // message, so they wait here until it goes.
   const held: (string | Uint8Array<ArrayBuffer>)[] = [];
-
-  // held bytes count toward backpressure like the socket's own buffer
   let heldBytes = 0;
   const countQueuedBytes = (): number => ws.bufferedAmount + heldBytes;
 
@@ -248,7 +203,6 @@ export function openExecSession(options: Readonly<ExecSessionOptions>): ExecSess
 
     match(message)
       .with({ type: 'started' }, (start) => {
-        // a repeat would start stdin twice
         if (state.started) {
           return;
         }
@@ -279,7 +233,7 @@ export function openExecSession(options: Readonly<ExecSessionOptions>): ExecSess
         });
       })
 
-      // only a tool exec gets acks (openToolExec)
+      // impd acks stdin only for a tool exec.
       .with({ type: 'stdin_ack' }, () => {})
       .with({ type: 'error' }, (failure) => {
         resolveOutcome({
@@ -292,8 +246,8 @@ export function openExecSession(options: Readonly<ExecSessionOptions>): ExecSess
       .exhaustive();
   };
 
-  // a start that requires anything, or drops CAP_SYS_ADMIN, waits for impd
-  // to say it reads the field
+  // An impd that does not read the require or dropSysAdmin field would run
+  // the command without it, so such a start waits for the feature check.
   const sendOpen = async (): Promise<void> => {
     const start = options.start;
 
@@ -336,8 +290,6 @@ export function openExecSession(options: Readonly<ExecSessionOptions>): ExecSess
     void sendOpen();
   });
 
-  // a throw here would escape to the event loop and leave the session (and
-  // a raw terminal) hanging, so every failure ends the session instead
   ws.addEventListener('message', (event) => {
     if (state.finished) {
       return;
@@ -359,9 +311,9 @@ export function openExecSession(options: Readonly<ExecSessionOptions>): ExecSess
     }
   });
 
-  // Bun reports a refused upgrade (a 401 among others) as an error and a
-  // close with no HTTP status, and Node's undici as an error alone, so the
-  // first of either before `open` asks impd why
+  // Bun reports a refused upgrade, such as a 401, as an error and a close
+  // with no HTTP status, and Node's undici as an error alone, so the first of
+  // either before the open asks impd why.
   const resolveRefusal = async (reason: string): Promise<void> => {
     if (state.refused) {
       return;

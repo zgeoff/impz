@@ -16,7 +16,6 @@ import {
   buildStubExecAgent,
 } from './build-stub-exec-agent';
 
-// the stub on a socket in a temp dir, as impd's agent client reaches it
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 

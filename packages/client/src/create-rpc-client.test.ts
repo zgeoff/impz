@@ -39,7 +39,6 @@ test('it sends no authorization header without a token', async () => {
 });
 
 test('it rejects a plain-text error answer as an ORPCError with its status', () => {
-  // a proxy in front of impd answers while impd is down
   server.use(
     http.post(
       'http://impd.test/rpc/system/features',

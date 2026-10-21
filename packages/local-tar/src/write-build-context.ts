@@ -4,21 +4,17 @@ import { posix } from 'node:path';
 import tar from 'tar-stream';
 import type { Extract, Header, Pack } from 'tar-stream';
 
-// A context impd will not build: the client's mistake, answered as such.
 export class BuildContextError extends Error {
   override name = 'BuildContextError';
 }
 
 export interface CheckedContext {
-  // the path in the context of the Dockerfile the engine will read
   readonly dockerfilePath: string;
-
-  // its text: the bytes impd checks are the bytes the engine builds
   readonly dockerfile: string;
 }
 
-// the paths the Dockerfile frontend reads, in its order: the name asked
-// for, then `dockerfile` beside it when that name is Dockerfile
+// The Dockerfile frontend reads a `dockerfile` beside a Dockerfile it does
+// not find, in this order.
 export function listDockerfileCandidates(dockerfilePath: string): string[] {
   if (posix.basename(dockerfilePath) !== 'Dockerfile') {
     return [dockerfilePath];
@@ -27,9 +23,6 @@ export function listDockerfileCandidates(dockerfilePath: string): string[] {
   return [dockerfilePath, posix.join(posix.dirname(dockerfilePath), 'dockerfile')];
 }
 
-// Checks the tar at inputPath and returns the Dockerfile the engine will
-// read from it. Refuses what an extractor could read another way than impd
-// does (docs/guides/images.md).
 export function readBuildContext(
   inputPath: string,
   dockerfilePath: string,
@@ -39,8 +32,6 @@ export function readBuildContext(
   return runContextPass(inputPath, dockerfilePath, maxDockerfileBytes, null, signal);
 }
 
-// Writes the context readBuildContext checked again at outputPath, which
-// must not exist yet, with dockerfile in place of its Dockerfile.
 export async function writeBuildContext(
   inputPath: string,
   outputPath: string,
@@ -54,25 +45,18 @@ export async function writeBuildContext(
   await runContextPass(inputPath, checked.dockerfilePath, maxDockerfileBytes, target, signal);
 }
 
-// a failed write of the rewrite, or the caller's abort, which stops the
-// read of the upload
 interface WriteFailure {
   error?: Error;
 }
 
 type EntryType = 'file' | 'directory' | 'symlink';
 
-// where a pass writes the context, and the Dockerfile text it writes in
-// place of the one the context holds
 interface CopyTarget {
   readonly outputPath: string;
   readonly checked: CheckedContext;
   readonly dockerfile: Uint8Array;
 }
 
-// One pass over the uploaded tar: checks every entry, and with a target
-// writes the context again there as plain ustar, with pax only for long
-// names.
 async function runContextPass(
   inputPath: string,
   dockerfilePath: string,
@@ -114,7 +98,6 @@ async function runContextPass(
 
   input.pipe(extract);
 
-  // a client that goes stops the read, and frees its slot without reading on
   const stop = (): void => {
     writeFailure.error = toError(signal?.reason);
 
@@ -132,7 +115,7 @@ async function runContextPass(
 
       checkPax(entry.header.name, entry.header.pax);
 
-      // `./` itself: the context's root, which the engine makes anyway
+      // The engine makes the context's root itself.
       if (name === '.') {
         entry.resume();
         continue;
@@ -153,8 +136,6 @@ async function runContextPass(
       const header = buildHeader(entry.header, name, type);
       const written = isReplaced ? { ...header, size: target.dockerfile.byteLength } : header;
       const sink = openEntry(pack, written);
-
-      // the replaced Dockerfile's own bytes are still read, for the check
       const write = isReplaced ? removeChunk : sink.write;
 
       const text = await writeEntryData(entry, write, isCandidate && isSmall);
@@ -176,7 +157,6 @@ async function runContextPass(
 
     const picked = pickDockerfile(candidates, types, texts, maxDockerfileBytes);
 
-    // the rewrite was made from the Dockerfile the first pass read
     if (
       target !== null &&
       (picked.dockerfilePath !== target.checked.dockerfilePath ||
@@ -201,8 +181,6 @@ async function runContextPass(
 
     await writing;
 
-    // a failed write or the caller's abort is the cause, not the destroyed
-    // entry it leaves behind
     throw writeFailure.error ?? error;
   } finally {
     signal?.removeEventListener('abort', stop);
@@ -217,8 +195,6 @@ function toError(error: unknown): Error {
 
 type Source = Extract extends AsyncIterable<infer Entry> ? Entry : never;
 
-// the entries of the tar, with a parse failure as the client's mistake; a
-// failed write of the rewrite stops the read and is thrown as it is
 async function* readEntries(
   extract: Extract,
   writeFailure: Readonly<WriteFailure>,
@@ -260,8 +236,6 @@ function readEntryType(header: Readonly<Header>): EntryType {
   );
 }
 
-// The name an extractor writes the entry at: `./a//b/` is `a/b`. Refuses
-// a name that leaves the context or that no extractor writes as given.
 function normalizeEntryName(name: string): string {
   if (name === '' || name.includes('\0')) {
     throw new BuildContextError(`the build context has an entry named ${JSON.stringify(name)}`);
@@ -276,9 +250,9 @@ function normalizeEntryName(name: string): string {
   return posix.normalize(name).replace(/\/$/v, '');
 }
 
-// The pax records a context may carry: tar-stream applies path, linkpath and
-// size, and the rest only describe the entry. Any other record, such as a
-// sparse map or an ACL, refuses the context.
+// tar-stream applies path, linkpath and size, and the rest only describe the
+// entry. Any other record, such as a sparse map or an ACL, changes what an
+// extractor writes.
 const KNOWN_PAX = new Set([
   'path',
   'linkpath',
@@ -297,8 +271,8 @@ const KNOWN_PAX = new Set([
 
 const XATTR_PREFIXES = ['SCHILY.xattr.', 'LIBARCHIVE.xattr.'];
 
-// Drops user.* xattrs; refuses security.* and every other namespace, since
-// a COPY from the context must never carry capabilities or ACLs.
+// A COPY from the context must never carry capabilities or ACLs, so only
+// user.* xattrs pass.
 function checkPax(name: string, pax: unknown): void {
   if (typeof pax !== 'object' || pax === null) {
     return;
@@ -325,8 +299,6 @@ function checkPax(name: string, pax: unknown): void {
   }
 }
 
-// the entry as the rewrite writes it: whole seconds, permission bits only,
-// and no pax records but the long name or link target tar-stream adds itself
 function buildHeader(header: Readonly<Header>, name: string, type: EntryType): Header {
   return {
     name: type === 'directory' ? `${name}/` : name,
@@ -344,7 +316,6 @@ function buildHeader(header: Readonly<Header>, name: string, type: EntryType): H
   };
 }
 
-// adds an entry and hands it each chunk, waiting while the pack is full
 function openEntry(pack: Pack, header: Readonly<Header>) {
   const written = Promise.withResolvers<void>();
 
@@ -358,11 +329,11 @@ function openEntry(pack: Pack, header: Readonly<Header>) {
 
   return {
     write: async (chunk: Uint8Array): Promise<void> => {
-      // a pack destroyed by a failed write has closed already, and never drains
+      // A pack destroyed by a failed write has closed already, and never drains.
       if (!sink.write(chunk) && !sink.destroyed) {
         const drained = Promise.withResolvers<void>();
 
-        // a pack destroyed while this waits closes instead of draining
+        // A pack destroyed while this waits closes instead of draining.
         sink.once('drain', drained.resolve);
         sink.once('close', drained.resolve);
 
@@ -379,7 +350,6 @@ function openEntry(pack: Pack, header: Readonly<Header>) {
 
 async function removeChunk(): Promise<void> {}
 
-// copies the entry's data to sink; returns its text when keepText is set
 async function writeEntryData(
   entry: Readonly<AsyncIterable<unknown>>,
   sink: (chunk: Uint8Array) => Promise<void>,
@@ -400,8 +370,8 @@ async function writeEntryData(
   return keepText ? new TextDecoder().decode(Bun.concatArrayBuffers(chunks)) : '';
 }
 
-// Every entry sits under directories only: an extractor writes an entry
-// under a symlink through it, and one under a file not at all.
+// An extractor writes an entry under a symlink through the link, and one
+// under a file not at all.
 function checkParents(types: ReadonlyMap<string, EntryType>): void {
   for (const name of types.keys()) {
     for (const parent of listParents(name)) {
@@ -422,8 +392,6 @@ function listParents(name: string): string[] {
   return parts.slice(0, -1).map((_part, index) => parts.slice(0, index + 1).join('/'));
 }
 
-// The Dockerfile the frontend reads: the first candidate the context has,
-// which must be a regular file.
 function pickDockerfile(
   candidates: readonly string[],
   types: ReadonlyMap<string, EntryType>,

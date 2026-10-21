@@ -7,10 +7,7 @@ import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { createImpClient } from '../src/create-imp-client';
 
-// the stand-in in its own process, with a temp dir of its own for the
-// harness's data dir; `served` is the JSON line it prints once ready
 async function setupTest() {
-  // one stack: the child exits before its temp dir goes
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -33,14 +30,12 @@ async function setupTest() {
     await child.exited;
   });
 
-  // the first line, once the stand-in is ready
   const line = await waitFor(
     async () => {
       const text = await readFile(stdoutPath, 'utf8');
 
       const [first, afterFirst] = text.split('\n');
 
-      // no text after a first newline: the line is not complete yet
       invariant(afterFirst !== undefined, 'run-stub-impd is not ready yet');
 
       return first ?? '';

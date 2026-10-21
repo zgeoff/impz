@@ -2,21 +2,17 @@ import type { ImpContract, SystemInfo } from '@impz/api';
 import type { ContractRouterClient } from '@orpc/contract';
 import packageJson from '../package.json' with { type: 'json' };
 
-// the bundler inlines it, so a published build knows its own version
+// The bundler inlines it, so a published build knows its own version.
 export const CLIENT_VERSION = packageJson.version;
 
 export interface ServerCheck {
   readonly clientVersion: string;
   readonly serverVersion: string;
   readonly compatible: boolean;
-
-  // the system.info answer the check read, so a caller that needs impd's
-  // features makes no second call
   readonly info: SystemInfo;
 }
 
 export interface CheckServerOptions {
-  // ends the system.info call, such as on a connection that never answers
   readonly signal?: Readonly<AbortSignal>;
 }
 
@@ -38,8 +34,8 @@ export async function checkServer(
 }
 
 // The client and impd release together. A major change breaks the API, and
-// before 1.0 a minor change does too (release-please bumps the minor for a
-// feat before 1.0).
+// before 1.0 a minor change does too, because release-please bumps the minor
+// for a feat before 1.0.
 export function isCompatibleVersion(client: string, server: string): boolean {
   const ours = parseVersion(client);
   const theirs = parseVersion(server);

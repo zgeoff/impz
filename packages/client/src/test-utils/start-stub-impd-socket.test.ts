@@ -6,7 +6,6 @@ import { runChildTests } from '@impz/test-utils/run-child-tests';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { startStubImpdSocket } from './start-stub-impd-socket';
 
-// a directory for a child test run
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'stub-impd-socket-'));
 

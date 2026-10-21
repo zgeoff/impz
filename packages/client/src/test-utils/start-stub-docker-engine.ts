@@ -1,22 +1,12 @@
 import { onTestFinished } from 'bun:test';
 
 interface StubDockerEngineOptions {
-  // the unix socket the engine listens on
   readonly socketPath: string;
-
-  // the image every build ends with
   readonly imageId: string;
-
-  // each build answers its first line at once, then waits for this
   readonly holdUntil?: () => Promise<void>;
-
-  // the error a build ends with, in place of the image
   readonly failure?: string;
 }
 
-// Docker's engine API for impd's host build: POST /build answers a trace
-// line, then the image ID or the error; any other call gets a 500 naming it
-// and lands in `unexpected`. It stops at the test's end.
 export function startStubDockerEngine(options: StubDockerEngineOptions) {
   const contexts: Uint8Array[] = [];
   const signals: AbortSignal[] = [];
