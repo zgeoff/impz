@@ -1,9 +1,10 @@
 import { expect, mock, test } from 'bun:test';
 import { tapStream } from './tap-stream';
+import type { StreamEnd } from './tap-stream';
 
 test('it passes every chunk through and ends once as done', async () => {
-  const onChunk = mock();
-  const onEnd = mock();
+  const onChunk = mock<(chunk: Uint8Array) => void>();
+  const onEnd = mock<(end: StreamEnd) => void>();
 
   const first = new TextEncoder().encode('a body ');
   const second = new TextEncoder().encode('of bytes');
@@ -24,8 +25,8 @@ test('it passes every chunk through and ends once as done', async () => {
 });
 
 test('it ends once as cancel and cancels the source when the reader cancels', async () => {
-  const onEnd = mock();
-  const sourceCancel = mock();
+  const onEnd = mock<(end: StreamEnd) => void>();
+  const sourceCancel = mock<(reason: unknown) => void>();
 
   const source = new ReadableStream<Uint8Array>({ cancel: sourceCancel });
 
@@ -36,7 +37,7 @@ test('it ends once as cancel and cancels the source when the reader cancels', as
 });
 
 test('it ends once as error with the cause, and errors the stream with no reason, when the source fails', () => {
-  const onEnd = mock();
+  const onEnd = mock<(end: StreamEnd) => void>();
 
   const failure = new Error('the upstream hung up');
 
