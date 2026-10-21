@@ -23,6 +23,7 @@ import { createImageBuilds } from './create-image-builds';
 import type { ImageBuilds } from './create-image-builds';
 import { createImageEviction } from './create-image-eviction';
 import { createImageWriter } from './create-image-writer';
+import type { ImageWriter } from './create-image-writer';
 
 export type ImageService = ImageAdds &
   ImageBuilds & {
@@ -36,6 +37,8 @@ export type ImageService = ImageAdds &
     readonly updateImagePin: (name: string, isPinned: boolean) => Promise<ImageRecord>;
 
     readonly runImageEviction: () => Promise<void>;
+
+    readonly withImagePublisher: ImageWriter['withPublisher'];
   };
 
 export interface ImageServiceDeps {
@@ -163,5 +166,6 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
     resolveImage,
     findDefaultImage: readDefaultImage,
     runImageEviction: runEviction,
+    withImagePublisher: writer.withPublisher,
   };
 }

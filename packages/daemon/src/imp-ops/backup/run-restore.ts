@@ -5,6 +5,7 @@ import type { BackupRestore, EgressPolicy, Imp } from '@impz/api';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { TokenStore } from '../../identity/auth/token-store';
+import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
 import type { NetworkService } from '../../network/networks/network-service';
@@ -56,6 +57,7 @@ export interface RestoreDeps {
     StorageBackend,
     'createImage' | 'createCheckpoint' | 'createImpDisk' | 'resolveImpPaths'
   >;
+  readonly images: Pick<ImageService, 'withImagePublisher'>;
   readonly restic: Pick<Restic, 'unlock' | 'listSnapshots' | 'dump' | 'restore'>;
   readonly paths: Pick<ReturnType<typeof buildBackupPaths>, 'tree' | 'restoreDir'>;
   readonly storageGate: Pick<StorageGate, 'join'>;
@@ -271,23 +273,25 @@ async function createJoinedImage(
 
   await deps.restic.restore(point.id, join(base, image.dir), directory, []);
 
-  await deps.storage.createImage(image.digest, async (target) => {
-    writeFileSync(join(target, 'rootfs.ext4'), '');
+  await deps.images.withImagePublisher(image.digest, name, async () => {
+    await deps.storage.createImage(image.digest, async (target) => {
+      writeFileSync(join(target, 'rootfs.ext4'), '');
 
-    await writeChangedBlocks(join(directory, 'rootfs.ext4'), join(target, 'rootfs.ext4'));
+      await writeChangedBlocks(join(directory, 'rootfs.ext4'), join(target, 'rootfs.ext4'));
 
-    copyFileSync(join(directory, 'config.json'), join(target, 'config.json'));
-  });
+      copyFileSync(join(directory, 'config.json'), join(target, 'config.json'));
+    });
 
-  rmSync(directory, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
 
-  await createImage(deps.db, {
-    name,
-    ref: image.ref,
-    digest: image.digest,
-    sizeBytes: image.sizeBytes,
-    source: image.source,
-    sourceImp: image.sourceImp,
+    await createImage(deps.db, {
+      name,
+      ref: image.ref,
+      digest: image.digest,
+      sizeBytes: image.sizeBytes,
+      source: image.source,
+      sourceImp: image.sourceImp,
+    });
   });
 
   return name;

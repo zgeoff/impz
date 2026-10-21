@@ -4,6 +4,7 @@ import { copyFile, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EgressPolicy, WarmHost } from '@impz/api';
 import { EgressPolicySchema } from '@impz/api';
+import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
 import type { EgressService } from '../../network/egress/egress-service';
@@ -66,6 +67,7 @@ interface ReceiveStreamDeps {
   >;
   readonly storageGate: Pick<StorageGate, 'join'>;
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
+  readonly images: Pick<ImageService, 'withImagePublisher'>;
   readonly imps: Pick<Imps, 'createImp' | 'destroyImp'>;
   readonly grants: Pick<Broker, 'addGrant' | 'listSecrets'>;
   readonly egress: Pick<EgressService, 'writeAnswers'>;
@@ -372,30 +374,34 @@ async function requireImage(
       return { name: known.name, files };
     }
 
-    await deps.storageGate.join(() =>
-      deps.storage.createImage(digest, async (directory) => {
-        await copyFile(temps.config, join(directory, 'config.json'));
+    const name = await deps.images.withImagePublisher(digest, header.image.name, async () => {
+      await deps.storageGate.join(() =>
+        deps.storage.createImage(digest, async (directory) => {
+          await copyFile(temps.config, join(directory, 'config.json'));
 
-        writeFileSync(join(directory, 'rootfs.ext4'), '');
+          writeFileSync(join(directory, 'rootfs.ext4'), '');
 
-        await writeChangedBlocks(temps.rootfs, join(directory, 'rootfs.ext4'));
-      }),
-    );
+          await writeChangedBlocks(temps.rootfs, join(directory, 'rootfs.ext4'));
+        }),
+      );
 
-    const taken = await readImageByName(deps.db, header.image.name);
+      const taken = await readImageByName(deps.db, header.image.name);
 
-    const hex = toDigestHex(digest).slice(0, 8);
+      const hex = toDigestHex(digest).slice(0, 8);
 
-    const name =
-      taken === undefined ? header.image.name : `${header.image.name.slice(0, 22)}-${hex}`;
+      const picked =
+        taken === undefined ? header.image.name : `${header.image.name.slice(0, 22)}-${hex}`;
 
-    await createImage(deps.db, {
-      name,
-      ref: header.image.ref,
-      digest,
-      sizeBytes: header.image.sizeBytes,
-      source: header.image.source,
-      sourceImp: header.image.sourceImp,
+      await createImage(deps.db, {
+        name: picked,
+        ref: header.image.ref,
+        digest,
+        sizeBytes: header.image.sizeBytes,
+        source: header.image.source,
+        sourceImp: header.image.sourceImp,
+      });
+
+      return picked;
     });
 
     return { name, files };

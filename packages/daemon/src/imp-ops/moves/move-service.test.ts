@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { MoveState } from '@impz/api';
@@ -24,6 +24,7 @@ import { makeStubSwitchedStorageTarget } from '../../../testing/imp-ops/make-stu
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { TEST_TOKEN } from '../../../testing/test-token';
+import { buildStubPublishHook } from '../../../testing/vm/build-stub-publish-hook';
 import { buildStubStoragePressure } from '../../../testing/vm/build-stub-storage-pressure';
 import { buildStubZfsStorage } from '../../../testing/vm/build-stub-zfs-storage';
 import { readImageByName } from '../../platform/db/images';
@@ -1183,6 +1184,39 @@ test('it keeps an old image the target has under the digest of what arrived when
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(two?.imageId).toBe(image?.id);
+});
+
+test('it keeps the rootfs a move publishes when the cleanup of an earlier removal of its digest runs before its row', async () => {
+  const publish = buildStubPublishHook();
+
+  const ctx = await setupTest({
+    target: {
+      createStorage: (dataDir) =>
+        publish.wrap(
+          createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+        ),
+    },
+  });
+
+  await ctx.source.createTestImage('web-1111111');
+
+  writeFileSync(buildImagePaths(ctx.source.dataDir, 'sha256:web-1111111').config, '{}');
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'web-1111111' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  publish.setAfterPublish(async (digest) => {
+    await ctx.target.db.insertInto('image_removals').values({ digest, created_at: 0 }).execute();
+    await ctx.target.images.runImageEviction();
+  });
+
+  const status = await ctx.runMove('dev');
+  const image = await readImageByName(ctx.target.db, 'web-1111111');
+
+  invariant(image);
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(existsSync(buildImagePaths(ctx.target.dataDir, image.digest).rootfs)).toBeTrue();
 });
 
 test('it carries only the grants of secrets the target has', async () => {

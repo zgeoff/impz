@@ -13,6 +13,7 @@ import type { BackupRestore, BackupRun, BackupStatus, ImpState } from '@impz/api
 import { ORPCError } from '@orpc/server';
 import * as z from 'zod';
 import type { TokenStore } from '../../identity/auth/token-store';
+import type { ImageService } from '../../imps/images/image-service';
 import type { LockedImp } from '../../imps/imps/imp-lock';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
@@ -86,6 +87,7 @@ export interface BackupServiceDeps {
   readonly tokens: Pick<TokenStore, 'createRestored'>;
   readonly networks: Pick<NetworkService, 'writeMissingNetworks' | 'removeEmptyNetworks'>;
   readonly storage: StorageBackend;
+  readonly images: Pick<ImageService, 'withImagePublisher'>;
   readonly restic?: Restic;
   readonly freezer?: DiskFreezer;
   readonly log?: (message: string) => void;

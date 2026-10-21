@@ -298,6 +298,7 @@ async function startImpdParts(
           db,
           imps,
           storage,
+          images: stored.images,
           grants: broker,
           tokens: access.tokens,
           networks: services.networks,

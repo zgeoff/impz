@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { MoveTicket, WarmHost, WarmMove } from '@impz/api';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
+import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
 import type { EgressService } from '../../network/egress/egress-service';
@@ -69,6 +70,7 @@ export interface MoveReceiverDeps {
   >;
   readonly storageGate: Pick<StorageGate, 'join'>;
   readonly diskBudget: Pick<DiskBudget, 'requireRoom' | 'withRoom'>;
+  readonly images: Pick<ImageService, 'withImagePublisher'>;
   readonly imps: Pick<Imps, 'createImp' | 'destroyImp' | 'lockImpId'>;
   readonly grants: Pick<Broker, 'addGrant' | 'listSecrets'>;
   readonly egress: Pick<EgressService, 'writeAnswers'>;

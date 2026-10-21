@@ -72,6 +72,13 @@ export interface ImageWriter {
   readonly removeIdleRootfs: (digest: string) => Promise<void>;
 
   readonly removeIdleImage: (digest: string, removeRow: () => Promise<boolean>) => Promise<boolean>;
+
+  // A restore or a move publishes a rootfs and its row outside this writer.
+  readonly withPublisher: <T>(
+    digest: string,
+    imageName: string,
+    publish: () => Promise<T>,
+  ) => Promise<T>;
 }
 
 interface ImageWriterDeps {
@@ -391,7 +398,21 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     );
   };
 
-  return { createImageOnHost, writeGuestImage, removeIdleRootfs, removeIdleImage };
+  const withPublisher = async <T>(
+    digest: string,
+    imageName: string,
+    publish: () => Promise<T>,
+  ): Promise<T> => {
+    await holdPublisher(digest);
+
+    try {
+      return await publish();
+    } finally {
+      await releasePublisher(digest, imageName);
+    }
+  };
+
+  return { createImageOnHost, writeGuestImage, removeIdleRootfs, removeIdleImage, withPublisher };
 }
 
 export function requireClientImageName(name: string): string {

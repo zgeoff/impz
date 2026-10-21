@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { expect, onTestFinished, test } from 'bun:test';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -18,6 +19,7 @@ import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-
 import { buildStubRestic } from '../../../testing/imp-ops/build-stub-restic';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { startTestImpd } from '../../../testing/start-test-impd';
+import { buildStubPublishHook } from '../../../testing/vm/build-stub-publish-hook';
 import { buildStubStoragePressure } from '../../../testing/vm/build-stub-storage-pressure';
 import { createTemplateService } from '../../imps/images/template-service';
 import { createNetworkService } from '../../network/networks/network-service';
@@ -26,7 +28,7 @@ import { readImageByName } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
 import { readSecret } from '../../platform/db/secrets';
 import { updateImpState } from '../../platform/db/update-imp-state';
-import { BACKUP_TREE, buildImpPaths } from '../../vm/storage/data-layout';
+import { BACKUP_TREE, buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { BackupManifestSchema } from './backup-manifest';
 import { buildBackupsOffError, createBackupService } from './backup-service';
@@ -44,14 +46,18 @@ async function setupTest(options: Readonly<{ isStorageFull?: boolean }> = {}) {
     rmSync(repoDir, { recursive: true, force: true });
   });
 
+  const publish = buildStubPublishHook();
+
   const host = await startTestImpd(stack, {
     frozenClockMs: Date.UTC(2026, 9, 2),
+    createStorage: (dataDir) =>
+      publish.wrap({
+        ...createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+        ...(options.isStorageFull === true &&
+          buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 })),
+      }),
     ...(options.isStorageFull === true && {
       env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
-      createStorage: (dataDir: string) => ({
-        ...createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-        ...buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 }),
-      }),
     }),
   });
 
@@ -67,6 +73,7 @@ async function setupTest(options: Readonly<{ isStorageFull?: boolean }> = {}) {
     tokens: host.tokens,
     networks: createNetworkService({ db: host.db, egress: host.egress, imps: host.imps }),
     storage: host.storage,
+    images: host.images,
     storageGate: host.storageGate,
     diskBudget: host.diskBudget,
     restic: restic.restic,
@@ -88,7 +95,7 @@ async function setupTest(options: Readonly<{ isStorageFull?: boolean }> = {}) {
     },
   };
 
-  return Object.assign(host, { stack, repoDir, restic, freezes, backupLogs, deps });
+  return Object.assign(host, { stack, repoDir, restic, freezes, backupLogs, deps, publish });
 }
 
 test('#runBackup freezes a running imp and copies stopped and sleeping imps as they are', async () => {
@@ -362,6 +369,34 @@ test('#restoreBackup keeps an old image it reuses when an eviction reaches the r
   expect(dev?.imageId).toBe(image?.id);
 });
 
+test('#restoreBackup keeps the rootfs it publishes when the cleanup of an earlier removal of its digest runs before its row', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('web-1111111');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'web-1111111', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev', image: 'web-1111111' });
+  await backups.runBackup();
+  await ctx.imps.destroyImp('dev');
+  await ctx.images.removeImage('web-1111111');
+
+  ctx.publish.setAfterPublish(async (digest) => {
+    await ctx.db.insertInto('image_removals').values({ digest, created_at: 0 }).execute();
+    await ctx.images.runImageEviction();
+  });
+
+  await backups.restoreBackup({ name: 'dev' });
+
+  const image = await readImageByName(ctx.db, 'web-1111111');
+
+  invariant(image);
+
+  expect(existsSync(buildImagePaths(ctx.dataDir, image.digest).rootfs)).toBeTrue();
+});
+
 test('#restoreBackup restores the newest backup at or before --at that holds the imp', async () => {
   const ctx = await setupTest();
 
@@ -559,6 +594,7 @@ test('#restoreBackup restores every imp and its image on a fresh host, renaming 
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
@@ -605,6 +641,7 @@ test('#restoreBackup rejects a restored image as CONFLICT when its name and its 
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
@@ -719,6 +756,7 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
@@ -1645,6 +1683,7 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: freshRestic.restic,
@@ -2120,6 +2159,7 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
@@ -2170,6 +2210,7 @@ test('#restoreBackup holds the database copy’s size from the disk budget while
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: freshRestic.restic,
@@ -2258,6 +2299,7 @@ test('#restoreBackup restores a token’s grantable list on a fresh host, so the
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
@@ -2313,6 +2355,7 @@ test('#restoreBackup brings back no token or secret in a restore of one imp from
     tokens: fresh.tokens,
     networks: createNetworkService({ db: fresh.db, egress: fresh.egress, imps: fresh.imps }),
     storage: fresh.storage,
+    images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
