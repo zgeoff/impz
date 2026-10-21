@@ -79,8 +79,6 @@ func (c *client) waitReady() error {
 	if m.Op != opReady {
 		return fmt.Errorf("the inner init said %q before it was ready", m.Op)
 	}
-	readNote(m.Error)
-	trace("i.ready")
 	return nil
 }
 

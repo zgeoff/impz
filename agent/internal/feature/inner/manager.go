@@ -161,7 +161,6 @@ func (m *Manager) tryStart() error {
 		m.cleanCgroup()
 		return fmt.Errorf("open the container's root: %w", err)
 	}
-	trace("i.rootfs")
 	m.rootMu.Lock()
 	m.root = root
 	m.rootMu.Unlock()
@@ -200,7 +199,6 @@ func (m *Manager) startReady() (*initProc, *client, error) {
 	// what a container left behind (a cgroup that outlived the last wait,
 	// say) must not fail this one
 	m.cleanCgroup()
-	trace("i.clean")
 	cg, err := os.Open(m.cgroupDir)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open %s: %w", m.cgroupDir, err)
@@ -210,7 +208,6 @@ func (m *Manager) startReady() (*initProc, *client, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	trace("i.fork")
 	c, err := connect(p, m.readyTimeout)
 	if err != nil {
 		m.cleanCgroup()
