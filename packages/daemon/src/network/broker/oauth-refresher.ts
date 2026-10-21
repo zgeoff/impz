@@ -2,7 +2,7 @@ import type { OAuthConfig } from '@impz/api';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { listSecrets, readSecret } from '../../platform/db/secrets';
 import type { SecretRecord } from '../../platform/db/secrets';
-import { sendWithCa } from '../../platform/http/send-with-ca';
+import { sendWithCA } from '../../platform/http/send-with-ca';
 import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
@@ -66,7 +66,7 @@ const REJECTION_FLOOR_MS = 5 * 60_000;
 
 export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
   const now = deps.now ?? Date.now;
-  const send = deps.fetch ?? sendWithCa;
+  const send = deps.fetch ?? sendWithCA;
   const timeoutMs = deps.timeoutMs ?? 30_000;
   const log = deps.log;
   const locks = buildKeyedMutex();

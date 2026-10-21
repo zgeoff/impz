@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startStubBrokerTlsUpstream } from '../../../testing/network/start-stub-broker-tls-upstream';
-import { sendWithCa } from './send-with-ca';
+import { sendWithCA } from './send-with-ca';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -33,7 +33,7 @@ test('it reaches an upstream that only the given CA vouches for', async () => {
     },
   });
 
-  const response = await sendWithCa(`${upstream.origin}/token`, {
+  const response = await sendWithCA(`${upstream.origin}/token`, {
     method: 'POST',
     body: 'grant_type=refresh_token',
     tls: { ca: [upstream.caPem] },
@@ -53,7 +53,7 @@ test('it refuses an upstream that no trusted CA vouches for when it is given no 
     respond: () => new Response('reached'),
   });
 
-  expect(sendWithCa(`${upstream.origin}/token`, { method: 'POST' })).rejects.toMatchObject({
+  expect(sendWithCA(`${upstream.origin}/token`, { method: 'POST' })).rejects.toMatchObject({
     code: expect.toBeOneOf(['UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'SELF_SIGNED_CERT_IN_CHAIN']),
   });
 });

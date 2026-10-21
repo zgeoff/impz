@@ -1,6 +1,6 @@
 import type { AuditRefusal, GrantFilter } from '@impz/api';
 import type { NewAuditEntry } from '../../platform/db/broker-audit';
-import { sendWithCa } from '../../platform/http/send-with-ca';
+import { sendWithCA } from '../../platform/http/send-with-ca';
 import { tapStream } from '../../platform/process/tap-stream';
 import { isRequestInFilter } from './is-request-in-filter';
 
@@ -55,7 +55,7 @@ const METHOD_OVERRIDE_HEADERS = ['x-http-method-override', 'x-http-method', 'x-m
 const MAX_AUDIT_PATH = 512;
 
 export function createForwarder(deps: ForwardDeps): (request: Request) => Promise<Response> {
-  const fetchUpstream = deps.fetch ?? sendWithCa;
+  const fetchUpstream = deps.fetch ?? sendWithCA;
 
   return async (request) => {
     const started = performance.now();
