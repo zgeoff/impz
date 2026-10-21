@@ -43,6 +43,7 @@ const SummarySchema = z.object({
   data_added: z.number(),
 });
 
+/* @internal */
 export class ResticError extends Error {
   override name = 'ResticError';
 
@@ -62,7 +63,7 @@ export interface ResticSnapshot {
   readonly tags: readonly string[];
 }
 
-export interface ResticSummary {
+interface ResticSummary {
   readonly snapshotId: string;
   readonly filesNew: number;
   readonly filesChanged: number;
@@ -223,6 +224,7 @@ export function createRestic(deps: ResticDeps): Restic {
   };
 }
 
+/* @internal */
 export function parseSnapshots(stdout: string): ResticSnapshot[] {
   const parsed = z.array(SnapshotSchema).parse(JSON.parse(stdout || '[]'));
 
@@ -236,6 +238,7 @@ export function parseSnapshots(stdout: string): ResticSnapshot[] {
     .toSorted((left, right) => left.time.getTime() - right.time.getTime());
 }
 
+/* @internal */
 export function parseBackupSummary(stdout: string): ResticSummary {
   const lines = stdout.trim().split('\n');
   const summary = SummarySchema.parse(JSON.parse(lines.at(-1) ?? '{}'));

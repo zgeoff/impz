@@ -22,6 +22,7 @@ export interface ImageBuildOptions {
   readonly output: ProgressOutput;
 }
 
+/* @internal */
 export function createContextStream(
   entries: readonly LocalEntry[],
   progress: CopyProgress,

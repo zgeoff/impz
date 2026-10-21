@@ -24,6 +24,7 @@ export interface KernelOopsWatch {
   ) => ReadonlySet<string> | null;
 }
 
+/* @internal */
 export const NO_KERNEL_OOPS: KernelOopsWatch = {
   readFlag: () => 'clear',
   isOopsed: () => false,

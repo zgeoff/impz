@@ -25,6 +25,7 @@ export function createPublicScope(
   };
 }
 
+/* @internal */
 export function createPublicRoute(
   findPublicImp: (name: string) => Promise<PublicImp | undefined>,
   limits: PublicLimits,

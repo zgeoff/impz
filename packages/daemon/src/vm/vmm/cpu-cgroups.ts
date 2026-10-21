@@ -60,12 +60,14 @@ interface CpuCgroupOptions {
   readonly sleep?: (durationMs: number) => Promise<void>;
 }
 
+/* @internal */
 export function formatCpuMax(limit: number | null): string {
   return limit === null
     ? `max ${String(PERIOD_US)}`
     : `${String(Math.round(limit * PERIOD_US))} ${String(PERIOD_US)}`;
 }
 
+/* @internal */
 export function parseCpuStat(text: string): CpuStat | null {
   const fields = new Map(
     text
@@ -83,6 +85,7 @@ export function parseCpuStat(text: string): CpuStat | null {
   return { usageUsec, throttledUsec: fields.get('throttled_usec') ?? 0 };
 }
 
+/* @internal */
 export function buildMemoryMax(memoryMib: number): string {
   const overhead = Math.max(
     MEMORY_MIN_OVERHEAD_MIB,
@@ -92,6 +95,7 @@ export function buildMemoryMax(memoryMib: number): string {
   return String((memoryMib + overhead) * BYTES_PER_MIB);
 }
 
+/* @internal */
 export function parseOomKills(text: string): number | null {
   const match = /^oom_kill (?<count>\d+)$/mu.exec(text);
 

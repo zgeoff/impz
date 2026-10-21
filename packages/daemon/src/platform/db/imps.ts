@@ -89,6 +89,7 @@ export interface NewImp {
 }
 
 // far above any account in the host image; an imp keeps its uid for life
+/* @internal */
 export const JAIL_UIDS = { first: 900_000, count: 65_536 } as const;
 export const TEMPLATE_BUILD_UID = JAIL_UIDS.first - 1;
 

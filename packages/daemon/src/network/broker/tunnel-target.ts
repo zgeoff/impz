@@ -43,6 +43,7 @@ export class TunnelRefusedError extends Error {
   override name = 'TunnelRefusedError';
 }
 
+/* @internal */
 export function isRefusedAddress(
   address: string,
   hostAddresses: ReadonlySet<string>,

@@ -1,5 +1,6 @@
 import * as z from 'zod';
 
+/* @internal */
 export const DroppedStorageSchema = z
   .object({
     kind: z.enum(['imp', 'checkpoint', 'image', 'snapshot', 'memory', 'secrets']),
@@ -9,6 +10,7 @@ export const DroppedStorageSchema = z
 
 export type DroppedStorage = z.infer<typeof DroppedStorageSchema>;
 
+/* @internal */
 export const OrphanStorageSchema = z
   .object({
     kind: z.enum(['imp', 'image', 'memory', 'checkpoint', 'secrets']),

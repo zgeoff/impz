@@ -7,6 +7,7 @@ import { NameSchema } from './name-schema';
 // A reader ignores event fields it does not know.
 export const EVENT_VERSION = 1;
 
+/* @internal */
 export const ImpChangeReasonSchema = z.enum([
   'booted',
   'woke',
@@ -31,6 +32,7 @@ export const ImpChangeReasonSchema = z.enum([
 
 export type ImpChangeReason = z.infer<typeof ImpChangeReasonSchema>;
 
+/* @internal */
 export const ImpEventDetailSchema = z
   .object({
     durationMs: z.int().nonnegative().optional(),

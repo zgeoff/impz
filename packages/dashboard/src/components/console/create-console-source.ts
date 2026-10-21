@@ -15,6 +15,7 @@ export function createConsoleSource(
   };
 }
 
+/* @internal */
 export function readTerminalConnection(handle: ExecHandle): TerminalConnection {
   return {
     // a tty sends everything on stdout; stderr is read too, so it never fills

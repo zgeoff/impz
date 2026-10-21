@@ -50,6 +50,7 @@ export function isNameAllowed(rules: AllowRules, name: string): boolean {
   return rules.names.has(normal) || rules.suffixes.some((suffix) => normal.endsWith(suffix));
 }
 
+/* @internal */
 export function isAddressAllowed(rules: AllowRules, address: string): boolean {
   const ip6 = parseIpv6(address);
 

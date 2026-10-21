@@ -200,6 +200,7 @@ function toCappedTtl(record: Answer, maxTtlS: number): Answer {
   return record.type === 'OPT' ? record : { ...record, ttl: Math.min(record.ttl ?? 0, maxTtlS) };
 }
 
+/* @internal */
 export const DEFAULT_TCP_LIMITS: ResolverServerLimits = { idleS: 10, maxPerSlot: 16 };
 
 interface ResolverServerLimits {
@@ -219,6 +220,7 @@ export interface ResolverServerOptions {
 // Bun marks it `errqueue`
 const ROUTINE_SOCKET_ERRORS = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH']);
 
+/* @internal */
 export function createSocketErrorReport(
   log: (message: string) => void,
   now: () => number,

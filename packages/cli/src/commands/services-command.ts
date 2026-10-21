@@ -11,7 +11,7 @@ import { formatOutput, formatServices } from '../output/format-output';
 
 const serviceArg = { type: 'positional', description: 'service name', required: true } as const;
 
-export interface ServiceAddArgs {
+interface ServiceAddArgs {
   readonly cmd?: string | undefined;
   readonly argv: readonly string[];
   readonly env?: readonly string[] | undefined;
@@ -20,6 +20,7 @@ export interface ServiceAddArgs {
   readonly restart?: ServiceDef['restart'] | undefined;
 }
 
+/* @internal */
 export function buildServiceDef(service: string, args: Readonly<ServiceAddArgs>): ServiceDef {
   if ((args.cmd === undefined) === (args.argv.length === 0)) {
     throw new UsageError('give the command once: --cmd "…" or after --');
@@ -166,6 +167,7 @@ const MAX_PARTIAL_LINE = 65_536;
 
 type LogText = Extract<ServiceLog, { readonly type: 'log' }>;
 
+/* @internal */
 export function createLogPrinter(prefix: boolean, write: (text: string) => void) {
   const partial = new Map<string, string>();
 
@@ -248,6 +250,7 @@ export const logsCommand = defineCommand({
     }),
 });
 
+/* @internal */
 export function formatLogEvent(
   name: string,
   event: Readonly<Exclude<ServiceLog, { readonly type: 'log' }>>,

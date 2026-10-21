@@ -325,6 +325,7 @@ interface JailerCommand {
   readonly apiSocket: string;
 }
 
+/* @internal */
 export function buildJailerCommand(command: Readonly<JailerCommand>): readonly string[] {
   // impd places the VM in its cgroup itself, so the jailer gets no --cgroup.
   return [
@@ -345,12 +346,14 @@ export function buildJailerCommand(command: Readonly<JailerCommand>): readonly s
   ];
 }
 
+/* @internal */
 export function listBoundDirs(paths: Readonly<ImpPaths>): readonly string[] {
   const isInside = paths.snapshotDir.startsWith(`${paths.directory}/`);
 
   return isInside ? [paths.directory] : [paths.directory, paths.snapshotDir];
 }
 
+/* @internal */
 export function listMountsUnder(mounts: string, root: string): string[] {
   return parseMounts(mounts)
     .map((mount) => mount.target)

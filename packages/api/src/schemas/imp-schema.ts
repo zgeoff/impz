@@ -9,6 +9,7 @@ export const ImpStateSchema = z.enum(['creating', 'running', 'sleeping', 'stoppe
 
 export type ImpState = z.infer<typeof ImpStateSchema>;
 
+/* @internal */
 export const ImpKindSchema = z.enum(['user', 'builder']);
 
 export type ImpKind = z.infer<typeof ImpKindSchema>;
@@ -108,8 +109,10 @@ export const ImpSchema = z.object({
 
 export type Imp = z.infer<typeof ImpSchema>;
 
+/* @internal */
 export const GrantNotCopiedReasonSchema = z.enum(['not-grantable', 'clash', 'no-secret']);
 
+/* @internal */
 export const GrantNotCopiedSchema = z.object({
   secret: SecretNameSchema,
   reason: GrantNotCopiedReasonSchema,

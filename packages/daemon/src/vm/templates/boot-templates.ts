@@ -27,6 +27,7 @@ import type { CpuCgroups } from '../vmm/cpu-cgroups';
 import type { JailUser } from '../vmm/jail';
 import type { TemplateBuildPlan } from '../vmm/template-vm';
 
+/* @internal */
 export const TEMPLATE_BOOT_ARGS = [...BASE_BOOT_ARGS, 'imp.template=1'].join(' ');
 
 const TEMPLATE_ADDRESS: SlotAddress = {
@@ -62,7 +63,7 @@ const TemplateMetaSchema = z.object({
 
 type TemplateMeta = z.infer<typeof TemplateMetaSchema>;
 
-export interface TemplateShape {
+interface TemplateShape {
   readonly vcpus: number;
   readonly memoryMib: number;
 }

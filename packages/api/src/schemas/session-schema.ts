@@ -11,6 +11,7 @@ export const SessionNameSchema = z
     'must be a lowercase letter or digit followed by up to 31 lowercase letters, digits or hyphens',
   );
 
+/* @internal */
 export const SessionExitSchema = z
   .object({
     code: z.int().nullable(),

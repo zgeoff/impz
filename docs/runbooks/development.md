@@ -31,6 +31,11 @@ shellcheck job in `.github/workflows/ci.yml` pins actionlint, zizmor and hadolin
 end-to-end harness against a real instance when a change touches the lifecycle, the agent or the
 host.
 
+`bun run deadcode` runs knip twice: over the whole tree, then in production mode, which leaves out
+every test file. The production run fails on an export that only a test imports. Un-export it when
+no test needs it, or tag it `/* @internal */` when a test reaches it as a seam. The tag takes one
+star, because the shared lint config bans JSDoc blocks and knip reads a tag from any block comment.
+
 ## End-to-end tests
 
 `e2e/test-e2e.sh` brings up the dev instance (`scripts/dev/dev.sh`), then runs each journey file of

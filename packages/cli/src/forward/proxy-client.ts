@@ -25,7 +25,7 @@ export interface ProxyIo {
   readonly connect?: ForwardTunnelOptions['connect'];
 }
 
-export interface Proxy {
+interface Proxy {
   readonly ports: readonly number[];
   readonly stop: () => void;
 }
@@ -76,6 +76,7 @@ function buildBindError(error: unknown, name: string, forward: Forward): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
+/* @internal */
 export function formatTunnelClose(code: number): string {
   if (code === TUNNEL_CLOSE_LOST) {
     return 'the connection in the imp was lost';
@@ -244,6 +245,7 @@ function openTunnel(socket: Socket, target: TunnelTarget, notices: TunnelNotices
   };
 }
 
+/* @internal */
 export async function startProxy(
   config: CliConfig,
   name: string,

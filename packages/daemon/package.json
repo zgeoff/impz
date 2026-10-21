@@ -10,9 +10,6 @@
     "./testing/build-stub-clock": "./testing/platform/build-stub-clock.ts",
     "./package.json": "./package.json"
   },
-  "scripts": {
-    "start": "bun src/main.ts"
-  },
   "dependencies": {
     "@better-auth/mcp": "catalog:",
     "@better-auth/oauth-provider": "catalog:",

@@ -88,6 +88,7 @@ function listSubCommands(command: SubCommandable): [string, CommandEntry][] {
   return listEntries(subCommands);
 }
 
+/* @internal */
 export function collectNodes(node: CompletionNode): readonly CompletionNode[] {
   return [node, ...node.children.flatMap((child) => collectNodes(child))];
 }

@@ -25,6 +25,7 @@ export interface ServiceServe {
   readonly clearServe: (service: string) => Promise<void>;
 }
 
+/* @internal */
 export function parseServedServices(json: string): ServedServices {
   try {
     const text = json.trim() === '' ? '{}' : json;

@@ -98,6 +98,7 @@ export async function runMigrations<T>(db: Kysely<T>): Promise<void> {
   requireMigrated(result);
 }
 
+/* @internal */
 export async function runMigrationsTo<T>(
   db: Kysely<T>,
   name: string,

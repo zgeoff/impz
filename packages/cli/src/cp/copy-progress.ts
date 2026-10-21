@@ -14,6 +14,7 @@ export interface ProgressOutput {
 // a fast copy must not spend its time printing
 const REDRAW_MS = 250;
 
+/* @internal */
 export function formatProgress(copied: number, total: number | null, label = 'impz cp'): string {
   if (total === null || total === 0) {
     return `${label}: ${formatBytes(copied)}`;

@@ -1,6 +1,7 @@
 import * as z from 'zod';
 import { NameSchema } from './name-schema';
 
+/* @internal */
 export const ExposureSchema = z.enum(['tailnet', 'public']);
 export const PublicAuthSchema = z.enum(['none', 'token', 'basic']);
 

@@ -8,6 +8,7 @@ export interface LoopHostDirs {
 
 const HOST_DIRS: LoopHostDirs = { procDir: '/proc', sysDir: '/sys' };
 
+/* @internal */
 export function readLoopBackingFile(
   directory: string,
   hostDirs: Readonly<LoopHostDirs> = HOST_DIRS,

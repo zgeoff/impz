@@ -28,6 +28,7 @@ const StatusSchema = z.object({
 const UNKNOWN: TailscaleStatus = { state: null, hostname: null, dnsName: null, ip: null, ips: [] };
 const STATUS_TTL_MS = 30_000;
 
+/* @internal */
 export function parseTailscaleStatus(json: string): TailscaleStatus {
   try {
     const status = StatusSchema.parse(JSON.parse(json));

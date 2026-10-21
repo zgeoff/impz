@@ -8,6 +8,7 @@ const ServeStatusSchema = z.object({
 
 // tailscaled takes a serve port on the tailnet IP itself, so an impd listener
 // on it never sees the traffic.
+/* @internal */
 export function parseServePorts(json: string): readonly number[] {
   try {
     // tailscale prints nothing when there is no serve config

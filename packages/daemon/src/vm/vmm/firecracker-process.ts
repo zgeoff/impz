@@ -35,6 +35,7 @@ export interface FirecrackerPaths {
 
 const SOCKET_WAIT_MS = 3000;
 
+/* @internal */
 export function buildSpawnArgv(
   command: readonly string[],
   cgroupProcs: string | null,

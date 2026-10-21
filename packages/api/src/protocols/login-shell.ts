@@ -2,6 +2,7 @@
 export const CONSOLE_SHELL = buildConsoleShell('/etc/passwd', ['/bin/bash', '/bin/sh']);
 
 // The script holds each path unquoted, so a path must hold no quote or space.
+/* @internal */
 export function buildConsoleShell(passwdPath: string, fallbacks: readonly string[]): string {
   return [
     'uid=$(id -u 2>/dev/null) || uid=0',

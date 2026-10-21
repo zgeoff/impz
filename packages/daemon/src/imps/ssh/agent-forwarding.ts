@@ -4,6 +4,7 @@ import { runGuestListener } from '../reverse/run-guest-listener';
 import { formatFailure, runChannelRelay } from './channel-io';
 import type { SshBackend } from './ssh-connection-context';
 
+/* @internal */
 export const MAX_AGENT_CHANNELS = 16;
 
 export interface AgentForwarding {

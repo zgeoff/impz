@@ -22,6 +22,7 @@ export interface KsmHostStats {
   readonly zeroMib: number;
 }
 
+/* @internal */
 export function checkKsmKernel(release: string): string | null {
   const match = /^(?<major>\d+)\.(?<minor>\d+)/u.exec(release);
   const major = Number(match?.groups?.['major'] ?? Number.NaN);
@@ -70,6 +71,7 @@ export function readKsmHostStats(directory = KSM_DIR): KsmHostStats | null {
   }
 }
 
+/* @internal */
 export function checkMergeableMappings(smaps: string): boolean | null {
   const mappings: { backing: string; bytes: number; mergeable: boolean }[] = [];
   let current: (typeof mappings)[number] | null = null;
@@ -118,6 +120,7 @@ export function checkMergeableMappings(smaps: string): boolean | null {
   return guest.every((mapping) => mapping.mergeable);
 }
 
+/* @internal */
 export function parseKsmStat(text: string): ReadonlyMap<string, string> {
   const fields = new Map<string, string>();
 

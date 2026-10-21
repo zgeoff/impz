@@ -49,7 +49,7 @@ const SPACE_COLUMNS = 'name,used,referenced,usedbydataset,creation,clones';
 
 // ZFS counts a dataset's snapshots in its `used`, and a snapshot's `used` holds only the blocks it
 // alone holds. A snapshot has no usedbydataset.
-export interface ZfsSpace {
+interface ZfsSpace {
   readonly name: string;
   readonly used: number;
   readonly referenced: number;
@@ -165,6 +165,7 @@ export function buildReceiveArgv(target: string, origin: string | null): string[
   return ['zfs', 'recv', '-u', ...(origin === null ? [] : ['-o', `origin=${origin}`]), target];
 }
 
+/* @internal */
 export function parseSendSize(stdout: string): number {
   // `zfs send -nP` ends with `size\t<bytes>`
   const line = stdout.split('\n').find((row) => row.startsWith('size\t'));
@@ -176,6 +177,7 @@ export function parseSendSize(stdout: string): number {
   return parseBytes(line.slice('size\t'.length).trim());
 }
 
+/* @internal */
 export function parseZfsSpace(stdout: string): ZfsSpace[] {
   return stdout
     .split('\n')
@@ -205,6 +207,7 @@ function buildPropertyArgs(properties: Readonly<Record<string, string>>): string
   return Object.entries(properties).flatMap(([key, value]) => ['-o', `${key}=${value}`]);
 }
 
+/* @internal */
 export function parseZfsList(stdout: string): ZfsEntry[] {
   return stdout
     .split('\n')
@@ -225,6 +228,7 @@ export function parseZfsList(stdout: string): ZfsEntry[] {
     });
 }
 
+/* @internal */
 export function parseZfsVersion(stdout: string): string {
   // `zfs version` prints the userland first (zfs-2.2.2-0ubuntu9), then the kernel module
   // (zfs-kmod-2.2.2-0ubuntu9).

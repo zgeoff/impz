@@ -8,6 +8,7 @@ export const EgressModeSchema = z.enum(['open', 'public', 'box', 'none']);
 
 export type EgressMode = z.infer<typeof EgressModeSchema>;
 
+/* @internal */
 export const EgressAllowEntrySchema = z
   .string()
   .max(253)

@@ -11,6 +11,7 @@ export interface DialTarget {
   readonly address: string;
 }
 
+/* @internal */
 export type DialEvent =
   | { readonly type: 'data'; readonly data: Uint8Array }
   | { readonly type: 'eof' };

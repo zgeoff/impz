@@ -20,7 +20,7 @@ import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { LoginKeys } from './login-keys';
 
-export interface SshGatewayLimits {
+interface SshGatewayLimits {
   readonly authTimeoutMs: number;
   readonly maxUnauthenticated: number;
   readonly maxAuthFailures: number;
@@ -32,6 +32,7 @@ export interface SshGatewayLimits {
 
 // OpenSSH's MaxAuthTries is 6; the keepalive drops a silent client after
 // about 45 s.
+/* @internal */
 export const DEFAULT_LIMITS: SshGatewayLimits = {
   authTimeoutMs: 30_000,
   maxUnauthenticated: 32,

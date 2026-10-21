@@ -56,6 +56,7 @@ function createBackend(config: Config, boundaries: Readonly<StorageBoundaries>):
   });
 }
 
+/* @internal */
 export function checkStorageMarker(dataDir: string, kind: StorageBackendKind): void {
   const marker = join(dataDir, MARKER_FILE);
   const recorded = existsSync(marker) ? readFileSync(marker, 'utf8').trim() : readUnmarked(dataDir);
@@ -67,6 +68,7 @@ export function checkStorageMarker(dataDir: string, kind: StorageBackendKind): v
   }
 }
 
+/* @internal */
 export function writeStorageMarker(dataDir: string, kind: StorageBackendKind): void {
   const marker = join(dataDir, MARKER_FILE);
 

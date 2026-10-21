@@ -25,6 +25,7 @@ export interface PublicListener {
   readonly stop: () => Promise<void>;
 }
 
+/* @internal */
 export function createPublicHandler(
   deps: Readonly<PublicListenerDeps>,
 ): (request: Request, server: Pick<Bun.Server<undefined>, 'timeout'> | null) => Promise<Response> {

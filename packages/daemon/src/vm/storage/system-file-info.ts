@@ -20,6 +20,7 @@ export async function deriveFileSha256(path: string): Promise<string> {
   return hasher.digest('hex');
 }
 
+/* @internal */
 export function parseKernelVersion(image: Uint8Array): string | null {
   const start = Buffer.from(image.buffer, image.byteOffset, image.byteLength).indexOf(BANNER);
 

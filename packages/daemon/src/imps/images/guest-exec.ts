@@ -26,6 +26,7 @@ interface GuestRunOptions {
 
 export type GuestExec = (argv: readonly string[], options: GuestRunOptions) => Promise<GuestRun>;
 
+/* @internal */
 export class GuestOutputError extends Error {
   override readonly name = 'GuestOutputError';
 }

@@ -178,6 +178,7 @@ export async function readConnectedPrefixes6(
   return parseConnectedPrefixes(routes, addresses);
 }
 
+/* @internal */
 export function parseConnectedPrefixes(routes: string, addresses: string): readonly string[] {
   const found = [
     ...routes.split('\n').flatMap((line) => {

@@ -50,6 +50,7 @@ export function resolveConfigDir(env: CliEnv): string {
   return join(configHome, 'impz');
 }
 
+/* @internal */
 export function resolveConfigPath(env: CliEnv): string {
   return join(resolveConfigDir(env), 'config.json');
 }

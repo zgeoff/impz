@@ -51,6 +51,7 @@ export const setCommand = defineCommand({
     }),
 });
 
+/* @internal */
 export function formatTop(imps: readonly Imp[]): string {
   const sorted = imps.toSorted(
     (left, right) =>

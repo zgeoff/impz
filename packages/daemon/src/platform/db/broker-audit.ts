@@ -3,7 +3,10 @@ import type { AuditEntry, AuditRefusal, RefusedRequest } from '@impz/api';
 import { toLikePattern } from '../../identity/auth/imp-patterns';
 import type { ImpDatabase } from './open-database';
 
+/* @internal */
 export const AUDIT_ROWS_PER_IMP = 1000;
+
+/* @internal */
 export const AUDIT_ROWS = 100_000;
 
 // Nothing from a header or a body is kept.
