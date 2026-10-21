@@ -113,9 +113,10 @@ export async function startTestImpd(
     options.onLog?.('test harness: database closed');
   });
 
-  // below the imps' port range, where the config refuses impd's own ports
+  // below the imps' port range, where the config refuses impd's own ports, and above 10080,
+  // which fetch refuses as a bad port
   const ports = claimFreePorts(3, {
-    pick: () => 10_000 + Math.floor(Math.random() * 10_000),
+    pick: () => 10_100 + Math.floor(Math.random() * 9900),
     onRelease: stack.defer.bind(stack),
   });
 
