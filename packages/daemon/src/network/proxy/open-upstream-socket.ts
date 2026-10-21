@@ -6,15 +6,6 @@ interface OpenDeadline {
   readonly startTimer: StartTimer;
 }
 
-type BunWebSocketConstructor = new (url: string, options: Bun.WebSocketOptions) => WebSocket;
-
-// Bun's WebSocket takes headers in an options object. bun-types defer to
-// lib.dom's constructor, which takes none, when lib.dom is loaded, as it is in
-// the dashboard's type check, which reads this module.
-invariant(isBunWebSocketConstructor(WebSocket));
-
-const BunWebSocket = WebSocket;
-
 export function openUpstreamSocket(
   target: string,
   protocols: readonly string[],
@@ -22,10 +13,17 @@ export function openUpstreamSocket(
   deadline: Readonly<OpenDeadline>,
 ): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const socket = new BunWebSocket(target, {
+    const options: Bun.WebSocketOptions = {
       protocols: [...protocols],
       headers: Object.fromEntries(headers),
-    });
+    };
+
+    // Bun's WebSocket takes headers in an options object. bun-types defer to
+    // lib.dom's constructor, which takes none, when lib.dom is loaded, as it is
+    // in the dashboard's type check, which reads this module.
+    const socket: unknown = Reflect.construct(WebSocket, [target, options]);
+
+    invariant(socket instanceof WebSocket);
 
     socket.binaryType = 'arraybuffer';
 
@@ -45,8 +43,4 @@ export function openUpstreamSocket(
       reject(new Error('connection failed'));
     });
   });
-}
-
-function isBunWebSocketConstructor(value: unknown): value is BunWebSocketConstructor {
-  return typeof value === 'function';
 }
