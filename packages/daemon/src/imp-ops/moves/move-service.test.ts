@@ -1,5 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { copyFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { MoveState } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -23,11 +24,13 @@ import { makeStubSwitchedStorageTarget } from '../../../testing/imp-ops/make-stu
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { TEST_TOKEN } from '../../../testing/test-token';
+import { buildStubStoragePressure } from '../../../testing/vm/build-stub-storage-pressure';
 import { buildStubZfsStorage } from '../../../testing/vm/build-stub-zfs-storage';
 import { readImageByName } from '../../platform/db/images';
 import type { ImpWrite } from '../../platform/db/imp-write-feed';
 import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../../platform/db/imps';
 import { buildImagePaths } from '../../vm/storage/data-layout';
+import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { FileEndSchema, MOVE_FRAMES, MoveFileSchema, readJsonPayload } from './move-frames';
 import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MOVE_PATHS, MoveHeaderSchema } from './move-header';
 import {
@@ -1013,8 +1016,8 @@ test('it files the image a target lacks under the digest of what arrived', async
   expect(rootfs.toString()).toStartWith('rootfs');
 });
 
-test('it keeps an old image the target has by digest when a prune reaches the stream as it picks the image', async () => {
-  const gate = buildQueryGate('sha256:agent-1111111');
+test('it keeps an old image the target has by digest when an eviction reaches the stream as it picks the image', async () => {
+  const gate = buildQueryGate('sha256:web-1111111');
 
   onTestFinished(() => {
     gate.release();
@@ -1024,7 +1027,14 @@ test('it keeps an old image the target has by digest when a prune reaches the st
   const beforeStream = { run: (): Promise<unknown> => Promise.resolve() };
 
   const ctx = await setupTest({
-    target: { wrapDatabase: gate.wrap, env: { IMP_IMAGE_PRUNE_ROLLBACK: '1' } },
+    target: {
+      wrapDatabase: gate.wrap,
+      env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
+      createStorage: (dataDir) => ({
+        ...createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+        ...buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 }),
+      }),
+    },
     hook: async (request, forward) => {
       if (new URL(request.url).pathname === MOVE_PATHS.receive) {
         await beforeStream.run();
@@ -1040,60 +1050,63 @@ test('it keeps an old image the target has by digest when a prune reaches the st
     ctx.target.db
       .updateTable('images')
       .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
-      .where('name', '=', 'agent-1111111')
+      .where('name', '=', 'web-1111111')
       .execute();
 
-  await ctx.source.createTestImage('agent-1111111');
-  await ctx.target.createTestImage('agent-1111111');
-  await ctx.target.createTestImage('agent-2222222');
+  await ctx.source.createTestImage('web-1111111');
+  await ctx.target.createTestImage('web-1111111');
 
-  writeFileSync(buildImagePaths(ctx.source.dataDir, 'sha256:agent-1111111').config, '{}');
-  writeFileSync(join(ctx.target.dataDir, 'image-keep'), '');
+  writeFileSync(buildImagePaths(ctx.source.dataDir, 'sha256:web-1111111').config, '{}');
 
-  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'agent-1111111' });
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'web-1111111' });
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   const moving = ctx.runMove('dev');
 
   await gate.reached;
 
-  await ctx.target.images.runImagePrune();
+  await ctx.target.images.runImageEviction();
 
   gate.release();
 
   const status = await moving;
-  const image = await readImageByName(ctx.target.db, 'agent-1111111');
+  const image = await readImageByName(ctx.target.db, 'web-1111111');
   const dev = await readImpByName(ctx.target.db, 'dev');
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(dev?.imageId).toBe(image?.id);
 });
 
-test('it keeps an old image the target has by digest when a prune reaches the move as it offers the image', async () => {
-  const gate = buildQueryGate('sha256:agent-1111111');
+test('it keeps an old image the target has by digest when an eviction reaches the move as it offers the image', async () => {
+  const gate = buildQueryGate('sha256:web-1111111');
 
   onTestFinished(() => {
     gate.release();
   });
 
   const ctx = await setupTest({
-    target: { wrapDatabase: gate.wrap, env: { IMP_IMAGE_PRUNE_ROLLBACK: '1' } },
+    target: {
+      wrapDatabase: gate.wrap,
+      env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
+      createStorage: (dataDir) => ({
+        ...createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+        ...buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 }),
+      }),
+    },
   });
 
-  await ctx.source.createTestImage('agent-1111111');
-  await ctx.target.createTestImage('agent-1111111');
-  await ctx.target.createTestImage('agent-2222222');
+  await ctx.source.createTestImage('web-1111111');
+  await ctx.target.createTestImage('web-1111111');
 
-  writeFileSync(buildImagePaths(ctx.source.dataDir, 'sha256:agent-1111111').config, '{}');
-  writeFileSync(join(ctx.target.dataDir, 'image-keep'), '');
+  writeFileSync(buildImagePaths(ctx.source.dataDir, 'sha256:web-1111111').config, '{}');
 
   await ctx.target.db
     .updateTable('images')
     .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
-    .where('name', '=', 'agent-1111111')
+    .where('name', '=', 'web-1111111')
     .execute();
 
-  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'agent-1111111' });
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'web-1111111' });
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
   gate.arm();
@@ -1102,51 +1115,56 @@ test('it keeps an old image the target has by digest when a prune reaches the mo
 
   await gate.reached;
 
-  await ctx.target.images.runImagePrune();
+  await ctx.target.images.runImageEviction();
 
   gate.release();
 
   const status = await moving;
-  const image = await readImageByName(ctx.target.db, 'agent-1111111');
+  const image = await readImageByName(ctx.target.db, 'web-1111111');
   const dev = await readImpByName(ctx.target.db, 'dev');
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(dev?.imageId).toBe(image?.id);
 });
 
-test('it keeps an old image the target has under the digest of what arrived when a prune reaches the move as it picks the image', async () => {
-  const gate = buildQueryGate('sha256:agent-1111111');
+test('it keeps an old image the target has under the digest of what arrived when an eviction reaches the move as it picks the image', async () => {
+  const gate = buildQueryGate('sha256:web-1111111');
 
   onTestFinished(() => {
     gate.release();
   });
 
   const ctx = await setupTest({
-    target: { wrapDatabase: gate.wrap, env: { IMP_IMAGE_PRUNE_ROLLBACK: '1' } },
+    target: {
+      wrapDatabase: gate.wrap,
+      env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
+      createStorage: (dataDir) => ({
+        ...createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+        ...buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 }),
+      }),
+    },
   });
 
-  await ctx.source.createTestImage('agent-1111111');
+  await ctx.source.createTestImage('web-1111111');
 
-  writeFileSync(buildImagePaths(ctx.source.dataDir, 'sha256:agent-1111111').config, '{}');
-  writeFileSync(join(ctx.target.dataDir, 'image-keep'), '');
+  writeFileSync(buildImagePaths(ctx.source.dataDir, 'sha256:web-1111111').config, '{}');
 
-  await ctx.sourceApp.client.imps.create({ name: 'one', image: 'agent-1111111' });
+  await ctx.sourceApp.client.imps.create({ name: 'one', image: 'web-1111111' });
   await ctx.sourceApp.client.imps.stop({ name: 'one' });
   await ctx.runMove('one');
   await ctx.targetApp.client.imps.destroy({ name: 'one' });
-  await ctx.target.createTestImage('agent-2222222');
 
-  const filed = await readImageByName(ctx.target.db, 'agent-1111111');
+  const filed = await readImageByName(ctx.target.db, 'web-1111111');
 
   invariant(filed);
 
   await ctx.target.db
     .updateTable('images')
     .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
-    .where('name', '=', 'agent-1111111')
+    .where('name', '=', 'web-1111111')
     .execute();
 
-  await ctx.sourceApp.client.imps.create({ name: 'two', image: 'agent-1111111' });
+  await ctx.sourceApp.client.imps.create({ name: 'two', image: 'web-1111111' });
   await ctx.sourceApp.client.imps.stop({ name: 'two' });
 
   gate.arm(filed.digest);
@@ -1155,12 +1173,12 @@ test('it keeps an old image the target has under the digest of what arrived when
 
   await gate.reached;
 
-  await ctx.target.images.runImagePrune();
+  await ctx.target.images.runImageEviction();
 
   gate.release();
 
   const status = await moving;
-  const image = await readImageByName(ctx.target.db, 'agent-1111111');
+  const image = await readImageByName(ctx.target.db, 'web-1111111');
   const two = await readImpByName(ctx.target.db, 'two');
 
   expect(status).toMatchObject({ isDone: true, error: null });

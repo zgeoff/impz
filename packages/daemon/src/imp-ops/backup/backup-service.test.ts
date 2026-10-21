@@ -9,6 +9,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
+import { copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import invariant from 'tiny-invariant';
@@ -17,6 +18,7 @@ import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-
 import { buildStubRestic } from '../../../testing/imp-ops/build-stub-restic';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { startTestImpd } from '../../../testing/start-test-impd';
+import { buildStubStoragePressure } from '../../../testing/vm/build-stub-storage-pressure';
 import { createTemplateService } from '../../imps/images/template-service';
 import { createNetworkService } from '../../network/networks/network-service';
 import { createCheckpoint, listCheckpoints } from '../../platform/db/checkpoints';
@@ -25,12 +27,13 @@ import { readImpByName } from '../../platform/db/imps';
 import { readSecret } from '../../platform/db/secrets';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import { BACKUP_TREE, buildImpPaths } from '../../vm/storage/data-layout';
+import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { BackupManifestSchema } from './backup-manifest';
 import { buildBackupsOffError, createBackupService } from './backup-service';
 import type { BackupServiceDeps } from './backup-service';
 import { ResticError } from './restic';
 
-async function setupTest() {
+async function setupTest(options: Readonly<{ isStorageFull?: boolean }> = {}) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -41,7 +44,16 @@ async function setupTest() {
     rmSync(repoDir, { recursive: true, force: true });
   });
 
-  const host = await startTestImpd(stack, { frozenClockMs: Date.UTC(2026, 9, 2) });
+  const host = await startTestImpd(stack, {
+    frozenClockMs: Date.UTC(2026, 9, 2),
+    ...(options.isStorageFull === true && {
+      env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
+      createStorage: (dataDir: string) => ({
+        ...createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+        ...buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 }),
+      }),
+    }),
+  });
 
   const restic = buildStubRestic({ repoDir, now: () => new Date(host.now()) });
   const freezes: string[] = [];
@@ -302,10 +314,10 @@ test('#restoreBackup restores an imp stopped, with its disk and its checkpoints 
   expect(readdirSync(join(ctx.dataDir, 'backup', 'restore'))).toStrictEqual([]);
 });
 
-test('#restoreBackup keeps an old image it reuses when a prune reaches the restore as it picks the image', async () => {
-  const ctx = await setupTest();
+test('#restoreBackup keeps an old image it reuses when an eviction reaches the restore as it picks the image', async () => {
+  const ctx = await setupTest({ isStorageFull: true });
 
-  const gate = buildQueryGate('sha256:agent-1111111');
+  const gate = buildQueryGate('sha256:web-1111111');
 
   ctx.stack.defer(() => {
     gate.release();
@@ -317,23 +329,18 @@ test('#restoreBackup keeps an old image it reuses when a prune reaches the resto
     backup: buildMockBackupConfig(),
   });
 
-  await ctx.createTestImage('agent-1111111');
+  await ctx.createTestImage('web-1111111');
 
-  writeFileSync(join(ctx.dataDir, 'images', 'agent-1111111', 'config.json'), '{}');
+  writeFileSync(join(ctx.dataDir, 'images', 'web-1111111', 'config.json'), '{}');
 
-  await ctx.imps.createImp({ name: 'dev', image: 'agent-1111111' });
+  await ctx.imps.createImp({ name: 'dev', image: 'web-1111111' });
   await backups.runBackup();
   await ctx.imps.destroyImp('dev');
-  await ctx.createTestImage('agent-2222222');
-  await ctx.createTestImage('agent-3333333');
-  await ctx.createTestImage('agent-4444444');
-
-  writeFileSync(join(ctx.dataDir, 'image-keep'), '');
 
   await ctx.db
     .updateTable('images')
     .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
-    .where('name', '=', 'agent-1111111')
+    .where('name', '=', 'web-1111111')
     .execute();
 
   gate.arm();
@@ -342,16 +349,16 @@ test('#restoreBackup keeps an old image it reuses when a prune reaches the resto
 
   await gate.reached;
 
-  await ctx.images.runImagePrune();
+  await ctx.images.runImageEviction();
 
   gate.release();
 
   await restoring;
 
-  const image = await readImageByName(ctx.db, 'agent-1111111');
+  const image = await readImageByName(ctx.db, 'web-1111111');
   const dev = await readImpByName(ctx.db, 'dev');
 
-  expect(image?.name).toBe('agent-1111111');
+  expect(image?.name).toBe('web-1111111');
   expect(dev?.imageId).toBe(image?.id);
 });
 

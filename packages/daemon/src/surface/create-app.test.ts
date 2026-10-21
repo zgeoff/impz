@@ -113,6 +113,7 @@ test('it serves system.info from config and the database', async () => {
       readOnlyFiles: true,
       execDropSysAdmin: true,
       guestScratch: true,
+      imagePins: true,
     },
     ksm: null,
   });
@@ -805,6 +806,38 @@ test('it refuses to remove an image an imp uses', async () => {
 
   expect(ctx.client.images.delete({ name: 'ubuntu' })).rejects.toMatchObject({
     code: 'CONFLICT',
+  });
+});
+
+test('it pins an image and lists it as pinned', async () => {
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu' }));
+
+  const pinned = await ctx.client.images.pin({ name: 'ubuntu' });
+  const images = await ctx.client.images.list();
+
+  expect(pinned).toMatchObject({ name: 'ubuntu', pinned: true });
+  expect(images).toPartiallyContain({ name: 'ubuntu', pinned: true });
+});
+
+test('it unpins a pinned image', async () => {
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu' }));
+
+  await ctx.client.images.pin({ name: 'ubuntu' });
+
+  const unpinned = await ctx.client.images.unpin({ name: 'ubuntu' });
+
+  expect(unpinned).toMatchObject({ name: 'ubuntu', pinned: false });
+});
+
+test('it refuses to pin an image this impd does not have', async () => {
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
+
+  expect(ctx.client.images.pin({ name: 'missing' })).rejects.toMatchObject({
+    code: 'NOT_FOUND',
   });
 });
 

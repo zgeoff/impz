@@ -85,6 +85,7 @@ export interface Images {
   id: string;
   last_used_at: Generated<number>;
   name: string;
+  pinned: Generated<number>;
   ref: string;
   size_bytes: number;
   source: Generated<ImageSource>;

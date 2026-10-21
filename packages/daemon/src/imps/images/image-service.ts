@@ -4,6 +4,7 @@ import {
   readImageByName,
   removeImage,
   removeImageRemoval,
+  updateImagePin,
   updateImageUse,
 } from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
@@ -20,7 +21,7 @@ import { FALLBACK_DEFAULT_IMAGE, createImageAdds } from './create-image-adds';
 import type { ImageAdds } from './create-image-adds';
 import { createImageBuilds } from './create-image-builds';
 import type { ImageBuilds } from './create-image-builds';
-import { createImagePrune } from './create-image-prune';
+import { createImageEviction } from './create-image-eviction';
 import { createImageWriter } from './create-image-writer';
 
 export type ImageService = ImageAdds &
@@ -32,7 +33,9 @@ export type ImageService = ImageAdds &
 
     readonly findDefaultImage: () => Promise<ImageRecord | undefined>;
 
-    readonly runImagePrune: () => Promise<void>;
+    readonly updateImagePin: (name: string, isPinned: boolean) => Promise<ImageRecord>;
+
+    readonly runImageEviction: () => Promise<void>;
   };
 
 export interface ImageServiceDeps {
@@ -55,8 +58,6 @@ export interface ImageServiceDeps {
 
   readonly seedRef?: string | null;
 
-  readonly readImageKeepFile?: (path: string) => Promise<string>;
-
   readonly now?: () => number;
 }
 
@@ -64,28 +65,33 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
   const writer = createImageWriter(deps);
   const now = deps.now ?? Date.now;
   const builds = createImageBuilds(deps, writer);
+  const adds = createImageAdds(deps, writer);
 
-  const prune = createImagePrune({
+  const eviction = createImageEviction({
     config: deps.config,
     db: deps.db,
+    storage: deps.storage,
     storageGate: deps.storageGate,
     removeIdleImage: writer.removeIdleImage,
     removeIdleRootfs: writer.removeIdleRootfs,
-    readKeepFile:
-      deps.readImageKeepFile ??
-      (() => Promise.reject(new Error('this impd was given no keep file reader'))),
     log: deps.log,
     now,
   });
 
-  const withPrune = async (build: () => Promise<ImageRecord>): Promise<ImageRecord> => {
-    const image = await build();
+  const runEviction = async (): Promise<void> => {
+    try {
+      await eviction.runEviction();
+    } catch (error) {
+      deps.log(`impd: image eviction: ${getErrorMessage(error)}`);
+    }
+  };
 
-    await prune.runPrune().catch((error: unknown) => {
-      deps.log(`impd: image prune: ${getErrorMessage(error)}`);
-    });
-
-    return image;
+  const withEviction = async (write: () => Promise<ImageRecord>): Promise<ImageRecord> => {
+    try {
+      return await write();
+    } finally {
+      await runEviction();
+    }
   };
 
   const readDefaultImage = async (): Promise<ImageRecord | undefined> => {
@@ -103,7 +109,7 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
   const resolveImage = async (name?: string): Promise<ImageRecord> => {
     const names = name === undefined ? [deps.config.defaultImage, FALLBACK_DEFAULT_IMAGE] : [name];
 
-    // The use goes in before the read, so a prune either sees it and keeps the image, or
+    // The use goes in before the read, so an eviction either sees it and keeps the image, or
     // removed the image first and the read finds nothing.
     await updateImageUse(deps.db, 'name', names, now());
 
@@ -118,10 +124,11 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
   };
 
   return {
-    ...createImageAdds(deps, writer),
+    ...adds,
     ...builds,
-    runImageBuild: (...args) => withPrune(() => builds.runImageBuild(...args)),
-    buildImageFromContext: (...args) => withPrune(() => builds.buildImageFromContext(...args)),
+    addImage: (...args) => withEviction(() => adds.addImage(...args)),
+    runImageBuild: (...args) => withEviction(() => builds.runImageBuild(...args)),
+    buildImageFromContext: (...args) => withEviction(() => builds.buildImageFromContext(...args)),
     listImages: () => listImages(deps.db),
     removeImage: async (name) => {
       const image = await readImageByName(deps.db, name);
@@ -144,8 +151,17 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
         await removeImageRemoval(deps.db, image.digest);
       });
     },
+    updateImagePin: async (name, isPinned) => {
+      const image = await updateImagePin(deps.db, name, isPinned);
+
+      if (image === undefined) {
+        throw buildNotFoundError('image', name);
+      }
+
+      return image;
+    },
     resolveImage,
     findDefaultImage: readDefaultImage,
-    runImagePrune: prune.runPrune,
+    runImageEviction: runEviction,
   };
 }

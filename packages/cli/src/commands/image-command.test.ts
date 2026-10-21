@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { DOCKERFILE_FRONTEND } from '@impz/daemon/src/imps/docker-proxy/dockerfile-frontend';
-import { createImage } from '@impz/daemon/src/platform/db/images';
+import { createImage, readImageByName, updateImagePin } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildMockNewImage,
@@ -291,6 +291,39 @@ test('#imageCommand refuses a build context without a Dockerfile before any uplo
     stderr: expect.stringMatching(/^impz: there is no Dockerfile in /u) as unknown,
     code: 2,
   });
+});
+
+test('#imageCommand pins an image so that image ls shows it pinned', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  const result = await runCLIInProcess({
+    args: ['image', 'pin', 'ubuntu'],
+    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+  });
+
+  const image = await readImageByName(ctx.db, 'ubuntu');
+
+  expect(result).toStrictEqual({ stdout: '', stderr: '', code: 0 });
+  expect(image?.isPinned).toBeTrue();
+});
+
+test('#imageCommand unpins a pinned image', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+  await updateImagePin(ctx.db, 'ubuntu', true);
+
+  const result = await runCLIInProcess({
+    args: ['image', 'unpin', 'ubuntu'],
+    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+  });
+
+  const image = await readImageByName(ctx.db, 'ubuntu');
+
+  expect(result).toStrictEqual({ stdout: '', stderr: '', code: 0 });
+  expect(image?.isPinned).toBeFalse();
 });
 
 test('#templateCommand refuses to remove a docker image as a template', async () => {

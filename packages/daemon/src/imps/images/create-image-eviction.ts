@@ -11,33 +11,31 @@ import type { ImageUse } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSingleFlight } from '../../platform/process/single-flight';
+import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import { FALLBACK_DEFAULT_IMAGE } from './create-image-adds';
 import type { ImageWriter } from './create-image-writer';
-import { parseImageKeepFile } from './parse-image-keep-file';
-import type { ImageKeepFile } from './parse-image-keep-file';
-import { pickPrunedImages } from './pick-pruned-images';
+import { isOverHighMark } from './is-over-high-mark';
+import { pickEvictedImages } from './pick-evicted-images';
 
-export interface ImagePrune {
-  readonly runPrune: () => Promise<void>;
+export interface ImageEviction {
+  readonly runEviction: () => Promise<void>;
 }
 
-export interface ImagePruneDeps {
-  readonly config: Pick<Config, 'imagePrune' | 'defaultImage'>;
+export interface ImageEvictionDeps {
+  readonly config: Pick<Config, 'imageEviction' | 'defaultImage'>;
   readonly db: ImpDatabase;
+  readonly storage: Pick<StorageBackend, 'readUsage' | 'measureImages'>;
   readonly storageGate: Pick<StorageGate, 'join'>;
   readonly removeIdleImage: ImageWriter['removeIdleImage'];
   readonly removeIdleRootfs: ImageWriter['removeIdleRootfs'];
-  readonly readKeepFile: (path: string) => Promise<string>;
   readonly log: (message: string) => void;
   readonly now?: () => number;
 }
 
-export function createImagePrune(deps: ImagePruneDeps): ImagePrune {
-  const rule = deps.config.imagePrune;
+export function createImageEviction(deps: ImageEvictionDeps): ImageEviction {
   const now = deps.now ?? Date.now;
   const flight = createSingleFlight<void>();
-  const state = { lastKeptAll: null as string | null };
 
   const removeImage = async (use: Readonly<ImageUse>): Promise<void> => {
     try {
@@ -49,11 +47,11 @@ export function createImagePrune(deps: ImagePruneDeps): ImagePrune {
         await removeImageRemoval(deps.db, use.digest);
 
         deps.log(
-          `impd: image prune: removed ${use.name} (${formatBytes(use.sizeBytes)}, last used ${new Date(use.lastUsedAt).toISOString()})`,
+          `impd: image eviction: removed ${use.name} (${formatBytes(use.sizeBytes)}, last used ${new Date(use.lastUsedAt).toISOString()})`,
         );
       }
     } catch (error) {
-      deps.log(`impd: image prune: could not remove ${use.name}: ${getErrorMessage(error)}`);
+      deps.log(`impd: image eviction: could not remove ${use.name}: ${getErrorMessage(error)}`);
     }
   };
 
@@ -67,7 +65,7 @@ export function createImagePrune(deps: ImagePruneDeps): ImagePrune {
         await removeImageRemoval(deps.db, digest);
       } catch (error) {
         deps.log(
-          `impd: image prune: could not remove the rootfs of ${digest}, and tries again at the next prune: ${getErrorMessage(error)}`,
+          `impd: image eviction: could not remove the rootfs of ${digest}, and tries again at the next image write: ${getErrorMessage(error)}`,
         );
       }
     }
@@ -76,56 +74,49 @@ export function createImagePrune(deps: ImagePruneDeps): ImagePrune {
   const runOnce = async (): Promise<void> => {
     await removeLeftoverRootfs();
 
-    const keepFile = await readImageKeepFile(deps.readKeepFile, rule.keepFile);
+    const marks = deps.config.imageEviction;
 
-    if (!keepFile.isOk) {
-      if (keepFile.reason !== state.lastKeptAll) {
-        deps.log(`impd: image prune: kept every image: ${rule.keepFile}: ${keepFile.reason}`);
-      }
-
-      state.lastKeptAll = keepFile.reason;
-
+    if (marks === null) {
       return;
     }
-
-    state.lastKeptAll = null;
-
-    const keptNames = new Set([
-      ...keepFile.names,
-      deps.config.defaultImage,
-      FALLBACK_DEFAULT_IMAGE,
-    ]);
 
     const at = now();
 
     const uses = await listImageUses(deps.db);
 
-    const plan = pickPrunedImages(uses, keptNames, rule, at);
+    await updateImageUse(
+      deps.db,
+      'id',
+      uses.filter((use) => use.impCount > 0).map((use) => use.id),
+      at,
+    );
 
-    await updateImageUse(deps.db, 'id', plan.usedIDs, at);
+    const usage = await deps.storage.readUsage();
 
-    for (const use of plan.removed) {
+    if (!isOverHighMark(usage, marks)) {
+      return;
+    }
+
+    const report = await deps.storage.measureImages([...new Set(uses.map((use) => use.digest))]);
+
+    const evicted = pickEvictedImages(
+      {
+        uses,
+        keptNames: new Set([deps.config.defaultImage, FALLBACK_DEFAULT_IMAGE]),
+        spaces: report.images,
+        usedBytes: usage.usedBytes,
+        availableBytes: usage.availableBytes + report.freeingBytes,
+        now: at,
+      },
+      marks,
+    );
+
+    for (const use of evicted) {
       await removeImage(use);
     }
   };
 
   return {
-    runPrune: () => flight.run('prune', runOnce),
+    runEviction: () => flight.run('eviction', runOnce),
   };
-}
-
-async function readImageKeepFile(
-  readKeepFile: ImagePruneDeps['readKeepFile'],
-  path: string,
-): Promise<ImageKeepFile> {
-  try {
-    const text = await readKeepFile(path);
-
-    return parseImageKeepFile(text);
-  } catch (error) {
-    return {
-      isOk: false,
-      reason: `cannot read the names of the images that configs outside impd use: ${getErrorMessage(error)}`,
-    };
-  }
 }

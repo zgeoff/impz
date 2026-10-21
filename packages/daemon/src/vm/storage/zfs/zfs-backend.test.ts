@@ -1634,6 +1634,45 @@ test('#readUsage reads the pool usage of the root dataset', async () => {
   expect(usage).toStrictEqual({ usedBytes: 1_073_741_824, availableBytes: 9_663_676_416 });
 });
 
+test('#measureImages counts the used bytes of an image no clone shares as freed', async () => {
+  const ctx = setupTest();
+
+  await ctx.backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
+  await ctx.backend.createImage('sha256:9f2c', () => Promise.resolve());
+
+  const report = await ctx.backend.measureImages(['sha256:9f2c']);
+
+  expect(report).toStrictEqual({
+    images: new Map([['sha256:9f2c', { freedBytes: 1_048_576, isShared: false }]]),
+    freeingBytes: 0,
+  });
+});
+
+test('#measureImages marks an image whose base an imp disk clones as shared', async () => {
+  const ctx = setupTest();
+
+  await ctx.backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
+  await ctx.backend.createImage('sha256:9f2c', () => Promise.resolve());
+  await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:9f2c' });
+
+  const report = await ctx.backend.measureImages(['sha256:9f2c']);
+
+  expect(report.images.get('sha256:9f2c')).toStrictEqual({
+    freedBytes: 1_048_576,
+    isShared: true,
+  });
+});
+
+test('#measureImages leaves out an image with no dataset', async () => {
+  const ctx = setupTest();
+
+  await ctx.backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
+
+  const report = await ctx.backend.measureImages(['sha256:9f2c']);
+
+  expect(report.images).toStrictEqual(new Map());
+});
+
 test('#removeImpDisk lets a checkpoint and a fork of the promote target run while its reclaim waits on the promote', async () => {
   const ctx = setupTest();
 
@@ -3706,6 +3745,87 @@ test.skipIf(readZfsTestPool() === null)(
     }
 
     expect(margins).toSatisfyAll((margin: number) => margin >= 0);
+  },
+  120_000,
+);
+
+test.skipIf(readZfsTestPool() === null)(
+  'it frees about the bytes it measured when it removes an image whose base no clone shares',
+  async () => {
+    const ctx = setupTest();
+
+    const pool = await ctx.createPoolBackend();
+
+    const poolName = pool.root.split('/')[0] ?? pool.root;
+
+    await pool.backend.start({
+      impIds: new Set(),
+      checkpointIds: new Set(),
+      imageDigests: new Set(),
+    });
+
+    // Random bytes, because the pool's lz4 would shrink a run of zeroes to nothing.
+    await pool.backend.createImage('sha256:spacious', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), randomBytes(64 * 1024 ** 2));
+
+      return Promise.resolve();
+    });
+
+    await runChecked(['zpool', 'sync', poolName]);
+
+    const measured = await pool.backend.measureImages(['sha256:spacious']);
+    const before = await pool.backend.readUsage();
+
+    await pool.backend.removeImage('sha256:spacious');
+
+    await runChecked(['zpool', 'sync', poolName]);
+
+    const after = await pool.backend.readUsage();
+    const freeing = await pool.backend.measureImages([]);
+
+    const space = measured.images.get('sha256:spacious');
+
+    invariant(space);
+
+    expect(space.isShared).toBeFalse();
+    expect(space.freedBytes).toBeWithin(64 * 1024 ** 2, 72 * 1024 ** 2);
+
+    expect(before.usedBytes - after.usedBytes).toBeWithin(
+      space.freedBytes * 0.95,
+      space.freedBytes * 1.05,
+    );
+
+    expect(
+      after.availableBytes + freeing.freeingBytes - before.availableBytes - measured.freeingBytes,
+    ).toBeWithin(space.freedBytes * 0.95, space.freedBytes * 1.05);
+  },
+  120_000,
+);
+
+test.skipIf(readZfsTestPool() === null)(
+  'it measures an image as shared while an imp disk clones its base',
+  async () => {
+    const ctx = setupTest();
+
+    const pool = await ctx.createPoolBackend();
+
+    await pool.backend.start({
+      impIds: new Set(),
+      checkpointIds: new Set(),
+      imageDigests: new Set(),
+    });
+
+    await pool.backend.createImage('sha256:spacious', (directory) => {
+      writeFileSync(join(directory, 'rootfs.ext4'), randomBytes(4 * 1024 ** 2));
+
+      return Promise.resolve();
+    });
+
+    await pool.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:spacious' });
+
+    const measured = await pool.backend.measureImages(['sha256:spacious']);
+
+    expect(measured.images.get('sha256:spacious')?.isShared).toBeTrue();
   },
   120_000,
 );

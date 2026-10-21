@@ -207,6 +207,9 @@ export const impContract = {
     builds: base.output(z.array(ImageBuildRunSchema)),
 
     delete: base.input(NameInputSchema).output(EmptySchema),
+
+    pin: base.input(NameInputSchema).output(ImageSchema),
+    unpin: base.input(NameInputSchema).output(ImageSchema),
   },
 
   exec: {

@@ -427,6 +427,26 @@ test('#readUsage reads the used and available bytes of a dataset', async () => {
   expect(usage).toStrictEqual({ used: 1_073_741_824, available: 9_663_676_416 });
 });
 
+test('#readFreeing reads the bytes a pool still frees in the background', async () => {
+  const run = mock<CommandRunner>(() =>
+    Promise.resolve({ exitCode: 0, stdout: '8388608\n', stderr: '' }),
+  );
+
+  const freeing = await createZfsCommands(run).readFreeing('tank');
+
+  expect(run).toHaveBeenCalledExactlyOnceWith([
+    'zpool',
+    'get',
+    '-Hp',
+    '-o',
+    'value',
+    'freeing',
+    'tank',
+  ]);
+
+  expect(freeing).toBe(8_388_608);
+});
+
 test('#readVersion reads the userland version from zfs version', async () => {
   const run = mock<CommandRunner>(() =>
     Promise.resolve({

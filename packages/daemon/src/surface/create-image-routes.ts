@@ -87,6 +87,16 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
 
       return {};
     }),
+    pin: os.images.pin.handler(async (context) => {
+      const image = await deps.images.updateImagePin(context.input.name, true);
+
+      return toApiImage(image);
+    }),
+    unpin: os.images.unpin.handler(async (context) => {
+      const image = await deps.images.updateImagePin(context.input.name, false);
+
+      return toApiImage(image);
+    }),
   };
 }
 

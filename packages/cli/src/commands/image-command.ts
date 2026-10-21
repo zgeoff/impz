@@ -111,6 +111,30 @@ const rmCommand = defineCommand({
     }),
 });
 
+const pinCommand = defineCommand({
+  name: 'pin',
+  description: 'Keep an image when impd evicts images to free disk',
+  args: { name: { type: 'positional', description: 'image name', required: true } },
+  run: (ctx) =>
+    runAction(ctx.extensions.impz, async (client) => {
+      await requireFeatures(client, { imagePins: 'not know the call' });
+
+      await client.images.pin({ name: ctx.values.name });
+    }),
+});
+
+const unpinCommand = defineCommand({
+  name: 'unpin',
+  description: 'Let impd evict an image again when it frees disk',
+  args: { name: { type: 'positional', description: 'image name', required: true } },
+  run: (ctx) =>
+    runAction(ctx.extensions.impz, async (client) => {
+      await requireFeatures(client, { imagePins: 'not know the call' });
+
+      await client.images.unpin({ name: ctx.values.name });
+    }),
+});
+
 export const imageCommand = defineGroup({
   name: 'image',
   description: 'Manage images',
@@ -119,7 +143,9 @@ export const imageCommand = defineGroup({
     build: buildCommand,
     builds: buildsCommand,
     ls: lsCommand,
+    pin: pinCommand,
     rm: rmCommand,
+    unpin: unpinCommand,
   },
 });
 

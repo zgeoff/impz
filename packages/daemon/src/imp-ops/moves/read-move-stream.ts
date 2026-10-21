@@ -338,7 +338,7 @@ async function requireImage(
   count: ByteCounter,
   tempBase: string,
 ): Promise<{ readonly name: string; readonly files: readonly ReceivedFile[] }> {
-  // The use goes in before each read, so an image prune keeps the image this move picks.
+  // The use goes in before each read, so an image eviction keeps the image this move picks.
   await updateImageUse(deps.db, 'digest', [header.image.digest], deps.now());
 
   const existing = await readImageByDigest(deps.db, header.image.digest);

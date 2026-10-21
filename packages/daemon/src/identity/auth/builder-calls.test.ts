@@ -14,6 +14,8 @@ test('it reports the imp of every call that changes an imp it names', () => {
     'images.build',
     'images.buildStream',
     'images.delete',
+    'images.pin',
+    'images.unpin',
     'secrets.add',
     'secrets.delete',
     'secrets.refresh',

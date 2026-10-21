@@ -12,6 +12,7 @@ export function buildMockImage(overrides: Partial<Image> = {}): Image {
     source: 'oci',
     createdAt: faker.date.past(),
     sizeBytes: faker.number.int({ min: 1, max: 2 ** 34 }),
+    pinned: false,
     ...overrides,
   };
 }

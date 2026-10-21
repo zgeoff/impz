@@ -31,6 +31,7 @@ const FEATURE_GAPS = {
   readOnlyFiles: 'has no read-only files',
   execDropSysAdmin: 'cannot drop CAP_SYS_ADMIN from a command',
   guestScratch: 'does not name the guest scratch folder',
+  imagePins: 'has no image pins',
 } as const satisfies Record<ImpdFeature, string>;
 
 export interface FeatureSource {

@@ -1,7 +1,6 @@
 import type { Config } from './config';
 import type { BackupService } from './imp-ops/backup/backup-service';
 import type { IdleLoop } from './imp-ops/idle/idle-loop';
-import type { ImageService } from './imps/images/image-service';
 import type { Imps } from './imps/imps/imp-service';
 import type { Broker } from './network/broker/broker-service';
 import type { WakeProxy } from './network/proxy/wake-proxy';
@@ -24,7 +23,6 @@ export interface ImpdTickerParts {
   readonly tailnetNames: Pick<TailnetNames, 'runSync'> | null;
   readonly broker: Pick<Broker, 'applyGrants'>;
   readonly gc: Pick<StorageGcService, 'runScheduled'>;
-  readonly images: Pick<ImageService, 'runImagePrune'>;
   readonly diskUsage: Pick<DiskUsageCache, 'runPass' | 'requestRefresh'>;
   readonly backups: Pick<BackupService, 'runScheduled'> | null;
 }
@@ -52,7 +50,6 @@ export function startImpdTickers(
       : [start('tailnet-names', 600_000, parts.tailnetNames.runSync)]),
     start('broker', 60_000, parts.broker.applyGrants),
     start('gc', 3_600_000, parts.gc.runScheduled),
-    start('image-prune', 3_600_000, parts.images.runImagePrune),
 
     // a pass runs FIEMAP over every file on XFS, so it runs rarely
     start('disk-usage', 300_000, parts.diskUsage.runPass),

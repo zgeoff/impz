@@ -14,6 +14,7 @@ test('it builds a default image', () => {
     source: 'oci',
     createdAt: expect.toBeBefore(new Date('2026-01-01T00:00:00.000Z')) as unknown,
     sizeBytes: expect.any(Number) as unknown,
+    pinned: false,
   });
 
   expect(ImageSchema.parse(image)).toStrictEqual(image);
@@ -31,5 +32,6 @@ test('it applies overrides on top of the defaults', () => {
     source: 'imp',
     createdAt: expect.toBeValidDate() as unknown,
     sizeBytes: 6,
+    pinned: false,
   });
 });

@@ -77,6 +77,7 @@ test('#runImageAdd makes a template from an imp through the stream of a current 
     source: 'imp',
     createdAt: expect.toBeValidDate() as unknown,
     sizeBytes: expect.any(Number) as unknown,
+    pinned: false,
   });
 
   expect(ctx.calls).toStrictEqual(['imps/create', 'system/features', 'images/addStream']);
@@ -109,6 +110,7 @@ test.skipIf(!checkDockerBuildx())(
       source: 'oci',
       createdAt: expect.toBeValidDate() as unknown,
       sizeBytes: expect.any(Number) as unknown,
+      pinned: false,
     });
 
     expect(ctx.calls).toStrictEqual(['system/features', 'images/buildStream']);
@@ -163,6 +165,7 @@ test('#runImageAdd adds through the call that answers at the end on an impd from
     source: 'imp',
     createdAt: expect.toBeValidDate() as unknown,
     sizeBytes: expect.any(Number) as unknown,
+    pinned: false,
   });
 
   expect(older.calls).toStrictEqual(['system/features', 'images/add']);
@@ -199,6 +202,7 @@ test.skipIf(!checkDockerBuildx())(
       source: 'oci',
       createdAt: expect.toBeValidDate() as unknown,
       sizeBytes: expect.any(Number) as unknown,
+      pinned: false,
     });
 
     expect(older.calls).toStrictEqual(['system/features', 'images/build']);

@@ -90,6 +90,8 @@ const SystemFeaturesSchema = z.object({
   execDropSysAdmin: z.boolean().optional(),
 
   guestScratch: z.boolean().optional(),
+
+  imagePins: z.boolean().optional(),
 });
 
 const GuestInfoSchema = z.object({

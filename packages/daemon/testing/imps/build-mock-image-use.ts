@@ -10,6 +10,7 @@ export function buildMockImageUse(overrides: Partial<ImageUse> = {}): ImageUse {
     sizeBytes: faker.number.int({ min: 1, max: 1024 ** 3 }),
     lastUsedAt: faker.date.past().getTime(),
     impCount: 0,
+    isPinned: false,
     ...overrides,
   };
 }

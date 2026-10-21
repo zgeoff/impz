@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
@@ -444,89 +444,205 @@ test('#resolveImage records the lookup as a use of the image', async () => {
     now: () => Date.parse('2030-01-01T00:00:00Z'),
   });
 
-  await createImage(ctx.db, buildMockNewImage({ name: 'agent-0a1b2c3' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-0a1b2c3' }));
 
-  await images.resolveImage('agent-0a1b2c3');
+  await images.resolveImage('web-0a1b2c3');
 
   const uses = await listImageUses(ctx.db);
 
   expect(uses[0]?.lastUsedAt).toBe(Date.parse('2030-01-01T00:00:00Z'));
 });
 
-test('#runImagePrune keeps every image when impd was given no keep file reader', async () => {
+test('#addImage evicts an old image under storage pressure, even when the add fails', async () => {
   const ctx = await setupTest();
 
-  const logged: string[] = [];
+  const images = createImageService({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: ctx.db,
+    storage: {
+      ...ctx.storage,
+      readUsage: () => Promise.resolve({ usedBytes: 90, availableBytes: 10 }),
+      measureImages: () =>
+        Promise.resolve({
+          images: new Map([['sha256:1', { freedBytes: 50, isShared: false }]]),
+          freeingBytes: 0,
+        }),
+    },
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+
+  const failure = await images.addImage('--help', 'x').then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(failure).toMatchObject({ code: 'BAD_REQUEST' });
+  expect(uses).toStrictEqual([]);
+});
+
+test('#runImageBuild evicts an old image under storage pressure, even when the build fails', async () => {
+  const ctx = await setupTest();
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: ctx.db,
+    storage: {
+      ...ctx.storage,
+      readUsage: () => Promise.resolve({ usedBytes: 90, availableBytes: 10 }),
+      measureImages: () =>
+        Promise.resolve({
+          images: new Map([['sha256:1', { freedBytes: 50, isShared: false }]]),
+          freeingBytes: 0,
+        }),
+    },
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+
+  const failure = await images.runImageBuild('--file=/etc/passwd', 'x').then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(failure).toMatchObject({ code: 'BAD_REQUEST' });
+  expect(uses).toStrictEqual([]);
+});
+
+test('#buildImageFromContext evicts an old image under storage pressure, even when the build fails', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: ctx.db,
+    storage: {
+      ...ctx.storage,
+      readUsage: () => Promise.resolve({ usedBytes: 90, availableBytes: 10 }),
+      measureImages: () =>
+        Promise.resolve({
+          images: new Map([['sha256:1', { freedBytes: 50, isShared: false }]]),
+          freeingBytes: 0,
+        }),
+    },
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+
+  const failure = await images
+    .buildImageFromContext('/nowhere.tar', BUILDER_IMAGE, undefined, {
+      signal: new AbortController().signal,
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(failure).toMatchObject({ code: 'BAD_REQUEST' });
+  expect(uses).toStrictEqual([]);
+});
+
+test('#updateImagePin answers NOT_FOUND for a name no image has', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: (message) => {
-      logged.push(message);
-    },
-  });
-
-  await writeFile(join(ctx.dataDir, 'image-keep'), '');
-  await createImage(ctx.db, buildMockNewImage({ name: 'agent-1111111' }));
-  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
-
-  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
-  await images.runImagePrune();
-
-  const uses = await listImageUses(ctx.db);
-
-  expect(uses.map((use) => use.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
-
-  expect(logged).toStrictEqual([
-    `impd: image prune: kept every image: ${join(ctx.dataDir, 'image-keep')}: cannot read the names of the images that configs outside impd use: this impd was given no keep file reader`,
-  ]);
-});
-
-test('#resolveImage keeps an old image that a prune reaches while the lookup reads it', async () => {
-  const ctx = await setupTest();
-
-  const gate = buildQueryGate('agent-1111111');
-
-  const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
-    db: gate.wrap(ctx.db),
-    storage: ctx.storage,
-    storageGate: createStorageGate(),
-    diskBudget: ctx.diskBudget,
-    readBuilders: () => null,
-    readImageKeepFile: (path) => readFile(path, 'utf8'),
     log: () => {},
   });
 
-  await writeFile(join(ctx.dataDir, 'image-keep'), '');
-  await createImage(ctx.db, buildMockNewImage({ name: 'agent-1111111' }));
-  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+  expect(images.updateImagePin('missing', true)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+});
+
+test('#resolveImage keeps an old image that an eviction reaches while the lookup reads it', async () => {
+  const ctx = await setupTest();
+
+  const gate = buildQueryGate('web-1111111');
+
+  const images = createImageService({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: gate.wrap(ctx.db),
+    storage: {
+      ...ctx.storage,
+      readUsage: () => Promise.resolve({ usedBytes: 90, availableBytes: 10 }),
+      measureImages: () =>
+        Promise.resolve({
+          images: new Map([['sha256:1', { freedBytes: 50, isShared: false }]]),
+          freeingBytes: 0,
+        }),
+    },
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
 
   await ctx.db
     .updateTable('images')
     .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
-    .where('name', '=', 'agent-1111111')
+    .where('name', '=', 'web-1111111')
     .execute();
 
   gate.arm();
 
-  const resolving = images.resolveImage('agent-1111111');
+  const resolving = images.resolveImage('web-1111111');
 
   await gate.reached;
 
-  await images.runImagePrune();
+  await images.runImageEviction();
 
   gate.release();
 
   const image = await resolving;
   const uses = await listImageUses(ctx.db);
 
-  expect(image.name).toBe('agent-1111111');
-  expect(uses.map((use) => use.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
+  expect(image.name).toBe('web-1111111');
+  expect(uses.map((use) => use.name)).toStrictEqual(['web-1111111']);
 });
 
 test('#resolveImage answers NOT_FOUND for a name no image has', async () => {

@@ -156,7 +156,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
 
     const offer = MoveOfferSchema.parse(body);
 
-    // The use goes in before the read, so an image prune keeps the image this offer says the
+    // The use goes in before the read, so an image eviction keeps the image this offer says the
     // target holds until the stream reuses it.
     await updateImageUse(deps.db, 'digest', [offer.imageDigest], deps.now());
 

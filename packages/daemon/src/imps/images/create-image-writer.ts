@@ -204,7 +204,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     digest: string,
     sizeBytes: number,
   ): Promise<ImageRecord> => {
-    // The use goes in before the read, so an image prune either sees it and keeps the row, or
+    // The use goes in before the read, so an image eviction either sees it and keeps the row, or
     // removed the row first and the read finds nothing.
     await updateImageUse(deps.db, 'name', [imageName], Date.now());
 

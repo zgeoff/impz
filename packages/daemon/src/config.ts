@@ -30,6 +30,7 @@ const PortSchema = z.coerce.number().pipe(z.int().min(1).max(65_535));
 const CountSchema = z.coerce.number().pipe(z.int().positive());
 const DnsServersSchema = z.array(z.ipv4()).min(1);
 const PercentSchema = z.coerce.number().pipe(z.int().min(0).max(100));
+const MarkSchema = z.coerce.number().pipe(z.int().min(1).max(99));
 
 const EnvSchema = z.object({
   IMP_DATA_DIR: z.string().default('/var/lib/imp'),
@@ -69,9 +70,8 @@ const EnvSchema = z.object({
     .string()
     .regex(BUILD_IMAGE_PATTERN, 'must name an image by digest, <ref>@sha256:<hex>')
     .default(DEFAULT_BUILD_IMAGE),
-  IMP_IMAGE_PRUNE_PREFIX: z.string().default('agent-'),
-  IMP_IMAGE_PRUNE_ROLLBACK: CountSchema.default(3),
-  IMP_IMAGE_KEEP_FILE: z.string().optional(),
+  IMP_IMAGE_EVICT_HIGH_PERCENT: MarkSchema.optional(),
+  IMP_IMAGE_EVICT_LOW_PERCENT: MarkSchema.optional(),
   IMP_SESSION_LOG_MAX_MIB: CountSchema.default(16),
   IMP_SESSION_LOG_IMP_MAX_MIB: CountSchema.default(64),
   IMP_SESSION_LOG_IMP_MAX_LIVE: CountSchema.default(8),
@@ -121,10 +121,9 @@ interface BuildConfig {
   readonly image: string;
 }
 
-export interface ImagePruneConfig {
-  readonly prefix: string;
-  readonly rollbackCount: number;
-  readonly keepFile: string;
+export interface ImageEvictionConfig {
+  readonly highPercent: number;
+  readonly lowPercent: number;
 }
 
 export interface Config {
@@ -158,7 +157,7 @@ export interface Config {
   readonly diskReserveBytes: number | null;
   readonly buildContextMaxBytes: number;
   readonly build: BuildConfig;
-  readonly imagePrune: ImagePruneConfig;
+  readonly imageEviction: ImageEvictionConfig | null;
   readonly sessionLog: SessionLogLimits;
   readonly dockerHost: string | null;
   readonly dns: readonly string[];
@@ -379,11 +378,10 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
       imageMaxFiles: parsed.IMP_BUILD_IMAGE_MAX_FILES,
       image: parsed.IMP_BUILD_IMAGE,
     },
-    imagePrune: {
-      prefix: parsed.IMP_IMAGE_PRUNE_PREFIX,
-      rollbackCount: parsed.IMP_IMAGE_PRUNE_ROLLBACK,
-      keepFile: parsed.IMP_IMAGE_KEEP_FILE ?? join(parsed.IMP_DATA_DIR, 'image-keep'),
-    },
+    imageEviction: parseImageEvictionConfig(
+      parsed.IMP_IMAGE_EVICT_HIGH_PERCENT,
+      parsed.IMP_IMAGE_EVICT_LOW_PERCENT,
+    ),
     sessionLog: {
       generationMaxBytes: parsed.IMP_SESSION_LOG_MAX_MIB * 1024 ** 2,
       impMaxBytes: parsed.IMP_SESSION_LOG_IMP_MAX_MIB * 1024 ** 2,
@@ -417,6 +415,29 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
     moves: { peerUrl: parsed.IMP_PEER_URL ?? null, testCidr: parsed.IMP_MOVE_TEST_CIDR ?? null },
     warnings: listHttpsWarnings(parsed),
   };
+}
+
+function parseImageEvictionConfig(
+  highPercent: number | undefined,
+  lowPercent: number | undefined,
+): ImageEvictionConfig | null {
+  if (highPercent === undefined && lowPercent === undefined) {
+    return null;
+  }
+
+  if (highPercent === undefined || lowPercent === undefined) {
+    throw new Error(
+      'IMP_IMAGE_EVICT_HIGH_PERCENT and IMP_IMAGE_EVICT_LOW_PERCENT go together; set both or neither',
+    );
+  }
+
+  if (lowPercent >= highPercent) {
+    throw new Error(
+      `IMP_IMAGE_EVICT_LOW_PERCENT ${String(lowPercent)} must be below IMP_IMAGE_EVICT_HIGH_PERCENT ${String(highPercent)}`,
+    );
+  }
+
+  return { highPercent, lowPercent };
 }
 
 function parseKsmConfig(

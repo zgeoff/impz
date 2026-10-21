@@ -410,7 +410,6 @@ async function startImpdParts(
         tailnetNames,
         broker,
         gc: services.gc,
-        images: stored.images,
         diskUsage,
         backups,
       },

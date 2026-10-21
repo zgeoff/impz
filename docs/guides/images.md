@@ -226,40 +226,46 @@ An image you built with plain `docker build` goes in with `impz image add <ref>`
 published base by digest; to stack it on another base, edit that FROM line. An imp's own disk can be
 an image too: a [template](./templates.md) copies a set-up imp into new ones.
 
-## Prune old images
+## Evict images under storage pressure
 
-impd removes old images whose names start with `IMP_IMAGE_PRUNE_PREFIX` (`agent-` by default) after
-each image build and once an hour, so a pool that holds one image per build never fills. Each prune
-keeps an image that an imp uses, the default image of `IMP_DEFAULT_IMAGE`, and each image that the
-keep file lists. Of the rest, it keeps the `IMP_IMAGE_PRUNE_ROLLBACK` images with the newest last
-use, and any image used within the last hour, and removes the others. A template never goes,
-whatever its name.
+impd keeps every image until you set two marks on the space of `IMP_DATA_DIR`: the ZFS dataset, or
+the XFS filesystem in its loop file. After each image add or build, impd reads how full that space
+is. At `IMP_IMAGE_EVICT_HIGH_PERCENT` or above, it removes images, least recently used first, until
+the space it expects to free brings usage under `IMP_IMAGE_EVICT_LOW_PERCENT`. Set both marks or
+neither, with the low mark below the high one:
 
-An image's last use is the newest of its build, an imp create from it, and a prune that found it in
-use or kept. impd logs each removal with the image's size and last use:
-
-```text
-impd: image prune: removed agent-0a1b2c3 (1.5 GiB, last used 2026-09-01T00:00:00.000Z)
+```sh
+IMP_IMAGE_EVICT_HIGH_PERCENT=85
+IMP_IMAGE_EVICT_LOW_PERCENT=70
 ```
 
-impd records the rootfs of each image it removes, by prune or by `impz image rm`, until the rootfs
-is gone. When that removal fails, or impd stops first, the next prune removes the rootfs.
+An eviction never removes these images:
 
-The keep file, `<IMP_DATA_DIR>/image-keep` unless `IMP_IMAGE_KEEP_FILE` names another, holds the
-images that a config outside impd boots, such as an atc target's `image`. impd cannot see those
-configs, so write the file whenever one of them changes:
+- an image that an imp uses, or that an imp disk or a template still shares blocks with
+- the default image of `IMP_DEFAULT_IMAGE`
+- a pinned image
+- an image used within the last hour, because an imp create, a restore or a move may be about to use
+  it
 
-```text
-# the image each atc target names
-agent-0a1b2c3
+Pin an image that a config outside impd boots, so that impd keeps it:
+
+```sh
+impz image pin tools
+impz image unpin tools
 ```
 
-Put one image name on each line. impd skips blank lines and lines that start with `#`. Write an
-empty file when no config outside impd boots an image.
+`impz image ls` shows each pin. An image's last use is the newest of its build, an imp create, a
+restore or a move that picks it, and an eviction that found an imp using it. impd counts what each
+removal frees from the image's own blocks, so an image whose blocks a clone or a reflink shares
+frees nothing and stays. impd logs each removal with the image's size and last use:
 
-**CAUTION:** Until the keep file exists, the prune removes nothing and logs `kept every image` once.
-A line that holds no image name keeps every image the same way. impd reads the file at each prune,
-so a change needs no restart.
+```text
+impd: image eviction: removed web-0a1b2c3 (1.5 GiB, last used 2026-09-01T00:00:00.000Z)
+```
+
+impd records the rootfs of each image it removes, by eviction or by `impz image rm`, until the
+rootfs is gone. When that removal fails, or impd stops first, impd removes the rootfs after the next
+image add or build.
 
 ## Isolated builds
 

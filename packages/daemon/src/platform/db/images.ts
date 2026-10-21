@@ -13,6 +13,7 @@ export interface ImageRecord {
   readonly sourceImp: string | null;
   readonly sizeBytes: number;
   readonly createdAt: Date;
+  readonly isPinned: boolean;
 }
 
 export interface NewImage {
@@ -112,7 +113,23 @@ function toImageRecord(row: Readonly<Selectable<DB['images']>>): ImageRecord {
     sourceImp: row.source_imp,
     sizeBytes: row.size_bytes,
     createdAt: new Date(row.created_at),
+    isPinned: row.pinned === 1,
   };
+}
+
+export async function updateImagePin(
+  db: ImpDatabase,
+  name: string,
+  isPinned: boolean,
+): Promise<ImageRecord | undefined> {
+  const row = await db
+    .updateTable('images')
+    .set({ pinned: isPinned ? 1 : 0 })
+    .where('name', '=', name)
+    .returningAll()
+    .executeTakeFirst();
+
+  return row === undefined ? undefined : toImageRecord(row);
 }
 
 export async function updateImage(
@@ -172,6 +189,7 @@ export interface ImageUse {
   readonly sizeBytes: number;
   readonly lastUsedAt: number;
   readonly impCount: number;
+  readonly isPinned: boolean;
 }
 
 export async function listImageUses(db: ImpDatabase): Promise<ImageUse[]> {
@@ -185,6 +203,7 @@ export async function listImageUses(db: ImpDatabase): Promise<ImageUse[]> {
       'images.source',
       'images.size_bytes',
       'images.last_used_at',
+      'images.pinned',
       eb.fn.count<number>('imps.id').as('imp_count'),
     ])
     .groupBy('images.id')
@@ -199,6 +218,7 @@ export async function listImageUses(db: ImpDatabase): Promise<ImageUse[]> {
     sizeBytes: row.size_bytes,
     lastUsedAt: row.last_used_at,
     impCount: row.imp_count,
+    isPinned: row.pinned === 1,
   }));
 }
 
@@ -212,6 +232,7 @@ export function removeUnusedImage(
       .deleteFrom('images')
       .where('id', '=', id)
       .where('last_used_at', '=', lastUsedAt)
+      .where('pinned', '=', 0)
       .where((eb) =>
         eb.not(
           eb.exists(

@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import type { Config } from './config';
 import type { ImpdDeps } from './impd-deps';
 import type { Builders } from './imps/images/builder-imps';
@@ -43,7 +42,6 @@ export function createImpdStorage(config: Config, deps: Readonly<ImpdDeps>): Imp
     diskBudget,
     readBuilders: () => buildersHolder.builders,
     log,
-    readImageKeepFile: (path) => readFile(path, 'utf8'),
     ...(deps.now !== undefined && { now: deps.now }),
     ...deps.images,
   });

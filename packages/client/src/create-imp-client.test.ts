@@ -427,6 +427,7 @@ test('#images.addStream hands on each progress event, then the image', async () 
         source: 'oci',
         createdAt: expect.toBeDate(),
         sizeBytes: expect.toBeNumber(),
+        pinned: false,
       },
     },
   ]);
@@ -526,6 +527,7 @@ test('#images.buildStream hands on each progress event as it comes, then the ima
         source: 'oci',
         createdAt: expect.toBeDate(),
         sizeBytes: expect.toBeNumber(),
+        pinned: false,
       },
     },
   ]);

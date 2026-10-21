@@ -397,6 +397,10 @@ export function buildStubZfs(options: FakeZfsOptions) {
       return listSpace(last);
     }
 
+    if (tool === 'zpool' && verb === 'get' && argv.includes('freeing')) {
+      return buildSuccess('0\n');
+    }
+
     if (verb === 'list' && argv.includes('used,available')) {
       return buildSuccess('1073741824\t9663676416\n');
     }

@@ -9,10 +9,13 @@ interface ZfsUsageContext {
   readonly root: string;
   readonly datasets: { readonly retired: string };
   readonly buildDiskName: (impId: string) => string;
+  readonly buildImageName: (digest: string) => string;
   readonly resolveImpPaths: (impId: string) => ImpPaths;
 }
 
-export function createZfsUsage(ctx: ZfsUsageContext): Pick<StorageBackend, 'measureUsage'> {
+export function createZfsUsage(
+  ctx: ZfsUsageContext,
+): Pick<StorageBackend, 'measureUsage' | 'measureImages'> {
   return {
     measureUsage: async (imps) => {
       const space = await ctx.zfs.listSpace(ctx.root);
@@ -61,6 +64,36 @@ export function createZfsUsage(ctx: ZfsUsageContext): Pick<StorageBackend, 'meas
       );
 
       return { imps: report, isPartial: false };
+    },
+
+    measureImages: async (digests) => {
+      const [space, freeingBytes] = await Promise.all([
+        ctx.zfs.listSpace(ctx.root),
+        ctx.zfs.readFreeing(ctx.root.split('/')[0] ?? ctx.root),
+      ]);
+
+      const byName = new Map(space.map((entry) => [entry.name, entry]));
+
+      const images = new Map(
+        digests.flatMap((digest) => {
+          const name = ctx.buildImageName(digest);
+          const found = byName.get(name);
+
+          if (found === undefined) {
+            return [];
+          }
+
+          // A dataset's `used` counts its snapshots, and a clone of `@base` keeps every block a
+          // destroy would otherwise free.
+          const isShared = space.some(
+            (entry) => entry.name.startsWith(`${name}@`) && entry.clones.length > 0,
+          );
+
+          return [[digest, { freedBytes: found.used, isShared }] as const];
+        }),
+      );
+
+      return { images, freeingBytes };
     },
   };
 }

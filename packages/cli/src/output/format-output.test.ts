@@ -432,19 +432,28 @@ test('#formatApiCalls ends the line with the detail of a call', () => {
   expect(text.split('\n')[1]).toEndWith(`  ${pulled}`);
 });
 
-test('#formatImages lists each image with its short digest and its size in MiB', () => {
+test('#formatImages lists each image with its short digest, its size in MiB and its pin', () => {
   const text = formatImages([
     buildMockImage({
       name: 'base',
       ref: 'busybox:1.37',
       digest: `sha256:${'a'.repeat(64)}`,
       sizeBytes: 5 * 1_048_576,
+      pinned: true,
+    }),
+    buildMockImage({
+      name: 'tools',
+      ref: 'alpine:3.22',
+      digest: `sha256:${'b'.repeat(64)}`,
+      sizeBytes: 9 * 1_048_576,
+      pinned: false,
     }),
   ]);
 
   expect(text.split('\n')).toStrictEqual([
-    'NAME  REF           DIGEST               SIZE',
-    'base  busybox:1.37  sha256:aaaaaaaaaaaa  5 MiB',
+    'NAME   REF           DIGEST               SIZE   PINNED',
+    'base   busybox:1.37  sha256:aaaaaaaaaaaa  5 MiB  yes',
+    'tools  alpine:3.22   sha256:bbbbbbbbbbbb  9 MiB  -',
   ]);
 });
 

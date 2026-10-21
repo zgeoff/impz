@@ -11,6 +11,9 @@ export const ImageSchema = z.object({
   source: ImageSourceSchema,
   createdAt: z.date(),
   sizeBytes: z.int().nonnegative(),
+
+  // An impd older than image pins sends no pin, and pins nothing.
+  pinned: z.boolean().default(false),
 });
 
 export type Image = z.infer<typeof ImageSchema>;

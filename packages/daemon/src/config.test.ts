@@ -40,7 +40,7 @@ test('it fills every setting from its default when the env is empty', () => {
       image:
         'ghcr.io/zgeoff/imp-base:0.29.0@sha256:1851f631ea77f3a99b6f1f9af8ca8868434f4cd066158bcf9def8678c29b0c21',
     },
-    imagePrune: { prefix: 'agent-', rollbackCount: 3, keepFile: '/var/lib/imp/image-keep' },
+    imageEviction: null,
     sessionLog: {
       generationMaxBytes: 16 * 1024 ** 2,
       impMaxBytes: 64 * 1024 ** 2,
@@ -194,26 +194,30 @@ test('it turns the SSH gateway off when IMP_SSH_PORT is 0', () => {
   expect(loadConfig({ IMP_SSH_PORT: '0' }).sshPort).toBeNull();
 });
 
-test('it reads the image prune settings', () => {
+test('it reads the image eviction marks', () => {
   const config = loadConfig({
-    IMP_IMAGE_PRUNE_PREFIX: 'runner-',
-    IMP_IMAGE_PRUNE_ROLLBACK: '5',
-    IMP_IMAGE_KEEP_FILE: '/etc/imp/image-keep',
+    IMP_IMAGE_EVICT_HIGH_PERCENT: '90',
+    IMP_IMAGE_EVICT_LOW_PERCENT: '80',
   });
 
-  expect(config.imagePrune).toStrictEqual({
-    prefix: 'runner-',
-    rollbackCount: 5,
-    keepFile: '/etc/imp/image-keep',
-  });
+  expect(config.imageEviction).toStrictEqual({ highPercent: 90, lowPercent: 80 });
 });
 
-test('it keeps the image keep file in IMP_DATA_DIR by default', () => {
-  expect(loadConfig({ IMP_DATA_DIR: '/srv/imp' }).imagePrune.keepFile).toBe('/srv/imp/image-keep');
+test.each([
+  [{ IMP_IMAGE_EVICT_HIGH_PERCENT: '90' }, /set both or neither/v],
+  [{ IMP_IMAGE_EVICT_LOW_PERCENT: '80' }, /set both or neither/v],
+  [
+    { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '80' },
+    /IMP_IMAGE_EVICT_LOW_PERCENT 80 must be below IMP_IMAGE_EVICT_HIGH_PERCENT 80/v,
+  ],
+])('it refuses the image eviction marks %p', (env, message) => {
+  expect(() => loadConfig(env)).toThrow(message);
 });
 
-test('it refuses an IMP_IMAGE_PRUNE_ROLLBACK of 0', () => {
-  expect(() => loadConfig({ IMP_IMAGE_PRUNE_ROLLBACK: '0' })).toThrow();
+test.each(['0', '100'])('it refuses an image eviction mark of %p', (mark) => {
+  expect(() =>
+    loadConfig({ IMP_IMAGE_EVICT_HIGH_PERCENT: mark, IMP_IMAGE_EVICT_LOW_PERCENT: '1' }),
+  ).toThrow();
 });
 
 test.each([

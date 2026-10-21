@@ -7,7 +7,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
@@ -25,9 +25,10 @@ import { createStubImageMkfs } from '../../../testing/imps/create-stub-image-mkf
 import { createTreeTar } from '../../../testing/imps/create-tree-tar';
 import { spawnSparseFilesTar } from '../../../testing/imps/spawn-sparse-files-tar';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
+import { buildStubStoragePressure } from '../../../testing/vm/build-stub-storage-pressure';
 import { startDiskSampler } from '../../../testing/vm/start-disk-sampler';
 import { loadConfig } from '../../config';
-import { createImage, listImages, readImageByName } from '../../platform/db/images';
+import { createImage, listImages, readImageByName, updateImagePin } from '../../platform/db/images';
 import { createImp } from '../../platform/db/imps';
 import { openDatabase } from '../../platform/db/open-database';
 import { buildImagePaths } from '../../vm/storage/data-layout';
@@ -167,6 +168,7 @@ test('it pins, builds and exports in its builder, with no host engine call', asy
     sourceImp: null,
     sizeBytes: expect.any(Number) as unknown,
     createdAt: expect.any(Date) as unknown,
+    isPinned: false,
   });
 
   expect(saved).toStrictEqual(image);
@@ -403,7 +405,7 @@ test('it releases the disk hold once a build succeeds', async () => {
   expect(status.pendingBytes).toBe(0);
 });
 
-test('it removes the oldest unused agent images once a build leaves more than the rollback count, and keeps those in use', async () => {
+test('it removes the least recently used images after a build under storage pressure, and keeps those in use or pinned', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -414,26 +416,30 @@ test('it removes the oldest unused agent images once a build leaves more than th
   const logged: string[] = [];
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '2' }),
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
     db: ctx.db,
-    storage: ctx.storage,
+    storage: {
+      ...ctx.storage,
+      ...buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 20 }),
+    },
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    readImageKeepFile: (path) => readFile(path, 'utf8'),
     log: (message) => {
       logged.push(message);
     },
   });
 
-  await writeFile(join(ctx.dataDir, 'image-keep'), 'agent-2222222\n');
-
   for (const [name, lastUsedAt] of [
-    ['agent-1111111', '2026-08-01T00:00:00Z'],
-    ['agent-2222222', '2026-08-02T00:00:00Z'],
-    ['agent-3333333', '2026-08-03T00:00:00Z'],
-    ['agent-4444444', '2026-08-04T00:00:00Z'],
-    ['agent-5555555', '2026-08-05T00:00:00Z'],
+    ['web-1111111', '2026-08-01T00:00:00Z'],
+    ['web-2222222', '2026-08-02T00:00:00Z'],
+    ['web-3333333', '2026-08-03T00:00:00Z'],
+    ['web-4444444', '2026-08-04T00:00:00Z'],
+    ['web-5555555', '2026-08-05T00:00:00Z'],
   ] as const) {
     const digest = `sha256:${name.slice(-1).repeat(64)}`;
 
@@ -448,11 +454,12 @@ test('it removes the oldest unused agent images once a build leaves more than th
       .execute();
   }
 
-  const used = await readImageByName(ctx.db, 'agent-1111111');
+  const used = await readImageByName(ctx.db, 'web-1111111');
 
   invariant(used);
 
   await createImp(ctx.db, buildMockNewImp({ imageId: used.id }));
+  await updateImagePin(ctx.db, 'web-2222222', true);
 
   await Bun.write(
     join(ctx.directoryPath, 'context.tar'),
@@ -461,7 +468,7 @@ test('it removes the oldest unused agent images once a build leaves more than th
 
   await images.buildImageFromContext(
     join(ctx.directoryPath, 'context.tar'),
-    'agent-6666666',
+    'web-6666666',
     undefined,
     { signal: new AbortController().signal },
   );
@@ -469,10 +476,10 @@ test('it removes the oldest unused agent images once a build leaves more than th
   const kept = await listImages(ctx.db);
 
   expect(kept.map((image) => image.name)).toStrictEqual([
-    'agent-1111111',
-    'agent-2222222',
-    'agent-5555555',
-    'agent-6666666',
+    'web-1111111',
+    'web-2222222',
+    'web-5555555',
+    'web-6666666',
   ]);
 
   const removedRootfs = buildImagePaths(ctx.dataDir, `sha256:${'3'.repeat(64)}`).rootfs;
@@ -481,13 +488,13 @@ test('it removes the oldest unused agent images once a build leaves more than th
   expect(existsSync(removedRootfs)).toBeFalse();
   expect(existsSync(usedRootfs)).toBeTrue();
 
-  expect(logged.filter((line) => line.startsWith('impd: image prune:'))).toStrictEqual([
-    'impd: image prune: removed agent-4444444 (1.0 GiB, last used 2026-08-04T00:00:00.000Z)',
-    'impd: image prune: removed agent-3333333 (1.0 GiB, last used 2026-08-03T00:00:00.000Z)',
+  expect(logged.filter((line) => line.startsWith('impd: image eviction:'))).toStrictEqual([
+    'impd: image eviction: removed web-3333333 (1.0 GiB, last used 2026-08-03T00:00:00.000Z)',
+    'impd: image eviction: removed web-4444444 (1.0 GiB, last used 2026-08-04T00:00:00.000Z)',
   ]);
 });
 
-test('it keeps every agent image after a build while the prune cannot read which images configs outside impd use', async () => {
+test('it keeps every image after a build under storage pressure while no marks are set', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -496,18 +503,20 @@ test('it keeps every agent image after a build while the prune cannot read which
   });
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
-    storage: ctx.storage,
+    storage: {
+      ...ctx.storage,
+      ...buildStubStoragePressure({ usedBytes: 99, availableBytes: 1, freedBytes: 20 }),
+    },
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    readImageKeepFile: (path) => readFile(path, 'utf8'),
     log: () => {},
   });
 
-  await createImage(ctx.db, buildMockNewImage({ name: 'agent-1111111' }));
-  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-2222222' }));
 
   await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
 
@@ -518,7 +527,7 @@ test('it keeps every agent image after a build while the prune cannot read which
 
   await images.buildImageFromContext(
     join(ctx.directoryPath, 'context.tar'),
-    'agent-3333333',
+    'web-3333333',
     undefined,
     { signal: new AbortController().signal },
   );
@@ -526,13 +535,13 @@ test('it keeps every agent image after a build while the prune cannot read which
   const kept = await listImages(ctx.db);
 
   expect(kept.map((image) => image.name)).toStrictEqual([
-    'agent-1111111',
-    'agent-2222222',
-    'agent-3333333',
+    'web-1111111',
+    'web-2222222',
+    'web-3333333',
   ]);
 });
 
-test('it keeps an old agent image that a build of the same digest rebuilds', async () => {
+test('it keeps an old image that a build of the same digest rebuilds', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -541,17 +550,21 @@ test('it keeps an old agent image that a build of the same digest rebuilds', asy
   });
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
     db: ctx.db,
-    storage: ctx.storage,
+    storage: {
+      ...ctx.storage,
+      ...buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 }),
+    },
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    readImageKeepFile: (path) => readFile(path, 'utf8'),
     log: () => {},
   });
-
-  await writeFile(join(ctx.dataDir, 'image-keep'), '');
 
   await Bun.write(
     join(ctx.directoryPath, 'context.tar'),
@@ -560,22 +573,22 @@ test('it keeps an old agent image that a build of the same digest rebuilds', asy
 
   const first = await images.buildImageFromContext(
     join(ctx.directoryPath, 'context.tar'),
-    'agent-1111111',
+    'web-1111111',
     undefined,
     { signal: new AbortController().signal },
   );
 
-  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-2222222' }));
 
   await ctx.db
     .updateTable('images')
     .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
-    .where('name', '=', 'agent-1111111')
+    .where('name', '=', 'web-1111111')
     .execute();
 
   const rebuilt = await images.buildImageFromContext(
     join(ctx.directoryPath, 'context.tar'),
-    'agent-1111111',
+    'web-1111111',
     undefined,
     { signal: new AbortController().signal },
   );
@@ -583,13 +596,13 @@ test('it keeps an old agent image that a build of the same digest rebuilds', asy
   const kept = await listImages(ctx.db);
 
   expect(rebuilt.digest).toBe(first.digest);
-  expect(kept.map((image) => image.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
+  expect(kept.map((image) => image.name)).toStrictEqual(['web-1111111', 'web-2222222']);
 });
 
-test('it returns a row that still exists when a prune reaches a same-digest rebuild between its rootfs and its row', async () => {
+test('it returns a row that still exists when an eviction reaches a same-digest rebuild between its rootfs and its row', async () => {
   const ctx = await setupTest();
 
-  const gate = buildQueryGate('agent-1111111');
+  const gate = buildQueryGate('web-1111111');
 
   ctx.stack.defer(() => {
     gate.release();
@@ -612,17 +625,21 @@ test('it returns a row that still exists when a prune reaches a same-digest rebu
   });
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
     db: gate.wrap(ctx.db),
-    storage: ctx.storage,
+    storage: {
+      ...ctx.storage,
+      ...buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 }),
+    },
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    readImageKeepFile: (path) => readFile(path, 'utf8'),
     log: () => {},
   });
-
-  await writeFile(join(ctx.dataDir, 'image-keep'), '');
 
   await Bun.write(
     join(ctx.directoryPath, 'context.tar'),
@@ -631,44 +648,44 @@ test('it returns a row that still exists when a prune reaches a same-digest rebu
 
   await images.buildImageFromContext(
     join(ctx.directoryPath, 'context.tar'),
-    'agent-1111111',
+    'web-1111111',
     undefined,
     { signal: new AbortController().signal },
   );
 
-  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-2222222' }));
 
   await ctx.db
     .updateTable('images')
     .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
-    .where('name', '=', 'agent-1111111')
+    .where('name', '=', 'web-1111111')
     .execute();
 
   const rebuilding = images.buildImageFromContext(
     join(ctx.directoryPath, 'context.tar'),
-    'agent-1111111',
+    'web-1111111',
     undefined,
     { signal: new AbortController().signal },
   );
 
   await gate.reached;
 
-  await images.runImagePrune();
+  await images.runImageEviction();
 
   gate.release();
 
   const rebuilt = await rebuilding;
   const rows = await listImages(ctx.db);
 
-  expect(rows.map((row) => row.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
+  expect(rows.map((row) => row.name)).toStrictEqual(['web-1111111', 'web-2222222']);
   expect(rows[0]?.id).toBe(rebuilt.id);
   expect(existsSync(buildImagePaths(ctx.dataDir, rebuilt.digest).rootfs)).toBeTrue();
 });
 
-test('it rebuilds an image under a new digest when a prune reaches the build before its row', async () => {
+test('it rebuilds an image under a new digest when an eviction reaches the build before its row', async () => {
   const ctx = await setupTest();
 
-  const gate = buildQueryGate('agent-1111111');
+  const gate = buildQueryGate('web-1111111');
 
   ctx.stack.defer(() => {
     gate.release();
@@ -692,17 +709,21 @@ test('it rebuilds an image under a new digest when a prune reaches the build bef
   const holder = { builders: first.builders };
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
     db: gate.wrap(ctx.db),
-    storage: ctx.storage,
+    storage: {
+      ...ctx.storage,
+      ...buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 }),
+    },
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => holder.builders,
-    readImageKeepFile: (path) => readFile(path, 'utf8'),
     log: () => {},
   });
-
-  await writeFile(join(ctx.dataDir, 'image-keep'), '');
 
   await Bun.write(
     join(ctx.directoryPath, 'context.tar'),
@@ -711,31 +732,31 @@ test('it rebuilds an image under a new digest when a prune reaches the build bef
 
   const old = await images.buildImageFromContext(
     join(ctx.directoryPath, 'context.tar'),
-    'agent-1111111',
+    'web-1111111',
     undefined,
     { signal: new AbortController().signal },
   );
 
-  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-2222222' }));
 
   await ctx.db
     .updateTable('images')
     .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
-    .where('name', '=', 'agent-1111111')
+    .where('name', '=', 'web-1111111')
     .execute();
 
   holder.builders = second.builders;
 
   const rebuilding = images.buildImageFromContext(
     join(ctx.directoryPath, 'context.tar'),
-    'agent-1111111',
+    'web-1111111',
     undefined,
     { signal: new AbortController().signal },
   );
 
   await gate.reached;
 
-  await images.runImagePrune();
+  await images.runImageEviction();
 
   gate.release();
 
@@ -745,15 +766,15 @@ test('it rebuilds an image under a new digest when a prune reaches the build bef
   expect(rebuilt.digest).not.toBe(old.digest);
 
   expect(rows.map((row) => [row.name, row.digest])).toStrictEqual([
-    ['agent-1111111', rebuilt.digest],
-    ['agent-2222222', expect.toBeString()],
+    ['web-1111111', rebuilt.digest],
+    ['web-2222222', expect.toBeString()],
   ]);
 });
 
 test('it keeps an image while a build of another name publishes its digest', async () => {
   const ctx = await setupTest();
 
-  const gate = buildQueryGate('agent-3333333');
+  const gate = buildQueryGate('web-3333333');
 
   ctx.stack.defer(() => {
     gate.release();
@@ -776,17 +797,21 @@ test('it keeps an image while a build of another name publishes its digest', asy
   });
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
     db: gate.wrap(ctx.db),
-    storage: ctx.storage,
+    storage: {
+      ...ctx.storage,
+      ...buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 }),
+    },
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    readImageKeepFile: (path) => readFile(path, 'utf8'),
     log: () => {},
   });
-
-  await writeFile(join(ctx.dataDir, 'image-keep'), '');
 
   await Bun.write(
     join(ctx.directoryPath, 'context.tar'),
@@ -795,29 +820,29 @@ test('it keeps an image while a build of another name publishes its digest', asy
 
   await images.buildImageFromContext(
     join(ctx.directoryPath, 'context.tar'),
-    'agent-1111111',
+    'web-1111111',
     undefined,
     { signal: new AbortController().signal },
   );
 
-  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-2222222' }));
 
   await ctx.db
     .updateTable('images')
     .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
-    .where('name', '=', 'agent-1111111')
+    .where('name', '=', 'web-1111111')
     .execute();
 
   const building = images.buildImageFromContext(
     join(ctx.directoryPath, 'context.tar'),
-    'agent-3333333',
+    'web-3333333',
     undefined,
     { signal: new AbortController().signal },
   );
 
   await gate.reached;
 
-  await images.runImagePrune();
+  await images.runImageEviction();
 
   const rows = await listImages(ctx.db);
 
@@ -825,7 +850,7 @@ test('it keeps an image while a build of another name publishes its digest', asy
 
   await building;
 
-  expect(rows.map((row) => row.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
+  expect(rows.map((row) => row.name)).toStrictEqual(['web-1111111', 'web-2222222']);
 });
 
 test('it releases the disk hold when the export is over the file limit', async () => {
