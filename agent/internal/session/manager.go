@@ -340,28 +340,11 @@ func isResumeOf(resume *proto.ResumeFrom, s *session) bool {
 // input applies the viewer's frames until the connection ends. It never
 // signals the process on the way out: a closed connection is a detach.
 func input(s *session, v *viewer, r *proto.Reader) {
-	for {
-		f, err := r.Next()
-		if err != nil {
-			return
-		}
-		switch f.Type {
-		case proto.TypeStdin:
-			s.queueStdin(v, f.Payload)
-		case proto.TypeStdinEOF:
-			// A tty has no EOF to give; the client sends ^D itself.
-		case proto.TypeResize:
-			var rs proto.Resize
-			if proto.Unmarshal(f.Payload, &rs) == nil {
-				s.resize(v, uint16(rs.Cols), uint16(rs.Rows))
-			}
-		case proto.TypeSignal:
-			var sig proto.Signal
-			if proto.Unmarshal(f.Payload, &sig) == nil && sig.Signal > 0 {
-				s.signal(v, syscall.Signal(sig.Signal))
-			}
-		default:
-			log.Printf("session %s: ignoring %s frame", s.name, f.Type)
-		}
-	}
+	// a nil StdinEOF: a tty has no EOF to give; the client sends ^D itself
+	_ = proto.Dispatch(r, proto.Input{
+		Stdin:  func(p []byte) { s.queueStdin(v, p) },
+		Resize: func(cols, rows uint16) { s.resize(v, cols, rows) },
+		Signal: func(sig syscall.Signal) { s.signal(v, sig) },
+		Other:  func(t proto.Type) { log.Printf("session %s: ignoring %s frame", s.name, t) },
+	})
 }

@@ -310,41 +310,34 @@ func (m *Manager) ttyGroup() (*cgroup.Group, error) {
 // while the process runs, the process group gets SIGHUP, as a terminal
 // hangup would deliver.
 func (s *session) input(r *proto.Reader) {
-	for {
-		f, err := r.Next()
-		if err != nil {
-			if !s.exited.Load() {
-				_ = s.proc.Signal(syscall.SIGHUP)
-			}
-			s.endStdin()
-			return
-		}
-		switch f.Type {
-		case proto.TypeStdin:
-			// Once the session ends the stdin goes nowhere, but the loop
-			// reads on: a host frame that meets a closed socket loses the
-			// host the EXIT frame to EPIPE (see Serve's exitLinger).
-			s.queueStdin(f.Payload)
-		case proto.TypeStdinEOF:
+	_ = proto.Dispatch(r, proto.Input{
+		// Once the session ends the stdin goes nowhere, but the loop
+		// reads on: a host frame that meets a closed socket loses the
+		// host the EXIT frame to EPIPE (see Serve's exitLinger).
+		Stdin: s.queueStdin,
+		StdinEOF: func() {
 			// A tty has no EOF to give; the client sends ^D itself.
 			if s.tty == nil {
 				s.endStdin()
 			}
-		case proto.TypeResize:
-			var rs proto.Resize
-			if s.tty != nil && proto.Unmarshal(f.Payload, &rs) == nil {
-				_ = pty.SetWinsize(s.tty, uint16(rs.Cols), uint16(rs.Rows))
+		},
+		Resize: func(cols, rows uint16) {
+			if s.tty != nil {
+				_ = pty.SetWinsize(s.tty, cols, rows)
 			}
-		case proto.TypeSignal:
-			var sig proto.Signal
-			if proto.Unmarshal(f.Payload, &sig) == nil && sig.Signal > 0 && !s.exited.Load() {
-				s.stop.arm(syscall.Signal(sig.Signal))
-				_ = s.proc.Signal(syscall.Signal(sig.Signal))
+		},
+		Signal: func(sig syscall.Signal) {
+			if !s.exited.Load() {
+				s.stop.arm(sig)
+				_ = s.proc.Signal(sig)
 			}
-		default:
-			log.Printf("exec: ignoring %s frame", f.Type)
-		}
+		},
+		Other: func(t proto.Type) { log.Printf("exec: ignoring %s frame", t) },
+	})
+	if !s.exited.Load() {
+		_ = s.proc.Signal(syscall.SIGHUP)
 	}
+	s.endStdin()
 }
 
 // queueStdin hands p to writeStdin in chunks. It blocks while the queue is
