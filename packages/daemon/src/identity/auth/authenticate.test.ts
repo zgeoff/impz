@@ -13,7 +13,6 @@ async function setupTest() {
   const database = await createTestDatabase();
 
   return {
-    // the token store over this database, as impd loads it
     loadTokens: (rootToken: string) =>
       loadTokenStore({
         db: database.db,

@@ -1,4 +1,3 @@
-// better-auth's error_description in a JSON refusal, or null
 export function readErrorDescription(answer: unknown): string | null {
   if (typeof answer !== 'object' || answer === null) {
     return null;

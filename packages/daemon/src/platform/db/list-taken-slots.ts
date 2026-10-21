@@ -1,8 +1,5 @@
 import type { ImpQueries } from './open-database';
 
-// The slots imps hold, and those that a warm move's live ticket keeps for
-// the imp it brings (docs/architecture/storage/moves.md#warm-moves): until the
-// commit, once its stream started, else until the stream's start window ends
 export async function listTakenSlots(db: ImpQueries, now: number): Promise<Set<number>> {
   const imps = await db.selectFrom('imps').select('slot').execute();
 

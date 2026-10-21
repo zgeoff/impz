@@ -1,9 +1,5 @@
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
 
-// A tailnet identity is ambient, like a cookie: a browser on that machine
-// sends it with any page's requests. So such a request must name a host impd
-// knows (DNS rebinding) and come from impd's own origin, not an imp's port.
-
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
 
 export interface KnownHosts {
@@ -11,15 +7,11 @@ export interface KnownHosts {
 }
 
 interface KnownHostsDeps {
-  // the node's status, read at most every 30 s (createStatusCache)
   readonly readTailscale: () => Promise<TailscaleStatus>;
 
-  // the apex of IMP_DOMAIN, where impd's API answers; null without one
   readonly domain: string | null;
 }
 
-// the names impd answers to: loopback, the tailnet node's names and
-// addresses, and the domain; an address as findHostName spells it
 export function createKnownHosts(deps: Readonly<KnownHostsDeps>): KnownHosts {
   return {
     read: async () => {
@@ -34,6 +26,9 @@ export function createKnownHosts(deps: Readonly<KnownHostsDeps>): KnownHosts {
 }
 
 export function isAllowedAmbientRequest(request: Request, hosts: ReadonlySet<string>): boolean {
+  // a browser on a tailnet machine carries its identity on any page's request,
+  // like a cookie, so the request must name a known host (DNS rebinding) and
+  // come from impd's own origin, not an imp's port
   const host = findHostName(request.headers.get('host'));
 
   if (host === null || !hosts.has(host)) {
@@ -61,14 +56,12 @@ export function isAllowedAmbientRequest(request: Request, hosts: ReadonlySet<str
   }
 }
 
-// a tailnet address as a Host header names it: IPv6 in brackets
 function readAddressHost(ip: string): string | null {
   const host = ip.includes(':') ? `[${ip}]` : ip;
 
   return findHostName(host);
 }
 
-// the Host header without its port, lowercased; null when there is none
 function findHostName(header: string | null): string | null {
   if (header === null || header === '') {
     return null;

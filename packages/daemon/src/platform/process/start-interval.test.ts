@@ -32,8 +32,6 @@ test('it runs its callback no more once stopped', async () => {
   stop();
 
   const runs = run.mock.calls.length;
-
-  // a second interval of the same length, which runs three times meanwhile
   const fence = mock();
 
   const stopFence = startInterval(() => {

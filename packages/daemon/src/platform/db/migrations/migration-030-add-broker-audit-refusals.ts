@@ -3,9 +3,8 @@ import type { Kysely } from 'kysely';
 import type { Migration } from 'kysely/migration';
 import type { NoTables } from './no-tables';
 
-// refused requests in the broker audit (GEO-286): a reason, and no secret,
-// method, host or path needed. SQLite cannot drop NOT NULL in place, so a
-// copy of the table replaces it in its own transaction, as in 028.
+// SQLite cannot drop NOT NULL in place, so a copy of the table replaces it in
+// its own transaction.
 export const MIGRATION_030_ADD_BROKER_AUDIT_REFUSALS: Migration = {
   async up(db: Kysely<NoTables>) {
     await db.transaction().execute(async (trx) => {
@@ -25,7 +24,6 @@ export const MIGRATION_030_ADD_BROKER_AUDIT_REFUSALS: Migration = {
         .addColumn('response_bytes', 'integer', (column) => column.notNull())
         .addColumn('duration_ms', 'integer', (column) => column.notNull())
 
-        // null for a request the broker sent upstream
         .addColumn('reason', 'text')
         .execute();
 

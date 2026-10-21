@@ -6,7 +6,6 @@ import { writeApiCall } from '../db/api-audit';
 import type { ImpDatabase } from '../db/open-database';
 import { getErrorMessage } from '../process/get-error-message';
 
-// namespaces whose input `name` is an imp's; a secret's or an image's is not
 const IMP_NAMESPACES: ReadonlySet<string> = new Set([
   'imps',
   'checkpoints',
@@ -22,13 +21,10 @@ export interface AuditedCall {
   readonly impName: string | null;
   readonly startedAt: number;
 
-  // what the call resolved that its name does not show, set by its handler
   readonly detail?: string | null;
 }
 
 export interface ApiAudit {
-  // writes the row without holding up the caller; a failed write is
-  // logged. `failure` is what the call threw, null when it succeeded.
   readonly record: (call: AuditedCall, failure: unknown) => void;
 }
 
@@ -46,12 +42,10 @@ export function createApiAudit(deps: ApiAuditDeps): ApiAudit {
   };
 }
 
-// The imp a call named, from its input, else from its result (`imps.create`
-// with no name gets one). Only the name: the input itself is never kept.
+// Only the name: the input itself is never kept.
 export function findImpName(procedure: string, input: unknown, output: unknown): string | null {
   const namespace = procedure.split('.')[0] ?? '';
 
-  // a template reads its source imp's disk
   if (procedure === 'images.add' || procedure === 'images.addStream') {
     return findField(input, 'imp');
   }
@@ -73,7 +67,6 @@ function findField(value: unknown, key: string): string | null {
   return typeof field === 'string' ? field : null;
 }
 
-// `ok` for a call that succeeded, else the error code the caller got
 function readOutcome(failure: unknown): string {
   if (failure === null) {
     return 'ok';
@@ -82,8 +75,6 @@ function readOutcome(failure: unknown): string {
   return failure instanceof ORPCError ? String(failure.code) : 'INTERNAL_SERVER_ERROR';
 }
 
-// Opens a session, an exec or an ssh channel, and audits the open: its
-// outcome, not how long the session then runs.
 export async function withAuditedOpen<T>(
   audit: ApiAudit,
   call: AuditedCall,

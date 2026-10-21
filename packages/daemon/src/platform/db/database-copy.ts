@@ -9,18 +9,13 @@ import { buildConflictError } from '../../surface/api-errors';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { ImpQueries } from './open-database';
 
-// A consistent copy of impd's database, safe while impd runs
-// (docs/guides/operations.md#database-copy-and-restore).
-
 export interface DatabaseCopyFile {
   readonly path: string;
   readonly sizeBytes: number;
 
-  // the copy's schema version: the last migration it holds
   readonly lastMigration: string;
   readonly createdAt: Date;
 
-  // PRAGMA integrity_check on the copy: 'ok', or its first problem
   readonly integrity: string;
 }
 
@@ -28,8 +23,8 @@ const MigrationRowSchema = z.object({ name: z.string() });
 const IntegrityRowSchema = z.object({ integrity_check: z.string() });
 const SizeRowSchema = z.object({ bytes: z.int().nonnegative() });
 
-// `VACUUM INTO` copies the database in one read transaction, so the copy is
-// whole whatever writes run meanwhile; the target must be absent or empty
+// VACUUM INTO copies in one read transaction, so the copy is whole whatever
+// writes run meanwhile; its target must be absent or empty.
 export async function writeConsistentCopy(db: ImpQueries, path: string): Promise<void> {
   await sql`VACUUM INTO ${path}`.execute(db);
 }
@@ -38,9 +33,6 @@ function buildDatabaseCopyPath(dataDir: string, name: string): string {
   return join(dataDir, 'db-copies', `${name}.sqlite`);
 }
 
-// Into <dataDir>/db-copies/<name>.sqlite, made empty and 0600 first. The
-// disk budget holds the database's size, as for a backup: DISK_FULL, with no
-// file made, past the reserve; CONFLICT when a copy by the name exists.
 export async function writeDatabaseCopy(
   db: ImpQueries,
   diskBudget: Pick<DiskBudget, 'withRoom'>,
@@ -85,7 +77,6 @@ export async function writeDatabaseCopy(
   });
 }
 
-// the pages the database holds, which a VACUUM INTO writes at most
 async function readDatabaseBytes(db: ImpQueries): Promise<number> {
   const result = await sql<{
     bytes: number;
@@ -96,7 +87,6 @@ async function readDatabaseBytes(db: ImpQueries): Promise<number> {
   return SizeRowSchema.parse(result.rows[0]).bytes;
 }
 
-// read from the copy itself, so they describe the file a restore puts back
 function readCopyFacts(path: string): Pick<DatabaseCopyFile, 'lastMigration' | 'integrity'> {
   const copy = new Database(path, { readonly: true });
 

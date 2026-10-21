@@ -316,7 +316,6 @@ test('#resolve forgets the oldest of 256 cached answers when another address com
     now: () => 0,
   });
 
-  // 257 addresses fill the cache past its 256 answers
   for (let index = 0; index < 257; index += 1) {
     await identities.resolve(
       `100.100.${String(Math.floor(index / 250))}.${String((index % 250) + 1)}`,
@@ -338,7 +337,6 @@ test('#resolve keeps a newer cached answer when the cache forgets the oldest', a
     now: () => 0,
   });
 
-  // 257 addresses fill the cache past its 256 answers
   for (let index = 0; index < 257; index += 1) {
     await identities.resolve(
       `100.100.${String(Math.floor(index / 250))}.${String((index % 250) + 1)}`,

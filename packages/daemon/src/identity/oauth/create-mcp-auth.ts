@@ -21,24 +21,13 @@ import { makeOAuthRouter } from './make-oauth-router';
 import type { AuthServer } from './make-oauth-router';
 import type { PublicMcpConfig } from './public-mcp-config';
 
-// The public MCP route's authorization server (docs/guides/mcp.md#public-route):
-// better-auth's OAuth provider and MCP plugins, set up as atc sets them up.
-// Each approved sign-in is one better-auth user, which is the grant.
-
 const MINUTE_MS = 60_000;
 const ACCESS_TOKEN_S = 15 * 60;
 
 // an inactivity timeout: each refresh issues a new refresh token
 const REFRESH_TOKEN_S = 30 * 24 * 60 * 60;
-
-// how long an authorization code waits for its exchange
 const CODE_S = 10 * 60;
-
-// a grant's last use is written at most this often
 const TOUCH_MS = MINUTE_MS;
-
-// a user with no refresh token this long after its sign-in never exchanged
-// its code, and goes
 const UNUSED_SIGN_IN_MS = 60 * MINUTE_MS;
 
 export interface McpAuth {
@@ -60,10 +49,8 @@ export interface McpAuth {
     imps: readonly string[] | undefined,
   ) => void;
 
-  // the route's OAuth paths; null for any other request
   readonly handle: (request: Request) => Promise<Response | null>;
 
-  // the caller an access token stands for now, or null
   readonly resolveAccess: (bearer: string) => Promise<Caller | null>;
   readonly removeExpired: () => Promise<void>;
 }
@@ -73,11 +60,9 @@ interface McpAuthDeps {
   readonly tokens: TokenStore;
   readonly revocations: Revocations;
 
-  // null: the route is off, and only the admin procedures answer
   readonly config: PublicMcpConfig | null;
 
-  // impd's clock, for the sign-ins and a grant's last use; better-auth
-  // reads the wall clock, so every compare with its rows does too
+  // better-auth reads the wall clock, so every compare with its rows does too
   readonly now: () => number;
   readonly log: (message: string) => void;
 }
@@ -100,7 +85,6 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     allowDynamicClientRegistration: false,
     grantTypes: ['authorization_code', 'refresh_token'],
 
-    // impd serves one resource, so every client may request it
     enforcePerClientResources: false,
     accessTokenExpiresIn: ACCESS_TOKEN_S,
     refreshTokenExpiresIn: REFRESH_TOKEN_S,
@@ -127,7 +111,7 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     // characters and PKCE, not a limit; impd limits sign-ins itself.
     rateLimit: { enabled: false },
 
-    // migration 034 made the tables; a check at start would only repeat it
+    // impd's migrations make the tables; a check at start would only repeat them
     advanced: { database: { validateSchema: false } },
     trustedOrigins: [origin],
 
@@ -143,14 +127,13 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     },
 
     // the provider's endpoint types do not satisfy the plugin type under
-    // exactOptionalPropertyTypes, as atc found
+    // exactOptionalPropertyTypes
     // oxlint-disable-next-line no-unsafe-type-assertion -- a BetterAuthPlugin at runtime; only its endpoint option types disagree with the stricter compiler settings
     plugins: [provider as BetterAuthPlugin, createApproverPlugin()],
   });
 
   const signIns = createSignIns({ now: deps.now });
 
-  // a grant's user, its tokens and consents go, and what it opened ends
   const removeGrantRows = async (ids: readonly string[], why: string): Promise<void> => {
     if (ids.length === 0) {
       return;
@@ -164,8 +147,6 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     }
   };
 
-  // the approver as it is now; null once its token is gone or no longer
-  // covers the grant, which then ends
   const readApprover = (tokenID: string, scope: Scope, imps: readonly string[] | null) => {
     const token = deps.tokens.findById(tokenID);
 
@@ -179,7 +160,6 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
   const server: AuthServer = {
     handler: (request) => auth.handler(request),
 
-    // resuming the authorization reads the request better-auth was called with
     signIn: (oauthQuery, approval) => {
       const headers = new Headers({
         accept: 'application/json',
@@ -254,12 +234,12 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     return client !== undefined;
   };
 
-  // The name's unique index refuses a second add that ran beside the first,
-  // past both lookups; it answers as the lookup would.
   const createFixedClient = async (name: string, redirectUris: readonly string[]) => {
     try {
       return await auth.api.createFixedClient({ body: { name, redirectURIs: [...redirectUris] } });
     } catch (error) {
+      // the name's unique index refuses a second add that ran beside the
+      // first, past both lookups
       const isTaken = await probeClientNamed(name);
 
       if (isTaken) {
@@ -455,11 +435,8 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
         scope: readLowerScope(scope, approver.scope),
         imps,
 
-        // the approver's own list: a grant then meets every refusal its
-        // token would, such as no fork; grants of secrets stay refused
         grantable: approver.grantable,
 
-        // an MCP client adds no image, whatever its token may
         imageRefPrefix: null,
         tokenId: approver.tokenId,
         grantId: grant.id,
@@ -543,9 +520,8 @@ interface AccessPayload {
   readonly scopes: readonly string[];
 }
 
-// The fields of better-auth's introspection payload a grant needs; null for
-// one without a user or client, or one bound to a key (`cnf`), since the
-// route checks no proof of the key and a stolen bound token must not pass.
+// A payload bound to a key (`cnf`) gives null: the route checks no proof of
+// the key, and a stolen bound token must not pass.
 function readAccessPayload(payload: unknown): AccessPayload | null {
   if (typeof payload !== 'object' || payload === null) {
     return null;

@@ -114,8 +114,6 @@ test('it waits for a running task when stopped', async () => {
 
   const fired = stub.fire('sweep');
   const stopping = ticker.stop();
-
-  // a stop that did not wait for the task would be settled already
   const statusWhileHeld = Bun.peek.status(stopping);
 
   const stopped = (async () => {

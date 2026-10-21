@@ -2,7 +2,6 @@ import type { Kysely } from 'kysely';
 import type { Migration } from 'kysely/migration';
 import type { NoTables } from './no-tables';
 
-// the guest port the wake proxy forwards to
 export const MIGRATION_002_ADD_IMP_HTTP_PORT: Migration = {
   async up(db: Kysely<NoTables>) {
     await db.schema

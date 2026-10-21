@@ -8,21 +8,15 @@ import { createImage } from './images';
 import { readImpByName } from './imps';
 import { listGrantNames, listGrantedRules } from './secrets';
 
-// Grants made, revoked, copied and changed at the same time: each race ends
-// as one serial order would, and no imp ever holds two credentials for one
-// host (docs/guides/connectors.md#secrets-and-grants).
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // its log lines say why a fork went without a grant
   const harness = await startTestImpd(stack);
 
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
-  // the default image, which every imp the tests create boots
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
@@ -120,8 +114,6 @@ test('it skips the clashing copy when a fork gets a grant while its source’s a
 
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
 
-  // the copy as a fork makes it, a grant on the fork, and a grant on the
-  // source, all at once
   const results = await Promise.allSettled([
     ctx.impd.broker.createForkGrants(dev, copy, null),
     ctx.client.grants.add({ name: 'copy', secret: 'gh-api' }),

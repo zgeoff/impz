@@ -11,9 +11,8 @@ import { writeConsistentCopy, writeDatabaseCopy } from './database-copy';
 import { openDatabase } from './open-database';
 import { MIGRATIONS, runMigrationsTo } from './run-migrations';
 
-// a data dir with impd's database in it, a WAL file as impd keeps it, so a
-// copy taken while writes run reads past the log; both gone when the test
-// finishes
+// impd keeps its database in WAL mode, so a copy taken while writes run must
+// read past the log
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -35,7 +34,6 @@ async function setupTest() {
 test('#writeDatabaseCopy returns the copy’s path, size, schema version and integrity', async () => {
   const ctx = await setupTest();
 
-  // 10 GiB free past a 1 GiB reserve
   const budget = createDiskBudget({
     storage: {
       readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
@@ -168,7 +166,6 @@ test('#writeDatabaseCopy holds a prefix of the writes that run meanwhile', async
 test('#writeDatabaseCopy refuses a copy past the disk reserve, and leaves no file', async () => {
   const ctx = await setupTest();
 
-  // the reserve and not a byte more: the copy needs room past it
   const budget = createDiskBudget({
     storage: {
       readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 1024 ** 3 }),
@@ -262,8 +259,6 @@ test('#writeConsistentCopy writes a copy of an older schema that migrates forwar
   const ctx = await setupTest();
 
   const restored = join(ctx.dataDir, 'restored.sqlite');
-
-  // an older impd's database, as `impz db copy` of that impd wrote it
   const older = createUnmigratedDatabase(join(ctx.dataDir, 'older.sqlite'));
 
   await runMigrationsTo(older, '020_add_grantable_secrets');
@@ -273,7 +268,6 @@ test('#writeConsistentCopy writes a copy of an older schema that migrates forwar
 
   onTestFinished(() => db.destroy());
 
-  // the migrating handle closes before a read-only one opens the file
   await db.destroy();
 
   const opened = new Database(restored, { readonly: true });

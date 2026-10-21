@@ -1,26 +1,21 @@
 import { readFileSync } from 'node:fs';
 
-// one line of /proc/self/mounts
 export interface MountEntry {
   readonly source: string;
   readonly target: string;
   readonly fstype: string;
 }
 
-// one line of /proc/<pid>/mountinfo
 export interface MountInfoEntry {
   readonly mountPoint: string;
   readonly fstype: string;
   readonly source: string;
 }
 
-// The host's mount table, as /proc/self/mounts lists it.
 export function readMounts(): string {
   return readFileSync('/proc/self/mounts', 'utf8');
 }
 
-// Each line of a /proc/self/mounts table, with the octal escapes the kernel
-// writes for a space, a tab, a newline and a backslash decoded.
 export function parseMounts(mounts: string): MountEntry[] {
   return mounts
     .split('\n')
@@ -32,7 +27,6 @@ export function parseMounts(mounts: string): MountEntry[] {
     });
 }
 
-// Each line of a mountinfo table:
 // <id> <parent> <dev> <root> <mount point> <options> [<optional>...] - <fstype> <source> ...
 export function parseMountInfo(mountInfo: string): MountInfoEntry[] {
   return mountInfo

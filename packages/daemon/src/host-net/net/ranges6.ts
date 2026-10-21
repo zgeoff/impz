@@ -1,9 +1,6 @@
 import { BlockList } from 'node:net';
 import { parseIpv6 } from './addressing6';
 
-// What no open, public or box imp reaches over IPv6, and no broker tunnel
-// dials; docs/architecture/network/egress.md#public says why, and
-// ranges6.test.ts checks them against the IANA registry.
 export const BLOCKED_RANGES6: readonly string[] = [
   'fc00::/7',
   'fe80::/10',
@@ -24,13 +21,9 @@ export const BLOCKED_RANGES6: readonly string[] = [
   '5f00::/16',
 ];
 
-// The documentation ranges, refused to public imps only: test networks use
-// them, as the ipv6 e2e suite's open and box imps do.
+// Refused to public imps only: test networks use them.
 export const DOCUMENTATION_RANGES6: readonly string[] = ['2001:db8::/32', '3fff::/20'];
 
-// The rest of 2001::/23, not globally reachable, refused to public imps
-// only; docs/architecture/network/egress.md#public says which global
-// blocks stay, and why 2001:1::/32 goes whole.
 export const RESERVED_RANGES6: readonly string[] = [
   '2001::/31',
   '2001:2::/32',
@@ -59,8 +52,6 @@ export const RESERVED_RANGES6: readonly string[] = [
   '2001:100::/24',
 ];
 
-// A checker for IPv6 CIDRs; anything that is not an IPv6 address counts as
-// blocked.
 export function createRangeChecker6(ranges: readonly string[]): (address: string) => boolean {
   const list = new BlockList();
 
@@ -73,7 +64,6 @@ export function createRangeChecker6(ranges: readonly string[]): (address: string
   return (address) => parseIpv6(address) === null || list.check(address, 'ipv6');
 }
 
-// The IPv4 address an IPv4-mapped one (`::ffff:a.b.c.d`) holds, or null.
 export function findMappedIpv4(address: string): string | null {
   const parsed = parseIpv6(address);
 

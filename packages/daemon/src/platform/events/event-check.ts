@@ -3,7 +3,6 @@ import type { ImpEvent } from '@impz/api';
 import { metrics } from '@opentelemetry/api';
 import { SCOPE } from '../telemetry/scope';
 
-// how often the drops of one event type are logged, at most
 const LOG_INTERVAL_MS = 5 * 60_000;
 
 interface EventCheckDeps {
@@ -11,15 +10,13 @@ interface EventCheckDeps {
   readonly now: () => number;
 }
 
-// the drops of one event type since its last log line
 interface DropLog {
   loggedAt: number | null;
   count: number;
 }
 
-// Whether an event may go on the wire: oRPC ends a stream on an event that
-// fails the schema (docs/guides/events.md). The bus still gives it to impd's
-// own subscribers. Each event is checked and counted once, for every stream.
+// oRPC ends a stream on an event that fails the schema, so such an event
+// stays off the wire; impd's own subscribers still get it from the bus.
 export function createEventCheck(deps: EventCheckDeps): (event: Readonly<ImpEvent>) => boolean {
   const dropped = metrics.getMeter(SCOPE).createCounter('imp.events.dropped', {
     description: 'events the stream dropped because they fail the event schema, a bug in impd',

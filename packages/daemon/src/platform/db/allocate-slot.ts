@@ -1,8 +1,8 @@
 import { listTakenSlots } from './list-taken-slots';
 import type { ImpQueries } from './open-database';
 
-// The lowest slot no imp or ticket holds. Run it in the same transaction as
-// the insert that takes the slot; the unique index on `slot` backs that up.
+// Run it in the same transaction as the insert that takes the slot; the
+// unique index on `slot` backs that up.
 export async function allocateSlot(
   db: ImpQueries,
   slotCount: number,

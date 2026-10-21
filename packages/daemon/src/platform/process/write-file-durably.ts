@@ -12,21 +12,14 @@ import { open, rename, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 export interface DurableWriteOptions {
-  // the new file's mode; 0o644 by default
   readonly mode?: number;
 
-  // flushes one open file or directory to the disk; fsync by default, and a
-  // test passes a recorder that calls it
   readonly sync?: (fd: number) => void;
 }
 
-// a new file, never one that is there, and never through a symlink
 const NEW_FILE_FLAGS =
   constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW;
 
-// Writes `data` to `<path>.new`, flushes it, renames it over `path` and
-// flushes the directory: after a crash the file is the old one or the new
-// one, never part of either, and the new one outlives a power loss.
 export function writeFileDurably(
   path: string,
   data: string | Uint8Array,
@@ -58,11 +51,10 @@ export function writeFileDurably(
     rmSync(next, { force: true });
   }
 
-  // the rename itself lives in the directory
+  // a rename survives a power loss only once its directory is flushed
   writeToDisk([dirname(path)], sync);
 }
 
-// writeFileDurably's twin for a caller that must not block the event loop
 export async function writeFileDurablyAsync(
   path: string,
   data: string | Uint8Array,
@@ -96,8 +88,6 @@ export async function writeFileDurablyAsync(
   }
 }
 
-// Copies `from` over `to` as writeFileDurably writes: a flushed copy at
-// `<to>.new`, renamed over, then the directory flushed.
 export function writeCopyDurably(from: string, to: string): void {
   const next = `${to}.new`;
 
@@ -114,15 +104,11 @@ export function writeCopyDurably(from: string, to: string): void {
   writeToDisk([dirname(to)]);
 }
 
-// Renames `from` to `to` and flushes the directory, so the new name outlives
-// a power loss.
 export function writeRenamed(from: string, to: string): void {
   renameSync(from, to);
   writeToDisk([dirname(to)]);
 }
 
-// Flushes each file or directory from the page cache to the disk: written
-// files, and the directories whose renames hold them.
 export function writeToDisk(
   paths: readonly string[],
   sync: (fd: number) => void = fsyncSync,

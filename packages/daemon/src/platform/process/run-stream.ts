@@ -1,20 +1,14 @@
 import { buildExitError } from './run-command';
 
-// A command whose stdout is read as it comes: `done` resolves once it exits
-// 0, and rejects with its stderr otherwise. `stop` kills it and resolves once
-// it has exited, so nothing it holds, such as a snapshot, is busy after.
 export interface StreamedCommand {
   readonly stdout: ReadableStream<Uint8Array>;
   readonly done: Promise<void>;
   readonly stop: () => Promise<void>;
 }
 
-// what a ZFS move spawns; a fake ZFS in tests
 export interface StreamRunner {
   readonly readFrom: (argv: readonly string[]) => StreamedCommand;
 
-  // feeds `input` to the command's stdin; rejects with its stderr on a
-  // non-zero exit
   readonly writeTo: (argv: readonly string[], input: ReadableStream<Uint8Array>) => Promise<void>;
 }
 
@@ -29,7 +23,6 @@ export function createStreamRunner(): StreamRunner {
 
         const exitCode = await child.exited;
 
-        // a stop is the caller's choice, not a failure to report
         if (exitCode !== 0 && !state.isStopped) {
           const message = await stderr;
 

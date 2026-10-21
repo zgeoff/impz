@@ -25,8 +25,6 @@ test('#runMigrations migrates an empty database to the last migration', async ()
   expect(ran.rows.map((row) => row.name)).toStrictEqual(Object.keys(MIGRATIONS).toSorted());
 });
 
-// A database records each migration by name, and a name it ran that this
-// impd lacks refuses the upgrade, so a released migration keeps its name
 test('#runMigrations keeps the name of each migration a released impd ran', () => {
   expect(Object.keys(MIGRATIONS).toSorted()).toIncludeAllMembers([
     '001_create_initial_schema',
@@ -93,8 +91,6 @@ test('#runMigrations runs nothing on a database file a newer impd migrated', asy
 
   invariant(older !== undefined);
 
-  // a newer impd's database, one migration short of this impd's last and
-  // holding one this impd never had
   await runMigrationsTo(db, older);
 
   await sql`INSERT INTO kysely_migration (name, timestamp)
@@ -124,7 +120,6 @@ test('#runMigrations runs nothing on a database file a newer impd migrated', asy
 test('#runMigrations rethrows the error of a migration that fails', async () => {
   const db = createUnmigratedDatabase();
 
-  // a table by the name the first migration makes, so its create fails
   await sql`CREATE TABLE images (id TEXT)`.execute(db);
 
   expect(runMigrations(db)).rejects.toThrowWithMessage(Error, 'table "images" already exists');
@@ -174,7 +169,6 @@ test('#runMigrations numbers existing imps in order of creation in the jail uid 
 
   await runMigrationsTo(db, '011_add_public_exposure');
 
-  // rows as an impd at 011 wrote them
   await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
     VALUES ('img', 'base', 'imp/base:latest', 'sha256:0', 1, 0)`.execute(db);
 
@@ -198,7 +192,6 @@ test('#runMigrations gives each secret its own generation in the grantable migra
 
   await runMigrationsTo(db, '019_add_imp_max_memory');
 
-  // rows as an impd at 019 wrote them
   await sql`INSERT INTO secrets (name, kind, rules, created_at)
     VALUES ('gh', 'custom', '[]', 0), ('npm', 'custom', '[]', 0)`.execute(db);
 
@@ -223,7 +216,6 @@ test('#runMigrations keeps each secret’s value in its old file in the grantabl
 
   await runMigrationsTo(db, '019_add_imp_max_memory');
 
-  // rows as an impd at 019 wrote them
   await sql`INSERT INTO secrets (name, kind, rules, created_at)
     VALUES ('gh', 'custom', '[]', 0), ('npm', 'custom', '[]', 0)`.execute(db);
 
@@ -246,7 +238,6 @@ test('#runMigrations gives a grant its secret’s generation in the grantable mi
 
   await runMigrationsTo(db, '019_add_imp_max_memory');
 
-  // rows as an impd at 019 wrote them
   await sql`INSERT INTO secrets (name, kind, rules, created_at)
     VALUES ('gh', 'custom', '[]', 0)`.execute(db);
 
@@ -279,7 +270,6 @@ test('#runMigrations lets a token grant no secret in the grantable migration', a
 
   await runMigrationsTo(db, '019_add_imp_max_memory');
 
-  // a row as an impd at 019 wrote it
   await sql`INSERT INTO tokens (id, name, secret_hash, scope, imps, created_at)
     VALUES ('t', 'ci', 'hash', 'manage', '["dev-*"]', 0)`.execute(db);
 
@@ -299,7 +289,6 @@ test('#runMigrations lets an existing token add no image in the image ref prefix
 
   await runMigrationsTo(db, '028_cascade_oauth_tokens');
 
-  // a row as an impd at 028 wrote it
   await sql`INSERT INTO tokens (id, name, secret_hash, scope, imps, grantable, created_at)
     VALUES ('t', 'ci', 'hash', 'manage', '["dev-*"]', '[]', 0)`.execute(db);
 
@@ -319,7 +308,6 @@ test('#runMigrations leaves every existing grant on the whole host in the grant 
 
   await runMigrationsTo(db, '030_add_broker_audit_refusals');
 
-  // rows as an impd at 030 wrote them
   await sql`INSERT INTO secrets (name, kind, rules, created_at, generation, value_file)
     VALUES ('gh', 'custom', '[]', 0, 'g1', 'gh-file')`.execute(db);
 
@@ -353,12 +341,10 @@ test('#runMigrations leaves the broker reading the old value file in the grantab
 
   await runMigrationsTo(db, '019_add_imp_max_memory');
 
-  // an older impd kept each value in a file named after its secret
   const files = createSecretFiles(dataDir);
 
   files.write('gh', 'old-value');
 
-  // rows as an impd at 019 wrote them
   const rules = JSON.stringify([
     { host: 'api.example.com', header: 'authorization', scheme: 'bearer' },
   ]);
@@ -387,7 +373,6 @@ test('#runMigrations leaves existing secrets without an oauth config in the oaut
 
   await runMigrationsTo(db, '025_add_api_audit_detail');
 
-  // a row as an impd at 025 wrote it
   await sql`INSERT INTO secrets (name, kind, rules, created_at, generation, value_file)
     VALUES ('gh', 'custom', '[]', 0, 'g', 'gh.a1')`.execute(db);
 
@@ -403,7 +388,6 @@ test('#runMigrations keeps every OAuth token in the token cascade migration', as
 
   await runMigrationsTo(db, '027_add_imp_backup');
 
-  // rows as an impd at 027 wrote them
   await sql`INSERT INTO tokens (id, name, secret_hash, scope, imps, created_at)
     VALUES ('tok', 'laptop', 'h', 'admin', NULL, 0)`.execute(db);
 
@@ -449,7 +433,6 @@ test('#runMigrations makes a grant’s delete remove its tokens in the token cas
 
   await runMigrationsTo(db, '027_add_imp_backup');
 
-  // rows as an impd at 027 wrote them
   await sql`INSERT INTO tokens (id, name, secret_hash, scope, imps, created_at)
     VALUES ('tok', 'laptop', 'h', 'admin', NULL, 0)`.execute(db);
 
@@ -502,7 +485,6 @@ test('#runMigrations keeps every broker audit row as a sent request in the refus
 
   await runMigrationsTo(db, '029_add_token_image_ref_prefix');
 
-  // rows as an impd at 029 wrote them
   await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
     VALUES ('img', 'base', 'imp/base:latest', 'sha256:0', 1, 0)`.execute(db);
 
@@ -542,7 +524,6 @@ test('#runMigrations makes an imp’s delete remove its broker audit rows in the
 
   await runMigrationsTo(db, '029_add_token_image_ref_prefix');
 
-  // rows as an impd at 029 wrote them
   await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
     VALUES ('img', 'base', 'imp/base:latest', 'sha256:0', 1, 0)`.execute(db);
 
@@ -570,7 +551,6 @@ test('#runMigrations keeps every broker audit row with its imp’s name in the k
 
   await runMigrationsTo(db, '035_drop_old_oauth');
 
-  // rows as an impd at 035 wrote them: a sent request and a refused one
   await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
     VALUES ('img', 'base', 'imp/base:latest', 'sha256:0', 1, 0)`.execute(db);
 
@@ -629,7 +609,6 @@ test('#runMigrations keeps a broker audit row whose imp is gone, under its imp i
 
   await runMigrationsTo(db, '035_drop_old_oauth');
 
-  // a row an impd at 035 left with the foreign keys off, its imp gone
   await sql`PRAGMA foreign_keys = OFF`.execute(db);
 
   await sql`INSERT INTO broker_audit (id, imp_id, secret_name, at, method, host, path, status,
@@ -681,7 +660,6 @@ test('#runMigrations keeps an imp’s broker audit rows past its delete in the k
 
   await db.deleteFrom('imps').where('id', '=', 'gone').execute();
 
-  // a row for the deleted imp, as a request that ends after the delete writes
   await db
     .insertInto('broker_audit')
     .values({
@@ -752,7 +730,6 @@ test('#runMigrations keeps a kernel oops hold an older impd wrote in the oops bo
 
   await runMigrationsTo(db, '031_add_grant_filter');
 
-  // rows as an impd at 031 wrote them: a hold, with no boot recorded
   await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
     VALUES ('img', 'base', 'imp/base:latest', 'sha256:0', 1, 0)`.execute(db);
 
@@ -794,8 +771,6 @@ test('#runMigrations carries each kernel oops hold into its own column in the oo
 
   await runMigrationsTo(db, '032_add_imp_oops_boot_id');
 
-  // rows as an impd at 032 wrote them: a hold of this boot, one from before
-  // 032 with no boot, another error, and no error
   await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
     VALUES ('img', 'base', 'imp/base:latest', 'sha256:0', 1, 0)`.execute(db);
 
@@ -900,7 +875,6 @@ test('#runMigrations drops the old OAuth tables, rows and all', async () => {
 
   await runMigrationsTo(db, '034_add_better_auth');
 
-  // rows as an impd at 034 kept them from the OAuth server before better-auth
   await sql`INSERT INTO tokens (id, name, secret_hash, scope, imps, created_at, grantable)
     VALUES ('tok', 'laptop', 'h', 'manage', NULL, 0, '{}')`.execute(db);
 
@@ -928,7 +902,6 @@ test('#runMigrations lets a token that approved an old OAuth grant be removed', 
 
   await runMigrationsTo(db, '034_add_better_auth');
 
-  // a token and the grant it approved under the OAuth server before better-auth
   await sql`INSERT INTO tokens (id, name, secret_hash, scope, imps, created_at, grantable)
     VALUES ('tok', 'laptop', 'h', 'manage', NULL, 0, '{}')`.execute(db);
 

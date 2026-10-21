@@ -1,4 +1,3 @@
-// A slot a warm move asks for, free of imps; its own ticket holds it
 export class SlotTakenError extends Error {
   override name = 'SlotTakenError';
 

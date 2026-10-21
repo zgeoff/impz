@@ -1,4 +1,3 @@
-// the request's own signal and a stream's end, as one
 export function mergeSignals(
   request: AbortSignal | undefined,
   ends: AbortSignal | null,

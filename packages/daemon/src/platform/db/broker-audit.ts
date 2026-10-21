@@ -3,21 +3,13 @@ import type { AuditEntry, AuditRefusal, RefusedRequest } from '@impz/api';
 import { toLikePattern } from '../../identity/auth/imp-patterns';
 import type { ImpDatabase } from './open-database';
 
-// the newest rows an imp keeps of each kind, sent and refused; older ones go
-// as new ones of their kind come, so a guest's refusals never push out the
-// requests sent with a credential
 export const AUDIT_ROWS_PER_IMP = 1000;
-
-// rows the log keeps across every imp, destroyed ones included, whose rows
-// no new row of their own ever cuts; the oldest go first
 export const AUDIT_ROWS = 100_000;
 
-// A request the broker sent with a credential, with reason null, or one it
-// refused, with no secret. Nothing from a header or a body is kept.
+// Nothing from a header or a body is kept.
 export interface NewAuditEntry {
   readonly impId: string;
 
-  // kept in the row, so it outlives the imp
   readonly impName: string;
   readonly secretName: string | null;
   readonly at: Date;
@@ -53,7 +45,6 @@ export async function writeAuditEntry(db: ImpDatabase, entry: NewAuditEntry): Pr
 
     const sameKind = entry.reason === null ? 'is' : 'is not';
 
-    // the id of the newest row of the entry's kind past the cap, if there is one
     const cut = await trx
       .selectFrom('broker_audit')
       .select('id')
@@ -73,8 +64,6 @@ export async function writeAuditEntry(db: ImpDatabase, entry: NewAuditEntry): Pr
         .execute();
     }
 
-    // counted in rows, not ids: the per-imp cuts leave gaps in the ids, and a
-    // cut by id would take other imps' rows with the table under its cap
     const oldest = await trx
       .selectFrom('broker_audit')
       .select('id')
@@ -89,9 +78,6 @@ export async function writeAuditEntry(db: ImpDatabase, entry: NewAuditEntry): Pr
   });
 }
 
-// The requests sent with a credential, newest first, destroyed imps' among
-// them; one imp's when impId is set, and only imps within the patterns when
-// there are any.
 export async function listAuditEntries(
   db: ImpDatabase,
   impId: string | null,
@@ -101,7 +87,6 @@ export async function listAuditEntries(
   const rows = await listAuditRows(db, { impId, limit, patterns, refused: false });
 
   return rows.map((row) => {
-    // the broker writes all four for each request it sent
     if (row.secret_name === null || row.method === null || row.host === null || row.path === null) {
       throw new Error(`broker audit row ${String(row.id)} was sent but lacks a field`);
     }
@@ -121,8 +106,6 @@ export async function listAuditEntries(
   });
 }
 
-// The requests the broker refused, in the same order and with the same
-// filters as listAuditEntries.
 export async function listRefusedRequests(
   db: ImpDatabase,
   impId: string | null,

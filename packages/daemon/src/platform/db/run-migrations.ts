@@ -92,8 +92,6 @@ export async function runMigrations<T>(db: Kysely<T>): Promise<void> {
   requireMigrated(result);
 }
 
-// up to and including `name`, for a test that writes rows as an older impd
-// did; a test of a failed migration passes its own `migrations`
 export async function runMigrationsTo<T>(
   db: Kysely<T>,
   name: string,
@@ -109,9 +107,8 @@ export async function runMigrationsTo<T>(
   requireMigrated(result);
 }
 
-// A database a newer impd migrated holds migrations this one lacks: refused
-// before anything runs, naming both schema versions, where kysely's own
-// refusal names only the missing migration
+// Kysely's own refusal names only the missing migration, not both schema
+// versions.
 async function requireKnownMigrations<T>(db: Kysely<T>): Promise<void> {
   const table = await sql<{ name: string }>`
     SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'kysely_migration'

@@ -2,7 +2,6 @@ import type { EgressPolicy } from '@impz/api';
 import { parseStoredPolicy } from './egress';
 import type { ImpDatabase } from './open-database';
 
-// the imp behind a broker connection
 export interface BrokerPeer {
   readonly id: string;
   readonly name: string;

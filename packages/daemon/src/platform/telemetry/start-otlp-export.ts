@@ -1,8 +1,5 @@
 import { metrics, trace } from '@opentelemetry/api';
 
-// The SDK, only when OTEL_EXPORTER_OTLP_ENDPOINT is set; the exporters read
-// it and the other OTEL_EXPORTER_OTLP_* settings themselves. Returns the
-// stop, which sends what is left.
 export async function startOtlpExport(
   env: Readonly<Record<string, string | undefined>>,
   version: string,

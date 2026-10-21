@@ -1,4 +1,3 @@
-// the body as text, of at most `max` bytes; null for none or a larger one
 export async function readBodyText(request: Request, max: number): Promise<string | null> {
   if (request.body === null) {
     return null;

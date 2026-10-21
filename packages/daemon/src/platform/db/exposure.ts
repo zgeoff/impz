@@ -3,17 +3,15 @@ import type { ImpState } from '@impz/api';
 import type { StoredPublicAuth } from './imps';
 import type { ImpDatabase } from './open-database';
 
-// A public imp as the public listeners see it
 export interface PublicImp {
   readonly id: string;
 
-  // a request to an imp that is not running wakes it, which has a limit
   readonly state: ImpState;
   readonly stored: StoredPublicAuth;
 }
 
-// The public listeners' view of an imp: its stored auth while it is public,
-// undefined for a tailnet-only or unknown imp, which both get the same 404.
+// undefined for a tailnet-only imp as for an unknown one, which both get the
+// same 404
 export async function readPublicImp(db: ImpDatabase, name: string): Promise<PublicImp | undefined> {
   const row = await db
     .selectFrom('imps')
@@ -40,7 +38,6 @@ export async function readPublicImp(db: ImpDatabase, name: string): Promise<Publ
   };
 }
 
-// the names the public A records are for
 export async function listPublicImpNames(db: ImpDatabase): Promise<string[]> {
   const rows = await db
     .selectFrom('imps')

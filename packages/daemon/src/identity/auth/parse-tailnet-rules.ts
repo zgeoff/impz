@@ -2,8 +2,6 @@ import * as z from 'zod';
 import { TailnetRulesSchema } from './tailnet-identity';
 import type { TailnetRule } from './tailnet-identity';
 
-// IMP_TAILNET_IDENTITIES is a JSON array of rules, such as
-// [{"match":"user:me@example.com","scope":"manage"}]
 export function parseTailnetRules(text: string | undefined): readonly TailnetRule[] | null {
   if (text === undefined) {
     return null;

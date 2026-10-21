@@ -5,9 +5,8 @@ import { join } from 'node:path';
 import { runChildTests } from '@impz/test-utils/run-child-tests';
 import { startOtlpExport } from './start-otlp-export';
 
-// An export that starts sets the global meter and tracer providers, which the
-// run's preload holds, so each such case runs as its own child `bun test`
-// with no preload. Its source imports these by absolute path.
+// A started export sets the global meter and tracer providers, which the
+// run's preload holds, so each case runs as a child `bun test` with no preload.
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'otlp-export-'));
 
@@ -20,7 +19,6 @@ async function setupTest() {
     updateEnvPath: JSON.stringify(Bun.resolveSync('@impz/test-utils/update-env', import.meta.dir)),
     invariantPath: JSON.stringify(Bun.resolveSync('tiny-invariant', import.meta.dir)),
 
-    // the child runs no preload, so it registers the run's matchers itself
     matchersPath: JSON.stringify(Bun.resolveSync('@zgeoff/bun-test-extended', import.meta.dir)),
   };
 }

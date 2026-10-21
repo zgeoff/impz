@@ -5,8 +5,6 @@ import type { ImpRecord } from './imps';
 import type { ImpDatabase, ImpQueries } from './open-database';
 import type { ImpLeases } from './schema';
 
-// the owner of a hold from before leases, and the label `imps.hold` writes;
-// neither blocks a user's sleep or stop (docs/guides/leases.md#holds)
 export const LEGACY_PRINCIPAL = 'legacy';
 export const HOLD_LABEL = 'hold';
 
@@ -16,40 +14,29 @@ export interface LeaseRecord {
   readonly label: string;
   readonly display: string;
 
-  // null holds with no end
   readonly until: Date | null;
   readonly createdAt: Date;
 }
 
-// one owner's lease on an imp
 export interface LeaseKey {
   readonly principal: string;
   readonly label: string;
 }
 
-// which leases a removal takes: these keys, or every one made through
-// `leases.*`
 type LeaseSelection = readonly LeaseKey[] | 'blocking';
 
 interface LeaseWrite {
-  // the clock's now: what ended before it is pruned
   readonly at: number;
 
-  // the ImpChanged reason it emits; null for none, as a renew
   readonly reason: ImpChangeReason | null;
 
-  // a removal emits even when it took nothing, as `hold 0` always has
   readonly isEmittedWhenNone?: boolean;
 }
 
-// Only a lease made through `leases.*` blocks a user's sleep or stop: the
-// `hold` label and a legacy hold never did.
 export function isBlockingLease(lease: Readonly<LeaseKey>): boolean {
   return lease.principal !== LEGACY_PRINCIPAL && lease.label !== HOLD_LABEL;
 }
 
-// the leases still live at `at`, of these imps or of all of them, oldest
-// first
 export async function listLeases(
   db: ImpDatabase,
   at: number,
@@ -73,8 +60,6 @@ export async function listLeases(
   return rows.map((row) => toLeaseRecord(row));
 }
 
-// Creates the lease or moves its end, keeping when it was made, then the
-// imp's hold. Leases that ended go first, so one that comes back is new.
 export async function writeLease(
   db: ImpDatabase,
   lease: Readonly<LeaseRecord>,
@@ -111,8 +96,6 @@ export async function writeLease(
   return imp;
 }
 
-// Removes the leases, then sets the imp's hold. It emits only when one went,
-// unless told otherwise; `released` says how many.
 export async function removeLeases(
   db: ImpDatabase,
   impId: string,
@@ -153,9 +136,6 @@ export async function removeLeases(
   return result;
 }
 
-// A moved imp's leases, as its target staged it: written with the imp's
-// hold, which emits nothing, as no imp of that name lives here yet. A pair
-// a header names twice keeps its last.
 export async function writeMovedLeases(
   db: ImpDatabase,
   impId: string,

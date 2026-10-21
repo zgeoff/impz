@@ -8,7 +8,6 @@ import { createApiAudit, findImpName, withAuditedOpen } from './api-audit';
 async function setupTest() {
   const database = await createTestDatabase();
 
-  // the audit's clock, which a test sets to the time it needs
   const clock = { at: 0 };
   const logs: string[] = [];
 

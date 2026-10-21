@@ -54,7 +54,6 @@ test('it closes the handle on destroy only after the held connection is released
     setImmediate(resolve);
   });
 
-  // still open: the holder can finish its write
   await connection.executeQuery(CompiledQuery.raw('select 1 as one'));
   await ctx.driver.releaseConnection();
 

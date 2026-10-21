@@ -1,7 +1,4 @@
-// Imp patterns as SQL: the matcher itself, isImpAllowed, is in @impz/api.
-
-// ImpPatternSchema allows no `%` or `_`, so a pattern becomes a LIKE
-// pattern by its `*` alone
 export function toLikePattern(pattern: string): string {
+  // imp patterns allow no `%` or `_`, so `*` is the only character to rewrite
   return pattern.replaceAll('*', '%');
 }

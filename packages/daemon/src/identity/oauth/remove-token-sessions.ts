@@ -1,8 +1,5 @@
 import type { ImpDatabase } from '../../platform/db/open-database';
 
-// A code exchange binds its tokens to the session that approved them; once
-// issued, no token needs it, so every session a token holds goes, with the
-// expired ones.
 export async function removeTokenSessions(db: ImpDatabase): Promise<void> {
   const held = await db
     .selectFrom('oauthAccessToken')

@@ -5,8 +5,6 @@ import * as z from 'zod';
 import { findAccess } from './access-policy';
 import { readChangedImps } from './builder-calls';
 
-// A completeness check over the access map. The calls left out name no imp
-// that exists (a new one, a backup's, another resource's) or change nothing.
 test('it reports the imp of every call that changes an imp it names', () => {
   const notAnImp = new Set([
     'imps.create',

@@ -11,7 +11,6 @@ export interface CallerSources {
   readonly rootToken: string;
   readonly now: () => number;
 
-  // null when no rule gives tailnet peers access
   readonly tailnet: {
     readonly identities: TailnetIdentities;
     readonly knownHosts: KnownHosts;
@@ -19,18 +18,11 @@ export interface CallerSources {
 }
 
 export interface CallerOptions {
-  // the connection's peer address: the socket's, or the client's as the
-  // wake proxy handed it over in-process; null when unknown
   readonly peer: string | null;
 
-  // the dashboard's session cookie counts; /exec and /tunnel take tickets
-  // and tokens only
   readonly cookie: boolean;
 }
 
-// Who a request runs as: its bearer token, the dashboard's session cookie,
-// or its peer's tailnet identity, for every route alike. Null for none, and
-// for a wrong bearer token, which never falls through to another source.
 export async function resolveCaller(
   request: Request,
   sources: Readonly<CallerSources>,
@@ -63,12 +55,11 @@ export async function resolveCaller(
   return sources.tailnet.identities.resolve(options.peer);
 }
 
-// An imp's page can plant its own imp_session on a longer path, which the
-// browser sends first, so every session value is tried. A session whose
-// token is gone logs nobody in.
 function readSessionCaller(request: Request, sources: Readonly<CallerSources>): Caller | null {
   const at = sources.now();
 
+  // an imp's page can plant its own imp_session on a longer path, which the
+  // browser sends first, so every session value is tried
   for (const value of readSessionCookies(request.headers.get('cookie'))) {
     const claim = readSession(value, sources.rootToken, at);
     const caller = claim === null ? null : sources.tokens.findById(claim.tokenId);
@@ -81,10 +72,9 @@ function readSessionCaller(request: Request, sources: Readonly<CallerSources>): 
   return null;
 }
 
-// Imps serve pages on other ports of this host, which SameSite counts as the same site; only a
-// same-origin request may use the cookie (docs/architecture/control/auth.md#the-dashboard-session). No Origin
-// at all is a refusal.
 export function isSameOrigin(request: Request): boolean {
+  // imps serve pages on other ports of this host, which SameSite counts as the
+  // same site, so only a same-origin request may use the cookie
   const site = request.headers.get('sec-fetch-site');
 
   if (site !== null) {

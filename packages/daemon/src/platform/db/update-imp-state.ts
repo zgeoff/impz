@@ -9,42 +9,29 @@ import type { DB } from './schema';
 import { toImpRecord } from './to-imp-record';
 
 export interface ImpStateChange {
-  // why, for the event stream
   readonly reason: ImpChangeReason;
   readonly detail?: ImpEventDetail;
   readonly state: ImpState;
   readonly error?: string | null;
 
-  // set with the error it comes with: an error write without it ends the
-  // hold, as a new error replaced the hold's text before the hold had its
-  // own column
   readonly hasOopsHold?: boolean;
   readonly oopsBootId?: string | null;
   readonly pid?: number | null;
   readonly sleptAt?: Date | null;
   readonly firecrackerVersion?: string | null;
 
-  // a cold boot that stands in for a wake counts as one, as a `woke` does
   readonly countsWake?: boolean;
 
-  // when a running imp's awake span ends; now by default. A repair passes
-  // the last time anything saw the VM alive.
   readonly awakeUntil?: Date;
 
-  // the cause the next cold boot records, whichever path boots it: a repair
-  // knows it before that boot (docs/architecture/guest/sessions.md#generations-boots-and-offsets)
   readonly nextBootCause?: Extract<ColdBootCause, 'recovery' | 'wake_fallback'>;
 }
 
-// what a compare-and-set state write expects the row to hold
 interface ImpStateExpected {
   readonly state: ImpState;
   readonly pid: number | null;
 }
 
-// The one writer of an imp's state; a field the change leaves out keeps its
-// value, null clears one. With `expected` it is a compare-and-set, which
-// gives undefined when something else changed the row first.
 export async function updateImpState(
   db: ImpDatabase,
   id: string,
@@ -96,7 +83,6 @@ export async function updateImpState(
     .where('id', '=', id);
 
   if (expected !== undefined) {
-    // an unlocked repair's move passes the lifecycle table too
     if (change.state !== expected.state) {
       requireTransition(expected.state, change.state, `move to ${change.state}`);
     }
@@ -108,7 +94,6 @@ export async function updateImpState(
 
   const returning = query.returningAll();
 
-  // an unguarded write to a missing row throws, as it always has
   const row =
     expected === undefined
       ? await returning.executeTakeFirstOrThrow()
@@ -117,9 +102,6 @@ export async function updateImpState(
   return row === undefined ? undefined : emitChange(db, toImpRecord(row), change);
 }
 
-// Awake time, in the same write as the state: a running imp's span opens
-// once (a re-adopt keeps it), and any other state closes it, a liveness
-// repair after a crash included, so the time still counts. A wake counts.
 function buildAwakeValues(change: Readonly<ImpStateChange>) {
   const now = Date.now();
 
@@ -134,7 +116,6 @@ function buildAwakeValues(change: Readonly<ImpStateChange>) {
 
   const until = change.awakeUntil?.getTime() ?? now;
 
-  // max() is null while no span is open; an end before the start adds nothing
   return {
     awake_ms: sql<number>`awake_ms + coalesce(max(0, ${until} - awake_since), 0)`,
     awake_since: null,

@@ -21,16 +21,10 @@ import type { GrantableSecret, TokenRecord, TokenSshKeyRecord } from '../../plat
 import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
 import type { Caller } from './caller';
 
-// The root token in <dataDir>/token has every scope and is not in the
-// database. Its id is one a made token can never get (those are 16
-// characters), so a dashboard session can name it.
+// A made token's id is 16 characters, so this one never clashes with it.
 export const ROOT_TOKEN_ID = 'root';
 const ROOT_NAME = 'root';
 const ROOT_PRINCIPAL = 'root';
-
-// A made token is `imp_<id>.<secret>`: the id finds the entry, and the
-// secret's SHA-256 is compared in constant time. 256 random bits need no
-// slow hash; that is for secrets a person picks.
 const SECRET_PREFIX = 'imp_';
 
 interface NewToken {
@@ -38,26 +32,18 @@ interface NewToken {
   readonly scope: Scope;
   readonly imps: readonly string[] | null;
 
-  // public key lines to bind to it; none when left out
   readonly sshKeys?: readonly string[];
 
-  // existing secrets it may grant to its imps; none when left out
   readonly grantable?: readonly string[];
 
-  // the start of the image refs it may add under its patterns; none when
-  // left out
   readonly imageRefPrefix?: string;
 }
 
-// what an update changes; a field left out stays, and a null prefix takes
-// the image add away
 interface TokenUpdate {
   readonly grantable?: readonly string[];
   readonly imageRefPrefix?: string | null;
 }
 
-// A key bound to a token, as the SSH gateway sees it. A login with it runs
-// as the token's caller; the key id lets removing the key end the login.
 export interface BoundSshKey {
   readonly key: AuthorizedKey;
   readonly keyId: string;
@@ -69,7 +55,6 @@ interface KeyEntry {
   readonly key: AuthorizedKey;
 }
 
-// the names of the tokens a restore wrote, and each one or key it left out
 interface RestoredTokens {
   readonly restored: readonly string[];
   readonly skipped: readonly { name: string; reason: string }[];
@@ -78,42 +63,25 @@ interface RestoredTokens {
 export interface TokenStore {
   readonly list: () => Token[];
 
-  // the token, and its secret: the only time impd has it. BAD_REQUEST for
-  // a grantable list or an image ref prefix without manage and imps;
-  // NOT_FOUND for a name no secret has.
   readonly create: (token: Readonly<NewToken>) => Promise<{ token: Token; secret: string }>;
 
-  // a new grantable list at each secret's generation now, a new image ref
-  // prefix, or both; a secret left off loses its grants on the token's
-  // imps. NOT_FOUND for the token or a secret; BAD_REQUEST as create.
   readonly update: (
     name: string,
     change: Readonly<TokenUpdate>,
   ) => Promise<{ token: Token; droppedGrants: number }>;
 
-  // NOT_FOUND for an unknown name; CONFLICT while authorized_keys lists one
-  // of its keys; calls onRemove with the token's id and its grants' ids
   readonly remove: (name: string) => Promise<void>;
 
-  // CONFLICT for a key bound to any token or listed in authorized_keys
   readonly addKey: (name: string, line: string) => Promise<SshKey>;
 
-  // CONFLICT while authorized_keys lists the key; calls onRemove with its id
   readonly removeKey: (name: string, fingerprint: string) => Promise<void>;
 
-  // the token a key blob is bound to, for an SSH login; null for none
   readonly findSshKey: (blob: Buffer) => BoundSshKey | null;
 
-  // the caller a bearer secret stands for, or null
   readonly authenticate: (secret: string) => Caller | null;
 
-  // the caller behind a token id, such as a dashboard session's; null once
-  // the token is gone
   readonly findById: (id: string) => Caller | null;
 
-  // A backup's tokens and keys as they were, so each secret works again. A
-  // token whose name or id this store has is left out, as is a key bound
-  // here or in authorized_keys; each is listed with why.
   readonly createRestored: (
     tokens: readonly TokenRecord[],
     keys: readonly TokenSshKeyRecord[],
@@ -125,17 +93,11 @@ interface TokenStoreDeps {
   readonly rootToken: string;
   readonly now: () => number;
 
-  // after a token or a key is removed, by its id: what it opened ends
   readonly onRemove: (id: string) => void;
 
-  // whether authorized_keys lists the key, whatever the file's mode. A key
-  // there has every imp: a binding next to it would narrow nothing until
-  // it was removed, and then hand the login back to the file.
   readonly isFileKey: (blob: Buffer) => boolean;
 }
 
-// impd is the only writer, so the tokens live in memory and every change
-// is written through
 export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<TokenStore> {
   const byId = new Map<string, TokenRecord>();
   const keysByFingerprint = new Map<string, KeyEntry>();
@@ -164,13 +126,11 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
     imps: null,
     grantable: [],
 
-    // it adds any image as a host-wide caller
     imageRefPrefix: null,
     tokenId: ROOT_TOKEN_ID,
     grantId: null,
     expiresAt: null,
 
-    // the root token and a root dashboard session
     principal: ROOT_PRINCIPAL,
     display: ROOT_NAME,
   };
@@ -212,7 +172,6 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
     sshKeys: listKeys(record.id).map((entry) => toSshKey(entry)),
   });
 
-  // parsed and free to bind: no token holds it, nor authorized_keys
   const buildKeyEntry = (tokenId: string, line: string): KeyEntry => {
     const key = parsePublicKey(line);
 
@@ -304,13 +263,10 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
         ...(change.imageRefPrefix !== undefined && { imageRefPrefix: change.imageRefPrefix }),
       });
 
-      // removed since requireByName
       if (written === null) {
         throw buildNotFoundError('token', name);
       }
 
-      // a new record, not an edit: a caller built from the old one keeps
-      // its view, and every request builds its caller again from this one
       const updated: TokenRecord = {
         ...record,
         grantable: written.grantable,
@@ -336,7 +292,6 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
 
       deps.onRemove(record.id);
 
-      // the OAuth grants it approved end with it, by their own ids too
       for (const grantId of grantIds) {
         deps.onRemove(grantId);
       }
@@ -464,9 +419,6 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
   };
 }
 
-// Each name with its secret's generation now, so the token is bound to that
-// secret and not to one made later under the name. Only a manage token for
-// some imps takes a list: a host-wide one grants anything already.
 async function readGrantable(
   db: ImpQueries,
   names: readonly string[],
@@ -497,8 +449,6 @@ async function readGrantable(
   return grantable;
 }
 
-// Only a manage token for some imps takes an image ref prefix: a host-wide
-// one adds any image already, and an add needs manage
 function requireImageScope(
   imageRefPrefix: string | null,
   token: Readonly<Pick<NewToken, 'scope' | 'imps'>>,
@@ -510,7 +460,6 @@ function requireImageScope(
   }
 }
 
-// each line as a key entry; CONFLICT for the same key twice
 function buildKeyEntries(lines: readonly string[], build: (line: string) => KeyEntry): KeyEntry[] {
   const entries = lines.map((line) => build(line));
 
@@ -527,7 +476,6 @@ function buildKeyEntries(lines: readonly string[], build: (line: string) => KeyE
   return entries;
 }
 
-// the secret of a bearer header, or null for none
 export function findBearer(header: string | null): string | null {
   return header !== null && header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
 }
@@ -543,6 +491,7 @@ function parseSecret(text: string): { readonly id: string; readonly secret: stri
 }
 
 function buildSecretHash(secret: string): Buffer {
+  // 256 random bits need no slow hash; a slow hash is for secrets a person picks
   return createHash('sha256').update(secret).digest();
 }
 
@@ -583,8 +532,6 @@ function toCaller(record: Readonly<TokenRecord>): Caller {
     grantId: null,
     expiresAt: null,
 
-    // by id, not name: a deleted token's id never comes back, so a new token
-    // with its name holds none of its leases
     principal: `token:${record.id}`,
     display: record.name,
   };

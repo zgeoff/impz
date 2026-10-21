@@ -10,7 +10,6 @@ export interface ImageRecord {
   readonly digest: string;
   readonly source: ImageSource;
 
-  // a template's source imp, by name; null for a docker image
   readonly sourceImp: string | null;
   readonly sizeBytes: number;
   readonly createdAt: Date;
@@ -22,7 +21,6 @@ export interface NewImage {
   readonly digest: string;
   readonly sizeBytes: number;
 
-  // oci and null when left out
   readonly source?: ImageSource;
   readonly sourceImp?: string | null;
 }
@@ -82,7 +80,7 @@ export async function listImages(db: ImpDatabase): Promise<ImageRecord[]> {
   return rows.map((row) => toImageRecord(row));
 }
 
-// fails on a foreign key while any imp still uses the image
+// throws on a foreign key while any imp still uses the image
 export async function removeImage(db: ImpDatabase, id: string): Promise<boolean> {
   const result = await db.deleteFrom('images').where('id', '=', id).executeTakeFirst();
 
@@ -102,8 +100,6 @@ function toImageRecord(row: Readonly<Selectable<DB['images']>>): ImageRecord {
   };
 }
 
-// points an image name at a new build; imps keep their own disks, so the
-// old rootfs is no longer needed by them
 export async function updateImage(
   db: ImpDatabase,
   id: string,

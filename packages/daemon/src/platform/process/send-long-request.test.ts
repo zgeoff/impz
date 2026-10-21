@@ -45,7 +45,6 @@ test('it stops the deadline once the answer comes', async () => {
 
   const control = new AbortController();
 
-  // the control's end lets the origin answer
   const controlCall = fetch(`${ctx.origin.origin}/control`, {
     method: 'POST',
     body: 'the control call',
@@ -117,7 +116,6 @@ test('it gets an answer that stays silent past Bun’s idle limit, where a plain
     },
   );
 
-  // the child goes first, before the origin it calls
   ctx.stack.defer(() => {
     child.kill();
   });

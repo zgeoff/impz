@@ -1,9 +1,5 @@
 import type { ImpDatabase } from './open-database';
 
-// The sessions started with `require: ['broker']`, by execution generation:
-// one run of a session's process, which a sleep, a wake and an impd restart
-// keep, and which no later run repeats.
-
 export async function probeBrokerSession(
   db: ImpDatabase,
   impId: string,
@@ -19,8 +15,6 @@ export async function probeBrokerSession(
   return row !== undefined;
 }
 
-// the new one, and of the rest only those the agent still lists, running or
-// exited, so the rows never outgrow the imp's sessions
 export async function writeBrokerSession(
   db: ImpDatabase,
   impId: string,

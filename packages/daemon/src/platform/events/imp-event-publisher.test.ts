@@ -23,9 +23,6 @@ function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // a frozen clock, far from the wall clock, that the session cookies read;
-  // a sleep's young-guest wait moves it by its pauses alone. The root
-  // token is the key of the session cookies.
   return startTestImpd(stack, {
     frozenClockMs: Date.UTC(2026, 0, 1),
     rootToken: 'root-token',
@@ -57,12 +54,9 @@ test('it sends a keepalive comment every 5 s through a stream with no event', as
 
   onTestFinished(() => reader.cancel());
 
-  // the opening comment
   await reader.read();
 
   jest.advanceTimersByTime(400_000);
-
-  // real timers again: the comments are queued by now
   jest.useRealTimers();
 
   const queued = await readQueuedText(reader, 1000);
@@ -157,9 +151,9 @@ test('it counts a young guest’s wait before a sleep in the slept event’s pre
 
   const stream = readInBackground(events);
 
-  // 200 ms short of IMP_SLEEP_MIN_GUEST_UPTIME_MS's 1500 ms default: the
-  // sleep waits the rest on the sleep clock before it pauses the VM, and
-  // the pause itself moves that clock by nothing
+  // 200 ms short of the 1500 ms default minimum guest uptime: the sleep waits
+  // the rest on the sleep clock before it pauses the VM, and the pause moves
+  // that clock by nothing
   ctx.fake.setGuestUptime(1300);
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -262,7 +256,6 @@ test('it reports an adopted change when a restarted impd adopts a running VM', a
     }),
   );
 
-  // each reconcile reports a VM it finds still running to the event bus
   await restarted.imps.reconcileImps();
 
   const adopted = await waitFor(() => {
@@ -364,7 +357,6 @@ test('it puts a secret’s value in no event and no audit row', async () => {
 test('it ends a dashboard stream at the session’s expiry', async () => {
   const ctx = await setupTest();
 
-  // a session that ends a millisecond after the test's frozen now
   const expiresAt = ctx.now() + 1;
   const sendDashboardRequest = (request: Request) => ctx.impd.api.app.handle(request);
 
@@ -550,7 +542,6 @@ test('it drops an event that fails the schema and goes on', async () => {
     expect(stream.items).not.toBeEmpty();
   });
 
-  // a stream that ended at the bad event would never send this one
   ctx.impd.imps.events.publish(after);
 
   await waitFor(() => {
@@ -578,8 +569,6 @@ test('it drops a snapshot imp that fails the schema and goes on', async () => {
 
   await ctx.client.imps.create({ name: 'bad', image: 'ubuntu' });
   await ctx.client.imps.create({ name: 'good', image: 'ubuntu' });
-
-  // a row no create would write
   await ctx.db.updateTable('imps').set({ name: 'Bad Name' }).where('name', '=', 'bad').execute();
 
   const controller = new AbortController();
@@ -597,7 +586,6 @@ test('it drops a snapshot imp that fails the schema and goes on', async () => {
     expect(stream.items).not.toBeEmpty();
   });
 
-  // a stream that ended at the bad imp would never send this one
   ctx.impd.imps.events.publish(later);
 
   await waitFor(() => {

@@ -9,20 +9,14 @@ import type { CommandRunner } from '../../platform/process/run-command';
 import { buildUlaPrefix, formatCidr6, parsePrefix64 } from './addressing6';
 import type { Prefix64 } from './addressing6';
 
-// IMP_SUBNET6 (docs/architecture/network/networking.md#ipv6): `auto` is a unique
-// local /64 behind NAT66, when the host container has an IPv6 route out;
-// a routed /64 is used as it is; `off` gives imps no IPv6.
 export type Ipv6Setting =
   | { readonly kind: 'auto' }
   | { readonly kind: 'off' }
   | { readonly kind: 'routed'; readonly prefix: Prefix64 };
 
-// What this impd gives imps, decided once at start.
 export interface Ipv6Plan {
   readonly prefix: Prefix64;
 
-  // `auto`: the prefix is unique local, and impd masquerades it out of the
-  // uplink, the interface of the container's IPv6 default route
   readonly nat66: boolean;
   readonly uplink: string | null;
 }
@@ -42,21 +36,15 @@ export function parseIpv6Setting(text: string): Ipv6Setting {
 }
 
 export interface Ipv6PlanDeps {
-  // the interface of the container's IPv6 default route, or null
   readonly readDefaultRoute: () => Promise<string | null>;
 
-  // the host's unique local prefix, made once and kept with its data
   readonly readUlaPrefix: () => Prefix64;
 
-  // what of setup-net's IPv6 rules is missing, or null when all are there
   readonly checkHostRules: () => Promise<string | null>;
   readonly runNft: (script: string) => Promise<void>;
   readonly log: (message: string) => void;
 }
 
-// The plan, or null when imps get no IPv6, logged either way. It fails
-// closed: no setup-net rules, or no NAT66 when auto needs it, means no IPv6
-// (docs/architecture/network/networking.md#ipv6).
 export async function resolveIpv6Plan(
   setting: Ipv6Setting,
   deps: Ipv6PlanDeps,
@@ -108,17 +96,12 @@ export async function resolveIpv6Plan(
   return { prefix, nat66: true, uplink };
 }
 
-// best effort: a host with no nftables has no table to remove
 async function removeNat66(deps: Readonly<Pick<Ipv6PlanDeps, 'runNft'>>): Promise<void> {
   try {
     await deps.runNft(buildNat66Removal());
-  } catch {
-    // nothing to remove
-  }
+  } catch {}
 }
 
-// What setup-net.sh puts in place for imps' IPv6
-// (docs/architecture/network/networking.md#ipv6), by table.
 const HOST_RULES6: readonly (readonly [string, string])[] = [
   ['filter', '-A INPUT -i imp+ -j DROP'],
   ['filter', '-A FORWARD -i imp+ -o imp+ -j DROP'],
@@ -133,9 +116,6 @@ const HOST_SYSCTLS6: readonly (readonly [string, string])[] = [
   ['all/forwarding', '1'],
 ];
 
-// The first of setup-net's IPv6 rules and settings that is missing, or null.
-// `procSys` is where the kernel shows the IPv6 settings, and `run` runs
-// ip6tables, runCommand by default.
 export async function checkHostRules6(
   procSys = '/proc/sys/net/ipv6/conf',
   run: CommandRunner = runCommand,
@@ -175,8 +155,6 @@ function readSysctl(path: string): string | null {
   }
 }
 
-// `ip -6 route show default`: the device of the first default route; `run`
-// runs it, runCommand by default
 export async function readIpv6DefaultRoute(
   run: CommandRunner = runCommand,
 ): Promise<string | null> {
@@ -189,9 +167,8 @@ export async function readIpv6DefaultRoute(
   return /\bdev (?<dev>\S+)/u.exec(result.stdout)?.groups?.['dev'] ?? null;
 }
 
-// The prefixes on the container's own links, which no imp may reach, read
-// at each table build. A failed read throws: a blocklist without them would
-// let an imp or a tunnel reach them. `run` throws on a failure.
+// A failed read throws: a blocklist without these prefixes would let an imp
+// or a tunnel reach them.
 export async function readConnectedPrefixes6(
   run: (argv: readonly string[]) => Promise<string> = runChecked,
 ): Promise<readonly string[]> {
@@ -201,8 +178,6 @@ export async function readConnectedPrefixes6(
   return parseConnectedPrefixes(routes, addresses);
 }
 
-// On-link routes of any origin (kernel, ra, static), and the prefix of every
-// global or unique local address, off the taps; canonical, with no repeats.
 export function parseConnectedPrefixes(routes: string, addresses: string): readonly string[] {
   const found = [
     ...routes.split('\n').flatMap((line) => {
@@ -237,8 +212,6 @@ export function parseConnectedPrefixes(routes: string, addresses: string): reado
   return [...prefixes];
 }
 
-// <dataDir>/net/ipv6-ula: made on first need, so the prefix, and every
-// imp's address in it, outlives restarts
 export function readOrCreateUlaPrefix(path: string): Prefix64 {
   if (existsSync(path)) {
     const prefix = parsePrefix64(readFileSync(path, 'utf8').trim());

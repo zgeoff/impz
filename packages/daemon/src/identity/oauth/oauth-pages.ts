@@ -1,9 +1,5 @@
 import type { Scope } from '@impz/api';
 
-// The sign-in pages of the public MCP route. Every value on them is escaped,
-// none runs a script or loads anything, and the forms post only to impd.
-
-// why no redirect may go back: the page says so instead
 export type SignInErrorPage =
   | 'expired'
   | 'bad_request'
@@ -20,9 +16,6 @@ const ERROR_TEXT: Readonly<Record<SignInErrorPage, string>> = {
     'The token that approved this sign-in is gone or no longer covers it. Start it again from the client.',
 };
 
-// What each response of these pages carries: no script, no frame, no form
-// target but impd and the client's redirect, and no cache. same-origin, not
-// no-referrer: under no-referrer a browser posts the form with Origin null.
 export function buildPageHeaders(redirectOrigin: string | null): Headers {
   const formAction = redirectOrigin === null ? "'self'" : `'self' ${redirectOrigin}`;
 
@@ -30,6 +23,8 @@ export function buildPageHeaders(redirectOrigin: string | null): Headers {
     'content-type': 'text/html; charset=utf-8',
     'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; form-action ${formAction}; frame-ancestors 'none'; base-uri 'none'`,
     'x-frame-options': 'DENY',
+
+    // not no-referrer: under it a browser posts the form with Origin null
     'referrer-policy': 'same-origin',
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
@@ -37,17 +32,14 @@ export function buildPageHeaders(redirectOrigin: string | null): Headers {
 }
 
 interface PendingView {
-  // the signed authorization query the form posts back
   readonly oauthQuery: string;
   readonly clientName: string;
   readonly redirectURI: string;
   readonly requestedScope: Scope;
 
-  // as `impz oauth approve` takes it, with its dash
   readonly approvalCode: string;
 }
 
-// the login page: the code to approve, and Continue once it is approved
 export function renderPendingPage(view: Readonly<PendingView>, issuerHost: string): string {
   const returnsTo = new URL(view.redirectURI).host;
 
@@ -69,7 +61,6 @@ interface AllowView {
   readonly imps: readonly string[] | null;
 }
 
-// the consent page: what the approval gave, to allow or deny
 export function renderAllowPage(view: Readonly<AllowView>): string {
   const imps = view.imps === null ? 'every imp, and the host' : view.imps.join(', ');
 
@@ -98,7 +89,6 @@ ${body}
 `;
 }
 
-// every character that could end a value or a tag
 function encodeHTML(text: string): string {
   return text
     .replaceAll('&', '&amp;')

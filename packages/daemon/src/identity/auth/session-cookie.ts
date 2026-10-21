@@ -1,8 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-// The dashboard's session (docs/architecture/control/auth.md#the-dashboard-session): the
-// token it was made with, by id, and an expiry, signed with a key derived
-// from the root token, so the browser never holds a token
 const SESSION_COOKIE = 'imp_session';
 
 // Over HTTPS. The browser takes a __Host- cookie only Secure, host-only and on
@@ -12,8 +9,6 @@ const SECURE_SESSION_COOKIE = '__Host-imp_session';
 const SESSION_COOKIES: ReadonlySet<string> = new Set([SESSION_COOKIE, SECURE_SESSION_COOKIE]);
 
 export const SESSION_MAX_AGE_S = 30 * 24 * 60 * 60;
-
-// v1 sessions carried no token; they no longer log anyone in
 const VERSION = 'v2';
 
 export interface SessionClaim {
@@ -27,8 +22,6 @@ export function buildSessionValue(rootToken: string, claim: Readonly<SessionClai
   return `${VERSION}.${claim.tokenId}.${expiry}.${buildSignature(rootToken, claim.tokenId, expiry)}`;
 }
 
-// the token and expiry of a valid session; null for one that is not valid.
-// Whether the token still exists is the caller's to check.
 export function readSession(value: string, rootToken: string, nowMs: number): SessionClaim | null {
   const [version, tokenId, expiry, signature, ...rest] = value.split('.');
 
@@ -54,9 +47,6 @@ export function readSession(value: string, rootToken: string, nowMs: number): Se
     : null;
 }
 
-// Every session cookie value in a Cookie header, under either name. An
-// imp's page can set its own imp_session on a longer path, which the browser
-// sends first, so the caller must try them all.
 export function readSessionCookies(header: string | null): string[] {
   if (header === null) {
     return [];
@@ -69,10 +59,9 @@ export function readSessionCookies(header: string | null): string[] {
     .map(([, ...value]) => value.join('='));
 }
 
-// Every other cookie of a Cookie header, or null when none is left. The wake
-// proxy forwards cookies to imps, and a browser sends the session to every
-// port of the host, imps' ports included.
 export function stripSessionCookie(header: string): string | null {
+  // a browser sends the session to every port of the host, imps' ports
+  // included, so it never goes on to an imp
   const kept = header
     .split(';')
     .map((pair) => pair.trim())
@@ -85,9 +74,9 @@ export function buildSessionCookie(value: string, secure: boolean): string {
   return buildCookie(value, SESSION_MAX_AGE_S, secure);
 }
 
-// Over HTTPS both names go: a session set over plain HTTP reaches the HTTPS
-// origin too. Over HTTP a __Host- cookie cannot be set, nor cleared.
 export function buildClearedSessionCookies(secure: boolean): readonly string[] {
+  // a session set over plain HTTP reaches the HTTPS origin too, and over HTTP
+  // a browser neither sets nor clears a __Host- cookie
   return secure
     ? [buildCookie('', 0, false), buildCookie('', 0, true)]
     : [buildCookie('', 0, false)];
