@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import {
   buildBackupEnv,
-  createBackupDrill,
   readBackupStatus,
   removeBackupSecrets,
+  wireBackupDrill,
   writeBackupSecrets,
 } from '../lib/backup-drill';
 import { config } from '../lib/config';
@@ -40,7 +40,7 @@ async function setupTest() {
 test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds next to nothing on the next run, and restores one imp or every imp of a point', async () => {
   const ctx = await setupTest();
 
-  const drill = createBackupDrill(ctx.stack, 'backupPointsSpansMs');
+  const drill = wireBackupDrill(ctx.stack, 'backupPointsSpansMs');
   const image = resolveImageName('e2e-tiny');
   const source = `${ctx.prefix}src`;
   const idle = `${ctx.prefix}idle`;
@@ -187,7 +187,7 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
 test('it restores a point that survived the scheduled forget and prune, and finds none before it', async () => {
   const ctx = await setupTest();
 
-  const drill = createBackupDrill(ctx.stack, 'backupPruneSpansMs');
+  const drill = wireBackupDrill(ctx.stack, 'backupPruneSpansMs');
   const idle = `${ctx.prefix}prune-idle`;
   const survivor = `${ctx.prefix}prune-kept`;
 

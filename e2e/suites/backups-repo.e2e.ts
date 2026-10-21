@@ -3,13 +3,13 @@ import { randomBytes } from 'node:crypto';
 import * as z from 'zod';
 import {
   buildBackupEnv,
-  createBackupDrill,
   findPackKey,
   readBackupStatus,
   removeBackupSecrets,
   runRestic,
   runS3,
   startRestic,
+  wireBackupDrill,
   writeBackupSecrets,
 } from '../lib/backup-drill';
 import { config } from '../lib/config';
@@ -49,7 +49,7 @@ async function setupTest() {
 test('it lists no file of an imp created with backup off in the snapshot, and refuses its restore with why', async () => {
   const ctx = await setupTest();
 
-  const drill = createBackupDrill(ctx.stack, 'backupOffSpansMs');
+  const drill = wireBackupDrill(ctx.stack, 'backupOffSpansMs');
   const kept = `${ctx.prefix}off-kept`;
   const chat = `${ctx.prefix}off-chat`;
 
@@ -110,7 +110,7 @@ test('it lists no file of an imp created with backup off in the snapshot, and re
 test('it restores past a stale lock in the repository, and fails the check loudly on a corrupted pack', async () => {
   const ctx = await setupTest();
 
-  const drill = createBackupDrill(ctx.stack, 'backupLockSpansMs');
+  const drill = wireBackupDrill(ctx.stack, 'backupLockSpansMs');
   const idle = `${ctx.prefix}lock-idle`;
   const unlocked = `${ctx.prefix}lock-kept`;
 
@@ -195,7 +195,7 @@ test('it restores past a stale lock in the repository, and fails the check loudl
 test('it brings back a named token, its secret’s name and the grant from a backup with the database copy, after the host lost them', async () => {
   const ctx = await setupTest();
 
-  const drill = createBackupDrill(ctx.stack, 'backupDatabaseSpansMs');
+  const drill = wireBackupDrill(ctx.stack, 'backupDatabaseSpansMs');
   const name = `${ctx.prefix}db`;
   const secret = `${ctx.prefix}gh`;
   const token = `${ctx.prefix}agent`;

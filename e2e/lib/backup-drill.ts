@@ -199,25 +199,62 @@ async function runBackup() {
 
 const BACKUP_STATE_FILE = '/var/lib/imp/backup/state.json';
 
+export type BackupRun = z.infer<typeof BackupRunSchema>;
+
 export interface BackupDrill {
   readonly reboot: (env: Readonly<Record<string, string>>) => Promise<void>;
   readonly startMinio: (secrets: Readonly<BackupSecrets>) => Promise<void>;
-  readonly runBackup: typeof runBackup;
+  readonly runBackup: () => Promise<BackupRun>;
+}
+
+export interface BackupDrillDeps {
+  readonly removeState: () => Promise<void>;
+
+  // An empty env reboots onto the run's own settings.
+  readonly reboot: (env: Readonly<Record<string, string>>) => Promise<void>;
+
+  readonly startMinio: (secrets: Readonly<BackupSecrets>) => Promise<void>;
+  readonly stopMinio: () => Promise<void>;
+  readonly runBackup: () => Promise<BackupRun>;
+  readonly writeMetric: (key: string, value: unknown) => void;
+  readonly now: () => number;
+}
+
+export function wireBackupDrill(stack: AsyncDisposableStack, metric: string): BackupDrill {
+  return createBackupDrill(stack, metric, {
+    removeState: async () => {
+      const removed = await runInContainer(['rm', '-f', BACKUP_STATE_FILE]);
+
+      if (removed.exitCode !== 0) {
+        throw new Error(`the backup state could not go: ${removed.stderr}`);
+      }
+    },
+    reboot: (env) => runDevScript('reboot', instance, env),
+    startMinio,
+    stopMinio,
+    runBackup,
+    writeMetric,
+    now: Date.now,
+  });
 }
 
 // The split of a backup test's time goes to one metric when the test ends,
 // since the reboot back off the backup settings runs in its cleanup.
-export function createBackupDrill(stack: AsyncDisposableStack, metric: string): BackupDrill {
+export function createBackupDrill(
+  stack: AsyncDisposableStack,
+  metric: string,
+  deps: Readonly<BackupDrillDeps>,
+): BackupDrill {
   const spans = { rebootMs: 0, minioMs: 0, runsMs: 0, rebootBackMs: 0 };
   const reached = { isRebooted: false, isMinioUp: false };
 
   stack.defer(() => {
-    writeMetric(metric, spans);
+    deps.writeMetric(metric, spans);
   });
 
   stack.defer(async () => {
     if (reached.isMinioUp) {
-      await stopMinio();
+      await deps.stopMinio();
     }
   });
 
@@ -228,11 +265,11 @@ export function createBackupDrill(stack: AsyncDisposableStack, metric: string): 
       return;
     }
 
-    const back = Date.now();
+    const back = deps.now();
 
-    await runDevScript('reboot');
+    await deps.reboot({});
 
-    spans.rebootBackMs += Date.now() - back;
+    spans.rebootBackMs += deps.now() - back;
   });
 
   return {
@@ -240,35 +277,31 @@ export function createBackupDrill(stack: AsyncDisposableStack, metric: string): 
     // impd keeps its last prune time across reboots and prunes once a day, so
     // an earlier test's prune would hold off this one's.
     reboot: async (env) => {
-      const rebootStarted = Date.now();
+      const rebootStarted = deps.now();
 
-      const removed = await runInContainer(['rm', '-f', BACKUP_STATE_FILE]);
-
-      if (removed.exitCode !== 0) {
-        throw new Error(`the backup state could not go: ${removed.stderr}`);
-      }
+      await deps.removeState();
 
       reached.isRebooted = true;
 
-      await runDevScript('reboot', instance, env);
+      await deps.reboot(env);
 
-      spans.rebootMs += Date.now() - rebootStarted;
+      spans.rebootMs += deps.now() - rebootStarted;
     },
     startMinio: async (secrets) => {
-      const minioStarted = Date.now();
+      const minioStarted = deps.now();
 
       reached.isMinioUp = true;
 
-      await startMinio(secrets);
+      await deps.startMinio(secrets);
 
-      spans.minioMs += Date.now() - minioStarted;
+      spans.minioMs += deps.now() - minioStarted;
     },
     runBackup: async () => {
-      const started = Date.now();
+      const started = deps.now();
 
-      const run = await runBackup();
+      const run = await deps.runBackup();
 
-      spans.runsMs += Date.now() - started;
+      spans.runsMs += deps.now() - started;
 
       return run;
     },
