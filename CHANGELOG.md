@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.0](https://github.com/zgeoff/impz/compare/v2.8.3...v2.9.0) (2026-10-21)
+
+
+### Features
+
+* **agent:** delegate the memory controller to each exec's cgroup ([#579](https://github.com/zgeoff/impz/issues/579)) ([0510bab](https://github.com/zgeoff/impz/commit/0510bab6b1a14ac8ce8c08d349d225c0992f6145))
+
 ## [2.8.3](https://github.com/zgeoff/impz/compare/v2.8.2...v2.8.3) (2026-10-21)
 
 ### Bug Fixes
