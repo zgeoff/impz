@@ -1,8 +1,6 @@
 import { faker } from '@faker-js/faker';
 import type { Checkpoint } from '../schemas/checkpoint-schema';
 
-// A labelled checkpoint with its size, as a current impd lists it. The date
-// counts back from faker's reference date, which the preload fixes.
 export function buildMockCheckpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
   return {
     id: `cp-${faker.string.alphanumeric({ length: 6, casing: 'lower' })}`,

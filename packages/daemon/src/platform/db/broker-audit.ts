@@ -1,4 +1,5 @@
 import type { AuditEntry, AuditRefusal, RefusedRequest } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 moves the caller into platform
 import { toLikePattern } from '../../identity/auth/imp-patterns';
 import type { ImpDatabase } from './open-database';
 

@@ -30,7 +30,6 @@ test('#ImpEventDetailSchema rejects a negative prepareMs', () => {
 });
 
 test('#ImpEventDetailSchema sends prepareMs in a detail that a client from before prepareMs still parses', () => {
-  // ImpEventDetailSchema as it was before prepareMs
   const oldDetailSchema = z
     .object({
       durationMs: z.int().nonnegative().optional(),

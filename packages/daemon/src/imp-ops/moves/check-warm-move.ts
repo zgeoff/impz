@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { WarmHost, WarmMove } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { Config } from '../../config';
 import { deriveSlotAddress } from '../../host-net/net/addressing';

@@ -1,8 +1,6 @@
 import { faker } from '@faker-js/faker';
 import type { Session } from '../schemas/session-schema';
 
-// A running session that no client is attached to, from an agent that counts
-// output. It has no exit until a test gives it one.
 export function buildMockSession(overrides: Partial<Session> = {}): Session {
   const startedAt = faker.date.past();
 

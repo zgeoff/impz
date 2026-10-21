@@ -6,6 +6,7 @@ import { collectBoundChanges } from './collect-bound-changes';
 import { collectSchemaMap } from './collect-schema-map';
 import type { Comparison } from './comparison';
 import { findBranches } from './find-branches';
+import { findFormat } from './find-format';
 import { findInclusive } from './find-inclusive';
 import { findRef } from './find-ref';
 import { findSchema } from './find-schema';
@@ -21,6 +22,7 @@ import { formatValues } from './format-values';
 import { getStrings } from './get-strings';
 import { hasOtherTag } from './has-other-tag';
 import { isAnything } from './is-anything';
+import { isPatternNarrowed } from './is-pattern-narrowed';
 import { isSchemaObject } from './is-schema-object';
 import { isValueAccepted } from './is-value-accepted';
 import { JSON_TYPES } from './json-types';
@@ -144,6 +146,16 @@ function collectObjectChanges(
 
   if (findValues(narrow) !== undefined) {
     return collectValueChanges(narrow, wide, path, comparison);
+  }
+
+  const narrowTypes = findTypes(narrow) ?? [];
+
+  // a type list is a union of one schema per type, each of which one option
+  // of the wide union must take
+  if (wideBranches !== undefined && narrowTypes.length > 1) {
+    return narrowTypes.flatMap((type) =>
+      collectChanges({ ...narrow, type }, wide, path, comparison),
+    );
   }
 
   if (wideBranches !== undefined) {
@@ -341,10 +353,19 @@ function collectStringChanges(
     ['max length', findInclusive(narrow, 'maxLength'), findInclusive(wide, 'maxLength'), 'upper'],
   ] as const;
 
-  const exact = (['pattern', 'format'] as const)
-    .filter((keyword) => wide[keyword] !== undefined && narrow[keyword] !== wide[keyword])
-    .map((keyword) => {
-      const change = formatSides(comparison, narrow[keyword], wide[keyword], formatValue);
+  const exact = [
+    ['pattern', narrow['pattern'], wide['pattern']],
+    ['format', findFormat(narrow), findFormat(wide)],
+  ] as const;
+
+  const changes = exact
+    .filter(([, narrowValue, wideValue]) => wideValue !== undefined && narrowValue !== wideValue)
+    .filter(
+      ([keyword, narrowValue, wideValue]) =>
+        keyword !== 'pattern' || !isPatternNarrowed(narrowValue, wideValue),
+    )
+    .map(([keyword, narrowValue, wideValue]) => {
+      const change = formatSides(comparison, narrowValue, wideValue, formatValue);
 
       return formatChange(path, `${keyword} ${change}`);
     });
@@ -353,7 +374,7 @@ function collectStringChanges(
     ...lengths.flatMap(([name, narrowBound, wideBound, side]) =>
       collectBoundChange(name, narrowBound, wideBound, side, path, comparison),
     ),
-    ...exact,
+    ...changes,
   ];
 }
 

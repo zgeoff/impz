@@ -1,4 +1,5 @@
 import type { MovePlan, MoveStatus, WarmHost } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { Config } from '../../config';
 import type { LockedImp } from '../../imps/imps/imp-lock';
@@ -17,6 +18,7 @@ import {
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildInvalidStateError, buildNotFoundError } from '../../surface/api-errors';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
 import { checkWarmMove, requireSnapshotMeta } from './check-warm-move';

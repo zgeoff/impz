@@ -1,5 +1,3 @@
-// each line of the text, without its newline, as it completes; a last line
-// with no newline comes out at the end, and an empty one does not
 export function splitLines(): TransformStream<string, string> {
   const state = { pending: '' };
 

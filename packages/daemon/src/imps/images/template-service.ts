@@ -11,6 +11,7 @@ import {
 import type { ImageRecord } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { printLog } from '../../platform/process/print-log';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildConflictError,
   buildInvalidStateError,

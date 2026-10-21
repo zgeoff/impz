@@ -6,7 +6,6 @@ export const CheckpointSchema = z.object({
   createdAt: z.date(),
   sizeBytes: z.int().nonnegative().optional(),
 
-  // the imp's disk size when it was taken; a restore or a fork takes it
   diskMib: z.int().positive(),
 });
 

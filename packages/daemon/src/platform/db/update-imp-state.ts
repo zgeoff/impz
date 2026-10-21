@@ -1,6 +1,7 @@
 import type { ColdBootCause, ImpChangeReason, ImpEventDetail, ImpState } from '@impz/api';
 import { sql } from 'kysely';
 import type { Updateable } from 'kysely';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
 import { requireTransition } from '../../imps/imps/imp-transitions';
 import type { ImpRecord } from './imps';
 import type { ImpDatabase } from './open-database';

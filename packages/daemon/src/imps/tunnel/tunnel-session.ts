@@ -7,6 +7,7 @@ import {
   TunnelClientMessageSchema,
 } from '@impz/api';
 import type { TunnelClientMessage, TunnelServerMessage } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import { createCountedLimit } from '../../platform/process/counted-limit';
 import { getErrorMessage } from '../../platform/process/get-error-message';

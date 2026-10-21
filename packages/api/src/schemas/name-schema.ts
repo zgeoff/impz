@@ -1,7 +1,7 @@
 import * as z from 'zod';
 
-// A DNS label, so a name works as the `<name>.imp.localhost` host and as a
-// guest hostname without escaping.
+// A DNS label, so a name works as a host name and a guest hostname without
+// escaping.
 export const NameSchema = z
   .string()
   .regex(

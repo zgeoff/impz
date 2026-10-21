@@ -7,7 +7,6 @@ test('it gives every procedure the imp errors', () => {
   const procedures: { procedure: string; missingErrors: string[] }[] = [];
   const pending: [string, unknown][] = Object.entries(impContract);
 
-  // walks the nested routers; the queue grows as each router is opened
   for (const [path, node] of pending) {
     if (isContractProcedure(node)) {
       procedures.push({
@@ -26,7 +25,7 @@ test('it gives every procedure the imp errors', () => {
 });
 
 // An ssh login checks its token once, so no procedure may change a token's
-// scope or imps in place; impd's token store holds the same guard
+// scope or imps in place.
 test('it offers no token procedure beyond the known ones', () => {
   expect(Object.keys(impContract.tokens).toSorted()).toStrictEqual([
     'addKey',

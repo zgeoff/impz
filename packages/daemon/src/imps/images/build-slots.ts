@@ -1,3 +1,4 @@
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 
 // builds that may run at once, an upload's or an on-host one; each holds up

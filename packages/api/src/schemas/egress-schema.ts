@@ -4,16 +4,10 @@ import { EGRESS_MODE_TRAITS } from './egress-mode-traits';
 const HOST_PATTERN = /^(?:[a-z0-9_][a-z0-9_-]{0,62}\.)+[a-z][a-z0-9-]{0,62}$/u;
 const CIDR_PATTERN = /^(?<address>(?:\d{1,3}\.){3}\d{1,3})(?:\/(?<prefix>\d{1,2}))?$/u;
 
-// What an imp may reach directly (docs/architecture/network/egress.md):
-// open, public (the internet only), box (its allow-list) or none. Hosts a
-// grant covers stay reachable through the credential broker under each.
 export const EgressModeSchema = z.enum(['open', 'public', 'box', 'none']);
 
 export type EgressMode = z.infer<typeof EgressModeSchema>;
 
-// One allow entry: a lowercase hostname, `*.` and a hostname (its subdomains
-// only), an IPv4 address or CIDR from /8, or a canonical IPv6 address or CIDR
-// from /16. Only an address entry allows a private address.
 export const EgressAllowEntrySchema = z
   .string()
   .max(253)
@@ -54,14 +48,14 @@ function isCidrEntry(entry: string): boolean {
     return false;
   }
 
-  // no host bits past the prefix, as `ip route` would refuse
+  // `ip route` refuses a CIDR with host bits past the prefix.
   const address = octets.reduce((acc, octet) => acc * 256 + octet, 0);
 
   return address % 2 ** (32 - prefix) === 0;
 }
 
-// an IPv6 address or CIDR as RFC 5952 writes it (lowercase, `::` for the
-// longest zero run), so one range has one spelling
+// Only RFC 5952's canonical form (lowercase, `::` for the longest zero run),
+// so one range has one spelling.
 function isCidr6Entry(entry: string): boolean {
   const [address = '', prefixText = '128', ...rest] = entry.split('/');
   const prefix = Number(prefixText);
@@ -86,7 +80,6 @@ function isCidr6Entry(entry: string): boolean {
     return false;
   }
 
-  // no host bits past the prefix
   const value = toIpv6Value(canonical);
 
   return value % 2n ** BigInt(128 - prefix) === 0n;

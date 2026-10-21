@@ -74,34 +74,27 @@ import { tokensContract } from './tokens-contract';
 
 const base = oc.errors(IMP_ERRORS);
 
-// `hold` is the label `imps.hold` writes, which never blocks a sleep: a lease
-// with it would not lease anything
+// A lease labelled `hold` never blocks a sleep, so it would hold nothing.
 const LeaseInputSchema = z.object({
   name: NameSchema,
   label: LeaseLabelSchema.refine((label) => label !== 'hold', 'hold is the label imps.hold writes'),
   ttlSeconds: LeaseTtlSchema,
 });
 
-// a docker image ref, or an imp whose disk becomes a template
 const ImageAddInputSchema = z.union([
   z.object({ ref: ImageRefSchema, name: NameSchema.optional() }),
   z.object({ imp: NameSchema, name: NameSchema }),
 ]);
 
-// contextDir is a path on the imp host, handed to `docker build`; a context
-// on the client's machine streams to IMAGE_BUILD_PATH instead
 const ImageBuildInputSchema = z.object({
-  // absolute, so docker build cannot read it as a flag
+  // Absolute, so docker build cannot read it as a flag.
   contextDir: z.string().startsWith('/'),
   name: NameSchema,
   dockerfile: DockerfilePathSchema.optional(),
 
-  // buildStream sends the build's output as log events; an impd from
-  // before them drops it unread
   logs: z.boolean().optional(),
 });
 
-// checkpoints.create's input, which the MCP tool imp_checkpoint builds on
 export const CheckpointCreateInputSchema = z.object({
   name: NameSchema,
   label: z.string().min(1).max(64).optional(),
@@ -110,39 +103,27 @@ export const CheckpointCreateInputSchema = z.object({
 export const impContract = {
   imps: impsContract,
 
-  // Each caller's own hold on an imp (docs/guides/leases.md). Only the
-  // caller's leases are touched; the label `hold` is the one `imps.hold` writes.
   leases: {
-    // boots or wakes the imp, then creates the lease or moves its end later;
-    // RAM_BUDGET_EXCEEDED keeps no lease
     acquire: base.input(LeaseInputSchema).output(LeaseSchema),
 
-    // LEASE_NOT_HELD once the lease ended or was released; wakes nothing
     renew: base.input(LeaseInputSchema).output(LeaseSchema),
 
     release: base
       .input(z.object({ name: NameSchema, label: LeaseLabelSchema }))
       .output(z.object({ released: z.boolean() })),
 
-    // live leases, of every imp the caller may reach unless it names one
     list: base
       .input(z.object({ name: NameSchema.optional(), label: LeaseLabelSchema.optional() }))
       .output(z.array(LeaseSchema)),
   },
 
-  // moves between hosts (docs/guides/hosts.md#moves); each is a call on
-  // one host, and the CLI runs them in turn
   moves: {
-    // the source: marks the imp `sending`, counts what a send to a
-    // `targetStorage` target carries; a sleeping imp without `stop` moves
-    // warm when `target` matches (docs/architecture/storage/moves.md#warm-moves)
     prepare: base
       .input(
         z.object({
           name: NameSchema,
           stop: z.boolean().optional(),
 
-          // as for imps.stop: a stop ends the imp's leases, never LEASED
           force: z.boolean().optional(),
           targetStorage: z.enum(['xfs', 'zfs']).optional(),
           target: WarmHostSchema.optional(),
@@ -150,11 +131,8 @@ export const impContract = {
       )
       .output(MovePlanSchema),
 
-    // the target: what a warm move to this host must match
     facts: base.output(WarmHostSchema),
 
-    // the target: a ticket for one stream of `bytes` bytes into imp `name`;
-    // with `warm`, checked against this host and keeping the imp's slot
     receive: base
       .input(
         z.object({
@@ -165,26 +143,18 @@ export const impContract = {
       )
       .output(MoveTicketSchema),
 
-    // the source: sends the imp to `to` with the target's ticket, in the
-    // background; `status` follows it
     send: base
       .input(z.object({ name: NameSchema, to: PeerUrlSchema, ticket: z.string() }))
       .output(MoveStatusSchema),
 
     status: base.input(z.object({ name: NameSchema })).output(MoveStatusSchema),
 
-    // the target: a fresh commit ticket for an imp it holds `receiving`,
-    // for a source whose ticket ran out
     reissue: base.input(z.object({ name: NameSchema })).output(MoveTicketSchema),
 
-    // the source: finishes a move a crash or a lost commit cut short, with a
-    // reissued ticket when the old one ran out
     resume: base
       .input(z.object({ name: NameSchema, ticket: z.string().optional() }))
       .output(MoveStatusSchema),
 
-    // the source: undoes a move the target has not committed; the target's
-    // copy goes first. Refused once the target has committed.
     abort: base.input(z.object({ name: NameSchema })).output(MoveStatusSchema),
   },
 
@@ -202,15 +172,11 @@ export const impContract = {
       .output(EmptySchema),
   },
 
-  // off-host backups with restic (docs/architecture/storage/backups.md); every call
-  // fails with PRECONDITION_FAILED when the host has no repository set
   backups: {
     run: base.output(BackupRunSchema),
 
     list: base.output(BackupStatusSchema),
 
-    // One imp by name, or all of them. `at` picks the newest backup at or
-    // before it, in UTC; the newest by default. A restored imp is stopped.
     restore: base
       .input(
         z.object({
@@ -218,10 +184,8 @@ export const impContract = {
           all: z.boolean().optional(),
           at: z.date().optional(),
 
-          // the restored imp's name, when one other than its own
           as: NameSchema.optional(),
 
-          // with `all`, adds the backup's imps to a host that has imps already
           merge: z.boolean().optional(),
         }),
       )
@@ -233,67 +197,43 @@ export const impContract = {
   images: {
     list: base.output(z.array(ImageSchema)),
 
-    // From an image ref the host's docker already has or can pull, or a
-    // template from an imp's disk (docs/guides/templates.md). A template
-    // name made again points at the new disk; imps made before keep theirs.
     add: base.input(ImageAddInputSchema).output(ImageSchema),
 
-    // from a directory on the imp host (ImageBuildInputSchema)
     build: base.input(ImageBuildInputSchema).output(ImageSchema),
 
-    // add and build as progress, then the image, for a call longer than a
-    // client's fetch waits (docs/guides/images.md#long-calls); an impd with
-    // `features.imageOpStream` has them
     addStream: base.input(ImageAddInputSchema).output(eventIterator(ImageOpEventSchema)),
     buildStream: base.input(ImageBuildInputSchema).output(eventIterator(ImageOpEventSchema)),
 
-    // the builds impd runs now, uploads and on-host builds alike; an impd
-    // with `features.imageBuilds` has it
     builds: base.output(z.array(ImageBuildRunSchema)),
 
     delete: base.input(NameInputSchema).output(EmptySchema),
   },
 
   exec: {
-    // a single-use ticket for one `/exec` WebSocket to this imp (exec-protocol)
     ticket: base
       .input(NameInputSchema)
       .output(z.object({ ticket: z.string(), expiresAt: z.date() })),
   },
 
   sessions: {
-    // a running imp's live sessions; a sleeping imp's as it went to sleep,
-    // without waking it; none for a stopped imp
     list: base.input(NameInputSchema).output(z.array(SessionSchema)),
 
-    // wakes a sleeping imp; SIGHUP, then SIGKILL after 2 s
     kill: base
       .input(z.object({ name: NameSchema, session: SessionNameSchema }))
       .output(EmptySchema),
 
-    // the logs impd keeps of sessions started with `log`, newest first
-    // (docs/guides/session-logs.md); none of the three wakes or boots the
-    // imp, as the logs live on the host
     logs: base.input(SessionLogListInputSchema).output(z.array(SessionLogSchema)),
 
-    // a byte range of one generation's log; INVALID_RESUME past its end,
-    // NOT_FOUND for a generation with no log
     readLog: base.input(SessionLogReadInputSchema).output(SessionLogReadSchema),
 
-    // deletes logs, a live generation's included: impd stops logging it
     deleteLog: base
       .input(SessionLogDeleteInputSchema)
       .output(z.object({ deleted: z.int().nonnegative() })),
   },
 
-  // the services the imp's agent supervises (docs/guides/services.md); each
-  // call but list and a log follow wakes a sleeping imp and boots a stopped
-  // one, as an exec does
   services: {
     list: base.input(NameInputSchema).output(ServiceListSchema),
 
-    // writes /etc/imp/services.d/<service>.json and starts it; CONFLICT
-    // when the service exists, unless `replace`
     add: base
       .input(
         z.object({
@@ -304,19 +244,14 @@ export const impContract = {
       )
       .output(EmptySchema),
 
-    // stops it and deletes its file; its logs stay
     remove: base
       .input(z.object({ name: NameSchema, service: ServiceNameSchema }))
       .output(EmptySchema),
 
-    // stops it and starts it from its file, so an edit to the file applies
     restart: base
       .input(z.object({ name: NameSchema, service: ServiceNameSchema }))
       .output(EmptySchema),
 
-    // the last `lines` lines (default 100) of a service's log, or of every
-    // service's (10 000 in all); `follow` goes on, never waking the imp or
-    // keeping it awake (docs/guides/services.md#logs)
     logs: base
       .input(
         z.object({
@@ -329,27 +264,17 @@ export const impContract = {
       .output(eventIterator(ServiceLogSchema)),
   },
 
-  // files the guest sees read-only under /run/imp/files, root included
-  // (docs/architecture/guest/agent.md#read-only-files); each call wakes or
-  // boots the imp, as an exec does. Check features.readOnlyFiles first
   files: {
-    // replaces the file at `path` with `content` through a rename, so a
-    // reader sees the old file or the new; answers the guest path
     write: base
       .input(z.object({ name: NameSchema, path: FilePathSchema, content: FileContentSchema }))
       .output(z.object({ path: z.string() })),
 
-    // deletes the file at `path`; `removed` is false when there was none
     remove: base
       .input(z.object({ name: NameSchema, path: FilePathSchema }))
       .output(z.object({ removed: z.boolean() })),
   },
 
-  // credentials the broker adds to an imp's requests (docs/guides/connectors.md)
   secrets: {
-    // `replace` swaps the value; another kind, rules or oauth config is
-    // CONFLICT unless `rebind`, which drops its grants. `rules`: kinds
-    // `custom` and `oauth`; `oauth`: kind `oauth`, whose value is a refresh token
     add: base
       .input(
         z.object({
@@ -366,39 +291,26 @@ export const impContract = {
 
     list: base.output(z.array(SecretSchema)),
 
-    // forces one refresh of an oauth secret now and answers after it ends;
-    // BAD_REQUEST for another kind, NOT_FOUND for no such secret
     refresh: base.input(z.object({ name: SecretNameSchema })).output(SecretSchema),
 
-    // revokes it from every imp
     delete: base.input(z.object({ name: SecretNameSchema })).output(EmptySchema),
   },
 
-  // private networks between imps (docs/guides/networks.md)
   networks: {
     list: base.output(z.array(NetworkSchema)),
 
     create: base.input(NameInputSchema).output(NetworkSchema),
 
-    // its imps' connections to one another end
     delete: base.input(NameInputSchema).output(EmptySchema),
 
-    // `name` is the imp: it and the network's other imps reach one another
-    // from now on, whatever their egress policies; joining twice is a no-op
     join: base.input(z.object({ network: NameSchema, name: NameSchema })).output(NetworkJoinSchema),
 
-    // the trust warnings for each network the imp is on, as a join gives
-    // them: after a policy change, or a create with networks
     warnings: base.input(NameInputSchema).output(z.array(z.string())),
 
-    // its connections to the others end; leaving one it is not on is a no-op
     leave: base.input(z.object({ network: NameSchema, name: NameSchema })).output(NetworkSchema),
   },
 
   grants: {
-    // the broker adds the secret to the imp's requests to its hosts, those a
-    // filter allows; a call without one keeps the grant's. An older impd
-    // drops `filter` and grants the whole host: check features.grantFilters
     add: base
       .input(
         z.object({
@@ -413,15 +325,12 @@ export const impContract = {
       .input(z.object({ name: NameSchema, secret: SecretNameSchema }))
       .output(EmptySchema),
 
-    // the secrets granted to the imp
     list: base.input(NameInputSchema).output(z.array(SecretNameSchema)),
 
-    // the same, each with its filter, by secret name
     details: base.input(NameInputSchema).output(z.array(GrantSchema)),
   },
 
   audit: {
-    // newest first; one imp's, or every imp's
     list: base
       .input(
         z.object({
@@ -431,7 +340,6 @@ export const impContract = {
       )
       .output(z.array(AuditEntrySchema)),
 
-    // the requests the broker refused, newest first; one imp's, or every imp's
     refused: base
       .input(
         z.object({
@@ -441,8 +349,6 @@ export const impContract = {
       )
       .output(z.array(RefusedRequestSchema)),
 
-    // API calls that changed something and sessions opened, newest first;
-    // those that named one imp, or all of them
     calls: base
       .input(
         z.object({
@@ -453,8 +359,6 @@ export const impContract = {
       .output(z.array(ApiCallSchema)),
   },
 
-  // every lifecycle event (docs/guides/events.md): first each imp as
-  // `ImpAdded`, then each event as it happens
   events: {
     stream: base.output(eventIterator(ImpEventSchema)),
   },
@@ -462,61 +366,46 @@ export const impContract = {
   system: {
     info: base.output(SystemInfoSchema),
 
-    // the version and features alone, at once: info measures every awake
-    // VM for its report, which a client that checks a feature never reads
     features: base.output(SystemFeaturesInfoSchema),
 
-    // removes the crash leftovers no row names and lists the orphans it
-    // keeps, or retires them with `orphans`; PRECONDITION_FAILED while
-    // storage is busy (docs/guides/operations.md#storage-cleanup)
     gc: base
       .input(
         z.object({
           dryRun: z.boolean().optional(),
           orphans: z.boolean().optional(),
 
-          // lists the secret values kept aside, as kind `secrets`; only
-          // `removeSecretFiles` with `orphans` deletes them
           secretFiles: z.boolean().optional(),
           removeSecretFiles: z.boolean().optional(),
         }),
       )
       .output(StorageGcSchema),
 
-    // a consistent copy of impd's database, safe while it runs, at
-    // <dataDir>/db-copies/<name>.sqlite (docs/guides/operations.md); CONFLICT
-    // when a copy by the name exists
     copyDatabase: base.input(z.object({ name: NameSchema.optional() })).output(DatabaseCopySchema),
   },
 
-  // OAuth for the public MCP route (docs/guides/mcp.md#public-route)
   oauth: {
     clients: {
       list: base.output(z.array(OAuthClientSchema)),
 
-      // a public client: PKCE and no secret; CONFLICT for a name taken
       add: base
         .input(z.object({ name: NameSchema, redirectUris: RedirectUrisSchema }))
         .output(OAuthClientSchema),
 
-      // its redirect URIs, replaced; the client ID stays
       update: base
         .input(z.object({ name: NameSchema, redirectUris: RedirectUrisSchema }))
         .output(OAuthClientSchema),
 
-      // revokes every grant it holds
       delete: base.input(NameInputSchema).output(EmptySchema),
     },
 
     grants: {
       list: base.output(z.array(OAuthGrantSchema)),
 
-      // ends its MCP sessions, calls and execs; its tokens stop at once
       delete: base.input(z.object({ id: z.string().min(1).max(64) })).output(EmptySchema),
     },
 
-    // a sign-in waiting on the public route, by the code its page shows;
-    // only a named token approves, never wider than itself
+    // Only a named token approves a sign-in, and never with more than its own
+    // scope and imps.
     approvals: {
       get: base.input(z.object({ code: ApprovalCodeSchema })).output(OAuthApprovalSchema),
       approve: base
@@ -525,7 +414,7 @@ export const impContract = {
             code: ApprovalCodeSchema,
             scope: ScopeSchema,
 
-            // left out: the approver's own patterns
+            // Left out, the grant takes the approver's own imp patterns.
             imps: z.array(GrantPatternSchema).min(1).max(32).optional(),
           }),
         )

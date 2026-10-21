@@ -1,4 +1,3 @@
-// "45s", "12m", "3h 20m"
 export function formatDuration(durationMs: number): string {
   const minutes = Math.floor(durationMs / 60_000);
 

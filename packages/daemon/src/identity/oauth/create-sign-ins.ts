@@ -1,8 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import { hasScope } from '@impz/api';
 import type { OAuthApproval, Scope } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import { createBuckets } from '../../network/https/public-limits';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildConflictError,
   buildForbiddenError,

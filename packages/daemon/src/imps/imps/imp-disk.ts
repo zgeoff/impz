@@ -1,5 +1,6 @@
 import { statSync, truncateSync } from 'node:fs';
 import { formatBytes } from '@impz/shared';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import { runChecked } from '../../platform/process/run-command';
 

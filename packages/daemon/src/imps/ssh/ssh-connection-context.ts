@@ -1,3 +1,4 @@
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 moves the caller into platform
 import type { AuditActor } from '../../identity/auth/caller';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';

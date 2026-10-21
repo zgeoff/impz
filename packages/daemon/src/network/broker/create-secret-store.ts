@@ -1,4 +1,5 @@
 import type { BrokerRule, OAuthConfig, Secret, SecretAdded, SecretKind } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import {
@@ -11,6 +12,7 @@ import {
 } from '../../platform/db/secrets';
 import type { NewSecret, SecretRecord } from '../../platform/db/secrets';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
 import { SecretRulesError, resolveRules } from './connector-kinds';
 import type { OAuthRefresher } from './oauth-refresher';

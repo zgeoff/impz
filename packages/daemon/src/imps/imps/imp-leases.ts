@@ -9,6 +9,7 @@ import {
   writeLease,
 } from '../../platform/db/leases';
 import type { LeaseRecord } from '../../platform/db/leases';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildLeaseNotHeldError, buildLeasedError } from '../../surface/api-errors';
 import type { ImpClock, ImpHost } from './imp-context';
 import { toLockedImp } from './imp-lock';

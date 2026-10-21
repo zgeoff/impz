@@ -1,4 +1,5 @@
 import type { ImpState } from '@impz/api';
+// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildInvalidStateError } from '../../surface/api-errors';
 
 // who may take an edge: every action, or only the one it names
