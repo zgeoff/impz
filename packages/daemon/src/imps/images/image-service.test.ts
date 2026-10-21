@@ -801,3 +801,27 @@ test('#removeImage leaves no record of the rootfs once it is gone', async () => 
 
   expect(removals).toStrictEqual([]);
 });
+
+test('#removeImage keeps a record of the rootfs while a publisher of its digest defers the removal', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web', digest: 'sha256:1' }));
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  const removals = await images.withImagePublisher('sha256:1', 'web-2222222', async () => {
+    await images.removeImage('web');
+
+    return listImageRemovals(ctx.db);
+  });
+
+  expect(removals).toStrictEqual(['sha256:1']);
+});

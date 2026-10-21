@@ -149,9 +149,11 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
       await deps.storageGate.join(async () => {
         await removeImage(deps.db, image.id);
 
-        await writer.removeIdleRootfs(image.digest);
+        const isRemoved = await writer.removeIdleRootfs(image.digest);
 
-        await removeImageRemoval(deps.db, image.digest);
+        if (isRemoved) {
+          await removeImageRemoval(deps.db, image.digest);
+        }
       });
     },
     updateImagePin: async (name, isPinned) => {

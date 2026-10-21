@@ -69,7 +69,7 @@ export interface ImageWriter {
     signal: AbortSignal,
   ) => Promise<ImageRecord>;
 
-  readonly removeIdleRootfs: (digest: string) => Promise<void>;
+  readonly removeIdleRootfs: (digest: string) => Promise<boolean>;
 
   readonly removeIdleImage: (digest: string, removeRow: () => Promise<boolean>) => Promise<boolean>;
 
@@ -242,15 +242,17 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     }
   };
 
-  const removeIdleRootfs = (digest: string): Promise<void> =>
+  const removeIdleRootfs = (digest: string): Promise<boolean> =>
     guestRootfsLock.runExclusive(digest, async () => {
       if (publishers.has(digest)) {
         freshRootfs.add(digest);
 
-        return;
+        return false;
       }
 
       await removeUnusedRootfs(digest);
+
+      return true;
     });
 
   const removeIdleImage = (digest: string, removeRow: () => Promise<boolean>): Promise<boolean> =>

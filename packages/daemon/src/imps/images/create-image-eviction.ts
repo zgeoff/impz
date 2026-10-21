@@ -60,9 +60,11 @@ export function createImageEviction(deps: ImageEvictionDeps): ImageEviction {
 
     for (const digest of digests) {
       try {
-        await deps.storageGate.join(() => deps.removeIdleRootfs(digest));
+        const isRemoved = await deps.storageGate.join(() => deps.removeIdleRootfs(digest));
 
-        await removeImageRemoval(deps.db, digest);
+        if (isRemoved) {
+          await removeImageRemoval(deps.db, digest);
+        }
       } catch (error) {
         deps.log(
           `impd: image eviction: could not remove the rootfs of ${digest}, and tries again at the next image write: ${getErrorMessage(error)}`,

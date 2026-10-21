@@ -454,3 +454,31 @@ test('it keeps the rootfs of a removed image that a new image row uses again', a
   expect(removals).toStrictEqual([]);
   expect(existsSync(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs)).toBeTrue();
 });
+
+test('it keeps the record of a removed rootfs while a publisher of its digest defers the removal', async () => {
+  const ctx = await setupTest();
+
+  const eviction = createImageEviction({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
+    log: ctx.log,
+    now: () => Date.parse('2026-10-01T00:00:00Z'),
+  });
+
+  await ctx.db.insertInto('image_removals').values({ digest: 'sha256:1', created_at: 0 }).execute();
+
+  await mkdir(buildImagePaths(ctx.dataDir, 'sha256:1').directory, { recursive: true });
+  await writeFile(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs, '');
+
+  const removals = await ctx.writer.withPublisher('sha256:1', 'web-1111111', async () => {
+    await eviction.runEviction();
+
+    return listImageRemovals(ctx.db);
+  });
+
+  expect(removals).toStrictEqual(['sha256:1']);
+});
