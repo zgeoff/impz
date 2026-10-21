@@ -649,6 +649,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Fail shard 1 on purpose
+        if: matrix.shard == 1
+        run: exit 1
+
       - name: Check KVM
         run: scripts/ci/check-kvm.sh
 
