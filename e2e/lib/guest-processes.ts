@@ -1,9 +1,8 @@
 import { runShellInImp } from './imp-cli';
 import { parseWholeNumber } from './parse-whole-number';
 
-// Thin glue over a live guest: how many of its processes run `sleep` with
-// seconds that match the grep pattern, read from /proc, since ps lists every
-// process in BusyBox but only the caller's session in procps.
+// Read from /proc, since ps lists every process in BusyBox but only the
+// caller's session in procps.
 export async function countGuestSleeps(name: string, secondsPattern: string): Promise<number> {
   const stdout = await runShellInImp(
     name,

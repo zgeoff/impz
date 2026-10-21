@@ -11,10 +11,8 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// `impz proxy` to an imp whose agent impd records as too old to dial.
-
-// one stack for every release, so the agent version comes back and the
-// proxy stops before the imp goes
+// One stack for every release, so the agent version comes back and the proxy
+// stops before the imp goes.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -44,7 +42,7 @@ test('it reports AGENT_OUTDATED and closes the connection when the imp’s agent
 
   const imp = await requireImp(name);
 
-  // impd reads the agent's version from the imp's vm.json for each dial
+  // impd reads the agent's version from the imp's vm.json for each dial.
   const file = `/var/lib/imp/imps/${imp.id}/vm.json`;
 
   await runChecked([

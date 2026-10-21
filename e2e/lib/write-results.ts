@@ -1,7 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import * as z from 'zod';
 
-// one suite's run, as the summary and results.json report it
 export interface Section {
   readonly index: number;
   readonly name: string;
@@ -12,18 +11,14 @@ export interface Section {
 export interface ResultsOptions {
   readonly resultsFile: string;
 
-  // the file suites append metrics to; a run that wrote none has no file
   readonly metricsFile: string;
   readonly ramBudgetMib: number;
   readonly idleTimeoutS: number;
   readonly now: () => Date;
 }
 
-// one line of the metrics file a suite appends to: {"<key>": <value>}
 const MetricSchema = z.record(z.string(), z.unknown());
 
-// Writes results.json: the run's settings, a `section<n>` entry per suite
-// with its verdict and duration, and every metric the suites appended.
 export function writeResults(
   sections: readonly Section[],
   options: Readonly<ResultsOptions>,

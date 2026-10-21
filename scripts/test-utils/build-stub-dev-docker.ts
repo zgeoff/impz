@@ -1,21 +1,11 @@
 interface StubDevImage {
-  // the image's tag and id, as `docker image ls` lists them
   readonly tag: string;
   readonly id: string;
-
-  // its imp.worktree and imp.machine labels; null fails `docker image inspect` for it
   readonly labels: { readonly worktree: string; readonly machine: string } | null;
-
-  // the container `docker ps` finds running from it
   readonly container?: string;
-
-  // `docker image rm` of its tag fails
   readonly isStuck?: boolean;
 }
 
-// A stub docker's script, for createStubBin, that answers scripts/dev/dev.sh prune over `images`:
-// their tags and labels, the containers that use them, and an rm or prune that succeeds
-// unless an image is stuck. Any call prune does not make fails as unexpected.
 export function buildStubDevDocker(images: readonly StubDevImage[]): string {
   const listed = images.map((image) => buildShellWord(`${image.tag} ${image.id}`)).join(' ');
 

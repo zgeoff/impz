@@ -2,9 +2,6 @@ import { runImp } from './imp-cli';
 import { runInContainer } from './instance';
 import { waitFor } from './wait-for';
 
-// A netns in the dev container behind a veth: a 10/8 and a link-local
-// address, whose listener logs each connection. Guests reach it through
-// FORWARD, as a private network beside the host.
 export const LAN = {
   netns: 'e2e-egress-lan',
   private: '10.250.77.1',
@@ -13,7 +10,6 @@ export const LAN = {
   log: '/tmp/e2e-egress-lan.log',
 } as const;
 
-// the connections the log shows to each address, 0 for one it lacks
 export function countLanConnections(
   log: string,
   addresses: readonly string[],
@@ -31,14 +27,11 @@ export interface Dial {
   readonly error: string;
 }
 
-// `<nc exit code> <ms> <wget's error>`, as runTimedDial's script prints it
 export function parseTimedDial(out: string): Dial {
   const [rc = '', durationMs = '', ...words] = out.trim().split(' ');
 
   return { isConnected: rc === '0', durationMs: Number(durationMs), error: words.join(' ') };
 }
-
-// Thin glue over the host container and live guests below.
 
 const LAN_LISTENER = `
 const { appendFileSync } = require('node:fs');
@@ -73,8 +66,6 @@ ip route add ${LAN.linkLocal}/32 dev e2elan0
 setsid ip netns exec ${LAN.netns} bun -e "$LISTENER" </dev/null >/dev/null 2>&1 &
 `;
 
-// Starts the netns and its listener, and returns once the container reaches
-// both addresses; the caller stops it with stopLanNetns.
 export async function startLanNetns(): Promise<void> {
   const result = await runInContainer(['env', `LISTENER=${LAN_LISTENER}`, 'sh', '-c', LAN_SETUP]);
 
@@ -95,7 +86,6 @@ export async function startLanNetns(): Promise<void> {
   });
 }
 
-// removing the netns removes its veth and the route through it
 export async function stopLanNetns(): Promise<void> {
   await runInContainer([
     'sh',
@@ -110,10 +100,9 @@ export async function readLanConnections(): Promise<Readonly<Record<string, numb
   return countLanConnections(result.stdout, [LAN.private, LAN.linkLocal]);
 }
 
-// A TCP connection from the guest by nc, timed by /proc/uptime's hundredths;
-// a failure is tried again with wget, which names it (nc fails in silence).
-// A refusal is a reset, at once, where a drop takes all 5 s of -w.
 export async function runTimedDial(name: string, target: string, port: number): Promise<Dial> {
+  // nc fails in silence, so wget retries a failure to name it. A refusal
+  // resets at once, where a drop takes all 5 s of -w.
   const script = [
     'rm -f /tmp/dial-err',
     "s=$(cut -d ' ' -f 1 /proc/uptime | tr -d .)",

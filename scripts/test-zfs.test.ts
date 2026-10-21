@@ -23,7 +23,7 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  // the script reads the loaded module's version before it does anything
+  // The script reads the loaded module's version before it does anything else.
   const moduleVersion = join(directory, 'zfs-version');
 
   writeFileSync(moduleVersion, '2.3.4-1\n');
@@ -396,8 +396,6 @@ test('it stops the test run and releases all it made when it gets SIGTERM', asyn
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
-
-  // a test run that holds the pool until something stops it
   createStubBin(ctx.stubs, 'bun', `: >'${started}'; exec sleep 30`);
 
   const subprocess = Bun.spawn([ctx.script], {
@@ -472,7 +470,7 @@ test('it destroys the pool and removes its file when SIGTERM comes during the po
 
   await waitFor(() => readFileSync(startedMarker), { timeoutMs: 10_000 });
 
-  // the create holds until the release, so the signal lands inside it
+  // The create holds until the release, so the signal lands inside it.
   subprocess.kill('SIGTERM');
 
   writeFileSync(release, '');
@@ -533,7 +531,6 @@ test('it removes its pool file while another pool uses a vdev path that only sta
 
   const zpool = createStubZpool(ctx.stubs);
 
-  // another pool, whose vdev path is this run's pool.img with more after a space
   writeFileSync(join(ctx.stubs, 'pools'), `tank ${work}/pool.img old\n`);
   createStubBin(ctx.stubs, 'id', 'echo 0');
   createStubZfs(ctx.stubs);
@@ -761,7 +758,6 @@ test('it refuses to run when zpool is missing and touches nothing', () => {
 
   createStubZfs(ctx.stubs);
 
-  // only the stubs, and no zpool among them
   const result = Bun.spawnSync([ctx.script], {
     env: {
       PATH: id.bin,

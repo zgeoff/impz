@@ -1,5 +1,3 @@
-// A protoc plugin, which buf.gen.yaml runs: the Markdown reference for the
-// agent protocol, from proto/imp/agent/v1/agent.proto.
 import { create, createFileRegistry, fromBinary, toBinary } from '@bufbuild/protobuf';
 import {
   CodeGeneratorRequestSchema,

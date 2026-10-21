@@ -9,10 +9,7 @@ import { removeImpIfPresent, removeNetworkIfPresent } from '../lib/reset-baselin
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// Private networks between imps (docs/guides/networks.md) in real guests.
-// web is open and db is box, so a network reaches past both policies.
-
-// one stack for every release, so each imp goes before its network
+// One stack for every release, so each imp goes before its network.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -29,8 +26,6 @@ test('it lets the imps on a network reach and name each other past their policie
   const lab = `${ctx.prefix}lab`;
   const web = `${ctx.prefix}web`;
   const db = `${ctx.prefix}db`;
-
-  // on no network
   const out = `${ctx.prefix}out`;
 
   await runImp('net', 'create', lab);
@@ -76,7 +71,6 @@ test('it lets the imps on a network reach and name each other past their policie
   await holdImp(db);
   await holdImp(out);
 
-  // a join that puts a box imp next to an open one warns
   const joined = await tryImp(['net', 'join', lab, db]);
 
   expect(joined).toStrictEqual({
@@ -93,7 +87,6 @@ test('it lets the imps on a network reach and name each other past their policie
   const dbIp = dbRow.ip;
   const outIp = outRow.ip;
 
-  // the imps on the network reach each other, whatever their policies
   const webToDb = await tryImp(['exec', web, '--', 'ping', '-c', '1', '-W', '2', dbIp]);
   const dbToWeb = await tryImp(['exec', db, '--', 'ping', '-c', '1', '-W', '2', webIp]);
 
@@ -111,7 +104,6 @@ test('it lets the imps on a network reach and name each other past their policie
   expect(dbToWeb.exitCode).toBe(0);
   expect(got).toBe('hello');
 
-  // an imp on no network reaches neither, and neither reaches it
   const outToWeb = await tryImp(['exec', out, '--', 'ping', '-c', '1', '-W', '2', webIp]);
   const outToDb = await tryImp(['exec', out, '--', 'ping', '-c', '1', '-W', '2', dbIp]);
   const webToOut = await tryImp(['exec', web, '--', 'ping', '-c', '1', '-W', '2', outIp]);
@@ -122,7 +114,6 @@ test('it lets the imps on a network reach and name each other past their policie
   expect(webToOut.exitCode).not.toBe(0);
   expect(dbToOut.exitCode).not.toBe(0);
 
-  // a network does not open the internet to a box imp
   const allowed = await tryImp([
     'exec',
     db,
@@ -152,8 +143,7 @@ test('it lets the imps on a network reach and name each other past their policie
   expect(allowed.exitCode).toBe(0);
   expect(blocked.exitCode).not.toBe(0);
 
-  // impd names the peers, by network and by bare name, for open and box imps;
-  // busybox nslookup prints some answers on stderr
+  // busybox nslookup prints some answers on stderr.
   const fromWeb = await tryImp(['exec', web, '--', 'nslookup', `${db}.${lab}.internal`]);
   const bare = await tryImp(['exec', web, '--', 'nslookup', db]);
   const fromDb = await tryImp(['exec', db, '--', 'nslookup', `${web}.${lab}.internal`]);
@@ -164,12 +154,9 @@ test('it lets the imps on a network reach and name each other past their policie
   expect(`${bare.stdout}${bare.stderr}`).toContain(`Address: ${dbIp}`);
   expect(`${fromDb.stdout}${fromDb.stderr}`).toContain(`Address: ${webIp}`);
   expect(`${reverse.stdout}${reverse.stderr}`).toContain(`${web}.${lab}.internal`);
-
-  // an imp on no network gets NXDOMAIN for a peer name
   expect(`${fromOut.stdout}${fromOut.stderr}`).toContain('NXDOMAIN');
   expect(`${fromOut.stdout}${fromOut.stderr}`).not.toContain(dbIp);
 
-  // a query to a peer's own port 53 reaches the peer, not impd
   await runShellInImp(
     web,
     `rm -f /tmp/dns; setsid sh -c 'nc -l -p 53 > /tmp/dns' </dev/null >/dev/null 2>&1 &`,
@@ -229,8 +216,6 @@ test('it ends a held connection with a reset on a leave, and shuts the pair out'
 
   await waitForGuestListen(web, 7001);
 
-  // the workload: a write every 200 ms until something ends the connection,
-  // then nc's exit code in /tmp/peer-done
   await runShellInImp(
     db,
     `rm -f /tmp/peer-*; setsid sh -c '(while sleep 0.2; do echo x; done | nc ${webIp} 7001; echo $? > /tmp/peer-done)' </dev/null >/dev/null 2>&1 &`,
@@ -243,7 +228,7 @@ test('it ends a held connection with a reset on a leave, and shuts the pair out'
   await runImp('net', 'leave', lab, db);
 
   // busybox nc says nothing on a reset; the kernel counts an established
-  // connection that a RST ended, and a FIN never
+  // connection that a RST ended, and a FIN never.
   const ended = await waitFor('the guest to see its connection reset', async () => {
     const code = await runShellInImp(db, 'cat /tmp/peer-done 2>/dev/null || true');
     const resets = await readEstabResets(db);

@@ -1,20 +1,13 @@
 export interface WaitForOptions {
-  // milliseconds between retries
   readonly intervalMs?: number;
 
-  // milliseconds before the wait gives up
   readonly timeoutMs?: number;
 
-  // the clock the deadline is read from
   readonly now?: () => number;
 
-  // waits out the interval between retries
   readonly wait?: (durationMs: number) => Promise<void>;
 }
 
-// Retries the attempt until it stops throwing, resolving with its value, so
-// a wait reads like the assertion it waits on. Past the deadline it rejects
-// with what it waited for and the attempt's last failure.
 export async function waitFor<T>(
   what: string,
   attempt: () => Promise<T> | T,

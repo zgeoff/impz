@@ -97,7 +97,7 @@ test('it fails a restart whose new proxy stops without a socket, printing its lo
     }),
   );
 
-  // the group of the docker socket, which a host without Docker lacks
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
   createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
@@ -133,10 +133,9 @@ test('it fails a restart whose impd is not ready by IMP_DEV_READY_TIMEOUT_S', ()
     }),
   );
 
-  // impd answers /health, but never ready
   createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":false}'`);
 
-  // the group of the docker socket, which a host without Docker lacks
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
   createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
@@ -174,7 +173,7 @@ test('it finishes a restart under IMP_DEV_READY_TIMEOUT_S once impd reports read
 
   createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
 
-  // the group of the docker socket, which a host without Docker lacks
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
   createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
@@ -210,7 +209,7 @@ test('it fails a restart whose old impd does not exit by IMP_DEV_STOP_TIMEOUT_S'
 
   createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
 
-  // the group of the docker socket, which a host without Docker lacks
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
   createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
@@ -249,7 +248,7 @@ test('it finishes a restart under IMP_DEV_STOP_TIMEOUT_S once the old impd exits
 
   createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
 
-  // the group of the docker socket, which a host without Docker lacks
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
   createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
@@ -309,7 +308,6 @@ test('it refuses up with IMP_HOST_IMAGE_READY=1 when there is no host image', ()
       PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
       IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
 
-      // a file under the repo stands in for the kernel and the system drive
       IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
       IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
       IMP_HOST_IMAGE: 'imp-host:dev-test',
@@ -342,7 +340,6 @@ test('it refuses up without the system drive IMP_SYSTEM_DRIVE names', () => {
       PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
       IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
 
-      // a file under the repo stands in for the kernel
       IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
       IMP_SYSTEM_DRIVE: join(ctx.directoryPath, 'imp-system.squashfs'),
       IMP_HOST_IMAGE: 'imp-host:dev-test',
@@ -374,10 +371,9 @@ test('it refuses up with IMP_TAILNET_NAMES=1 when 1Password has no OAuth client'
     }),
   );
 
-  // 1Password without the item
   createStubBin(ctx.directoryPath, 'op', 'exit 1');
 
-  // the group of the docker socket, which a host without Docker lacks
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
   createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
@@ -385,7 +381,6 @@ test('it refuses up with IMP_TAILNET_NAMES=1 when 1Password has no OAuth client'
       PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
       IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
 
-      // a file under the repo stands in for the kernel and the system drive
       IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
       IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
       IMP_HOST_IMAGE: 'imp-host:dev-test',
@@ -412,9 +407,6 @@ test('it refuses up with IMP_TAILNET_NAMES=1 when 1Password has no OAuth client'
 test('it passes the Tailscale key to docker by name only in up, and never traces it', () => {
   const ctx = setupTest();
 
-  // the proxy's compile writes its binary into the data dir, and its run
-  // passes; every other run and inspect fails, so up stops right at the
-  // container start, after building its argv
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
@@ -436,7 +428,6 @@ test('it passes the Tailscale key to docker by name only in up, and never traces
       IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
       IMP_HOST_IMAGE_READY: '1',
 
-      // a file under the repo stands in for the kernel and the system drive
       IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
       IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
     },
@@ -463,7 +454,7 @@ test('it refuses up with an IMP_ACME_CA_FILE outside the repo', () => {
     }),
   );
 
-  // the group of the docker socket, which a host without Docker lacks
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
   createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
@@ -471,7 +462,6 @@ test('it refuses up with an IMP_ACME_CA_FILE outside the repo', () => {
       PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
       IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
 
-      // a file under the repo stands in for the kernel and the system drive
       IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
       IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
       IMP_HOST_IMAGE: 'imp-host:dev-test',
@@ -508,10 +498,9 @@ test('it fails up when the container stops before impd is ready, printing its lo
     }),
   );
 
-  // impd's /health does not answer
   createStubBin(ctx.directoryPath, 'curl', 'exit 7');
 
-  // the group of the docker socket, which a host without Docker lacks
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
   createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
@@ -519,7 +508,6 @@ test('it fails up when the container stops before impd is ready, printing its lo
       PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
       IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
 
-      // a file under the repo stands in for the kernel and the system drive
       IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
       IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
       IMP_HOST_IMAGE: 'imp-host:dev-test',

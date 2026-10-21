@@ -26,10 +26,6 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// HTTPS through Pebble, which the harness starts only for a run with this
-// suite. Each test reboots the instance onto HTTPS, without the certificate
-// and account of an earlier start, and back to plain impd at its end.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -48,7 +44,7 @@ test.skipIf(!probePebbleRunning())(
     const name = `${ctx.prefix}a`;
     const host = `${name}.${PEBBLE_DOMAIN}`;
 
-    // Pebble forgets every account on each start
+    // Pebble forgets every account on each start.
     await runInContainer([
       'rm',
       '-f',
@@ -57,14 +53,13 @@ test.skipIf(!probePebbleRunning())(
       '/var/lib/imp/tls/account.json',
     ]);
 
-    // in-test, not suite settings: impd must start with the files above gone
+    // In-test, not suite settings: impd must start with the files above gone.
     await runDevScript('reboot', instance, buildPebbleEnv());
 
     ctx.stack.defer(() => runDevScript('reboot'));
 
     await writePebbleRoot();
 
-    // the bare domain is the API
     const health = await waitFor(
       `https://${PEBBLE_DOMAIN}/health`,
       async () => {
@@ -83,7 +78,7 @@ test.skipIf(!probePebbleRunning())(
 
     writeMetric('https_issue_ms', issueMs);
 
-    // the key in the same file never leaves this process
+    // The key in the same file never leaves this process.
     const pem = await runInContainer(['cat', '/var/lib/imp/tls/certificate.pem']);
     const mode = await runInContainer(['stat', '-c', '%a', '/var/lib/imp/tls/certificate.pem']);
 
@@ -120,7 +115,6 @@ test.skipIf(!probePebbleRunning())(
     expect(urls.split('\n')[0]).toBe(`https://${host}`);
     expect(served.body).toBe('e2e-tiny-ok');
 
-    // a request over each scheme wakes the sleeping imp, so the two compare
     await runImp('hold', name, '0');
     await runImp('sleep', name);
     await waitFor(`${name} to sleep`, () => assertState(name, 'sleeping'));
@@ -144,8 +138,8 @@ test.skipIf(!probePebbleRunning())(
     expect(wokenHttp.body).toBe('e2e-tiny-ok');
     expect(httpWakeMs).toBeGreaterThan(0);
 
-    // only one label names an imp; the certificate does not cover a.<host>
-    // either, so the Host header carries it
+    // Only one label names an imp, and the certificate does not cover a.<host>
+    // either, so the Host header carries it.
     const nested = await readInContainer(`https://${host}/`, { host: `a.${host}` });
     const redirect = await readInContainer(`http://${host}/path?q=1`);
 
@@ -171,7 +165,7 @@ test.skipIf(!probePebbleRunning())(
       '/var/lib/imp/tls/account.json',
     ]);
 
-    // in-test, not suite settings: impd must start with the files above gone
+    // In-test, not suite settings: impd must start with the files above gone.
     await runDevScript('reboot', instance, buildPebbleEnv());
 
     ctx.stack.defer(() => runDevScript('reboot'));
@@ -196,8 +190,6 @@ test.skipIf(!probePebbleRunning())(
 
     await waitForExec(name);
 
-    // tailnet-only: a 404 on the public listener, with a Host that names it,
-    // and the bare domain's API is not there either
     const hidden = await readInContainer(publicUrl);
     const apex = await readInContainer(publicUrl, { host: PEBBLE_DOMAIN });
 
@@ -214,7 +206,6 @@ test.skipIf(!probePebbleRunning())(
 
     expect(exposed).toMatchObject({ url: `https://${name}.${PEBBLE_DOMAIN}`, auth: 'token' });
 
-    // the imp's own record, at the public IP, through challtestsrv
     await waitFor('the public record', async () => {
       const log = await readImpdLogSince(exposeStarted);
 
@@ -226,7 +217,6 @@ test.skipIf(!probePebbleRunning())(
     await runImp('sleep', name);
     await waitFor(`${name} to sleep`, () => assertState(name, 'sleeping'));
 
-    // asleep, a request without the token must not wake it
     const refused = await readInContainer(publicUrl);
 
     expect(refused.status).toBe(401);

@@ -7,10 +7,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// impd writes the read-only files through the agent, and the inner
-// container sees them on a read-only bind, so root inside cannot change one
-// (docs/architecture/guest/agent.md#read-only-files).
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -94,8 +90,8 @@ test('it shows a file impd wrote read-only to root, replaces it, keeps it throug
   expect(gone).toBe('gone');
 });
 
-// the dropped exec runs first: the plain exec's remount would leave the
-// files writable for it
+// The dropped exec runs first: the plain exec's remount would leave the files
+// writable for it.
 test('it refuses root a remount of the files in an exec that drops CAP_SYS_ADMIN, and lets a plain exec remount them', async () => {
   const ctx = await setupTest();
 

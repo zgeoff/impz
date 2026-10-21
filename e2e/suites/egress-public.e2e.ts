@@ -19,10 +19,6 @@ import { startStubPrivateService } from '../lib/start-stub-private-service';
 import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
-// The public policy (docs/architecture/network/egress.md): the internet,
-// and no private address. The private listeners are this machine, at the
-// container's gateway, and a netns of 10/8 and link-local in the container.
-
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
 const startInfo = await readInfo();
 
@@ -77,7 +73,7 @@ test('it lets an open imp reach each private listener, before and after a public
   await waitForExec(pub);
   await holdImp(pub);
 
-  // the netns's own start probed each listener once
+  // The netns's own start probed each listener once.
   const initial = await readLanConnections();
   const controlLan = await runTimedDial(open, LAN.private, LAN.port);
   const controlGateway = await runTimedDial(open, ctx.gateway, listener.port);
@@ -101,13 +97,12 @@ test('it lets an open imp reach each private listener, before and after a public
 
   writeMetric('egressPublicRefusalMs', Math.max(...refusals.map((dial) => dial.durationMs)));
 
-  // a reset at once, where a drop would take all 5 s of nc's -w
+  // A reset at once, where a drop would take all 5 s of nc's -w.
   expect(refusals).toSatisfyAll(
     (dial: (typeof refusals)[number]) =>
       !dial.isConnected && dial.error.includes('Connection refused') && dial.durationMs < 1000,
   );
 
-  // no listener saw a connection: the firewall refused it, no dead listener
   expect(afterRefusals).toStrictEqual(beforeRefusals);
   expect(acceptedAfter).toBe(acceptedBefore);
 
@@ -177,9 +172,9 @@ test('it lets a public imp fetch from the internet, and removes a private addres
 
   const fetched = await tryGetFromImp(pub, 'http://example.com/');
 
-  // sslip.io answers with the address the name spells, here in 10/8: the
-  // open imp gets it from the public resolver; the public imp's query goes
-  // to impd, which removes it
+  // sslip.io answers with the address the name spells, here in 10/8: the open
+  // imp gets it from the public resolver, and impd removes it from the public
+  // imp's answer.
   const openAnswer = await runShellInImp(open, 'nslookup 10-250-77-1.sslip.io 8.8.8.8 || true');
   const publicAnswer = await runShellInImp(pub, 'nslookup 10-250-77-1.sslip.io 8.8.8.8 || true');
 

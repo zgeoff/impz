@@ -25,10 +25,7 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// `impz proxy` and sleep: the journey waits out the idle timeout, so it runs
-// in the acceptance set, not in `fast` with the proxy suite.
-
-// one stack for every release, so the proxy stops before its imp goes
+// One stack for every release, so the proxy stops before its imp goes.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -63,8 +60,6 @@ test('it keeps an imp awake while a proxied connection is open, wakes it on a co
   invariant(heldPort !== undefined);
   invariant(countPort !== undefined);
 
-  // an open connection keeps it awake past the idle timeout, and it sleeps
-  // once the connection ends
   const held = await openHeldSocket(heldPort);
 
   ctx.stack.defer(() => {
@@ -77,12 +72,10 @@ test('it keeps an imp awake while a proxied connection is open, wakes it on a co
 
   held.socket.destroy();
 
-  // the idle timeout plus a sweep of the idle loop
   await waitFor(`${name} to sleep`, () => assertState(name, 'sleeping'), {
     timeoutMs: (config.idleTimeoutS + 15) * 1000,
   });
 
-  // a connection wakes it
   const started = Date.now();
 
   const page = await readPage(`http://127.0.0.1:${String(pagePort)}/`);
@@ -94,7 +87,6 @@ test('it keeps an imp awake while a proxied connection is open, wakes it on a co
   expect(page).toBe(PAGE);
   expect(afterPage).toBe('running');
 
-  // a forced sleep drops open connections, and the next connection wakes it
   const dropped = await openHeldSocket(countPort);
 
   ctx.stack.defer(() => {

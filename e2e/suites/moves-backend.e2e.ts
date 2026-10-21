@@ -2,11 +2,6 @@ import { expect, test } from 'bun:test';
 import { readInfo } from '../lib/imp-cli';
 import { readMoveHosts } from '../lib/move-hosts';
 
-// Both hosts on the run's backend, before any move: the moves then send what
-// that pair sends, files from XFS and `zfs send` streams between two ZFS
-// hosts, so a ZFS run cannot fall back to files unseen.
-
-// the hosts the harness's fixture keeps up for the suite
 function setupTest() {
   const hosts = readMoveHosts({ tailnet: false });
 

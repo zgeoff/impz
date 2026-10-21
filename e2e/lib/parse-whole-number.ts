@@ -1,5 +1,3 @@
-// A whole number a command printed; empty or other output throws, so a
-// failed read never passes as 0.
 export function parseWholeNumber(text: string, what: string): number {
   const trimmed = text.trim();
 

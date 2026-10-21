@@ -17,8 +17,7 @@ function setupTest() {
   return { directoryPath: directory };
 }
 
-// buf compiles the schema with its comments, as buf generate hands it to the
-// plugin
+// buf compiles the schema with its comments, as buf generate hands it to the plugin.
 test('it renders the header comment, then a table per message', () => {
   const ctx = setupTest();
 

@@ -9,9 +9,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImageIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// What `impz image build` and `impz image add` refuse (docs/guides/images.md),
-// before a build or in its builder; none of them leaves an image.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -57,7 +54,8 @@ test('it refuses a RUN step that asks for the host network or insecure mode', as
     stderr: expect.toInclude('network.host is not allowed'),
   });
 
-  // the pinned stable frontend has no --security; the engine never sees the step
+  // The pinned stable frontend has no --security, so the engine never sees the
+  // step.
   expect(insecureResult).toStrictEqual({
     exitCode: 1,
     stdout: '',
@@ -67,14 +65,12 @@ test('it refuses a RUN step that asks for the host network or insecure mode', as
   expect(images).not.toContain(name);
 });
 
-// A builder has only what it pulls: an image built on the host's Docker is
-// not there, and its name pulls from the registry, which has none
 test('it fails the pull of a FROM image that only the host’s Docker has', async () => {
   const ctx = await setupTest();
 
   const name = `${ctx.prefix}localfrom`;
 
-  // the host engine's tags are shared: refuse one this test did not make
+  // The host engine's tags are shared: refuse one this test did not make.
   const local = 'e2e-img-localbase:1';
 
   const existing = await runCommand(['docker', 'image', 'inspect', local]);
@@ -132,9 +128,7 @@ test('it refuses a FROM image from the host’s own registry under the proxy’s
   });
 });
 
-// #145: what the engine would fetch on its own is refused before the build,
-// and a listener on the host's loopback, which the test owns, sees nothing;
-// {url} and {port} stand for that listener's
+// {url} and {port} stand for the listener's own.
 test.each([
   ['a plain URL', 'plain', 'ADD {url} /probe', 'ADD {url} is refused'],
   ['a URL in the JSON form', 'json', 'ADD ["{url}", "/probe"]', 'ADD {url} is refused'],

@@ -6,9 +6,6 @@ import type { CommandResult, DevInstance } from './instance';
 import { REPO_ROOT, instance, readToken, runCommand } from './instance';
 
 const IMP_SCRIPT = join(REPO_ROOT, 'scripts', 'impz');
-
-// The CLI's JSON output, with only the fields the suites read. Dates arrive
-// as ISO strings.
 const ImpStateSchema = z.enum(['creating', 'running', 'sleeping', 'stopped', 'error']);
 const SampleSchema = z.object({ cpuThrottledMs: z.number() });
 
@@ -84,12 +81,10 @@ export type SystemInfo = z.infer<typeof SystemInfoSchema>;
 
 export type CheckpointRow = z.infer<typeof CheckpointRowSchema>;
 
-// each instance's root token, by container
 const tokens = new Map<string, Promise<string>>();
 
-// From the env when the runner passed it, else read from the dev container
-// once, so a suite file also runs on its own. Another instance's is always
-// read from its container.
+// Read from the dev container when the runner passed no token, so a suite
+// file also runs on its own.
 function readImpToken(target: DevInstance): Promise<string> {
   const fromEnv = process.env['IMP_TOKEN'] ?? '';
 
@@ -108,14 +103,12 @@ function readImpToken(target: DevInstance): Promise<string> {
   return token;
 }
 
-// the env that points the CLI at a dev instance
 export async function readImpEnv(target: DevInstance = instance): Promise<Record<string, string>> {
   const impToken = await readImpToken(target);
 
   return { IMP_URL: target.apiUrl, IMP_TOKEN: impToken };
 }
 
-// impd's API client, as the run's root token reaches the instance
 export async function createInstanceClient(target: DevInstance = instance): Promise<ImpClient> {
   const token = await readImpToken(target);
 
@@ -125,18 +118,13 @@ export async function createInstanceClient(target: DevInstance = instance): Prom
 export interface ImpRunOptions {
   readonly stdin?: string;
 
-  // a token in place of the run's root token, such as a scoped one
   readonly token?: string;
 
-  // the instance to drive, the run's own by default
   readonly target?: DevInstance;
 
-  // more env for the CLI, such as XDG_CONFIG_HOME for saved hosts
   readonly env?: Readonly<Record<string, string>>;
 }
 
-// Runs the imp CLI as a user would and returns what happened, failure
-// included.
 export async function tryImp(
   args: readonly string[],
   options: ImpRunOptions = {},
@@ -151,8 +139,6 @@ export async function tryImp(
   });
 }
 
-// Starts the imp CLI for a command that runs until stopped, such as
-// `impz proxy` or `impz events`, with its output piped.
 export async function startImp(args: readonly string[]) {
   const env = await readImpEnv();
 
@@ -164,7 +150,6 @@ export async function startImp(args: readonly string[]) {
   });
 }
 
-// Runs the imp CLI and returns its stdout, or throws with its stderr.
 export function runImp(...args: readonly string[]): Promise<string> {
   return runImpWith({}, ...args);
 }
@@ -184,7 +169,6 @@ export async function runImpWith(
   return result.stdout;
 }
 
-// `impz exec NAME -- ARGV...`, without the final newline
 export async function runInImp(name: string, ...argv: readonly string[]): Promise<string> {
   const stdout = await runImp('exec', name, '--', ...argv);
 
@@ -198,14 +182,13 @@ export function runShellInImp(name: string, script: string): Promise<string> {
 export interface ImpUrls {
   readonly https: string | null;
 
-  // the imp's own tailnet name, https://<service>.<tailnet>.ts.net
   readonly service: string | null;
   readonly local: string;
   readonly tailnet: string | null;
 }
 
-// `impz url NAME`, read by the shape of each line, not its place: the https
-// suite's settings stay for the whole run, so its line may come first
+// Read by the shape of each line, not its place: the https suite's settings
+// stay for the whole run, so its line may come first.
 export async function readImpUrls(name: string): Promise<ImpUrls> {
   const stdout = await runImp('url', name);
 
@@ -254,7 +237,6 @@ export async function readState(name: string, target: DevInstance = instance): P
   return row.state;
 }
 
-// throws unless the imp is in the state, for use inside waitFor
 export async function assertState(
   name: string,
   state: ImpState,
@@ -279,7 +261,6 @@ export async function listCheckpoints(name: string): Promise<readonly Checkpoint
   return z.array(CheckpointRowSchema).parse(JSON.parse(stdout));
 }
 
-// what a command that returns one imp prints with --json
 export function parseImp(stdout: string): ImpRow {
   return ImpRowSchema.parse(JSON.parse(stdout));
 }

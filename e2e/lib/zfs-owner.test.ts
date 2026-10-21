@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import type { RunZfsCommand } from './zfs-owner';
 import { ZFS_OWNER_FILE, readZfsOwner, resetZfsRoot } from './zfs-owner';
 
-// a work dir as scripts/zfs-host-test.sh leaves it: data beside bench.img
 async function setupTest() {
   const work = await mkdtemp(join(tmpdir(), 'zfs-owner-'));
 

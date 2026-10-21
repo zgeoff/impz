@@ -29,8 +29,6 @@ test('#readTailscaleE2EAuthKey reads the e2e client as an ephemeral, preauthoriz
 
 test('#readTailscaleE2EAuthKey reads no key when neither the env nor op has the e2e client', async () => {
   const ctx = setupTest();
-
-  // 1Password without the item
   const op = createStubBin(ctx.directoryPath, 'op', 'exit 1');
 
   updateEnv('PATH', `${op.bin}:${process.env['PATH'] ?? ''}`);

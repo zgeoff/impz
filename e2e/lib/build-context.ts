@@ -2,8 +2,6 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { IMAGE_BUILD_PATH } from '../../packages/api/src/protocols/image-build-protocol';
 
-// A build context directory `<root>/<name>` holding this Dockerfile; returns
-// its path. Other files go in beside it.
 export async function writeBuildContext(
   root: string,
   name: string,
@@ -22,14 +20,12 @@ export interface RawBuild {
   readonly token: string;
   readonly directoryPath: string;
 
-  // the context's files, relative to dir, as the tar holds them
   readonly files: readonly string[];
   readonly name: string;
 }
 
-// A raw upload of a tar of `files` to impd's image build route, as an SDK
-// sends it: the CLI packs only the Dockerfile it was told to, so the
-// frontend's fallbacks need a tar of our own.
+// The CLI packs only the Dockerfile it is given, so the frontend's fallbacks
+// need a tar built here.
 export async function sendRawBuild(build: Readonly<RawBuild>): Promise<Response> {
   const tar = Bun.spawn(['tar', '-C', build.directoryPath, '-cf', '-', ...build.files], {
     stdout: 'pipe',

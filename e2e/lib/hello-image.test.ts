@@ -1,8 +1,6 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
-// An image built on the published base names it by digest, so a build always starts from the
-// bytes that a release attested.
 test('it starts from the published base, pinned by digest', () => {
   const froms = readFileSync(
     new URL('../../images/examples/hello/Dockerfile', import.meta.url),

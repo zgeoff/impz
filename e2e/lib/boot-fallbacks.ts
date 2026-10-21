@@ -1,11 +1,9 @@
-// impd's line when a template restore fails and the imp boots the kernel
-// instead. The create still works, so no suite sees it on its own: a ZFS
-// host restored no template while every suite passed (#147).
+// A fallback still creates the imp, so no suite sees one on its own: a ZFS
+// host restored no template while every suite passed.
 const FALLBACK = /: boot template [0-9a-f]+ failed, booting the kernel/u;
 
-// The lines of impd's log where a template restore fell back. The caller
-// reads the current container's log: what a container logged before a suite
-// recreated it is gone, and goes unchecked.
+// Docker drops a container's log when a suite recreates the container, so
+// lines logged before that go unchecked.
 export function collectBootFallbacks(log: string): string[] {
   return log.split('\n').filter((line) => FALLBACK.test(line));
 }

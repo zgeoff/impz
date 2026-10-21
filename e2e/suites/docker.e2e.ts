@@ -8,9 +8,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// Docker inside an imp of images/base, whose dockerd starts with the guest.
-// Each test boots its own imp and waits for its dockerd.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -68,7 +65,7 @@ test('it runs a container from scratch in the inner container, with no registry'
     timeoutMs: 90_000,
   });
 
-  // the agent is a static binary: an image of it alone needs no pull
+  // The agent is a static binary, so an image of it alone needs no pull.
   const version = await runShellInImp(
     name,
     [
@@ -132,7 +129,6 @@ test('it serves a container port published on 8080 through the wake proxy, again
 
   await runInImp(name, 'docker', 'run', '-d', '--name', 'web', '-p', '8080:80', 'nginx:alpine');
 
-  // until nginx's own page comes through, not just any answer
   const page = await waitFor(`nginx in ${name} through the proxy`, async () => {
     const body = await readThroughProxy(name);
 

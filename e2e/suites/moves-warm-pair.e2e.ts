@@ -9,10 +9,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// A warm move keeps the imp's slot, so two warm imps that live on A side by
-// side, in slots of their own, live on B side by side too (lib/move-hosts.ts).
-
-// one stack for every release, on both hosts
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -62,7 +58,6 @@ test('it moves two sleeping imps from slots of their own on A onto B side by sid
   const firstMoved = await requireImp(first, ctx.hosts.hostB);
   const secondMoved = await requireImp(second, ctx.hosts.hostB);
 
-  // the first exec wakes each on B, while the other is there too
   const onB = { target: ctx.hosts.hostB };
 
   const firstSaid = await runImpWith(onB, 'exec', first, '--', 'echo', 'pair1-ok');

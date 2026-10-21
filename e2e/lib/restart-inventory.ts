@@ -13,8 +13,6 @@ export interface InventoryEntry {
   readonly checkpoints: readonly string[];
 }
 
-// An imp's row without its volatile fields (state, RAM, activity), with its
-// checkpoint ids sorted: what a restart or a reboot must keep.
 export function buildInventoryEntry(
   row: Readonly<ImpRow>,
   checkpointIds: readonly string[],
@@ -31,16 +29,12 @@ export function buildInventoryEntry(
   };
 }
 
-// The rows that are neither sleeping nor stopped, as `<name> <state>`.
 export function collectAwakeRows(rows: readonly Readonly<ImpRow>[]): readonly string[] {
   return rows
     .filter((row) => row.state !== 'sleeping' && row.state !== 'stopped')
     .map((row) => `${row.name} ${row.state}`);
 }
 
-// The names of scale's fleet when the harness kept it for this journey
-// (config.keptPrefixes), as scale names them: e2e-scale-01 on. None when it
-// kept no fleet, as when scale failed or did not run.
 export function buildKeptScaleFleet(keptPrefixes: readonly string[], scaleCount: number): string[] {
   const prefix = getSuitePrefix('scale');
 
@@ -54,7 +48,6 @@ export function buildKeptScaleFleet(keptPrefixes: readonly string[], scaleCount:
   );
 }
 
-// every imp on the instance by name, as buildInventoryEntry keeps it
 export async function readInventory(): Promise<readonly InventoryEntry[]> {
   const rows = await listImps();
 

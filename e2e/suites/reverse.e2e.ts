@@ -21,12 +21,8 @@ import { SSH_HOST, setupSshClient, startLocalSshAgent, startSsh } from '../lib/s
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// Reverse forwards (docs/guides/reverse-forwards.md), by `impz proxy
-// --reverse` and `ssh -R`. This machine's ssh-agent is the unix socket
-// service, and `ssh-add -l` in the imp, as the image user, its client.
-
-// one stack for every release, so a forward stops before the agent and the
-// imp go
+// One stack for every release, so a forward stops before the agent and the
+// imp go.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -37,7 +33,6 @@ async function setupTest() {
 
   stack.defer(() => ssh.cleanup());
 
-  // the user's agent on this machine, holding a key made for the test
   const laptop = await startLocalSshAgent(ssh);
 
   stack.defer(() => laptop.stop());
@@ -85,7 +80,6 @@ test('it lets a process in the imp reach a unix socket and a port on this machin
   const name = `${ctx.prefix}reach`;
   const socket = '/tmp/e2e-agent.sock';
 
-  // the port service on this machine
   const page = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
@@ -137,8 +131,6 @@ test('it lets a process in the imp reach a unix socket and a port on this machin
   await waitForGuestPathGone(name, dirname(own));
 });
 
-// A forced sleep ends the forward in the imp. The CLI leaves the imp asleep,
-// and once it wakes listens again at the same path, over the old socket.
 test('it listens again at the same path once the imp wakes, without waking it', async () => {
   const ctx = await setupTest();
 
@@ -168,8 +160,8 @@ test('it listens again at the same path once the imp wakes, without waking it', 
     }
   });
 
-  // a dwell whose length is the contract (decision 5): a reopen after the
-  // CLI's 2 s RETRY_MS (cli/src/forward/reverse-client.ts) would wake the imp by 3 s
+  // The dwell's length is the contract: it outlasts the CLI's retry interval,
+  // so a reopen would have woken the imp by now.
   await Bun.sleep(3000);
 
   const waiting = await requireImp(name);
@@ -199,14 +191,11 @@ test('it listens again at the same path once the imp wakes, without waking it', 
   expect(listed).toContain('imp-e2e-laptop (ED25519)');
 });
 
-// An open relay keeps the imp awake, as a tunnel does; the listener alone
-// does not, and the imp then sleeps on its idle timeout.
 test('it keeps the imp awake while a relay is open, and lets it sleep once only the listener is left', async () => {
   const ctx = await setupTest();
 
   const name = `${ctx.prefix}relay`;
 
-  // a TCP server on this machine that greets each client and never closes
   const holder = createServer((socket) => {
     socket.write('held\n');
   });
@@ -273,7 +262,6 @@ test('it forwards a port and a unix socket in the imp to this machine with ssh -
   const name = `${ctx.prefix}sshr`;
   const socket = '/tmp/e2e-ssh-r.sock';
 
-  // the port service on this machine
   const page = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,

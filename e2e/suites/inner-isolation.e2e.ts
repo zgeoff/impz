@@ -11,10 +11,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// User code runs in the inner container over the user disk; the agent stays
-// outside it (docs/architecture/guest/agent.md#the-inner-container). Nothing done
-// inside may take the agent down. Each test boots its own imp.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -59,7 +55,6 @@ test('it leaves the inner init socket held by no process inside', async () => {
   const own = await runShellInImp(name, String.raw`ls /proc/self/fd | tr "\n" " "`);
   const socket = await runShellInImp(name, 'readlink /proc/1/fd/3');
 
-  // the httpd service, and everything else, has no fd on the init's socket
   const holders = await runShellInImp(
     name,
     `for p in /proc/[0-9]*; do [ "$p" = /proc/1 ] || ls -l "$p/fd" 2>/dev/null; done | grep -c '${socket}' || true`,
@@ -141,7 +136,7 @@ test('it gives an exec its cgroup even after the exec parent is removed inside',
   await runShellInImp(
     name,
     [
-      // out of its own leaf first, which would keep the parent busy
+      // Out of its own leaf first, which would keep the parent busy.
       'echo $$ > /sys/fs/cgroup/init/cgroup.procs',
       'rmdir /sys/fs/cgroup/exec/* 2>/dev/null',
       'rmdir /sys/fs/cgroup/exec',
@@ -209,7 +204,7 @@ test('it removes device nodes removed inside only inside, and execs still run', 
   await holdImp(name);
   await runShellInImp(name, 'rm -f /dev/null /dev/zero');
 
-  // the agent opens its own /dev/null for every exec's stdin
+  // The agent opens its own /dev/null for every exec's stdin.
   const seen = await runShellInImp(name, 'test -e /dev/null || echo gone');
 
   expect(seen).toBe('gone');

@@ -19,8 +19,6 @@ async function setupTest() {
 test('#listAgentThroughUnixForward lists the agent at the far end of the forward, and removes the local socket', async () => {
   const ctx = await setupTest();
 
-  // ssh that serves its -L listen path with an empty agent of its own, as
-  // the forward to an agent in the imp would
   const ssh = createStubBin(
     ctx.directoryPath,
     'ssh',

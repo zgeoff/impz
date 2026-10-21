@@ -1,6 +1,3 @@
-// Let's Encrypt's test CA and the DNS server it asks, pinned by digest. The
-// e2e Pebble stack runs them, and scripts/dev/pull-pebble-images.ts pulls them
-// before `bun run test:pebble`.
 export const PEBBLE_IMAGES = {
   pebble:
     'ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199',

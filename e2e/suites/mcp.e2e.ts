@@ -9,10 +9,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent, removeTokenIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// `impz mcp` over stdio, as an agent's MCP client drives it, held to the
-// suite's prefix; and impd's MCP over HTTP. The file tools' commands must
-// work with BusyBox (e2e-tiny) and coreutils (impd's default image).
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -37,8 +33,8 @@ test('it boots an imp inside the prefix with imp_create, and refuses one outside
   const name = `${ctx.prefix}tiny`;
   const other = 'e2e-other-stdio';
 
-  // the outside name must be free, so the cleanup below takes only what this
-  // test made
+  // The outside name must be free, so the cleanup below takes only what this
+  // test made.
   const taken = await readImp(other);
 
   expect(taken).toBeUndefined();
@@ -53,8 +49,8 @@ test('it boots an imp inside the prefix with imp_create, and refuses one outside
 
   const outside = await ctx.session.runTool('imp_create', { name: other });
 
-  // a regressed refusal, or a create that failed after its insert, leaves an
-  // imp; the removal passes over a name that was never made
+  // A regressed refusal, or a create that failed after its insert, leaves an
+  // imp; the removal passes over a name that was never made.
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, other));
 
   expect(readToolData(created)).toMatchObject({ imp: { name, state: 'running' } });
@@ -74,8 +70,6 @@ test.each([
     const ctx = await setupTest();
 
     const name = `${ctx.prefix}files-${tools.toLowerCase()}`;
-
-    // a leading dash and spaces in each part, and shell syntax that stays text
     const path = '/root/-odd dir/-a file $(x).txt';
     const content = 'line one\nünïcode\n';
 
@@ -96,7 +90,6 @@ test.each([
     expect(readToolData(written)).toStrictEqual({ path, bytes: Buffer.byteLength(content) });
     expect(readToolData(read)).toMatchObject({ content });
 
-    // no temp file is left behind, and a new file gets 0666 less the umask
     expect(readToolData(listed)).toMatchObject({
       exitCode: 0,
       stdout: expect.toSatisfy(
@@ -131,7 +124,6 @@ test.each([
 
   expect(readToolData(created)).toMatchObject({ imp: { name, state: 'running' } });
 
-  // the link points at an odd path: a leading dash, a space and shell syntax
   await ctx.session.runTool('imp_exec', {
     name,
     command:
@@ -288,8 +280,8 @@ test('it runs a 15 s command over HTTP for a token held to the prefix, and refus
   const tokenName = `${ctx.prefix}agent`;
   const other = 'e2e-other-http';
 
-  // the outside name must be free, so the cleanup below takes only what this
-  // test made
+  // The outside name must be free, so the cleanup below takes only what this
+  // test made.
   const taken = await readImp(other);
 
   expect(taken).toBeUndefined();
@@ -317,8 +309,6 @@ test('it runs a 15 s command over HTTP for a token held to the prefix, and refus
     await agent.close();
   });
 
-  // a long call answers as SSE, with a keepalive comment every 5 s; that the
-  // stream outlasts the API's idle timeout is mcp-endpoint.test.ts's to prove
   const startedAt = performance.now();
 
   const long = await agent.runTool('imp_exec', {
@@ -335,8 +325,8 @@ test('it runs a 15 s command over HTTP for a token held to the prefix, and refus
 
   const outside = await agent.runTool('imp_create', { name: other });
 
-  // a regressed refusal, or a create that failed after its insert, leaves an
-  // imp; the removal passes over a name that was never made
+  // A regressed refusal, or a create that failed after its insert, leaves an
+  // imp; the removal passes over a name that was never made.
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, other));
 
   const ended = await agent.close();

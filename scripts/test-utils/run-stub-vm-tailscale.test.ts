@@ -3,7 +3,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// run-stub-vm-tailscale.sh is the tailscale CLI of deploy/nixos/tests/vm.nix's stub image.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-stub-vm-tailscale-'));
 

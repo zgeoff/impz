@@ -8,10 +8,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// What a wiped user disk leaves: the agent outside the inner container
-// (docs/architecture/guest/agent.md#the-inner-container) keeps answering, so a
-// checkpoint restores the imp and a stop still stops it.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -42,7 +38,6 @@ test('it keeps the agent answering after rm -rf / inside, and a checkpoint resto
 
   await tryImp(['exec', name, '--', 'sh', '-c', 'rm -rf /* 2>/dev/null']);
 
-  // the agent answers: exec fails at once, it does not hang
   const started = Date.now();
 
   const broken = await tryImp(['exec', name, '--', 'true']);
@@ -60,8 +55,6 @@ test('it keeps the agent answering after rm -rf / inside, and a checkpoint resto
   expect(tookMs).toBeLessThan(10_000);
   expect(state).toBe('running');
 
-  // the agent's world still runs commands, and shows the wiped disk and the
-  // container's cgroup
   const left = await runImp('exec', '--agent', name, '--', 'ls', '-A', '/user');
 
   const events = await runImp(

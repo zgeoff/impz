@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { resolveWipeTarget } from './wipe-target';
 import { ZFS_OWNER_FILE } from './zfs-owner';
 
-// a repo root with its .data
 async function setupTest() {
   const root = await mkdtemp(join(tmpdir(), 'wipe-target-'));
 

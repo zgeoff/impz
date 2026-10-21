@@ -14,10 +14,6 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// Elastic memory (docs/architecture/lifecycle/elastic-memory.md): a 256 MiB guest that may grow
-// to 1 GiB, which stays the most this suite boots. One imp grows, shrinks,
-// then sleeps and wakes, each step on what the one before it left plugged.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -52,9 +48,8 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
   const row = await requireImp(name);
   const totalBefore = await readMemTotalMib(name);
 
-  // 600 MiB in tmpfs, which nothing can reclaim, at 30 MiB a second: the
-  // `sleep 1` sets that rate, which the controller's margin covers; a faster
-  // burst can outrun it
+  // 600 MiB in tmpfs at 30 MiB a second: the controller's margin covers that
+  // rate, and a faster burst can outrun it.
   const fillStarted = performance.now();
 
   const filled = await runShellInImp(
@@ -76,9 +71,8 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
 
   await runShellInImp(name, 'rm -f /mnt/fill/*');
 
-  // What a shrink may leave plugged in an idle guest: its use (about 40 MiB)
-  // and a step past its grow mark (424 MiB in all), less the base it sees
-  // (about 236 of its 256 MiB), is about 188, so at most 256.
+  // A shrink may leave plugged the guest's use (about 40 MiB) and a step past
+  // its grow mark (424 MiB in all), less the base it sees (about 236 MiB).
   const shrinkStarted = performance.now();
 
   await waitFor(
@@ -99,9 +93,8 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
 
   expect(totalShrunk).toBeLessThan(256 + 256);
 
-  // 300 MiB in use at 30 MiB a second, too soon for the minute-long idle
-  // shrink. It crosses the grow mark only near its end, so the memory stays
-  // in use until the grow lands, then goes
+  // 300 MiB at 30 MiB a second, too soon for the minute-long idle shrink. It
+  // crosses the grow mark only near its end, so it stays in use until the grow.
   const secondFillStarted = new Date();
 
   await runShellInImp(
@@ -126,8 +119,8 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
   writeMetric('memory_grow_after_fill_ms', Math.round(performance.now() - growStarted));
 
   // Once the balloon statistics count what the guest holds, a tick that read
-  // them from before the grow has run: one step covers this fill, so a
-  // second grow is one those older statistics asked for
+  // them from before the grow has run, so a second grow is one those older
+  // statistics asked for.
   await waitFor(
     `the balloon statistics of ${name} to show the grow`,
     async () => {
@@ -148,8 +141,8 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
   const pluggedBeforeSleep = await readPluggedMib(name);
   const availableInGuest = await readMemAvailableMib(name);
 
-  // the sleep sizes its unplug from the balloon statistics, which lag the
-  // guest; it must see the freed 300 MiB (64 MiB covers the guest's own churn)
+  // The sleep sizes its unplug from the balloon statistics, which lag the
+  // guest; 64 MiB covers the guest's own churn.
   await waitFor(
     `the balloon statistics of ${name} to show the freed memory`,
     async () => {
@@ -164,8 +157,6 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
     { timeoutMs: 10_000, intervalMs: 200 },
   );
 
-  // a poll or more after the statistics counted the grow, so a tick that
-  // read them from before it has logged its grow by now
   const secondFillLog = await readImpdLogSince(secondFillStarted);
 
   const grows = secondFillLog
@@ -188,12 +179,9 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
   invariant(slept);
   writeMetric('memory_sleep_after_unplug_ms', slept.durationMs);
 
-  // the sleep unplugged down to use and headroom before the pause
   expect(slept.pluggedMib).toBeLessThan(pluggedBeforeSleep);
   expect(slept.pluggedMib).toBeLessThanOrEqual(256);
 
-  // an exec wakes it: the wake restores what the snapshot kept, and the guest
-  // answers
   const wakeStarted = new Date();
 
   const totalAfterWake = await readMemTotalMib(name);
@@ -201,7 +189,7 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
 
   expect(totalAfterWake).toBeLessThan(256 + 256);
 
-  // from the snapshot, not a cold boot that would pass the same checks
+  // From the snapshot, not a cold boot that would pass the same checks.
   expect(wakeLog).toContain(`${name}: woke pid`);
   expect(wakeLog).not.toContain(`${name}: cold boot instead of a wake`);
 }, 300_000);

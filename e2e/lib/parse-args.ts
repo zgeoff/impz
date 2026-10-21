@@ -2,10 +2,8 @@ import { parseArgs as parseArgv } from 'node:util';
 import { FAST_GROUPS, SUITES, SUITE_SETS } from './suites';
 
 export interface HarnessArgs {
-  // suite names, in run order
   readonly suites: readonly string[];
 
-  // the full definition of done: tailscale must pass, not skip
   readonly acceptance: boolean;
   readonly clean: boolean;
   readonly keep: boolean;
@@ -13,8 +11,6 @@ export interface HarnessArgs {
   readonly help: boolean;
 }
 
-// node's own parser reports an unknown flag, a stray argument and a flag
-// missing its value
 export function parseArgs(argv: readonly string[]): HarnessArgs {
   const parsed = parseArgv({
     args: [...argv],
@@ -61,7 +57,6 @@ export function parseArgs(argv: readonly string[]): HarnessArgs {
   };
 }
 
-// --group N: one of the fast set's CI groups, as its runner runs it
 function resolveGroup(group: string): readonly string[] {
   const suites = /^[1-9]\d*$/u.test(group) ? FAST_GROUPS[Number(group) - 1] : undefined;
 

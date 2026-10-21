@@ -4,14 +4,10 @@ import { readThroughProxy } from './http';
 import { runShellInImp } from './imp-cli';
 import { waitFor } from './wait-for';
 
-// Only guest memory holds it: a token on a tmpfs served by a background httpd,
-// its pid and start time, and the boot id. A cold boot loses it all; sleep and
-// wake keep it all (docs/architecture/lifecycle/sleep-and-wake.md#what-survives-a-sleep).
 export interface MemoryProof {
   readonly name: string;
   readonly token: string;
 
-  // "<pid> <starttime> <boot id>"
   readonly identity: string;
 }
 
@@ -19,13 +15,10 @@ function buildIdentityScript(pid: string): string {
   return `echo ${pid} $(cut -d' ' -f22 /proc/${pid}/stat) $(cat /proc/sys/kernel/random/boot_id)`;
 }
 
-// Starts busybox httpd on :8080 in an e2e-bare imp, serving the token, and
-// waits until the proxy returns it.
 export async function startMemoryProof(name: string): Promise<MemoryProof> {
   const token = randomBytes(16).toString('hex');
 
-  // httpd forks into the background: the script polls for its pid, for up
-  // to 5 s
+  // httpd forks into the background, so the script polls for its pid.
   const identity = await runShellInImp(
     name,
     [
@@ -52,7 +45,6 @@ export async function startMemoryProof(name: string): Promise<MemoryProof> {
   return { name, token, identity };
 }
 
-// true while the httpd process and boot the proof started are still there
 export async function checkMemoryKept(proof: MemoryProof): Promise<boolean> {
   const pid = proof.identity.split(' ')[0] ?? '';
 
@@ -65,7 +57,6 @@ export async function checkMemoryKept(proof: MemoryProof): Promise<boolean> {
   }
 }
 
-// the same httpd process and boot the proof started
 export async function checkMemoryProof(proof: MemoryProof): Promise<void> {
   const pid = proof.identity.split(' ')[0] ?? '';
 

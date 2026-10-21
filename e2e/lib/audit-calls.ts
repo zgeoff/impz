@@ -1,9 +1,6 @@
 import * as z from 'zod';
 import { runImp } from './imp-cli';
 
-// The api audit rows of one imp, newest first, as `impz audit --json` prints
-// them.
-
 const AuditCallsSchema = z.array(
   z.object({
     at: z.string(),
@@ -20,8 +17,6 @@ export function parseAuditCalls(json: string): AuditCall[] {
   return AuditCallsSchema.parse(JSON.parse(json));
 }
 
-// The rows ahead of the newest row from before, not a clock's: a read holds
-// at most its limit of rows, so new rows push old ones out of `after`.
 export function pickNewCalls(
   after: readonly AuditCall[],
   before: readonly AuditCall[],
@@ -46,8 +41,6 @@ export function pickNewCalls(
 
   return after.slice(0, added);
 }
-
-// Thin glue over the CLI below.
 
 export async function readAuditCalls(name: string): Promise<AuditCall[]> {
   const json = await runImp('audit', name, '--kind', 'api', '--json');

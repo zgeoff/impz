@@ -12,10 +12,7 @@ import { getSuitePrefix } from '../lib/suites';
 import { openTerminal } from '../lib/terminal';
 import { waitFor } from '../lib/wait-for';
 
-// Sessions (docs/architecture/guest/sessions.md) through `impz console` and `impz attach`
-// on a pseudo-terminal, as a user at a terminal. Ctrl-] (\u001D) detaches.
-
-// one stack for every release, so each terminal closes before its imp goes
+// One stack for every release, so each terminal closes before its imp goes.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -37,7 +34,6 @@ test('it keeps a detached console session through an idle sleep, and redraws it 
 
   await waitForExec(name);
 
-  // impz console starts a session that a detach key leaves running
   const entry = await openTerminal(['console', name]);
 
   ctx.stack.defer(() => entry.close());
@@ -57,7 +53,6 @@ test('it keeps a detached console session through an idle sleep, and redraws it 
   expect(entry.readOutput()).toContain(`detached from session main (impz attach ${name} main)`);
   expect(started).toMatchObject({ state: 'running', attached: false, cols: 80, rows: 24 });
 
-  // the detached idle session lets the imp sleep, and a list does not wake it
   await waitFor(`${name} to sleep`, () => assertState(name, 'sleeping'), {
     timeoutMs: (config.idleTimeoutS + 15) * 1000,
   });
@@ -69,8 +64,6 @@ test('it keeps a detached console session through an idle sleep, and redraws it 
   expect(imp.state).toBe('sleeping');
   expect(imp.sessions).toBe(1);
 
-  // impz attach wakes the imp and shows the session, which redraws at the
-  // new size
   const attached = await openTerminal(['attach', name], { cols: 100, rows: 30 });
 
   ctx.stack.defer(() => attached.close());
@@ -79,8 +72,7 @@ test('it keeps a detached console session through an idle sleep, and redraws it 
 
   const replayed = attached.readOutput().length;
 
-  // a program that prints the terminal size on SIGWINCH, on the main
-  // screen; the shell runs it as the foreground job, which SIGWINCH reaches
+  // The shell runs the program as the foreground job, which SIGWINCH reaches.
   attached.type(
     String.raw`sh -c 'trap "echo size=\$(stty size)" WINCH; echo drawn; while :; do sleep 0.2; done'`,
   );
@@ -119,7 +111,6 @@ test('it hands a session over to a second attach, and ends the first', async () 
 
   await waitForExec(name);
 
-  // a session running a program that prints the terminal size on SIGWINCH
   const entry = await openTerminal(['console', name]);
 
   ctx.stack.defer(() => entry.close());
@@ -150,7 +141,7 @@ test('it hands a session over to a second attach, and ends the first', async () 
 
   const firstCode = await first.exited;
 
-  // the replay holds the sizes the first terminal saw; the redraw adds one
+  // The replay holds the sizes the first terminal saw; the redraw adds one.
   const seen = countMatches(first.readOutput(), 'size=24 80');
 
   await waitFor('the second terminal to redraw', () => {
@@ -170,7 +161,6 @@ test('it hands a session over to a second attach, and ends the first', async () 
 
   await second.exited;
 
-  // the CLI's exit code once another terminal took the session over
   expect(firstCode).toBe(254);
   expect(first.readOutput()).toContain('another client attached to session main');
 });
@@ -202,7 +192,6 @@ test('it keeps an attached terminal through an imp sleep by attaching again', as
 
   await terminal.waitForText('attaching again');
 
-  // typed while it attaches again, so the keys wait for the session
   const after = terminal.readOutput().length;
 
   terminal.type('echo back-$((40+2))\n');
@@ -230,7 +219,6 @@ test('it keeps the imp awake while a detached session is busy, and lets it sleep
 
   await waitForExec(name);
 
-  // an idle session beside the busy one, which the kill must leave
   const idle = await openTerminal(['console', name]);
 
   ctx.stack.defer(() => idle.close());
@@ -251,7 +239,6 @@ test('it keeps the imp awake while a detached session is busy, and lets it sleep
 
   busy.type('echo spin-$((1+1)); while :; do :; done\n');
 
-  // the loop runs once the marker shows
   await busy.waitForText('spin-2', typed);
 
   busy.type('\u001D');

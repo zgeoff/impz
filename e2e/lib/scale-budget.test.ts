@@ -128,7 +128,6 @@ test('#startBudgetMonitor keeps each sample it reads and passes over one impd wa
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<BudgetSample | null>();
 
-  // the reads in turn; the last holds until the test lets it go
   const reads = buildStubAnswerQueue<() => Promise<BudgetSample | null>>([
     () => Promise.resolve(first),
     () => Promise.resolve(null),
@@ -283,7 +282,6 @@ test('#waitForUnderBudget returns once both figures of the last sample are under
 test('#waitForUnderBudget returns without failing once an overshoot outlasts the start limit and the longest sleep', async () => {
   const clock = buildStubClock();
 
-  // impd's figure is under, what the VMs own is not
   const samples = [
     { at: 0, ramUsedMib: 900, awake: 3, firecrackerPssMib: 1150, firecrackerOwnedMib: 1100 },
   ];
@@ -294,6 +292,5 @@ test('#waitForUnderBudget returns without failing once an overshoot outlasts the
     { now: clock.now, wait: clock.sleep },
   );
 
-  // the start limit plus budget-overshoot.ts's 30 s MAX_SLEEP_MS
   expect(clock.now()).toBe(32_500);
 });

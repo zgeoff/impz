@@ -5,47 +5,28 @@ interface SuiteResult {
 }
 
 export interface RunSuitesDeps {
-  // the run's suites, in run order
   readonly names: readonly string[];
   readonly prefixOf: (name: string) => string;
 
-  // each suite's journey files, in run order
   readonly journeysOf: (name: string) => readonly string[];
 
-  // --keep: what each journey left stays
   readonly keep: boolean;
 
-  // runs one journey file to its exit and returns its exit code; the caller
-  // forgets the journey's process group once this settles, before any reset
-
-  // `kept`: the prefixes of the imps a passing scale kept for restart
   readonly runJourney: (journey: string, kept: readonly string[]) => Promise<number>;
 
-  // what else decides a journey's verdict, such as the boot-fallback scan
   readonly checkJourney: (suite: string, journey: string) => Promise<boolean>;
   readonly reset: (prefixes: readonly string[]) => Promise<void>;
 
-  // the impd settings a suite runs on, read as it starts; null for the run's
   readonly settingsOf: (name: string) => Readonly<Record<string, string>> | null;
 
-  // the instance on a suite's settings
   readonly rebootOnto: (settings: Readonly<Record<string, string>>) => Promise<void>;
 
-  // the instance back on the run's settings, after a journey that failed or
-  // a suite with settings of its own
   readonly reboot: () => Promise<void>;
 
-  // a fresh instance with the run's settings, when a reset cannot restore
-  // the baseline
   readonly recreate: () => Promise<void>;
 
-  // what a suite runs beside the instance, such as the moves suites' second
-  // host, read as it starts; none when left out
   readonly fixturesOf?: (name: string) => readonly string[];
 
-  // a fixture up before the suite's settings, since the instance may join
-  // it; its reset after each journey; and down after the settings' reboot
-  // back
   readonly startFixture: (fixture: string) => Promise<void>;
   readonly resetFixture: (fixture: string) => Promise<void>;
   readonly stopFixture: (fixture: string) => Promise<void>;
@@ -59,24 +40,19 @@ export interface RunSuitesDeps {
 export interface RunSuitesResult {
   readonly results: readonly SuiteResult[];
 
-  // why the run stopped before its last suite, or null
   readonly stoppedBecause: string | null;
 }
 
-// Runs each suite's journeys in turn, resetting its prefix after each one
-// (a reboot first after a failure); an unrestorable baseline means a fresh
-// instance, and a failed one stops the run. scale's imps wait for restart.
 export async function runSuites(deps: Readonly<RunSuitesDeps>): Promise<RunSuitesResult> {
   const results: SuiteResult[] = [];
   let carried: readonly string[] = [];
 
-  // a kept scale leaves the instance on its settings, so restart re-adopts
-  // the fleet running as scale left it, and reboots back after its last
+  // A kept scale leaves the instance on its settings, so restart re-adopts the
+  // fleet running as scale left it.
   let isCarriedOffRunSettings = false;
 
   for (const name of deps.names) {
     if (deps.isInterrupted()) {
-      // restart will not run to reboot off the settings a kept scale left
       if (isCarriedOffRunSettings) {
         await resetRunSettings(deps, 'scale');
       }
@@ -90,37 +66,22 @@ export async function runSuites(deps: Readonly<RunSuitesDeps>): Promise<RunSuite
     const prefix = deps.prefixOf(name);
     const isKeptForRestart = name === 'scale' && deps.names.includes('restart');
     const prefixes = [prefix, ...carried];
-
-    // only a passing scale is kept for restart, which takes its imps with its
-    // own reset; a failed one is reset here like any other suite
     let isKept = false;
     let isPassed = true;
     let stoppedBecause: string | null = null;
-
-    // A suite's own settings: every journey runs on them, rebooted onto
-    // before the first and after a fresh instance, and back onto the run's
-    // after the last, a failure or an interrupt.
     const settings = readSettings(deps, name);
     const ownSettings = settings ?? null;
-
-    // whether the instance may be off the run's settings, and needs the
-    // reboot back
     let isOffRunSettings: boolean = isCarriedOffRunSettings;
-
-    // whether it runs on the suite's settings now
     let isOnSettings = false;
 
     if (settings === undefined) {
       isPassed = false;
     }
 
-    // up before the first journey, and down at the suite's end once it was
-    // started, even in part
     const fixtures = deps.fixturesOf?.(name) ?? [];
     let isFixtureStarted = false;
 
     for (const journey of settings === undefined ? [] : deps.journeysOf(name)) {
-      // a journey that never ran fails its suite
       if (deps.isInterrupted()) {
         isPassed = false;
         break;
@@ -142,7 +103,6 @@ export async function runSuites(deps: Readonly<RunSuitesDeps>): Promise<RunSuite
 
         isOnSettings = await runRebootOnto(deps, name, ownSettings);
 
-        // a signal during the reboot finds no journey to stop, so none starts
         if (!isOnSettings || deps.isInterrupted()) {
           isPassed = false;
           break;
@@ -163,7 +123,6 @@ export async function runSuites(deps: Readonly<RunSuitesDeps>): Promise<RunSuite
         try {
           await deps.recreate();
 
-          // a fresh instance comes up on the run's settings
           isOnSettings = false;
           isOffRunSettings = false;
         } catch (error) {
@@ -174,9 +133,9 @@ export async function runSuites(deps: Readonly<RunSuitesDeps>): Promise<RunSuite
       const fixtureReset =
         deps.keep || deps.isInterrupted() ? 'reset' : await resetFixtures(deps, journey, fixtures);
 
-      // a fixture made anew may reboot the instance off the suite's settings,
-      // as host B's stop takes A off its network, so the next journey reboots
-      // onto them first
+      // A fixture made anew may reboot the instance off the suite's settings, as
+      // host B's stop takes A off its network, so the next journey reboots onto
+      // them first.
       if (fixtureReset !== 'reset') {
         isOnSettings = false;
       }
@@ -222,8 +181,6 @@ interface SettingsRestore {
   readonly stoppedBecause: string | null;
 }
 
-// The reboot back onto the run's settings after a suite with its own; when
-// it fails, a fresh instance, unless the run was interrupted.
 async function resetRunSettings(
   deps: Readonly<RunSuitesDeps>,
   name: string,
@@ -258,8 +215,6 @@ function readReason(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// the suite's settings, null for the run's, or undefined when reading them
-// threw, which fails the suite before it changes anything
 function readSettings(
   deps: Readonly<RunSuitesDeps>,
   name: string,
@@ -273,7 +228,6 @@ function readSettings(
   }
 }
 
-// every fixture up, in order; false when one would not start
 async function startFixtures(
   deps: Readonly<RunSuitesDeps>,
   name: string,
@@ -315,8 +269,6 @@ interface JourneyVerdict {
   readonly isClean: boolean;
 }
 
-// A journey that throws, or whose checks throw, fails like one that exits
-// non-zero, and the run goes on.
 async function runChecked(
   deps: Readonly<RunSuitesDeps>,
   suite: string,
@@ -347,15 +299,11 @@ async function runChecked(
 interface RestoreOptions {
   readonly prefixes: readonly string[];
 
-  // --keep, or scale's imps kept for restart
   readonly isSkipped: boolean;
 
-  // the reboot after a failure: onto the suite's settings, or the run's
   readonly reboot: () => Promise<void>;
 }
 
-// The reset after one journey file, with a reboot first when it failed and
-// the run goes on; false when the baseline could not be restored.
 async function resetAfterJourney(
   deps: Readonly<RunSuitesDeps>,
   journey: string,
@@ -381,9 +329,6 @@ async function resetAfterJourney(
   }
 }
 
-// The reset of each fixture after a journey. One whose reset fails goes
-// down and up anew, which fails the suite ('anew'); one that will not come
-// back runs no more of its journeys ('lost').
 async function resetFixtures(
   deps: Readonly<RunSuitesDeps>,
   journey: string,
@@ -415,7 +360,6 @@ async function resetFixtures(
   return outcome;
 }
 
-// every fixture down, the last started first; false when one would not stop
 async function stopFixtures(
   deps: Readonly<RunSuitesDeps>,
   name: string,
@@ -437,14 +381,11 @@ async function stopFixtures(
 }
 
 export interface RunVerdictInput {
-  // each section's verdict, setup included
   readonly passed: readonly boolean[];
   readonly stoppedBecause: string | null;
   readonly interrupted: boolean;
 }
 
-// A run passes only when every section passed, nothing stopped it, and no
-// signal came, even one after the last suite ended.
 export function hasRunPassed(input: Readonly<RunVerdictInput>): boolean {
   return input.passed.every(Boolean) && input.stoppedBecause === null && !input.interrupted;
 }

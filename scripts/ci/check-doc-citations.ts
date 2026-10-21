@@ -1,6 +1,3 @@
-// Checks every docs/ path that code cites, with its #anchor, and exits non-zero on one that does
-// not resolve. `bun run lint:docs` runs it after the docs-writing skill's check-links.sh, which
-// covers the links in Markdown. Usage (from the repo root): bun scripts/ci/check-doc-citations.ts
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -10,21 +7,16 @@ export interface Problem {
   readonly message: string;
 }
 
-// `docs/guides/tokens.md#scopes` or `docs/reference`, not a docs/ folder of another path; an
-// anchor keeps its letters in any script and its URL escapes (`#café`, `#caf%C3%A9`)
 const DOC_PATH = /(?<![\w/.-])docs(?:\/[\w.-]+)+(?:#[\p{L}\p{M}\p{N}_%-]+)?/gu;
 
-// this repo's docs by URL, on any ref, one with a slash in it too: https://github.com/zgeoff/impz/blob/main/docs/…
 const BLOB_URL =
   /github\.com\/zgeoff\/impz\/(?:blob|tree)\/\S*?\/(?<ref>docs(?:\/[\w.-]+)+(?:#[\p{L}\p{M}\p{N}_%-]+)?)/gu;
 
-// the repository as one run sees it, with each page's anchors read once
 interface Repo {
   readonly exists: (path: string) => boolean;
   readonly readAnchors: (path: string) => Set<string> | null;
 }
 
-// `files` are paths relative to `root`, the repository root that every citation starts from
 export function checkDocCitations(root: string, files: readonly string[]): Problem[] {
   const pages = new Map<string, Set<string> | null>();
 
@@ -49,7 +41,6 @@ export function checkDocCitations(root: string, files: readonly string[]): Probl
   });
 }
 
-// null for a file that is gone from the tree or binary (a NUL byte): nothing to cite
 function readText(path: string): string | null {
   if (!existsSync(path) || !statSync(path).isFile()) {
     return null;
@@ -60,15 +51,12 @@ function readText(path: string): string | null {
   return bytes.includes(0) ? null : bytes.toString('utf8');
 }
 
-// GitHub never renders an HTML comment, so a heading inside one has no anchor: the line without
-// its comments, and whether a comment is still open at its end
+// GitHub renders no HTML comment, so a heading inside one has no anchor.
 interface VisibleText {
   readonly kept: string;
   readonly isOpen: boolean;
 }
 
-// GitHub's anchors of a page: ATX and setext headings outside code fences and front matter,
-// numbered on repeat, plus explicit id and name attributes
 function collectAnchors(markdown: string): Set<string> {
   const anchors = new Set<string>();
   const headingAnchors = new Set<string>();
@@ -140,7 +128,6 @@ function splitComments(line: string, inComment: boolean): VisibleText {
   return { kept, isOpen };
 }
 
-// a fence closes on a marker of its own character, at least as long, with nothing after it
 function formatFence(open: string, marker: string, rest: string): string {
   if (open === '') {
     return marker;
@@ -173,9 +160,6 @@ const ENTITIES: Readonly<Record<string, string>> = {
   nbsp: ' ',
 };
 
-// GitHub slugs the rendered heading: outside code spans, link syntax, HTML tags and emphasis
-// markers drop and entities decode; then lowercase, every character but a letter, mark, digit,
-// `_`, `-` or space dropped, and each space a `-`
 function buildSlug(title: string): string {
   const rendered = title
     .split(/(?<span>`+[^`]*`+)/u)
@@ -207,9 +191,8 @@ function buildSlug(title: string): string {
     .replaceAll(' ', '-');
 }
 
-// GitHub's suffix for a repeated slug, as github-slugger picks it: the slug's next number until
-// the result is no heading's anchor yet, so `Notes`, `Notes`, `Notes-1` get `notes`, `notes-1`
-// and `notes-1-1`
+// github-slugger numbers a repeated slug until the result is unused, so the headings `Notes`,
+// `Notes`, `Notes-1` get `notes`, `notes-1` and `notes-1-1`.
 function pickHeadingAnchor(
   slug: string,
   taken: ReadonlySet<string>,
@@ -247,9 +230,10 @@ function checkFile(file: string, text: string, repo: Repo): Problem[] {
   return problems;
 }
 
-// a sentence's full stop is no part of the path
 function checkCitation(ref: string, repo: Repo): string | null {
   const [rawPath = '', rawAnchor] = ref.split('#');
+
+  // A citation that ends a sentence carries its full stop.
   const path = rawPath.replace(/\.+$/u, '');
 
   if (!repo.exists(path)) {
@@ -271,7 +255,6 @@ function checkCitation(ref: string, repo: Repo): string | null {
   return null;
 }
 
-// an anchor with its URL escapes decoded, or null for an escape that is no UTF-8
 function decodeAnchor(anchor: string): string | null {
   try {
     return decodeURIComponent(anchor);
@@ -280,8 +263,8 @@ function decodeAnchor(anchor: string): string | null {
   }
 }
 
-// Markdown is check-links.sh's; the synced skills cite placeholder pages as examples, and this
-// check's own test cites missing ones on purpose
+// check-links.sh covers Markdown, the synced skills cite placeholder pages as examples, and this
+// check's own test cites missing pages on purpose.
 const SKIPPED = [/\.md$/u, /^\.claude\//u, /^scripts\/ci\/check-doc-citations\.test\.ts$/u];
 
 function main(): void {
@@ -299,7 +282,6 @@ function main(): void {
   console.log(`check-doc-citations: ${String(files.length)} files, every docs/ citation resolves`);
 }
 
-// untracked files too, so a new file is checked before it is staged
 function listFiles(): string[] {
   const result = Bun.spawnSync(
     ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'],

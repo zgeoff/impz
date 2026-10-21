@@ -42,9 +42,6 @@ const WorkflowSchema = z.looseObject({
 
 export type CiJobs = z.infer<typeof WorkflowSchema>['jobs'];
 
-// The jobs of .github/workflows/ci.yml that the e2e group tests read: the
-// e2e-group matrix, the required e2e aggregate, and release-please. Throws
-// when one is missing or lacks the fields those tests read.
 export function parseCiWorkflow(yaml: string): CiJobs {
   return WorkflowSchema.parse(Bun.YAML.parse(yaml)).jobs;
 }

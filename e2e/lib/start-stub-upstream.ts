@@ -8,9 +8,7 @@ import { runChecked } from './instance';
 
 const OAUTH_CLIENT_ID = 'e2e-client';
 
-// A fake github.com and api.github.com on this machine: git smart HTTP
-// behind Basic auth, a check of the bearer token, and a fake OAuth token
-// endpoint. It never echoes a token, which would put it in the guest's memory.
+// It never echoes a token, which would put the token in the guest's memory.
 
 interface SeenRequest {
   readonly method: string;
@@ -18,42 +16,30 @@ interface SeenRequest {
   readonly authorization: string | null;
 }
 
-// the OAuth side: /oauth/token takes a JSON refresh request and rotates the
-// refresh token each time, and /oauth-e2e/me says whether the bearer token is
-// the access token issued last. Every token is made up for the run.
 interface StubOAuth {
   readonly clientId: string;
 
-  // the refresh token a secret starts from
   readonly firstRefreshToken: string;
 
-  // each token issued, in order
   readonly accessTokens: () => readonly string[];
   readonly refreshTokens: () => readonly string[];
 
-  // how many refresh requests were refused
   readonly refused: () => number;
 
-  // the status the endpoint answers a refresh token, as a request would; a
-  // current one is exchanged
   readonly exchange: (refreshToken: string) => number;
 }
 
 export interface StubUpstream {
   readonly oauth: StubOAuth;
 
-  // https://<address>:<port>, for the broker's test-upstreams file
   readonly origin: string;
   readonly caPem: string;
 
-  // http://<address>:<port>: the same fake over plain http, for a rule's upstream
   readonly plainOrigin: string;
   readonly seen: readonly SeenRequest[];
 
-  // a bare repo at <owner>/<repo>.git that accepts pushes
   readonly createRepo: (path: string) => Promise<string>;
 
-  // stops both listeners and removes the certificates and repos
   readonly stop: () => Promise<void>;
 }
 
@@ -218,7 +204,6 @@ export async function startStubUpstream(address: string, token: string): Promise
   };
 }
 
-// a CA and a leaf for the address, by openssl on this machine
 async function createCertificates(directory: string, address: string): Promise<void> {
   const ca = join(directory, 'ca');
   const leaf = join(directory, 'leaf');
@@ -297,7 +282,6 @@ function runOpenssl(argv: readonly string[]): Promise<string> {
 
 const CGI_HEADER_END = /\r?\n\r?\n/u;
 
-// `git http-backend` writes CGI: headers, a blank line, the body
 function parseCgiOutput(output: Uint8Array): Response {
   const text = Buffer.from(output).toString('latin1');
   const match = CGI_HEADER_END.exec(text);

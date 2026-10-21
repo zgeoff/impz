@@ -22,10 +22,6 @@ import { getSuitePrefix } from '../lib/suites';
 import { startTextCapture } from '../lib/text-capture';
 import { waitFor } from '../lib/wait-for';
 
-// A restart of the inner container from inside starts it again, not the guest
-// (docs/architecture/guest/agent.md#the-inner-container): the disk, the network and what holds
-// connections to the imp outlast it.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -53,7 +49,7 @@ test('it starts the container again on a reboot inside, not the guest, and its s
   const before = await readInitStart(name);
   const uptimeBefore = await readUptime(name);
 
-  // busybox reboot -f calls reboot(2), which in a PID namespace kills its init
+  // busybox reboot -f calls reboot(2), which in a PID namespace kills its init.
   await tryImp(['exec', name, '--', 'reboot', '-f']);
   await waitForInnerInit(name);
 
@@ -67,8 +63,7 @@ test('it starts the container again on a reboot inside, not the guest, and its s
   expect(devNull).toBe('back');
   expect(uptimeAfter).toBeGreaterThanOrEqual(uptimeBefore);
 
-  // the agent starts the image's www service (httpd) in the new container; a
-  // second start would bind :8080 again, fail, and count a restart
+  // A second start would bind :8080 again, fail, and count a restart.
   const service = await waitFor(`www running in ${name} after the restart`, async () => {
     const listed = await runImp('service', 'ls', name, '--json');
 
@@ -167,16 +162,12 @@ test('it keeps forwards, reverse forwards and the service port working through a
   await tryImp(['exec', name, '--', 'reboot', '-f']);
   await waitForInnerInit(name);
 
-  // the forward dials anew for each connection, once the service is back
   const after = await waitFor('the forward to the service after the restart', () =>
     readOkBody(fetch(local)),
   );
 
-  // the TCP reverse forward kept its port: the guest has one network
   const reversedAfter = await runShellInImp(name, fetchInGuest);
 
-  // the socket in the old container's /run went with it; the client listens
-  // again in the new one
   const again = await waitFor('the reverse forward on a socket to listen again', () => {
     const path = findSocketListenAgain(stderr.read());
 
@@ -196,8 +187,6 @@ test('it keeps forwards, reverse forwards and the service port working through a
   expect(throughProxy).toBe('e2e-tiny-ok');
 });
 
-// The init is the agent binary from the system drive and makes its own mount
-// points. Only busybox and its loader and libc (/lib, /lib64) stay.
 test('it starts a container whose root was wiped again', async () => {
   const ctx = await setupTest();
 

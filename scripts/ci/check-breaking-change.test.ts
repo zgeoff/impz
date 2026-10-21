@@ -4,8 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createGitFreeEnv, runGitChecked } from '../../e2e/lib/git-env';
 
-// A git repository on `main` with no commit; each test commits the base and
-// the pull request's branch itself.
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'imp-breaking-change-'));
 
@@ -13,7 +11,7 @@ async function setupTest() {
 
   await runGitChecked(['git', 'init', '--quiet', '--initial-branch=main', directory]);
 
-  // commits need an author, and a signing setup of the host must not apply
+  // git refuses a commit without an author, and the host's signing setup must not apply.
   await runGitChecked(['git', '-C', directory, 'config', 'user.name', 'test']);
   await runGitChecked(['git', '-C', directory, 'config', 'user.email', 'test@example.com']);
   await runGitChecked(['git', '-C', directory, 'config', 'commit.gpgsign', 'false']);

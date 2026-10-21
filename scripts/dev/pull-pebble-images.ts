@@ -1,5 +1,4 @@
-// Pulls the Pebble suite's pinned images before `bun run test:pebble` runs
-// its tests, so no test pays for a pull inside its own time budget.
+// A pull inside a Pebble test would spend that test's time budget.
 import { PEBBLE_IMAGES } from './pebble-images';
 
 for (const image of Object.values(PEBBLE_IMAGES)) {

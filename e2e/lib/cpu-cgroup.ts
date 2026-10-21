@@ -6,8 +6,6 @@ export interface CpuStat {
   readonly throttledUsec: number;
 }
 
-// The two counters of a cgroup v2 cpu.stat the cpu suite reads; throws when
-// either is missing, as a cgroup without the cpu controller shows.
 export function parseCpuStat(text: string): CpuStat {
   const getField = (field: string): number => {
     const value = new RegExp(`^${field} (?<value>\\d+)$`, 'mv').exec(text)?.groups?.['value'];
@@ -22,16 +20,12 @@ export function parseCpuStat(text: string): CpuStat {
   return { usageUsec: getField('usage_usec'), throttledUsec: getField('throttled_usec') };
 }
 
-// Thin glue over the host container and a live guest below.
-
-// an imp's own cgroup in the host container
 export async function readImpCgroupDir(name: string): Promise<string> {
   const row = await requireImp(name);
 
   return `/sys/fs/cgroup/imps/${row.id}`;
 }
 
-// a file in the host container; throws when it cannot be read
 export async function readContainerFile(path: string): Promise<string> {
   const result = await runInContainer(['cat', path]);
 
@@ -43,14 +37,11 @@ export async function readContainerFile(path: string): Promise<string> {
 }
 
 export interface BusyLoop {
-  // the VM's CPU over host wall time, in cores: an upper bound, since a
-  // loaded host may give the VM less, never more
+  // An upper bound: a loaded host may give the VM less CPU, never more.
   readonly share: number;
   readonly throttledUsec: number;
 }
 
-// Runs one busy guest core for `seconds` and measures the VM's cgroup
-// across it.
 export async function runBusyLoop(name: string, seconds: number): Promise<BusyLoop> {
   const directory = await readImpCgroupDir(name);
   const before = await readContainerFile(`${directory}/cpu.stat`);

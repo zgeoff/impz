@@ -11,10 +11,7 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// The SSH gateway and sleep: the journey waits out the idle timeout, so it
-// runs in the acceptance set, not in `fast` with the ssh suite.
-
-// one stack for every release, so ssh stops before the imp goes
+// One stack for every release, so ssh stops before the imp goes.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -40,7 +37,6 @@ test('it wakes a sleeping imp on ssh but not on a refused login, and keeps it aw
   await waitForExec(name);
   await runImp('sleep', name);
 
-  // a refused login does not wake it
   const unknownUser = await runSsh(ctx.ssh, 'nobody', ['true']);
   const unknownKey = await runSsh(ctx.ssh, name, ['true'], { host: SSH_HOST_OTHER_KEY });
   const afterRefusals = await readState(name);
@@ -59,7 +55,6 @@ test('it wakes a sleeping imp on ssh but not on a refused login, and keeps it aw
 
   expect(afterRefusals).toBe('sleeping');
 
-  // a login wakes it
   const started = Date.now();
 
   const woken = await runSsh(ctx.ssh, name, ['echo awake']);
@@ -71,8 +66,6 @@ test('it wakes a sleeping imp on ssh but not on a refused login, and keeps it aw
   expect(woken.stdout).toBe('awake\n');
   expect(afterLogin).toBe('running');
 
-  // an open connection keeps it awake past the idle timeout, and it sleeps
-  // once the connection ends
   const held = startSsh(ctx.ssh, ['-N', `${name}@${SSH_HOST}`]);
 
   ctx.stack.defer(() => held.stop());
@@ -83,7 +76,6 @@ test('it wakes a sleeping imp on ssh but not on a refused login, and keeps it aw
 
   await held.stop();
 
-  // the idle timeout plus a sweep of the idle loop
   await waitFor(`${name} to sleep`, () => assertState(name, 'sleeping'), {
     timeoutMs: (config.idleTimeoutS + 15) * 1000,
   });

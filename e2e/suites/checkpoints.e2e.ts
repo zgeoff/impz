@@ -20,10 +20,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
-// `impz checkpoint`, `impz restore` and `impz fork` on the instance's storage
-// backend: a reflink on XFS, a snapshot on ZFS. Each test boots its own
-// source imp and takes its own checkpoints.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -57,7 +53,6 @@ test('it restores the disk of a running imp from its checkpoint, within the limi
 
   invariant(cp1);
 
-  // impd's own timing, without the CLI round trip
   const impdMs = await readImpdLoggedMs(`${source}: checkpoint ${cp1.id} in`);
 
   invariant(impdMs !== null);

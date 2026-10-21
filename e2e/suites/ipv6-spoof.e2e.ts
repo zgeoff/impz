@@ -16,10 +16,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// Spoofed IPv6 sources (docs/architecture/network/networking.md#ipv6), on the
-// topology's near network behind NAT66. The instance reboots onto it, and
-// back to its own network at the end.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -64,14 +60,13 @@ test('it drops an imp’s IPv6 packets from outside its prefix or from another i
   await waitForExec(victim);
   await holdImp(victim);
 
-  // Spoofed from outside the prefix, and as another imp: the host's rpfilter
-  // drops both before the slot chain's own source check
+  // The host's rpfilter drops both before the slot chain's own source check.
   const own = await readGuestIpv6(spoofer);
   const victimAddress = await readGuestIpv6(victim);
 
   const farSpoof = `${ctx.plan.far}77`;
 
-  // before the spoofed addresses, which the guest would pick as its source
+  // Before the spoofed addresses, which the guest would pick as its source.
   const spoofControl = await tryDialFromImp(spoofer, server, 80);
 
   await runShellInImp(

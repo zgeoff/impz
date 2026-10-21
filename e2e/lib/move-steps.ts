@@ -8,7 +8,6 @@ import { HOST_B } from './move-hosts';
 import type { MoveHosts } from './move-hosts';
 import type { StubUpstream } from './start-stub-upstream';
 
-// A's saved name beside B's, for the commands that reach every saved host
 export const HOST_A = 'a';
 
 export interface RpcAnswer {
@@ -27,17 +26,14 @@ const HostImpSchema = z.object({ host: z.string(), name: z.string(), move: z.str
 const HostImpsSchema = z.object({ imps: z.array(HostImpSchema) });
 
 export interface HostListing {
-  // the table's rows for the name, one per host that holds it
   readonly rows: readonly string[];
   readonly imps: readonly z.infer<typeof HostImpSchema>[];
 }
 
-// a host's API answer: its `json`, which holds the error when it failed
 export function parseRpcAnswer(ok: boolean, raw: unknown): RpcAnswer {
   return { ok, body: z.object({ json: z.unknown() }).parse(raw).json };
 }
 
-// `impz ls --all` and `impz ls --all --json`, cut to the rows that name `name`
 export function parseHostListing(table: string, json: string, name: string): HostListing {
   const rows = table
     .trimEnd()
@@ -49,14 +45,12 @@ export function parseHostListing(table: string, json: string, name: string): Hos
   return { rows, imps: body.imps.filter((imp) => imp.name === name) };
 }
 
-// the IPv4 addresses in `nft list set` output
 export function parseNftSetAddresses(listed: string): readonly string[] {
   const elements = /elements = \{(?<list>[^\}]*)\}/v.exec(listed)?.groups?.['list'] ?? '';
 
   return [...elements.matchAll(/\d+\.\d+\.\d+\.\d+/gv)].map((match) => match[0]);
 }
 
-// a call to a host's API as its root token
 export async function sendHostRpc(
   target: DevInstance,
   path: string,
@@ -82,8 +76,6 @@ export async function listLeasesOn(target: DevInstance, name: string): Promise<M
   return z.array(LeaseSchema).parse(answer.body);
 }
 
-// The first step of a move, as the source's own route: it marks the imp
-// `sending` and goes no further.
 export async function startMoveSend(target: DevInstance, name: string): Promise<void> {
   const answer = await sendHostRpc(target, 'moves/prepare', { name, targetStorage: 'xfs' });
 
@@ -92,7 +84,6 @@ export async function startMoveSend(target: DevInstance, name: string): Promise<
   }
 }
 
-// both hosts saved in a CLI config at `dir`, so the move config keeps B alone
 export async function writeBothHostsConfig(
   hosts: Readonly<MoveHosts>,
   directory: string,
@@ -120,12 +111,10 @@ export async function listAllHosts(
   return parseHostListing(table, json, name);
 }
 
-// where broker/create-upstream-resolver.ts reads a host's upstreams from
 export function buildUpstreamsPath(target: DevInstance): string {
   return join(target.dataDir, 'broker-test-upstreams.json');
 }
 
-// points the host's broker at the stub for github.com and api.github.com
 export async function writeUpstreamsFile(
   target: DevInstance,
   upstream: Readonly<StubUpstream>,
@@ -139,7 +128,6 @@ export async function writeUpstreamsFile(
   );
 }
 
-// the IPv4 addresses a box slot's nft set lets in
 export async function readAllowSet(target: DevInstance, slot: number): Promise<readonly string[]> {
   const listed = await runInContainer(
     ['nft', 'list', 'set', 'inet', 'imp_egress', `allow${String(slot)}`],
@@ -149,8 +137,6 @@ export async function readAllowSet(target: DevInstance, slot: number): Promise<r
   return parseNftSetAddresses(listed.stdout);
 }
 
-// The uid the imp's Firecracker runs as, then the owners of its disk and its
-// tap: the wake's jail prepare gives the disk to that uid.
 export async function readJailOwners(
   target: DevInstance,
   id: string,

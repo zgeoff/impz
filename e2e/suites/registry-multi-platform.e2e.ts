@@ -22,16 +22,12 @@ import {
 import { removeImageIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// A multi-platform index in a registry the journey owns
-// (lib/registry-steps.ts), on the suite's IMP_BUILD_ISOLATION=host: impd
-// binds the host's variant and inspects that variant's config.
-
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
 const isReady = await checkRegistryReady(config.registryName);
 
 const registryMissing = !isReady;
 
-// one stack for every release: the trust goes before its registry
+// One stack for every release, so the trust goes before its registry.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -39,7 +35,7 @@ async function setupTest() {
 
   const prefix = getSuitePrefix('registry');
 
-  // under the repo: scripts/dev/dev.sh mounts it at the same path in the container
+  // Under the repo: dev.sh mounts it at the same path in the container.
   const directory = await mkdtemp(join(REPO_ROOT, '.cache', 'e2e', 'registry-'));
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
@@ -50,7 +46,7 @@ async function setupTest() {
 
   const registry = await startRegistry(stack, config.registryName, container, directory);
 
-  // the engine reads certs.d on each request: no restart
+  // The engine reads certs.d on each request, so it needs no restart.
   const trust = await createRegistryTrust({
     registry: registry.address,
     certPath: registry.certPath,
@@ -83,9 +79,8 @@ test.skipIf(registryMissing)(
     const host = `${ctx.registry.address}/${repository}:${hostArch}`;
     const other = `${ctx.registry.address}/${repository}:${otherArch}`;
 
-    // registered before each build, whose image stays local if its push
-    // fails; an rmi of an image that is not there, or that the explicit rmi
-    // below removed, only exits nonzero
+    // Registered before each build, whose image stays local if its push fails.
+    // An rmi of an image that is not there only exits nonzero.
     ctx.stack.defer(async () => {
       await runCommand(['docker', 'rmi', host]);
     });
@@ -100,7 +95,7 @@ test.skipIf(registryMissing)(
       await runCommand(['docker', 'rmi', other]);
     });
 
-    // a trigger impd would refuse, and that fails the build if it ran
+    // A trigger impd would refuse, and that fails the build if it ran.
     await createPushedImage(
       writeContext(
         ctx.directoryPath,

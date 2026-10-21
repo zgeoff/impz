@@ -21,14 +21,12 @@ export type TailscaleStatus = z.infer<typeof TailscaleStatusSchema>;
 const SelfSchema = z.object({ Tags: z.array(z.string()).default([]) });
 const SelfTagsSchema = z.object({ Self: SelfSchema });
 
-// the tags a node joined with, from its own `tailscale status --json`
 export function parseSelfTags(stdout: string): string[] {
   const json: unknown = JSON.parse(stdout);
 
   return SelfTagsSchema.parse(json).Self.Tags;
 }
 
-// a peer as `tailscale status --json` lists it
 export interface TailnetPeer {
   readonly DNSName: string;
   readonly TailscaleIPs: readonly string[];
@@ -37,22 +35,16 @@ export interface TailnetPeer {
 }
 
 export interface TailnetNode {
-  // MagicDNS name without the trailing dot
   readonly fqdn: string;
 
-  // its first label, which MagicDNS also answers
   readonly short: string;
 
-  // the tags the node joined with
   readonly tags: readonly string[];
 }
 
 const TAILNET_NOT_READY =
   'tailscale needs the tag:imp-e2e OAuth client (op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth) and this machine on the tailnet';
 
-// a tailnet suite runs only with the tag:imp-e2e key for impd's node and this
-// machine on the tailnet to reach it from; `status` is this machine's
-// `tailscale status`, null when it has none
 export function isTailnetReady(
   status: Readonly<Pick<TailscaleStatus, 'BackendState'>> | null,
   hasKey: boolean,
@@ -60,8 +52,6 @@ export function isTailnetReady(
   return hasKey && status?.BackendState === 'Running';
 }
 
-// fails a tailnet suite that must run, such as under acceptance, with what
-// it lacks
 export function requireTailnetReady(
   status: Readonly<Pick<TailscaleStatus, 'BackendState'>> | null,
   hasKey: boolean,
@@ -71,7 +61,6 @@ export function requireTailnetReady(
   }
 }
 
-// `tailscale status --json`, or null when it is not that
 export function parseTailscaleStatus(stdout: string): TailscaleStatus | null {
   let json: unknown;
 
@@ -86,8 +75,8 @@ export function parseTailscaleStatus(stdout: string): TailscaleStatus | null {
   return status.success ? status.data : null;
 }
 
-// The online peer that holds `ip`, by IP and not by name: an offline node
-// from an earlier run can still hold the name, and then this node is imp-1.
+// By IP and not by name: an offline node from an earlier run can still hold
+// the name, and then this node is imp-1.
 export function findTailnetNode(peers: readonly TailnetPeer[], ip: string): TailnetNode | null {
   const peer = peers.find((candidate) => candidate.Online && candidate.TailscaleIPs.includes(ip));
 
@@ -101,7 +90,6 @@ export function findTailnetNode(peers: readonly TailnetPeer[], ip: string): Tail
   return { fqdn, short, tags: peer.Tags ?? [] };
 }
 
-// this machine's tailscale status, or null without the CLI or its JSON
 export async function readLocalTailscaleStatus(): Promise<TailscaleStatus | null> {
   const result = await runCommand(['tailscale', 'status', '--json']).catch(() => null);
 
@@ -112,8 +100,6 @@ const InfoTailscaleSchema = z.object({
   tailscale: z.object({ state: z.string().nullable(), ip: z.string().nullable() }),
 });
 
-// impd's tailnet IP once its node is Running, as after a reboot; the run's
-// instance unless `options` names another
 export async function waitForTailnetIp(options: Readonly<ImpRunOptions> = {}): Promise<string> {
   const ip = await waitFor(
     'impd tailscale state Running',
@@ -134,14 +120,12 @@ export async function waitForTailnetIp(options: Readonly<ImpRunOptions> = {}): P
   return ip;
 }
 
-// the per-imp tailnet name among `impz url`'s lines, or null
 export function findServiceUrl(stdout: string): string | null {
   return (
     stdout.split('\n').find((line) => /^https:\/\/[\w\-]+\.[\w\-]+\.ts\.net$/v.test(line)) ?? null
   );
 }
 
-// a call to impd's API over the tailnet, with no token
 export function sendTailnetRpc(ip: string, path: string, input: unknown): Promise<Response> {
   return fetch(`http://${ip}:7070/rpc/${path}`, {
     method: 'POST',
@@ -151,7 +135,6 @@ export function sendTailnetRpc(ip: string, path: string, input: unknown): Promis
   });
 }
 
-// the trimmed body of a 2xx answer over the tailnet; any other status throws
 export async function readTailnetBody(url: string, host?: string): Promise<string> {
   const response = await fetch(url, {
     ...(host !== undefined && { headers: { host } }),

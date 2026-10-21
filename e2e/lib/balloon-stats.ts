@@ -5,8 +5,6 @@ export interface BalloonStats {
   readonly availableMib: number;
 }
 
-// The guest's total and available memory in MiB from Firecracker's GET
-// /balloon/statistics answer, whose sizes are bytes.
 export function parseBalloonStats(text: string): BalloonStats {
   const parsed: unknown = JSON.parse(text);
 
@@ -30,9 +28,6 @@ function getMib(parsed: object, key: string, text: string): number {
   return Math.floor(bytes / 1_048_576);
 }
 
-// What impd's memory controller reads for an awake imp: the balloon
-// statistics on its Firecracker's API socket, jailed or not, which lag the
-// guest (docs/architecture/lifecycle/elastic-memory.md#the-controller).
 export async function readBalloonStats(impID: string): Promise<BalloonStats> {
   const socket = `/var/lib/imp/imps/${impID}/run/api.sock`;
 

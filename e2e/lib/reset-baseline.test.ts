@@ -14,14 +14,11 @@ import {
   resetBaseline,
 } from './reset-baseline';
 
-// impd's real app on the stub VMM, as the dev instance runs it, with the
-// in-process client the reset drives
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the bearer the test's client sends
   const harness = await startTestImpd(stack, { rootToken: 'root-token' });
 
   const dataDir = harness.dataDir;
@@ -33,8 +30,6 @@ async function setupTest() {
     fetch: sendClientRequest,
   });
 
-  // the image an imp boots from when it names none, as impd's image
-  // service leaves it: its rootfs under its digest
   await Bun.write(join(dataDir, 'images', 'ubuntu', 'rootfs.ext4'), 'rootfs');
 
   const image = await createImage(
@@ -306,7 +301,7 @@ test('#resetBaseline fails when impd refuses to remove what the prefix names', a
 test('#resetBaseline ends the move of an imp a failed move left marked, then removes it', async () => {
   const ctx = await setupTest();
 
-  // a move's first step counts the image's files too
+  // A move's first step counts the image's files too.
   await Bun.write(join(ctx.dataDir, 'images', ctx.image.name, 'config.json'), '{}');
   await ctx.client.imps.create({ name: 'e2e-x-dev' });
   await ctx.client.imps.stop({ name: 'e2e-x-dev' });
@@ -325,7 +320,7 @@ test('#resetBaseline ends the move of an imp a failed move left marked, then rem
 test('#resetBaseline fails when the move of a marked imp cannot be ended', async () => {
   const ctx = await setupTest();
 
-  // a move's first step counts the image's files too
+  // A move's first step counts the image's files too.
   await Bun.write(join(ctx.dataDir, 'images', ctx.image.name, 'config.json'), '{}');
 
   const imp = await ctx.client.imps.create({ name: 'e2e-x-dev' });
@@ -333,7 +328,6 @@ test('#resetBaseline fails when the move of a marked imp cannot be ended', async
   await ctx.client.imps.stop({ name: 'e2e-x-dev' });
   await ctx.client.moves.prepare({ name: 'e2e-x-dev', targetStorage: 'xfs' });
 
-  // the send's target is one that nothing answers, so the abort cannot reach it
   await ctx.db
     .updateTable('move_sends')
     .set({ peer_url: 'http://127.0.0.1:1', ticket: 'ticket' })

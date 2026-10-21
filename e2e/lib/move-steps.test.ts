@@ -19,8 +19,6 @@ import {
   startMoveSend,
 } from './move-steps';
 
-// impd's real app on the stub VMM, listening on loopback as a host's API,
-// and the client the test reads it back with
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -31,8 +29,6 @@ async function setupTest() {
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   const dataDir = join(directory, 'data');
-
-  // impd boots with a root token, the bearer the host's token file holds
   const rootToken = faker.string.alphanumeric(32);
 
   const harness = await startTestImpd(stack, { dataDir, rootToken });
@@ -45,13 +41,11 @@ async function setupTest() {
     fetch: sendClientRequest,
   });
 
-  // the image an imp boots from when it names none, as impd's image
-  // service leaves it: its rootfs under its digest
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
 
-  // a move's plan counts the image's config beside its rootfs
+  // A move's plan counts the image's config beside its rootfs.
   await Bun.write(buildImagePaths(dataDir, image.digest).config, '{}');
 
   await createImage(harness.db, image);
@@ -133,7 +127,7 @@ test('#parseNftSetAddresses reads a set without elements as none', () => {
 test('#startMoveSend marks the imp sending on the source host', async () => {
   const ctx = await setupTest();
 
-  // scripts/dev/dev.sh token reads the host's token through docker exec
+  // dev.sh's token command reads the host's token through docker exec.
   const docker = createStubBin(ctx.directoryPath, 'docker', `echo ${ctx.rootToken}`);
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
@@ -161,7 +155,7 @@ test('#startMoveSend marks the imp sending on the source host', async () => {
 test('#startMoveSend rejects with the host’s error when the source refuses the move', async () => {
   const ctx = await setupTest();
 
-  // scripts/dev/dev.sh token reads the host's token through docker exec
+  // dev.sh's token command reads the host's token through docker exec.
   const docker = createStubBin(ctx.directoryPath, 'docker', `echo ${ctx.rootToken}`);
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
@@ -210,7 +204,6 @@ test('#readAllowSet reads the addresses of the slot’s allow set in the host’
 test('#readJailOwners reads the jail uid, then the owners of the disk and the tap, in the host’s container', async () => {
   const ctx = await setupTest();
 
-  // the script, as the container's sh gets it, beside the stub's answer
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',

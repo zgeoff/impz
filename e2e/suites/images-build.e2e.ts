@@ -23,11 +23,7 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// `impz image build` (docs/guides/images.md): what a build keeps of its
-// context and Dockerfile, through the CLI, from a host path and as a raw
-// upload. Each test builds its own images in a context dir of its own.
-
-// one stack for every release, so each imp goes before the image it boots
+// One stack for every release, so each imp goes before the image it boots.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -35,8 +31,8 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  // under the repo: scripts/dev/dev.sh mounts it at the same path in the
-  // container, so `--on-host` finds the directory where impd runs docker build
+  // Under the repo: dev.sh mounts it at the same path in the container, so
+  // `--on-host` finds the directory where impd runs docker build.
   await mkdir(join(REPO_ROOT, '.cache', 'e2e'), { recursive: true });
 
   const buildRoot = await mkdtemp(join(REPO_ROOT, '.cache', 'e2e', 'build-'));
@@ -52,7 +48,6 @@ test('it builds images/examples/hello from its pinned base in a builder, and the
   const name = `${ctx.prefix}hello`;
   const helloDir = join(REPO_ROOT, 'images', 'examples', 'hello');
 
-  // unmodified: FROM the published base by digest, which impd pins as is
   const dockerfile = await readFile(join(helloDir, 'Dockerfile'), 'utf8');
 
   const ref = /^FROM (?<ref>\S+)$/mv.exec(dockerfile)?.groups?.['ref'] ?? '';
@@ -71,8 +66,6 @@ test('it builds images/examples/hello from its pinned base in a builder, and the
 
   expect(digest).toStartWith('@sha256:');
   expect(log).toContain(`pinned FROM ${ref} as ghcr.io/zgeoff/imp-base${digest}`);
-
-  // in a builder, which pulls the frontend and the base cold
   expect(log).toContain(`impd: image build ${name} (imp): pins=`);
   expect(images).toContain(name);
 
@@ -86,7 +79,6 @@ test('it builds images/examples/hello from its pinned base in a builder, and the
   const urls = await readImpUrls(name);
   const page = await readFile(join(helloDir, 'rootfs', 'srv', 'hello', 'index.html'), 'utf8');
 
-  // until its own page comes through, not just any answer
   const body = await waitFor(`${name} to serve its page`, async () => {
     const served = await readThroughProxy(name);
 
@@ -150,7 +142,6 @@ test('it brings an uploaded context’s files, ENV and WORKDIR into the imp less
 
   expect(kept).toContain(name);
 
-  // the same Dockerfile from the host's path: the same image, kept as it is
   await runImp('image', 'build', directory, '--name', name, '--on-host');
   await runImp('rm', name);
   await runImp('image', 'rm', name);
@@ -165,7 +156,7 @@ test('it keeps a file capability through the build: nobody binds port 80 with it
 
   const name = `${ctx.prefix}caps`;
 
-  // a copy named busybox-* still takes the applet as its first argument
+  // A copy named busybox-* still takes the applet as its first argument.
   const directory = await writeBuildContext(
     ctx.buildRoot,
     'caps',
@@ -184,7 +175,7 @@ test('it keeps a file capability through the build: nobody binds port 80 with it
 
   const getcap = await runInImp(name, 'getcap', '/usr/local/bin/busybox-lowbind');
 
-  // nc listens until timeout's TERM, 143 in busybox; a refused bind exits 1
+  // nc listens until timeout's TERM, 143 in busybox; a refused bind exits 1.
   const withCap = await runShellInImp(
     name,
     `su -s /bin/sh nobody -c 'timeout 1 busybox-lowbind nc -l -p 80' 2>&1; echo "exit=$?"`,
@@ -215,8 +206,6 @@ test('it leaves out what .dockerignore drops from a build from a host path, as a
   await writeFile(join(directory, '.dockerignore'), '*.secret\n');
   await writeFile(join(directory, 'kept.txt'), 'kept');
   await writeFile(join(directory, 'dropped.secret'), 'dropped');
-
-  // ./ and the default name: impd sends the proxy one spelling
   await runImp('image', 'build', directory, '--name', name, '--on-host', '--file', './Dockerfile');
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
@@ -243,7 +232,7 @@ test('it builds with the pinned frontend whatever a # syntax= line names', async
     '# syntax=example.invalid/not-a-frontend:1\nFROM busybox:1.37\nRUN --mount=type=cache,target=/c true\n',
   );
 
-  // a frontend from the line would fail to resolve example.invalid
+  // A frontend from the line would fail to resolve example.invalid.
   const built = await tryImp(['image', 'build', directory, '--name', name]);
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
@@ -343,8 +332,8 @@ test('it builds a raw upload whose only Dockerfile is a lowercase dockerfile, as
   expect(which.trim()).toBe('lower');
 });
 
-// the engine reads neither ignore file from a context sent as the body: what
-// impd checks is every file the tar holds (the CLI applies them as it packs)
+// The engine reads neither ignore file from a context sent as the body; the
+// CLI applies them as it packs.
 test('it applies no ignore file to a raw upload, Dockerfile.dockerignore included', async () => {
   const ctx = await setupTest();
 

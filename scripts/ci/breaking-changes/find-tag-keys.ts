@@ -2,9 +2,8 @@ import { collectSchemaMap } from './collect-schema-map';
 import { findValues } from './find-values';
 import type { SchemaObject } from './schema';
 
-// A union's discriminator: the properties every option on both sides fixes
-// to one value, on which the options of one side differ. A version field
-// that every option fixes alike tells no option apart, though it changes.
+// A field that every option fixes to the same value, such as a version, tells no option apart,
+// even when that value changes between sides.
 export function collectTagKeys(sides: readonly (readonly SchemaObject[])[]): readonly string[] {
   const options = sides.flat();
   const [first] = options;
@@ -22,7 +21,6 @@ export function collectTagKeys(sides: readonly (readonly SchemaObject[])[]): rea
   );
 }
 
-// the one value a schema fixes a property to
 function findTag(schema: SchemaObject, key: string): unknown {
   const property = collectSchemaMap(schema, 'properties')[key];
   const values = property === undefined ? undefined : findValues(property);

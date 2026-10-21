@@ -12,9 +12,6 @@ import {
 } from './instance';
 import { waitFor } from './wait-for';
 
-// The chaos suite's rounds: random operations cut short by a kill of impd, a
-// Firecracker or the container, as a property runner drives them.
-
 type ChaosOp = 'sleep' | 'wake' | 'exec' | 'stop-start';
 
 export type ChaosFault = 'impd' | 'firecracker' | 'container';
@@ -28,13 +25,11 @@ export interface ChaosRound {
   readonly steps: readonly ChaosStep[];
   readonly fault: ChaosFault;
 
-  // how long the operations run before the fault
   readonly delayMs: number;
 }
 
 const MODULUS = 2_147_483_647;
 
-// Park-Miller, so the seed in the log replays a failed run
 export function createParkMiller(seed: number): () => number {
   let state = (seed % (MODULUS - 1)) + 1;
 
@@ -55,9 +50,6 @@ export function pickOne<T>(random: () => number, items: readonly T[]): T {
   return item;
 }
 
-// An exec that outlasts the fault's offset, on an imp not in error, then up
-// to two more operations on any other imp, errored ones too, then a fault,
-// impd's twice as likely, within 3 s.
 export function planChaosRound(
   random: () => number,
   names: readonly string[],
@@ -71,7 +63,7 @@ export function planChaosRound(
     ),
   };
 
-  // a stop or sleep of the held exec's imp would end it before the fault
+  // A stop or sleep of the held exec's imp would end the exec before the fault.
   const rest = names.filter((name) => name !== held.name);
 
   const others = Array.from({ length: rest.length === 0 ? 0 : Math.floor(random() * 3) }, () => ({
@@ -84,11 +76,8 @@ export function planChaosRound(
   return { steps: [held, ...others], fault, delayMs: Math.floor(random() * 3000) };
 }
 
-// how long an exec step runs in the guest: past the latest fault offset
 export const CHAOS_EXEC_S = 4;
 
-// The imp a Firecracker kill takes: one whose VM runs, or null when none
-// does.
 export function pickFaultVictim(
   random: () => number,
   names: readonly string[],
@@ -106,7 +95,6 @@ export interface ImpVmRow {
   readonly state: string;
 }
 
-// each imp's state and the VMs it has, as a line a failure reads at once
 export function listImpVmCounts(
   rows: readonly ImpVmRow[],
   vms: ReadonlyMap<string, readonly number[]>,
@@ -114,8 +102,8 @@ export function listImpVmCounts(
   return rows.map((row) => `${row.name} ${row.state}: ${String(vms.get(row.id)?.length ?? 0)} VMs`);
 }
 
-// The VMs each imp should have: one while running, and one in `error`
-// where an adopt left a VM that outlived SIGKILL, with its pid on record.
+// An imp in `error` keeps a VM when impd's adopt found one that outlived
+// SIGKILL, with its pid on record.
 export function listExpectedImpVmCounts(
   rows: readonly ImpVmRow[],
   vms: ReadonlyMap<string, readonly number[]>,
@@ -128,7 +116,6 @@ export function listExpectedImpVmCounts(
   });
 }
 
-// the VMs no imp owns
 export function collectStrayVms(
   rows: readonly ImpVmRow[],
   vms: ReadonlyMap<string, readonly number[]>,
@@ -140,7 +127,6 @@ export function collectStrayVms(
 
 const SETTLED_STATES = new Set(['running', 'sleeping', 'stopped', 'error']);
 
-// the imps of `names` not yet in a state a user can act on
 export function collectUnsettledImps(
   rows: readonly ImpVmRow[],
   names: readonly string[],
@@ -152,8 +138,6 @@ export function collectUnsettledImps(
   });
 }
 
-// The imps a round may cost their memory: those the fault took, every stop
-// and start, and any step a fault other than a Firecracker kill cut short.
 export function findLostImps(round: Readonly<ChaosRound>, taken: readonly string[]): Set<string> {
   const cut = round.steps.filter(
     (step) => step.op === 'stop-start' || round.fault !== 'firecracker',
@@ -162,7 +146,6 @@ export function findLostImps(round: Readonly<ChaosRound>, taken: readonly string
   return new Set([...taken, ...cut.map((step) => step.name)]);
 }
 
-// Firecracker pids by the imp id in their API socket, from `pgrep -a`
 export function parseFirecrackerVms(stdout: string): Map<string, number[]> {
   const vms = new Map<string, number[]>();
 
@@ -178,15 +161,12 @@ export function parseFirecrackerVms(stdout: string): Map<string, number[]> {
   return vms;
 }
 
-// Thin glue over the dev instance and this host below.
-
 export async function listContainerVms(): Promise<Map<string, number[]>> {
   const result = await runInContainer(['pgrep', '-a', 'firecracker']);
 
   return parseFirecrackerVms(result.stdout);
 }
 
-// host processes in the cgroup of the container with this id
 export function readContainerProcesses(containerId: string): number[] {
   const pids: number[] = [];
 
@@ -236,7 +216,6 @@ export async function waitForImpd(): Promise<void> {
   );
 }
 
-// the operation, failures and all: a kill cuts many of them short
 export async function runChaosStep(step: Readonly<ChaosStep>): Promise<void> {
   if (step.op === 'stop-start') {
     await tryImp(['stop', step.name]);
@@ -253,8 +232,6 @@ export async function runChaosStep(step: Readonly<ChaosStep>): Promise<void> {
   await tryImp(args);
 }
 
-// kills the container, waits until none of its processes or its loop device
-// is left, and brings it back
 async function runContainerKill(containerId: string): Promise<void> {
   await runChecked(['docker', 'kill', instance.container]);
 
@@ -283,10 +260,8 @@ async function runContainerKill(containerId: string): Promise<void> {
 }
 
 export interface ChaosFaultResult {
-  // the imps whose memory it took
   readonly taken: readonly string[];
 
-  // what it killed: impd's pid, a VM's pids, or the container's id
   readonly killed: readonly string[];
 }
 
@@ -298,8 +273,6 @@ async function runKillInContainer(pid: string): Promise<void> {
   }
 }
 
-// The fault, which throws when it finds nothing to kill: a round whose
-// fault never happened proves nothing.
 export async function runChaosFault(
   fault: ChaosFault,
   names: readonly string[],
@@ -343,8 +316,6 @@ export async function runChaosFault(
   return { taken: names, killed: [containerId] };
 }
 
-// the rows of the imps, once every one of `names` is in a state a user can
-// act on
 export function readSettledImps(names: readonly string[]): Promise<readonly ImpVmRow[]> {
   return waitFor('every imp to settle', async () => {
     const rows = await listImps();

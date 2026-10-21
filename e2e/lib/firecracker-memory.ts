@@ -1,8 +1,5 @@
 const KIB_PER_MIB = 1024;
 
-// One line per Firecracker in the container, read without impd:
-// "<Pss> <Pss_Anon> <Pss_Shmem> <argv...>", the sizes in kB from its
-// smaps_rollup ("-" for a missing field), then its command line.
 export const FIRECRACKER_MEMORY_SCRIPT = `
 for pid in $(pgrep -x firecracker); do
   argv=$(tr '\\0' ' ' < /proc/$pid/cmdline 2>/dev/null)
@@ -11,8 +8,6 @@ for pid in $(pgrep -x firecracker); do
     /proc/$pid/smaps_rollup 2>/dev/null
 done`;
 
-// A jailed Firecracker has the jailer's `--id <imp id>`; an unjailed one
-// (IMP_JAILER=false) only its socket, <data>/imps/<imp id>/run/api.sock.
 export function findImpIdFromArgv(argv: readonly string[]): string | null {
   const id = argv.indexOf('--id');
 
@@ -26,22 +21,15 @@ export function findImpIdFromArgv(argv: readonly string[]): string | null {
 }
 
 export interface FirecrackerMemory {
-  // every resident page, clean file pages included: the copy of the
-  // firecracker binary each jail holds and the boot template's mem file
   readonly pssMib: number;
 
-  // anonymous and shmem pages: what the governor counts and the budget caps
-  // (docs/architecture/lifecycle/ram-governor.md#what-it-measures)
+  // Anonymous and shmem pages, which the governor counts against the budget.
   readonly ownedMib: number;
   readonly count: number;
 
-  // what each VM owns, by its imp's id
   readonly ownedByImpMib: ReadonlyMap<string, number>;
 }
 
-// sums FIRECRACKER_MEMORY_SCRIPT's output; a process gone between pgrep and
-// its read prints nothing. A missing field throws: read as 0, it would let
-// a breach of the budget pass.
 export function parseFirecrackerMemory(output: string): FirecrackerMemory {
   const ownedByImpMib = new Map<string, number>();
 
@@ -50,6 +38,7 @@ export function parseFirecrackerMemory(output: string): FirecrackerMemory {
   let count = 0;
 
   for (const line of output.split('\n')) {
+    // A process gone between pgrep and its read prints nothing.
     if (line.trim() === '') {
       continue;
     }
@@ -57,6 +46,7 @@ export function parseFirecrackerMemory(output: string): FirecrackerMemory {
     const words = line.trim().split(/\s+/u);
     const fields = words.slice(0, 3).map(Number);
 
+    // Read as 0, a missing field would let a breach of the budget pass.
     if (fields.length !== 3 || fields.some((field) => !Number.isInteger(field))) {
       throw new Error(`smaps_rollup without Pss, Pss_Anon and Pss_Shmem: '${line}'`);
     }
@@ -82,8 +72,8 @@ export function parseFirecrackerMemory(output: string): FirecrackerMemory {
   };
 }
 
-// The smallest RAM the given imps own, from smaps, not impd's figure: impd
-// samples an imp's RAM every few seconds, so a new imp's can be stale.
+// impd samples an imp's RAM every few seconds, so its figure for a new imp
+// can be stale.
 export function readSmallestOwnedMib(impIds: readonly string[], memory: FirecrackerMemory): number {
   const owned = impIds.map((id) => {
     const mib = memory.ownedByImpMib.get(id);

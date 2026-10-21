@@ -3,7 +3,6 @@ import { isSchema } from './is-schema';
 import { isSchemaObject } from './is-schema-object';
 import type { Schema } from './schema';
 
-// a local `$ref` (`#/$defs/…`), merged with the keywords beside it
 export function resolveRef(schema: Schema, root: Schema): Schema {
   const ref = findRef(schema);
 

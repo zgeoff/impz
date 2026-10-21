@@ -9,9 +9,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// A disk that cannot take a sleep's memory file (IMP_DISK_RESERVE_GIB):
-// impd refuses the sleep with DISK_FULL and the imp stays awake.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -33,16 +30,14 @@ test('it keeps an imp awake with DISK_FULL when the disk cannot take its sleep',
 
   await waitForExec(name);
 
-  // A reserve past any test disk: a wake still goes through, a sleep not.
-  // This journey's own settings, back to the run's at its end; the imp
-  // comes first, as no create fits the reserve.
+  // A reserve past any test disk lets a wake through but refuses a sleep. The
+  // imp comes first, as no create fits the reserve.
   await runDevScript('reboot', instance, { IMP_DISK_RESERVE_GIB: '100000' });
 
   ctx.stack.defer(() => runDevScript('reboot'));
 
   await waitForImpd();
 
-  // no VM or loop device outlives the reboot
   const devices = await readLoopDevices();
   const vms = await listContainerVms();
   const rows = await listImps();

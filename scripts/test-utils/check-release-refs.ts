@@ -1,33 +1,26 @@
-// the image, and a file of a release tag, such as docs/guides/install.md's bootstrap.sh URL
 const RELEASE_REF =
   /ghcr\.io\/zgeoff\/imp-host:(?<tag>[\w.\-]+)|zgeoff\/impz\/v(?<source>[\w.\-]+)\//gv;
 
-// a deploy file from main names main's code, not a release's
+// A deploy file fetched from main runs main's code, so its URL carries no release.
 const MAIN_URL = 'raw.githubusercontent.com/zgeoff/impz/main/deploy/';
 
-// release-please's VERSION_REGEX, less its pre-release and build parts
+// release-please's version pattern, less its pre-release and build parts.
 const VERSION = /\d+\.\d+\.\d+/v;
 const INLINE = 'x-release-please-version';
 const BLOCK_START = 'x-release-please-start-version';
 const BLOCK_END = 'x-release-please-end';
 
-// the old template's line, which bootstrap.sh and upgrade.sh turn into a comment
+// bootstrap.sh and upgrade.sh turn this line of an earlier template into a comment.
 const LEGACY_DEFINITION = /^readonly (?:LEGACY_IMAGE_LINE|legacy_image_line)=/v;
 
-// a guide's prose may name another tag, such as latest; its code may not
+// A guide's prose may name another tag, such as latest; its code may not.
 const FENCE = /^\s*```/v;
 
 export interface ReleaseRefs {
-  // each reference that release-please would leave wrong, as `<file>:<line>: <why>`
   readonly problems: readonly string[];
-
-  // the references to version under a marker, which release-please moves to the next release
   readonly defaults: number;
 }
 
-// Checks a file whose marked lines release-please's generic updater rewrites: every release
-// reference must be version and marked, and the first X.Y.Z of a marked line must be one. A
-// Markdown file's prose may name another tag; its code may not.
 export function checkReleaseRefs(file: string, text: string, version: string): ReleaseRefs {
   const problems: string[] = [];
   let defaults = 0;

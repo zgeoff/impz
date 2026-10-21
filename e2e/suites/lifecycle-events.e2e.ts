@@ -9,10 +9,7 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// `impz events` (docs/guides/events.md) and the api audit log, over one imp's
-// create, sleep, wake and rm.
-
-// one stack for every release, so the event stream ends before its imps go
+// One stack for every release, so the event stream ends before its imps go.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -29,7 +26,7 @@ test('it streams a create, sleep, wake and rm as events with no reconnect, and l
   const anchor = `${ctx.prefix}anchor`;
   const name = `${ctx.prefix}ev`;
 
-  // an imp already there, whose snapshot line says the stream is open
+  // An imp already there, whose snapshot line says the stream is open.
   await runImp('new', anchor, '--memory', '512');
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, anchor));
@@ -72,8 +69,8 @@ test('it streams a create, sleep, wake and rm as events with no reconnect, and l
 
   await collecting;
 
-  // a reconnect says why on stderr, and its snapshot would stand in for the
-  // changes it missed
+  // A reconnect says why on stderr, and its snapshot would stand in for the
+  // changes it missed.
   const warnings = await new Response(events.stderr).text();
 
   const lines = seen.filter((line) => line.startsWith(`${name} `));

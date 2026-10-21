@@ -21,10 +21,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
-// An imp of the default image through its life: create, exec, console,
-// network, stop and start, rm. Each test boots its own; the event stream is
-// in lifecycle-events.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -144,7 +140,7 @@ test('it resolves names and reaches the internet from the guest', async () => {
 
   await waitForExec(name);
 
-  // bash's /dev/tcp: the default image may have no HTTP client
+  // bash's /dev/tcp: the default image may have no HTTP client.
   const request = String.raw`printf "HEAD / HTTP/1.0\r\nHost: example.com\r\n\r\n" >&3`;
 
   const status = await runInImp(
@@ -174,8 +170,6 @@ test('it keeps the disk through a stop, boots a stopped imp on exec with an empt
 
   expect(stopped).toBe('stopped');
 
-  // exec boots a stopped imp, as an HTTP request does
-  // (docs/architecture/lifecycle/sleep-and-wake.md#what-survives-a-sleep)
   const persisted = await runInImp(name, 'cat', '/root/persist');
   const booted = await readState(name);
   const run = await runShellInImp(name, 'test -e /run/stale && echo stale || echo fresh');

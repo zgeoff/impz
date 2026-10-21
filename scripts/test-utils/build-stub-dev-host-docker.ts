@@ -1,26 +1,14 @@
 interface StubDevHostDocker {
-  // each container `docker inspect` knows, and whether it runs; any other is no such object
   readonly containers: Readonly<Record<string, boolean>>;
-
-  // `docker image inspect` finds the host image
   readonly hasImage: boolean;
-
-  // the proxy's socket is there, for `docker exec <proxy> test -S`
   readonly hasSocket: boolean;
-
-  // each container's log, for `docker logs --tail`
   readonly logs?: Readonly<Record<string, string>>;
 
-  // the impd pids `pgrep` finds in the container; none makes pgrep exit 1, as with no match
+  // pgrep exits 1 when no process matches.
   readonly impdPids?: readonly number[];
-
-  // `kill -0` of those pids fails once impd has exited after its SIGHUP; true by default
   readonly impdExits?: boolean;
 }
 
-// A stub docker's script, for createStubBin, that answers scripts/dev/dev.sh up and restart: the host
-// image, container states, the proxy's compile into the dir on /out, its socket, the logs, and
-// restart's pgrep, SIGHUP and kill -0 of impd. Any other call fails, naming itself on stderr.
 export function buildStubDevHostDocker(stub: StubDevHostDocker): string {
   const states = Object.entries(stub.containers).map(
     ([name, isRunning]) =>

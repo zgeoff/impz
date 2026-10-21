@@ -58,7 +58,6 @@ test('#countMatches counts none in text without the needle', () => {
 });
 
 test('#sendRequest half-closes after the body and resolves with all the far end sent', async () => {
-  // echoes once it has the whole request, then closes
   const server = Bun.listen<{ received: string }>({
     hostname: '127.0.0.1',
     port: 0,
@@ -86,7 +85,6 @@ test('#sendRequest half-closes after the body and resolves with all the far end 
 });
 
 test('#sendRequest rejects when nothing listens', () => {
-  // a port that was free a moment ago
   const server = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data: () => {} } });
   const port = server.port;
 
@@ -121,7 +119,6 @@ test('#openHeldSocket settles closed when the far end closes the connection', as
 });
 
 test('#sendOverHeldSocket resolves with the far end’s first reply and leaves the socket open', async () => {
-  // echoes each chunk, as `nc -e cat` does
   const server = Bun.listen({
     hostname: '127.0.0.1',
     port: 0,

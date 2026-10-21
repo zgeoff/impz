@@ -20,11 +20,6 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// impd restarts and instance reboots keep every imp (docs/runbooks/development.md).
-// The inventory holds every imp on the instance: in the acceptance run that
-// is scale's fleet too, which the harness keeps for this suite.
-
-// one stack for every release
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -42,7 +37,6 @@ test('it re-adopts running VMs across an impd restart, wakes a sleeper and resto
   const mem = `${ctx.prefix}mem`;
   const stopped = `${ctx.prefix}stopped`;
 
-  // a running imp with a checkpoint and a later write
   await runImp('new', disk, '--image', resolveImageName('e2e-tiny'), '--memory', '512');
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, disk));
@@ -55,7 +49,6 @@ test('it re-adopts running VMs across an impd restart, wakes a sleeper and resto
 
   const diskBootId = await runShellInImp(disk, 'cat /proc/sys/kernel/random/boot_id');
 
-  // a sleeping imp whose memory holds a proof
   await runImp('new', mem, '--image', resolveImageName('e2e-bare'), '--memory', '512');
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, mem));
@@ -64,11 +57,9 @@ test('it re-adopts running VMs across an impd restart, wakes a sleeper and resto
 
   const proof = await startMemoryProof(mem);
 
-  // the idle sleeper may get there first
+  // The idle sleeper may get there first.
   await tryImp(['sleep', mem]);
   await waitFor(`${mem} to sleep`, () => assertState(mem, 'sleeping'));
-
-  // a stopped imp
   await runImp('new', stopped, '--image', resolveImageName('e2e-tiny'), '--memory', '512');
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, stopped));
@@ -81,7 +72,6 @@ test('it re-adopts running VMs across an impd restart, wakes a sleeper and resto
 
   console.log(`    ${String(beforeRestart.length)} imps before the restart`);
 
-  // scale's whole fleet when the harness kept it for this suite
   expect(beforeRestart.map((entry) => entry.name)).toIncludeAllMembers(
     buildKeptScaleFleet(config.keptPrefixes, config.scaleCount),
   );
@@ -89,7 +79,7 @@ test('it re-adopts running VMs across an impd restart, wakes a sleeper and resto
   const restarting = Date.now();
 
   // dev.sh restart can return while the old impd still answers /health, so
-  // wait for a new impd process before trusting readiness
+  // wait for a new impd process before trusting readiness.
   await runDevScript('restart');
 
   const newPid = await waitFor(
@@ -129,21 +119,16 @@ test('it re-adopts running VMs across an impd restart, wakes a sleeper and resto
   expect(oldPid).not.toBeNull();
   expect(newPid).not.toBe(oldPid);
   expect(afterRestart).toStrictEqual(beforeRestart);
-
-  // re-adopted, not rebooted: the same boot and the latest write
   expect(diskState).toBe('running');
   expect(bootId).toBe(diskBootId);
   expect(file).toBe('r2');
   expect(stoppedState).toBe('stopped');
 
-  // the sleeper wakes with its memory after the restart
   const woken = await readThroughProxy(mem);
 
   expect(woken).toBe(proof.token);
 
   await checkMemoryProof(proof);
-
-  // a checkpoint taken before the restart restores
   await runImp('restore', disk, 'r1');
   await waitForExec(disk);
 
@@ -151,14 +136,13 @@ test('it re-adopts running VMs across an impd restart, wakes a sleeper and resto
 
   expect(restored).toBe('r1');
 
-  // stopping the instance sleeps every imp, and they wake intact
   await holdImp(mem);
 
   const beforeReboot = await readInventory();
 
   const rebooting = Date.now();
 
-  // dev.sh reboot: SIGTERM makes impd sleep every VM before it exits
+  // SIGTERM makes impd sleep every VM before it exits.
   await runDevScript('reboot');
 
   writeMetric('rebootMs', Date.now() - rebooting);

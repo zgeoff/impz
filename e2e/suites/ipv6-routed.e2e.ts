@@ -19,10 +19,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// A routed /64 for imps (docs/architecture/network/networking.md#ipv6): the router
-// sends the topology's third /64 to the host, and each imp dials out from its
-// own address in it. The instance ends back on its own network.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -60,7 +56,7 @@ test('it moves a sleeping imp to the routed /64 on a cold boot, and it dials out
 
   const rebooted = new Date();
 
-  // the reboot sleeps it; its snapshot holds the old prefix
+  // The reboot sleeps it, and its snapshot holds the old prefix.
   await startV6Instance(ctx.plan, `${ctx.plan.routed}/64`);
 
   const hostAddress = await readV6HostAddress();

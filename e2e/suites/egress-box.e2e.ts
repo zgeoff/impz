@@ -14,10 +14,6 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// Egress policies in real guests (docs/architecture/network/egress.md):
-// impd's nft table, its resolver, and the nat redirect of port 53. The
-// public hosts are example.com and Quad9; this machine is the private one.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -91,7 +87,6 @@ test('it lets a box imp reach its list, and nothing else', async () => {
 
   writeMetric('egressFirstFetchMs', Math.round(performance.now() - started));
 
-  // 9.9.9.9: an address no list here names, and no answer adds
   const unlisted = await tryGetFromImp(name, 'http://example.org/');
   const unnamed = await tryDialFromImp(name, '9.9.9.9', 443);
   const gateway = await tryDialFromImp(name, ctx.gateway, listener.port);
@@ -125,7 +120,7 @@ test('it answers a refused name with REFUSED and EDE 18, whichever resolver the 
   await waitForExec(name);
   await holdImp(name);
 
-  // over TCP, which busybox's nc speaks: a length, then the message
+  // Over TCP, which busybox's nc speaks: a length, then the message.
   const hex = await runShellInImp(
     name,
     `printf '${buildTcpQueryOctal('example.org')}' | nc -w 3 8.8.8.8 53 | od -An -tx1 -v`,
@@ -169,7 +164,7 @@ test('it drops a guest that sends from another address of its /30', async () => 
 
   const octets = row.ip.split('.').map(Number);
 
-  // the /30's network address, which the tap's reverse-path check passes
+  // The /30's network address, which the tap's reverse-path check passes.
   const other = [...octets.slice(0, 3), (octets[3] ?? 0) - 2].join('.');
 
   await runShellInImp(name, `ip addr add ${other}/32 dev eth0`);
@@ -209,7 +204,6 @@ test('it opens a private address only by an explicit CIDR, and cuts its flow und
   await waitForExec(name);
   await holdImp(name);
 
-  // a flow from the guest that writes every 200 ms until something ends it
   await runShellInImp(
     name,
     `rm -f /tmp/nc-done; setsid sh -c '(while sleep 0.2; do echo x; done | nc ${ctx.gateway} ${String(listener.port)}; echo done > /tmp/nc-done)' </dev/null >/dev/null 2>&1 &`,
@@ -262,16 +256,14 @@ test('it ends the broker tunnels a tighter policy denies, even one whose head co
   await waitForExec(name);
   await holdImp(name);
 
-  // the broker on the guest's gateway (IMP_BROKER_PORT's default; the
-  // broker's variables reach only an imp with a grant)
   const route = await runShellInImp(name, 'ip -4 route show default');
 
   const gateway = /via (?<ip>[\d.]+)/v.exec(route)?.groups?.['ip'] ?? '';
   const broker = `${gateway} 7081`;
   const head = String.raw`CONNECT example.org:80 HTTP/1.1\r\nHost: example.org:80\r\n\r\n`;
 
-  // A held tunnel that writes a header with no end until something ends it:
-  // garbage instead would get a 400 from example.org, which closes it first.
+  // A header with no end holds the tunnel open: garbage instead would get a 400
+  // from example.org, which closes it first.
   const hold = String.raw`GET / HTTP/1.1\r\nHost: example.org\r\nX-Hold: `;
 
   await runShellInImp(
@@ -287,15 +279,12 @@ test('it ends the broker tunnels a tighter policy denies, even one whose head co
     }
   });
 
-  // one that connects now and sends its head once the change is in
-  // (/tmp/tun-go), then stays open until the broker's answer comes
   await runShellInImp(
     name,
     `setsid sh -c "(until [ -f /tmp/tun-go ]; do sleep 0.1; done; printf '${head}'; until grep -q ' 403 ' /tmp/tun-late; do sleep 0.1; done) | nc ${broker} > /tmp/tun-late" </dev/null >/dev/null 2>&1 &`,
   );
 
-  // both connections established to the broker's port, 7081 (1BA9): the
-  // held one still open, and the late one open with its head not yet sent
+  // The broker's port, 7081, shows as 1BA9 in /proc/net/tcp.
   await waitFor('the late connection to open beside the held one', async () => {
     const count = await runShellInImp(
       name,

@@ -6,9 +6,6 @@ import { runImp } from './imp-cli';
 import { REPO_ROOT, instance, runChecked, runCommand, runInContainer } from './instance';
 import { waitFor } from './wait-for';
 
-// The restore drill's repository (docs/architecture/storage/backups.md): MinIO in a
-// container that shares the dev instance's network, so impd reaches it on
-// 127.0.0.1:9000, pinned by digest.
 const MINIO_IMAGE =
   'cgr.dev/chainguard/minio@sha256:0f95aa412a12351a95bb43c3b54b66440eb0aa022bb3f3458942678a489e915b';
 
@@ -16,7 +13,7 @@ const BUCKET = 'imp-e2e';
 const BACKUP_REPOSITORY = `s3:http://127.0.0.1:9000/${BUCKET}`;
 
 export interface BackupSecrets {
-  // under the repo, which the dev container mounts at /src
+  // Under the repo, which the dev container mounts at /src.
   readonly directory: string;
   readonly envFile: string;
   readonly passwordInContainer: string;
@@ -24,7 +21,6 @@ export interface BackupSecrets {
   readonly secretKey: string;
 }
 
-// impd's backup settings for the drill: the schedule runs every `intervalS`
 export function buildBackupEnv(
   secrets: Readonly<BackupSecrets>,
   intervalS: number,
@@ -38,7 +34,6 @@ export function buildBackupEnv(
   };
 }
 
-// the first data pack's key in an S3 ListObjectsV2 answer, or undefined
 export function findPackKey(listing: string): string | undefined {
   return /<Key>(?<key>data\/[^<]+)<\/Key>/v.exec(listing)?.groups?.['key'];
 }
@@ -63,9 +58,6 @@ const BackupStatusSchema = z.object({
   lastCheck: CheckSchema.nullable(),
 });
 
-// Thin glue over the dev instance and MinIO below.
-
-// Throwaway keys for a throwaway bucket, in a new dir the caller removes.
 export async function writeBackupSecrets(): Promise<BackupSecrets> {
   const parent = join(REPO_ROOT, '.cache', 'e2e');
 
@@ -98,8 +90,6 @@ function readMinioName(): string {
   return `${instance.container}-minio`;
 }
 
-// MinIO in the container's network, with the bucket made; the caller stops
-// it with stopMinio, before the instance's next reboot
 export async function startMinio(secrets: Readonly<BackupSecrets>): Promise<void> {
   await runCommand(['docker', 'rm', '-f', readMinioName()]);
 
@@ -147,7 +137,6 @@ export async function stopMinio(): Promise<void> {
   await runCommand(['docker', 'rm', '-f', readMinioName()]);
 }
 
-// a signed S3 request to MinIO from inside the dev container
 export function runS3(
   secrets: Readonly<BackupSecrets>,
   method: string,
@@ -169,8 +158,6 @@ export function runS3(
   ]);
 }
 
-// `docker exec`'s arguments for restic in the dev container, with impd's
-// repository and keys
 function buildResticExecArgs(
   secrets: Readonly<BackupSecrets>,
   args: readonly string[],
@@ -192,7 +179,6 @@ export function runRestic(secrets: Readonly<BackupSecrets>, ...args: readonly st
   return runCommand(['docker', 'exec', ...buildResticExecArgs(secrets, args)]);
 }
 
-// in the background, for the caller to kill
 export function startRestic(secrets: Readonly<BackupSecrets>, ...args: readonly string[]) {
   return runCommand(['docker', 'exec', '-d', ...buildResticExecArgs(secrets, args)]);
 }

@@ -66,19 +66,15 @@ impd; E2E_SCALE_COUNT (30), E2E_SCALE_MEMORY_MIB (512), E2E_SCALE_FILL_MIB
 
 Writes .cache/e2e/results.json. Exits non-zero if any suite fails.`;
 
-// every imp and fixture image the harness creates starts with this
 const PREFIX = 'e2e-';
 const RESULTS_DIR = join(REPO_ROOT, '.cache', 'e2e');
 const RESULTS_FILE = join(RESULTS_DIR, 'results.json');
 const METRICS_FILE = join(RESULTS_DIR, 'metrics.jsonl');
 let interrupted = false;
-
-// the pid of the suite process running now, which leads its group, so a
-// signal can stop it
 let running: number | null = null;
 
-// as scripts/dev/dev.sh resolves it: a relative IMP_DEV_DATA is relative to the
-// caller's directory
+// As dev.sh resolves it: a relative IMP_DEV_DATA is relative to the caller's
+// directory.
 function resolveDataPath(): string {
   const configured = process.env['IMP_DEV_DATA'] ?? join(REPO_ROOT, '.data', 'dev');
 
@@ -89,14 +85,11 @@ function resolveDataPath(): string {
   return resolve(process.cwd(), configured);
 }
 
-// tailnet logout, then the container and its data dir go: the run starts
-// from nothing
 async function resetInstance(): Promise<void> {
   const data = await resolveDataWipe(resolveDataPath());
 
-  // the moves suites' second host keeps its data between runs, which spares
-  // its image seed; a reset takes it too, so no old migration outlives a
-  // rebase that renumbered it; on ZFS its root dataset goes with it
+  // A reset takes the second host's data too, so no old migration outlives a
+  // rebase that renumbered it.
   const hostB = await resolveDataWipe(`${resolveDataPath()}-mv-b`, readHostBZfsRoot());
 
   const targets = [data, hostB].filter((target) => target !== null);
@@ -124,8 +117,6 @@ async function resetInstance(): Promise<void> {
   }
 }
 
-// The scale suite needs host RAM for the budget plus headroom, and disk on
-// the data volume for a memory snapshot of every imp it creates.
 function checkScaleHeadroom(): void {
   const availableMib = readAvailableMib();
 
@@ -154,8 +145,6 @@ function readAvailableMib(): number {
   return Math.floor(Number(match?.groups?.['kib'] ?? 0) / 1024);
 }
 
-// brings up the dev instance with the run's tuning, checks it, and builds
-// the fixture images the selected suites need
 async function setupInstance(args: HarnessArgs): Promise<void> {
   if (args.clean) {
     await resetInstance();
@@ -163,7 +152,6 @@ async function setupInstance(args: HarnessArgs): Promise<void> {
     await runDevScript('down');
   }
 
-  // the https suite reboots the instance onto this stack, and off it again
   if (args.suites.includes('https')) {
     await startPebble();
   }
@@ -171,8 +159,6 @@ async function setupInstance(args: HarnessArgs): Promise<void> {
   await startInstance(args);
 }
 
-// up with the run's tuning, checked, at the baseline, with the images the
-// run's suites need
 async function startInstance(args: HarnessArgs): Promise<void> {
   await runDevScript('up');
   await checkPrivileges(instance.container);
@@ -181,7 +167,6 @@ async function startInstance(args: HarnessArgs): Promise<void> {
 
   const info = await readInfo();
 
-  // every suite relies on this budget to stay small
   if (info.ramBudgetMib !== config.ramBudgetMib) {
     throw new Error(
       `impd RAM budget is ${String(info.ramBudgetMib)} MiB, not ${String(config.ramBudgetMib)}: ` +
@@ -189,7 +174,7 @@ async function startInstance(args: HarnessArgs): Promise<void> {
     );
   }
 
-  // leftovers of an aborted or --keep run would skew RAM numbers
+  // Leftovers of an aborted or --keep run would skew RAM numbers.
   await resetSuites(SUITES.map((suite) => suite.prefix));
 
   if (args.suites.includes('scale')) {
@@ -209,8 +194,6 @@ async function startInstance(args: HarnessArgs): Promise<void> {
   await createMissingImages([...images]);
 }
 
-// The first signal stops the running suite (its whole process group, imp
-// CLI calls included), runs no more and cleans up; a second exits at once.
 function stopRun(signal: NodeJS.Signals): void {
   if (interrupted) {
     process.exit(130);
@@ -223,8 +206,6 @@ function stopRun(signal: NodeJS.Signals): void {
   }
 }
 
-// Every imp, network, secret, token, OAuth client and image the suites named
-// with these prefixes goes; the fixture images stay.
 async function resetSuites(prefixes: readonly string[]): Promise<void> {
   await resetBaseline({
     client: await createInstanceClient(),
@@ -253,7 +234,6 @@ async function runJourneyProcess(
     },
   });
 
-  // gone: a signal during the reset has no group to stop
   running = null;
 
   if (exitCode !== 0 && !interrupted) {
@@ -265,16 +245,13 @@ async function runJourneyProcess(
   return exitCode;
 }
 
-// a suite's number in the acceptance order, as results.json names it
 function getSuiteIndex(name: string): number {
   return SUITES.findIndex((suite) => suite.name === name) + 1;
 }
 
-// chaos kills firecracker on purpose, so a restore there may fall back
+// chaos kills firecracker on purpose, so a restore there may fall back.
 const FALLBACK_SUITES: ReadonlySet<string> = new Set(['chaos']);
 
-// A template restore that fell back still creates the imp, so the suite
-// passes; the fallback is a failure all the same, unless the suite causes it
 async function checkNoBootFallbacks(name: string, since: Readonly<Date>): Promise<boolean> {
   let log: string;
 
@@ -334,8 +311,6 @@ function formatSection(section: Section): string {
   return `[${String(section.index)}] ${section.name.padEnd(12)} ${section.verdict} ${(section.durationMs / 1000).toFixed(1).padStart(7)} s`;
 }
 
-// a host-B fixture as its suite runs it: B's options, and the suite's prefix
-// for B's reset
 function readHostBFixture(fixture: string, keep: boolean): HostBFixture {
   for (const suite of SUITES) {
     const name = suite.fixtures?.find((candidate) => candidate === fixture);
@@ -348,7 +323,6 @@ function readHostBFixture(fixture: string, keep: boolean): HostBFixture {
   throw new Error(`no suite runs the fixture ${fixture}`);
 }
 
-// impd's default and base images stay
 async function removeLeftovers(suites: readonly string[]): Promise<void> {
   console.log('== cleanup');
 
@@ -375,7 +349,7 @@ async function removeLeftovers(suites: readonly string[]): Promise<void> {
       }
     }
   } catch (error) {
-    // the results and summary still matter more than a tidy instance
+    // The results and summary still matter more than a tidy instance.
     const reason = error instanceof Error ? error.message : String(error);
 
     console.error(`    cleanup failed: ${reason}`);
@@ -402,15 +376,13 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  // one tag for the whole run: dev.sh, the suites and the clean reset
   process.env['IMP_HOST_IMAGE'] = await readHostImage();
 
-  // scripts/dev/dev.sh passes these to impd
   process.env['IMP_RAM_BUDGET_MIB'] = String(config.ramBudgetMib);
   process.env['IMP_IDLE_TIMEOUT_S'] = String(config.idleTimeoutS);
 
-  // e2e nodes join only as tag:imp-e2e, which reaches no live impd, never
-  // with dev's tag:imp key; one 1Password read, only for the tailnet suites
+  // e2e nodes join only as tag:imp-e2e, which reaches no live impd, never with
+  // dev's tag:imp key.
   delete process.env['TAILSCALE_AUTHKEY'];
 
   const tailnet =
@@ -425,7 +397,6 @@ async function main(): Promise<number> {
     process.env['IMP_TAILSCALE_TAGS'] = tailnet.tags;
   }
 
-  // stop the running suite, run no more, and clean up
   process.on('SIGINT', () => {
     stopRun('SIGINT');
   });
@@ -475,8 +446,6 @@ async function main(): Promise<number> {
       resetFixture: (fixture) => readHostBFixture(fixture, args.keep).reset(),
       stopFixture: (fixture) => readHostBFixture(fixture, args.keep).stop(),
 
-      // a fresh instance: the container and data dir go, and come back
-      // with the run's settings, baseline and images
       recreate: async () => {
         await resetInstance();
         await startInstance(args);
@@ -508,7 +477,6 @@ async function main(): Promise<number> {
       console.error(`== the run stopped: ${stoppedBecause}`);
     }
 
-    // an instance that could not be made anew has nothing left to tidy
     const isUp = stoppedBecause === null || stoppedBecause === 'interrupted';
 
     if (!args.keep && isUp) {

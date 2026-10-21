@@ -4,21 +4,16 @@ import { PEBBLE_IMAGES } from '../../scripts/dev/pebble-images';
 import { REPO_ROOT, instance, runChecked, runCommand } from './instance';
 import { waitFor } from './wait-for';
 
-// the domain impd gets in the https suite; challtestsrv answers for it
 export const PEBBLE_DOMAIN = 'imp.test';
 
-// where the harness's stack keeps Pebble's minica PEM: under .cache, which
-// the dev container mounts at /src/.cache
+// Under .cache, which the dev container mounts at /src/.cache.
 const HARNESS_MINICA_DIR = join(REPO_ROOT, '.cache', 'e2e');
 
 export interface PebbleEndpoints {
-  // from this machine
   readonly directoryUrl: string;
   readonly rootUrl: string;
   readonly challtestsrvUrl: string;
 
-  // Pebble's own TLS certificate chains to this CA, and is for `pebble` and
-  // `localhost`: in the network the container is `pebble`, from here `localhost`
   readonly minicaFile: string;
   readonly minicaPem: string;
 }
@@ -35,9 +30,6 @@ function buildNames(prefix: string, minicaDir: string) {
   } as const;
 }
 
-// Pebble and challtestsrv for one test, refused on a name docker already
-// shows; `stack` removes only what this run made. The minica PEM goes into
-// `minicaDir`, the harness's own directory when left out.
 export async function startPebbleStack(
   stack: Readonly<Pick<AsyncDisposableStack, 'defer'>>,
   prefix: string,
@@ -75,7 +67,7 @@ export async function startPebbleStack(
     await runChecked(['docker', 'network', 'rm', names.network]);
   });
 
-  // created, then started, so a container that will not start still goes
+  // Created, then started, so a container that will not start still goes.
   await createChallTestSrv(names);
 
   stack.defer(async () => {
@@ -94,16 +86,11 @@ export async function startPebbleStack(
   return waitForStack(names, started);
 }
 
-// The containers go, and the network unless a dev instance, which stays up
-// after a run, is still on it. Nothing fails when they are not there.
 async function stopHarnessStack(names: PebbleNames): Promise<void> {
   await runCommand(['docker', 'rm', '-f', names.pebble, names.challtestsrv]);
   await runCommand(['docker', 'network', 'rm', names.network]);
 }
 
-// The harness's stack, named after the instance, which the https suite
-// reboots the dev instance onto. A dev instance that is still up keeps the
-// network from an earlier run, so the harness takes that network again.
 export async function startPebble(): Promise<void> {
   const names = buildNames(instance.container, HARNESS_MINICA_DIR);
   const started = performance.now();
@@ -123,7 +110,6 @@ export async function startPebble(): Promise<void> {
   await waitForStack(names, started);
 }
 
-// true when the harness started the stack for this run
 export function probePebbleRunning(): boolean {
   const names = buildNames(instance.container, HARNESS_MINICA_DIR);
 
@@ -135,12 +121,8 @@ export function probePebbleRunning(): boolean {
   return inspect.stdout.toString().trim() === 'true';
 }
 
-// The env that scripts/dev/dev.sh hands impd, so the dev instance joins the
-// stack's network and gets its certificate from Pebble. Only the https suite
-// sets it, and removes it when it ends.
 const PUBLIC_IP = '203.0.113.7';
 
-// the public listener's port inside the host container (IMP_PUBLIC_HTTPS_PORT)
 export const PUBLIC_HTTPS_PORT = 7443;
 
 export function buildPebbleEnv(
@@ -157,8 +139,8 @@ export function buildPebbleEnv(
     IMP_ACME_DIRECTORY: 'https://pebble:14000/dir',
     IMP_ACME_CA_FILE: names.minicaFile,
 
-    // public imps on TEST-NET-3: only the record points there, and the
-    // suite reaches the public listener on loopback in the container
+    // Public imps on TEST-NET-3: only the record points there, and the suite
+    // reaches the public listener on loopback in the container.
     IMP_PUBLIC_IP: PUBLIC_IP,
   };
 }
@@ -188,8 +170,8 @@ function createChallTestSrv(names: PebbleNames): Promise<string> {
   ]);
 }
 
-// no sleep before validation, and no nonce rejections: a faster test, the
-// same protocol
+// No sleep before validation and no nonce rejections: a faster test, the
+// same protocol.
 function createPebble(names: PebbleNames): Promise<string> {
   return runChecked([
     'docker',
@@ -215,8 +197,6 @@ function createPebble(names: PebbleNames): Promise<string> {
   ]);
 }
 
-// Copies the minica PEM out and returns once Pebble and challtestsrv both
-// answer. It logs how long each phase took, so a slow start names its phase.
 async function waitForStack(names: PebbleNames, started: number): Promise<PebbleEndpoints> {
   const timings: string[] = [];
 
@@ -242,7 +222,6 @@ async function waitForStack(names: PebbleNames, started: number): Promise<Pebble
   await waitFor(
     'Pebble to answer',
     async () => {
-      // a fetch that hangs fails this attempt, so the next one runs
       const response = await fetch(endpoints.directoryUrl, {
         tls: { ca: endpoints.minicaPem },
         signal: AbortSignal.timeout(1000),
@@ -257,8 +236,8 @@ async function waitForStack(names: PebbleNames, started: number): Promise<Pebble
 
   writePhaseTiming('Pebble ready');
 
-  // an issuance sets its TXT record through this API first: a call that
-  // reaches the published port before challtestsrv listens stalls or fails
+  // An issuance sets its TXT record through this API first, so a call that
+  // reaches the published port before challtestsrv listens stalls or fails.
   await waitFor(
     'challtestsrv to answer',
     async () => {
@@ -297,9 +276,6 @@ async function readPebbleEndpoints(names: PebbleNames): Promise<PebbleEndpoints>
   };
 }
 
-// The root Pebble signs with, which it makes anew on each start: what a
-// client must trust for impd's certificate. Written under .cache, which the
-// dev container mounts at /src/.cache.
 export async function writePebbleRoot(): Promise<string> {
   const endpoints = await readPebbleEndpoints(buildNames(instance.container, HARNESS_MINICA_DIR));
   const response = await fetch(endpoints.rootUrl, { tls: { ca: endpoints.minicaPem } });
@@ -318,8 +294,6 @@ async function readPublishedPort(container: string, port: number): Promise<strin
   return parsePublishedPort(container, port, out);
 }
 
-// The host port in `docker port`'s output, one `<address>:<port>` line per
-// binding; the first line's port when there are several
 export function parsePublishedPort(container: string, port: number, out: string): string {
   const published = /:(?<port>\d+)\s*$/mu.exec(out.trim())?.groups?.['port'];
 

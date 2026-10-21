@@ -45,8 +45,6 @@ test('#stopSuiteGroup stops a running suite and the processes it started', async
   const marker = join(ctx.directoryPath, 'started');
   const started = Promise.withResolvers<number>();
 
-  // a suite that starts a child of its own, as the imp CLI calls do, and
-  // writes the child's pid once it runs
   const running = runSuite({
     argv: [
       process.execPath,
@@ -71,7 +69,6 @@ test('#stopSuiteGroup stops a running suite and the processes it started', async
     async () => {
       const text = await readFile(marker, 'utf8');
 
-      // a pid, not a file caught half written
       expect(text).toMatch(/^[1-9]\d*$/u);
 
       return Number(text);
@@ -85,7 +82,6 @@ test('#stopSuiteGroup stops a running suite and the processes it started', async
 
   expect(exitCode).not.toBe(0);
 
-  // gone: signal 0 to its pid finds no process
   await waitFor(
     () => {
       expect(() => process.kill(grandchild, 0)).toThrow(/ESRCH/u);

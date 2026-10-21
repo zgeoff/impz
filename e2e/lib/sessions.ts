@@ -12,7 +12,6 @@ const SessionRowSchema = z.object({
 
 export type SessionRow = z.infer<typeof SessionRowSchema>;
 
-// `impz sessions <imp> --json`, with the fields the suites read
 export function parseSessions(stdout: string): SessionRow[] {
   return z.array(SessionRowSchema).parse(JSON.parse(stdout));
 }
@@ -23,7 +22,6 @@ export async function listSessions(imp: string): Promise<SessionRow[]> {
   return parseSessions(stdout);
 }
 
-// the session named `session` in the imp; throws when it has none
 export async function requireSession(imp: string, session: string): Promise<SessionRow> {
   const sessions = await listSessions(imp);
 

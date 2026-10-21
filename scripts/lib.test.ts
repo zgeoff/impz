@@ -52,7 +52,7 @@ test.each([['/w/My Work Tree'], ['/w/.hidden'], ['/w/wörk'], [`/w/${'x'.repeat(
   (root) => {
     const script = new URL('lib.sh', import.meta.url).pathname;
 
-    // Docker's tag grammar, after the imp-host repository
+    // Docker's tag grammar, after the imp-host repository.
     expect(runSourcedFunction({ script, fn: 'dev_image_tag', args: [root] }).stdout).toMatch(
       /^imp-host:\w[\w.-]{0,127}\n$/u,
     );
@@ -147,7 +147,7 @@ test('#load_tailscale_authkey exports a key from op and keeps it out of a bash -
   const ctx = setupTest();
   const op = createStubBin(ctx.directoryPath, 'op', "echo 'fake-tskey-for-the-trace-check'");
 
-  // the comparison runs untraced: only the function's own trace is checked
+  // The comparison runs after set +x, because bash -x would trace the key it compares.
   const result = Bun.spawnSync(
     [
       'bash',
@@ -205,7 +205,7 @@ test("#load_tailscale_authkey joins a dev instance with impz's tag:imp-e2e clien
   const ctx = setupTest();
   const op = createStubBin(ctx.directoryPath, 'op', "echo 'tskey-client-fake-for-the-trace-check'");
 
-  // the comparison runs untraced: only the function's own trace is checked
+  // The comparison runs after set +x, because bash -x would trace the key it compares.
   const result = Bun.spawnSync(
     [
       'bash',
@@ -277,7 +277,6 @@ test('#load_tailscale_authkey never asks op without IMP_TAILSCALE_OP=1', () => {
     { env: { PATH: `${op.bin}:${process.env['PATH'] ?? ''}`, HOME: ctx.directoryPath } },
   );
 
-  // the run reaches its end: sourcing and the lookup left the shell alive
   expect(result.exitCode).toBe(0);
   expect(readFileSync(op.calls, 'utf8')).toBe('');
 });
@@ -322,7 +321,7 @@ test('#load_tailscale_e2e_authkey joins e2e nodes with the tag:imp-e2e client fr
   const ctx = setupTest();
   const op = createStubBin(ctx.directoryPath, 'op', "echo 'fake-tskey-client-for-the-trace-check'");
 
-  // the comparison runs untraced: only the function's own trace is checked
+  // The comparison runs after set +x, because bash -x would trace the key it compares.
   const result = Bun.spawnSync(
     [
       'bash',

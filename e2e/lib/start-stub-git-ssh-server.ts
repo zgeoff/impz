@@ -6,23 +6,15 @@ import type { Connection, ServerChannel } from 'ssh2';
 import { createGitFreeEnv, runGitChecked } from './git-env';
 import { runChecked } from './instance';
 
-// A git server over SSH on this machine, as a forge would be: one public
-// key, and one command, a push to one bare repo. Imps reach it through the
-// host container's NAT; #26's egress policies may block private ranges.
-
 export interface StubGitSshServer {
   readonly port: number;
 
-  // `ssh-ed25519 AAAA...`, for the imp's known_hosts
   readonly hostKey: string;
 
-  // the bare repo that pushes land in
   readonly repo: string;
 
-  // logins whose signature the key verified
   readonly logins: () => number;
 
-  // closes the listener once open connections end
   readonly stop: () => Promise<void>;
 }
 
@@ -87,7 +79,7 @@ function handleConnection(
       return;
     }
 
-    // a key query: the client asks before it signs
+    // A key query: the client asks before it signs.
     if (ctx.signature === undefined || ctx.blob === undefined) {
       ctx.accept();
 

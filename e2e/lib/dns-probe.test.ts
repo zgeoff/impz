@@ -20,9 +20,9 @@ test('#buildTcpQueryOctal frames an A query with its length, as octal escapes', 
 });
 
 test('#parseTcpReplyHex reads a REFUSED reply and its Extended DNS Error', () => {
-  // the encoder takes the rcode in the flags' low bits (5 is REFUSED), and no
-  // EDE option: the reply ends with an empty OPT record, whose rdlength
-  // becomes 6 for option 15 of length 2, info code 18
+  // The encoder takes the rcode in the flags' low bits (5 is REFUSED) and has
+  // no EDE option: the reply ends with an empty OPT record whose rdlength
+  // becomes 6 for option 15 of length 2, info code 18.
   const encoded = dnsPacket.encode({
     type: 'response',
     id: 26,

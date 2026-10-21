@@ -39,10 +39,6 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// The restore drill (docs/architecture/storage/backups.md). Each test reboots the
-// instance with backups on to a MinIO of its own, with the schedule every
-// 60 s, and back to no backups at its end.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -64,8 +60,8 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
   const idle = `${ctx.prefix}idle`;
   const copy = `${ctx.prefix}copy`;
 
-  // in-test, not suite settings: impd sets up its repository at start, and
-  // each test brings its own; MinIO joins the new container
+  // In-test, not suite settings: impd sets up its repository at start, and
+  // each test brings its own.
   await runDevScript('reboot', instance, buildBackupEnv(ctx.secrets, 60));
 
   ctx.stack.defer(() => runDevScript('reboot'));
@@ -91,7 +87,6 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
   await writeGuestFile(idle, '/root/f', 'idle');
   await runImp('stop', idle);
 
-  // a writer that never stops for long: the freeze lands among its writes
   await runShellInImp(
     source,
     'echo \'i=0; while :; do echo "line $i" >> /root/log; i=$((i+1)); sleep 0.01; done\' > /root/writer.sh && setsid sh /root/writer.sh >/dev/null 2>&1 &',
@@ -104,7 +99,7 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
   writeMetric('backupFirstMs', Date.now() - firstStarted);
   writeMetric('backupFirstAddedMiB', Math.round(first.dataAddedBytes / 1_048_576));
 
-  // the bracket keeps pkill from matching the shell that runs it
+  // The bracket keeps pkill from matching the shell that runs it.
   await runShellInImp(source, 'pkill -f "[w]riter.sh" || true');
 
   expect(first.imps).toContain(source);
@@ -135,8 +130,6 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
   await waitForExec(copy);
 
   const restoredFile = await readGuestFile(copy, '/root/f');
-
-  // the guest's own journal makes the log whole: the last line is complete
   const last = await runShellInImp(copy, 'tail -n 1 /root/log');
   const checkpoints = await listCheckpoints(copy);
 
@@ -151,7 +144,6 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
 
   expect(checkpointFile).toBe('v1');
 
-  // restore --all refuses a host with imps, and --merge names the clash
   const all = await tryImp(['backup', 'restore', '--all']);
   const merged = await tryImp(['backup', 'restore', '--all', '--merge']);
 
@@ -169,9 +161,9 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
     ),
   });
 
-  // the newest point that holds the source: a scheduled run after the
-  // removal below would hold none of the journey's imps, and one after the
-  // copy's restore holds the copy too
+  // The newest point that holds the source: a scheduled run after the removal
+  // below holds none of the journey's imps, and one after the copy's restore
+  // holds the copy too.
   const status = await readBackupStatus();
 
   const point = status.points.findLast((candidate) => candidate.imps.includes(source));
@@ -201,7 +193,6 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
     stderr: expect.toInclude('stop the old impd'),
   });
 
-  // the restore brings back exactly the point's imps, onto an empty instance
   expect(point?.imps).toContain(idle);
   expect(restored.map((row) => row.name).toSorted()).toStrictEqual(point?.imps.toSorted() ?? []);
   expect(states).toSatisfyAll((state: string) => state === 'stopped');
@@ -220,8 +211,8 @@ test('it lists no file of an imp created with backup off in the snapshot, and re
   const kept = `${ctx.prefix}off-kept`;
   const chat = `${ctx.prefix}off-chat`;
 
-  // in-test, not suite settings: impd sets up its repository at start, and
-  // each test brings its own
+  // In-test, not suite settings: impd sets up its repository at start, and
+  // each test brings its own.
   await runDevScript('reboot', instance, buildBackupEnv(ctx.secrets, 60));
 
   ctx.stack.defer(() => runDevScript('reboot'));
@@ -287,8 +278,8 @@ test('it restores a point that survived the scheduled forget and prune, and find
   const idle = `${ctx.prefix}prune-idle`;
   const survivor = `${ctx.prefix}prune-kept`;
 
-  // in-test, not suite settings: impd sets up its repository at start, and
-  // each test brings its own
+  // In-test, not suite settings: impd sets up its repository at start, and
+  // each test brings its own.
   await runDevScript('reboot', instance, buildBackupEnv(ctx.secrets, 60));
 
   ctx.stack.defer(() => runDevScript('reboot'));
@@ -310,7 +301,6 @@ test('it restores a point that survived the scheduled forget and prune, and find
 
   const firstTime = before.points[0]?.time ?? new Date();
 
-  // the schedule's first run prunes
   const status = await waitFor(
     'the scheduled prune',
     async () => {
@@ -345,7 +335,7 @@ test('it restores a point that survived the scheduled forget and prune, and find
     early,
   ]);
 
-  // every run so far fell in one hour: forget keeps only the newest
+  // Every run so far fell in one hour, so forget keeps only the newest.
   expect(status.points.at(-1)?.imps).toContain(idle);
   expect(survivorState).toBe('stopped');
   expect(gone).toStrictEqual({ exitCode: 1, stdout: '', stderr: expect.toInclude('not found') });
@@ -357,8 +347,8 @@ test('it restores past a stale lock in the repository, and fails the check loudl
   const idle = `${ctx.prefix}lock-idle`;
   const unlocked = `${ctx.prefix}lock-kept`;
 
-  // in-test, not suite settings: impd sets up its repository at start, and
-  // each test brings its own
+  // In-test, not suite settings: impd sets up its repository at start, and
+  // each test brings its own.
   await runDevScript('reboot', instance, buildBackupEnv(ctx.secrets, 60));
 
   ctx.stack.defer(() => runDevScript('reboot'));
@@ -376,8 +366,8 @@ test('it restores past a stale lock in the repository, and fails the check loudl
   await runImp('stop', idle);
   await runBackup();
 
-  // `check` takes restic's exclusive lock and, throttled to 16 KiB/s, holds
-  // it for minutes on this repository; a SIGKILL leaves it behind
+  // `check` takes restic's exclusive lock and, throttled to 16 KiB/s, holds it
+  // for minutes on this repository; a SIGKILL leaves it behind.
   await startRestic(ctx.secrets, '--limit-download', '16', 'check', '--read-data');
 
   await waitFor('restic check to take its lock', async () => {
@@ -410,8 +400,6 @@ test('it restores past a stale lock in the repository, and fails the check loudl
 
   const key = findPackKey(listing.stdout) ?? '';
 
-  // kept in a dir of this test's own, so the repository is whole again
-  // after the check
   const made = await runInContainer(['mktemp', '-d']);
 
   const packDir = made.stdout.trim();
@@ -450,8 +438,8 @@ test('it brings back a named token, its secret’s name and the grant from a bac
   const secret = `${ctx.prefix}gh`;
   const token = `${ctx.prefix}agent`;
 
-  // in-test, not suite settings: impd sets up its repository at start, and
-  // each test brings its own
+  // In-test, not suite settings: impd sets up its repository at start, and
+  // each test brings its own.
   await runDevScript('reboot', instance, {
     ...buildBackupEnv(ctx.secrets, 3600),
     IMP_BACKUP_DATABASE: 'true',
@@ -495,7 +483,6 @@ test('it brings back a named token, its secret’s name and the grant from a bac
     .map((line) => z.object({ path: z.string().optional() }).parse(JSON.parse(line)).path ?? '')
     .filter((path) => path !== '');
 
-  // the host loses every row the restore brings back
   await runImp('rm', name);
   await runImp('token', 'rm', token);
   await runImp('secret', 'rm', secret);

@@ -19,12 +19,8 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// Session logs (docs/guides/session-logs.md): impd keeps the output of a
-// session started with `log` on the host, past the agent's ring (256 KiB)
-// and past the end of the generation.
-
-// one stack for every release, so each session socket closes before its imp
-// goes
+// One stack for every release, so each session socket closes before its imp
+// goes.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -60,8 +56,6 @@ test('it keeps all of a logged session past the ring, a sleep and a wake, the ex
 
   const opening = performance.now();
 
-  // 1 MiB untouched by the tty, then, once /tmp/go exists, 1000 more bytes
-  // and exit 7: the wait lets the journey sleep and wake the imp between
   const producer = await openSessionSocket({
     type: 'start',
     name,
@@ -89,7 +83,6 @@ test('it keeps all of a logged session past the ring, a sleep and a wake, the ex
 
   producer.close();
 
-  // all of 1 MiB, four times the ring, from the first byte on
   const full = await waitFor('the whole 1 MiB in the log', async () => {
     const log = await requireSessionLog(name, started.executionGeneration);
 
@@ -108,11 +101,8 @@ test('it keeps all of a logged session past the ring, a sleep and a wake, the ex
   expect(full).toMatchObject({ session: 'out', state: 'live', logStart: 0, bytes: mib });
   expect(read).toBe('x'.repeat(mib));
 
-  // a sleep and a wake lose nothing: the log goes on, and the exit ends it
   await runImp('sleep', name);
   await assertState(name, 'sleeping');
-
-  // the exec wakes the imp; the session writes its tail and exits
   await runInImp(name, 'touch', '/tmp/go');
 
   const ended = await waitFor('the exit in the log', async () => {
@@ -137,7 +127,6 @@ test('it keeps all of a logged session past the ring, a sleep and a wake, the ex
 
   expect(tailRead).toBe('y'.repeat(tail));
 
-  // a stopped imp keeps its logs, and reading them boots nothing
   await runImp('stop', name);
 
   const stoppedRead = await runImp(
@@ -155,7 +144,6 @@ test('it keeps all of a logged session past the ring, a sleep and a wake, the ex
   expect(stoppedRead).toBe(`${'x'.repeat(mib)}${'y'.repeat(tail)}`);
   expect(stoppedState).toBe('stopped');
 
-  // a checkpoint restore keeps the logs, which live on the host
   await runImp('start', name);
   await runImp('checkpoint', name, 'before');
   await runImp('restore', name, 'before');

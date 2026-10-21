@@ -16,15 +16,12 @@ import { removeDataDir } from './remove-data-dir';
 import { resetBaseline } from './reset-baseline';
 import { resolveDataWipe } from './resolve-data-wipe';
 
-// The moves suites' hosts: the run's own instance as A, and B beside it on
-// a Docker network, reached at its address there. B's data dir stays
-// between runs, so only its first start seeds the default image.
+// B's data dir stays between runs, so only its first start seeds the default
+// image.
 
-// what the move suites run in: each instance holds about one test guest
 const RAM_BUDGET_MIB = '2048';
 const DEFAULT_MEMORY_MIB = '512';
 
-// the saved host the CLI moves imps to
 export const HOST_B = 'b';
 
 export interface MoveHosts {
@@ -32,13 +29,10 @@ export interface MoveHosts {
   readonly hostB: DevInstance;
   readonly network: string;
 
-  // the network's gateway: this machine, as both containers see it
   readonly gateway: string;
 
-  // the CLI's env: XDG_CONFIG_HOME holds the saved host b
   readonly cliEnv: Readonly<Record<string, string>>;
 
-  // A rebooted onto the network, and reboots back at the end
   readonly isARebooted: boolean;
 }
 
@@ -49,9 +43,8 @@ export interface MoveNetwork {
   readonly ipB: string;
 }
 
-// A /24 in 10.100.0.0 to 10.255.255.0, one per port offset: inside 10/8,
-// clear of IMP_SUBNET's 10.66/16 and of Docker's 172.x pools, so runs in
-// other worktrees and e2e slots never share it.
+// Inside 10/8 but clear of IMP_SUBNET's 10.66/16 and of Docker's 172.x pools,
+// so runs in other worktrees and e2e slots never share it.
 export function buildMoveNetwork(offset: number): MoveNetwork {
   const second = 100 + Math.floor(offset / 256);
 
@@ -70,11 +63,8 @@ export function buildMoveNetwork(offset: number): MoveNetwork {
 }
 
 export interface MoveHostsOptions {
-  // move over the tailnet: B joins it under its own name, and neither host
-  // takes the test range or a peer URL
   readonly tailnet: boolean;
 
-  // more env for both impds, such as per-imp tailnet names
   readonly env?: Readonly<Record<string, string>>;
 }
 
@@ -90,7 +80,6 @@ function buildNames() {
   };
 }
 
-// impd's env on each host
 function buildHostEnv(
   options: MoveHostsOptions,
   network: MoveNetwork,
@@ -114,16 +103,14 @@ function buildHostEnv(
   };
 }
 
-// On ZFS, B's root dataset beside A's, which scripts/zfs-host-test.sh makes:
 // B would inherit A's IMP_ZFS_ROOT otherwise, and two impds on one dataset
-// take each other's disks. Undefined on XFS.
+// take each other's disks.
 export function readHostBZfsRoot(): string | undefined {
   const root = process.env['IMP_ZFS_ROOT'] ?? '';
 
   return process.env['IMP_STORAGE_BACKEND'] === 'zfs' && root !== '' ? `${root}-mv-b` : undefined;
 }
 
-// B as the options make it, for starting it and for its teardown
 function readHostB(options: MoveHostsOptions): DevInstance {
   const names = buildNames();
   const network = buildMoveNetwork(readOffset());
@@ -137,7 +124,6 @@ function readHostB(options: MoveHostsOptions): DevInstance {
     env: {
       ...buildHostEnv(options, network, network.ipB),
 
-      // off the tailnet, unless the suite moves over it under B's own name
       ...(options.tailnet ? { IMP_TAILSCALE_HOSTNAME: names.container } : { IMP_DEV_TAILNET: '0' }),
       ...(zfsRoot !== undefined && { IMP_ZFS_ROOT: zfsRoot }),
     },
@@ -156,9 +142,7 @@ async function checkAOnNetwork(network: string): Promise<boolean> {
   return result.stdout.trim() === 'yes';
 }
 
-// A failed run (--bail skips afterAll) can leave B up and A on the
-// network, its only one; this puts both back, and loses nothing when the
-// run is clean.
+// --bail skips afterAll, so a failed run can leave B up and A on the network.
 export async function removeMoveLeftovers(): Promise<void> {
   const names = buildNames();
 
@@ -173,13 +157,8 @@ export async function removeMoveLeftovers(): Promise<void> {
   await runCommand(['docker', 'network', 'rm', names.network]);
 }
 
-// the two ways the harness runs B: on the Docker network, or on the tailnet
-// under its own name
 export type HostBFixtureName = 'host-b' | 'host-b-tailnet';
 
-// The options each fixture runs B with. Per-imp tailnet names need an OAuth
-// client, so both impds run them only once IMP_E2E_TAILNET_NAMES=1 says it
-// exists, and then under one test prefix.
 export function readMoveOptions(fixture: HostBFixtureName): MoveHostsOptions {
   if (fixture === 'host-b') {
     return { tailnet: false };
@@ -190,9 +169,6 @@ export function readMoveOptions(fixture: HostBFixtureName): MoveHostsOptions {
     : { tailnet: true };
 }
 
-// A's settings for the moves: onto the network, with the test range and its
-// peer URL, unless the move goes over the tailnet, which A is on already;
-// null when A runs on the run's own.
 export function buildMoveSettings(
   options: Readonly<MoveHostsOptions>,
   offset: number,
@@ -211,40 +187,28 @@ export function buildMoveSettings(
   };
 }
 
-// B's part of a moves suite, which the harness runs as the suite's fixture
 export interface HostBFixture {
-  // the network, B on it, and the CLI config that saves it, before A's
-  // settings reboot A onto the network
   readonly start: () => Promise<void>;
 
-  // B's imps, secrets and moves that a journey named with the prefix
   readonly reset: () => Promise<void>;
 
-  // B down and the network gone, once A is back on the run's settings
   readonly stop: () => Promise<void>;
 }
 
-// what the fixture does to the hosts, Docker and the CLI config
 export interface HostBFixtureDeps {
-  // the CLI config dir that saves B, made anew on each start
   readonly cliDir: string;
   readonly removeLeftovers: () => Promise<void>;
   readonly createNetwork: (name: string, network: Readonly<MoveNetwork>) => Promise<void>;
 
-  // B up, and its container's privileges checked against deploy/
   readonly startHost: (host: Readonly<DevInstance>) => Promise<void>;
 
-  // saves B as HOST_B in the CLI config `env` points at
   readonly login: (
     host: Readonly<DevInstance>,
     env: Readonly<Record<string, string>>,
   ) => Promise<void>;
 
-  // the baseline reset on B for the prefix
   readonly resetHost: (host: Readonly<DevInstance>, prefix: string) => Promise<void>;
 
-  // B down and its data dir emptied, so its next start makes it from nothing;
-  // never under --keep (`keep`), which keeps what the journeys left
   readonly removeHost: (host: Readonly<DevInstance>) => Promise<void>;
   readonly keep: boolean;
   readonly log: (line: string) => void;
@@ -282,7 +246,6 @@ export function buildHostBFixtureDeps(keep: boolean): HostBFixtureDeps {
       await resetBaseline({ client, prefixes: [prefix], dataDir: host.dataDir });
     },
     removeHost: async (host) => {
-      // refused before anything goes, as for a dir that is no instance's
       const target = await resolveDataWipe(host.dataDir, readHostBZfsRoot());
 
       await runDevScript('down', host);
@@ -306,7 +269,6 @@ export function createHostBFixture(
   const hostB = readHostB(options);
   const reset = () => deps.resetHost(hostB, prefix);
 
-  // B up and saved in a fresh CLI config
   const startLoggedIn = async () => {
     await deps.startHost(hostB);
 
@@ -323,8 +285,7 @@ export function createHostBFixture(
 
       await startLoggedIn();
 
-      // What an earlier, killed run or a failed journey left on B. A reset
-      // that fails makes B from nothing: a receiving imp whose source is
+      // A reset that fails makes B from nothing: a receiving imp whose source is
       // gone stays marked, and impd refuses to remove it.
       try {
         await reset();
@@ -352,8 +313,6 @@ export function createHostBFixture(
   };
 }
 
-// The hosts that the harness's host-B fixture keeps up with these options,
-// for a journey; it starts nothing.
 export function readMoveHosts(options: Readonly<MoveHostsOptions>): MoveHosts {
   const names = buildNames();
 

@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import * as z from 'zod';
 import { createStubBin } from './create-stub-bin';
 
-// The part of `tailscale status --json` that host/scripts/tailscale-up.sh reads.
 interface StubTailscaleNode {
   readonly BackendState: string;
   readonly Self: {
@@ -24,25 +23,17 @@ const SelfSchema = z.object({
 const NodeSchema = z.object({ BackendState: z.string(), Self: SelfSchema });
 
 export interface StubTailscale {
-  // the directory that holds the stub, for the front of a child's PATH
   readonly bin: string;
-
-  // makes `node` the one status reports
   readonly writeNode: (node: StubTailscaleNode) => void;
 
-  // status reports Starting until releaseStart, whatever the node says
+  // Until the start is released, status reports Starting whatever the node says.
   readonly holdStart: () => void;
   readonly releaseStart: () => void;
 
   readonly readNode: () => StubTailscaleNode;
-
-  // the arguments after --socket of each call with this verb, in order
   readonly readCalls: (verb: string) => readonly string[];
 }
 
-// A `tailscale` CLI in <dir>/bin, after the --socket=… it always gets first:
-// `status` fails before any node is written, as with no tailscaled; `up`
-// saves a Running node with its --hostname and --advertise-tags.
 export function createStubTailscale(directory: string): StubTailscale {
   const status = join(directory, 'tailscale-status.json');
   const starting = join(directory, 'tailscale-starting');

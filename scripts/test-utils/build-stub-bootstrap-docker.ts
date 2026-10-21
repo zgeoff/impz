@@ -1,34 +1,20 @@
 interface StubBootstrapDocker {
-  // what `docker version` reads as the daemon's version; without it, the daemon does not answer
   readonly serverVersion?: string;
-
-  // what `docker network inspect` prints for the imp-host network in deploy/bootstrap.sh's
-  // NETWORK_FORMAT, and the containers on it; without it, there is no such network
   readonly hostNetwork?: string;
   readonly networkContainers?: readonly string[];
-
-  // the images the host holds, and those of them that carry the unit's seccomp profile
   readonly images?: readonly string[];
   readonly seccompImages?: readonly string[];
-
-  // what the imp-host container answers: `impz info` (with or without --json), `docker port`,
-  // its findmnt of /var/lib/imp, its IPv6 default route, and its log
   readonly impInfo?: string;
   readonly published?: string;
   readonly dataMount?: string;
   readonly ipv6Route?: string;
   readonly logs?: string;
-
-  // the CLI the container has: impz, or imp in an image from before the CLI's rename
   readonly runningCLI?: 'imp' | 'impz';
 }
 
 const SECCOMP_IN_IMAGE = '/usr/local/share/imp/deploy/imp-host.seccomp.json';
 
-// A stub docker's script, for createStubBin, that answers the calls deploy/bootstrap.sh makes
-// of a host's Docker. Any call bootstrap.sh does not make fails as unexpected.
 export function buildStubBootstrapDocker(stub: StubBootstrapDocker): string {
-  // `docker load` takes an archive that holds no image the host lacks
   const version =
     stub.serverVersion === undefined
       ? 'echo "Cannot connect to the Docker daemon at unix:///var/run/docker.sock" >&2; exit 1'

@@ -16,9 +16,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// A jailed VM's start, stop and removal leave no jail, cgroup or mount
-// behind, nor does the boot template build a cold boot starts.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -34,8 +31,8 @@ test('it starts, stops and removes a jailed VM cleanly, and the boot template bu
 
   const name = `${ctx.prefix}rm`;
 
-  // The second cold boot of a shape since impd started builds its boot
-  // template in the background, unless one exists; three cold boots follow.
+  // The second cold boot of a shape since impd started builds its boot template
+  // in the background, unless one exists.
   const since = new Date();
 
   await runImp('new', name, '--image', resolveImageName('e2e-bare'), '--memory', '512');
@@ -64,7 +61,6 @@ test('it starts, stops and removes a jailed VM cleanly, and the boot template bu
 
   const key = await readTemplateKey(name);
 
-  // a destroy kills the VM outright
   await runImp('rm', name);
 
   const jail = await runInContainer(['ls', `/var/lib/imp/jail/firecracker/${row.id}`]);
@@ -75,7 +71,6 @@ test('it starts, stops and removes a jailed VM cleanly, and the boot template bu
   expect(cgroup.exitCode).not.toBe(0);
   expect(removedMounts).toStrictEqual([]);
 
-  // the jailed build this imp's boots started ends before the mount check
   await waitFor('the imp’s boot template build to end', async () => {
     const log = await readImpdLogSince(since);
 

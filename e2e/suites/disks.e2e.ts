@@ -17,9 +17,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// `impz new --disk` and `impz disk resize` on one imp, through each state a
-// resize can find it in.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -57,7 +54,7 @@ test('it grows a disk past its image at the first boot, at once while running, o
 
   const disk = buildImpDiskPath(info.storage.backend, row.id);
 
-  // ext4 keeps a few percent of each size for its own metadata
+  // ext4 keeps a few percent of each size for its own metadata.
   const firstBoot = await runInImp(name, 'df', '-k', '/');
 
   expect(parseDfSizeKib(firstBoot)).toBeGreaterThan(97 * 1024 * 1024);

@@ -14,10 +14,7 @@ import {
 import { runSsh, setupKeyClient } from '../lib/ssh';
 import { getSuitePrefix } from '../lib/suites';
 
-// Scoped tokens (docs/guides/tokens.md): what a read token and an exec
-// token limited to some imps may do, through the CLI as a user runs it.
-
-// one stack for every release, so a token goes before the imps it names
+// One stack for every release, so a token goes before the imps it names.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -40,7 +37,6 @@ test('it prints a made read token once, lists it without its secret, and lets it
 
   await waitForExec(dev);
 
-  // `impz token new` prints the secret alone on stdout
   const made = await runImp('token', 'new', reader, '--scope', 'read');
 
   registerRemoval(ctx.stack, config.keep, () => removeTokenIfPresent(ctx.client, reader));
@@ -155,7 +151,6 @@ test('it lets an exec token limited to dev-* run in its imp and not touch anothe
 
   expect(listed.stdout).not.toContain(other);
 
-  // the audit log names the token behind each call
   const calls = await listAuditCalls(other);
 
   expect(calls.find((call) => call.procedure === 'imps.stop')).toMatchObject({
@@ -164,7 +159,6 @@ test('it lets an exec token limited to dev-* run in its imp and not touch anothe
     outcome: 'FORBIDDEN',
   });
 
-  // a removed token is refused at once
   await runImp('token', 'rm', devExec);
 
   const after = await tryImp(['ls'], { token: secret });
@@ -184,8 +178,6 @@ test('it lets a token for dev-* that may grant one secret grant it there and not
   const other = `${ctx.prefix}grant-other`;
   const granter = `${ctx.prefix}granter`;
   const gh = `${ctx.prefix}gh`;
-
-  // a synthetic value, which no output may show
   const ghValue = 'ghp_synthetic126e2e0123456789';
 
   await runImp('new', dev, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
@@ -229,7 +221,7 @@ test('it lets a token for dev-* that may grant one secret grant it there and not
   const granted = await tryImp(['grant', dev, gh], { token: secret });
   const otherImp = await tryImp(['grant', other, gh], { token: secret });
 
-  // the fork's name matches dev-*, so only the missing scope refuses it
+  // The fork's name matches dev-*, so only the missing scope refuses it.
   const fork = await tryImp(['fork', dev, `${dev}-copy`], { token: secret });
 
   registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, `${dev}-copy`));
@@ -256,7 +248,6 @@ test('it lets a token for dev-* that may grant one secret grant it there and not
     stderr: expect.toInclude('FORBIDDEN'),
   });
 
-  // the grant stays through a sleep and a wake
   await runImp('sleep', dev);
   await runImp('wake', dev);
 
@@ -283,8 +274,6 @@ test('it lets an ssh key bound to a dev-* exec token log in to its imp and no ot
   const dev = `${ctx.prefix}key-dev`;
   const other = `${ctx.prefix}key-other`;
   const sshDev = `${ctx.prefix}ssh-dev`;
-
-  // an ssh Host alias whose key authorized_keys does not list
   const keyHost = 'imp-e2e-dev-key';
 
   await runImp('new', dev, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
@@ -331,7 +320,6 @@ test('it lets an ssh key bound to a dev-* exec token log in to its imp and no ot
     stderr: expect.toInclude('Permission denied'),
   });
 
-  // the audit log names the token behind the login
   const calls = await listAuditCalls(dev);
 
   expect(calls.find((call) => call.actorName === sshDev)).toMatchObject({
@@ -339,7 +327,6 @@ test('it lets an ssh key bound to a dev-* exec token log in to its imp and no ot
     outcome: 'ok',
   });
 
-  // an unbound key logs in nowhere
   const bound = await runImp('token', 'key', 'ls', sshDev);
 
   const [fingerprint] = bound.split(' ');
@@ -362,8 +349,6 @@ test('it opens no ssh session for a key bound to a read token', async () => {
 
   const dev = `${ctx.prefix}read-key-dev`;
   const sshReader = `${ctx.prefix}ssh-reader`;
-
-  // an ssh Host alias whose key authorized_keys does not list
   const keyHost = 'imp-e2e-read-key';
 
   await runImp('new', dev, '--image', resolveImageName('e2e-tiny'), '--memory', '256');

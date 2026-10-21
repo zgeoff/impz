@@ -3,9 +3,6 @@ import * as z from 'zod';
 import { tryImp } from './imp-cli';
 import type { DevInstance } from './instance';
 
-// A client of impd's public MCP route (docs/guides/mcp.md#public-route): the
-// login and consent pages, the CLI's approval, the token endpoint, and /mcp.
-
 export const RouteTokensSchema = z.object({
   access_token: z.string(),
   refresh_token: z.string(),
@@ -14,26 +11,20 @@ export const RouteTokensSchema = z.object({
 
 export type RouteTokens = z.infer<typeof RouteTokensSchema>;
 
-// The route's origin on the instance: impd's :7071, published at the
-// instance's offset; plain http on loopback, as tests alone may use.
 export function buildRouteOrigin(target: Readonly<Pick<DevInstance, 'portOffset'>>): string {
   return `http://127.0.0.1:${String(7071 + target.portOffset)}`;
 }
 
-// RFC 7636's S256: the verifier's SHA-256, base64url
 export function buildPkceChallenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
 }
 
 export interface ApprovalPage {
-  // what `impz oauth approve` takes
   readonly code: string;
 
-  // the signed query the form posts back
   readonly oauthQuery: string;
 }
 
-// the login page's approval code and form field, '' for each it lacks
 export function parseApprovalPage(page: string): ApprovalPage {
   const query = /name="oauth_query" value="(?<query>[^"]+)"/v.exec(page)?.groups?.['query'] ?? '';
 
@@ -43,8 +34,6 @@ export function parseApprovalPage(page: string): ApprovalPage {
   };
 }
 
-// An answer from /mcp: the last SSE event's data, or the body, parsed as
-// JSON, or the text of one that is not JSON, such as a 401's.
 export function parseMcpBody(text: string): unknown {
   const events = text.split('\n').filter((line) => line.startsWith('data: '));
   const last = events.at(-1)?.slice('data: '.length) ?? text;
@@ -58,7 +47,6 @@ export function parseMcpBody(text: string): unknown {
   }
 }
 
-// the cookies a response sets, as a request sends them back
 export function readCookies(response: Response): string {
   return response.headers
     .getSetCookie()
@@ -66,10 +54,8 @@ export function readCookies(response: Response): string {
     .join('; ');
 }
 
-// Thin glue over the live route below.
-
-// as a browser posts a page's form under a same-origin referrer policy:
-// Origin null, and Sec-Fetch-Site it sets itself
+// As a browser posts a page's form under a same-origin referrer policy:
+// Origin null, and the Sec-Fetch-Site the browser sets itself.
 export const BROWSER_FORM = { origin: 'null', 'sec-fetch-site': 'same-origin' };
 
 export function sendForm(
@@ -91,7 +77,6 @@ export interface McpAnswer {
   readonly body: unknown;
 }
 
-// a JSON-RPC call on the route's /mcp, in the session when one is given
 export async function sendMcp(
   origin: string,
   bearer: string,
@@ -119,7 +104,6 @@ export async function sendMcp(
   };
 }
 
-// an MCP session on the route; throws unless initialize answers 200
 export async function openRouteMcp(origin: string, bearer: string): Promise<string> {
   const opened = await sendMcp(origin, bearer, '', 'initialize', {
     protocolVersion: '2025-06-18',
@@ -135,14 +119,10 @@ export async function openRouteMcp(origin: string, bearer: string): Promise<stri
 }
 
 export interface Approval {
-  // the named token that approves, with the scope it grants
   readonly approverToken: string;
   readonly scope: string;
 }
 
-// The browser's part of a sign-in, as arrangement: authorization, the login
-// page, the CLI's approval, Continue and Allow, to the redirect back with its
-// code. Each step that goes another way throws, naming it.
 export async function runBrowserSignIn(
   authorizationURL: string,
   approval: Readonly<Approval>,
@@ -204,8 +184,6 @@ export interface SignIn extends Approval {
   readonly redirect: string;
 }
 
-// A sign-in from authorization to the client's tokens, approved with the
-// CLI, as arrangement
 export async function runSignIn(signIn: Readonly<SignIn>): Promise<RouteTokens> {
   const verifier = randomBytes(32).toString('base64url');
 

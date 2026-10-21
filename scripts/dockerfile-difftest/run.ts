@@ -1,7 +1,4 @@
 #!/usr/bin/env bun
-// Parses generated Dockerfiles with impd's port (dockerfile-parse.ts) and
-// with the Go parser it ports, and fails on any file the two read
-// differently. See README.md.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -44,13 +41,10 @@ interface Comparable {
   readonly trigger: string | null;
 }
 
-// Errors from parsers impd does not port (ENV and LABEL pairs): Go fails
-// the build on them, so impd accepting the file lets nothing through.
+// impd does not port Go's ENV and LABEL pair parsers, and Go fails the build on their errors, so
+// impd accepting such a file lets nothing through.
 const HARMLESS_GO_ERRORS = [/^Syntax error - can't find = in /v];
 
-// Lines with the forms the frontend could read another way than a naive
-// reader: quotes and escapes, the escape directive, continuations,
-// heredocs, JSON arrays with escapes, and space that is not ASCII.
 const PIECES = [
   'FROM a:1',
   'from c',
@@ -159,8 +153,7 @@ const PIECES = [
   '#check=skip=all',
 ];
 
-// a fixed-seed generator, so a failing file can be made again; it returns
-// the high bits of a 31-bit LCG, whose low bits repeat too soon
+// The low bits of a 31-bit LCG repeat too soon, so the generator returns its high bits.
 function makeRandom(seed: number): () => number {
   const state = { value: seed % 2_147_483_648 };
 
@@ -180,8 +173,8 @@ function buildDockerfile(random: () => number): string {
   return `${bom}${lines.join(ending)}${random() % 2 === 0 ? ending : ''}`;
 }
 
-// non-ASCII flags differ only in how each side decodes the bytes; impd
-// refuses them before it reads them
+// The two parsers read a non-ASCII flag differently only in how they decode its bytes, and impd
+// refuses such a flag before it reads it.
 function normalizeFlag(flag: string): string {
   const isAscii = new TextEncoder().encode(flag).every((byte) => byte < 128);
 
@@ -190,7 +183,7 @@ function normalizeFlag(flag: string): string {
 
 const WORD_KEYWORDS = new Set(['from', 'add', 'copy']);
 
-// ARG's words come from parseWords, which impd ports as splitNameWords
+// Go splits ARG's words with its own word parser, which impd ports separately.
 function parseWords(instruction: Readonly<Instruction>, escape: string): readonly string[] | null {
   if (instruction.keyword === 'arg') {
     return splitNameWords(instruction.args, escape);
@@ -240,13 +233,10 @@ function readOurs(dockerfile: string) {
   }
 }
 
-// the error's class: its text without line numbers and quoted parts
 function formatErrorClass(error: string): string {
   return error.replaceAll(/line \d+/gv, 'line N').replaceAll(/"[^"]*"/gv, '"…"');
 }
 
-// The pinned copy impd builds of a Dockerfile it accepts; null when impd
-// refuses the file, and an error when impd accepts it but cannot pin it
 function renderPinned(dockerfile: string): string | null | Error {
   let images: ReturnType<typeof checkDockerfile>;
 
@@ -328,7 +318,6 @@ function main(): number {
     pinFailures: 0,
   };
 
-  // the files both parsers read, which the pin round trip uses
   const accepted: string[] = [];
 
   const oursOnly = new Map<string, number>();
@@ -387,7 +376,6 @@ function main(): number {
     }
   });
 
-  // the pinned copies must read the same to the Go parser as to impd's
   const pinned: string[] = [];
 
   for (const dockerfile of accepted) {

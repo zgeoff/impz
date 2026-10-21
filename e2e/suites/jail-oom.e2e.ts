@@ -17,9 +17,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// A jailed VM's cgroup kills it past memory.max, and impd stops the imp and
-// says why (docs/architecture/isolation.md#cgroups).
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -50,8 +47,8 @@ test('it stops a VM over its memory limit, says why, and leaves no jail mounted'
     ].join('\n'),
   );
 
-  // A woken VM maps its memory from the snapshot file, which the host can
-  // drop; a write makes each page the VM's own, and there is no room for it.
+  // A woken VM maps its memory from the snapshot file, which the host can drop;
+  // a write makes each page the VM's own, and there is no room for it.
   await runImp('sleep', name);
   await runImp('wake', name);
   await waitForExec(name);
@@ -64,7 +61,6 @@ test('it stops a VM over its memory limit, says why, and leaves no jail mounted'
     `echo ${String(128 * 1024 * 1024)} > /sys/fs/cgroup/imps/${row.id}/memory.max`,
   ]);
 
-  // the exec dies with the VM
   await tryImp([
     'exec',
     name,

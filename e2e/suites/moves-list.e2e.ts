@@ -12,10 +12,6 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// `impz ls --all` across A and B on the harness's move network
-// (lib/move-hosts.ts), with both saved in a CLI config of the test's own.
-
-// one stack for every release, on both hosts
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -34,7 +30,7 @@ test('it shows both hosts in impz ls --all, with the move mark while the imp mov
 
   const seen = `${ctx.prefix}seen`;
 
-  // the move config keeps B alone, so the listing gets one of its own
+  // The move config keeps B alone, so the listing gets one of its own.
   const configDir = await mkdtemp(join(tmpdir(), 'imp-mv-both-'));
 
   ctx.stack.defer(() => rm(configDir, { recursive: true, force: true }));

@@ -3,8 +3,6 @@ import { findValues } from './find-values';
 import { isSchemaObject } from './is-schema-object';
 import type { Schema, SchemaObject } from './schema';
 
-// whether the two take no value in common on a discriminator: then they are
-// different variants
 export function hasOtherTag(
   narrow: SchemaObject,
   wide: Schema,

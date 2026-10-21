@@ -11,9 +11,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// The watchdog (IMP_WATCHDOG_ACTION) on a guest that stops answering: impd
-// boots it cold, so what only its memory held is gone.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -29,8 +26,7 @@ test('it restarts a paused VM whose agent stops answering with the watchdog', as
 
   const name = `${ctx.prefix}dog`;
 
-  // this journey's own settings, back to the run's at its end: a watchdog
-  // this short would trip during the seeded kill rounds
+  // A watchdog this short would trip during the seeded kill rounds.
   await runDevScript('reboot', instance, {
     IMP_WATCHDOG_ACTION: 'restart',
     IMP_WATCHDOG_TIMEOUT_S: '10',
@@ -40,7 +36,6 @@ test('it restarts a paused VM whose agent stops answering with the watchdog', as
 
   await waitForImpd();
 
-  // no VM or loop device outlives the reboot
   const devices = await readLoopDevices();
   const vms = await listContainerVms();
   const rows = await listImps();
@@ -55,7 +50,6 @@ test('it restarts a paused VM whose agent stops answering with the watchdog', as
   const proof = await startMemoryProof(name);
   const row = await requireImp(name);
 
-  // the guest stops; Firecracker and its socket stay
   await runInContainer([
     'curl',
     '-fsS',

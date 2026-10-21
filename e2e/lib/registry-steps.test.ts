@@ -17,9 +17,6 @@ import {
   startRegistry,
 } from './registry-steps';
 
-// the caller's stack goes before the temp dir that holds the stub docker,
-// and the dir goes even when that stack's release throws; a test may
-// release the caller's stack itself and still read the dir after
 async function setupTest() {
   const cleanup = new AsyncDisposableStack();
 

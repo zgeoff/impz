@@ -25,10 +25,7 @@ import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
-// Sleep and wake of an e2e-bare imp (docs/architecture/lifecycle/sleep-and-wake.md):
-// a memory proof (lib/memory-proof.ts) shows what only guest memory holds.
-
-// one stack for every release, so an exec stops before its imp goes
+// One stack for every release, so an exec stops before its imp goes.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -56,7 +53,6 @@ test('it sleeps an idle imp by itself, wakes it intact on a request, and keeps i
 
   expect(firecrackerUp).toBeTrue();
 
-  // impd's sampler has measured the imp, so the RAM it uses counts
   await waitFor(`a RAM reading of ${name}`, async () => {
     const sampled = await requireImp(name);
 
@@ -67,7 +63,6 @@ test('it sleeps an idle imp by itself, wakes it intact on a request, and keeps i
 
   const before = await readInfo();
 
-  // an idle imp sleeps by itself and frees its RAM
   const idleFrom = Date.now();
 
   await waitFor(`${name} to sleep`, () => assertState(name, 'sleeping'), {
@@ -91,7 +86,6 @@ test('it sleeps an idle imp by itself, wakes it intact on a request, and keeps i
   expect(after.ramUsedMib).toBeLessThan(before.ramUsedMib);
   expect(after.awakeCount).toBeLessThan(before.awakeCount);
 
-  // an HTTP request wakes it intact
   const requested = Date.now();
 
   const response = await sendProxyRequest(name);
@@ -108,12 +102,10 @@ test('it sleeps an idle imp by itself, wakes it intact on a request, and keeps i
 
   await checkMemoryProof(proof);
 
-  // a finished request does not keep it awake
   await waitFor(`${name} to sleep`, () => assertState(name, 'sleeping'), {
     timeoutMs: (config.idleTimeoutS + 15) * 1000,
   });
 
-  // an exec session holds it awake while it runs
   const exec = await startImp(['exec', name, '--', 'sleep', '3600']);
 
   ctx.stack.defer(async () => {
@@ -134,7 +126,6 @@ test('it sleeps an idle imp by itself, wakes it intact on a request, and keeps i
     timeoutMs: (config.idleTimeoutS + 15) * 1000,
   });
 
-  // a hold does too
   await runImp('hold', name, '1m');
 
   const heldFrom = Date.now();
@@ -147,14 +138,12 @@ test('it sleeps an idle imp by itself, wakes it intact on a request, and keeps i
   });
 
   await checkMemoryProof(proof);
-
-  // impz sleep and impz wake keep memory, and the guest clock catches up
   await runImp('sleep', name);
 
   const slept = await readState(name);
 
-  // the time asleep is the contract: a guest clock that froze while asleep
-  // would be this far behind after the wake
+  // The time asleep is the contract: a guest clock that froze while asleep
+  // would be this far behind after the wake.
   await Bun.sleep(5000);
 
   await runImp('wake', name);
@@ -169,7 +158,6 @@ test('it sleeps an idle imp by itself, wakes it intact on a request, and keeps i
   expect(woken).toBe('running');
   expect(Math.abs(Number(guestS) - Date.now() / 1000)).toBeLessThan(3);
 
-  // a request to the imp's own port wakes it too
   await runImp('sleep', name);
 
   const byPort = await readOkBody(sendImpPortRequest(row.slot));
@@ -179,9 +167,6 @@ test('it sleeps an idle imp by itself, wakes it intact on a request, and keeps i
   expect(wokenByPort).toBe('running');
 });
 
-// A woken VM's sleep writes only the pages the guest dirtied, over a copy of
-// the memory file it woke from: what the guest wrote before and after each
-// wake comes back whole.
 test('it keeps what a woken imp wrote through its next sleeps, which write only the pages it dirtied', async () => {
   const ctx = await setupTest();
 
@@ -198,7 +183,6 @@ test('it keeps what a woken imp wrote through its next sleeps, which write only 
   await runImp('sleep', name);
   await runImp('wake', name);
 
-  // 8 MiB the guest writes after the wake, on a tmpfs only its memory holds
   const written = await runShellInImp(
     name,
     'mkdir -p /run/dirty && mount -t tmpfs -o size=16m tmpfs /run/dirty && ' +
@@ -218,8 +202,6 @@ test('it keeps what a woken imp wrote through its next sleeps, which write only 
   const afterSecond = await runShellInImp(name, 'sha256sum /run/dirty/blob');
 
   await checkMemoryProof(proof);
-
-  // a later sleep writes over the file a diff sleep wrote
   await runShellInImp(name, 'echo again > /run/dirty/note');
 
   const thirdFrom = new Date();
@@ -288,7 +270,7 @@ test('it gives memory the guest frees back to the host', async () => {
 
   await runShellInImp(name, 'rm /run/fill/blob && umount /run/fill');
 
-  // free page reporting hands the pages back within seconds
+  // Free page reporting hands the pages back within seconds.
   const shrunk = await waitFor(`${name} RAM to shrink`, async () => {
     const sampled = await requireImp(name);
 

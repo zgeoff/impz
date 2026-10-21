@@ -1,9 +1,8 @@
-// imp's test:related for the pre-push baseline. The root bun test skips the
-// dashboard (bunfig.toml pathIgnorePatterns), so a dashboard file's tests run
-// from its package, as test:dashboard runs them.
 import { join } from 'node:path';
 import { runRelatedTests } from './run-related-tests.ts';
 
+// The root bun test skips the dashboard through bunfig.toml, so a dashboard file's tests run from
+// its package.
 const dashboardPrefix = 'packages/dashboard/';
 
 export async function runBranchTests(paths: readonly string[], cwd: string): Promise<number> {

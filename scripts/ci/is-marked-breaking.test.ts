@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { isMarkedBreaking } from './is-marked-breaking';
 
-// Each row's verdict is release-please 17.11.2's parseConventionalCommits on
-// the squash message GitHub builds for it.
+// Each row's verdict is what release-please 17.11.2 parses from the squash message GitHub builds
+// for that row.
 test.each([
   ['a lone commit with a ! subject', 'feat: a', ['feat(api)!: drop imps.get'], '', true],
   ['a lone commit of any type with a ! subject', 'chore: a', ['chore!: drop imps.get'], '', true],

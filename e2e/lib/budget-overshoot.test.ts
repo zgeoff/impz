@@ -4,7 +4,7 @@ import { collectBudgetBreaches, collectOvershoots } from './budget-overshoot';
 // Samples are 700 ms apart, as the scale monitor takes them.
 
 test('#collectOvershoots finds a run of samples over the budget that use left again', () => {
-  // measured in the scale suite: 9 MiB over for two samples
+  // Measured in the scale suite: 9 MiB over for two samples.
   const samples = [2741, 2825, 2825, 2517, 2648].map((usedMib, index) => ({
     at: index * 700,
     usedMib,
@@ -31,7 +31,6 @@ test('#collectOvershoots marks a run still over at the last sample as open', () 
 });
 
 test('#collectBudgetBreaches passes an overshoot that ends inside the start limit, whatever ended it', () => {
-  // ended by the admission sleep of another imp
   const samples = [2741, 2825, 2825, 2517, 2648].map((usedMib, index) => ({
     at: index * 700,
     usedMib,
@@ -51,8 +50,6 @@ test('#collectBudgetBreaches passes an overshoot that ends inside the start limi
 });
 
 test('#collectBudgetBreaches passes a slow enforce sleep, whose own length does not count against the overshoot', () => {
-  // over from 700 ms; enforce starts a sleep at 5.6 s that takes 2.4 s, so use
-  // is over for 7.7 s in all
   const samples = [2700, ...Array.from({ length: 11 }, () => 2830), 2500].map((usedMib, index) => ({
     at: index * 700,
     usedMib,
@@ -89,8 +86,6 @@ test('#collectBudgetBreaches fails a missing enforce sleep once use stays over p
 });
 
 test('#collectBudgetBreaches fails a dead enforce loop even with admission sleeps around it', () => {
-  // creates every 4 s sleep an imp each to make room, never enough to bring
-  // use under the budget, and enforce never runs
   const samples = [2700, ...Array.from({ length: 16 }, () => 2830), 2700].map((usedMib, index) => ({
     at: index * 700,
     usedMib,
@@ -241,7 +236,6 @@ test('#collectBudgetBreaches passes a running check of an overshoot still inside
 });
 
 test("#collectBudgetBreaches fails the final check of a dead enforce loop's overshoot still open at the end", () => {
-  // the last sample is inside the grace a running check gives a sleep under way
   const samples = [2700, ...Array.from({ length: 12 }, () => 2830)].map((usedMib, index) => ({
     at: index * 700,
     usedMib,

@@ -15,12 +15,7 @@ import {
 } from '../lib/instance';
 import { waitFor } from '../lib/wait-for';
 
-// The rules imp-docker-proxy holds a host build to. The dev proxy, under
-// IMP_BUILD_ISOLATION=imp, refuses every build, so each test builds through
-// a second proxy of the same binary under host isolation.
-
 async function setupTest() {
-  // a name and socket of this test's own, so no other proxy is touched
   const id = randomUUID().slice(0, 8);
   const name = `${instance.container}-docker-proxy-host-mode-${id}`;
   const socket = `/run/imp-docker/host-mode-${id}.sock`;
@@ -94,9 +89,8 @@ test("it refuses a build that tags outside imp/ or retags the host's image", asy
   expect(retagAnswer.message).toContain('param t');
 });
 
-// the engine reads a build's params from r.Form, where a form body replaces
-// or adds to the query: these would give RUN the host's network, a remote
-// context, a tag outside imp/ and the classic builder, with no frontend pin
+// The engine reads a build's params from r.Form, where a form body replaces or
+// adds to the query.
 test.each([
   [
     'an urlencoded',
@@ -108,7 +102,6 @@ test.each([
     ],
   ],
 
-  // curl sends -F fields as multipart/form-data, with its own boundary
   [
     'a multipart',
     [
@@ -127,7 +120,6 @@ test.each([
   async (_kind, form) => {
     const ctx = await setupTest();
 
-    // the tag the form body names, with the suite's prefix
     const evil = 'e2e-sock-evil:latest';
 
     const query = new URLSearchParams([

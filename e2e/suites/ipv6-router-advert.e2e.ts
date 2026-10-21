@@ -22,10 +22,6 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// A guest's router advertisement (docs/architecture/network/networking.md#ipv6), on
-// the topology's near network behind NAT66. The instance reboots onto it,
-// and back to its own network at the end.
-
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -61,8 +57,7 @@ test('it ignores a guest’s router advertisement, and still accepts its router 
   await waitForExec(rogue);
 
   // impd's nft input drops a guest's RA before ip6tables, so a counter on the
-  // tap's ingress proves it arrived; the reboot onto the topology made the
-  // container anew, so no earlier run's table is there
+  // tap's ingress proves it arrived.
   const tap = await readImpTap(rogue);
 
   const table = buildRaCounterTable(ctx.prefix);
@@ -88,9 +83,8 @@ test('it ignores a guest’s router advertisement, and still accepts its router 
   const routingAfter = await readHostRouting();
   const acceptsBefore = await readRsAccepts();
 
-  // The control: a solicitation, which the host accepts, shows on both the
-  // tap's counter and ip6tables'. The guest solicits only while it takes
-  // RAs; the toggle drops its IPv6, so it comes last.
+  // The guest solicits only while it takes RAs, and the toggle drops its IPv6,
+  // so the control comes last.
   await runShellInImp(
     rogue,
     'cd /proc/sys/net/ipv6/conf/eth0 && echo 1 > accept_ra && echo 3 > router_solicitations && echo 1 > disable_ipv6 && echo 0 > disable_ipv6',

@@ -10,7 +10,6 @@ import { JSON_TYPES } from './json-types';
 import { resolveRef } from './resolve-ref';
 import type { Schema, SchemaObject } from './schema';
 
-// an intersection, with its siblings, as the fewest schemas a value must pass at once
 export function mergeIntersection(
   schema: SchemaObject,
   root: Schema,
@@ -30,7 +29,6 @@ export function mergeIntersection(
   );
 }
 
-// each part folded into the first group whose keywords it combines with
 function mergeIntersectionParts(
   parts: readonly SchemaObject[],
   direction: MessageDirection,
@@ -57,8 +55,6 @@ function mergeIntersectionParts(
 
 const OBJECT_KEYWORDS = ['properties', 'additionalProperties'];
 
-// one schema that takes exactly the values both take, or none when a keyword
-// conflicts in a way no one schema can state
 function mergeIntersectionPair(
   left: SchemaObject,
   right: SchemaObject,
@@ -91,9 +87,8 @@ function mergeIntersectionPair(
   return merged;
 }
 
-// A key that one part names falls to the other part's `additionalProperties`.
-// zod closes each object of an output on its own keys, though the value it
-// sends carries the keys of every part, so a closed part binds only an input.
+// zod closes each object of an output on its own keys, though the value it sends carries the keys
+// of every part, so a closed part binds only an input.
 function mergeObjectKeywords(
   left: SchemaObject,
   right: SchemaObject,
@@ -133,7 +128,6 @@ function mergeObjectKeywords(
   return merged;
 }
 
-// the schemas a value must pass at once, as one schema
 function mergeSchemaList(schemas: readonly (Schema | undefined)[]): Schema | undefined {
   const given = schemas.filter((schema) => schema !== undefined);
 
@@ -186,7 +180,6 @@ function mergeKeyword(
       return { value: both };
     }
 
-    // the values both list
     if (keyword === 'enum') {
       return {
         value: left.filter((value) => right.some((other) => Bun.deepEquals(value, other, true))),
@@ -201,7 +194,6 @@ function mergeKeyword(
   return undefined;
 }
 
-// the types both sides take, where an integer is also a number
 function mergeTypes(
   left: SchemaObject,
   right: SchemaObject,
@@ -212,7 +204,7 @@ function mergeTypes(
     sides.every((side) => side.includes(type) || (type === 'integer' && side.includes('number'))),
   );
 
-  // a number on both sides already takes every integer
+  // A JSON Schema number already takes every integer.
   const types = common.includes('number') ? common.filter((type) => type !== 'integer') : common;
 
   if (types.length === 0) {
