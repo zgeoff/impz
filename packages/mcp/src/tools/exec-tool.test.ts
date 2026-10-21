@@ -17,22 +17,17 @@ import { buildStubAfter } from '../test-utils/build-stub-after';
 import { buildStubRepeat } from '../test-utils/build-stub-repeat';
 import { createMcpServer } from '../test-utils/create-mcp-server';
 
-// impd's real app on a loopback port for an exec's socket, a root client,
-// `stack`, whose releases run before impd stops, and an MCP server whose
-// messages land parsed in `sent`, its progress stepped by `repeat`
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the bearer the root client sends
   const harness = await startTestImpd(stack, { rootToken: 'root-token' });
 
   const db = harness.db;
   const dataDir = harness.dataDir;
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imps.create boots when it names none
   await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(db, image);
@@ -41,8 +36,6 @@ async function setupTest() {
   const repeat = buildStubRepeat();
   const after = buildStubAfter();
 
-  // progress ticks only when the test steps `repeat` by 1000 ms; a command's
-  // deadline and its 50 ms kill grace end only when the test fires `after`
   const mcp = createMcpServer({
     version: '1.2.3',
     killGraceMs: 50,
@@ -51,7 +44,6 @@ async function setupTest() {
     after: after.after,
   });
 
-  // its calls in flight end before impd's app closes
   stack.defer(() => mcp.close());
 
   const sent: unknown[] = [];
@@ -272,7 +264,6 @@ test("it passes a requirement to impd, whose refusal comes back as the tool's er
     },
   );
 
-  // the imp holds no grant, so impd sets no broker variables and runs nothing
   expect(ctx.sent).toStrictEqual([
     {
       jsonrpc: '2.0',
@@ -561,8 +552,6 @@ test('it keeps the head and the tail of a large output and counts what it droppe
     },
   );
 
-  // 8 KiB of head and 8 KiB of tail around the marker; `flood` fills
-  // between HEAD and TAIL with x
   const stdout = [
     `HEAD${'x'.repeat(8192 - 4)}`,
     `\n[... ${String(1_000_000 - 16_384)} bytes dropped ...]\n`,
@@ -607,8 +596,6 @@ test('it sends SIGTERM to a command at its timeout and reports timedOut', async 
     agent.close();
   });
 
-  // the default timers, as `impz mcp` runs them: the shortest timeout is a
-  // second; its close runs before impd stops
   const mcp = createMcpServer({ version: '1.2.3', killGraceMs: 50 });
 
   ctx.stack.defer(() => mcp.close());
@@ -653,13 +640,13 @@ test('it sends SIGTERM to a command at its timeout and reports timedOut', async 
 
   expect(guest.signals).toStrictEqual(['sleepy:15']);
 
-  // the agent kills what is left of the group itself, given the grace: no
-  // second exec
+  // The guest agent kills what is left of the group itself, so no second exec
+  // opens.
   expect(guest.requests).toMatchObject([{ argv: ['/bin/sh', '-c', 'sleepy'], killGraceMs: 50 }]);
 });
 
-// before protocol 0.8.0 the rest of the group outlives the stop until the
-// imp restarts (docs/guides/operations.md#upgrade)
+// On a guest agent before protocol 0.8.0, the rest of the group outlives the
+// stop until the imp restarts.
 test('it opens no second exec to stop a command on an agent from before the group kill', async () => {
   const ctx = await setupTest();
 
@@ -695,7 +682,6 @@ test('it opens no second exec to stop a command on an agent from before the grou
     },
   );
 
-  // the command's deadline, once the guest runs it
   await waitFor(() => {
     expect(guest.requests).toHaveLength(1);
   });
@@ -762,8 +748,6 @@ test('it sends SIGKILL after the grace to a command that ignores SIGTERM', async
     },
   );
 
-  // the command's deadline, once the guest runs it, then the grace SIGTERM
-  // opens
   await waitFor(() => {
     expect(guest.requests).toHaveLength(1);
   });
@@ -799,8 +783,6 @@ test('it sends SIGKILL after the grace to a command that ignores SIGTERM', async
   ]);
 
   expect(guest.signals).toStrictEqual(['stubborn:15', 'stubborn:9']);
-
-  // the session carried SIGKILL to the whole group: no sweep
   expect(guest.requests).toMatchObject([{ argv: ['/bin/sh', '-c', 'stubborn'] }]);
 });
 
@@ -838,7 +820,6 @@ test('it stops a cancelled exec and sends no response', async () => {
     context,
   );
 
-  // the command runs in the guest
   await waitFor(() => {
     invariant(guest.requests[0]);
   });
@@ -852,7 +833,6 @@ test('it stops a cancelled exec and sends no response', async () => {
     context,
   );
 
-  // the grace SIGTERM opens, which the stubborn command outlasts
   await waitFor(() => {
     expect(ctx.after.countPending(50)).toBe(1);
   });
@@ -897,7 +877,6 @@ test('it stops every call in flight on close, as when the client goes away', asy
     },
   );
 
-  // the command runs in the guest
   await waitFor(() => {
     invariant(guest.requests[0]);
   });
@@ -948,7 +927,6 @@ test('it sends a progress notification on each tick while a call with a progress
     context,
   );
 
-  // the command runs in the guest
   await waitFor(() => {
     invariant(guest.requests[0]);
   });
@@ -956,7 +934,6 @@ test('it sends a progress notification on each tick while a call with a progress
   ctx.repeat.tick(1000);
   ctx.repeat.tick(1000);
 
-  // the cancel ends the call, which then sends nothing more
   await ctx.mcp.receive(
     JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 1 } }),
     context,

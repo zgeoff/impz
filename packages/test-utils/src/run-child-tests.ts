@@ -2,15 +2,12 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 interface ChildTestRun {
-  // null when the run was killed at its deadline
   readonly exitCode: number | null;
   readonly isTimedOut: boolean;
   readonly output: string;
 }
 
-// Runs `source` as one test file in `dir`, its working and temp dir, with no
-// preload, so a later test can read what an earlier onTestFinished left. It
-// kills the child at timeoutMs, by default under bun test's 5 s timeout.
+// The default deadline stays under bun test's 5 s per-test timeout.
 export function runChildTests(directory: string, source: string, timeoutMs = 4000): ChildTestRun {
   writeFileSync(join(directory, 'child.test.ts'), source);
 

@@ -11,23 +11,14 @@ export interface CappedRunOptions {
   readonly env?: Readonly<Record<string, string>>;
   readonly require?: readonly ExecRequirement[];
   readonly timeoutMs: number;
-
-  // per stream; see output-cap.ts
   readonly maxOutputBytes: number;
   readonly headBytes: number;
-
-  // the tool call's cancel
   readonly signal: Readonly<AbortSignal>;
-
-  // how long SIGTERM, then SIGKILL, get before the next step
   readonly killGraceMs: number;
-
-  // the timer behind the deadline and the kill grace
   readonly after: After;
 }
 
 export interface CappedRunResult {
-  // null when a signal ended the command, or it never reported an exit
   readonly exitCode: number | null;
   readonly signal: string | null;
   readonly timedOut: boolean;
@@ -35,9 +26,6 @@ export interface CappedRunResult {
   readonly stderr: CappedOutput;
 }
 
-// Runs a command in an imp to its exit, its deadline or a cancel, which
-// throws once the command stopped. A closed socket only sends SIGHUP, which
-// nohup ignores, so a stop signals the process group; see stopCommand.
 export async function runCapped(
   openExec: ImpClient['openExec'],
   name: string,
@@ -113,8 +101,6 @@ async function drain(
   }
 }
 
-// a command that exits before reading its stdin makes the write fail; its
-// exit says what happened
 async function writeStdin(
   handle: Readonly<ExecHandle>,
   stdin: Uint8Array | undefined,
@@ -126,14 +112,13 @@ async function writeStdin(
 
     await handle.closeStdin();
   } catch {
-    // see above
+    // A command that exits before reading its stdin fails the write, and its
+    // exit reports why.
   }
 }
 
 type Stop = 'exited' | 'timeout' | 'cancel';
 
-// the first of: the command's exit (or the session's end), the cancel, the
-// deadline. A start that fails throws, as `exit` does.
 async function waitForStop(
   handle: Readonly<ExecHandle>,
   [cancel, deadline]: readonly [Readonly<AbortSignal>, Readonly<AbortSignal>],
@@ -186,8 +171,9 @@ async function waitSettled(promise: Promise<unknown>): Promise<void> {
   }
 }
 
-// SIGTERM to the process group, then SIGKILL after the grace. After a leader
-// exits on SIGTERM, the agent kills the rest (docs/guides/mcp.md#exec).
+// A closed exec socket only sends SIGHUP, which nohup ignores, so a stop
+// signals the process group. Once its leader exits on SIGTERM, the guest agent
+// kills the rest.
 async function stopCommand(
   handle: Readonly<ExecHandle>,
   graceMs: number,
@@ -210,7 +196,6 @@ async function stopCommand(
   }
 }
 
-// whether the session ended within `ms`
 async function waitForExit(
   handle: Readonly<ExecHandle>,
   durationMs: number,
@@ -235,8 +220,6 @@ async function waitForExit(
   }
 }
 
-// the exit, or null for a command stopped without one; a session that ended
-// for another reason (impd restarting, the imp destroyed) throws
 async function readExit(
   handle: Readonly<ExecHandle>,
   stop: Stop,

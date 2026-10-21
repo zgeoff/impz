@@ -30,7 +30,8 @@ test('it refuses to register over a tracer provider registered before it', async
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  // a child run, since this run's preload holds the one global provider
+  // OpenTelemetry takes one global provider per process, and this run's
+  // preload already set it.
   const run = runChildTests(
     directory,
     [

@@ -6,26 +6,15 @@ import type { McpCaller } from '../create-caller-auth';
 import { createImpServer } from '../create-imp-server';
 import type { ImpServerOptions } from '../create-imp-server';
 
-// Who one message comes from, and where its answers go
 interface MessageContext extends McpCaller {
-  // gets each message the server sends about the request, whole: its
-  // progress, then its response
   readonly reply: (message: string) => void;
 }
 
 interface TestMcpServer {
-  // delivers one JSON-RPC message; resolves once a request is answered, or
-  // once a cancelled call that gets no answer has ended
   readonly receive: (line: string, context: Readonly<MessageContext>) => Promise<void>;
-
-  // as when the client goes away: cancels every call in flight and waits
-  // for them to stop
   readonly close: () => Promise<void>;
 }
 
-// imp's real MCP server, behind the call registry's gate, over an in-memory
-// transport. The first message's context opens the connection; each message
-// carries its own caller, as each HTTP request does.
 export function createMcpServer(options: Readonly<ImpServerOptions>): TestMcpServer {
   const calls = createCallRegistry();
 
@@ -33,9 +22,6 @@ export function createMcpServer(options: Readonly<ImpServerOptions>): TestMcpSer
   const state: { server: Server | null } = { server: null };
 
   const replies = new Map<RequestId, MessageContext['reply']>();
-
-  // the receives still waiting for an answer, newest last: a refusal of a
-  // duplicate id answers the newest, the running call the one before
   const waiting = new Map<RequestId, (() => void)[]>();
 
   const transport: Transport = {
@@ -80,7 +66,7 @@ export function createMcpServer(options: Readonly<ImpServerOptions>): TestMcpSer
       if (!isJSONRPCRequest(message)) {
         transport.onmessage?.(message, { authInfo: createCallerAuth(context) });
 
-        // the SDK runs a notification's handler on a later microtask
+        // The SDK runs a notification's handler on a later microtask.
         await waitForMicrotasks();
 
         return;
@@ -91,8 +77,8 @@ export function createMcpServer(options: Readonly<ImpServerOptions>): TestMcpSer
       replies.set(message.id, context.reply);
       waiting.set(message.id, [...(waiting.get(message.id) ?? []), answered.resolve]);
 
-      // a cancelled call gets no answer: its end resolves the receive, once
-      // the SDK has had its chance to answer
+      // The SDK sends a cancelled call no answer, so the call's end resolves
+      // the receive.
       const authInfo = createCallerAuth(context, {
         onCallEnd: () => {
           void (async () => {
@@ -114,7 +100,8 @@ export function createMcpServer(options: Readonly<ImpServerOptions>): TestMcpSer
   };
 }
 
-// every microtask queued so far, and the ones they queue, have run
+// setImmediate fires once every queued microtask, and each one it queues, has
+// run.
 function waitForMicrotasks(): Promise<void> {
   return new Promise((resolve) => {
     setImmediate(resolve);

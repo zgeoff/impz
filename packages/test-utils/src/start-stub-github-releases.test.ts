@@ -66,7 +66,8 @@ test('it records the path of each request in order', async () => {
 test('it stops serving when the test finishes', () => {
   const releases = startStubGithubReleases({ latest: 'v1.2.3', assets: {} });
 
-  // registered after the stub's own stop, so it runs once the server is gone
+  // Bun runs onTestFinished callbacks in registration order, so this runs after
+  // the stub has stopped.
   onTestFinished(() => {
     expect(fetch(`${releases.url}/latest`)).rejects.toThrow();
   });

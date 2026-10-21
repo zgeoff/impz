@@ -21,19 +21,13 @@ import { buildStubAfter } from './test-utils/build-stub-after';
 import { buildStubRepeat } from './test-utils/build-stub-repeat';
 import { createMcpServer } from './test-utils/create-mcp-server';
 
-// impd's real app on a loopback port for an exec's socket, a root client,
-// `stack`, whose releases run before impd stops, an armed `gate` that holds
-// impd's next imps read, and the replies of `mcp` or the test's own server
 async function setupTest() {
-  // first, so a held read lets go before impd stops
   const gate = buildQueryGate('imps');
 
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the bearer the root client sends; a frozen clock, so a later read of an
-  // imp matches the answer about it
   const harness = await startTestImpd(stack, {
     rootToken: 'root-token',
     frozenClockMs: Date.UTC(2026, 0, 1),
@@ -44,7 +38,6 @@ async function setupTest() {
   const dataDir = harness.dataDir;
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imps.create boots when it names none
   await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(db, image);
@@ -53,8 +46,6 @@ async function setupTest() {
   const repeat = buildStubRepeat();
   const after = buildStubAfter();
 
-  // progress ticks only when the test steps `repeat` by 1000 ms, and a
-  // stopped command's SIGKILL comes only when the test fires its 50 ms grace
   const mcp = createMcpServer({
     version: '1.2.3',
     killGraceMs: 50,
@@ -63,7 +54,6 @@ async function setupTest() {
     after: after.after,
   });
 
-  // its calls in flight end before impd's app closes
   stack.defer(() => mcp.close());
 
   const sent: unknown[] = [];
@@ -438,13 +428,11 @@ test('it still answers a create whose cancel arrives before the create starts', 
     scope: 'manage',
   } as const;
 
-  // the connection is open before the two lines come
   await server.receive('{"jsonrpc":"2.0","id":0,"method":"ping"}', {
     ...context,
     reply: () => {},
   });
 
-  // both lines in one read, as one chunk of stdin brings them
   const created = server.receive(
     JSON.stringify({
       jsonrpc: '2.0',
@@ -524,7 +512,7 @@ test('it cancels the first call after refusing a second with its id', async () =
 
   await running;
 
-  // the SDK sends no answer to a cancelled call
+  // The SDK sends no answer to a cancelled call.
   expect(ctx.sent).toStrictEqual([
     {
       jsonrpc: '2.0',
@@ -574,7 +562,6 @@ test('it still answers a cancelled create, so the agent learns the name of what 
     context,
   );
 
-  // the create waits inside impd while the cancel lands
   await ctx.gate.reached;
 
   await ctx.mcp.receive(
@@ -592,7 +579,6 @@ test('it still answers a cancelled create, so the agent learns the name of what 
 
   invariant(made);
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(made));
   const stored = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -644,7 +630,6 @@ test('it still answers a cancelled fork, so the agent learns the name of what it
     context,
   );
 
-  // the fork waits inside impd while the cancel lands
   await ctx.gate.reached;
 
   await ctx.mcp.receive(
@@ -664,7 +649,6 @@ test('it still answers a cancelled fork, so the agent learns the name of what it
 
   invariant(fork);
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(fork));
   const stored = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -718,7 +702,6 @@ test('it still answers a cancelled restore, so the agent learns the state of the
     context,
   );
 
-  // the restore waits inside impd while the cancel lands
   await ctx.gate.reached;
 
   await ctx.mcp.receive(
@@ -734,7 +717,6 @@ test('it still answers a cancelled restore, so the agent learns the state of the
 
   const restored = await ctx.client.imps.get({ name: 'agent-src' });
 
-  // the imp as it crosses impd's API, its dates as ISO strings
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const json: unknown = JSON.parse(JSON.stringify(restored));
   const stored = z.looseObject({ resources: z.looseObject({}) }).parse(json);
@@ -799,7 +781,6 @@ test('it stops reporting progress for a cancelled call', async () => {
     context,
   );
 
-  // the command runs in the guest
   await waitFor(() => {
     invariant(guest.requests[0]);
   });
@@ -811,8 +792,6 @@ test('it stops reporting progress for a cancelled call', async () => {
     context,
   );
 
-  // a tick after the cancel, while the stubborn command still waits for its
-  // SIGKILL
   ctx.repeat.tick(1000);
 
   await waitFor(() => {

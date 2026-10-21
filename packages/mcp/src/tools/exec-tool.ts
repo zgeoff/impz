@@ -10,8 +10,6 @@ const DEFAULT_TIMEOUT_S = 120;
 const MAX_TIMEOUT_S = 1800;
 const DEFAULT_OUTPUT_BYTES = 64 * 1024;
 const MAX_OUTPUT_BYTES = 256 * 1024;
-
-// the first bytes of a stream kept whole; the rest of the cap is its tail
 const HEAD_BYTES = 8 * 1024;
 
 const ExecInput = z

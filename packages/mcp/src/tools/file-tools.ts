@@ -11,12 +11,9 @@ const DEFAULT_READ_BYTES = 256 * 1024;
 const MAX_READ_BYTES = 1024 * 1024;
 const MAX_WRITE_BYTES = 4 * 1024 * 1024;
 const FILE_TIMEOUT_MS = 60_000;
-
-// the little a failed command prints on stderr
 const STDERR_BYTES = 4096;
 
-// Absolute, so no path reaches a command as a flag; the commands take it as
-// an argument, never inside a shell string.
+// An absolute path cannot reach a command as a flag.
 const GuestPathInput = z
   .string()
   .startsWith('/', 'must be an absolute path')
@@ -51,7 +48,6 @@ export const FILE_TOOLS: readonly Tool[] = [
     run: async (input, context) => {
       context.guard.require(input.name);
 
-      // one byte past the limit tells a file at the limit from a larger one
       const result = await runFileCommand(context, input.name, {
         argv: ['head', '-c', String(input.maxBytes + 1), input.path],
         maxOutputBytes: input.maxBytes + 1,
@@ -137,7 +133,6 @@ interface FileCommand {
   readonly maxOutputBytes: number;
 }
 
-// head only: past the cap is either too large (read) or noise (write)
 function runFileCommand(
   context: Readonly<ToolContext>,
   name: string,
@@ -172,7 +167,6 @@ function formatFailure(result: Readonly<CappedRunResult>, what: string): string 
   return `${what} (${exit})${stderr === '' ? '' : `: ${stderr}`}`;
 }
 
-// null for bytes that are not UTF-8
 function encodeContent(bytes: Uint8Array, encoding: 'utf8' | 'base64'): string | null {
   if (encoding === 'base64') {
     return bytes.toBase64();
@@ -190,7 +184,6 @@ function decodeContent(content: string, encoding: 'utf8' | 'base64'): Uint8Array
     return new TextEncoder().encode(content);
   }
 
-  // whitespace between the characters is skipped; the padding must be whole
   try {
     return Uint8Array.fromBase64(content, { lastChunkHandling: 'strict' });
   } catch {

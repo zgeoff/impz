@@ -6,8 +6,6 @@ import type { McpCaller } from '../create-caller-auth';
 
 export interface LegacySession {
   readonly id: string;
-
-  // the caller that opened it, the only one it answers
   readonly key: string;
   readonly transport: WebStandardStreamableHTTPServerTransport;
 }
@@ -17,16 +15,12 @@ interface SessionState extends LegacySession {
   readonly server: Server;
   readonly drain: () => Promise<void>;
   lastUsedAt: number;
-
-  // tool calls in flight: a busy session is never swept or evicted
   busy: number;
   readonly forgetEnds: () => void;
 }
 
 export interface SessionOwner extends McpCaller {
   readonly key: string;
-
-  // aborts when what the caller authenticated with ends; its sessions end
   readonly ends: AbortSignal | null;
 }
 
@@ -38,16 +32,16 @@ interface LegacySessionsOptions {
   };
   readonly now: () => number;
 
-  // between SSE comments, so no idle timeout ends a long call's stream
+  // An SSE comment at this interval keeps an idle timeout from ending a long
+  // call's stream.
   readonly keepaliveMs: number;
 
   // oxlint-disable-next-line no-deprecated -- create-imp-server.ts says why it is the low-level Server
   readonly createServer: (owner: Readonly<SessionOwner>, calls: Readonly<CallRegistry>) => Server;
 }
 
-// The 2025-era MCP sessions of one impd, in memory: a restart ends them all.
 // The SDK's transport has no hook for a session limit, an idle sweep or the
-// caller a session belongs to, so those live here.
+// caller a session belongs to.
 export function createLegacySessions(options: Readonly<LegacySessionsOptions>) {
   const sessions = new Map<string, SessionState>();
 
@@ -61,13 +55,10 @@ export function createLegacySessions(options: Readonly<LegacySessionsOptions>) {
     sessions.delete(session.id);
     state.forgetEnds();
 
-    // closes the session's streams and aborts its calls, which then stop
     await state.server.close();
     await state.drain();
   };
 
-  // room for one more session of `key`, by evicting idle ones; false when
-  // every session in the way is busy
   const makeRoom = (key: string): boolean => {
     const all = [...sessions.values()];
     const own = all.filter((state) => state.key === key);
@@ -91,7 +82,6 @@ export function createLegacySessions(options: Readonly<LegacySessionsOptions>) {
   };
 
   return {
-    // null when the limits leave no room
     open: async (owner: Readonly<SessionOwner>): Promise<LegacySession | null> => {
       if (owner.ends?.aborted === true || !makeRoom(owner.key)) {
         return null;
@@ -134,7 +124,6 @@ export function createLegacySessions(options: Readonly<LegacySessionsOptions>) {
       return state;
     },
 
-    // another caller's session is not found
     findOwned: (id: string, key: string): LegacySession | null => {
       const state = sessions.get(id);
 
@@ -147,7 +136,6 @@ export function createLegacySessions(options: Readonly<LegacySessionsOptions>) {
       return state;
     },
 
-    // counts a tool call until it ends, which keeps the session from a sweep
     track: (session: Readonly<LegacySession>, ended: Promise<void>): void => {
       const state = sessions.get(session.id);
 
@@ -166,7 +154,6 @@ export function createLegacySessions(options: Readonly<LegacySessionsOptions>) {
     },
     end: stopSession,
 
-    // ends sessions idle for longer than the limit
     sweep: (): void => {
       const cutoff = options.now() - options.limits.idleMs;
 
@@ -182,7 +169,6 @@ export function createLegacySessions(options: Readonly<LegacySessionsOptions>) {
   };
 }
 
-// the least recently used idle session of these, to make room
 function findEvictable(candidates: readonly Readonly<SessionState>[]): LegacySession | null {
   const idle = candidates.filter((state) => state.busy === 0);
 

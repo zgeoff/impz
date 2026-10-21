@@ -1,6 +1,3 @@
-// The JSON-RPC answer an MCP POST carries: its JSON body, or the one message
-// of its event stream that holds a result or an error, past any progress and
-// keepalives. Throws when the response carries no answer.
 export async function readMcpAnswer(response: Response): Promise<unknown> {
   const text = await response.text();
 

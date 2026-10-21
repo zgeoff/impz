@@ -2,16 +2,11 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 interface StubUnameOptions {
-  // the directory the `uname` script goes in, ahead of the real one on PATH
   readonly bin: string;
-
-  // what `uname -s` and `uname -m` print
   readonly system: string;
   readonly machine: string;
 }
 
-// A `uname` that names the platform a script picks its download by; any
-// other flag fails.
 export function createStubUname(options: StubUnameOptions): void {
   writeFileSync(
     join(options.bin, 'uname'),

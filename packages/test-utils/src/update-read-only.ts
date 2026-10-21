@@ -1,11 +1,8 @@
 import { existsSync } from 'node:fs';
 
-// Makes a tree read-only for this user, root too (chattr +i; root writes past
-// any mode); returns the undo, which `stack` also runs while the tree exists.
 export function updateReadOnly(stack: Readonly<DisposableStack>, path: string): () => void {
+  // Root writes past any file mode, so only chattr +i locks a tree against root.
   const isRoot = process.getuid?.() === 0;
-
-  // chattr refuses a symlink, which holds no flags; chmod -R passes over one
   const lock = isRoot ? buildChattrArgv(path, '+i') : ['chmod', '-R', 'a-w', path];
   const unlock = isRoot ? buildChattrArgv(path, '-i') : ['chmod', '-R', 'u+w', path];
 
@@ -25,6 +22,7 @@ export function updateReadOnly(stack: Readonly<DisposableStack>, path: string): 
 }
 
 function buildChattrArgv(path: string, flag: string): readonly string[] {
+  // chattr refuses a symlink, which holds no flags.
   return ['find', path, '!', '-type', 'l', '-exec', 'chattr', flag, '{}', '+'];
 }
 

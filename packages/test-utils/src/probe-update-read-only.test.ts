@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { probeUpdateReadOnly } from './probe-update-read-only';
 
-// root's lock as this machine allows it, asked of chattr directly; any other
-// user's lock is a chmod, which needs nothing
+// Only root's lock needs chattr +i, which this machine may refuse; another
+// user's lock is a chmod.
 test.skipIf(
   process.getuid?.() === 0 &&
     Bun.spawnSync([

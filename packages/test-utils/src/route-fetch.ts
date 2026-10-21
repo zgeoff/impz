@@ -4,9 +4,8 @@ type Fetch = typeof fetch;
 
 type SendRequest = (input: Parameters<Fetch>[0], init?: BunFetchRequestInit) => Promise<Response>;
 
-// A request over a unix socket, or to a loopback host, goes to the native
-// fetch: MSW rebuilds a request it lets through and drops Bun's own options
-// (`unix`, `tls`). Every other request goes to MSW's fetch.
+// MSW rebuilds a request it lets through and drops Bun's own `unix` and `tls`
+// options, so a unix-socket or loopback request skips MSW for the native fetch.
 export function buildRoutedFetch(nativeFetch: Fetch, mockedFetch: Fetch): Fetch {
   const sendRequest: SendRequest = (input, init) => {
     const href = input instanceof Request ? input.url : input.toString();

@@ -1,8 +1,7 @@
 import { mergeBytes } from '@impz/shared';
 
-// One output stream, held to `maxBytes`: the first `headBytes` and the last
-// bytes up to the cap. The middle is dropped, where the least is lost: a
-// build's first error is near the head, its summary near the tail.
+// Dropping the middle loses the least: a build's first error is near the
+// head, its summary near the tail.
 export interface CappedOutput {
   readonly head: Uint8Array;
   readonly tail: Uint8Array;
@@ -32,7 +31,6 @@ export function createOutputCollector(maxBytes: number, headBytes: number): Outp
 
     counts.tail += chunk.byteLength;
 
-    // drop whole chunks off the front, then trim the first one
     while (counts.tail > tailLimit) {
       const [first] = tail;
 
@@ -85,9 +83,6 @@ export function createOutputCollector(maxBytes: number, headBytes: number): Outp
   };
 }
 
-// The text an agent reads: invalid UTF-8 becomes U+FFFD, and a marker says
-// where bytes were dropped and how many. The cut never splits a character:
-// the bytes of one it would split count as dropped.
 export function formatCappedText(output: Readonly<CappedOutput>): string {
   const decoder = new TextDecoder();
 
@@ -106,12 +101,10 @@ export function formatCappedText(output: Readonly<CappedOutput>): string {
 
 const MAX_CHARACTER_BYTES = 4;
 
-// a byte that continues a UTF-8 character: 10xxxxxx
 function isContinuation(byte: number): boolean {
   return (byte & 0xc0) === 0x80;
 }
 
-// how many bytes the character this lead byte starts takes
 function countCharacterBytes(lead: number): number {
   if (lead >= 0xf0) {
     return 4;
@@ -124,7 +117,6 @@ function countCharacterBytes(lead: number): number {
   return lead >= 0xc0 ? 2 : 1;
 }
 
-// the end of the head without a character cut short at it
 function getHeadEnd(head: Uint8Array): number {
   for (let back = 1; back <= Math.min(MAX_CHARACTER_BYTES, head.byteLength); back++) {
     const start = head.byteLength - back;
@@ -138,7 +130,6 @@ function getHeadEnd(head: Uint8Array): number {
   return head.byteLength;
 }
 
-// the start of the tail past the rest of a character cut at it
 function getTailStart(tail: Uint8Array): number {
   let start = 0;
 

@@ -71,7 +71,6 @@ test('it lets a later test read what an earlier test released', async () => {
 test('it kills a child that hangs past its deadline', async () => {
   const ctx = await setupTest();
 
-  // a test that never settles, with a test timeout longer than the deadline
   const run = runChildTests(
     ctx.directoryPath,
     [

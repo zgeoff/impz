@@ -5,27 +5,17 @@ import { TOOLS } from './tools/tool-list';
 interface Call {
   readonly abort: AbortController;
   readonly cancellable: boolean;
-
-  // never rejects
   readonly done: Promise<void>;
 }
 
-// The tool calls in flight on one MCP connection (a stdio pipe, or one HTTP
-// session), by their JSON-RPC id.
 export interface CallRegistry {
-  // true from a tool call's arrival at the gate until it ends or is answered
   readonly isRunning: (id: RequestId) => boolean;
-
-  // `done` settles once the call has ended
   readonly add: (id: RequestId, call: Readonly<Call>) => void;
   readonly remove: (id: RequestId) => void;
-
-  // waits for every call in flight to end
   readonly drain: () => Promise<void>;
 
   // The SDK drops a cancelled request's answer, so the gate keeps the cancel
-  // of a call that cannot be cancelled from it: only the call's own signal
-  // aborts, and its answer still goes out. `onClose` runs once it closes.
+  // of a call that cannot be cancelled from the SDK.
   readonly createGate: (transport: Transport, onClose?: () => void) => Transport;
 }
 
@@ -36,14 +26,10 @@ interface Arrival {
 
 export function createCallRegistry(): CallRegistry {
   const calls = new Map<RequestId, Call>();
-
-  // tool calls past the gate that have not started yet, and whether a cancel
-  // the gate held came for one
   const arriving = new Map<RequestId, Arrival>();
 
   const isRunning = (id: RequestId): boolean => arriving.has(id) || calls.has(id);
 
-  // true when the message is a cancel the gate keeps from the SDK
   const holdCancel = (message: unknown): boolean => {
     const requestId = readCancelledRequestID(message);
 
@@ -51,7 +37,6 @@ export function createCallRegistry(): CallRegistry {
       return false;
     }
 
-    // a call not started yet takes the cancel as it starts
     const arrival = arriving.get(requestId);
 
     if (arrival !== undefined) {
@@ -93,7 +78,6 @@ export function createCallRegistry(): CallRegistry {
       const gate: Transport = {
         start: () => inner.start(),
         send: (message, options) => {
-          // a call the SDK refuses before it starts ends with its answer
           if (!('method' in message) && message.id !== undefined) {
             arriving.delete(message.id);
           }
@@ -114,7 +98,8 @@ export function createCallRegistry(): CallRegistry {
           return;
         }
 
-        // the SDK keeps one abort per id, which a second call would replace
+        // The SDK keeps one abort per request id, which a second call with the
+        // same id would replace.
         if (isJSONRPCRequest(message) && message.method === 'tools/call') {
           if (isRunning(message.id)) {
             void inner.send(buildDuplicateError(message.id));
@@ -145,7 +130,6 @@ export function createCallRegistry(): CallRegistry {
   };
 }
 
-// the request a `notifications/cancelled` names; null for any other message
 function readCancelledRequestID(message: unknown): RequestId | null {
   if (typeof message !== 'object' || message === null || !('method' in message)) {
     return null;
@@ -166,7 +150,6 @@ function readCancelledRequestID(message: unknown): RequestId | null {
   return typeof requestId === 'string' || typeof requestId === 'number' ? requestId : null;
 }
 
-// the answer to a tool call whose id a running call holds
 function buildDuplicateError(id: RequestId): JSONRPCErrorResponse {
   return {
     jsonrpc: '2.0',
@@ -175,8 +158,6 @@ function buildDuplicateError(id: RequestId): JSONRPCErrorResponse {
   };
 }
 
-// whether the tool a `tools/call` names may stop mid-run; an unknown one,
-// which the server refuses, may
 function isCancellable(params: unknown): boolean {
   const name =
     typeof params === 'object' && params !== null && 'name' in params ? params.name : null;

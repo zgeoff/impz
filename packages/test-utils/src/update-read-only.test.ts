@@ -85,8 +85,6 @@ test.skipIf(!probeUpdateReadOnly())(
 
     const stack = new DisposableStack();
 
-    // released by the test's own stack too, before the directory goes, should
-    // the test fail first
     ctx.stack.defer(() => {
       stack.dispose();
     });
