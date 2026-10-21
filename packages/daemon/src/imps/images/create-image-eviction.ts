@@ -10,7 +10,6 @@ import {
 import type { ImageUse } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-import { createSingleFlight } from '../../platform/process/single-flight';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import { FALLBACK_DEFAULT_IMAGE } from './create-image-adds';
@@ -35,7 +34,6 @@ export interface ImageEvictionDeps {
 
 export function createImageEviction(deps: ImageEvictionDeps): ImageEviction {
   const now = deps.now ?? Date.now;
-  const flight = createSingleFlight<void>();
 
   const removeImage = async (use: Readonly<ImageUse>): Promise<void> => {
     try {
@@ -121,7 +119,34 @@ export function createImageEviction(deps: ImageEvictionDeps): ImageEviction {
     }
   };
 
+  const passes: { running: Promise<void> | undefined; isQueued: boolean } = {
+    running: undefined,
+    isQueued: false,
+  };
+
+  const runPasses = async (): Promise<void> => {
+    try {
+      do {
+        passes.isQueued = false;
+
+        await runOnce();
+      } while (passes.isQueued);
+    } finally {
+      passes.running = undefined;
+    }
+  };
+
   return {
-    runEviction: () => flight.run('eviction', runOnce),
+    runEviction: () => {
+      if (passes.running !== undefined) {
+        passes.isQueued = true;
+
+        return passes.running;
+      }
+
+      passes.running = runPasses();
+
+      return passes.running;
+    },
   };
 }

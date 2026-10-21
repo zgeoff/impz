@@ -289,6 +289,82 @@ test('it reads usage again after the measure, once the storage settled earlier r
   expect(usages.left).toBe(0);
 });
 
+test('it runs one more pass for an eviction asked for while a pass runs', async () => {
+  const ctx = await setupTest();
+
+  const usages = buildStubAnswerQueue([
+    { usedBytes: 70, availableBytes: 30 },
+    { usedBytes: 90, availableBytes: 10 },
+    { usedBytes: 90, availableBytes: 10 },
+  ]);
+
+  const eviction = createImageEviction({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: ctx.db,
+    storage: {
+      readUsage: () => Promise.resolve(usages.next()),
+      measureImages: ctx.storage.measureImages,
+    },
+    storageGate: createStorageGate(),
+    removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
+    log: ctx.log,
+    now: () => Date.parse('2026-10-01T00:00:00Z'),
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
+  await mkdir(buildImagePaths(ctx.dataDir, 'sha256:1').directory, { recursive: true });
+  await writeFile(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs, '');
+
+  ctx.fiemap.setExtents(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs, [
+    { logical: 0, physical: 4096, length: 50, flags: 0 },
+  ]);
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+  await Promise.all([eviction.runEviction(), eviction.runEviction()]);
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(uses).toStrictEqual([]);
+  expect(usages.left).toBe(0);
+});
+
+test('it runs a single pass for evictions asked for one after another', async () => {
+  const ctx = await setupTest();
+
+  const usages = buildStubAnswerQueue([
+    { usedBytes: 70, availableBytes: 30 },
+    { usedBytes: 70, availableBytes: 30 },
+  ]);
+
+  const eviction = createImageEviction({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: ctx.db,
+    storage: {
+      readUsage: () => Promise.resolve(usages.next()),
+      measureImages: ctx.storage.measureImages,
+    },
+    storageGate: createStorageGate(),
+    removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
+    log: ctx.log,
+    now: () => Date.parse('2026-10-01T00:00:00Z'),
+  });
+
+  await eviction.runEviction();
+  await eviction.runEviction();
+
+  expect(usages.left).toBe(0);
+});
+
 test('it never removes an image an imp uses, a pinned image, or the image impd boots by default', async () => {
   const ctx = await setupTest();
 
