@@ -1,5 +1,11 @@
 import type { Config } from '../../config';
-import { listImages, readImageByName, removeImage, updateImageUse } from '../../platform/db/images';
+import {
+  listImages,
+  readImageByName,
+  removeImage,
+  removeImageRemoval,
+  updateImageUse,
+} from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
 import { countImpsUsingImage } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
@@ -64,6 +70,7 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
     db: deps.db,
     storageGate: deps.storageGate,
     removeIdleImage: writer.removeIdleImage,
+    removeIdleRootfs: writer.removeIdleRootfs,
     readKeepFile:
       deps.readImageKeepFile ??
       (() => Promise.reject(new Error('this impd was given no keep file reader'))),
@@ -133,6 +140,8 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
         await removeImage(deps.db, image.id);
 
         await writer.removeIdleRootfs(image.digest);
+
+        await removeImageRemoval(deps.db, image.digest);
       });
     },
     resolveImage,

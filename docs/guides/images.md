@@ -242,6 +242,9 @@ use or kept. impd logs each removal with the image's size and last use:
 impd: image prune: removed agent-0a1b2c3 (1.5 GiB, last used 2026-09-01T00:00:00.000Z)
 ```
 
+impd records the rootfs of each image it removes, by prune or by `impz image rm`, until the rootfs
+is gone. When that removal fails, or impd stops first, the next prune removes the rootfs.
+
 The keep file, `<IMP_DATA_DIR>/image-keep` unless `IMP_IMAGE_KEEP_FILE` names another, holds the
 images that a config outside impd boots, such as an atc target's `image`. impd cannot see those
 configs, so write the file whenever one of them changes:

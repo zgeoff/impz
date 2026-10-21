@@ -1,6 +1,6 @@
 import type { ImageSource } from '@impz/api';
 import type { Selectable } from 'kysely';
-import type { ImpDatabase } from './open-database';
+import type { ImpDatabase, ImpQueries } from './open-database';
 import type { DB } from './schema';
 
 export interface ImageRecord {
@@ -84,10 +84,22 @@ export async function listImages(db: ImpDatabase): Promise<ImageRecord[]> {
 }
 
 // throws on a foreign key while any imp still uses the image
-export async function removeImage(db: ImpDatabase, id: string): Promise<boolean> {
-  const result = await db.deleteFrom('images').where('id', '=', id).executeTakeFirst();
+export function removeImage(db: ImpDatabase, id: string): Promise<boolean> {
+  return db.transaction().execute(async (trx) => {
+    const row = await trx
+      .deleteFrom('images')
+      .where('id', '=', id)
+      .returning('digest')
+      .executeTakeFirst();
 
-  return result.numDeletedRows > 0n;
+    if (row === undefined) {
+      return false;
+    }
+
+    await createImageRemoval(trx, row.digest);
+
+    return true;
+  });
 }
 
 function toImageRecord(row: Readonly<Selectable<DB['images']>>): ImageRecord {
@@ -190,23 +202,50 @@ export async function listImageUses(db: ImpDatabase): Promise<ImageUse[]> {
   }));
 }
 
-export async function removeUnusedImage(
+export function removeUnusedImage(
   db: ImpDatabase,
   id: string,
   lastUsedAt: number,
 ): Promise<boolean> {
-  const result = await db
-    .deleteFrom('images')
-    .where('id', '=', id)
-    .where('last_used_at', '=', lastUsedAt)
-    .where((eb) =>
-      eb.not(
-        eb.exists(
-          eb.selectFrom('imps').select('imps.id').whereRef('imps.image_id', '=', 'images.id'),
+  return db.transaction().execute(async (trx) => {
+    const row = await trx
+      .deleteFrom('images')
+      .where('id', '=', id)
+      .where('last_used_at', '=', lastUsedAt)
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb.selectFrom('imps').select('imps.id').whereRef('imps.image_id', '=', 'images.id'),
+          ),
         ),
-      ),
-    )
-    .executeTakeFirst();
+      )
+      .returning('digest')
+      .executeTakeFirst();
 
-  return result.numDeletedRows > 0n;
+    if (row === undefined) {
+      return false;
+    }
+
+    await createImageRemoval(trx, row.digest);
+
+    return true;
+  });
+}
+
+async function createImageRemoval(db: ImpQueries, digest: string): Promise<void> {
+  await db
+    .insertInto('image_removals')
+    .values({ digest, created_at: Date.now() })
+    .onConflict((conflict) => conflict.column('digest').doNothing())
+    .execute();
+}
+
+export async function listImageRemovals(db: ImpDatabase): Promise<string[]> {
+  const rows = await db.selectFrom('image_removals').select('digest').orderBy('digest').execute();
+
+  return rows.map((row) => row.digest);
+}
+
+export async function removeImageRemoval(db: ImpDatabase, digest: string): Promise<void> {
+  await db.deleteFrom('image_removals').where('digest', '=', digest).execute();
 }

@@ -7,7 +7,7 @@ import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { loadConfig } from '../../config';
-import { createImage, listImageUses } from '../../platform/db/images';
+import { createImage, listImageRemovals, listImageUses } from '../../platform/db/images';
 import { createImp } from '../../platform/db/imps';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
@@ -52,6 +52,7 @@ test('it keeps every image, and says why once, while the keep file is missing', 
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
@@ -85,6 +86,7 @@ test('it keeps every image while the keep file holds a line that is no image nam
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
@@ -116,6 +118,7 @@ test('it removes the unused agent images past the rollback count, and logs each'
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
@@ -168,6 +171,7 @@ test('it never removes an image an imp uses, a kept name holds, or impd boots by
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
@@ -203,6 +207,7 @@ test('it records the prune as the last use of each image in use', async () => {
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2030-01-01T00:00:00Z'),
@@ -240,6 +245,7 @@ test('it prunes only the images whose name starts with IMP_IMAGE_PRUNE_PREFIX', 
     db: ctx.db,
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
@@ -261,4 +267,87 @@ test('it prunes only the images whose name starts with IMP_IMAGE_PRUNE_PREFIX', 
     'agent-2222222',
     'runner-2222222',
   ]);
+});
+
+test('it removes at the next prune a rootfs whose removal failed after its row went', async () => {
+  const ctx = await setupTest();
+
+  const prune = createImagePrune({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    db: ctx.db,
+    storageGate: createStorageGate(),
+    removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
+    readKeepFile: (path) => readFile(path, 'utf8'),
+    log: ctx.log,
+    now: () => Date.parse('2026-10-01T00:00:00Z'),
+  });
+
+  await writeFile(join(ctx.dataDir, 'image-keep'), '');
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-1111111', digest: 'sha256:1' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-09-01T00:00:00Z') })
+    .where('name', '=', 'agent-1111111')
+    .execute();
+
+  // a file where the images directory belongs makes the rootfs removal fail
+  await writeFile(join(ctx.dataDir, 'images'), '');
+
+  await prune.runPrune();
+
+  const failedRemovals = await listImageRemovals(ctx.db);
+
+  const failedLog = ctx.log.mock.calls.map((call) => call[0]);
+
+  await rm(join(ctx.dataDir, 'images'));
+  await mkdir(buildImagePaths(ctx.dataDir, 'sha256:1').directory, { recursive: true });
+  await writeFile(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs, '');
+
+  await prune.runPrune();
+
+  const removals = await listImageRemovals(ctx.db);
+  const uses = await listImageUses(ctx.db);
+
+  expect(failedRemovals).toStrictEqual(['sha256:1']);
+
+  expect(failedLog).toStrictEqual([
+    expect.toStartWith('impd: image prune: could not remove agent-1111111: '),
+  ]);
+
+  expect(removals).toStrictEqual([]);
+  expect(uses.map((use) => use.name)).toStrictEqual(['agent-2222222']);
+  expect(existsSync(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs)).toBeFalse();
+});
+
+test('it keeps the rootfs of a removed image that a new image row uses again', async () => {
+  const ctx = await setupTest();
+
+  const prune = createImagePrune({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storageGate: createStorageGate(),
+    removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
+    readKeepFile: (path) => readFile(path, 'utf8'),
+    log: ctx.log,
+    now: () => Date.parse('2026-10-01T00:00:00Z'),
+  });
+
+  await writeFile(join(ctx.dataDir, 'image-keep'), '');
+
+  await ctx.db.insertInto('image_removals').values({ digest: 'sha256:1', created_at: 0 }).execute();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-1111111', digest: 'sha256:1' }));
+  await mkdir(buildImagePaths(ctx.dataDir, 'sha256:1').directory, { recursive: true });
+  await writeFile(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs, '');
+
+  await prune.runPrune();
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual([]);
+  expect(existsSync(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs)).toBeTrue();
 });

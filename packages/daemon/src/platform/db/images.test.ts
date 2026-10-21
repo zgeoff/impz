@@ -5,12 +5,14 @@ import { createTestDatabase } from '../../../testing/platform/create-test-databa
 import {
   countImageDigestUses,
   createImage,
+  listImageRemovals,
   listImageUses,
   listImages,
   readImageByDigest,
   readImageById,
   readImageByName,
   removeImage,
+  removeImageRemoval,
   removeUnusedImage,
   updateImage,
   updateImageUse,
@@ -318,6 +320,53 @@ test('#removeUnusedImage keeps an image an imp uses', async () => {
 
   expect(isRemoved).toBeFalse();
   expect(stored).toMatchObject({ id: image.id });
+});
+
+test('#removeUnusedImage records the digest of the image it removes, for its rootfs removal', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1' }));
+
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
+  await removeUnusedImage(ctx.db, image.id, Date.parse('2030-01-01T00:00:00Z'));
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual(['sha256:1']);
+});
+
+test('#removeUnusedImage records no digest when it keeps the image', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1' }));
+
+  await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-02T00:00:00Z'));
+  await removeUnusedImage(ctx.db, image.id, Date.parse('2030-01-01T00:00:00Z'));
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual([]);
+});
+
+test('#removeImage records the digest of the image it removes, for its rootfs removal', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1' }));
+
+  await removeImage(ctx.db, image.id);
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual(['sha256:1']);
+});
+
+test('#removeImageRemoval drops the record of a removed rootfs', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1' }));
+
+  await removeImage(ctx.db, image.id);
+  await removeImageRemoval(ctx.db, 'sha256:1');
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual([]);
 });
 
 test('#removeUnusedImage keeps an image used again since the caller read its last use', async () => {

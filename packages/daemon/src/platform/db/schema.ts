@@ -74,6 +74,11 @@ export interface Grants {
   secret_name: string;
 }
 
+export interface ImageRemovals {
+  created_at: number;
+  digest: string;
+}
+
 export interface Images {
   created_at: number;
   digest: string;
@@ -379,6 +384,7 @@ export interface DB {
   broker_sessions: BrokerSessions;
   checkpoints: Checkpoints;
   grants: Grants;
+  image_removals: ImageRemovals;
   images: Images;
   imp_cold_boots: ImpColdBoots;
   imp_leases: ImpLeases;

@@ -1,6 +1,12 @@
 import { formatBytes } from '@impz/shared';
 import type { Config } from '../../config';
-import { listImageUses, removeUnusedImage, updateImageUse } from '../../platform/db/images';
+import {
+  listImageRemovals,
+  listImageUses,
+  removeImageRemoval,
+  removeUnusedImage,
+  updateImageUse,
+} from '../../platform/db/images';
 import type { ImageUse } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
@@ -21,6 +27,7 @@ export interface ImagePruneDeps {
   readonly db: ImpDatabase;
   readonly storageGate: Pick<StorageGate, 'join'>;
   readonly removeIdleImage: ImageWriter['removeIdleImage'];
+  readonly removeIdleRootfs: ImageWriter['removeIdleRootfs'];
   readonly readKeepFile: (path: string) => Promise<string>;
   readonly log: (message: string) => void;
   readonly now?: () => number;
@@ -39,6 +46,8 @@ export function createImagePrune(deps: ImagePruneDeps): ImagePrune {
       );
 
       if (isRemoved) {
+        await removeImageRemoval(deps.db, use.digest);
+
         deps.log(
           `impd: image prune: removed ${use.name} (${formatBytes(use.sizeBytes)}, last used ${new Date(use.lastUsedAt).toISOString()})`,
         );
@@ -48,7 +57,25 @@ export function createImagePrune(deps: ImagePruneDeps): ImagePrune {
     }
   };
 
+  const removeLeftoverRootfs = async (): Promise<void> => {
+    const digests = await listImageRemovals(deps.db);
+
+    for (const digest of digests) {
+      try {
+        await deps.storageGate.join(() => deps.removeIdleRootfs(digest));
+
+        await removeImageRemoval(deps.db, digest);
+      } catch (error) {
+        deps.log(
+          `impd: image prune: could not remove the rootfs of ${digest}, and tries again at the next prune: ${getErrorMessage(error)}`,
+        );
+      }
+    }
+  };
+
   const runOnce = async (): Promise<void> => {
+    await removeLeftoverRootfs();
+
     const keepFile = await readImageKeepFile(deps.readKeepFile, rule.keepFile);
 
     if (!keepFile.isOk) {

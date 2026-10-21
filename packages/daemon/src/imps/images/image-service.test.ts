@@ -8,7 +8,7 @@ import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { loadConfig } from '../../config';
-import { createImage, listImageUses } from '../../platform/db/images';
+import { createImage, listImageRemovals, listImageUses } from '../../platform/db/images';
 import { openDatabase } from '../../platform/db/open-database';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
@@ -635,4 +635,53 @@ test('#removeImage removes the rootfs once no image uses its digest', async () =
   await images.removeImage('web');
 
   expect(existsSync(rootfs)).toBeFalse();
+});
+
+test('#removeImage keeps a record of the rootfs while its removal fails', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web', digest: 'sha256:1' }));
+
+  // a file where the images directory belongs makes the rootfs removal fail
+  writeFileSync(join(ctx.dataDir, 'images'), '');
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  const removing = images.removeImage('web');
+
+  expect(removing).rejects.toMatchObject({ code: 'ENOTDIR' });
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual(['sha256:1']);
+});
+
+test('#removeImage leaves no record of the rootfs once it is gone', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web', digest: 'sha256:1' }));
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    log: () => {},
+  });
+
+  await images.removeImage('web');
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(removals).toStrictEqual([]);
 });
