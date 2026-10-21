@@ -1,6 +1,4 @@
-// What `imp-agent tar` takes after "tar" (agent/internal/tartool): a tar of
-// the guest path on stdout, or stdin's tar extracted into it, owned by
-// `owner` when given.
+// the Go agent's `imp-agent tar` parses this argv
 export type TarCommand =
   | { readonly op: 'create'; readonly path: string }
   | { readonly op: 'extract'; readonly path: string; readonly owner?: string | undefined };

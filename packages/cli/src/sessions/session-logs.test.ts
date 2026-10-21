@@ -14,13 +14,11 @@ import {
 } from '@impz/daemon/testing';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 
-// impd, listening for the spawned CLI
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root bearer; the CLI reads it back from env
   const rootToken = faker.string.alphanumeric(32);
 
   const harness = await startTestImpd(stack, { rootToken });

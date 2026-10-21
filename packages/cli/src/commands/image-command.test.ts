@@ -19,7 +19,6 @@ import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 
-// impd's real app, listening on a loopback port for the spawned CLI
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -29,15 +28,12 @@ async function setupTest() {
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  // the engine a host build sends its context to
   const engine = startStubDockerEngine({ directoryPath: dataDir });
 
   stack.defer(() => engine.stop());
 
-  // impd boots with a root bearer; each test reads it back for the CLI
   const rootToken = faker.string.alphanumeric(32);
 
-  // builds run on the host's engine, the stub
   const harness = await startTestImpd(stack, {
     dataDir,
     rootToken,
@@ -194,7 +190,6 @@ test('#imageCommand lists a running build with its start and step from another s
     exportTar: Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout,
   });
 
-  // the engine holds the build in its RUN step until the listing is read
   const hold = Promise.withResolvers<void>();
 
   onTestFinished(() => {
@@ -301,7 +296,6 @@ test('#imageCommand refuses a build context without a Dockerfile before any uplo
 test('#templateCommand refuses to remove a docker image as a template', async () => {
   const ctx = await setupTest();
 
-  // a docker image, with a rootfs where its digest names
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');

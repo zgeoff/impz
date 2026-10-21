@@ -2,9 +2,8 @@ type Fetch = typeof fetch;
 
 type SendRequest = (input: Parameters<Fetch>[0], init?: BunFetchRequestInit) => Promise<Response>;
 
-// The page's fetch as a browser runs it: a relative URL resolves against the
-// page, and a request to the page's own origin carries
-// `Sec-Fetch-Site: same-origin`, which Bun's fetch never sends.
+// Bun's fetch never sends `Sec-Fetch-Site`, which a browser sets to
+// `same-origin` on a request to the page's own origin
 export function buildStubBrowserFetch(innerFetch: Fetch, pageUrl: string): Fetch {
   const pageOrigin = new URL(pageUrl).origin;
 

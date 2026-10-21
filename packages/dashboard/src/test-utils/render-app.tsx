@@ -6,9 +6,6 @@ import { ImpdProvider, buildBrowserImpd } from '../lib/impd';
 import { IMPD_ORIGIN } from '../mocks/handlers';
 import { buildRouter } from '../router';
 
-// The whole app at `path` (under /ui), as the browser runs it from impd:
-// the SDK calls impd's origin, where the MSW handlers answer. The router and
-// query client come beside the render result.
 export function renderApp(path = '/') {
   const router = buildRouter(createMemoryHistory({ initialEntries: [`/ui${path}`] }));
 

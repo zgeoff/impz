@@ -22,14 +22,13 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root bearer; each test reads it back for the CLI
   const rootToken = faker.string.alphanumeric(32);
 
   const harness = await startTestImpd(stack, { rootToken });
 
   const dataDir = harness.dataDir;
 
-  // each boot reports an agent with the services API (0.10.0)
+  // impd needs an agent at 0.10.0 or later for the services API
   harness.fake.agent.version = '0.10.0';
 
   const sendClientRequest = (request: Request) => harness.impd.api.app.handle(request);
@@ -40,7 +39,6 @@ async function setupTest() {
     fetch: sendClientRequest,
   });
 
-  // the image a test's imps boot from, with a rootfs where its digest names
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
@@ -48,7 +46,6 @@ async function setupTest() {
   await createImage(harness.db, image);
 
   return {
-    // a test defers what must stop before impd, such as a guest's agent
     stack,
     rootToken,
     dataDir,
@@ -230,7 +227,6 @@ test('#serviceCommand adds the service and then sets the imp’s HTTP port for -
     ],
   );
 
-  // newest first: the port set came after the imp's create
   expect(calls.map((call) => [call.procedure, call.outcome])).toStrictEqual([
     ['imps.update', 'ok'],
     ['imps.create', 'ok'],
@@ -245,7 +241,6 @@ test('#serviceCommand sets no HTTP port when the guest refuses the add', async (
 
   const agent = await startStubServiceAgent(vsockPath, { knowsServices: true, stack: ctx.stack });
 
-  // the guest has a service web already, so an add without --replace is refused
   await sendServicesAdd(vsockPath, { name: 'web', argv: ['httpd'] }, false);
 
   const result = await runCLIInProcess({
@@ -296,7 +291,6 @@ test('#serviceCommand says the service runs and how to set the port when an exec
     code: 1,
   });
 
-  // the list of what the guest runs, then the add
   expect(agent.requests.map((request) => encodeAgentMessage(RequestSchema, request))).toStrictEqual(
     [
       { op: 'services.list' },

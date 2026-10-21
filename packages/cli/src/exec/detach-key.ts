@@ -1,16 +1,14 @@
 import { UsageError } from '../cli/errors';
 
 export const DEFAULT_DETACH_KEY = 'ctrl-]';
-
-// the session `impz console` and `impz attach` use when none is named
 export const DEFAULT_SESSION = 'main';
 
 // ctrl-[ is Escape, and ctrl-h, ctrl-i, ctrl-j and ctrl-m are Backspace,
-// Tab, Enter and Return: a program needs those
+// Tab, Enter and Return, which a program needs
 const RESERVED_KEYS = new Set(['[', 'h', 'i', 'j', 'm']);
 
-// `ctrl-<key>` as the byte a terminal sends for it, or null for `none`.
-// Ctrl clears the top three bits, so ctrl-] is 0x1d and ctrl-a is 0x01.
+// a terminal sends ctrl-<key> as the key's code with the top three bits
+// cleared, so ctrl-] is 0x1d and ctrl-a is 0x01
 export function parseDetachKey(text: string): number | null {
   if (text === 'none') {
     return null;
@@ -32,9 +30,9 @@ export interface DetachKeyMatch {
   readonly length: number;
 }
 
-// Finds the detach key in input: the plain byte, or the forms a terminal
-// sends when a program turned on the kitty keyboard protocol (CSI cp;5u)
-// or xterm's modifyOtherKeys (CSI 27;5;cp~). The earliest one wins.
+// a terminal sends ctrl-<key> as CSI cp;5u under the kitty keyboard protocol
+// and as CSI 27;5;cp~ under xterm's modifyOtherKeys, when a program turned
+// either on
 export function findDetachKey(chunk: Uint8Array, key: number): DetachKeyMatch | null {
   const codepoint = String(getKeyCodepoint(key));
 
@@ -55,8 +53,7 @@ export function findDetachKey(chunk: Uint8Array, key: number): DetachKeyMatch | 
   return matches.reduce((first, match) => (match.at < first.at ? match : first));
 }
 
-// the key ctrl was held with: a letter in lower case, as kitty reports it,
-// else the symbol
+// kitty reports a ctrl letter by its lower-case codepoint
 function getKeyCodepoint(key: number): number {
   return key >= 0x01 && key <= 0x1a ? 0x60 + key : 0x40 + key;
 }

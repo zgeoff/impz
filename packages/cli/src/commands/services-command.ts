@@ -11,22 +11,15 @@ import { formatOutput, formatServices } from '../output/format-output';
 
 const serviceArg = { type: 'positional', description: 'service name', required: true } as const;
 
-// what `impz service add` takes besides the names
 export interface ServiceAddArgs {
   readonly cmd?: string | undefined;
-
-  // the words after `--`
   readonly argv: readonly string[];
-
-  // KEY=VALUE, one or more
   readonly env?: readonly string[] | undefined;
   readonly cwd?: string | undefined;
   readonly user?: string | undefined;
   readonly restart?: ServiceDef['restart'] | undefined;
 }
 
-// --cmd runs through the shell; a stop signals the whole process group, so
-// it reaches what the shell starts. `--` passes argv as it is.
 export function buildServiceDef(service: string, args: Readonly<ServiceAddArgs>): ServiceDef {
   if ((args.cmd === undefined) === (args.argv.length === 0)) {
     throw new UsageError('give the command once: --cmd "…" or after --');
@@ -101,7 +94,6 @@ const addCommand = defineCommand({
         return;
       }
 
-      // a second call: the port is the imp's, not the service's
       try {
         await client.imps.update({ name, httpPort });
       } catch (error) {
@@ -110,7 +102,6 @@ const addCommand = defineCommand({
     }),
 });
 
-// The service runs either way; say so, and how to set the port after.
 function formatPortRefusal(name: string, service: string, port: number, error: unknown): string {
   const forbidden = error instanceof ORPCError && error.code === 'FORBIDDEN';
   const retry = `impz set ${name} --http-port ${String(port)}`;
@@ -175,9 +166,6 @@ const MAX_PARTIAL_LINE = 65_536;
 
 type LogText = Extract<ServiceLog, { readonly type: 'log' }>;
 
-// Writes each service's text as it comes. With prefix, every line starts
-// with its service's name, so a line waits for its end; `flush` writes what
-// is left once the stream ends.
 export function createLogPrinter(prefix: boolean, write: (text: string) => void) {
   const partial = new Map<string, string>();
 
@@ -260,8 +248,6 @@ export const logsCommand = defineCommand({
     }),
 });
 
-// what a follow says on stderr when the imp stops running, runs again, or
-// impd restarts, which ends it
 export function formatLogEvent(
   name: string,
   event: Readonly<Exclude<ServiceLog, { readonly type: 'log' }>>,

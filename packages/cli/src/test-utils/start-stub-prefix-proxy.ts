@@ -6,16 +6,10 @@ interface ProxySocketData {
 }
 
 interface StubPrefixProxyOptions {
-  // where the proxy sends what it takes, such as impd's loopback URL
   readonly target: string;
-
-  // the path the proxy serves the target under, such as `/imp`
   readonly prefix: string;
 }
 
-// A loopback reverse proxy that serves `target` under `prefix`, as one in
-// front of impd does: 404 outside the prefix, and `paths` records each path
-// it was asked for. Its stop goes into `stack`.
 export function startStubPrefixProxy(
   stack: Readonly<AsyncDisposableStack>,
   options: Readonly<StubPrefixProxyOptions>,
@@ -88,9 +82,8 @@ export function startStubPrefixProxy(
           ws.send(data);
         });
 
-        // a close frame passes on as it came; an upstream that dropped its
-        // connection (1006) gets the client's connection dropped, as a real
-        // proxy does
+        // a real proxy drops the client's connection when the upstream dropped
+        // its own (1006)
         upstream.addEventListener('close', (event) => {
           if (isSendableCloseCode(event.code)) {
             ws.close(event.code, event.reason);

@@ -17,33 +17,22 @@ import { openBunWebSocket } from '../exec/open-bun-web-socket';
 import { waitOrAbort } from '../exec/wait-or-abort';
 import type { ReverseLocal, ReverseSpec } from '../parse/parse-reverse';
 
-// what a reverse forward touches besides its sockets; tests swap it
 export interface ReverseIo {
-  // a line for the user on stderr, after `impz: `
   readonly writeNotice: (text: string) => void;
 
-  // tells onState the imp's state now, then each change, without waking
-  // it; rejects once the imp is gone. impd's event stream by default.
+  // must not wake the imp
   readonly watchImp?: (
     config: CliConfig,
     name: string,
     signal: AbortSignal,
     onState: (state: ImpState) => void,
   ) => Promise<void>;
-
-  // resolves after `ms`, or at once when the signal aborts; a timer by
-  // default
   readonly wait?: (durationMs: number, signal: AbortSignal) => Promise<void>;
-
-  // told each state the wait for a wake reads; nothing by default
   readonly onWatchedState?: (state: ImpState) => void;
 }
 
 export interface ReverseForwarding {
-  // where the first listen landed in the imp
   readonly listening: ReverseListening;
-
-  // settles when the forward fails for good; a lost one listens again
   readonly failed: Promise<Error>;
   readonly stop: () => void;
 }
@@ -52,10 +41,8 @@ export interface ReverseForwarding {
 // listener ended
 const LOST_GRACE_MS = 30_000;
 
-// a WebSocket that closed without a handshake: impd is down or unreachable
+// the WebSocket close code for a connection that closed without a handshake
 const CLOSE_ABNORMAL = 1006;
-
-// impd restarting or unreachable: the next try comes after this long
 const RETRY_MS = 2000;
 
 const PROCESS_IO: ReverseIo = {
@@ -64,8 +51,6 @@ const PROCESS_IO: ReverseIo = {
   },
 };
 
-// The imp's state from the event stream, which opens with every imp. The
-// stream ends when impd restarts; it opens again after RETRY_MS.
 function watchImpStates(
   config: CliConfig,
   name: string,
@@ -79,8 +64,8 @@ function watchImpStates(
     signal,
     reconnect: { delayMs: RETRY_MS },
 
-    // NOT_FOUND for an imp destroyed before the stream opened; an impd that
-    // is down fails the stream too, which opens again
+    // a 4xx, such as NOT_FOUND for an imp destroyed before the stream opened,
+    // ends the watch; an impd that is down fails the stream, which opens again
     onOpen: async () => {
       try {
         await client.imps.get({ name }, { signal });
@@ -118,8 +103,6 @@ function openLocal(local: ReverseLocal): Socket {
   return createConnection({ host: '127.0.0.1', port: local.port, allowHalfOpen: true });
 }
 
-// One client in the imp, relayed to a new connection to the local side. The
-// local socket pauses while more than the window waits for impd's acks.
 function openLocalRelay(
   accept: (handlers: ReverseRelayHandlers) => ReverseRelay,
   local: ReverseLocal,
@@ -168,7 +151,6 @@ function openLocalRelay(
   });
 }
 
-// a forward the imp lost, which listens again once the imp runs
 class ForwardLostError extends Error {
   override name = 'ForwardLostError';
 }
@@ -182,9 +164,9 @@ function formatEnd(end: ReverseForwardEnd): string {
     .exhaustive();
 }
 
-// Resolves once the imp runs again. After a lost listener it first waits for
-// the imp to leave `running`, so a forward never wakes the imp it slept: an
-// imp still running once `grace` settles lost only its listener.
+// after a lost listener the wait first sees the imp leave `running`, so a
+// forward never wakes the imp it slept; an imp still running when `grace`
+// settles lost only its listener
 async function waitForWake(
   watch: (onState: (state: ImpState) => void) => Promise<void>,
   grace: Promise<void> | null,
@@ -230,9 +212,6 @@ async function waitForWake(
   await woke.promise;
 }
 
-// A reverse forward that outlives sleeps: when its listener in the imp ends,
-// as a sleep ends it, it waits for the imp to wake, never waking it, and
-// listens again. impd refusing it ends it for good.
 export async function startReverseForward(
   config: CliConfig,
   name: string,
@@ -269,7 +248,6 @@ export async function startReverseForward(
       await wait(RETRY_MS, watching.signal);
     }
 
-    // each wait has its own stream and grace, ended once the wait is over
     const waiting = new AbortController();
 
     const signal = AbortSignal.any([watching.signal, waiting.signal]);
@@ -292,8 +270,6 @@ export async function startReverseForward(
     return openForward();
   };
 
-  // each turn holds one forward until it ends; one the imp lost is opened
-  // again, by p-retry, once the imp runs
   const runForward = async (first: ReverseForward): Promise<void> => {
     const turn: { forward: ReverseForward; lost: ReverseForwardEnd | null } = {
       forward: first,
@@ -309,7 +285,7 @@ export async function startReverseForward(
 
           io.writeNotice(`forwarding ${name}:${formatGuest(again)} -> ${local} again`);
         } catch {
-          // `ended` says why, below
+          // the forward's `ended` promise reports why
         }
       }
 

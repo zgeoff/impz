@@ -3,7 +3,6 @@ import { buildMockImp } from '@impz/api/test-utils/build-mock-imp';
 import { formatImps } from './format-imps';
 
 test('#formatImps notes why an imp boots cold and what it predates', () => {
-  // an imp with none of the fields a note reads
   const {
     move,
     agentSilentSince,
@@ -46,7 +45,6 @@ test('#formatImps notes why an imp boots cold and what it predates', () => {
 });
 
 test('#formatImps notes an inner container that is down, and none that is up', () => {
-  // an imp with none of the fields a note reads
   const {
     move,
     agentSilentSince,

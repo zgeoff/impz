@@ -642,7 +642,6 @@ test('#buildRanking leaves a generated name to impd though a host has an imp of 
 });
 
 test('#createPlaced moves on to the next host after a RAM refusal, with one create per host', async () => {
-  // each host's answer to a create
   const answers: Record<string, () => Promise<string>> = {
     alpha: () =>
       Promise.reject(

@@ -13,31 +13,24 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root bearer; each test reads it back for its client
   const rootToken = faker.string.alphanumeric(32);
 
-  // the port impd's own public listener takes, below the imps' ports
+  // impd's own public listener takes a port below the imps' ports
   const publicPort = claimFreePorts(1, {
     pick: () => 10_000 + Math.floor(Math.random() * 10_000),
   }).take();
 
-  // impd's clock stays where a test sets it
   const harness = await startTestImpd(stack, {
     rootToken,
     frozenClockMs: Date.now(),
     env: {
-      // the public MCP route a sign-in is for, as tests name it
       IMP_MCP_PUBLIC_URL: 'http://127.0.0.1:7171',
       IMP_MCP_PUBLIC_PORT: String(publicPort),
     },
   });
 
   const impd = harness.impd;
-
-  // a call's body as oRPC sends it: the input under `json`
   const RpcBodySchema = z.looseObject({ json: z.unknown() });
-
-  // each call a client makes: its procedure and its input as oRPC sends it
   const calls: { readonly path: string; readonly input: unknown }[] = [];
 
   const sendRecordedRequest = async (request: Request) => {
@@ -56,15 +49,11 @@ async function setupTest() {
     now: harness.now,
     advance: harness.advance,
     calls,
-
-    // the public route's OAuth paths, with impd's 404 for any other
     handleRoute: async (request: Request) => {
       const answered = await impd.oauth.handle(request);
 
       return answered ?? new Response('not found', { status: 404 });
     },
-
-    // a client of impd's API for the token with this secret
     connect: (token: string) =>
       createImpClient({
         url: 'http://impd.test',
@@ -107,7 +96,6 @@ test('it shows the sign-in and approves nothing when the answer at a terminal is
 
   const made = await root.tokens.create({ name: 'approver', scope: 'manage' });
 
-  // the sign-in starts at a known time
   ctx.advance(Date.UTC(2026, 0, 1) - ctx.now());
 
   const started = await createPendingSignIn({

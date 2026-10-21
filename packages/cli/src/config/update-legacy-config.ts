@@ -13,13 +13,8 @@ import {
 } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
-// what the CLI keeps in its config directory: the saved hosts and the
-// fallback token (cli-config.ts)
 const CONFIG_FILES: readonly string[] = ['config.json', 'token'];
 
-// Moves the files the CLI kept in <config>/imp before its rename into `dir`,
-// each only when `dir` lacks it, so a failed move resumes on the next call;
-// a file outside `reads` that cannot move is noted and left where it is.
 export function updateLegacyConfig(
   directory: string,
   warn: (line: string) => void = console.error,
@@ -61,7 +56,6 @@ export function updateLegacyConfig(
     warn(`impz: moved ${from} to ${to}`);
   }
 
-  // the old directory goes only when nothing else is left in it
   try {
     rmdirSync(legacyDir);
   } catch {
@@ -84,8 +78,8 @@ function probePresent(path: string): boolean {
   }
 }
 
-// whether an old file is there to move; a path that cannot be looked up is
-// noted and left, so it never stops a call that reads impz's own config
+// a path that cannot be looked up is noted and left, so it never stops a call
+// that reads impz's own config
 function checkLegacyFile(path: string, warn: (line: string) => void): boolean {
   try {
     return probePresent(path);
@@ -101,7 +95,6 @@ function checkLegacyFile(path: string, warn: (line: string) => void): boolean {
   }
 }
 
-// a symlink as a link that still points at its file, anything else as a file
 function writeMovedEntry(from: string, to: string, legacyDir: string, directory: string): void {
   if (lstatSync(from).isSymbolicLink()) {
     symlinkSync(planLinkTarget(readlinkSync(from), legacyDir, directory), to);
@@ -111,8 +104,6 @@ function writeMovedEntry(from: string, to: string, legacyDir: string, directory:
   }
 }
 
-// a link's target as seen from the new directory: an absolute one as it was,
-// a moved file at its new place, anything else where it was
 function planLinkTarget(target: string, legacyDir: string, directory: string): string {
   if (isAbsolute(target)) {
     return target;
@@ -136,7 +127,8 @@ function removeMovedSource(from: string, to: string): void {
   }
 }
 
-// a rename, or a copy when the old directory is on another filesystem
+// a rename fails when the old directory is on another filesystem, so a copy
+// takes its place
 function writeMovedFile(from: string, to: string): void {
   try {
     renameSync(from, to);

@@ -265,7 +265,6 @@ export const tokenCommand = defineGroup({
   },
 });
 
-// --imps 'dev-*,ci-*': the imps a token may touch; unset for every imp
 function parseImpPatterns(text: string | undefined): string[] | undefined {
   if (text === undefined) {
     return undefined;
@@ -287,7 +286,6 @@ function parseImpPatterns(text: string | undefined): string[] | undefined {
   return patterns;
 }
 
-// --grantable 'gh,npm': existing secrets the token may grant to its imps
 function parseGrantable(text: string | undefined): string[] | undefined {
   if (text === undefined) {
     return undefined;
@@ -307,8 +305,6 @@ function parseGrantable(text: string | undefined): string[] | undefined {
   return names;
 }
 
-// --image-ref-prefix ghcr.io/org/app-: the start of the image refs the
-// token may add under its imps (docs/guides/tokens.md#adding-images)
 function parseImageRefPrefix(text: string): string {
   const parsed = ImageRefPrefixSchema.safeParse(text);
 
@@ -321,16 +317,14 @@ function parseImageRefPrefix(text: string): string {
   return parsed.data;
 }
 
-// a list makes sense only on a manage token for some imps; an impd refuses
-// it otherwise, but an older one would not see the list at all
+// impd refuses a list on any other token, but an older impd would not see
+// the list at all
 function requireGrantScope(scope: Scope, imps: readonly string[] | undefined): void {
   if (scope !== 'manage' || imps === undefined) {
     throw new UsageError('--grantable needs --scope manage and --imps');
   }
 }
 
-// The key lines of a public key file, such as ~/.ssh/id_ed25519.pub. A
-// private key is refused before it leaves this machine.
 function readKeyFile(path: string): string[] {
   let text: string;
 
@@ -358,12 +352,10 @@ function readKeyFile(path: string): string[] {
   return lines;
 }
 
-// `token set --grantable`: the whole new list, as parseGrantable; '' clears it
 function parseGrantableUpdate(text: string): string[] {
   return text.trim() === '' ? [] : (parseGrantable(text) ?? []);
 }
 
-// `token set --image-ref-prefix`: as parseImageRefPrefix; '' takes it away
 function parseImageRefPrefixUpdate(text: string): string | null {
   return text.trim() === '' ? null : parseImageRefPrefix(text);
 }

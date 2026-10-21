@@ -7,8 +7,6 @@ function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the target: answers HTTP with its path, and echoes each WebSocket text
-  // as `echo <text>`
   const target = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
@@ -113,7 +111,6 @@ test('it refuses a fault for a WebSocket that never opened', () => {
 test('it drops the client without a close frame when the target drops its side', async () => {
   const ctx = setupTest();
 
-  // a target that drops each WebSocket without a frame once it sends
   const dropping = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,

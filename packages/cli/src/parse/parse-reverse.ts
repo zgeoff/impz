@@ -1,15 +1,10 @@
 import type { ReverseGuest } from '@impz/client';
 import { UsageError } from '../cli/errors';
 
-// The local side of a reverse forward: a unix socket or a port on this
-// machine's 127.0.0.1.
 export type ReverseLocal =
   | { readonly network: 'unix'; readonly path: string }
   | { readonly network: 'tcp'; readonly port: number };
 
-// One `impz proxy --reverse` spec: GUEST:LOCAL. Each side is an absolute
-// path or a port; a lone side is both. An empty GUEST is a socket the imp's
-// agent makes, and a guest port 0 takes any free port.
 export interface ReverseSpec {
   readonly guest: ReverseGuest;
   readonly local: ReverseLocal;
@@ -18,7 +13,6 @@ export interface ReverseSpec {
 const USAGE =
   'try GUEST:LOCAL, each an absolute path or a port: /tmp/app.sock:/run/app.sock, 9000:8080, or 9000';
 
-// A guest path holds no colon, so the first colon splits the sides.
 export function parseReverse(spec: string): ReverseSpec {
   const colon = spec.indexOf(':');
   const guestText = colon === -1 ? spec : spec.slice(0, colon);

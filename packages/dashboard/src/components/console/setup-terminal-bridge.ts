@@ -4,15 +4,12 @@ interface Disposable {
   readonly dispose: () => void;
 }
 
-// the part of an xterm.js Terminal this needs, so tests can stand in for it
 export interface TerminalScreen {
   readonly write: (data: Uint8Array) => void;
   readonly onData: (listener: (data: string) => void) => Disposable;
   readonly onResize: (listener: (size: TerminalSize) => void) => Disposable;
 }
 
-// Wires a screen to a connection: output to the screen, keys and size to
-// the far end. The returned function unwires it and stops reading.
 export function setupTerminalBridge(
   screen: TerminalScreen,
   connection: TerminalConnection,
@@ -31,7 +28,7 @@ export function setupTerminalBridge(
         screen.write(chunk.value);
       }
     } catch {
-      // the connection's `ended` says why the output stopped
+      // the connection's `ended` promise reports why the output stopped
     }
   };
 
@@ -47,7 +44,7 @@ export function setupTerminalBridge(
     try {
       await reader.cancel();
     } catch {
-      // already ended
+      // cancel rejects on a stream that already ended
     }
   };
 

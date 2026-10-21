@@ -1,6 +1,5 @@
 import type { ExposeResult } from '@impz/api';
 
-// What an expose made, the credential included: impd shows it this once
 export function formatExposeResult(result: ExposeResult): string {
   const lines = [`${result.url} is public`];
 

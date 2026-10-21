@@ -6,21 +6,16 @@ import { openEventStream } from '@impz/daemon/src/platform/events/event-stream';
 
 type ImpdEventListener = (event: Readonly<ImpEvent>) => void;
 
-// what an event stream runs for: the session's imp patterns and expiry
 interface StreamSession {
   readonly imps: readonly string[] | null;
   readonly expiresAt: Date;
 }
 
-// the clock the expiry runs on: impd's wall clock and setTimeout by default;
-// a test passes a stub's
 interface StreamClock {
   readonly now?: () => number;
   readonly startTimer?: (fire: () => void, durationMs: number) => () => void;
 }
 
-// The subscribers of the mock impd's event bus, one per open stream; the
-// preload clears it after each test
 export const impdEventListeners = new Set<ImpdEventListener>();
 
 const impdEventBus: EventBus = {
@@ -38,18 +33,12 @@ const impdEventBus: EventBus = {
   },
 };
 
-// impd's own logouts (packages/daemon auth/logouts.ts): a logout ends every
-// dashboard stream
 export const impdLogouts = createLogouts();
 
-// sends an event to every open stream, as impd does after a change
 export function emitImpdEvent(event: ImpEvent): void {
   impdEventBus.publish(event);
 }
 
-// events.stream through impd's own openEventStream, filtered and ended as
-// packages/daemon create-router.ts does: by the session's imp patterns, and
-// at the caller's abort, a logout, or the session's expiry
 export function openImpdEventStream(
   session: StreamSession,
   readImps: () => readonly Imp[],

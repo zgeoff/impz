@@ -10,8 +10,6 @@ import { useImpd } from '../lib/impd';
 import { LIVE } from '../lib/live';
 import styles from './page.module.css';
 
-// The budget and what each awake imp holds. The governor's decisions are
-// not in the API yet; they come with the event stream (#38).
 export function RamPage() {
   const impd = useImpd();
   const info = useQuery({ ...impd.query.system.info.queryOptions(), ...LIVE });
@@ -61,7 +59,6 @@ export function RamPage() {
   );
 }
 
-// the imps holding the most RAM first; imps that are not awake hold none
 function sortByRam(imps: readonly Imp[]): Imp[] {
   return imps.toSorted((first, second) => (second.ramMib ?? -1) - (first.ramMib ?? -1));
 }

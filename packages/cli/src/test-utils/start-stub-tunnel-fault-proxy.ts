@@ -1,5 +1,4 @@
 interface FaultTunnel {
-  // impd's text messages to the client, in order, such as `{"type":"opened"}`
   readonly toClient: string[];
   isClosed: boolean;
 }
@@ -12,9 +11,6 @@ interface FaultSocketData {
   upstream: WebSocket | null;
 }
 
-// A loopback proxy that relays HTTP and WebSockets to real impd, and can put
-// a text impd never sends into one WebSocket towards the client: a fault on
-// the path. Its stop goes into `stack`.
 export function startStubTunnelFaultProxy(stack: Readonly<AsyncDisposableStack>, target: string) {
   const tunnels: FaultTunnel[] = [];
   const clients: Bun.ServerWebSocket<FaultSocketData>[] = [];
@@ -111,8 +107,6 @@ export function startStubTunnelFaultProxy(stack: Readonly<AsyncDisposableStack>,
   return {
     url: `http://127.0.0.1:${String(server.port)}`,
     tunnels,
-
-    // sends `text` to the client on the WebSocket that opened `index`th
     sendText: (index: number, text: string): void => {
       const client = clients[index];
 

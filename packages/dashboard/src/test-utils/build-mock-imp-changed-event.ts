@@ -9,7 +9,6 @@ interface ImpChangedEventOverrides extends Partial<Omit<ImpChangedEvent, 'imp'>>
   readonly imp?: Partial<Imp>;
 }
 
-// the event impd streams after an imp's record changes
 export function buildMockImpChangedEvent(
   overrides: ImpChangedEventOverrides = {},
 ): ImpChangedEvent {

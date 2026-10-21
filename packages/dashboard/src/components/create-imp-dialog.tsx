@@ -12,7 +12,6 @@ interface CreateImpDialogProps {
   readonly onOpenChange: (open: boolean) => void;
 }
 
-// Blank fields take impd's defaults (IMP_DEFAULT_IMAGE, …), as `impz new` does.
 export function CreateImpDialog(props: CreateImpDialogProps) {
   const impd = useImpd();
   const refresh = useRefresh();
@@ -91,7 +90,8 @@ export function CreateImpDialog(props: CreateImpDialogProps) {
   );
 }
 
-// blank fields are left out; exactOptionalPropertyTypes refuses undefined
+// exactOptionalPropertyTypes refuses an undefined field, so a blank field is
+// left out
 function readCreateInput(form: FormData) {
   const name = readText(form, 'name');
   const image = readText(form, 'image');

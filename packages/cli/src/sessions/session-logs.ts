@@ -5,10 +5,6 @@ import { UsageError } from '../cli/errors';
 import type { ImpClient } from '../config/create-imp-client';
 import { formatOutput, formatSessionLogs } from '../output/format-output';
 
-// `impz sessions logs|log|log-rm`: the session logs impd keeps on the host
-// (docs/guides/session-logs.md). None of them wakes the imp.
-
-// what the verbs call
 type SessionLogClient = Pick<ImpClient, 'sessions' | 'system'>;
 
 const LOGS_USAGE = 'usage: impz sessions logs <name> [session]';
@@ -34,7 +30,6 @@ export async function listSessionLogs(
   io.print(formatOutput(logs, isJson, formatSessionLogs));
 }
 
-// the newest log of the session when no generation is named
 async function readGeneration(
   client: SessionLogClient,
   name: string,
@@ -56,8 +51,6 @@ async function readGeneration(
   return newest.executionGeneration;
 }
 
-// Writes the raw output from `--from` to the log's end on stdout; a range
-// the log lost goes to stderr, as the ring's gap would.
 export async function writeSessionLog(
   client: SessionLogClient,
   io: CommandIO,

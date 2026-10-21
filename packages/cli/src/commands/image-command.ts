@@ -38,8 +38,6 @@ const addCommand = defineCommand({
     }),
 });
 
-// The context is packed here and uploaded, honoring its .dockerignore;
-// --on-host names a directory on the impd host instead, which never leaves it
 const buildCommand = defineCommand({
   name: 'build',
   description: 'Build a directory with its Dockerfile into an imp image',
@@ -75,7 +73,6 @@ const buildCommand = defineCommand({
     }),
 });
 
-// the builds impd runs now, from any client or shell
 const buildsCommand = defineCommand({
   name: 'builds',
   description: 'List the image builds running now',
@@ -160,8 +157,6 @@ function runBuild(client: ImpClient, args: Readonly<BuildArgs>): Promise<Image> 
   );
 }
 
-// `impz template`: the images API with an imp as the source
-// (docs/guides/templates.md)
 const templateCreateCommand = defineCommand({
   name: 'create',
   description: "Make a template from an imp's disk",

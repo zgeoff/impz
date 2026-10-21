@@ -16,9 +16,6 @@ import {
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 
-// impd's real app on a loopback port, where the `impz mcp` subprocess reaches
-// it, the CLI's entry the tests run it from, a root client for the scenario,
-// and `stack`, whose releases run before impd stops
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -29,12 +26,10 @@ async function setupTest() {
 
   stack.defer(() => rm(home, { recursive: true, force: true }));
 
-  // the bearer the root client and the subprocess send
   const harness = await startTestImpd(stack, { rootToken: 'root-token' });
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imps.create boots when it names none
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
@@ -241,7 +236,6 @@ test('it creates an imp through impd over stdio', async () => {
 
   // the call stops when the input ends, so the input ends once it answers
   const answer = await waitFor(() => {
-    // the text after the first newline, empty once the answer's line is whole
     const [line, rest] = stdout.text.split('\n');
 
     invariant(rest !== undefined);
@@ -315,7 +309,6 @@ test('it runs a command in the guest over stdio', async () => {
 
   // the call stops when the input ends, so the input ends once it answers
   const answer = await waitFor(() => {
-    // the text after the first newline, empty once the answer's line is whole
     const [line, rest] = stdout.text.split('\n');
 
     invariant(rest !== undefined);

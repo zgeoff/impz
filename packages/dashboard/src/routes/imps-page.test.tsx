@@ -192,7 +192,6 @@ test('it shows a change impd streams without waiting for the next poll', async (
     expect(impdEventListeners.size).toBe(1);
   });
 
-  // a change made elsewhere, such as from the CLI
   const slept = await impCollection.update((query) => query.where({ name: 'web' }), {
     data(imp) {
       imp.state = 'sleeping';

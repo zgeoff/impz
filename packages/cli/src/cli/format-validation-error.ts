@@ -2,8 +2,6 @@ import { isArgsValidationError } from 'gunshi';
 import type { ArgsValidationError } from 'gunshi';
 import { P, match } from 'ts-pattern';
 
-// The line for a command line gunshi refused, such as an unknown flag or a
-// missing argument. `command` is the path of the command it was for.
 export function formatValidationError(error: AggregateError, command: string): string | null {
   const errors: readonly unknown[] = error.errors;
   const refused = errors.filter((each) => isArgsValidationError(each));
@@ -69,15 +67,13 @@ function formatArgError(error: Readonly<ArgsValidationError>): string {
     .exhaustive();
 }
 
-// the flag as `--name`, or a positional argument by its name
 function getDisplayName(displayName: unknown, name: unknown): string {
   const text = typeof displayName === 'string' ? displayName : String(name);
 
   return text.startsWith("'--") ? `--${String(name)}` : text.replaceAll("'", '');
 }
 
-// gunshi's integer bounds as a sentence, else the parser's own message under
-// the flag's name
+// gunshi words an integer bound as `Integer must be >= <n>, got <value>`
 function formatParseFailure(flag: string, reason: string): string {
   const bound = /^Integer must be (?<op>[<>])= (?<limit>-?\d+), got (?<actual>.+)$/u.exec(reason);
 

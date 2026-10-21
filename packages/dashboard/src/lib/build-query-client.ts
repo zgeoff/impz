@@ -1,8 +1,6 @@
 import { ORPCError } from '@orpc/client';
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 
-// A 401 means the session ended (expired, logged out, a new token), so any
-// query or mutation that sees one sends the browser to the login page.
 export function buildQueryClient(onUnauthorized: () => void): QueryClient {
   const handleError = (error: Error): void => {
     if (isUnauthorized(error)) {

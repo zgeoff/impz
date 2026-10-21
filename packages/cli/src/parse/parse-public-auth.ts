@@ -7,8 +7,6 @@ export interface PublicAuthRequest {
   readonly user?: string;
 }
 
-// `--auth none|token|basic` and `--user u`: token by default, a user alone
-// means basic, and only basic takes one
 export function parsePublicAuth(
   auth: string | undefined,
   user: string | undefined,

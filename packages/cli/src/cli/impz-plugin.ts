@@ -5,17 +5,11 @@ import type { CommandIO } from './command-io';
 import { CommandLineError } from './errors';
 import { renderUsage } from './render-usage';
 
-// what every command gets beside its own flags
 export interface ImpzExtension {
-  // the saved host `--host` named, or null to fall back on IMP_URL, then the
-  // current host
   readonly host: string | null;
   readonly io: CommandIO;
 }
 
-// The flags every command takes: `--host` anywhere before `--`, and
-// `--help` and `--version`, which answer instead of running the command.
-// Each command reads its host and IO from `ctx.extensions.impz`.
 export function buildImpzPlugin(io: CommandIO) {
   return plugin({
     id: 'impz',

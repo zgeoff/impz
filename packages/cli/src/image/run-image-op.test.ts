@@ -14,31 +14,26 @@ import {
 import { checkDockerBuildx } from '../test-utils/run-docker-build';
 import { runImageAdd, runOnHostBuild } from './run-image-op';
 
-// impd's real app, booted on stand-ins, and an in-process client of it that
-// records each procedure it calls
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root bearer; each test reads it back for its client
   const rootToken = faker.string.alphanumeric(32);
 
   const harness = await startTestImpd(stack, {
     rootToken,
 
-    // a host build runs this machine's docker, as the stub VMM boots no builder
+    // the stub VMM boots no builder, so a build runs on this machine's docker
     env: { IMP_BUILD_ISOLATION: 'host' },
 
-    // keeps the imp's sparse disk sparse, which a template copies
+    // a template copies the imp's disk, which must stay sparse
     cloneDisk: async (source, target) => {
       await Bun.spawn(['cp', '--sparse=always', source, target]).exited;
     },
   });
 
   const sendRequest = (request: Request) => harness.impd.api.app.handle(request);
-
-  // the procedure of each call the client sends, such as `system/info`
   const calls: string[] = [];
 
   const sendClientRequest = (request: Request) => {
@@ -59,7 +54,6 @@ async function setupTest() {
 test('#runImageAdd makes a template from an imp through the stream of a current impd', async () => {
   const ctx = await setupTest();
 
-  // the image the imp is created from, with a rootfs where its digest names
   const base = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, base.digest).rootfs, 'rootfs');
@@ -142,7 +136,6 @@ test('#runOnHostBuild passes on a current impd’s refusal of a host build', asy
 test('#runImageAdd adds through the call that answers at the end on an impd from before imageOpStream', async () => {
   const ctx = await setupTest();
 
-  // the image the imp is created from, with a rootfs where its digest names
   const base = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, base.digest).rootfs, 'rootfs');
@@ -216,7 +209,6 @@ test.skipIf(!checkDockerBuildx())(
 test('#runImageAdd rejects when impd faults by ending the stream before it answers the image', async () => {
   const ctx = await setupTest();
 
-  // the image the imp is created from, with a rootfs where its digest names
   const base = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, base.digest).rootfs, 'rootfs');

@@ -16,9 +16,6 @@ function setupTest() {
   return { directoryPath: directory };
 }
 
-// Every source of a URL against every source of a token: the pair always
-// comes from one place, and a saved token never follows IMP_URL elsewhere.
-
 test('it calls the local impd with no token when nothing is set', () => {
   const ctx = setupTest();
 

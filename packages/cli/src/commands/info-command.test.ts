@@ -14,8 +14,6 @@ import { readJsonOutput } from '../test-utils/read-json-output';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';
 
-// The CLI's home, where config.json keeps the saved hosts, so none of this
-// machine's reaches it; the impd host a test starts releases into `stack`
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -40,7 +38,6 @@ test('it shows an awake imp’s inner container as down, with its restarts and l
 
   const imp = await box.client.imps.create({ name: 'web' });
 
-  // its agent answers, with the container down after three restarts
   await startStubInnerAgent(buildImpPaths(box.dataDir, imp.id).vsockSocket, {
     inner: { up: false, restarts: 3, lastError: 'start inner init: exit status 1' },
     stack: ctx.stack,

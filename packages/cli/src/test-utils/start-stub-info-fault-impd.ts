@@ -1,6 +1,3 @@
-// impd on loopback for a CLI child, its feature reads (system.features and
-// system.info) dropping the connection before any answer; every other call reaches the app behind `fetch`. It
-// records each call's procedure, and its stop goes into `stack`.
 export function startStubInfoFaultImpd(
   stack: Readonly<AsyncDisposableStack>,
   fetch: (request: Request) => Promise<Response>,

@@ -6,11 +6,8 @@ export interface StartCliOptions {
   readonly args: readonly string[];
 
   // the CLI's whole environment beside PATH, so no variable of the test run
-  // (IMP_URL, IMP_TOKEN, a saved host's HOME) reaches it unasked; without a
-  // HOME here the CLI gets an empty one of its own
+  // reaches it unasked
   readonly env?: Readonly<Record<string, string>>;
-
-  // piped in, then closed; no stdin at all when left out
   readonly stdin?: string;
 }
 
@@ -22,9 +19,6 @@ export interface CliResult {
 
 const MAIN = join(import.meta.dir, '..', 'main.ts');
 
-// Starts the real `impz` binary as a user runs it: `bun main.ts <args>`, with
-// stdout and stderr piped. The caller owns the process. Without a HOME the CLI
-// finds the developer's own, so its default HOME is a temp dir, gone on exit.
 export function startCli(options: StartCliOptions) {
   const home = mkdtempSync(join(tmpdir(), 'impz-cli-home-'));
 
@@ -48,8 +42,6 @@ async function removeOnExit(exited: Promise<number>, directory: string): Promise
   }
 }
 
-// Runs the real `impz` binary to its exit and returns what it printed and its
-// exit code.
 export async function runCli(options: StartCliOptions): Promise<CliResult> {
   const child = startCli(options);
 

@@ -9,25 +9,21 @@ import { buildStubBrowserFetch } from './src/test-utils/build-stub-browser-fetch
 const bunFetch = globalThis.fetch;
 
 declare global {
-  // happy-dom's own API on the window that @zgeoff/bun-test-react registers
   var happyDOM: { readonly setURL: (url: string) => void };
 }
 
-// a seeded faker, and every env override put back after each test
 registerRunHooks();
 
-// the page's own origin, as impd serves the dashboard
 globalThis.happyDOM.setURL(`${IMPD_ORIGIN}/ui/`);
 
-// a browser marks the page's own requests with Sec-Fetch-Site, which impd's
-// session routes need; wrapped around MSW's fetch, so MSW sees the header
+// impd's session routes need the Sec-Fetch-Site header a browser sends; the
+// stand-in wraps MSW's fetch, so MSW sees the header
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });
 
   globalThis.fetch = buildStubBrowserFetch(globalThis.fetch, `${IMPD_ORIGIN}/ui/`);
 });
 
-// the mock impd's records, and any event stream an unmounted app left open
 afterEach(() => {
   server.resetHandlers();
 

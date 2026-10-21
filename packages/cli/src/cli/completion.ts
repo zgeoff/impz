@@ -5,20 +5,15 @@ export const SHELLS = ['bash', 'zsh', 'fish'] as const;
 
 export type Shell = (typeof SHELLS)[number];
 
-// One command in the tree a completion script walks: the words that may
-// follow it.
 export interface CompletionNode {
-  // the command's words from the root, `impz checkpoint`
   readonly path: string;
   readonly subcommands: readonly string[];
   readonly flags: readonly string[];
   readonly children: readonly CompletionNode[];
 }
 
-// flags every command line takes before the command, outside any command
 const ROOT_FLAGS = ['--host', '--version', '--help'];
 
-// a command as gunshi holds it: the command, or the loader of a lazy one
 type CommandEntry = SubCommandable | LazyCommand;
 
 export async function readCompletionTree(command: CommandEntry): Promise<CompletionNode> {
@@ -76,7 +71,6 @@ export function renderCompletion(shell: Shell, tree: CompletionNode): string {
   return RENDERERS[shell](collectNodes(tree));
 }
 
-// a command gunshi loads lazily, such as `completion`, loaded now
 async function loadCommand(entry: CommandEntry): Promise<SubCommandable> {
   if (typeof entry !== 'function') {
     return entry;
@@ -94,7 +88,6 @@ function listSubCommands(command: SubCommandable): [string, CommandEntry][] {
   return listEntries(subCommands);
 }
 
-// the node and every node under it, depth first
 export function collectNodes(node: CompletionNode): readonly CompletionNode[] {
   return [node, ...node.children.flatMap((child) => collectNodes(child))];
 }
@@ -109,9 +102,7 @@ function pickFlags(node: CompletionNode): readonly string[] {
   return node.flags;
 }
 
-// The bash and zsh scripts share their shape: a `case` that maps a command
-// path to its subcommands and to its flags, and a loop that walks the typed
-// words down that tree. No associative arrays, so macOS's bash 3.2 runs it.
+// a `case` instead of associative arrays, so macOS's bash 3.2 runs it
 function renderCases(fn: string, nodes: readonly CompletionNode[], pick: PickWords): string {
   const cases = nodes
     .map((node) => `    '${node.path}') echo '${pick(node).join(' ')}' ;;`)
@@ -149,7 +140,7 @@ complete -F _impz impz
 `;
 }
 
-// `path` is a special zsh variable (tied to PATH), so the walk uses `cmd`.
+// `path` is a special zsh variable tied to PATH, so the walk uses `cmd`
 function renderZsh(nodes: readonly CompletionNode[]): string {
   return `#compdef impz
 # zsh completion for impz: put it on $fpath as _impz, or eval "$(impz completion zsh)"

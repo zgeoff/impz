@@ -81,7 +81,6 @@ test('#formatTop lists the busiest imp first, with disk use, traffic, wakes and 
 });
 
 test('#setCommand refuses a set with no change before any call', async () => {
-  // a call that slipped through would fail on the dead address instead
   const result = await runCLIInProcess({
     args: ['set', 'box'],
     env: { IMP_URL: 'http://127.0.0.1:1' },

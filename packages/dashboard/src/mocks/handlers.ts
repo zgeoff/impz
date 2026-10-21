@@ -8,8 +8,6 @@ import { impdLogouts } from './impd-events';
 import { impdRouter } from './impd-router';
 import type { ImpdSession } from './impd-router';
 
-// the impd that serves the dashboard in the tests (test-setup.ts sets the
-// page's URL under it)
 export const IMPD_ORIGIN = 'http://impd.test';
 export const LOGIN_URL = `${IMPD_ORIGIN}/auth/login`;
 export const LOGOUT_URL = `${IMPD_ORIGIN}/auth/logout`;
@@ -42,9 +40,6 @@ export function resolveLogout(context: RouteContext): Response {
   return new HttpResponse(null, { status: 204 });
 }
 
-// impd's /rpc (packages/daemon create-app.ts): the browser's session, only
-// from impd's own origin and before it expires, or impd's 401; oRPC's own
-// fetch handler answers through impdRouter
 export async function resolveRpc(context: RouteContext): Promise<Response> {
   const session = readSession(context.request);
 
@@ -70,8 +65,6 @@ function readJson(request: Readonly<Request>): Promise<unknown> {
   );
 }
 
-// a known token's secret opens a session with that token's scope; any other
-// body, malformed JSON included, gets a 401
 async function resolveLoginBody(json: unknown): Promise<Response> {
   const body = LoginSchema.safeParse(json);
 
@@ -90,9 +83,6 @@ async function resolveLoginBody(json: unknown): Promise<Response> {
   return new HttpResponse(null, { status: 204 });
 }
 
-// impd's readSessionCaller (packages/daemon auth/authenticate.ts): the
-// session, same-origin and unexpired, as its token is now, found by id, so
-// a new token under the old name does not revive it
 function readSession(request: Request): ImpdSession | null {
   const session = isSameOrigin(request) ? sessionCollection.findFirst() : undefined;
 

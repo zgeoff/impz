@@ -3,7 +3,6 @@ import type { Imp } from '@impz/api';
 
 type DiskUsage = NonNullable<Imp['diskUsage']>;
 
-// a complete measurement of an imp's disk use on the host
 export function buildMockDiskUsage(overrides: Partial<DiskUsage> = {}): DiskUsage {
   return {
     exclusiveBytes: faker.number.int({ min: 0, max: 1024 }) * 1024 * 1024,

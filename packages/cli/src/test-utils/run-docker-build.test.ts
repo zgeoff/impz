@@ -80,7 +80,6 @@ test.skipIf(!checkDockerBuildx())(
     invariant(packed.success);
 
     runDockerBuild({
-      // a path inside the tar, as docker reads the Dockerfile from the context
       dockerfile: 'Dockerfile',
       context: { tarPath },
       destination: join(ctx.directoryPath, 'out'),

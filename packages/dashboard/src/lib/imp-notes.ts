@@ -6,8 +6,6 @@ export interface ImpNote {
   readonly text: string;
 }
 
-// What is worth knowing about an imp beyond its state: why it failed, why
-// its next wake boots cold, and whether a hold keeps it awake.
 export function buildImpNotes(imp: Imp, nowMs: number): ImpNote[] {
   const notes: ImpNote[] = [];
 

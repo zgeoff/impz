@@ -12,13 +12,9 @@ interface ForkDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly source: string;
-
-  // a checkpoint id to fork from; without one, the imp's disk as it is now
   readonly checkpoint?: string;
 }
 
-// A fork copies the disk only: the new imp boots fresh, with its own
-// entropy and IDs
 export function ForkDialog(props: ForkDialogProps) {
   const impd = useImpd();
   const refresh = useRefresh();

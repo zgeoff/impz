@@ -8,7 +8,6 @@ import { startStubAgent } from '@impz/daemon/testing';
 import invariant from 'tiny-invariant';
 import { buildStubListenAgent } from './build-stub-listen-agent';
 
-// a socket path in a temp dir, as impd's agent client reaches the stub there
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'stub-listen-agent-'));
 

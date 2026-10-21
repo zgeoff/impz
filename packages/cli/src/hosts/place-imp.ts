@@ -4,7 +4,6 @@ import { ORPCError, findMissingFeatures } from '@impz/client';
 import type { ImpClient } from '../config/create-imp-client';
 import type { HostAnswer } from './fan-out';
 
-// what `impz new --place` asks of a host
 export interface PlaceRequest {
   readonly name: string | null;
   readonly image: string | null;
@@ -13,11 +12,9 @@ export interface PlaceRequest {
   readonly policyMode: EgressMode | null;
   readonly networks: readonly string[];
 
-  // --public and --net need a manage token with no imp patterns
   readonly needsWholeHost: boolean;
 }
 
-// what placement reads from one host before it picks
 export interface HostProbe {
   readonly info: SystemInfo;
   readonly identity: Identity;
@@ -37,13 +34,10 @@ interface DroppedHost {
 }
 
 export interface Ranking {
-  // best first
   readonly ranked: readonly RankedHost[];
   readonly dropped: readonly DroppedHost[];
 }
 
-// One host's facts, in one round of calls under the fan-out's signal. The
-// image, imp and network lists are names only: each is local to its host.
 export async function readHostProbe(
   client: ImpClient,
   signal: AbortSignal,
@@ -68,9 +62,6 @@ export async function readHostProbe(
   };
 }
 
-// Drops each host that would refuse the create, then ranks the rest by free
-// RAM. A name taken on a host that answered ends it: best effort, as a host
-// out of reach or a token's imp patterns hide names.
 export function buildRanking(
   answers: readonly HostAnswer<HostProbe>[],
   request: PlaceRequest,
@@ -101,16 +92,13 @@ export function buildRanking(
   return { ranked: ranked.toSorted((first, second) => second.freeMib - first.freeMib), dropped };
 }
 
-// The budget less what awake VMs own, boots under way reserve, and every
-// sleeper takes back on a wake; idle imps the governor could sleep are not
-// counted, so it errs low (docs/guides/hosts.md#placement)
 export function getFreeMib(info: SystemInfo): number {
   return info.ramBudgetMib - info.ramUsedMib - info.ramReservedMib - (info.ramSleepingMib ?? 0);
 }
 
-// The next host only when the governor turned the boot away, as impd then
-// removes the imp before it answers; any other failure, a timeout too, may
-// leave an imp, so it ends placement
+// impd removes the imp before it answers that the governor turned the boot
+// away, so only that refusal tries the next host; any other failure, a
+// timeout too, may leave an imp behind
 export async function createPlaced<T>(
   ranked: readonly RankedHost[],
   create: (host: string) => Promise<T>,

@@ -12,14 +12,11 @@ import invariant from 'tiny-invariant';
 import { buildStubBackoffClock } from '../test-utils/build-stub-backoff-clock';
 import { printEvents } from './events-command';
 
-// impd's real app, listening on a loopback port for the spawned CLI, and an
-// in-process client of it
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root bearer; each test reads it back for its client
   const rootToken = faker.string.alphanumeric(32);
 
   const harness = await startTestImpd(stack, { rootToken });
@@ -27,8 +24,7 @@ async function setupTest() {
   const impd = harness.impd;
   const port = harness.config.apiPort;
 
-  // each listen after impd's own registers the stop of its own server; a
-  // Bun server that a test stopped already stops again as a no-op
+  // Bun stops a server that a test stopped already again as a no-op
   const startListener = (): void => {
     impd.api.app.listen({ port, hostname: '127.0.0.1' });
 
@@ -69,7 +65,6 @@ test('it prints only the named imp’s events, and reconnects after impd’s con
   const live = createImpClient({ url: ctx.url, token: ctx.rootToken });
   const warn = mock<(line: string) => void>();
 
-  // impd comes back for the first reconnect only
   const backoff = buildStubBackoffClock({
     at: 1,
     onWait: () => {
@@ -77,7 +72,6 @@ test('it prints only the named imp’s events, and reconnects after impd’s con
     },
   });
 
-  // each line drops impd's connection, as a restart does
   const print = mock<(line: string) => void>(() => {
     void ctx.stopListener();
   });
@@ -157,7 +151,6 @@ test('it prints every imp’s events when no imp is named', async () => {
     (line) => {
       lines.push(line);
 
-      // both snapshot lines are in, so impd's connection drops
       if (lines.length === 2) {
         void ctx.stopListener();
       }
@@ -185,7 +178,6 @@ test('it starts the count and the backoff again after a stream that lasted', asy
 
   const live = createImpClient({ url: ctx.url, token: ctx.rootToken });
 
-  // impd is back for the third try
   const backoff = buildStubBackoffClock({
     at: 2,
     onWait: () => {
@@ -199,7 +191,6 @@ test('it starts the count and the backoff again after a stream that lasted', asy
         stream: async () => {
           const stream = await live.events.stream();
 
-          // the stream that opens lasts 20 s, then impd's connection drops
           backoff.advance(20_000);
           void ctx.stopListener();
 
@@ -226,7 +217,6 @@ test('it starts the count and the backoff again after a stream that lasted', asy
 test('it reconnects after impd fails the stream with a server error', async () => {
   const ctx = await setupTest();
 
-  // the snapshot read fails on a closed database, as on a failed disk
   await ctx.db.destroy();
 
   const warn = mock<(line: string) => void>();

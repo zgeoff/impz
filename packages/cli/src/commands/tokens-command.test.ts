@@ -7,14 +7,11 @@ import { startStubImpdRelease, startTestImpd } from '@impz/daemon/testing';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startStubInfoFaultImpd } from '../test-utils/start-stub-info-fault-impd';
 
-// impd's real app, listening on a loopback port for the spawned CLI, and an
-// in-process client of it
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the bearer the CLI sends
   const harness = await startTestImpd(stack, { rootToken: 'root-token' });
 
   const sendRequest = (request: Request) => harness.impd.api.app.handle(request);
@@ -111,7 +108,6 @@ test('it refuses an --ssh-key file that is missing', async () => {
   });
 });
 
-// impd's address is a closed port: a call would fail to connect, not refuse
 test.each([
   [
     ['token', 'new', 'agent', '--scope', 'manage', '--grantable', 'gh'],

@@ -11,9 +11,8 @@ test('it logs in, creates an imp, runs a command in its console and destroys it'
 }) => {
   const token = process.env['IMP_TOKEN'] ?? '';
 
-  // the harness's suite (e2e/suites/dashboard.e2e.ts) names the imp, so
-  // its cleanup removes it, and a small fixture image; '' picks the default
-  // image
+  // the e2e harness names the imp so its cleanup removes it, and passes a
+  // small fixture image; '' picks the default image
   const prefix = process.env['E2E_IMP_PREFIX'] ?? 'e2e-dash-';
   const image = process.env['E2E_IMP_IMAGE'] ?? '';
   const name = process.env['E2E_IMP_NAME'] ?? `${prefix}${String(Date.now() % 100_000)}`;
@@ -28,7 +27,6 @@ test('it logs in, creates an imp, runs a command in its console and destroys it'
   await expect(page.getByRole('heading', { name: 'Imps' })).toBeVisible();
   await expect(page.getByRole('meter', { name: 'RAM in use' })).toBeVisible();
 
-  // the browser holds the session cookie and never the token
   const cookies = await page.context().cookies();
 
   const session = cookies.find((cookie) => cookie.name === 'imp_session');
@@ -84,7 +82,6 @@ test('it logs in, creates an imp, runs a command in its console and destroys it'
 
   await expect(page).toHaveURL(/\/ui\/login$/u);
 
-  // the session is gone: the list sends the browser back to the login
   await page.goto('/ui/');
 
   await expect(page).toHaveURL(/\/ui\/login$/u);

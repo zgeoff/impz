@@ -1,15 +1,11 @@
-// Modes a full-screen program sets on the terminal: once the session ends
-// or detaches, nothing will set them back, so the CLI does.
-
 const ESC = '\u001B';
 
-// mouse reporting (X10, buttons, drags, motion, and the UTF-8, SGR, urxvt
-// and pixel encodings) and focus events: always off, no shell wants them
+// no shell wants mouse reporting or focus events, so the reset always turns
+// them off
 const RESET_MOUSE_MODES = [9, 1000, 1002, 1003, 1005, 1006, 1015, 1016, 1004]
   .map((mode) => `${ESC}[?${String(mode)}l`)
   .join('');
 
-// the cursor shown, colors and styles reset, xterm's modifyOtherKeys off
 const RESET_CURSOR_AND_KEYS = `${ESC}[?25h${ESC}[0m${ESC}[>4;0m`;
 
 const ALT_SCREEN_MODES = new Set([47, 1047, 1049]);
@@ -17,11 +13,8 @@ const ALT_SCREEN_MODES = new Set([47, 1047, 1049]);
 const BRACKETED_PASTE = 2004;
 const CURSOR_KEYS = 1;
 
-// a CSI sequence (prefix, parameters, final byte), or RIS, a full reset
 // oxlint-disable-next-line no-control-regex -- terminal sequences start with ESC
 const SEQUENCE = /\u001B\[(?<prefix>[<=>?]?)(?<params>[\d:;]*)(?<final>[@-~])|\u001Bc/gu;
-
-// a sequence cut off at the end of a chunk is kept for the next one
 const MAX_CARRY = 32;
 
 export interface ModeWatcher {
@@ -29,8 +22,6 @@ export interface ModeWatcher {
   readonly buildReset: () => string;
 }
 
-// Turns off what the session turned on, and leaves alone what it did not:
-// the local shell may use bracketed paste or cursor keys itself.
 export function createModeWatcher(): ModeWatcher {
   const decoder = new TextDecoder('latin1');
 
@@ -100,7 +91,7 @@ interface Seen {
   paste: boolean;
   cursorKeys: boolean;
 
-  // kitty keyboard pushes less pops, per screen as kitty keeps them
+  // kitty keeps a stack of keyboard modes for each screen
   kitty: { main: number; alt: number };
 }
 

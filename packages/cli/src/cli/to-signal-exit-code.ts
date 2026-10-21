@@ -1,8 +1,7 @@
 import { constants } from 'node:os';
 
-// The exit code a shell reports for a process the signal ended: 128 + its
-// number, such as 130 for SIGINT. impd names a signal Node does not know,
-// a real-time one, `SIG<n>`. Null for a signal with no number.
+// a shell reports 128 plus the signal's number; impd names a real-time
+// signal, which Node does not know, as `SIG<n>`
 export function toSignalExitCode(signal: string): number | null {
   const signals: Readonly<Record<string, number>> = constants.signals;
   const numbered = /^SIG(?<number>\d+)$/u.exec(signal)?.groups?.['number'];

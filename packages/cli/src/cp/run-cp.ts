@@ -19,22 +19,15 @@ import { parseCpArgs } from './parse-cp-args';
 import type { CpPlan } from './parse-cp-args';
 
 export interface CpOptions {
-  // the saved host `--host` named, or null, and the environment that picks
-  // the impd without one
   readonly host: string | null;
   readonly env: CliEnv;
   readonly warn: (line: string) => void;
-
-  // where the copy's progress goes: stderr
   readonly output: ProgressOutput;
   readonly source: string;
   readonly target: string;
-
-  // the owner in the imp, for an upload: user, uid, user:group or uid:gid
   readonly owner?: string;
 }
 
-// `impz cp`: one side on this machine, the other in an imp
 export async function runCp(options: CpOptions): Promise<void> {
   const config = loadCliConfig(options.env, options.host, options.warn);
   const plan = parseCpArgs(options.source, options.target);

@@ -1,5 +1,4 @@
-// a timer that an abort clears, so a wait left behind keeps no process
-// alive; a finished wait takes its listener off the shared signal
+// an abort clears the timer, so a wait left behind keeps no process alive
 export function waitOrAbort(durationMs: number, signal: AbortSignal): Promise<void> {
   const waited = Promise.withResolvers<void>();
 

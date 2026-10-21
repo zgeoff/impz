@@ -13,9 +13,6 @@ import {
 } from '../output/format-output';
 import { readConfirmation } from '../prompts/read-confirmation';
 
-// The public MCP route's clients, grants and sign-in approvals
-// (docs/guides/mcp.md#public-route)
-
 const clientArg = { type: 'positional', description: 'client name', required: true } as const;
 
 const redirectArg = {
@@ -115,15 +112,12 @@ const grantCommand = defineGroup({
   subCommands: { ls: grantLsCommand, rm: grantRmCommand },
 });
 
-// how approve asks: whether stdin is a terminal, the question itself, and
-// where it shows the sign-in and the outcome (stderr)
 interface ApprovePrompt {
   readonly isTerminal: boolean;
   readonly confirm: (question: string) => Promise<boolean>;
   readonly show: (line: string) => void;
 }
 
-// the calls approve makes, so a test can pass a fake impd
 interface ApprovalsClient {
   readonly oauth: {
     readonly approvals: Pick<ImpClient['oauth']['approvals'], 'get' | 'approve'>;
@@ -137,8 +131,6 @@ interface ApproveRequest {
   readonly isConfirmed: boolean;
 }
 
-// Shows what the sign-in asks for and what it would get, then asks; --yes
-// skips the question, and with no terminal to ask at, --yes is required
 export async function runApprove(
   client: Readonly<ApprovalsClient>,
   request: Readonly<ApproveRequest>,
@@ -250,7 +242,6 @@ function parseApprovalCode(text: string): string {
   return parsed.data;
 }
 
-// --imps 'dev-*,web': imp names, or a name prefix and a trailing *
 function parseGrantPatterns(text: string | undefined): string[] | undefined {
   if (text === undefined) {
     return undefined;

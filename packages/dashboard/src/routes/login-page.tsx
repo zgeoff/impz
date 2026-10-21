@@ -11,7 +11,6 @@ const MESSAGES = {
   failed: 'impd did not answer the login.',
 } as const;
 
-// The token goes to impd once, which answers with the session cookie
 export function LoginPage() {
   const navigate = useNavigate();
 

@@ -20,8 +20,6 @@ interface CliOutcome {
   readonly mustExit: boolean;
 }
 
-// Runs one impz command line to its end. A failure prints one line on stderr
-// and maps to its exit code: 2 for a usage error, 1 for any other.
 export async function runCLI(args: readonly string[], io: CommandIO): Promise<CliOutcome> {
   try {
     const rendered = await cli([...args], mainCommand, {
@@ -43,14 +41,12 @@ export async function runCLI(args: readonly string[], io: CommandIO): Promise<Cl
   }
 }
 
-// the failure's line on stderr, and the exit code it maps to
 function printFailure(error: unknown, io: CommandIO): CliOutcome {
   if (error instanceof CommandExitError) {
     return { code: error.code, mustExit: error.mustExit };
   }
 
   if (error instanceof PromptCancelledError) {
-    // a Ctrl-C at the prompt, as a shell reports it
     return { code: toSignalExitCode('SIGINT') ?? 1, mustExit: false };
   }
 
@@ -67,7 +63,6 @@ function printFailure(error: unknown, io: CommandIO): CliOutcome {
   return { code: 1, mustExit: false };
 }
 
-// the line for a mistake in the command line, or null for any other failure
 function formatUsageError(error: unknown): string | null {
   if (error instanceof UsageError) {
     return error.message;

@@ -18,16 +18,10 @@ export interface ImageBuildOptions {
   readonly directory: string;
   readonly name: string;
   readonly dockerfile: string | undefined;
-
-  // no progress and no build output; errors still print
   readonly quiet?: boolean;
-
-  // where the progress and the build's output go: stderr
   readonly output: ProgressOutput;
 }
 
-// A tar of the entries, made as impd reads it: the pack waits while the
-// upload does, so a large context never sits in memory.
 export function createContextStream(
   entries: readonly LocalEntry[],
   progress: CopyProgress,
@@ -43,7 +37,6 @@ export function createContextStream(
     await writer.write(chunk);
   };
 
-  // the stream errors with the pack's failure, which fails the upload
   const writeEntries = async (): Promise<void> => {
     try {
       await writeLocalEntries(entries, send, progress, warn);
@@ -59,8 +52,6 @@ export function createContextStream(
   return pipe.readable;
 }
 
-// `impz image build <directory>`: packs the directory here, honoring its
-// .dockerignore, and uploads it for impd to build
 export async function runImageBuild(
   client: ImpClient,
   options: Readonly<ImageBuildOptions>,
@@ -74,8 +65,6 @@ export async function runImageBuild(
   );
 
   const quiet = options.quiet === true;
-
-  // the upload's line is for a terminal only
   const output = { ...options.output, isTTY: options.output.isTTY && !quiet };
 
   const writeWarning = (text: string): void => {
@@ -96,9 +85,6 @@ export async function runImageBuild(
       {
         size,
         ...(options.dockerfile !== undefined && { dockerfile: options.dockerfile }),
-
-        // the upload's line ends where the build's starts; off a terminal
-        // the upload shows as a line of its own
         onProgress: (event) => {
           if (event.phase !== 'upload' || !output.isTTY) {
             progress.finish();

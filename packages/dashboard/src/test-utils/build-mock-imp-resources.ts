@@ -9,7 +9,6 @@ interface ImpResourcesOverrides extends Partial<Omit<ImpResources, 'sample'>> {
   readonly sample?: Partial<ResourceSample>;
 }
 
-// what a running imp used, with impd's last sample of its VM
 export function buildMockImpResources(overrides: ImpResourcesOverrides = {}): ImpResources {
   const since = faker.date.recent();
 

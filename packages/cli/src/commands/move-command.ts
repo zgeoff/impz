@@ -10,11 +10,8 @@ import type { ImpClient } from '../config/create-imp-client';
 import { createCopyProgress } from '../cp/copy-progress';
 import type { ProgressOutput } from '../cp/copy-progress';
 
-// how often `impz move` asks the source how far the send is
 const POLL_MS = 1000;
 
-// A whole move, as docs/guides/hosts.md#moves walks it: the source marks
-// the imp, the target issues a ticket, the source streams and commits.
 export async function runMove(run: MoveRun): Promise<void> {
   if (run.mode === 'abort') {
     const status = await run.from.moves.abort({ name: run.name });
@@ -34,8 +31,6 @@ export async function runMove(run: MoveRun): Promise<void> {
     return;
   }
 
-  // a ZFS source sends ZFS streams to a ZFS target, else files; a sleeping
-  // imp moves with its memory when the target's facts match
   const info = await run.to.system.info();
   const facts = await readFacts(run);
 
@@ -43,8 +38,7 @@ export async function runMove(run: MoveRun): Promise<void> {
     name: run.name,
     stop: run.stop,
 
-    // a person typed --stop: the imp's leases end rather than refuse it, as
-    // with impz stop
+    // a person typed --stop, so the imp's leases end rather than refuse it
     ...(run.stop && { force: true }),
     targetStorage: info.storage.backend,
     ...(facts !== null && { target: facts }),
@@ -133,8 +127,6 @@ async function requireTicket(run: MoveRun, plan: Readonly<MovePlan>) {
   }
 }
 
-// A move the target verified, whose commit did not land: a fresh commit
-// ticket from the target, and the source commits with it.
 async function runResume(run: MoveRun): Promise<void> {
   const before = await run.from.moves.status({ name: run.name });
 
@@ -190,12 +182,10 @@ function requireDone(run: MoveRun, status: Readonly<MoveStatus>): void {
 }
 
 function readFailureHint(run: MoveRun, status: Readonly<MoveStatus>): string {
-  // the target holds a verified copy: only a commit or an abort ends it
   if (status.state === 'moved') {
     return `; run impz move ${run.name} ${run.toHost} --resume, or --abort`;
   }
 
-  // the target did not confirm the abort, so the mark stays on
   if (status.state === 'sending') {
     return `; the imp stays marked here: run impz move ${run.name} ${run.toHost} --abort once ${run.toHost} answers`;
   }
@@ -209,16 +199,12 @@ export interface MoveRun {
   readonly name: string;
   readonly from: MoveClient;
   readonly to: MoveClient;
-
-  // the saved host the imp moves to, for messages
   readonly toHost: string;
   readonly mode: 'move' | 'resume' | 'abort';
   readonly stop: boolean;
   readonly output: ProgressOutput;
   readonly print: (line: string) => void;
   readonly wait: (durationMs: number) => Promise<void>;
-
-  // the clock the send's progress reads its rate from
   readonly now: () => number;
 }
 

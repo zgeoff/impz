@@ -15,8 +15,6 @@ test('#parseDetachKey reads none as no detach key', () => {
   expect(parseDetachKey('none')).toBeNull();
 });
 
-// the last five are the keys a program needs: Escape, Backspace, Tab, Enter
-// and Return
 test.each([
   'ctrl-1',
   'ctrl-',

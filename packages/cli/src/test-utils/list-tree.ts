@@ -1,8 +1,6 @@
 import { lstat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-// Every path under dir, sorted, as a test compares two trees: `/` after a
-// directory, `@` after a symlink and `*` after an executable file.
 export async function listTree(directory: string): Promise<string[]> {
   const names = await readdir(directory, { recursive: true });
 

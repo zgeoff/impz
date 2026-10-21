@@ -18,8 +18,6 @@ interface CpuChange {
   readonly cpuWeight: number | undefined;
 }
 
-// The imp's CPU use from impd's last sample, and its limit and weight. A
-// change applies at once to a running imp (docs/guides/cpu-limits.md).
 export function CpuPanel(props: CpuPanelProps) {
   const impd = useImpd();
   const refresh = useRefresh();

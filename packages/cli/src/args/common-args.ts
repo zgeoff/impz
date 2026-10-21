@@ -10,7 +10,6 @@ export const detachKeyArg = {
   default: DEFAULT_DETACH_KEY,
 } as const;
 
-// the session name; impd checks the rest of its form
 export function requireSessionName(session: string): string {
   if (session === '') {
     throw new UsageError('a session needs a name');

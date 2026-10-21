@@ -35,8 +35,8 @@ const HostConfigSchema = z.object({
   hosts: z.record(z.string(), SavedHostSchema).default({}),
 });
 
-// A name a shell and a completion script take as one word, and never a URL,
-// so `--host https://…` is caught as the mistake it is.
+// a shell and a completion script take the name as one word, and a URL never
+// matches, so `--host https://…` is caught as a mistake
 const HOST_NAME = /^[a-z0-9][a-z0-9._-]*$/iu;
 const EMPTY_CONFIG: HostConfig = { current: null, hosts: {} };
 
@@ -64,9 +64,6 @@ export function checkHostName(name: string): string {
   return name;
 }
 
-// The saved hosts, or none without a config file. A file that does not parse
-// is an error, never an empty config, which `impz login` would write over.
-// `warn` gets the notes: a file others can read, a move from before impz.
 export function readHostConfig(
   env: CliEnv,
   warn: (line: string) => void = console.error,
@@ -105,9 +102,6 @@ export function readHostConfig(
   return result.data;
 }
 
-// Writes a temp file with mode 0600 and renames it over the config, so a
-// crash leaves the old file or the new one and no other user can read the
-// tokens at any point.
 export function writeHostConfig(
   env: CliEnv,
   config: HostConfig,
@@ -150,8 +144,6 @@ function resolveWritePath(path: string): string {
   }
 }
 
-// the file holds tokens: say so when someone else can read it, but leave the
-// mode to its owner
 function checkSharedMode(path: string, warn: (line: string) => void): void {
   if ((statSync(path).mode & 0o077) !== 0) {
     warn(`impz: warning: ${path} is readable by other users; run chmod 600 ${path}`);

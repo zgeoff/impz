@@ -13,8 +13,6 @@ interface ConfirmDialogProps {
   readonly onConfirm: () => Promise<unknown>;
 }
 
-// Asks before an action that cannot be undone, then runs it and stays open
-// with the error if it fails.
 export function ConfirmDialog(props: ConfirmDialogProps) {
   const action = useMutation({
     mutationFn: props.onConfirm,

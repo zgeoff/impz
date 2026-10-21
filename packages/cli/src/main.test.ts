@@ -6,7 +6,7 @@ import { probeUpdateReadOnly } from '@impz/test-utils/probe-update-read-only';
 import { updateReadOnly } from '@impz/test-utils/update-read-only';
 import { runCLIInProcess } from './test-utils/run-cli-in-process';
 
-// the CLI's HOME; `stack` makes a read-only HOME writable again before it goes
+// `stack` makes a read-only HOME writable again before it goes
 function setupTest() {
   const stack = new DisposableStack();
 

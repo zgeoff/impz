@@ -81,9 +81,6 @@ export function formatBackupStatus(status: Readonly<BackupStatus>): string {
   ].join('\n');
 }
 
-// `impz info`'s https line: the domain, and whether the DNS API token file
-// reads now. A token from the env has no check, and says nothing: only the
-// provider can tell whether a token is good. No line from an impd before it.
 export function formatHttps(info: SystemInfo['https']): string[][] {
   if (info === undefined) {
     return [];
@@ -106,8 +103,6 @@ export function formatHttps(info: SystemInfo['https']): string[][] {
   return [['https', `${info.domain}, ${state}`]];
 }
 
-// what `impz info` says an upgrade left: the imps whose next wake boots
-// cold, and how many run each older part; an older impd does not count them
 export function formatBootStatus(
   status: Readonly<SystemInfo['bootStatus']> | undefined,
   impdVersion: string,
@@ -205,7 +200,6 @@ export function formatImages(images: readonly Image[]): string {
   );
 }
 
-// a build's start to the second, and its age at `nowMs`
 export function formatImageBuilds(builds: readonly ImageBuildRun[], nowMs: number): string {
   return formatTable(
     ['NAME', 'SOURCE', 'STARTED', 'ELAPSED', 'PHASE', 'STEP', 'BUILDER'],
@@ -248,9 +242,8 @@ export function formatNetworks(networks: readonly Network[]): string {
   );
 }
 
-// a token or an identity as any impd answers: one from before grantable
-// lists or image ref prefixes leaves the field out, and the client applies
-// no schema default
+// an impd from before grantable lists or image ref prefixes leaves the fields
+// out, and the client applies no schema default
 type WithOptionalGrantable<T> = Omit<T, 'grantable' | 'imageRefPrefix'> & {
   readonly grantable?: readonly string[] | undefined;
   readonly imageRefPrefix?: string | null | undefined;
@@ -298,7 +291,6 @@ export function formatOAuthGrants(grants: readonly OAuthGrant[]): string {
   );
 }
 
-// what a sign-in asks for, for its approver to check before approving
 export function formatOAuthApproval(approval: Readonly<OAuthApproval>): string {
   return [
     `client:       ${approval.client}`,
@@ -309,7 +301,6 @@ export function formatOAuthApproval(approval: Readonly<OAuthApproval>): string {
   ].join('\n');
 }
 
-// `SHA256:... comment`, as `ssh-keygen -l` prints a key
 export function formatSshKey(key: SshKey): string {
   return key.comment === '' ? key.fingerprint : `${key.fingerprint} ${key.comment}`;
 }
@@ -357,7 +348,6 @@ export function formatRefusedRequests(refused: readonly RefusedRequest[]): strin
   );
 }
 
-// a list a filter leaves out allows any method or any path: `*`
 export function formatGrants(grants: readonly Grant[]): string {
   return formatTable(
     ['SECRET', 'METHODS', 'PATHS'],
@@ -384,7 +374,6 @@ export function formatApiCalls(calls: readonly ApiCall[]): string {
   );
 }
 
-// what went, or would go, then the orphans it kept
 export function formatGc(gc: Readonly<StorageGc>): string {
   const kept = gc.kept ?? [];
 
@@ -424,7 +413,6 @@ export function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-// what a command prints: JSON with --json, else its table
 export function formatOutput<T>(
   value: T,
   json: boolean | undefined,
@@ -467,8 +455,6 @@ function formatLastExit(exit: Service['lastExit']): string {
   return exit.signal ?? `code ${String(exit.code)}`;
 }
 
-// `-` for a kind that never expires; for oauth, whether its access token is
-// there and until when
 function formatSecretState(secret: Readonly<Secret>): string {
   const oauth = secret.oauth;
 
@@ -487,7 +473,6 @@ function formatSecretState(secret: Readonly<Secret>): string {
   return `needs_login (${oauth.error ?? 'unknown'})`;
 }
 
-// the secrets it may grant, comma-separated, or `none`
 function formatGrantable(
   entry: Readonly<{ grantable?: readonly string[] | undefined }>,
   none: string,
@@ -497,7 +482,6 @@ function formatGrantable(
   return names.length === 0 ? none : names.join(',');
 }
 
-// its snapshots, or for kept secret values how many files
 function formatOrphanContents(orphan: Readonly<OrphanStorage>): string {
   if (orphan.files !== undefined) {
     return `${String(orphan.files.length)} files`;

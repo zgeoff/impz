@@ -1,8 +1,5 @@
 import type { SignalSource } from '../prompts/read-token';
 
-// The signals a process gets, without the process: `send` hands a signal to
-// the listeners on it, as the kernel would, and `listening` names the
-// signals that still have one.
 export function buildStubSignals() {
   const listeners = new Map<NodeJS.Signals, Set<() => void>>();
 

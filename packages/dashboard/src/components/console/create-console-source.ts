@@ -1,7 +1,6 @@
 import type { ExecHandle, ImpClient } from '@impz/client';
 import type { TerminalConnection, TerminalEnd, TerminalSource } from './terminal-source';
 
-// A login shell in the imp, as `impz console` opens; it wakes a sleeping imp
 export function createConsoleSource(
   client: Pick<ImpClient, 'openConsole'>,
   name: string,
@@ -39,7 +38,6 @@ async function readEnd(handle: ExecHandle): Promise<TerminalEnd> {
   }
 }
 
-// one stream with both streams' chunks in arrival order; it ends when both do
 function mergeStreams(
   first: ReadableStream<Uint8Array>,
   second: ReadableStream<Uint8Array>,
