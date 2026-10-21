@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { parseCiWorkflow } from './parse-ci-workflow';
 
-test('it reads the e2e group matrix, the e2e aggregate and release-please', () => {
+test('it reads the e2e group matrix, the e2e aggregate, the zfs shards, the zfs aggregate and release-please', () => {
   const yaml = [
     'jobs:',
     '  e2e-group:',
@@ -29,6 +29,25 @@ test('it reads the e2e group matrix, the e2e aggregate and release-please', () =
     '      - env:',
     `          RESULT: \${{ needs.e2e-group.result }}`,
     '        run: test "$RESULT" = success',
+    '  zfs-shard:',
+    '    env:',
+    `      IMP_ZFS_E2E_SUITES: \${{ matrix.suites }}`,
+    '    strategy:',
+    '      fail-fast: false',
+    '      matrix:',
+    '        include:',
+    '          - { shard: 1, suites: backups, unit: true }',
+    '    steps:',
+    '      - name: ZFS backend tests',
+    '        if: matrix.unit',
+    '        run: scripts/test-zfs.sh',
+    '  zfs:',
+    '    if: always()',
+    '    needs: [zfs-shard]',
+    '    steps:',
+    '      - env:',
+    `          RESULT: \${{ needs.zfs-shard.result }}`,
+    '        run: test "$RESULT" = success',
     '  release-please:',
     '    needs: [e2e]',
   ].join('\n');
@@ -53,8 +72,51 @@ test('it reads the e2e group matrix, the e2e aggregate and release-please', () =
         { env: { RESULT: `\${{ needs.e2e-group.result }}` }, run: 'test "$RESULT" = success' },
       ],
     },
+    'zfs-shard': {
+      env: { IMP_ZFS_E2E_SUITES: `\${{ matrix.suites }}` },
+      strategy: {
+        'fail-fast': false,
+        matrix: { include: [{ shard: 1, suites: 'backups', unit: true }] },
+      },
+      steps: [{ name: 'ZFS backend tests', if: 'matrix.unit', run: 'scripts/test-zfs.sh' }],
+    },
+    zfs: {
+      if: 'always()',
+      needs: ['zfs-shard'],
+      steps: [
+        { env: { RESULT: `\${{ needs.zfs-shard.result }}` }, run: 'test "$RESULT" = success' },
+      ],
+    },
     'release-please': { needs: ['e2e'] },
   });
+});
+
+test('it throws on a workflow without the zfs aggregate job', () => {
+  const yaml = [
+    'jobs:',
+    '  e2e-group:',
+    '    env: { WRITE_CACHE: "false" }',
+    '    strategy:',
+    '      fail-fast: false',
+    '      matrix:',
+    '        include: []',
+    '    steps: []',
+    '  e2e:',
+    '    if: always()',
+    '    needs: []',
+    '    steps: []',
+    '  zfs-shard:',
+    '    env: { IMP_ZFS_E2E_SUITES: backups }',
+    '    strategy:',
+    '      fail-fast: false',
+    '      matrix:',
+    '        include: []',
+    '    steps: []',
+    '  release-please:',
+    '    needs: []',
+  ].join('\n');
+
+  expect(() => parseCiWorkflow(yaml)).toThrowWithMessage(Error, /"zfs"/u);
 });
 
 test('it throws on a workflow without the e2e-group job', () => {

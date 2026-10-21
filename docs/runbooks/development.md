@@ -81,7 +81,8 @@ drives it through a browser. The suites run in this order:
 | `jail`           | the jailer: its own uid, no capabilities, seccomp, a memory cap; sleep, wake and re-adopt jailed; rollback and upgrade between jailed and unjailed                                                                                         |
 | `memory`         | elastic memory: a guest grows under a gradual allocation, shrinks to its use, and a sleep unplugs spare memory first                                                                                                                       |
 | `ksm`            | with KSM on the host (CI's runner only): two jailed guests merge the same pages, their Pss falls, the budget holds after they diverge; skips elsewhere                                                                                     |
-| `backups`        | backups of running and stopped imps and checkpoints, restores, forget and prune, a stale lock, a corrupted pack                                                                                                                            |
+| `backups`        | backups of running and stopped imps and checkpoints, restores, forget and prune                                                                                                                                                            |
+| `backups-repo`   | an imp left out of backups, a stale lock, a corrupted pack, the database copy                                                                                                                                                              |
 
 ```sh
 e2e/test-e2e.sh                          # the acceptance set: every suite
@@ -107,8 +108,8 @@ reboots the instance with HTTPS on, then off again
 ([HTTPS](../guides/https.md#testing-with-pebble)). The `fast` set takes about 4.5 minutes, most of
 it idle timeouts in the sleep suite and the jail suite's two reboots. The full set adds docker,
 images, scale, tailscale, sessions, ssh-wake, proxy-wake, cp, connectors, https, egress, ipv6,
-networks, moves, moves-tailnet, chaos and backups; at its defaults the scale suite alone took about
-75 seconds in the last acceptance run.
+networks, moves, moves-tailnet, chaos, backups and backups-repo; at its defaults the scale suite
+alone took about 75 seconds in the last acceptance run.
 
 The moves suites start a second instance, `<IMP_DEV_NAME>-mv-b`, with its data in
 `<IMP_DEV_DATA>-mv-b`, and reboot the run's instance onto a network of their own and back. Each
@@ -268,7 +269,7 @@ Lefthook installs the hooks with `bun install`.
 | `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                         |
 | `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                        |
 | `e2e`        | yes      | Passes only when every `e2e-group` job passed: the `fast` end-to-end set on real microVMs, in three groups on three runners (below).                                                                              |
-| `zfs`        | no       | `scripts/test-zfs.sh`, then real imps on a ZFS pool: `scripts/zfs-host-test.sh` with the suites the job's `IMP_ZFS_E2E_SUITES` names.                                                                             |
+| `zfs`        | yes      | Passes only when every `zfs-shard` job passed: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                                 |
 
 The `checks` job also runs the docs-writing skill's scripts. `bun run lint:docs` runs
 `check-links.sh`, which fails on a broken relative link or anchor in a README or a page under
@@ -315,10 +316,13 @@ without KVM fails in seconds with the reason. The job then:
    and the XFS file on the runner's `/mnt` disk. There is no Tailscale key in CI, and a missed
    timing limit only warns. The host networking tests run in group 2 only (`HOST_TESTS_GROUP`).
 
-The `zfs` job builds the same inputs, reading the caches only, caps the ZFS ARC at 1 GiB, and runs
-the suites its `IMP_ZFS_E2E_SUITES` names on a pool in a sparse file, the moves suite among them, so
-real VMs move between two ZFS hosts there. The job summary shows the ZFS timings, and the
-`zfs-e2e-results` artifact holds the logs.
+The ZFS suites run in three `zfs-shard` jobs, each on its own runner, and the `zfs` job is the
+required check over them, as `e2e` is over the groups. Each shard builds the same inputs, reading
+the caches only, caps the ZFS ARC at 1 GiB, and runs the suites in its matrix row on a pool in a
+sparse file through `scripts/zfs-host-test.sh`. The backups suites and the moves suite run in these
+shards alone, so real VMs move between two ZFS hosts there. One shard also runs
+`scripts/test-zfs.sh`. Each shard's job summary shows its ZFS timings, and its `zfs-e2e-results-N`
+artifact holds the logs and `results.json`, where each backup test reports the split of its time.
 
 After a pass, a failure or a timeout, each group saves an `e2e-results-N` artifact (14 days):
 `results.json`, `metrics.jsonl`, `impd.log` (the dev container's whole log) and the dashboard

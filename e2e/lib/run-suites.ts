@@ -12,7 +12,11 @@ export interface RunSuitesDeps {
 
   readonly keep: boolean;
 
-  readonly runJourney: (journey: string, kept: readonly string[]) => Promise<number>;
+  readonly runJourney: (
+    journey: string,
+    kept: readonly string[],
+    settings: Readonly<Record<string, string>> | null,
+  ) => Promise<number>;
 
   readonly checkJourney: (suite: string, journey: string) => Promise<boolean>;
   readonly reset: (prefixes: readonly string[]) => Promise<void>;
@@ -109,7 +113,7 @@ export async function runSuites(deps: Readonly<RunSuitesDeps>): Promise<RunSuite
         }
       }
 
-      const verdict = await runChecked(deps, name, journey, carried);
+      const verdict = await runChecked(deps, { suite: name, journey, kept: carried, ownSettings });
 
       isKept = isKeptForRestart && verdict.isPassed && verdict.isClean;
 
@@ -269,28 +273,33 @@ interface JourneyVerdict {
   readonly isClean: boolean;
 }
 
+interface JourneyRun {
+  readonly suite: string;
+  readonly journey: string;
+  readonly kept: readonly string[];
+  readonly ownSettings: Readonly<Record<string, string>> | null;
+}
+
 async function runChecked(
   deps: Readonly<RunSuitesDeps>,
-  suite: string,
-  journey: string,
-  kept: readonly string[],
+  run: Readonly<JourneyRun>,
 ): Promise<JourneyVerdict> {
   let isPassed = false;
 
   try {
-    const exitCode = await deps.runJourney(journey, kept);
+    const exitCode = await deps.runJourney(run.journey, run.kept, run.ownSettings);
 
     isPassed = exitCode === 0;
   } catch (error) {
-    deps.log(`    the ${journey} journey could not run: ${readReason(error)}`);
+    deps.log(`    the ${run.journey} journey could not run: ${readReason(error)}`);
   }
 
   try {
-    const isClean = await deps.checkJourney(suite, journey);
+    const isClean = await deps.checkJourney(run.suite, run.journey);
 
     return { isPassed, isClean };
   } catch (error) {
-    deps.log(`    the ${journey} journey's checks failed: ${readReason(error)}`);
+    deps.log(`    the ${run.journey} journey's checks failed: ${readReason(error)}`);
 
     return { isPassed, isClean: false };
   }

@@ -53,6 +53,9 @@ export const SUITES: readonly Suite[] = [
     prefix: 'e2e-slp-',
     images: ['e2e-bare', 'e2e-ws'],
     journeys: ['sleep-memory', 'sleep-proxy-answers', 'sleep-websocket'],
+
+    // Its journeys wait out the idle timeout again and again, so a short one cuts the suite.
+    settings: () => ({ IMP_IDLE_TIMEOUT_S: '5' }),
   },
   {
     name: 'scale',
@@ -195,8 +198,9 @@ export const SUITES: readonly Suite[] = [
     settings: () => buildKsmSettings(checkHostRunsKsm()),
   },
 
-  // Last, because it reboots the instance with backups on, then off again.
+  // Last, because they reboot the instance with backups on, then off again.
   { name: 'backups', prefix: 'e2e-bk-', images: ['e2e-tiny'] },
+  { name: 'backups-repo', prefix: 'e2e-bkr-', images: ['e2e-tiny'] },
 ];
 
 // One list per CI runner and instance; each held about 225 s of suite work in
@@ -260,6 +264,14 @@ export function readSuiteSettings(
   }
 
   return suite.settings?.(target) ?? null;
+}
+
+export function buildJourneyEnv(
+  settings: Readonly<Record<string, string>> | null,
+): Readonly<Record<string, string>> {
+  const idleTimeoutS = settings?.['IMP_IDLE_TIMEOUT_S'];
+
+  return idleTimeoutS === undefined ? {} : { E2E_IDLE_TIMEOUT_S: idleTimeoutS };
 }
 
 export function buildKsmSettings(isKsmRunning: boolean): Readonly<Record<string, string>> | null {

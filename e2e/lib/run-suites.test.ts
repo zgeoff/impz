@@ -446,6 +446,38 @@ test('#runSuites keeps a passing scale’s imps and its settings for restart, an
   ]);
 });
 
+test('#runSuites hands each journey the settings its own suite reboots onto', async () => {
+  const ctx = setupTest();
+
+  await runSuites({
+    ...ctx.recorders,
+    names: ['lifecycle', 'sleep'],
+    prefixOf: (name) => `e2e-${name}-`,
+    journeysOf: (name) => (name === 'sleep' ? ['sleep-memory', 'sleep-websocket'] : [name]),
+    keep: false,
+    settingsOf: (name) => (name === 'sleep' ? { IMP_IDLE_TIMEOUT_S: '5' } : null),
+    isInterrupted: () => false,
+    now: () => 0,
+    checkJourney: () => Promise.resolve(true),
+    runJourney: (journey, _kept, settings) => {
+      ctx.steps.push(`run ${journey} on ${JSON.stringify(settings)}`);
+
+      return Promise.resolve(0);
+    },
+  });
+
+  expect(ctx.steps).toStrictEqual([
+    'run lifecycle on null',
+    'reset e2e-lifecycle-',
+    'reboot onto {"IMP_IDLE_TIMEOUT_S":"5"}',
+    'run sleep-memory on {"IMP_IDLE_TIMEOUT_S":"5"}',
+    'reset e2e-sleep-',
+    'run sleep-websocket on {"IMP_IDLE_TIMEOUT_S":"5"}',
+    'reset e2e-sleep-',
+    'reboot',
+  ]);
+});
+
 test('#runSuites resets scale after it when restart is not in the run', async () => {
   const ctx = setupTest();
 

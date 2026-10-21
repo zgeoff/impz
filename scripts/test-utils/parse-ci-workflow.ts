@@ -24,6 +24,24 @@ const GroupJobSchema = z.looseObject({
   steps: z.array(StepSchema),
 });
 
+const ShardRowSchema = z.looseObject({
+  shard: z.number(),
+  suites: z.string(),
+  unit: z.boolean(),
+});
+
+const ShardMatrixSchema = z.looseObject({ include: z.array(ShardRowSchema) });
+
+// The shards' build step passes write-cache as a YAML boolean.
+const ShardStepWithSchema = z.looseObject({ name: z.string().optional() });
+const ShardStepSchema = StepSchema.extend({ with: ShardStepWithSchema.optional() });
+
+const ShardJobSchema = z.looseObject({
+  env: z.looseObject({ IMP_ZFS_E2E_SUITES: z.string() }),
+  strategy: z.looseObject({ 'fail-fast': z.boolean(), matrix: ShardMatrixSchema }),
+  steps: z.array(ShardStepSchema),
+});
+
 const AggregateJobSchema = z.looseObject({
   if: z.string(),
   needs: z.array(z.string()),
@@ -36,6 +54,8 @@ const WorkflowSchema = z.looseObject({
   jobs: z.looseObject({
     'e2e-group': GroupJobSchema,
     e2e: AggregateJobSchema,
+    'zfs-shard': ShardJobSchema,
+    zfs: AggregateJobSchema,
     'release-please': ReleaseJobSchema,
   }),
 });

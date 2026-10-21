@@ -3,8 +3,16 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as z from 'zod';
 import { runImp } from './imp-cli';
-import { REPO_ROOT, instance, runChecked, runCommand, runInContainer } from './instance';
+import {
+  REPO_ROOT,
+  instance,
+  runChecked,
+  runCommand,
+  runDevScript,
+  runInContainer,
+} from './instance';
 import { waitFor } from './wait-for';
+import { writeMetric } from './write-metric';
 
 const MINIO_IMAGE =
   'cgr.dev/chainguard/minio@sha256:0f95aa412a12351a95bb43c3b54b66440eb0aa022bb3f3458942678a489e915b';
@@ -90,7 +98,7 @@ function readMinioName(): string {
   return `${instance.container}-minio`;
 }
 
-export async function startMinio(secrets: Readonly<BackupSecrets>): Promise<void> {
+async function startMinio(secrets: Readonly<BackupSecrets>): Promise<void> {
   await runCommand(['docker', 'rm', '-f', readMinioName()]);
 
   await runChecked([
@@ -133,7 +141,7 @@ export async function startMinio(secrets: Readonly<BackupSecrets>): Promise<void
   }
 }
 
-export async function stopMinio(): Promise<void> {
+async function stopMinio(): Promise<void> {
   await runCommand(['docker', 'rm', '-f', readMinioName()]);
 }
 
@@ -183,10 +191,121 @@ export function startRestic(secrets: Readonly<BackupSecrets>, ...args: readonly 
   return runCommand(['docker', 'exec', '-d', ...buildResticExecArgs(secrets, args)]);
 }
 
-export async function runBackup() {
+async function runBackup() {
   const stdout = await runImp('backup', 'run', '--json');
 
   return BackupRunSchema.parse(JSON.parse(stdout));
+}
+
+const BACKUP_STATE_FILE = '/var/lib/imp/backup/state.json';
+
+type BackupRun = z.infer<typeof BackupRunSchema>;
+
+export interface BackupDrill {
+  readonly reboot: (env: Readonly<Record<string, string>>) => Promise<void>;
+  readonly startMinio: (secrets: Readonly<BackupSecrets>) => Promise<void>;
+  readonly runBackup: () => Promise<BackupRun>;
+}
+
+interface BackupDrillDeps {
+  readonly removeState: () => Promise<void>;
+
+  // An empty env reboots onto the run's own settings.
+  readonly reboot: (env: Readonly<Record<string, string>>) => Promise<void>;
+
+  readonly startMinio: (secrets: Readonly<BackupSecrets>) => Promise<void>;
+  readonly stopMinio: () => Promise<void>;
+  readonly runBackup: () => Promise<BackupRun>;
+  readonly writeMetric: (key: string, value: unknown) => void;
+  readonly now: () => number;
+}
+
+export function wireBackupDrill(stack: AsyncDisposableStack, metric: string): BackupDrill {
+  return createBackupDrill(stack, metric, {
+    removeState: async () => {
+      const removed = await runInContainer(['rm', '-f', BACKUP_STATE_FILE]);
+
+      if (removed.exitCode !== 0) {
+        throw new Error(`the backup state could not go: ${removed.stderr}`);
+      }
+    },
+    reboot: (env) => runDevScript('reboot', instance, env),
+    startMinio,
+    stopMinio,
+    runBackup,
+    writeMetric,
+    now: Date.now,
+  });
+}
+
+// The split of a backup test's time goes to one metric when the test ends,
+// since the reboot back off the backup settings runs in its cleanup.
+export function createBackupDrill(
+  stack: AsyncDisposableStack,
+  metric: string,
+  deps: Readonly<BackupDrillDeps>,
+): BackupDrill {
+  const spans = { rebootMs: 0, minioMs: 0, runsMs: 0, rebootBackMs: 0 };
+  const reached = { isRebooted: false, isMinioUp: false };
+
+  stack.defer(() => {
+    deps.writeMetric(metric, spans);
+  });
+
+  stack.defer(async () => {
+    if (reached.isMinioUp) {
+      await deps.stopMinio();
+    }
+  });
+
+  // Before MinIO stops: impd's shutdown waits for a scheduled run, which
+  // retries for seconds against a MinIO that is gone.
+  stack.defer(async () => {
+    if (!reached.isRebooted) {
+      return;
+    }
+
+    const back = deps.now();
+
+    await deps.reboot({});
+
+    spans.rebootBackMs += deps.now() - back;
+  });
+
+  return {
+    // impd sets up its repository at start, so each test reboots onto its own.
+    // impd keeps its last prune time across reboots and prunes once a day, so
+    // an earlier test's prune would hold off this one's.
+    reboot: async (env) => {
+      const rebootStarted = deps.now();
+
+      await deps.removeState();
+
+      reached.isRebooted = true;
+
+      await deps.reboot(env);
+
+      spans.rebootMs += deps.now() - rebootStarted;
+    },
+    startMinio: async (secrets) => {
+      const minioStarted = deps.now();
+
+      reached.isMinioUp = true;
+
+      await deps.startMinio(secrets);
+
+      spans.minioMs += deps.now() - minioStarted;
+    },
+    runBackup: async () => {
+      const started = deps.now();
+
+      const run = await deps.runBackup();
+
+      spans.runsMs += deps.now() - started;
+
+      return run;
+    },
+  };
 }
 
 export async function readBackupStatus() {

@@ -46,6 +46,7 @@ test('it runs every suite in run order when no suite is named', () => {
     'memory',
     'ksm',
     'backups',
+    'backups-repo',
   ]);
 });
 
