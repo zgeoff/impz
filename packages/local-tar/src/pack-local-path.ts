@@ -4,13 +4,10 @@ import { basename, join } from 'node:path';
 import tar from 'tar-stream';
 import type { Header, Pack } from 'tar-stream';
 
-// what a pack reports as file bytes go into the tar
 export interface PackProgress {
   readonly add: (bytes: number) => void;
 }
 
-// One local entry under its archive name; `other` (a socket, a device, a
-// FIFO) is left out of the archive.
 export interface LocalEntry {
   readonly path: string;
   readonly name: string;
@@ -28,8 +25,6 @@ const ENTRY_KINDS = [
   ['file', 'isFile'],
 ] as const;
 
-// path and everything under it, parents first; the top entry is named after
-// path's base, as `imp-agent tar extract` expects
 export async function listLocalEntries(path: string): Promise<readonly LocalEntry[]> {
   const entries: LocalEntry[] = [];
 
@@ -54,6 +49,7 @@ export async function listLocalEntries(path: string): Promise<readonly LocalEntr
     }
   };
 
+  // `imp-agent tar extract` expects the top entry named after the path's base.
   await readEntries(path, basename(path));
 
   return entries;
@@ -63,7 +59,6 @@ export function countFileBytes(entries: readonly LocalEntry[]): number {
   return entries.reduce((total, entry) => total + (entry.kind === 'file' ? entry.size : 0), 0);
 }
 
-// adds an entry and resolves once the pack has taken all of it
 async function writeEntryContent(
   pack: Pack,
   header: EntryHeader,
@@ -99,7 +94,6 @@ async function writeEntryContent(
   await written.promise;
 }
 
-// the entry's tar header; null for `other`, which the tar leaves out
 async function readEntryHeader(entry: LocalEntry): Promise<EntryHeader | null> {
   const mode = entry.mode;
 
@@ -141,9 +135,6 @@ async function writeEntry(
   await writeEntryContent(pack, header, content, progress);
 }
 
-// The exact length of the tar writeLocalEntries makes: tar-stream encodes
-// every header (a long name adds a pax header), then each file's data,
-// padded to 512 bytes, and the 1024-byte end are added.
 export async function countTarBytes(entries: readonly LocalEntry[]): Promise<number> {
   const pack = tar.pack();
   const padded = { bytes: 0 };
@@ -152,6 +143,7 @@ export async function countTarBytes(entries: readonly LocalEntry[]): Promise<num
     const header = await readEntryHeader(entry);
 
     if (header !== null) {
+      // tar-stream adds a pax header for a long name, so only encoding a header gives its length.
       pack.entry({ ...header, size: 0 }, '');
     }
 
@@ -173,8 +165,6 @@ export async function countTarBytes(entries: readonly LocalEntry[]): Promise<num
   return counted.bytes;
 }
 
-// Packs entries as a tar and hands each chunk to send, which applies the
-// backpressure: the pack waits while send does.
 export async function writeLocalEntries(
   entries: readonly LocalEntry[],
   send: (chunk: Uint8Array) => Promise<void>,

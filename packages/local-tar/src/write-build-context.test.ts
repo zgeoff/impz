@@ -14,7 +14,6 @@ import {
   writeBuildContext,
 } from './write-build-context';
 
-// `stack` releases in reverse: a test defers what must end before the dir goes
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -502,7 +501,6 @@ test('#writeBuildContext rejects with the reason of a signal aborted during its 
 
   const bytes = await createStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
 
-  // a FIFO the test feeds, so the read waits for the rest of the tar
   await $`mkfifo ${input}`;
 
   const writing = writeBuildContext(
@@ -514,8 +512,6 @@ test('#writeBuildContext rejects with the reason of a signal aborted during its 
     controller.signal,
   );
 
-  // the writer settles before the dir goes, once the feed closes and the
-  // signal aborts
   ctx.stack.defer(async () => {
     await Promise.allSettled([writing]);
   });
@@ -552,7 +548,6 @@ test('#writeBuildContext rejects with an error of the text of a reason that is n
 
   const bytes = await createStubTar([{ name: 'Dockerfile', content: 'FROM busybox:1.37\n' }]);
 
-  // a FIFO the test feeds, so the read waits for the rest of the tar
   await $`mkfifo ${input}`;
 
   const writing = writeBuildContext(
@@ -564,8 +559,6 @@ test('#writeBuildContext rejects with an error of the text of a reason that is n
     controller.signal,
   );
 
-  // the writer settles before the dir goes, once the feed closes and the
-  // signal aborts
   ctx.stack.defer(async () => {
     await Promise.allSettled([writing]);
   });

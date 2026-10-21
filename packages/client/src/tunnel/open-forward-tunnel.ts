@@ -10,64 +10,34 @@ import { P, match } from 'ts-pattern';
 import { resolveImpdWebSocketUrl } from '../resolve-impd-web-socket-url';
 import { parseTunnelServerMessage } from './parse-tunnel-server-message';
 
-// How a tunnel ended: `done` once both sides are done, `unreachable` when
-// the socket closed without a handshake, as when impd is down
 export type ForwardTunnelEnd =
   | { readonly kind: 'done' }
   | { readonly kind: 'unreachable' }
-
-  // impd refused it, as when nothing answers on the port in the imp
   | { readonly kind: 'failed'; readonly code: string | null; readonly message: string }
-
-  // impd closed it with another code, such as TUNNEL_CLOSE_RESTARTING
   | { readonly kind: 'closed'; readonly code: number };
 
 export interface ForwardTunnelOptions {
   readonly baseUrl: string;
   readonly token: string | null;
   readonly name: string;
-
-  // the port in the imp the tunnel dials
   readonly port: number;
-
-  // the runtime that opens the socket is the caller's choice
   readonly connect: (url: string, headers: Readonly<Record<string, string>>) => WebSocket;
-
-  // impd dialed the port: bytes may flow
   readonly onOpened: () => void;
-
-  // bytes from the port in the imp; the tunnel acks them once this settles
   readonly onData: (data: Uint8Array) => Promise<void> | void;
-
-  // the port in the imp closed its side
   readonly onEof: () => void;
-
-  // the tunnel ended; called once, and never after `close`
   readonly onEnd: (end: ForwardTunnelEnd) => void;
 }
 
-// One local connection to a port in the imp, over its own socket.
 export interface ForwardTunnel {
-  // bytes to the port in the imp; false once more than the window waits for
-  // impd's acks, or the tunnel has not opened: wait for room first
   readonly send: (data: Uint8Array) => boolean;
   readonly waitForRoom: () => Promise<void>;
-
-  // the bytes sent that impd has not acked yet
   readonly countUnackedBytes: () => number;
-
-  // the local side closed its write side; it reaches impd after every byte
-  // before it
   readonly sendEof: () => void;
   readonly close: () => void;
 }
 
-// a WebSocket that closed without a handshake
 const CLOSE_ABNORMAL = 1006;
 
-// A local forward over `/tunnel` (packages/api tunnel-protocol): `open`
-// dials the port, then bytes flow both ways under the tunnel window. impd
-// closes a tunnel more than one frame past it, so later frames wait here.
 export function openForwardTunnel(options: Readonly<ForwardTunnelOptions>): ForwardTunnel {
   const url = resolveImpdWebSocketUrl(options.baseUrl, TUNNEL_PATH);
 
@@ -76,6 +46,8 @@ export function openForwardTunnel(options: Readonly<ForwardTunnelOptions>): Forw
 
   const ws = options.connect(url.href, headers);
   const state = { opened: false, unacked: 0, isEofHeld: false, done: false };
+
+  // impd closes a tunnel more than one frame past its window.
   const held: Uint8Array<ArrayBuffer>[] = [];
   const waiters: (() => void)[] = [];
 
@@ -96,7 +68,6 @@ export function openForwardTunnel(options: Readonly<ForwardTunnelOptions>): Forw
     }
   };
 
-  // sends held frames while the window has room, then the held eof
   const sendHeld = (): void => {
     if (!state.opened) {
       return;
@@ -168,8 +139,6 @@ export function openForwardTunnel(options: Readonly<ForwardTunnelOptions>): Forw
 
         ws.close(TUNNEL_CLOSE_NORMAL, 'tunnel failed');
       })
-
-      // messages only a reverse forward gets
       .with({ type: P.union('listening', 'connection') }, () => {
         ws.close(TUNNEL_CLOSE_PROTOCOL, 'bad message');
       })
@@ -210,7 +179,7 @@ export function openForwardTunnel(options: Readonly<ForwardTunnelOptions>): Forw
     }
   });
 
-  // the error event carries no detail; close follows it
+  // The error event carries no detail, and a close event follows it.
   ws.addEventListener('error', () => {});
 
   return {

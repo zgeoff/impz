@@ -5,9 +5,8 @@ export type ImpdAccess = 'unauthorized' | 'unreachable' | 'reachable';
 
 const CHECK_TIMEOUT_MS = 5000;
 
-// Why a WebSocket upgrade failed. Bun's client reports no HTTP status for a
-// refused upgrade, so this asks `/rpc`, which checks the same token. Any
-// answer, even an older impd's NOT_FOUND, is an ORPCError with its status.
+// Bun's client reports no HTTP status for a refused upgrade, so this asks
+// `/rpc`, which checks the same token.
 export async function checkImpdAccess(rpc: Pick<FeatureSource, 'system'>): Promise<ImpdAccess> {
   try {
     await rpc.system.features(undefined, { signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) });

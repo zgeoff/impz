@@ -1,9 +1,6 @@
 import { splitLines } from '@impz/shared';
 import * as z from 'zod';
 
-// A newer impd in front of a real impd's `handle`: each ImpChanged event of
-// events.stream carries `reason`, a reason this client's schema does not
-// list; every other call and line passes through unchanged.
 export function makeStubImpdWithNewReason(
   handle: (request: Request) => Promise<Response>,
   reason: string,
@@ -31,12 +28,9 @@ export function makeStubImpdWithNewReason(
   };
 }
 
-// what this stand-in reads of an events.stream data line, as `/rpc` sends it
-// (records, so each key keeps its place)
 const FieldsSchema = z.record(z.string(), z.unknown());
 const EventLineSchema = FieldsSchema.pipe(z.looseObject({ json: FieldsSchema }));
 
-// an SSE data line of an ImpChanged event, with `reason` in place of its own
 function buildRenamedLine(line: string, reason: string): string {
   if (!line.startsWith('data: ')) {
     return line;

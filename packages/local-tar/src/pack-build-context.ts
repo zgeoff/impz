@@ -9,19 +9,14 @@ export class MissingDockerfileError extends Error {
   override readonly name = 'MissingDockerfileError';
 }
 
-// The context as `docker buildx build <dir>` sends it, by path in the context, parents first.
-// The ignore file is `<Dockerfile>.dockerignore` when there is one, else `.dockerignore`, and
-// it may leave itself out. The Dockerfile always goes: docker reads it from the tar.
 export function listContextEntries(
   root: string,
   dockerfile: string,
 ): Promise<readonly LocalEntry[]> {
-  // the frontend reads `dockerfile` beside a missing `Dockerfile`
   const found = listDockerfileCandidates(posix.normalize(dockerfile)).find((candidate) =>
     existsSync(join(root, candidate)),
   );
 
-  // a rejection, not a throw: callers catch on the promise
   if (found === undefined) {
     return Promise.reject(new MissingDockerfileError(`there is no ${dockerfile} in ${root}`));
   }
@@ -46,10 +41,8 @@ async function listEntries(root: string, dockerfile: string): Promise<readonly L
 
   const matcher = ignore().add(patterns);
 
-  // with no `!` exception, nothing under an ignored directory comes back
+  // With no `!` exception, nothing under an ignored directory comes back.
   const hasExceptions = patterns.split('\n').some((line) => line.trim().startsWith('!'));
-
-  // `./Dockerfile` names the entry `Dockerfile`
   const dockerfileName = posix.normalize(dockerfile);
 
   const isDockerfileBelow = (directory: string): boolean =>
@@ -66,6 +59,7 @@ async function listEntries(root: string, dockerfile: string): Promise<readonly L
 
       const stats = await lstat(path);
 
+      // docker reads the Dockerfile from the tar, so an ignore file never leaves it out.
       const ignored = matcher.ignores(name) && name !== dockerfileName;
 
       const entry: LocalEntry = {
@@ -90,7 +84,8 @@ async function listEntries(root: string, dockerfile: string): Promise<readonly L
         continue;
       }
 
-      // an ignored directory goes only as the parent of what comes back
+      // docker sends an ignored directory only as the parent of an entry that
+      // comes back.
       if (hasExceptions || isDockerfileBelow(name)) {
         const below = await readEntries(path, name);
 

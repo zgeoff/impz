@@ -14,12 +14,8 @@ export interface RpcClientOptions {
   readonly fetch?: (request: Request) => Promise<Response>;
 }
 
-// what oRPC's link calls to send each call
 type LinkFetch = NonNullable<RPCLinkOptions<ClientContext>['fetch']>;
 
-// A bare client of impd's `/rpc` for an exec session, which has a URL and a
-// token but no ImpClient. A proxy's plain-text error rejects as an ORPCError
-// with its status too, so any answer reads as an answer.
 export function createRpcClient(options: Readonly<RpcClientOptions>): RpcClient {
   const customFetch = options.fetch;
 

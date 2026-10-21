@@ -28,59 +28,31 @@ import { UnknownProcedureError } from './unknown-procedure-error';
 
 type RpcClient = ContractRouterClient<ImpContract>;
 
-// what oRPC's link calls to send each call, with the call's procedure path
 type LinkFetch = NonNullable<RPCLinkOptions<ClientContext>['fetch']>;
 
 export interface ImpClientOptions {
-  // impd's API, e.g. http://localhost:7070; a path prefix is kept, so impd
-  // can sit behind a reverse proxy at /impd/
   readonly url: string;
-
-  // the bearer token from `<IMP_DATA_DIR>/token`; leave it out when a proxy
-  // in front of impd adds it, as a browser app should
   readonly token?: string;
-
-  // swaps the transport, e.g. an in-process app in tests
   readonly fetch?: (request: Request) => Promise<Response>;
-
-  // opens the `/exec` socket; impd's own MCP endpoint bridges it in process
   readonly connect?: (url: string) => ExecSocket;
-
-  // the timer of a long call's deadline (LONG_CALL_DEADLINES_MS); setTimeout
-  // by default
   readonly startTimer?: StartTimer;
 }
 
 export interface ImpClient extends RpcClient {
-  // one wake call; see require-awake.ts
   readonly requireAwake: (name: string, options?: RequireAwakeOptions) => Promise<Imp>;
-
-  // whether impd speaks this client's version of the API
   readonly checkServer: (options?: CheckServerOptions) => Promise<ServerCheck>;
-
-  // builds an image from a tar of its build context, uploaded from here;
-  // `images.build` takes a directory on the impd host instead
   readonly buildImage: (
     name: string,
     context: BuildContext,
     options?: BuildImageOptions,
   ) => Promise<Image>;
-
-  // a command with streamed stdio over `/exec`, authenticated by an exec
-  // ticket; named so, because `exec` is the contract's namespace
   readonly openExec: (
     name: string,
     argv: readonly string[],
     options?: ExecOptions,
   ) => Promise<ExecHandle>;
-
-  // a command run to its exit, with its output collected
   readonly run: (name: string, argv: readonly string[], options?: RunOptions) => Promise<RunResult>;
-
-  // a login shell with a tty; with `session`, one that outlives the handle
   readonly openConsole: (name: string, options?: ConsoleOptions) => Promise<ExecHandle>;
-
-  // attaches to a running session (`sessions.list` names them)
   readonly openAttach: (
     name: string,
     session: string,
@@ -129,8 +101,7 @@ export function createImpClient(options: Readonly<ImpClientOptions>): ImpClient 
 
   const rpc: RpcClient = createORPCClient(link);
 
-  // the oRPC client is a proxy, so its namespaces are copied one by one;
-  // `satisfies` fails the build when the contract grows a namespace
+  // The oRPC client is a proxy that a spread cannot copy.
   const namespaces = {
     imps: rpc.imps,
     leases: rpc.leases,
@@ -184,7 +155,7 @@ function startRealTimer(fire: () => void, durationMs: number): () => void {
 }
 
 // oRPC answers every error, a missing imp's NOT_FOUND among them, as JSON;
-// impd's own 404 for a path no procedure matches is plain text
+// impd's own 404 for a path no procedure matches is plain text.
 function isUnknownProcedure(status: number, contentType: string | null): boolean {
   return status === 404 && !(contentType ?? '').startsWith('application/json');
 }

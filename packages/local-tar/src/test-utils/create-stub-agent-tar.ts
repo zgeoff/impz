@@ -1,12 +1,8 @@
 import tar from 'tar-stream';
 import type { Header } from 'tar-stream';
 
-// one entry: its tar header, and for a file its content
 export type StubTarEntry = Partial<Header> & Pick<Header, 'name'> & { readonly content?: string };
 
-// The tar `imp-agent tar create` sends from an imp, for `impz cp` to
-// extract: a file is 0644 and anything else 0755 unless its header says
-// otherwise, and an entry with content is a file.
 export async function createStubAgentTar(
   entries: readonly Readonly<StubTarEntry>[],
 ): Promise<Uint8Array> {

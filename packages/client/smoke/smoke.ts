@@ -2,9 +2,6 @@ import assert from 'node:assert/strict';
 import { CLIENT_VERSION, ExecError, createImpClient, openExecSession } from '@impz/client';
 import type { ExecOutcome, ExecSessionOptions } from '@impz/client';
 
-// The client's smoke against run-stub-impd.ts, from the packed package under
-// Node, Bun and a compiled Bun binary (scripts/release/check-client-runtimes.sh).
-// Arguments: the expected version and run-stub-impd's JSON line.
 const [expectedVersion = '', impdJson = '{}'] = process.argv.slice(2);
 const impd = parseImpd(impdJson);
 const imp = createImpClient({ url: impd.url, token: impd.token });
@@ -106,8 +103,6 @@ async function checkConsole(): Promise<void> {
   const output = await readUntil(shell.stdout, ['tty 80x24', 'resize 100x30', 'hi']);
 
   assert.ok(output.includes('hi'));
-
-  // a tty sends SIGINT as the ^C key, which the fake agent ends on
   shell.sendSignal('SIGINT');
 
   const exit = await shell.exit;
@@ -115,8 +110,6 @@ async function checkConsole(): Promise<void> {
   assert.deepEqual(exit, { code: null, signal: 'SIGINT' });
 }
 
-// run-stub-impd's proxy answers only under /impd/, so this fails if the client
-// drops the prefix from the RPC or the exec socket URL
 async function checkPrefix(): Promise<void> {
   const prefixed = createImpClient({ url: impd.prefixedUrl, token: impd.token });
 
@@ -134,14 +127,13 @@ async function checkBadToken(): Promise<void> {
 
   await assert.rejects(wrong.openExec('smoke', ['cat']), makeCodeCheck('UNAUTHORIZED'));
 
-  // a refused upgrade, which Bun reports with no HTTP status
+  // Bun reports a refused upgrade with no HTTP status.
   const outcome = await openRawSession(impd.url, 'not-the-token');
 
   assert.equal(outcome.kind, 'unauthorized');
 }
 
-// a good token, but a ticket the first socket redeemed: Node reports the
-// refused upgrade with an error and no close
+// Node reports a refused upgrade with an error and no close.
 async function checkUsedTicket(): Promise<void> {
   const issued = await imp.exec.ticket({ name: 'smoke' });
 
@@ -175,7 +167,6 @@ async function checkClosedPort(): Promise<void> {
   assert.equal(outcome.kind, 'unreachable');
 }
 
-// the first abort lands while the ticket request is in flight
 async function checkAbort(): Promise<void> {
   const controller = new AbortController();
 
@@ -195,7 +186,6 @@ async function checkAbort(): Promise<void> {
 
   await assert.rejects(opened, isAbortError);
 
-  // the ticket is in, and the socket is still connecting
   const connecting = new AbortController();
 
   const handle = await imp.openExec('smoke', ['cat'], { signal: connecting.signal });
@@ -213,8 +203,6 @@ function isAbortError(error: unknown): boolean {
   return true;
 }
 
-// an exec socket with no header, as a browser opens one: with no ticket or a
-// used one, impd refuses the upgrade and the session asks /rpc why
 function openRawSession(url: string, token: string, ticket?: string): Promise<ExecOutcome> {
   const session = openExecSession({
     ...buildRawSession(url, token),

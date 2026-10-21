@@ -7,7 +7,6 @@ import { openAccept, openListener } from '@impz/daemon/src/vm/agent-client/liste
 import { startStubAgent } from '@impz/daemon/testing';
 import { buildStubForwardAgent } from './build-stub-forward-agent';
 
-// the stub on a socket in a temp dir, as impd's agent client reaches it
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 

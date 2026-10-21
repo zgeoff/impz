@@ -8,9 +8,6 @@ import type { Image, ImageBuildProgress } from '@impz/api';
 import { splitLines } from '@impz/shared';
 import { ORPCError } from '@orpc/client';
 
-// The image of impd's answer to `POST /images/build`: a stream of events, or
-// the JSON of an impd from before the stream. A failure throws an ORPCError,
-// as a contract call would.
 export async function readBuildAnswer(
   response: Response,
   onProgress: ((progress: ImageBuildProgress) => void) | undefined,
@@ -20,6 +17,7 @@ export async function readBuildAnswer(
     return readBuildEvents(response, onProgress, onLog);
   }
 
+  // An impd without the build stream answers with plain JSON.
   const body: unknown = await response.json().catch(() => null);
 
   if (response.ok) {
@@ -35,7 +33,7 @@ export async function readBuildAnswer(
     });
   }
 
-  // a 401 comes before the route, from impd's auth, without a code
+  // A 401 comes from impd's auth before the route, without a code.
   const code = response.status === 401 ? 'UNAUTHORIZED' : 'INTERNAL_SERVER_ERROR';
 
   throw new ORPCError(code, {
@@ -48,9 +46,6 @@ function isStream(response: Response): boolean {
   return response.headers.get('content-type')?.startsWith(IMAGE_BUILD_STREAM_TYPE) === true;
 }
 
-// The image or the error that ends the stream. A line that is not an event
-// this client knows is skipped; a stream that ends without its last event
-// lost impd, or the connection, mid-build.
 async function readBuildEvents(
   response: Response,
   onProgress: ((progress: ImageBuildProgress) => void) | undefined,
@@ -85,7 +80,6 @@ async function readBuildEvents(
   });
 }
 
-// each line of the body, as it completes
 async function* readLines(response: Response): AsyncGenerator<string> {
   if (response.body === null) {
     return;

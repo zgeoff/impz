@@ -1,11 +1,10 @@
-// starts a timer that calls `fire` once after `ms`, and returns its cancel
 export type StartTimer = (fire: () => void, durationMs: number) => () => void;
 
 // oxlint-disable-next-line zgeoff/module-order -- LONG_CALL_DEADLINES_MS reads it as the module loads
 const HOUR_MS = 60 * 60 * 1000;
 
-// The calls that answer only when their work ends, which can be later than
-// Bun's fetch waits for a silent answer (360 s): each waits this long instead.
+// These calls answer only when their work ends, which can be later than
+// Bun's fetch waits for a silent answer (360 s).
 export const LONG_CALL_DEADLINES_MS: ReadonlyMap<string, number> = new Map([
   ['backups.run', 24 * HOUR_MS],
   ['backups.restore', 24 * HOUR_MS],
@@ -17,30 +16,24 @@ export const LONG_CALL_DEADLINES_MS: ReadonlyMap<string, number> = new Map([
   ['moves.resume', HOUR_MS],
 ]);
 
-// what oRPC's link passes a fetch beside the request
 export interface CallInit {
   readonly redirect?: Request['redirect'];
 }
 
 interface LongCall {
-  // the procedure, as `backups.run`
   readonly procedure: string;
   readonly deadlineMs: number;
   readonly startTimer: StartTimer;
-
-  // the transport; the global fetch with Bun's idle limit lifted when null
   readonly send: ((request: Request) => Promise<Response>) | null;
 }
 
-// One call of LONG_CALL_DEADLINES_MS: Bun's limit lifted (`timeout: false`),
-// and at the deadline the request aborts with a TimeoutError that names it.
 export async function sendLongCall(
   request: Request,
   init: Readonly<CallInit>,
   call: Readonly<LongCall>,
 ): Promise<Response> {
-  // one controller for the caller's abort and the deadline, since a browser
-  // the SDK serves (Firefox 121–123) has no AbortSignal.any
+  // One controller for the caller's abort and the deadline, since a browser
+  // the SDK serves (Firefox 121–123) has no AbortSignal.any.
   const limit = new AbortController();
 
   const expired = Promise.withResolvers<never>();
@@ -67,8 +60,6 @@ export async function sendLongCall(
 
   const signal = limit.signal;
 
-  // inside the try, so a transport that throws at once still ends the timer
-  // and the listener
   try {
     const limited = new Request(request, { signal });
 

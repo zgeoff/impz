@@ -6,12 +6,8 @@ import type {
 import { TEST_TOKEN, startTestImpd } from '@impz/daemon/testing';
 import type { Server } from 'bun';
 
-// impd's own app with a fake agent and one imp, `smoke`, for smoke.ts.
-// Prints { url, prefixedUrl, closedUrl, token } as one JSON line and serves
-// until SIGTERM; prefixedUrl serves impd only under /impd/.
 const PREFIX = '/impd';
 
-// what it started, released on SIGTERM and on a setup step that throws
 const stack = new AsyncDisposableStack();
 
 const served = await startOrRelease();
@@ -39,7 +35,6 @@ async function stopAndExit(): Promise<void> {
 }
 
 async function startStubImpd() {
-  // only impd's unexpected RPC failures reach stderr, as on a host
   const harness = await startTestImpd(stack, {
     onLog: (message) => {
       if (message.startsWith('impd: rpc failed: ')) {
@@ -64,9 +59,6 @@ async function startStubImpd() {
   return { url, prefixedUrl: `${proxy.url.origin}${PREFIX}/`, closedUrl, token: TEST_TOKEN };
 }
 
-// `cat` without a tty echoes stdin until EOF. With a tty, as a console has,
-// it reports its size and each resize, echoes what it reads, and ends by
-// SIGINT on ^C, as a shell's foreground job would.
 function createFakeStream(request: Readonly<AgentExecRequest>): ExecStream {
   const encoder = new TextEncoder();
 
@@ -151,13 +143,9 @@ async function* readEvents(
 interface ProxySocket {
   readonly upstreamUrl: string;
   upstream: WebSocket | null;
-
-  // what the client sends before the upstream opens waits for it
   readonly pending: (string | Uint8Array)[];
 }
 
-// A reverse proxy that strips /impd, as one in front of a real impd would,
-// for HTTP and for the exec WebSocket. Anything outside the prefix is a 404.
 function startPrefixProxy(upstreamBase: string): Server<ProxySocket> {
   const handleRequest = (request: Request, server: Server<ProxySocket>) => {
     const incoming = new URL(request.url);
@@ -227,7 +215,8 @@ function startPrefixProxy(upstreamBase: string): Server<ProxySocket> {
   });
 }
 
-// 1005 and 1006 report a close with no frame; neither may be sent
+// The WebSocket codes 1005 and 1006 report a close with no frame, and
+// neither may be sent.
 function stopSocket(socket: Pick<WebSocket, 'close'> | null, code: number, reason: string): void {
   if (code === 1005 || code === 1006) {
     socket?.close();

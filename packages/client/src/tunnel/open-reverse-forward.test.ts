@@ -13,35 +13,28 @@ import { createImpClient } from '../create-imp-client';
 import { buildStubForwardAgent } from '../test-utils/build-stub-forward-agent';
 import { openReverseForward } from './open-reverse-forward';
 
-// impd booted in process on stub VMs and listening on a loopback port, as
-// /tunnel needs a real socket, with the imp `box` and the stub agent on its
-// vsock
+// impd listens on a loopback port, as /tunnel needs a real socket.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root token, the bearer the test's client sends
   const rootToken = 'root-token';
 
   const harness = await startTestImpd(stack, { rootToken });
 
   const impd = harness.impd;
-
-  // the image `box` boots
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
 
-  // an agent with reverse forwards
   harness.fake.agent.version = '0.18.0';
 
   const url = harness.url;
   const client = createImpClient({ url, token: rootToken });
 
-  // the imp every forward listens in, and its agent
   const box = await client.imps.create({ name: 'box' });
 
   const agent = buildStubForwardAgent();

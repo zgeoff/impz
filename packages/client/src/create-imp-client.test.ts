@@ -21,15 +21,11 @@ import { createImpClient } from './create-imp-client';
 import { makeStubImpdWithNewReason } from './test-utils/make-stub-impd-with-new-reason';
 import { startStubDockerEngine } from './test-utils/start-stub-docker-engine';
 
-// `startImpd` boots impd with `env` and serves it at http://impd.test/
-// through the run's MSW server, its `restartImpd` as a restart does;
-// `workDir` holds a test's host engine
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // impd boots with a root token, the bearer the test's client sends
   const rootToken = 'root-token';
 
   const workDir = await mkdtemp(join(tmpdir(), 'imp-client-engine-'));
@@ -41,7 +37,6 @@ async function setupTest() {
   const startImpd = async (env: Readonly<Record<string, string>> = {}) => {
     const harness = await startTestImpd(stack, { rootToken, env });
 
-    // the image every imps.create boots when it names none
     const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
     await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
@@ -92,8 +87,6 @@ test('#createImpClient rejects a procedure impd does not have as an unknown proc
   const ctx = await setupTest();
   const harness = await ctx.startImpd();
 
-  // an impd from before the stream: the call reaches a path impd has no
-  // procedure for, which it answers with its own plain-text not-found
   server.use(
     http.all('http://impd.test/*', (info) =>
       harness.impd.api.app.handle(
@@ -242,7 +235,6 @@ test('#requireAwake waits out a stopping impd for the one that replaces it when 
 
   const wakes = mock<(impd: string, status: number) => void>();
 
-  // the first wake still reaches the impd that stops, and the next the one that replaces it
   server.use(
     http.post(
       'http://impd.test/rpc/imps/wake',
@@ -277,7 +269,6 @@ test('#requireAwake waits out a stopping impd for the one that replaces it when 
 });
 
 test('#requireAwake rejects with the TypeError of an impd it cannot reach', () => {
-  // nothing listens on a free port
   const client = createImpClient({
     url: `http://127.0.0.1:${String(claimFreePorts(1).take())}/`,
     token: 'root-token',
@@ -360,7 +351,6 @@ test('#checkServer reports both versions, that they are compatible, and the info
 
   const check = await ctx.client.checkServer();
 
-  // the info holds impd's state, so the test pins only the parts it knows
   expect(check).toMatchObject({
     clientVersion: CLIENT_VERSION,
     serverVersion: CLIENT_VERSION,
@@ -372,7 +362,6 @@ test('#checkServer reports both versions, that they are compatible, and the info
 test('#checkServer rejects at the abort of its signal when impd never answers', async () => {
   const ctx = await setupTest();
 
-  // a half-open connection: impd takes the call and never answers it
   const answer = mock(() => Promise.withResolvers<Response>().promise);
 
   server.use(http.post('http://impd.test/rpc/system/info', answer));
@@ -399,7 +388,6 @@ test('#images.addStream hands on each progress event, then the image', async () 
   await mkdir(join(ctx.workDir, 'tree'));
   await writeFile(join(ctx.workDir, 'tree', 'hello'), 'from busybox\n');
 
-  // the image is on the host already
   const docker = createStubDockerCli({
     directory: ctx.workDir,
     images: [
@@ -421,7 +409,6 @@ test('#images.addStream hands on each progress event, then the image', async () 
 
   updateEnv('PATH', docker.path);
 
-  // adds pull onto the host engine, as no builder imp has an agent here
   await ctx.startImpd({ IMP_BUILD_ISOLATION: 'host' });
 
   const events = await ctx.client.images.addStream({ ref: 'busybox:1.37', name: 'box' });
@@ -448,7 +435,6 @@ test('#images.addStream hands on each progress event, then the image', async () 
 test('#images.addStream throws the ORPCError of an add that impd refuses', async () => {
   const ctx = await setupTest();
 
-  // adds pull onto the host engine, as no builder imp has an agent here
   await ctx.startImpd({ IMP_BUILD_ISOLATION: 'host' });
 
   const events = await ctx.client.images.addStream({ ref: 'busybox:1.37', name: 'imp-builder' });
@@ -472,7 +458,6 @@ test('#images.buildStream hands on each progress event as it comes, then the ima
   await mkdir(join(ctx.workDir, 'tree'));
   await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
 
-  // the frontend is on the host, and the engine tags what it builds
   const docker = createStubDockerCli({
     directory: ctx.workDir,
     images: [
@@ -494,7 +479,6 @@ test('#images.buildStream hands on each progress event as it comes, then the ima
     holdUntil: () => release.promise,
   });
 
-  // builds run on the host engine, as no builder imp has an agent here
   await ctx.startImpd({
     IMP_BUILD_ISOLATION: 'host',
     DOCKER_HOST: `unix://${join(ctx.workDir, 'docker.sock')}`,
@@ -549,9 +533,8 @@ test('#images.buildStream hands on each progress event as it comes, then the ima
   expect(engine.unexpected).toStrictEqual([]);
 });
 
-// A newer impd sends a reason this client does not know: the client passes
-// it through, since oRPC checks outputs on the server, not here. A new
-// ImpChangeReason needs no EVENT_VERSION bump.
+// oRPC checks outputs on the server, not in the client, so a reason this
+// client does not know passes through.
 test('#events.stream passes on an event whose reason this client does not know', async () => {
   const ctx = await setupTest();
   const harness = await ctx.startImpd();
