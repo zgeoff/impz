@@ -199,6 +199,24 @@ test('#login refuses a body without a token', async () => {
   expect(response.headers.get('set-cookie')).toBeNull();
 });
 
+test('#login refuses a body that is not JSON', async () => {
+  const ctx = await setupTest();
+  const tokens = await ctx.loadTokens('root-secret');
+
+  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+
+  const response = await sessions.respond(
+    new Request('http://imp:7070/rpc/auth/login', {
+      method: 'POST',
+      headers: { 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
+      body: '{"json": {"token": "root-secret"',
+    }),
+  );
+
+  expect(response.status).toBe(400);
+  expect(response.headers.get('set-cookie')).toBeNull();
+});
+
 test('#login refuses a GET, which a link on any page can send', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
