@@ -22,6 +22,13 @@ const fullNetfilter = probeUnshare([
   ].join(' && '),
 ]);
 
+// a refusal test stops before the first rule, so it needs only IPv4 nat
+const ipv4Netfilter = probeUnshare([
+  'sh',
+  '-c',
+  'iptables -t nat -S && ip link && command -v sysctl',
+]);
+
 // it changes nothing before the check, so it runs anywhere
 test('it refuses to start without the settings host/entrypoint takes from impd', () => {
   const result = Bun.spawnSync(['bash', join(import.meta.dir, 'setup-net.sh')], {
@@ -117,11 +124,9 @@ kill "$LISTENER_PID"
   },
 );
 
-test.skipIf(!probeUnshare(['sh', '-c', 'iptables -t nat -S && ip link && command -v sysctl']))(
-  'it refuses to start with IPv4 forwarding off',
-  () => {
-    const run = runInNetns({
-      script: `
+test.skipIf(!ipv4Netfilter)('it refuses to start with IPv4 forwarding off', () => {
+  const run = runInNetns({
+    script: `
 ip link add up0 type dummy
 ip link set up0 up
 ip addr add 192.0.2.2/24 dev up0
@@ -129,47 +134,43 @@ ip route add default via 192.0.2.1
 sysctl -qw net.ipv4.ip_forward=0
 bash "$SETUP_NET"
 `,
-      env: {
-        SETUP_NET: join(import.meta.dir, 'setup-net.sh'),
-        IMP_SUBNET: '10.66.0.0/16',
-        IMP_BROKER_PORT: '7081',
-        IMP_EGRESS_DNS_PORT: '7053',
-      },
-      mount: false,
-    });
+    env: {
+      SETUP_NET: join(import.meta.dir, 'setup-net.sh'),
+      IMP_SUBNET: '10.66.0.0/16',
+      IMP_BROKER_PORT: '7081',
+      IMP_EGRESS_DNS_PORT: '7053',
+    },
+    mount: false,
+  });
 
-    expect(run).toStrictEqual({
-      stdout: '',
-      stderr:
-        'setup-net: net.ipv4.ip_forward is off; run the container with --sysctl net.ipv4.ip_forward=1\n',
-      exitCode: 1,
-    });
-  },
-);
+  expect(run).toStrictEqual({
+    stdout: '',
+    stderr:
+      'setup-net: net.ipv4.ip_forward is off; run the container with --sysctl net.ipv4.ip_forward=1\n',
+    exitCode: 1,
+  });
+});
 
-test.skipIf(!probeUnshare(['sh', '-c', 'iptables -t nat -S && ip link && command -v sysctl']))(
-  'it refuses to start without a default route',
-  () => {
-    const run = runInNetns({
-      script: `
+test.skipIf(!ipv4Netfilter)('it refuses to start without a default route', () => {
+  const run = runInNetns({
+    script: `
 ip link add up0 type dummy
 ip link set up0 up
 ip addr add 192.0.2.2/24 dev up0
 sysctl -qw net.ipv4.ip_forward=1
 bash "$SETUP_NET"
 `,
-      env: {
-        SETUP_NET: join(import.meta.dir, 'setup-net.sh'),
-        IMP_SUBNET: '10.66.0.0/16',
-        IMP_BROKER_PORT: '7081',
-        IMP_EGRESS_DNS_PORT: '7053',
-      },
-      mount: false,
-    });
+    env: {
+      SETUP_NET: join(import.meta.dir, 'setup-net.sh'),
+      IMP_SUBNET: '10.66.0.0/16',
+      IMP_BROKER_PORT: '7081',
+      IMP_EGRESS_DNS_PORT: '7053',
+    },
+    mount: false,
+  });
 
-    expect(run).toStrictEqual({ stdout: '', stderr: 'setup-net: no default route\n', exitCode: 1 });
-  },
-);
+  expect(run).toStrictEqual({ stdout: '', stderr: 'setup-net: no default route\n', exitCode: 1 });
+});
 
 test.skipIf(!fullNetfilter)(
   'it leaves one UDP and one TCP pair of egress DNS rules after a resolver port change',
