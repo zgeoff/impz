@@ -272,7 +272,8 @@ export function createJails(deps: Readonly<JailDeps>): Jails {
     },
     release: removeMounts,
     sweepRunDir: async (paths) => {
-      // the unmount stops the last jail uid's processes, so none races the delete
+      // the jail's processes stop before the recursive delete, which one still
+      // running could race
       await removeMounts(paths.impId);
 
       setupImpdRunDir(paths);
