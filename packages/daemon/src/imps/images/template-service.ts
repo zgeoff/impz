@@ -7,6 +7,7 @@ import {
   readImageById,
   readImageByName,
   updateImage,
+  updateImageUse,
 } from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
@@ -124,6 +125,10 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
               'a template of it would put its disk in every backup',
             );
           }
+
+          // The use goes in before the read, so an image eviction keeps the template this
+          // replaces until the new one lands.
+          await updateImageUse(deps.db, 'name', [name], Date.now());
 
           const existing = await readImageByName(deps.db, name);
 
