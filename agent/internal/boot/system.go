@@ -69,7 +69,7 @@ func Run() error {
 	if params.Template {
 		c, err := claim.Park(listenVsock, buildPing, func(c *proto.Claim) error {
 			steps.restart()
-			return claim.Apply(c, userDisk)
+			return claim.Apply(c, inner.UserDisk)
 		})
 		if err != nil {
 			return err
@@ -79,7 +79,11 @@ func Run() error {
 	} else {
 		steps.mark("world")
 	}
-	if err := mountUserDisk(); err != nil {
+	// the container's init starts up while the agent mounts the disk it
+	// runs on
+	mgr := inner.New(r, inner.Config{RunSize: innerRunSize()})
+	mgr.Prestart()
+	if err := inner.MountUserDisk(); err != nil {
 		return err
 	}
 	steps.mark("mount")
@@ -100,7 +104,6 @@ func Run() error {
 	}
 	steps.mark("network")
 
-	mgr := inner.New(r, inner.Config{RunSize: innerRunSize()})
 	root := mgr.Root()
 	image := imagecfg.NewLive(imagecfg.Config{})
 	sup := services.New(mgr, root, image)
@@ -214,7 +217,7 @@ func Run() error {
 // disk.
 func prepareRoot(root fsroot.FS, params cmdline.Params, image *imagecfg.Live) {
 	if name := params.Hostname; name != "" {
-		if err := fsroot.WriteFileAtomic(root, "/etc/hostname", []byte(name+"\n"), 0o644); err != nil {
+		if err := fsroot.RewriteFile(root, "/etc/hostname", []byte(name+"\n"), 0o644); err != nil {
 			log.Printf("hostname: %v", err)
 		}
 		if err := hosts.Update(root, "/etc/hosts", name); err != nil {

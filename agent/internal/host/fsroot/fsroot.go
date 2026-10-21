@@ -352,6 +352,20 @@ func (f *fileInfo) Mode() fs.FileMode {
 // WriteFileAtomic replaces p through a temporary file and a rename in fsys,
 // so a crash mid-write cannot leave it truncated.
 func WriteFileAtomic(fsys FS, p string, data []byte, mode os.FileMode) error {
+	return replaceFile(fsys, p, data, mode, true)
+}
+
+// RewriteFile replaces p as WriteFileAtomic does, without its fsync: for a
+// file that every boot writes again, such as /etc/hostname. The sync waits
+// for a journal commit, which a restored imp pays before it answers. ext4
+// still writes the data of a file a rename replaces before the rename
+// (auto_da_alloc), and a file a crash empties is written again at the next
+// boot.
+func RewriteFile(fsys FS, p string, data []byte, mode os.FileMode) error {
+	return replaceFile(fsys, p, data, mode, false)
+}
+
+func replaceFile(fsys FS, p string, data []byte, mode os.FileMode, durable bool) error {
 	tmp := filepath.Join(filepath.Dir(p), fmt.Sprintf(".%s.%d", filepath.Base(p), time.Now().UnixNano()))
 	f, err := fsys.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 	if err != nil {
@@ -361,7 +375,7 @@ func WriteFileAtomic(fsys FS, p string, data []byte, mode os.FileMode) error {
 	if err == nil {
 		err = f.Chmod(mode)
 	}
-	if err == nil {
+	if err == nil && durable {
 		err = f.Sync()
 	}
 	if cerr := f.Close(); err == nil {

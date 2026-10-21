@@ -29,13 +29,15 @@ container over the user disk.
    so that the kernel never picks it, and makes the cgroup for user code, with a memory limit a
    little under the guest's memory. A [boot template](../lifecycle/boot-templates.md) parks here and
    takes its claim's values from then on.
-2. It mounts the user disk, and grows its filesystem when the host grew the disk. It compares the
-   size in the filesystem's superblock with the disk's first, because an online resize flushes the
-   journal even when the size stays the same.
+2. It forks the inner container's init, which mounts the user disk and sets up the container's root
+   while the agent mounts the same disk for itself. The agent grows the disk's filesystem when the
+   host grew the disk. It compares the size in the filesystem's superblock with the disk's first,
+   because an online resize flushes the journal even when the size stays the same.
 3. It sets the hostname and brings up loopback and the network device.
 4. It starts the inner container, writes the container's hostname, hosts and resolver files, and
-   reads the image's config for the default environment. On the first boot of an imp made from a
-   template image it writes a new machine-id and new SSH host keys.
+   reads the image's config for the default environment. It writes those files without a sync,
+   because every boot writes them again. On the first boot of an imp made from a template image it
+   writes a new machine-id and new SSH host keys.
 5. It starts the services, makes the cgroups for execs and outer execs, and listens on vsock.
 
 The agent never execs itself on the way, because on a restored template a new runtime would fault in
@@ -49,10 +51,11 @@ guest's part of a create goes.
 
 User code runs in a container whose root is the user disk, with its own mount, PID and cgroup
 namespaces, and the agent's network and hostname. Its PID 1 is the agent binary again, in an inner
-mode: it pivots into the user disk, mounts fresh `/proc`, `/sys`, `/dev` and `/run` there, binds the
-system drive read-only at `/run/imp/sys`, and then forks every user process for the agent over a
-socket, since a Go process cannot join a mount namespace. Inside, the system drive gives every image
-the helpers impd runs, such as the SFTP server and the tar of `impz cp`.
+mode: it mounts the user disk in its own namespace when its copy of the agent's mounts lacks it,
+pivots into it, mounts fresh `/proc`, `/sys`, `/dev` and `/run` there, binds the system drive
+read-only at `/run/imp/sys`, and then forks every user process for the agent over a socket, since a
+Go process cannot join a mount namespace. Inside, the system drive gives every image the helpers
+impd runs, such as the SFTP server and the tar of `impz cp`.
 
 The container exists so that user processes cannot take the agent down by accident. `rm -rf /`,
 `kill -9 -1`, a reboot inside or a full memory ends the container, not the agent. When the inner

@@ -53,6 +53,8 @@ type Manager struct {
 	firstBackoff time.Duration
 	// readyTimeout bounds each init's setup
 	readyTimeout time.Duration
+	// early is the init Prestart started, which the first start takes
+	early chan readyInit
 
 	mu      sync.Mutex
 	current *client
@@ -127,22 +129,29 @@ func (m *Manager) startOnce() error {
 	return err
 }
 
+// Prestart starts the container's init ahead of Launch, which takes it:
+// the boot calls it before it mounts the user disk, so the init starts up
+// and sets up its root beside the agent's mount. Call it at most once,
+// before Launch.
+func (m *Manager) Prestart() {
+	early := make(chan readyInit, 1)
+	m.early = early
+	safe.Go("inner: prestart", func() {
+		p, c, err := m.startReady()
+		early <- readyInit{p, c, err}
+	}, func() { early <- readyInit{err: errors.New("panic")} })
+}
+
+// readyInit is an inner init that said it is ready, or why it is not.
+type readyInit struct {
+	p   *initProc
+	c   *client
+	err error
+}
+
 func (m *Manager) tryStart() error {
-	// what a container left behind (a cgroup that outlived the last wait,
-	// say) must not fail this one
-	m.cleanCgroup()
-	cg, err := os.Open(m.cgroupDir)
+	p, c, err := m.takeReady()
 	if err != nil {
-		return fmt.Errorf("open %s: %w", m.cgroupDir, err)
-	}
-	defer cg.Close()
-	p, err := m.startInit(cg)
-	if err != nil {
-		return err
-	}
-	c, err := connect(p, m.readyTimeout)
-	if err != nil {
-		m.cleanCgroup()
 		return err
 	}
 	root, err := fsroot.Open(m.rootOf(p.pid))
@@ -171,6 +180,40 @@ func (m *Manager) tryStart() error {
 		p.kill()
 	}
 	return nil
+}
+
+// takeReady returns the init that Prestart started, the first time, or
+// starts one.
+func (m *Manager) takeReady() (*initProc, *client, error) {
+	if early := m.early; early != nil {
+		m.early = nil
+		r := <-early
+		return r.p, r.c, r.err
+	}
+	return m.startReady()
+}
+
+// startReady forks one inner init into the container's cgroup and waits
+// until it is ready.
+func (m *Manager) startReady() (*initProc, *client, error) {
+	// what a container left behind (a cgroup that outlived the last wait,
+	// say) must not fail this one
+	m.cleanCgroup()
+	cg, err := os.Open(m.cgroupDir)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open %s: %w", m.cgroupDir, err)
+	}
+	defer cg.Close()
+	p, err := m.startInit(cg)
+	if err != nil {
+		return nil, nil, err
+	}
+	c, err := connect(p, m.readyTimeout)
+	if err != nil {
+		m.cleanCgroup()
+		return nil, nil, err
+	}
+	return p, c, nil
 }
 
 // watch waits for the container to end: its init dying, or its socket

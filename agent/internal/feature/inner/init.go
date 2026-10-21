@@ -16,6 +16,7 @@ import (
 	"github.com/zgeoff/impz/agent/internal/feature/files"
 	"github.com/zgeoff/impz/agent/internal/host/cgroup"
 	"github.com/zgeoff/impz/agent/internal/host/proc"
+	"github.com/zgeoff/impz/agent/internal/host/sysutil"
 )
 
 // Layout of the guest the inner init sets up. The agent's own world is the
@@ -30,7 +31,25 @@ const (
 	FilesMount = "/run/imp/files"
 	// AgentBinary is the agent on the system drive.
 	AgentBinary = "/imp-agent"
+	// UserDisk is the user disk's device.
+	UserDisk = "/dev/vda"
 )
+
+// MountUserDisk mounts the user disk at UserRoot in this mount namespace,
+// unless it is mounted there already. The agent and the inner init both
+// call it. The init's namespace is a copy of the agent's, taken at its
+// fork: a boot forks the init before the agent's mount, so the two mounts
+// run side by side, and the kernel reads the filesystem once for both. A
+// restart's copy has the mount already.
+func MountUserDisk() error {
+	// noinit_itable: the disk is a sparse file, so the inode tables of a grown
+	// disk read as zeros already; zeroing them in the background would only
+	// allocate about 1.6 % of the disk on the host
+	if err := sysutil.MountOnce(UserDisk, UserRoot, "ext4", unix.MS_RELATIME, "noinit_itable"); err != nil {
+		return fmt.Errorf("%s: %w", UserDisk, err)
+	}
+	return nil
+}
 
 // Config is what the agent tells the inner init through its environment.
 type Config struct {
@@ -97,6 +116,9 @@ func setupRoot(runSize string) (*os.File, error) {
 	// nothing here propagates back to the agent's namespace
 	if err := unix.Mount("", "/", "", unix.MS_REC|unix.MS_PRIVATE, ""); err != nil {
 		return nil, fmt.Errorf("make / private: %w", err)
+	}
+	if err := MountUserDisk(); err != nil {
+		return nil, err
 	}
 	agent, err := os.Open(AgentBinary)
 	if err != nil {

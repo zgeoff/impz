@@ -149,7 +149,7 @@ func writeResolvConf(fsys fsroot.FS, path string, servers []string) error {
 			return err
 		}
 	}
-	return fsroot.WriteFileAtomic(fsys, path, []byte(resolvConf(servers)), 0o644)
+	return fsroot.RewriteFile(fsys, path, []byte(resolvConf(servers)), 0o644)
 }
 
 func resolvConf(servers []string) string {

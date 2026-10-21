@@ -16,11 +16,10 @@ import (
 	"github.com/zgeoff/impz/agent/internal/feature/memory"
 	"github.com/zgeoff/impz/agent/internal/host/cgroup"
 	"github.com/zgeoff/impz/agent/internal/host/disk"
+	"github.com/zgeoff/impz/agent/internal/host/sysutil"
 )
 
 const (
-	userDisk = "/dev/vda"
-
 	// agentRunSize caps the agent's own /run: its sockets and little else
 	agentRunSize = "16m"
 )
@@ -29,20 +28,25 @@ const (
 // which must contain the directories /dev, /proc, /sys, /run and /user,
 // since it cannot be written. A boot template makes them before it parks.
 func setupAgentWorld() error {
-	if err := mountOnce("devtmpfs", "/dev", "devtmpfs", unix.MS_NOSUID, "mode=0755"); err != nil {
+	if err := sysutil.MountOnce("devtmpfs", "/dev", "devtmpfs", unix.MS_NOSUID, "mode=0755"); err != nil {
 		return err
 	}
-	if err := mountOnce("proc", "/proc", "proc", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, ""); err != nil {
+	if err := sysutil.MountOnce("proc", "/proc", "proc", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, ""); err != nil {
 		return err
 	}
-	if err := mountOnce("sysfs", "/sys", "sysfs", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, ""); err != nil {
+	if err := sysutil.MountOnce("sysfs", "/sys", "sysfs", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, ""); err != nil {
 		return err
 	}
-	if err := mountOnce("cgroup2", cgroup.Root, "cgroup2",
-		unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC|unix.MS_RELATIME, "nsdelegate"); err != nil {
+	// favordynmods: without it, each move into a cgroup and each change of
+	// a cgroup's controllers waits for an RCU grace period, which the boot
+	// pays several times over in the inner container's start; a fork then
+	// costs a little more. Only this mount, in the root cgroup namespace,
+	// sets it: the container's mounts and docker's cannot clear it.
+	if err := sysutil.MountOnce("cgroup2", cgroup.Root, "cgroup2",
+		unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC|unix.MS_RELATIME, "nsdelegate,favordynmods"); err != nil {
 		return err
 	}
-	if err := mountOnce("tmpfs", "/run", "tmpfs", unix.MS_NOSUID|unix.MS_NODEV, "mode=0755,size="+agentRunSize); err != nil {
+	if err := sysutil.MountOnce("tmpfs", "/run", "tmpfs", unix.MS_NOSUID|unix.MS_NODEV, "mode=0755,size="+agentRunSize); err != nil {
 		return err
 	}
 	// the agent's own ptys, for an exec in its world
@@ -60,24 +64,12 @@ func setupAgentWorld() error {
 	return nil
 }
 
-// mountUserDisk mounts the user disk at UserRoot. A boot template does this
-// only after its claim, so the disk it never read is the copy's own.
-func mountUserDisk() error {
-	// noinit_itable: the disk is a sparse file, so the inode tables of a grown
-	// disk read as zeros already; zeroing them in the background would only
-	// allocate about 1.6 % of the disk on the host
-	if err := unix.Mount(userDisk, inner.UserRoot, "ext4", unix.MS_RELATIME, "noinit_itable"); err != nil {
-		return fmt.Errorf("mount %s: %w", userDisk, err)
-	}
-	return nil
-}
-
 // growUserDisk grows the mounted user disk to its device: the host may have
 // grown it since the last boot. A failed grow leaves the filesystem as it
 // was, so the boot goes on.
 func growUserDisk() {
 	if err := disk.Grow(inner.UserRoot); err != nil {
-		log.Printf("boot: grow %s: %v", userDisk, err)
+		log.Printf("boot: grow %s: %v", inner.UserDisk, err)
 	}
 }
 
@@ -111,18 +103,6 @@ func innerRunSize() string {
 	return ""
 }
 
-// mountOnce mounts fstype on target unless something is already mounted
-// there. The kernel auto-mounts devtmpfs on /dev (DEVTMPFS_MOUNT).
-func mountOnce(source, target, fstype string, flags uintptr, data string) error {
-	if mounted(target) {
-		return nil
-	}
-	if err := unix.Mount(source, target, fstype, flags, data); err != nil {
-		return fmt.Errorf("mount %s on %s: %w", fstype, target, err)
-	}
-	return nil
-}
-
 func mkdirMount(source, target, fstype string, flags uintptr, data string) error {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		return err
@@ -131,14 +111,4 @@ func mkdirMount(source, target, fstype string, flags uintptr, data string) error
 		return fmt.Errorf("mount %s on %s: %w", fstype, target, err)
 	}
 	return nil
-}
-
-// mounted reports whether path is a mountpoint: its device differs from
-// its parent's.
-func mounted(path string) bool {
-	var st, parent unix.Stat_t
-	if unix.Stat(path, &st) != nil || unix.Stat(path+"/..", &parent) != nil {
-		return false
-	}
-	return st.Dev != parent.Dev
 }

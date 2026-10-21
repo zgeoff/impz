@@ -62,6 +62,36 @@ func TestWriteFileAtomicNeverWritesThroughAPlantedSymlinkToOutside(t *testing.T)
 	assert.Equal(t, string(b), "agent's", "the agent's file changed")
 }
 
+func TestRewriteFileReplacesTheFileWithItsDataAndMode(t *testing.T) {
+	r, inside, _ := setup(t)
+	assert.NilError(t, os.WriteFile(filepath.Join(inside, "etc/hostname"), []byte("old-name\n"), 0o600))
+
+	err := RewriteFile(r, "/etc/hostname", []byte("quiet-otter\n"), 0o644)
+
+	assert.NilError(t, err)
+	b, err := os.ReadFile(filepath.Join(inside, "etc/hostname"))
+	assert.NilError(t, err)
+	assert.Check(t, cmp.Equal(string(b), "quiet-otter\n"))
+	fi, err := os.Stat(filepath.Join(inside, "etc/hostname"))
+	assert.NilError(t, err)
+	assert.Check(t, cmp.Equal(fi.Mode().Perm(), os.FileMode(0o644)))
+	entries, err := os.ReadDir(filepath.Join(inside, "etc"))
+	assert.NilError(t, err)
+	assert.Check(t, cmp.Len(entries, 1), "a temporary file stayed behind")
+}
+
+func TestRewriteFileNeverWritesThroughAPlantedSymlinkToOutside(t *testing.T) {
+	r, inside, outside := setup(t)
+	assert.NilError(t, os.Symlink(filepath.Join(outside, "secret"), filepath.Join(inside, "etc/hostname")))
+
+	err := RewriteFile(r, "/etc/hostname", []byte("x"), 0o644)
+
+	assert.NilError(t, err)
+	b, err := os.ReadFile(filepath.Join(outside, "secret"))
+	assert.NilError(t, err)
+	assert.Equal(t, string(b), "agent's", "the agent's file changed")
+}
+
 func TestReadFileStopsDotDotThroughARelativeLinkAtTheRoot(t *testing.T) {
 	r, inside, _ := setup(t)
 	assert.NilError(t, os.Symlink("../../outside", filepath.Join(inside, "etc/up")))

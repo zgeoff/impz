@@ -55,7 +55,7 @@ func Update(fsys fsroot.FS, path, name string) error {
 		}
 		return err
 	}
-	return fsroot.WriteFileAtomic(fsys, path, []byte(out), 0o644)
+	return fsroot.RewriteFile(fsys, path, []byte(out), 0o644)
 }
 
 // hostsWithName returns hosts with its first 127.0.1.1 line mapping to

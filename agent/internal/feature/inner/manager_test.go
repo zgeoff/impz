@@ -2,6 +2,7 @@ package inner
 
 import (
 	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"testing"
@@ -136,6 +137,30 @@ func TestLaunchBringsTheContainerUp(t *testing.T) {
 
 	receive(t, inits, 5*time.Second, "init")
 	assert.DeepEqual(t, m.Status(), Status{Up: true})
+}
+
+func TestLaunchStartsTheInitThatPrestartForked(t *testing.T) {
+	m, inits := testManager(t, nil, nil)
+	m.Prestart()
+	receive(t, inits, 5*time.Second, "prestarted init")
+
+	m.Launch()
+
+	assert.DeepEqual(t, m.Status(), Status{Up: true})
+	assert.Check(t, cmp.Len(inits, 0), "Launch forked a second init")
+}
+
+func TestLaunchReportsAPrestartThatFailed(t *testing.T) {
+	m, _ := testManager(t, nil, nil)
+	m.firstBackoff = time.Hour
+	m.cgroupDir = filepath.Join(t.TempDir(), "gone")
+	m.Prestart()
+
+	m.Launch()
+
+	st := m.Status()
+	assert.Check(t, !st.Up)
+	assert.Check(t, cmp.Contains(st.LastErr, "gone"))
 }
 
 func TestARestartRunsOnDownThenOnUp(t *testing.T) {
