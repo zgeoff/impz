@@ -90,12 +90,6 @@ func Run() error {
 	steps.mark("mount")
 	growUserDisk()
 	steps.mark("grow")
-	// the files go on the disk while the container starts up
-	rootFiles := make(chan struct{})
-	safe.Go("boot: root files", func() {
-		defer close(rootFiles)
-		writeRootFilesOnDisk(params)
-	}, nil)
 	// Problems below are logged, not fatal: an agent that answers on vsock
 	// with a broken network or a dead container is still reachable to debug.
 	if params.Hostname != "" {
@@ -126,7 +120,7 @@ func Run() error {
 		sup.Suspend()
 	})
 	mgr.OnUp(func() {
-		prepareRoot(root, params, image)
+		prepareRoot(root, params, image, func(string) {})
 		if err := sup.Reload(); err != nil {
 			log.Printf("services: %v", err)
 		}
@@ -139,8 +133,7 @@ func Run() error {
 		steps.steps = append(steps.steps, &proto.BootStep{Name: t.Name, Ms: uint32(max(t.Mono-mPre, 0) / 1e6)})
 	}
 	steps.mark("inner")
-	<-rootFiles
-	loadImageConfig(root, image)
+	prepareRoot(root, params, image, steps.mark)
 	steps.mark("root")
 	identityReset := ""
 	if params.ResetIdentity {
@@ -223,44 +216,25 @@ func Run() error {
 	return srv.Serve(listenVsock)
 }
 
-// prepareRoot writes the files of the user's root that follow the imp,
-// then reads the image config.
-func prepareRoot(root fsroot.FS, params cmdline.Params, image *imagecfg.Live) {
-	writeRootFiles(root, params)
-	loadImageConfig(root, image)
-}
-
-// writeRootFiles writes the files of the user's root that follow the imp
-// rather than the image: hostname, hosts and resolv.conf. A fork or rename
-// gives the imp a new hostname on the same disk.
-func writeRootFiles(root fsroot.FS, params cmdline.Params) {
+// prepareRoot writes the files of the user's root that follow the imp
+// rather than the image (hostname, hosts and resolv.conf), then reads the
+// image config. A fork or rename gives the imp a new hostname on the same
+// disk.
+func prepareRoot(root fsroot.FS, params cmdline.Params, image *imagecfg.Live, mark func(string)) {
 	if name := params.Hostname; name != "" {
 		if err := fsroot.RewriteFile(root, "/etc/hostname", []byte(name+"\n"), 0o644); err != nil {
 			log.Printf("hostname: %v", err)
 		}
+		mark("r.hostname")
 		if err := hosts.Update(root, "/etc/hosts", name); err != nil {
 			log.Printf("hosts: %v", err)
 		}
+		mark("r.hosts")
 	}
 	if err := netcfg.WriteResolvConf(root, params.DNS); err != nil {
 		log.Printf("resolv.conf: %v", err)
 	}
-}
-
-// writeRootFilesOnDisk writes the root's files through the user disk's own
-// mount, which the agent has before the container is up. The container
-// mounts nothing over /etc, so the files are the ones it sees.
-func writeRootFilesOnDisk(params cmdline.Params) {
-	root, err := fsroot.Open(inner.UserRoot)
-	if err != nil {
-		log.Printf("boot: open %s: %v", inner.UserRoot, err)
-		return
-	}
-	defer root.Close()
-	writeRootFiles(root, params)
-}
-
-func loadImageConfig(root fsroot.FS, image *imagecfg.Live) {
+	mark("r.resolv")
 	cfg, err := imagecfg.Load(root)
 	if err != nil {
 		log.Printf("%s: %v (using defaults)", imagecfg.Path, err)
