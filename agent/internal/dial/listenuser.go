@@ -144,8 +144,9 @@ func wrapBound(fds []int, network, address string) (*Bound, error) {
 }
 
 // bindSocket binds and listens as the calling process: the listening
-// socket, and for unix the directory it is in.
-func bindSocket(network, address string) ([]int, error) {
+// socket, and for unix the directory it is in, which must not lead under
+// ownDir, the agent's own sockets.
+func bindSocket(network, address, ownDir string) ([]int, error) {
 	if network == "tcp" {
 		fd, err := bindTCP(address)
 		if err != nil {
@@ -153,7 +154,7 @@ func bindSocket(network, address string) ([]int, error) {
 		}
 		return []int{fd}, nil
 	}
-	return bindUnix(address)
+	return bindUnix(address, ownDir)
 }
 
 func bindTCP(address string) (int, error) {
@@ -185,7 +186,7 @@ func bindTCP(address string) (int, error) {
 // first and resolved, so a symlink cannot lead under /run/imp, and a socket
 // left at the name (a forward that ended with a forced sleep) is replaced,
 // as OpenSSH's StreamLocalBindUnlink does; anything else there is refused.
-func bindUnix(address string) ([]int, error) {
+func bindUnix(address, ownDir string) ([]int, error) {
 	clean := filepath.Clean(address)
 	dirPath, name := filepath.Dir(clean), filepath.Base(clean)
 	dir, err := unix.Open(dirPath, unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
@@ -209,7 +210,7 @@ func bindUnix(address string) ([]int, error) {
 	if err != nil {
 		return fail(proto.ErrListenFailed, err.Error())
 	}
-	if real == impDir || strings.HasPrefix(real, impDir+"/") {
+	if real == ownDir || strings.HasPrefix(real, ownDir+"/") {
 		return fail(proto.ErrBadRequest, address+" leads to the agent's own sockets")
 	}
 
@@ -253,5 +254,5 @@ func RunListenHelper(network, address string) error {
 	if err := checkListenAddress(network, address); err != nil {
 		return answer(nil, err)
 	}
-	return answer(bindSocket(network, address))
+	return answer(bindSocket(network, address, impDir))
 }

@@ -173,8 +173,7 @@ func TestHandleRefusesARequestWithoutItsRequiredField(t *testing.T) {
 // A freeze over the wire that finds the root frozen replies FROZEN.
 func TestHandleRepliesFrozenToASecondFreeze(t *testing.T) {
 	var f fakeIoctl
-	f.install(t)
-	s := &Server{}
+	s := &Server{rootIoctl: f.ioctl}
 	assert.NilError(t, s.freeze(time.Hour))
 	t.Cleanup(func() { s.thaw() })
 

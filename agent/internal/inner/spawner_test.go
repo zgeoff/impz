@@ -285,15 +285,18 @@ func TestAnUnknownOpIsRefused(t *testing.T) {
 	assert.Error(t, err, "unknown op reboot")
 }
 
+// A call has 30 seconds for its reply.
+func TestNewClientGivesACallThirtySeconds(t *testing.T) {
+	assert.Equal(t, newClient(-1).callTimeout, 30*time.Second)
+}
+
 func TestACallTheInitNeverAnswersTimesOut(t *testing.T) {
-	old := callTimeout
-	callTimeout = 200 * time.Millisecond
-	t.Cleanup(func() { callTimeout = old })
 	sp, err := newSocketpair()
 	assert.NilError(t, err)
 	t.Cleanup(func() { unix.Close(sp[1]) })
 	// a peer that reads nothing and answers nothing
 	c := newClient(sp[0])
+	c.callTimeout = 200 * time.Millisecond
 	go c.run()
 	t.Cleanup(c.shut)
 

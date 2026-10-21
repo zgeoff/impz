@@ -43,6 +43,10 @@ type Manager struct {
 	// killGrace is the package's killGrace; a test sets its own before it
 	// starts a session
 	killGrace time.Duration
+	// tapWait and lastWriteTimeout are the package's; a test sets its own
+	// before it starts a session
+	tapWait          time.Duration
+	lastWriteTimeout time.Duration
 	// recorded, when set, gets each retired run once record has kept or
 	// passed over it; a test sets it before it starts a session, to know
 	// when a run that ended late has been judged
@@ -69,7 +73,15 @@ type ended struct {
 }
 
 func NewManager(l *launch.Launcher, bootID string) *Manager {
-	return &Manager{launcher: l, bootID: bootID, killGrace: killGrace, sessions: make(map[string]*session), previous: make(map[string]ended)}
+	return &Manager{
+		launcher:         l,
+		bootID:           bootID,
+		killGrace:        killGrace,
+		tapWait:          tapWait,
+		lastWriteTimeout: lastWriteTimeout,
+		sessions:         make(map[string]*session),
+		previous:         make(map[string]ended),
+	}
 }
 
 // Attached returns the number of open session connections.
@@ -128,7 +140,7 @@ func (m *Manager) Serve(req *proto.Request, conn net.Conn, r *proto.Reader, w *p
 	m.attached.Add(1)
 	defer m.attached.Add(-1)
 
-	v := newViewer(conn, w)
+	v := newViewer(conn, w, m.lastWriteTimeout)
 	safe.Go("session "+req.GetSession()+" writer", v.run, func() { conn.Close() })
 	s, perr := m.attach(req, v)
 	if perr != nil {
@@ -154,7 +166,7 @@ func (m *Manager) serveTap(req *proto.Request, conn net.Conn, r *proto.Reader, w
 	if !ok {
 		return proto.ReplyError(w, m.noSession(req.GetSession()))
 	}
-	t := newViewer(conn, w)
+	t := newViewer(conn, w, m.lastWriteTimeout)
 	t.progress = s.tapProgress
 	safe.Go("session "+req.GetSession()+" tap", t.run, func() { conn.Close() })
 	if perr := s.tap(t, req.ResumeFrom); perr != nil {
@@ -245,7 +257,7 @@ func (m *Manager) find(req *proto.Request) (*session, bool, *proto.Error) {
 		return nil, false, proto.StartError(err, errors.Is(err, proc.ErrDown))
 	}
 	m.seq++
-	s = newSession(req.GetSession(), req, run{proc: p, master: master, generation: sysutil.RandomHex(16), seq: m.seq, bootID: m.bootID})
+	s = newSession(req.GetSession(), req, run{proc: p, master: master, generation: sysutil.RandomHex(16), seq: m.seq, bootID: m.bootID, tapWait: m.tapWait})
 	s.onDelivered = func() { m.removeIfOver(s) }
 	m.mu.Lock()
 	m.sessions[s.name] = s

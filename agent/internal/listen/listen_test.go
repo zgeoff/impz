@@ -236,11 +236,16 @@ func TestServeAgentNumbersWaitingClientsAndClosesThoseOverTheCap(t *testing.T) {
 	assert.Check(t, cmp.ErrorIs(readEnd(over), io.EOF))
 }
 
-func TestServeAgentClosesAClientTheHostNeverPairs(t *testing.T) {
-	old := pendingTimeout
-	pendingTimeout = 50 * time.Millisecond
-	t.Cleanup(func() { pendingTimeout = old })
+// A client impd never pairs has ten seconds before it is closed.
+func TestNewManagerClosesAnUnpairedClientAfterTenSeconds(t *testing.T) {
 	m := newManager(t, shortDir(t))
+
+	assert.Equal(t, m.pendingTimeout, 10*time.Second)
+}
+
+func TestServeAgentClosesAClientTheHostNeverPairs(t *testing.T) {
+	m := newManager(t, shortDir(t))
+	m.pendingTimeout = 50 * time.Millisecond
 	control, resp := listen(t, m)
 
 	client := dialSocket(t, resp.GetPath())

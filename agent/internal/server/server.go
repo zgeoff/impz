@@ -58,6 +58,15 @@ type Server struct {
 	frozen    bool
 	// poweringOff refuses freezes once poweroff has thawed for good.
 	poweringOff bool
+
+	// Tests set these to run without root, a disk or a real timer; nil is
+	// the real kernel call, time.AfterFunc and disk.WaitAndGrow.
+	rootIoctl   func(req uint) error
+	afterFunc   func(d time.Duration, fn func()) *time.Timer
+	waitAndGrow func(mountpoint string, target int64, timeout time.Duration) error
+	// autoThawFired runs as an auto-thaw callback starts, before it takes
+	// freezeMu
+	autoThawFired func()
 }
 
 // Listen backoff bounds. A snapshot restore resets the vsock transport; the

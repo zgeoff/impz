@@ -14,7 +14,7 @@ import (
 func TestAttachRefusesASessionWhoseExitAViewerGot(t *testing.T) {
 	s := newSession("job", &proto.Request{}, run{})
 	s.markDelivered()
-	v := newViewer(nil, nil)
+	v := newViewer(nil, nil, lastWriteTimeout)
 
 	err := s.attach(v, 80, 24, false, nil, nil)
 

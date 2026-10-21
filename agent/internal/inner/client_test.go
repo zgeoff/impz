@@ -62,18 +62,15 @@ func TestConnectFailsWhenTheInitDiesBeforeItIsReady(t *testing.T) {
 	p, died, _ := fakeInitProc(t)
 	died <- reaper.Status{Code: 2}
 
-	_, err := connect(p)
+	_, err := connect(p, readyTimeout)
 
 	assert.Error(t, err, "the inner init exited before it was ready: exit 2")
 }
 
 func TestConnectKillsAnInitThatIsNotReadyInTime(t *testing.T) {
-	old := readyTimeout
-	readyTimeout = 50 * time.Millisecond
-	t.Cleanup(func() { readyTimeout = old })
 	p, _, kills := fakeInitProc(t)
 
-	_, err := connect(p)
+	_, err := connect(p, 50*time.Millisecond)
 
 	assert.Check(t, cmp.Error(err, "the inner init was not ready after 50ms"))
 	assert.Check(t, cmp.Len(kills, 1), "the init was not killed")

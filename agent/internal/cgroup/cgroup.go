@@ -110,6 +110,9 @@ func NewDelegatedTree(parent string, controllers ...string) (*Tree, error) {
 type Group struct {
 	path string
 	dir  *os.File
+	// waitEmptyRead, when set, sees each read WaitEmpty makes; nil outside
+	// tests, which use it to know a read happened
+	waitEmptyRead func(populated bool, err error)
 }
 
 // New sweeps the ended leaves that have emptied, then makes and opens a new
@@ -233,8 +236,8 @@ func (g *Group) Kill() error {
 func (g *Group) WaitEmpty(deadline time.Time) bool {
 	for {
 		populated, err := Populated(g.path)
-		if waitEmptyRead != nil {
-			waitEmptyRead(populated, err)
+		if g.waitEmptyRead != nil {
+			g.waitEmptyRead(populated, err)
 		}
 		if err == nil && !populated {
 			return true
@@ -245,10 +248,6 @@ func (g *Group) WaitEmpty(deadline time.Time) bool {
 		time.Sleep(min(poll, time.Until(deadline)))
 	}
 }
-
-// waitEmptyRead, when set, sees each read WaitEmpty makes; nil outside
-// tests, which use it to know a read happened.
-var waitEmptyRead func(populated bool, err error)
 
 // Populated reports whether the cgroup at dir or any cgroup under it holds a
 // process, as its cgroup.events says.

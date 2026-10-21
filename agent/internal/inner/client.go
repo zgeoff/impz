@@ -21,9 +21,8 @@ import (
 var ErrDown = proc.ErrDown
 
 // callTimeout bounds a request to the inner init: one that hangs (a stat on
-// a dead FUSE mount, say) fails instead of holding its caller. A variable
-// for tests.
-var callTimeout = 30 * time.Second
+// a dead FUSE mount, say) fails instead of holding its caller.
+const callTimeout = 30 * time.Second
 
 // errNoAnswer is a request the inner init did not answer within callTimeout.
 var errNoAnswer = errors.New("the inner init did not answer")
@@ -45,6 +44,8 @@ type result struct {
 // proc.Runner: each Start is a spawn in the container.
 type client struct {
 	sock int
+	// callTimeout bounds each call
+	callTimeout time.Duration
 
 	writeMu sync.Mutex
 
@@ -59,10 +60,11 @@ type client struct {
 
 func newClient(sock int) *client {
 	return &client{
-		sock:    sock,
-		pending: make(map[uint64]*pendingCall),
-		waiters: make(map[int]chan reaper.Status),
-		down:    make(chan struct{}),
+		sock:        sock,
+		callTimeout: callTimeout,
+		pending:     make(map[uint64]*pendingCall),
+		waiters:     make(map[int]chan reaper.Status),
+		down:        make(chan struct{}),
 	}
 }
 
@@ -185,7 +187,7 @@ func (c *client) call(m message, fds []int, register func(reply message)) (messa
 		c.mu.Unlock()
 		return message{}, fmt.Errorf("%w: %v", ErrDown, err)
 	}
-	t := time.NewTimer(callTimeout)
+	t := time.NewTimer(c.callTimeout)
 	defer t.Stop()
 	select {
 	case r := <-ch:
@@ -207,7 +209,7 @@ func (c *client) call(m message, fds []int, register func(reply message)) (messa
 		}
 		return r.m, replyErr(r.m)
 	}
-	return message{}, fmt.Errorf("%s: %w after %s", m.Op, errNoAnswer, callTimeout)
+	return message{}, fmt.Errorf("%s: %w after %s", m.Op, errNoAnswer, c.callTimeout)
 }
 
 // Start spawns s in the container. Its pid is the container's pid for it.
@@ -330,13 +332,13 @@ func startInit(r *reaper.Reaper, agent string, cloneflags uintptr, cgroup *os.Fi
 		func() { unix.Close(pidfd) }), nil
 }
 
-// readyTimeout bounds the inner init's setup. A variable for tests.
-var readyTimeout = 30 * time.Second
+// readyTimeout bounds the inner init's setup.
+const readyTimeout = 30 * time.Second
 
 // connect starts a client on p's socket once the inner init is ready. When
-// the init dies first, or takes longer than readyTimeout, it kills the init
-// and closes the socket.
-func connect(p *initProc) (*client, error) {
+// the init dies first, or takes longer than timeout, it kills the init and
+// closes the socket.
+func connect(p *initProc, timeout time.Duration) (*client, error) {
 	c := newClient(p.sock)
 	ready := make(chan error, 1)
 	safe.Go("inner: ready", func() { ready <- c.waitReady() }, func() { ready <- errors.New("panic") })
@@ -351,8 +353,8 @@ func connect(p *initProc) (*client, error) {
 		read = true
 	case <-p.gone:
 		err = fmt.Errorf("the inner init exited before it was ready: %s", describe(p.status))
-	case <-time.After(readyTimeout):
-		err = fmt.Errorf("the inner init was not ready after %s", readyTimeout)
+	case <-time.After(timeout):
+		err = fmt.Errorf("the inner init was not ready after %s", timeout)
 	}
 	p.kill()
 	if !read {

@@ -25,9 +25,8 @@ const drainGrace = 500 * time.Millisecond
 
 // tapWait bounds how long a logged session's output waits for a tap
 // before the ring overwrites bytes no tap took: past it the session runs on,
-// and the bytes the ring drops are a gap in impd's log. A variable so tests
-// can shorten it.
-var tapWait = 5 * time.Second
+// and the bytes the ring drops are a gap in impd's log.
+const tapWait = 5 * time.Second
 
 // readSize is one read of the pty.
 const readSize = 32 << 10
@@ -98,7 +97,7 @@ type session struct {
 	phase    phase
 	// tapProgress wakes a waiting pump when a tap wrote output out
 	tapProgress chan struct{}
-	// tapWait is the package's, as the session started
+	// tapWait is the manager's, as the session started
 	tapWait    time.Duration
 	cols, rows uint16
 	// exit is set as the phase reaches phaseExited
@@ -115,6 +114,7 @@ type run struct {
 	generation string
 	seq        uint64
 	bootID     string
+	tapWait    time.Duration
 }
 
 func newSession(name string, req *proto.Request, r run) *session {
@@ -139,7 +139,7 @@ func newSession(name string, req *proto.Request, r run) *session {
 		raw:          newRing(ringSize),
 		taps:         make(map[*viewer]struct{}),
 		tapStart:     make(map[*viewer]uint64),
-		tapWait:      tapWait,
+		tapWait:      r.tapWait,
 		tapProgress:  make(chan struct{}, 1),
 		cols:         cols,
 		rows:         rows,

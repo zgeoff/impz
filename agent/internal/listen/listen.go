@@ -42,12 +42,12 @@ const (
 	// are closed at once
 	maxPending = 16
 
+	// pendingTimeout closes a client impd never paired
+	pendingTimeout = 10 * time.Second
+
 	agentSocket   = "agent.sock"
 	forwardSocket = "sock"
 )
-
-// pendingTimeout closes a client impd never paired. A variable for tests.
-var pendingTimeout = 10 * time.Second
 
 // Binder binds a socket as the image's user: dial.Dialer.
 type Binder interface {
@@ -62,6 +62,8 @@ type Manager struct {
 	binder Binder
 	// fsys is where the agent's own sockets go: the inner container's root
 	fsys fsroot.FS
+	// pendingTimeout closes a client impd never paired
+	pendingTimeout time.Duration
 
 	mu        sync.Mutex
 	listeners map[string]*listener
@@ -69,12 +71,13 @@ type Manager struct {
 
 func NewManager(agentRoot, forwardRoot string, image *imagecfg.Live, binder Binder, fsys fsroot.FS) *Manager {
 	return &Manager{
-		agentRoot:   agentRoot,
-		forwardRoot: forwardRoot,
-		image:       image,
-		binder:      binder,
-		fsys:        fsys,
-		listeners:   map[string]*listener{},
+		agentRoot:      agentRoot,
+		forwardRoot:    forwardRoot,
+		image:          image,
+		binder:         binder,
+		fsys:           fsys,
+		pendingTimeout: pendingTimeout,
+		listeners:      map[string]*listener{},
 	}
 }
 
@@ -93,6 +96,8 @@ type listener struct {
 	// inTmpfs: its socket file is on a tmpfs, which goes when the
 	// container does
 	inTmpfs bool
+
+	pendingTimeout time.Duration
 
 	mu      sync.Mutex
 	next    uint32
@@ -132,7 +137,7 @@ func (m *Manager) Serve(req *proto.Request, r *proto.Reader, w *proto.Writer) er
 // client until the host closes the connection. What it made goes with it.
 func (m *Manager) serve(r *proto.Reader, w *proto.Writer, open func(*listener) (*proto.Listening, error)) error {
 	id := sysutil.RandomHex(8)
-	l := &listener{id: id, w: w, pending: map[uint32]net.Conn{}}
+	l := &listener{id: id, w: w, pendingTimeout: m.pendingTimeout, pending: map[uint32]net.Conn{}}
 	resp, err := open(l)
 	if err != nil {
 		return proto.ReplyError(w, err)
@@ -391,7 +396,7 @@ func (l *listener) add(c net.Conn) (uint32, bool) {
 	l.next++
 	id := l.next
 	l.pending[id] = c
-	time.AfterFunc(pendingTimeout, func() {
+	time.AfterFunc(l.pendingTimeout, func() {
 		if c := l.take(id); c != nil {
 			c.Close()
 		}

@@ -263,34 +263,40 @@ func TestServeDialsAUnixSocketForARootImageInTheAgent(t *testing.T) {
 	h.requireOK(t)
 }
 
-// A symlink to a socket under the agent's own directory is refused. The
-// helper runs connectUnix, with the real impDir.
+// A symlink to a socket under the agent's own directory is refused.
 func TestConnectUnixRefusesASymlinkIntoTheAgentsDirectory(t *testing.T) {
+	t.Parallel()
 	dir := shortDir(t)
-	old := impDir
-	impDir = filepath.Join(dir, "imp")
-	t.Cleanup(func() { impDir = old })
-	assert.NilError(t, os.MkdirAll(impDir, 0o700))
-	target := listenUnix(t, impDir, "agent.sock")
+	ownDir := filepath.Join(dir, "imp")
+	assert.NilError(t, os.MkdirAll(ownDir, 0o700))
+	target := listenUnix(t, ownDir, "agent.sock")
 	link := filepath.Join(dir, "link.sock")
 	assert.NilError(t, os.Symlink(target, link))
 
-	_, err := connectUnix(link)
+	_, err := connectUnix(link, ownDir)
 
 	assert.Check(t, cmp.Equal(codeOf(t, err), proto.ErrBadRequest))
+}
+
+// A helper has seven seconds to answer: the five of the connect, and two for
+// its fork and exec.
+func TestNewDialerGivesAHelperSevenSeconds(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, testDialer("").helperTimeout, 7*time.Second)
 }
 
 // A helper that hangs is killed at the deadline; one that dies, answers
 // without a socket, or with a datagram socket fails the dial.
 func TestOpenUnixFailsTheDialWhenTheHelperMisbehaves(t *testing.T) {
-	old := helperTimeout
-	helperTimeout = 300 * time.Millisecond
-	t.Cleanup(func() { helperTimeout = old })
+	t.Parallel()
 	for _, address := range []string{"/hang", "/die", "/junk", "/datagram", "/no/such.sock"} {
 		t.Run(address, func(t *testing.T) {
+			d := testDialer("")
+			d.helperTimeout = 300 * time.Millisecond
 			started := time.Now()
 
-			_, err := testDialer("").openUnix(address)
+			_, err := d.openUnix(address)
 			took := time.Since(started)
 
 			assert.Check(t, cmp.Equal(codeOf(t, err), proto.ErrDialFailed))

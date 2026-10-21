@@ -24,8 +24,8 @@ const exitLinger = 2 * time.Second
 
 // lastWriteTimeout bounds the writes of a viewer that was taken over or
 // dropped: a host that stopped reading must not keep its connection, and the
-// goroutines behind it, forever. A variable so tests can shorten it.
-var lastWriteTimeout = 5 * time.Second
+// goroutines behind it, forever.
+const lastWriteTimeout = 5 * time.Second
 
 type frame struct {
 	typ     proto.Type
@@ -56,10 +56,13 @@ type viewer struct {
 	written atomic.Uint64
 	// progress, set before run for a tap, is signalled after each STDOUT write
 	progress chan struct{}
+	// lastWriteTimeout bounds the writes once the viewer is taken over or
+	// dropped
+	lastWriteTimeout time.Duration
 }
 
-func newViewer(conn net.Conn, w *proto.Writer) *viewer {
-	return &viewer{conn: conn, w: w, wake: make(chan struct{}, 1), done: make(chan struct{})}
+func newViewer(conn net.Conn, w *proto.Writer, lastWriteTimeout time.Duration) *viewer {
+	return &viewer{conn: conn, w: w, lastWriteTimeout: lastWriteTimeout, wake: make(chan struct{}, 1), done: make(chan struct{})}
 }
 
 // push queues f. It returns false, and queues nothing, when the viewer is
@@ -101,7 +104,7 @@ func (v *viewer) stop(last *frame, drop bool) bool {
 		v.queue = nil
 	}
 	if last != nil && last.typ != proto.TypeExit {
-		_ = v.conn.SetWriteDeadline(time.Now().Add(lastWriteTimeout))
+		_ = v.conn.SetWriteDeadline(time.Now().Add(v.lastWriteTimeout))
 	}
 	v.signal()
 	return true

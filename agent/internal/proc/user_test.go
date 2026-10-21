@@ -9,22 +9,27 @@ import (
 
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
+
+	"github.com/zgeoff/impz/agent/internal/fsroot"
 )
 
-// useAccounts points the account lookups at passwd and group files holding
-// the given contents, for the rest of the test.
-func useAccounts(t *testing.T, passwd, group string) {
+// useAccounts is a root whose /etc/passwd and /etc/group hold the given
+// contents. An empty group leaves /etc/group out.
+func useAccounts(t *testing.T, passwd, group string) fsroot.FS {
 	t.Helper()
 	dir := t.TempDir()
-	p, g := filepath.Join(dir, "passwd"), filepath.Join(dir, "group")
-	assert.NilError(t, os.WriteFile(p, []byte(passwd), 0o644))
-	assert.NilError(t, os.WriteFile(g, []byte(group), 0o644))
-	oldP, oldG := passwdPath, groupPath
-	passwdPath, groupPath = p, g
-	t.Cleanup(func() { passwdPath, groupPath = oldP, oldG })
+	assert.NilError(t, os.Mkdir(filepath.Join(dir, "etc"), 0o755))
+	assert.NilError(t, os.WriteFile(filepath.Join(dir, passwdPath), []byte(passwd), 0o644))
+	if group != "" {
+		assert.NilError(t, os.WriteFile(filepath.Join(dir, groupPath), []byte(group), 0o644))
+	}
+	root, err := fsroot.Open(dir)
+	assert.NilError(t, err)
+	t.Cleanup(func() { root.Close() })
+	return root
 }
 
-func TestLookupUserResolvesTheCredentialsAndHomeOfASpec(t *testing.T) {
+func TestLookupUserInResolvesTheCredentialsAndHomeOfASpec(t *testing.T) {
 	// imp is in docker and wheel, svc only in docker
 	const passwd = "root:x:0:0:root:/root:/bin/sh\n" +
 		"imp:x:1000:1000::/home/imp:/bin/bash\n" +
@@ -51,9 +56,9 @@ func TestLookupUserResolvesTheCredentialsAndHomeOfASpec(t *testing.T) {
 		{"4242:999", &syscall.Credential{Uid: 4242, Gid: 999, Groups: []uint32{}}, "/"},
 	} {
 		t.Run(tc.spec, func(t *testing.T) {
-			useAccounts(t, passwd, group)
+			fsys := useAccounts(t, passwd, group)
 
-			cred, home, err := LookupUser(tc.spec)
+			cred, home, err := LookupUserIn(fsys, tc.spec)
 
 			assert.NilError(t, err)
 			assert.Check(t, cmp.DeepEqual(cred, tc.cred))
@@ -62,12 +67,12 @@ func TestLookupUserResolvesTheCredentialsAndHomeOfASpec(t *testing.T) {
 	}
 }
 
-func TestLookupUserLeavesRootToInheritTheAgentsCredentials(t *testing.T) {
+func TestLookupUserInLeavesRootToInheritTheAgentsCredentials(t *testing.T) {
 	for _, spec := range []string{"", "root", "0"} {
 		t.Run("spec "+spec, func(t *testing.T) {
-			useAccounts(t, "root:x:0:0:root:/root:/bin/sh\n", "root:x:0:\n")
+			fsys := useAccounts(t, "root:x:0:0:root:/root:/bin/sh\n", "root:x:0:\n")
 
-			cred, home, err := LookupUser(spec)
+			cred, home, err := LookupUserIn(fsys, spec)
 
 			assert.NilError(t, err)
 			assert.Check(t, cmp.Nil(cred))
@@ -78,7 +83,7 @@ func TestLookupUserLeavesRootToInheritTheAgentsCredentials(t *testing.T) {
 
 // The error text is the EXEC_FAILED message the host shows. A failed lookup
 // gives no credential and no home, so it never falls back to root.
-func TestLookupUserFailsForASpecItCannotResolve(t *testing.T) {
+func TestLookupUserInFailsForASpecItCannotResolve(t *testing.T) {
 	for _, tc := range []struct {
 		name, spec, want string
 	}{
@@ -91,9 +96,9 @@ func TestLookupUserFailsForASpecItCannotResolve(t *testing.T) {
 		{name: "empty group", spec: "imp:", want: `user "imp:": empty user or group`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			useAccounts(t, "imp:x:1000:1000::/home/imp:/bin/bash\n", "imp:x:1000:\n")
+			fsys := useAccounts(t, "imp:x:1000:1000::/home/imp:/bin/bash\n", "imp:x:1000:\n")
 
-			cred, home, err := LookupUser(tc.spec)
+			cred, home, err := LookupUserIn(fsys, tc.spec)
 
 			assert.Check(t, cmp.Error(err, tc.want))
 			assert.Check(t, cmp.Nil(cred))
@@ -104,7 +109,7 @@ func TestLookupUserFailsForASpecItCannotResolve(t *testing.T) {
 
 // setresuid and setresgid read (uid_t)-1 as "leave unchanged", so an id
 // outside 0 to 2^32-2 would keep the agent's root.
-func TestLookupUserRejectsAnIDOutsideTheKernelsRange(t *testing.T) {
+func TestLookupUserInRejectsAnIDOutsideTheKernelsRange(t *testing.T) {
 	for _, tc := range []struct {
 		name, passwd, group, spec, want string
 	}{
@@ -118,9 +123,9 @@ func TestLookupUserRejectsAnIDOutsideTheKernelsRange(t *testing.T) {
 			want: `user "big": id 4294967295 is out of range`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			useAccounts(t, tc.passwd, tc.group)
+			fsys := useAccounts(t, tc.passwd, tc.group)
 
-			cred, home, err := LookupUser(tc.spec)
+			cred, home, err := LookupUserIn(fsys, tc.spec)
 
 			assert.Check(t, cmp.Error(err, tc.want))
 			assert.Check(t, cmp.Nil(cred))
@@ -129,21 +134,20 @@ func TestLookupUserRejectsAnIDOutsideTheKernelsRange(t *testing.T) {
 	}
 }
 
-func TestLookupUserGivesOnlyThePrimaryGroupWithoutAGroupFile(t *testing.T) {
-	useAccounts(t, "imp:x:1000:1000::/home/imp:/bin/bash\n", "")
-	groupPath = filepath.Join(t.TempDir(), "missing")
+func TestLookupUserInGivesOnlyThePrimaryGroupWithoutAGroupFile(t *testing.T) {
+	fsys := useAccounts(t, "imp:x:1000:1000::/home/imp:/bin/bash\n", "")
 
-	cred, _, err := LookupUser("imp")
+	cred, _, err := LookupUserIn(fsys, "imp")
 
 	assert.NilError(t, err)
 	assert.DeepEqual(t, cred.Groups, []uint32{1000})
 }
 
-func TestLookupUserReadsAGroupLineLongerThanTheScannerDefault(t *testing.T) {
+func TestLookupUserInReadsAGroupLineLongerThanTheScannerDefault(t *testing.T) {
 	members := strings.Repeat("someone,", 20000) + "imp"
-	useAccounts(t, "imp:x:1000:1000::/home/imp:/bin/bash\n", "big:x:4000:"+members+"\n")
+	fsys := useAccounts(t, "imp:x:1000:1000::/home/imp:/bin/bash\n", "big:x:4000:"+members+"\n")
 
-	cred, _, err := LookupUser("imp")
+	cred, _, err := LookupUserIn(fsys, "imp")
 
 	assert.NilError(t, err)
 	assert.DeepEqual(t, cred.Groups, []uint32{1000, 4000})

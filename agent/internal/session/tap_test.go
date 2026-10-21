@@ -198,8 +198,8 @@ func TestTapAfterTheExitLeavesTheExitForTheNextViewer(t *testing.T) {
 }
 
 func TestTapResumesExactlyAtAnOffsetTheRingHolds(t *testing.T) {
-	shortenTapWait(t, 100*time.Millisecond)
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
+	m.tapWait = 100 * time.Millisecond
 	total := uint64(ringSize + 1000)
 	out := startLoggedQuiet(t, m, "job", "head -c "+strconv.FormatUint(total, 10)+" /dev/zero | tr '\\0' x", total)
 
@@ -214,8 +214,8 @@ func TestTapResumesExactlyAtAnOffsetTheRingHolds(t *testing.T) {
 
 // A resume below the ring's start is a gap up to it.
 func TestTapResumeBelowTheRingStartIsAGap(t *testing.T) {
-	shortenTapWait(t, 100*time.Millisecond)
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
+	m.tapWait = 100 * time.Millisecond
 	total := uint64(ringSize + 1000)
 	out := startLoggedQuiet(t, m, "job", "head -c "+strconv.FormatUint(total, 10)+" /dev/zero | tr '\\0' x", total)
 
@@ -227,8 +227,8 @@ func TestTapResumeBelowTheRingStartIsAGap(t *testing.T) {
 }
 
 func TestTapResumePastTheEndIsInvalid(t *testing.T) {
-	shortenTapWait(t, 100*time.Millisecond)
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
+	m.tapWait = 100 * time.Millisecond
 	total := uint64(ringSize + 1000)
 	out := startLoggedQuiet(t, m, "job", "head -c "+strconv.FormatUint(total, 10)+" /dev/zero | tr '\\0' x", total)
 
@@ -259,8 +259,8 @@ func TestTapOfASessionWithoutALogIsABadRequest(t *testing.T) {
 // A tap that stops reading is dropped as a slow viewer is; the viewer keeps
 // its live output.
 func TestTapThatStopsReadingIsDroppedAsSlow(t *testing.T) {
-	shortenTapWait(t, 100*time.Millisecond)
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
+	m.tapWait = 100 * time.Millisecond
 	viewer := startLogged(t, m, "main", "while :; do echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; done")
 	viewer.started(t)
 	drained := make(chan struct{})
@@ -307,13 +307,6 @@ func TestTapThatStopsReadingIsDroppedAsSlow(t *testing.T) {
 	}
 }
 
-func shortenTapWait(t *testing.T, d time.Duration) {
-	t.Helper()
-	old := tapWait
-	tapWait = d
-	t.Cleanup(func() { tapWait = old })
-}
-
 // A logged session's output waits for its first tap rather than let the
 // ring drop bytes no tap took.
 func TestLoggedSessionHoldsItsOutputWithinTheRingUntilATap(t *testing.T) {
@@ -350,8 +343,8 @@ func TestTapOfAHeldLoggedSessionReadsItsOutputFromZero(t *testing.T) {
 // With no tap within tapWait, the session runs on untapped: all its output
 // passes through the ring.
 func TestLoggedSessionRunsOnWithoutATapPastTheTapWait(t *testing.T) {
-	shortenTapWait(t, 100*time.Millisecond)
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
+	m.tapWait = 100 * time.Millisecond
 	total := uint64(4 * ringSize)
 
 	startLoggedQuiet(t, m, "job", "head -c "+strconv.FormatUint(total, 10)+" /dev/zero | tr '\\0' x", total)

@@ -29,9 +29,8 @@ import (
 const HelperCommand = "dial-unix"
 
 // helperTimeout bounds the wait for the helper's answer: its connect never
-// blocks, so the margin over dialTimeout covers the fork and exec. A
-// variable for tests.
-var helperTimeout = dialTimeout + 2*time.Second
+// blocks, so the margin over dialTimeout covers the fork and exec.
+const helperTimeout = dialTimeout + 2*time.Second
 
 // The helper's one-byte answer, then a message for an error.
 const (
@@ -48,12 +47,14 @@ type Dialer struct {
 	// cred, when set, replaces user: tests set credentials without
 	// /etc/passwd
 	cred *syscall.Credential
+	// helperTimeout bounds each helper's answer and its exit
+	helperTimeout time.Duration
 }
 
 // NewDialer dials unix sockets as the image's USER, through helpers that
 // runner starts where the sockets are: in the inner container.
 func NewDialer(runner proc.Runner, image *imagecfg.Live) *Dialer {
-	return &Dialer{runner: runner, image: image}
+	return &Dialer{runner: runner, image: image, helperTimeout: helperTimeout}
 }
 
 // openUnix connects to the socket at address as the dialer's user. Root
@@ -104,28 +105,28 @@ func (d *Dialer) runHelper(args []string, max int, failCode string) ([]int, erro
 		return nil, &proto.Error{Code: failCode, Message: "start the helper: " + err.Error()}
 	}
 
-	fds, err := receiveFds(parent, helperTimeout, max, failCode)
+	fds, err := receiveFds(parent, d.helperTimeout, max, failCode)
 	if err != nil {
 		// A helper that hangs must not outlive its request; the reaper reaps
 		// it. Kill reaches only this helper, never a process that reused its
 		// pid.
 		_ = p.Kill()
-		waitHelper(p)
+		waitHelper(p, d.helperTimeout)
 		return nil, err
 	}
 	// The helper holds its own copy of what it sent until it exits: a
 	// listener closed before then would still accept.
-	waitHelper(p)
+	waitHelper(p, d.helperTimeout)
 	return fds, nil
 }
 
 // waitHelper waits for a helper to exit, and kills one that outstays
-// helperTimeout.
-func waitHelper(p *proc.Process) {
+// timeout.
+func waitHelper(p *proc.Process, timeout time.Duration) {
 	select {
 	case <-p.Done:
 		return
-	case <-time.After(helperTimeout):
+	case <-time.After(timeout):
 	}
 	_ = p.Kill()
 	<-p.Done
@@ -219,8 +220,9 @@ func fileConn(fd int, address string) (net.Conn, error) {
 
 // connectUnix connects to the socket at address as the calling process. It
 // opens the path with O_PATH and connects through /proc/self/fd, so the path
-// it checks against impDir is the one it connects to.
-func connectUnix(address string) (int, error) {
+// it checks against ownDir, the agent's own sockets, is the one it connects
+// to.
+func connectUnix(address, ownDir string) (int, error) {
 	pathFd, err := unix.Open(address, unix.O_PATH|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return -1, &proto.Error{Code: proto.ErrDialFailed, Message: fmt.Sprintf("open %s: %v", address, err)}
@@ -235,7 +237,7 @@ func connectUnix(address string) (int, error) {
 	if err != nil {
 		return -1, &proto.Error{Code: proto.ErrDialFailed, Message: err.Error()}
 	}
-	if real == impDir || strings.HasPrefix(real, impDir+"/") {
+	if real == ownDir || strings.HasPrefix(real, ownDir+"/") {
 		return -1, &proto.Error{Code: proto.ErrBadRequest, Message: address + " leads to the agent's own sockets"}
 	}
 
@@ -254,7 +256,7 @@ func connectUnix(address string) (int, error) {
 // RunHelper is `imp-agent dial-unix <path>`: it connects to path as this
 // process's user and answers on fd 0 with the socket or the error.
 func RunHelper(address string) error {
-	fd, err := connectUnix(address)
+	fd, err := connectUnix(address, impDir)
 	if err != nil {
 		return answer(nil, err)
 	}

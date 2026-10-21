@@ -158,7 +158,7 @@ func TestWaitEmptyReturnsOnceTheLeafEmpties(t *testing.T) {
 	assert.NilError(t, os.WriteFile(events, []byte("populated 1\nfrozen 0\n"), 0o600))
 	// the first read must see the leaf populated before it empties
 	reads := make(chan bool, 1)
-	waitEmptyRead = func(populated bool, err error) {
+	g.waitEmptyRead = func(populated bool, err error) {
 		if err != nil {
 			return
 		}
@@ -167,15 +167,13 @@ func TestWaitEmptyReturnsOnceTheLeafEmpties(t *testing.T) {
 		default:
 		}
 	}
-	t.Cleanup(func() { waitEmptyRead = nil })
 	emptied := make(chan bool, 1)
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
 		emptied <- g.WaitEmpty(time.Now().Add(5 * time.Second))
 	}()
-	// runs before the hook is cleared: it empties the leaf, so WaitEmpty
-	// ends after a failure too, and joins it
+	// empties the leaf, so WaitEmpty ends after a failure too, and joins it
 	t.Cleanup(func() {
 		os.WriteFile(events, []byte("populated 0\nfrozen 0\n"), 0o600)
 		select {

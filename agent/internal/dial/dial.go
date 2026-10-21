@@ -21,9 +21,8 @@ import (
 const dialTimeout = 5 * time.Second
 
 // impDir holds the agent's own sockets, such as forwarded ssh-agents. impd
-// refuses the path, and connectUnix refuses a symlink that leads there. A
-// variable for tests.
-var impDir = "/run/imp"
+// refuses the path, and connectUnix refuses a symlink that leads there.
+const impDir = "/run/imp"
 
 // chunk is the most the relay reads from the target before it writes a frame.
 const chunk = 32 << 10

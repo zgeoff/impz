@@ -21,40 +21,55 @@ const ext4ResizeFS = 0x40086610
 
 const pollInterval = 20 * time.Millisecond
 
-// SizePath is the user disk's size in 512-byte sectors.
-var SizePath = "/sys/block/vda/size"
-
-// DevicePath is the user disk, whose ext4 superblock holds the filesystem's
-// size in blocks.
-var DevicePath = "/dev/vda"
-
-// resizeFS and blockSize are variables so tests can run without an ext4 root.
-var (
-	resizeFS  = ioctlResize
-	blockSize = statBlockSize
+// The user disk: its size in 512-byte sectors, and the device, whose ext4
+// superblock holds the filesystem's size in blocks.
+const (
+	sizePath   = "/sys/block/vda/size"
+	devicePath = "/dev/vda"
 )
+
+// device is a block device and the ext4 filesystem mounted from it.
+type device struct {
+	sizePath   string
+	devicePath string
+	resizeFS   func(mountpoint string, blocks uint64) error
+	blockSize  func(mountpoint string) (int64, error)
+}
+
+// userDisk is the guest's user disk.
+func userDisk() *device {
+	return &device{sizePath: sizePath, devicePath: devicePath, resizeFS: ioctlResize, blockSize: statBlockSize}
+}
 
 // Grow resizes the ext4 filesystem mounted at mountpoint to fill the device.
 func Grow(mountpoint string) error {
-	bytes, err := readDeviceBytes()
-	if err != nil {
-		return err
-	}
-	return growTo(mountpoint, bytes)
+	return userDisk().grow(mountpoint)
 }
 
 // WaitAndGrow waits until the device reports at least target bytes, then
 // grows the filesystem at mountpoint. After the host changes the drive, the
 // guest reads the new capacity on its own time.
 func WaitAndGrow(mountpoint string, target int64, timeout time.Duration) error {
+	return userDisk().waitAndGrow(mountpoint, target, timeout)
+}
+
+func (d *device) grow(mountpoint string) error {
+	bytes, err := d.readBytes()
+	if err != nil {
+		return err
+	}
+	return d.growTo(mountpoint, bytes)
+}
+
+func (d *device) waitAndGrow(mountpoint string, target int64, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
-		bytes, err := readDeviceBytes()
+		bytes, err := d.readBytes()
 		if err != nil {
 			return err
 		}
 		if bytes >= target {
-			return growTo(mountpoint, bytes)
+			return d.growTo(mountpoint, bytes)
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("the disk is %d bytes after %s, not %d", bytes, timeout, target)
@@ -66,29 +81,29 @@ func WaitAndGrow(mountpoint string, target int64, timeout time.Duration) error {
 // growTo skips the resize when the filesystem fills the device already: the
 // ioctl keeps the size then, but flushes the journal all the same, and that
 // held up every boot. A superblock it cannot read leaves the call to ext4.
-func growTo(mountpoint string, bytes int64) error {
-	size, err := blockSize(mountpoint)
+func (d *device) growTo(mountpoint string, bytes int64) error {
+	size, err := d.blockSize(mountpoint)
 	if err != nil {
 		return err
 	}
 	blocks := uint64(bytes / size)
-	if have, err := readFSBlocks(DevicePath); err == nil && have == blocks {
+	if have, err := readFSBlocks(d.devicePath); err == nil && have == blocks {
 		return nil
 	}
-	if err := resizeFS(mountpoint, blocks); err != nil {
+	if err := d.resizeFS(mountpoint, blocks); err != nil {
 		return fmt.Errorf("EXT4_IOC_RESIZE_FS to %d bytes: %w", bytes, err)
 	}
 	return nil
 }
 
-func readDeviceBytes() (int64, error) {
-	raw, err := os.ReadFile(SizePath)
+func (d *device) readBytes() (int64, error) {
+	raw, err := os.ReadFile(d.sizePath)
 	if err != nil {
 		return 0, err
 	}
 	sectors, err := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", SizePath, err)
+		return 0, fmt.Errorf("%s: %w", d.sizePath, err)
 	}
 	return sectors * 512, nil
 }

@@ -51,6 +51,8 @@ type Manager struct {
 	rootOf    func(pid int) string
 	// firstBackoff is a restart's first wait, minBackoff outside tests
 	firstBackoff time.Duration
+	// readyTimeout bounds each init's setup
+	readyTimeout time.Duration
 
 	mu      sync.Mutex
 	current *client
@@ -77,6 +79,7 @@ func New(r *reaper.Reaper, cfg Config) *Manager {
 		cfg:          cfg,
 		cgroupDir:    CgroupDir,
 		firstBackoff: minBackoff,
+		readyTimeout: readyTimeout,
 		startInit: func(cgroup *os.File) (*initProc, error) {
 			return startInit(r, AgentBinary,
 				syscall.CLONE_NEWNS|syscall.CLONE_NEWPID|syscall.CLONE_NEWCGROUP, cgroup, cfg.env())
@@ -137,7 +140,7 @@ func (m *Manager) tryStart() error {
 	if err != nil {
 		return err
 	}
-	c, err := connect(p)
+	c, err := connect(p, m.readyTimeout)
 	if err != nil {
 		m.cleanCgroup()
 		return err

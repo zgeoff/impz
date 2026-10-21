@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/sys/unix"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 
 	"github.com/zgeoff/impz/agent/internal/proc"
 	"github.com/zgeoff/impz/agent/internal/reaper"
@@ -56,6 +57,7 @@ func testManager(t *testing.T, gate <-chan struct{}, entered chan<- struct{}) (*
 		cgroupDir:    t.TempDir(),
 		rootOf:       func(int) string { return root },
 		firstBackoff: minBackoff,
+		readyTimeout: readyTimeout,
 	}
 	m.startInit = func(*os.File) (*initProc, error) {
 		if entered != nil {
@@ -156,11 +158,13 @@ func TestARestartRunsOnDownThenOnUp(t *testing.T) {
 	assert.DeepEqual(t, m.Status(), Status{Up: true, Restarts: 1})
 }
 
-// A restart waits one second first, doubling up to 30 s.
-func TestNewStartsTheRestartBackoffAtOneSecond(t *testing.T) {
+// A restart waits one second first, doubling up to 30 s, and an init has
+// 30 seconds to set up.
+func TestNewStartsTheRestartBackoffAtOneSecondAndGivesAnInitThirtySeconds(t *testing.T) {
 	m := New(testReaper, Config{})
 
-	assert.Equal(t, m.firstBackoff, time.Second)
+	assert.Check(t, cmp.Equal(m.firstBackoff, time.Second))
+	assert.Check(t, cmp.Equal(m.readyTimeout, 30*time.Second))
 }
 
 func TestAStopDuringAStartKillsTheNewInit(t *testing.T) {

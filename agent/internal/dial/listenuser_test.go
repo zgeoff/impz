@@ -113,21 +113,20 @@ func TestCheckListenAddressRefusesABadAddress(t *testing.T) {
 // The directory is resolved before the check, so a symlink in the path
 // cannot lead under the agent's own directory.
 func TestBindSocketRefusesAPathUnderTheAgentsDirectory(t *testing.T) {
+	t.Parallel()
 	dir := shortDir(t)
-	old := impDir
-	impDir = filepath.Join(dir, "imp")
-	t.Cleanup(func() { impDir = old })
-	assert.NilError(t, os.MkdirAll(filepath.Join(impDir, "ssh-agent"), 0o700))
+	ownDir := filepath.Join(dir, "imp")
+	assert.NilError(t, os.MkdirAll(filepath.Join(ownDir, "ssh-agent"), 0o700))
 	link := filepath.Join(dir, "link")
-	assert.NilError(t, os.Symlink(filepath.Join(impDir, "ssh-agent"), link))
+	assert.NilError(t, os.Symlink(filepath.Join(ownDir, "ssh-agent"), link))
 	for _, tc := range []struct {
 		name, path string
 	}{
 		{name: "through a symlink", path: filepath.Join(link, "x.sock")},
-		{name: "directly", path: filepath.Join(impDir, "x.sock")},
+		{name: "directly", path: filepath.Join(ownDir, "x.sock")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := bindSocket("unix", tc.path)
+			_, err := bindSocket("unix", tc.path, ownDir)
 
 			assert.Check(t, cmp.Equal(codeOf(t, err), proto.ErrBadRequest))
 		})
@@ -138,7 +137,7 @@ func TestBindSocketNamesAMissingDirectory(t *testing.T) {
 	t.Parallel()
 	missing := filepath.Join(t.TempDir(), "no", "such")
 
-	_, err := bindSocket("unix", filepath.Join(missing, "app.sock"))
+	_, err := bindSocket("unix", filepath.Join(missing, "app.sock"), impDir)
 
 	var pe *proto.Error
 	assert.Assert(t, errors.As(err, &pe), "got %v, want a protocol error", err)

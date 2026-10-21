@@ -329,8 +329,8 @@ func TestServeHandsTheSessionToANewViewerAndDetachesTheOldOne(t *testing.T) {
 // A viewer whose host stopped reading, but never closed, does not keep a
 // new viewer out.
 func TestServeHandsTheSessionOnFromAHalfOpenViewer(t *testing.T) {
-	shortenLastWrite(t)
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
+	m.lastWriteTimeout = 100 * time.Millisecond
 	guest, conn := net.Pipe()
 	stuck := &host{conn: conn}
 	stuck.served = runServe(t, m, &proto.Request{Op: proto.OpExec, Session: new("main"), Tty: new(true), Argv: []string{"sh", "-c", "echo ready; while read l; do echo \"said $l\"; done"}}, guest, conn)
@@ -344,13 +344,6 @@ func TestServeHandsTheSessionOnFromAHalfOpenViewer(t *testing.T) {
 
 	// the stuck connection's writes time out, and its Serve returns
 	stuck.waitServed(t)
-}
-
-func shortenLastWrite(t *testing.T) {
-	t.Helper()
-	saved := lastWriteTimeout
-	lastWriteTimeout = 100 * time.Millisecond
-	t.Cleanup(func() { lastWriteTimeout = saved })
 }
 
 func TestServeRecordsTheExitOfADetachedSession(t *testing.T) {
@@ -442,11 +435,15 @@ func TestKillRefusesASessionThatIsAlreadyKilled(t *testing.T) {
 	assert.Check(t, cmp.Equal(pe.Code, proto.ErrNoSession))
 }
 
-// A killed session's process has two seconds between SIGHUP and SIGKILL.
-func TestNewManagerGivesAKilledSessionTwoSecondsBeforeSIGKILL(t *testing.T) {
+// A killed session's process has two seconds between SIGHUP and SIGKILL. A
+// logged session's output waits five seconds for a tap, and a viewer taken
+// over or dropped has five seconds for its last writes.
+func TestNewManagerTakesTheKillGraceTapWaitAndLastWriteTimeout(t *testing.T) {
 	m := NewManager(launch.New(&proc.Direct{Reaper: testReaper}, imagecfg.NewLive(imagecfg.Config{}), nil), "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 
-	assert.Equal(t, m.killGrace, 2*time.Second)
+	assert.Check(t, cmp.Equal(m.killGrace, 2*time.Second))
+	assert.Check(t, cmp.Equal(m.tapWait, 5*time.Second))
+	assert.Check(t, cmp.Equal(m.lastWriteTimeout, 5*time.Second))
 }
 
 // A process that ignores SIGHUP gets SIGKILL after the kill grace.

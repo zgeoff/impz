@@ -16,8 +16,8 @@ import (
 	"github.com/zgeoff/impz/agent/internal/fsroot"
 )
 
-// The account files. Variables so tests can point them at fixtures.
-var (
+// The account files.
+const (
 	passwdPath = "/etc/passwd"
 	groupPath  = "/etc/group"
 )
