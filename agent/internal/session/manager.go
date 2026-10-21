@@ -134,7 +134,7 @@ func (m *Manager) Serve(req *proto.Request, conn net.Conn, r *proto.Reader, w *p
 	if perr != nil {
 		v.stop(nil, false)
 		<-v.done
-		return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: perr})
+		return proto.ReplyError(w, perr)
 	}
 
 	input(s, v, r)
@@ -152,7 +152,7 @@ func (m *Manager) serveTap(req *proto.Request, conn net.Conn, r *proto.Reader, w
 	s, ok := m.sessions[req.GetSession()]
 	m.mu.Unlock()
 	if !ok {
-		return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: m.noSession(req.GetSession())})
+		return proto.ReplyError(w, m.noSession(req.GetSession()))
 	}
 	t := newViewer(conn, w)
 	t.progress = s.tapProgress
@@ -160,7 +160,7 @@ func (m *Manager) serveTap(req *proto.Request, conn net.Conn, r *proto.Reader, w
 	if perr := s.tap(t, req.ResumeFrom); perr != nil {
 		t.stop(nil, false)
 		<-t.done
-		return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: perr})
+		return proto.ReplyError(w, perr)
 	}
 	// a tap sends nothing; reading finds the connection's end
 	for {

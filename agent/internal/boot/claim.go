@@ -72,7 +72,7 @@ func serveParked(c net.Conn, apply func(*proto.Claim) error) (*proto.Claim, bool
 	}
 	req := &proto.Request{}
 	if err := proto.Unmarshal(f.Payload, req); err != nil {
-		w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: &proto.Error{Code: proto.ErrBadRequest, Message: err.Error()}})
+		proto.ReplyError(w, &proto.Error{Code: proto.ErrBadRequest, Message: err.Error()})
 		return nil, false
 	}
 	switch req.Op {
@@ -83,18 +83,19 @@ func serveParked(c net.Conn, apply func(*proto.Claim) error) (*proto.Claim, bool
 		return nil, false
 	case proto.OpClaim:
 		if req.Claim == nil || req.Claim.Hostname == "" || req.Claim.Ip == "" {
-			w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: &proto.Error{Code: proto.ErrBadRequest, Message: "claim needs a hostname and an ip"}})
+			proto.ReplyError(w, &proto.Error{Code: proto.ErrBadRequest, Message: "claim needs a hostname and an ip"})
 			return nil, false
 		}
 		if err := apply(req.Claim); err != nil {
 			log.Printf("boot: claim: %v", err)
-			w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: &proto.Error{Code: proto.ErrInternal, Message: err.Error()}})
+			// INTERNAL even for a coded error: the claim failed, not the request
+			proto.ReplyError(w, &proto.Error{Code: proto.ErrInternal, Message: err.Error()})
 			return nil, false
 		}
 		w.WriteMessage(proto.TypeResponse, &proto.OK{Ok: true})
 		return req.Claim, true
 	default:
-		w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: errNotParked})
+		proto.ReplyError(w, errNotParked)
 		return nil, false
 	}
 }

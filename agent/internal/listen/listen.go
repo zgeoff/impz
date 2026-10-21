@@ -121,10 +121,10 @@ func (m *Manager) Serve(req *proto.Request, r *proto.Reader, w *proto.Writer) er
 			return m.openBound(l, req.GetNetwork(), req.GetAddress())
 		})
 	default:
-		return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: &proto.Error{
+		return proto.ReplyError(w, &proto.Error{
 			Code:    proto.ErrBadRequest,
 			Message: fmt.Sprintf("network must be tcp or unix, got %q", req.GetNetwork()),
-		}})
+		})
 	}
 }
 
@@ -135,7 +135,7 @@ func (m *Manager) serve(r *proto.Reader, w *proto.Writer, open func(*listener) (
 	l := &listener{id: id, w: w, pending: map[uint32]net.Conn{}}
 	resp, err := open(l)
 	if err != nil {
-		return replyErr(w, err)
+		return proto.ReplyError(w, err)
 	}
 	m.mu.Lock()
 	m.listeners[id] = l
@@ -171,14 +171,6 @@ func (m *Manager) serve(r *proto.Reader, w *proto.Writer, open func(*listener) (
 	}
 }
 
-func replyErr(w *proto.Writer, err error) error {
-	var pe *proto.Error
-	if !errors.As(err, &pe) {
-		pe = &proto.Error{Code: proto.ErrInternal, Message: err.Error()}
-	}
-	return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: pe})
-}
-
 // Accept serves an agent.accept connection: it takes the client the host
 // named and relays it. A client already closed or timed out is NO_CONNECTION.
 func (m *Manager) Accept(req *proto.Request, r *proto.Reader, w *proto.Writer) error {
@@ -191,10 +183,10 @@ func (m *Manager) Accept(req *proto.Request, r *proto.Reader, w *proto.Writer) e
 		c = l.take(req.GetConnection())
 	}
 	if c == nil {
-		return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: &proto.Error{
+		return proto.ReplyError(w, &proto.Error{
 			Code:    proto.ErrNoConnection,
 			Message: fmt.Sprintf("no waiting connection %d on listener %q", req.GetConnection(), req.GetListener()),
-		}})
+		})
 	}
 	defer c.Close()
 	if err := w.WriteMessage(proto.TypeResponse, &proto.OK{Ok: true}); err != nil {

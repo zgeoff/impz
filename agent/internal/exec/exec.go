@@ -88,9 +88,7 @@ func (m *Manager) Serve(req *proto.Request, r *proto.Reader, w *proto.Writer) er
 
 	s, err := m.start(req)
 	if err != nil {
-		return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{
-			Error: proto.StartError(err, errors.Is(err, proc.ErrDown)),
-		})
+		return proto.ReplyError(w, proto.StartError(err, errors.Is(err, proc.ErrDown)))
 	}
 	if s.group != nil {
 		defer m.cgroups.Release(s.group)

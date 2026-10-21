@@ -114,12 +114,12 @@ func (s *Server) handle(c net.Conn) {
 		return
 	}
 	if f.Type != proto.TypeRequest {
-		replyErr(w, proto.ErrBadRequest, "first frame must be REQUEST, got "+f.Type.String())
+		proto.ReplyError(w, &proto.Error{Code: proto.ErrBadRequest, Message: "first frame must be REQUEST, got " + f.Type.String()})
 		return
 	}
 	req := &proto.Request{}
 	if err := proto.Unmarshal(f.Payload, req); err != nil {
-		replyErr(w, proto.ErrBadRequest, err.Error())
+		proto.ReplyError(w, &proto.Error{Code: proto.ErrBadRequest, Message: err.Error()})
 		return
 	}
 
@@ -173,11 +173,7 @@ func (s *Server) handle(c net.Conn) {
 	}
 	resp, err := s.safeUnary(req)
 	if err != nil {
-		var pe *proto.Error
-		if !errors.As(err, &pe) {
-			pe = &proto.Error{Code: proto.ErrInternal, Message: err.Error()}
-		}
-		w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: pe})
+		proto.ReplyError(w, err)
 		return
 	}
 	w.WriteMessage(proto.TypeResponse, resp)
@@ -256,14 +252,10 @@ func (s *Server) unary(req *proto.Request) (protoreflect.ProtoMessage, error) {
 // agent's world has no accounts, and a session would outlive the caller.
 func (s *Server) serveOuter(req *proto.Request, r *proto.Reader, w *proto.Writer) error {
 	if req.GetSession() != "" {
-		return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{
-			Error: &proto.Error{Code: proto.ErrBadRequest, Message: "an outer exec takes no session"},
-		})
+		return proto.ReplyError(w, &proto.Error{Code: proto.ErrBadRequest, Message: "an outer exec takes no session"})
 	}
 	if req.GetUser() != "" && req.GetUser() != "root" && req.GetUser() != "0" {
-		return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{
-			Error: &proto.Error{Code: proto.ErrBadRequest, Message: "an outer exec runs as root"},
-		})
+		return proto.ReplyError(w, &proto.Error{Code: proto.ErrBadRequest, Message: "an outer exec runs as root"})
 	}
 	return s.Outer.Serve(req, r, w)
 }
@@ -284,14 +276,10 @@ func (s *Server) serveLogs(req *proto.Request, r *proto.Reader, w *proto.Writer)
 	err := s.Services.Logs(req.GetService(), logReq, w, done)
 	var pe *proto.Error
 	if errors.As(err, &pe) {
-		w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: pe})
+		proto.ReplyError(w, pe)
 	} else if err != nil {
 		log.Printf("services.logs %s: %v", req.GetService(), err)
 	}
-}
-
-func replyErr(w *proto.Writer, code, msg string) {
-	w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: &proto.Error{Code: code, Message: msg}})
 }
 
 // BuildPing reports the uptime from CLOCK_BOOTTIME, or none when the clock

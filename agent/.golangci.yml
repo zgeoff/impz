@@ -16,6 +16,7 @@ linters:
       exclude-functions:
         - (*github.com/zgeoff/impz/agent/internal/proto.Writer).Write
         - (*github.com/zgeoff/impz/agent/internal/proto.Writer).WriteMessage
+        - github.com/zgeoff/impz/agent/internal/proto.ReplyError
     gosec:
       excludes:
         # errcheck checks unhandled errors

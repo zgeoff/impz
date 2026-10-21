@@ -40,7 +40,7 @@ type halfCloser interface {
 func (d *Dialer) Serve(req *proto.Request, r *proto.Reader, w *proto.Writer) error {
 	target, err := d.open(req)
 	if err != nil {
-		return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: toProtoError(err)})
+		return proto.ReplyError(w, err)
 	}
 	defer target.Close()
 	if err := w.WriteMessage(proto.TypeResponse, &proto.OK{Ok: true}); err != nil {
@@ -159,12 +159,4 @@ func pumpIn(r *proto.Reader, target net.Conn, halfClosed chan<- struct{}) error 
 			close(halfClosed)
 		}
 	}
-}
-
-func toProtoError(err error) *proto.Error {
-	var pe *proto.Error
-	if errors.As(err, &pe) {
-		return pe
-	}
-	return &proto.Error{Code: proto.ErrInternal, Message: err.Error()}
 }
