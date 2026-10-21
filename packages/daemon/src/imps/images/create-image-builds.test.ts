@@ -10,6 +10,7 @@ import {
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
@@ -648,17 +649,18 @@ test('it returns a row that still exists when an eviction reaches a same-digest 
     gate.release();
   });
 
-  const exports = { count: 0 };
+  const exportHooks = buildStubAnswerQueue([
+    () => {},
+    () => {
+      gate.arm();
+    },
+  ]);
 
   const builder = buildStubImageBuilder({
     exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     onExport: () => {
-      exports.count += 1;
-
-      if (exports.count === 2) {
-        gate.arm();
-      }
+      exportHooks.next()();
 
       return Promise.resolve();
     },
@@ -820,17 +822,18 @@ test('it keeps an image while a build of another name publishes its digest', asy
     gate.release();
   });
 
-  const exports = { count: 0 };
+  const exportHooks = buildStubAnswerQueue([
+    () => {},
+    () => {
+      gate.arm();
+    },
+  ]);
 
   const builder = buildStubImageBuilder({
     exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     onExport: () => {
-      exports.count += 1;
-
-      if (exports.count === 2) {
-        gate.arm();
-      }
+      exportHooks.next()();
 
       return Promise.resolve();
     },
@@ -1318,17 +1321,18 @@ test('it keeps the rootfs when an image rm runs while a build of its digest is b
     gate.release();
   });
 
-  const exports = { count: 0 };
+  const exportHooks = buildStubAnswerQueue([
+    () => {},
+    () => {
+      gate.arm();
+    },
+  ]);
 
   const builder = buildStubImageBuilder({
     exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     onExport: () => {
-      exports.count += 1;
-
-      if (exports.count === 2) {
-        gate.arm();
-      }
+      exportHooks.next()();
 
       return Promise.resolve();
     },
@@ -1395,17 +1399,18 @@ test("it removes that rootfs after all when the build's row then fails", async (
     gate.release();
   });
 
-  const exports = { count: 0 };
+  const exportHooks = buildStubAnswerQueue([
+    () => {},
+    () => {
+      gate.arm();
+    },
+  ]);
 
   const builder = buildStubImageBuilder({
     exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
     repoDigest: `sha256:${'a'.repeat(64)}`,
     onExport: () => {
-      exports.count += 1;
-
-      if (exports.count === 2) {
-        gate.arm();
-      }
+      exportHooks.next()();
 
       return Promise.resolve();
     },
