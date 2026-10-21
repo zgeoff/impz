@@ -126,8 +126,14 @@ test('it opens the new imp after a fork from a checkpoint', async () => {
   const ctx = await setupTest();
 
   await ctx.harness.createTestImage('base');
-  await ctx.client.imps.create({ name: 'web' });
+
+  const imp = await ctx.client.imps.create({ name: 'web' });
+
+  const disk = buildImpPaths(ctx.harness.dataDir, imp.id).disk;
+
+  await Bun.write(disk, 'before the upgrade');
   await ctx.client.checkpoints.create({ name: 'web', label: 'before-upgrade' });
+  await Bun.write(disk, 'after the upgrade');
   await ctx.logIn();
 
   const rendered = renderApp('/imps/web');
@@ -143,9 +149,10 @@ test('it opens the new imp after a fork from a checkpoint', async () => {
   await rendered.findByRole('heading', { name: 'web2' });
 
   const fork = await ctx.client.imps.get({ name: 'web2' });
+  const forkDisk = await Bun.file(buildImpPaths(ctx.harness.dataDir, fork.id).disk).text();
 
   expect(rendered.router.state.location.pathname).toBe('/imps/web2');
-  expect(fork.image).toBe('base');
+  expect(forkDisk).toBe('before the upgrade');
 });
 
 test('it says so when the imp does not exist', async () => {
