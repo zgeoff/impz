@@ -23,14 +23,6 @@ export interface SessionHandlerDeps {
   readonly logFailure?: (failure: unknown) => void;
 }
 
-const RPC_PREFIX = '/rpc';
-
-const SESSION_PATHS: ReadonlySet<string> = new Set(
-  Object.entries(sessionContract).flatMap(([namespace, procedures]) =>
-    Object.keys(procedures).map((name) => `${RPC_PREFIX}/${namespace}/${name}`),
-  ),
-);
-
 interface SessionContext {
   readonly request: Request;
   readonly resHeaders?: Headers;
@@ -92,11 +84,10 @@ export function createSessionHandler(deps: Readonly<SessionHandlerDeps>) {
   });
 
   return {
-    isSessionCall: (request: Request): boolean => SESSION_PATHS.has(new URL(request.url).pathname),
-    respond: async (request: Request): Promise<Response> => {
-      const handled = await handler.handle(request, { prefix: RPC_PREFIX, context: { request } });
+    respond: async (request: Request): Promise<Response | null> => {
+      const handled = await handler.handle(request, { prefix: '/rpc', context: { request } });
 
-      return handled.matched ? handled.response : new Response('not found', { status: 404 });
+      return handled.matched ? handled.response : null;
     },
   };
 }

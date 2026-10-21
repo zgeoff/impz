@@ -41,6 +41,8 @@ test('#login sets a session cookie naming the token, for 30 days', async () => {
     }),
   );
 
+  invariant(response);
+
   const [pair = ''] = (response.headers.get('set-cookie') ?? '').split(';');
   const [value] = readSessionCookies(pair);
 
@@ -68,6 +70,8 @@ test('#login sets an http-only strict cookie on / over plain HTTP', async () => 
     }),
   );
 
+  invariant(response);
+
   const cookie = Bun.Cookie.parse(response.headers.get('set-cookie') ?? '');
 
   expect(cookie.toJSON()).toMatchObject({
@@ -94,6 +98,8 @@ test('#login sets the Secure __Host- cookie for an https request', async () => {
       body: JSON.stringify({ json: { token: 'root-secret' } }),
     }),
   );
+
+  invariant(response);
 
   const cookie = Bun.Cookie.parse(response.headers.get('set-cookie') ?? '');
 
@@ -124,6 +130,8 @@ test('#login sets the Secure __Host- cookie behind a TLS front that says so', as
     }),
   );
 
+  invariant(response);
+
   expect(response.headers.get('set-cookie')).toStartWith('__Host-imp_session=');
 });
 
@@ -153,6 +161,8 @@ test.each([
     }),
   );
 
+  invariant(response);
+
   const body: unknown = await response.json();
 
   expect(response.status).toBe(403);
@@ -173,6 +183,8 @@ test('#login refuses a token that authenticates nobody', async () => {
       body: JSON.stringify({ json: { token: 'wrong' } }),
     }),
   );
+
+  invariant(response);
 
   const body: unknown = await response.json();
 
@@ -195,6 +207,8 @@ test('#login refuses a body without a token', async () => {
     }),
   );
 
+  invariant(response);
+
   expect(response.status).toBe(400);
   expect(response.headers.get('set-cookie')).toBeNull();
 });
@@ -213,6 +227,8 @@ test('#login refuses a body that is not JSON', async () => {
     }),
   );
 
+  invariant(response);
+
   expect(response.status).toBe(400);
   expect(response.headers.get('set-cookie')).toBeNull();
 });
@@ -229,6 +245,8 @@ test('#login refuses a GET, which a link on any page can send', async () => {
       headers: { 'sec-fetch-site': 'same-origin' },
     }),
   );
+
+  invariant(response);
 
   expect(response.status).toBe(405);
   expect(response.headers.get('set-cookie')).toBeNull();
@@ -254,6 +272,8 @@ test('#logout clears the plain cookie over plain HTTP and reports the logout', a
       body: JSON.stringify({}),
     }),
   );
+
+  invariant(response);
 
   expect(response.status).toBe(200);
 
@@ -287,6 +307,8 @@ test('#logout clears both cookies over HTTPS', async () => {
       body: JSON.stringify({}),
     }),
   );
+
+  invariant(response);
 
   expect(
     response.headers.getSetCookie().map((header) => Bun.Cookie.parse(header).toJSON()),
@@ -325,38 +347,28 @@ test.each([
     }),
   );
 
+  invariant(response);
+
   expect(response.status).toBe(403);
   expect(onLogout).not.toHaveBeenCalled();
 });
 
-test.each([
-  ['/rpc/auth/login', true],
-  ['/rpc/auth/logout', true],
-  ['/rpc/auth/whoami', false],
-  ['/rpc/system/info', false],
-  ['/rpc/authors', false],
-])('#isSessionCall takes %s as a session call: %p', async (path, isSession) => {
-  const ctx = await setupTest();
-  const tokens = await ctx.loadTokens('root-secret');
+test.each(['/rpc/auth/whoami', '/rpc/system/info', '/rpc/authors'])(
+  '#respond leaves %s, outside the session contract, to the caller flow',
+  async (path) => {
+    const ctx = await setupTest();
+    const tokens = await ctx.loadTokens('root-secret');
 
-  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
+    const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
 
-  expect(sessions.isSessionCall(new Request(`http://imp:7070${path}`))).toBe(isSession);
-});
+    const answered = await sessions.respond(
+      new Request(`http://imp:7070${path}`, {
+        method: 'POST',
+        headers: { 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
+        body: '{}',
+      }),
+    );
 
-test('#respond answers a session path with no procedure with 404', async () => {
-  const ctx = await setupTest();
-  const tokens = await ctx.loadTokens('root-secret');
-
-  const sessions = createSessionHandler({ tokens, rootToken: 'root-secret', now: Date.now });
-
-  const response = await sessions.respond(
-    new Request('http://imp:7070/rpc/auth/whoami', {
-      method: 'POST',
-      headers: { 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
-      body: JSON.stringify({}),
-    }),
-  );
-
-  expect(response.status).toBe(404);
-});
+    expect(answered).toBeNull();
+  },
+);

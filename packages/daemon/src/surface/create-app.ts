@@ -267,8 +267,10 @@ export function createApp(deps: AppDeps) {
     .all(
       '/rpc*',
       async (context) => {
-        if (sessionCalls.isSessionCall(context.request)) {
-          return sessionCalls.respond(context.request);
+        const answered = await sessionCalls.respond(context.request);
+
+        if (answered !== null) {
+          return answered;
         }
 
         const caller = await findCaller(context.request, context.server, true);
