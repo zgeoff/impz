@@ -392,14 +392,18 @@ async function requireImage(
       const picked =
         taken === undefined ? header.image.name : `${header.image.name.slice(0, 22)}-${hex}`;
 
-      await createImage(deps.db, {
-        name: picked,
-        ref: header.image.ref,
-        digest,
-        sizeBytes: header.image.sizeBytes,
-        source: header.image.source,
-        sourceImp: header.image.sourceImp,
-      });
+      await createImage(
+        deps.db,
+        {
+          name: picked,
+          ref: header.image.ref,
+          digest,
+          sizeBytes: header.image.sizeBytes,
+          source: header.image.source,
+          sourceImp: header.image.sourceImp,
+        },
+        deps.now(),
+      );
 
       return picked;
     });

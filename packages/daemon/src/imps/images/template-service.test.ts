@@ -412,6 +412,30 @@ test('it makes an old template again when an eviction runs during the clone', as
   expect(stored?.digest).toBe(second.digest);
 });
 
+test('it records impd clock as the last use of a template it makes', async () => {
+  const ctx = await setupTest();
+
+  const baseImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, baseImage.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, baseImage);
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+
+  ctx.advance(4 * 365 * 24 * 60 * 60 * 1000);
+
+  await ctx.impd.templates.createTemplate('dev', 'tools');
+
+  const row = await ctx.db
+    .selectFrom('images')
+    .select('last_used_at')
+    .where('name', '=', 'tools')
+    .executeTakeFirstOrThrow();
+
+  expect(row.last_used_at).toBeWithin(ctx.now() - 60_000, ctx.now() + 1);
+});
+
 test('it evicts an old unused image after it makes a template while storage is full', async () => {
   const ctx = await setupTest({ isStorageFull: true });
 

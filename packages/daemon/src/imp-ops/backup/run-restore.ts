@@ -284,14 +284,18 @@ async function createJoinedImage(
 
     rmSync(directory, { recursive: true, force: true });
 
-    await createImage(deps.db, {
-      name,
-      ref: image.ref,
-      digest: image.digest,
-      sizeBytes: image.sizeBytes,
-      source: image.source,
-      sourceImp: image.sourceImp,
-    });
+    await createImage(
+      deps.db,
+      {
+        name,
+        ref: image.ref,
+        digest: image.digest,
+        sizeBytes: image.sizeBytes,
+        source: image.source,
+        sourceImp: image.sourceImp,
+      },
+      deps.now().getTime(),
+    );
   });
 
   return name;

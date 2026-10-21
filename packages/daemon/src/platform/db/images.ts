@@ -26,9 +26,11 @@ export interface NewImage {
   readonly sourceImp?: string | null;
 }
 
-export async function createImage(db: ImpDatabase, image: NewImage): Promise<ImageRecord> {
-  const now = Date.now();
-
+export async function createImage(
+  db: ImpDatabase,
+  image: NewImage,
+  now: number = Date.now(),
+): Promise<ImageRecord> {
   const row = await db
     .insertInto('images')
     .values({
@@ -136,6 +138,7 @@ export async function updateImage(
   db: ImpDatabase,
   id: string,
   image: Readonly<Omit<NewImage, 'name' | 'source'>>,
+  now: number = Date.now(),
 ): Promise<ImageRecord> {
   const row = await db
     .updateTable('images')
@@ -144,7 +147,7 @@ export async function updateImage(
       digest: image.digest,
       size_bytes: image.sizeBytes,
       source_imp: image.sourceImp ?? null,
-      last_used_at: Date.now(),
+      last_used_at: now,
     })
     .where('id', '=', id)
     .returningAll()

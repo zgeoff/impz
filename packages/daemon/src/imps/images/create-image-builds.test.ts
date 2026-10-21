@@ -599,6 +599,46 @@ test('it keeps an old image that a build of the same digest rebuilds', async () 
   expect(kept.map((image) => image.name)).toStrictEqual(['web-1111111', 'web-2222222']);
 });
 
+test('it records the service clock as the last use of an image it builds', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => builder.builders,
+    log: () => {},
+    now: () => Date.parse('2030-01-01T00:00:00Z'),
+  });
+
+  await Bun.write(
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+  );
+
+  await images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web-1111111',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  const row = await ctx.db
+    .selectFrom('images')
+    .select('last_used_at')
+    .where('name', '=', 'web-1111111')
+    .executeTakeFirstOrThrow();
+
+  expect(row.last_used_at).toBe(Date.parse('2030-01-01T00:00:00Z'));
+});
+
 test('it returns a row that still exists when an eviction reaches a same-digest rebuild between its rootfs and its row', async () => {
   const ctx = await setupTest();
 

@@ -92,6 +92,8 @@ interface ImageWriterDeps {
   readonly log: (message: string) => void;
 
   readonly dockerEnv?: Readonly<Record<string, string>>;
+
+  readonly now?: () => number;
 }
 
 interface GuestRootfs {
@@ -105,6 +107,7 @@ interface GuestRootfs {
 
 export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   const storageGate = deps.storageGate;
+  const now = deps.now ?? Date.now;
   const building = createSingleFlight<number>();
 
   const publishers = new Map<string, number>();
@@ -213,21 +216,23 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   ): Promise<ImageRecord> => {
     // The use goes in before the read, so an image eviction either sees it and keeps the row, or
     // removed the row first and the read finds nothing.
-    await updateImageUse(deps.db, 'name', [imageName], Date.now());
+    const at = now();
+
+    await updateImageUse(deps.db, 'name', [imageName], at);
 
     const existing = await readImageByName(deps.db, imageName);
 
     requireDockerImage(existing);
 
     if (existing === undefined) {
-      return createImage(deps.db, { name: imageName, ref, digest, sizeBytes });
+      return createImage(deps.db, { name: imageName, ref, digest, sizeBytes }, at);
     }
 
     if (existing.digest === digest) {
       return existing;
     }
 
-    const updated = await updateImage(deps.db, existing.id, { ref, digest, sizeBytes });
+    const updated = await updateImage(deps.db, existing.id, { ref, digest, sizeBytes }, at);
 
     await removeIdleRootfs(existing.digest);
 

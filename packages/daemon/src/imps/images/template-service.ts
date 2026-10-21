@@ -44,12 +44,14 @@ interface TemplateServiceDeps {
 
   readonly diskBudget: Pick<DiskBudget, 'requireRoom'>;
   readonly runImageEviction: () => Promise<void>;
+  readonly now?: () => number;
   readonly log?: (message: string) => void;
   readonly freezer?: DiskFreezer;
 }
 
 export function createTemplateService(deps: TemplateServiceDeps): TemplateService {
   const log = deps.log ?? printLog;
+  const now = deps.now ?? Date.now;
   const storage = deps.storage;
 
   const withConsistentDisk = createConsistentDisk({
@@ -85,10 +87,10 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
     }>,
   ): Promise<ImageRecord> => {
     if (existing === undefined) {
-      return createImage(deps.db, { ...image, source: 'imp' });
+      return createImage(deps.db, { ...image, source: 'imp' }, now());
     }
 
-    return updateImage(deps.db, existing.id, image);
+    return updateImage(deps.db, existing.id, image, now());
   };
 
   const removeReplaced = async (existing: ImageRecord | undefined): Promise<void> => {
@@ -128,7 +130,7 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
 
         // The use goes in before the read, so an image eviction keeps the template this
         // replaces until the new one lands.
-        await updateImageUse(deps.db, 'name', [name], Date.now());
+        await updateImageUse(deps.db, 'name', [name], now());
 
         const existing = await readImageByName(deps.db, name);
 

@@ -369,6 +369,30 @@ test('#restoreBackup keeps an old image it reuses when an eviction reaches the r
   expect(dev?.imageId).toBe(image?.id);
 });
 
+test('#restoreBackup records its clock as the last use of an image row it writes', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('web-1111111');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'web-1111111', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev', image: 'web-1111111' });
+  await backups.runBackup();
+  await ctx.imps.destroyImp('dev');
+  await ctx.images.removeImage('web-1111111');
+  await backups.restoreBackup({ name: 'dev' });
+
+  const row = await ctx.db
+    .selectFrom('images')
+    .select('last_used_at')
+    .where('name', '=', 'web-1111111')
+    .executeTakeFirstOrThrow();
+
+  expect(row.last_used_at).toBe(ctx.now());
+});
+
 test('#restoreBackup keeps the rootfs it publishes when the cleanup of an earlier removal of its digest runs before its row', async () => {
   const ctx = await setupTest();
 
