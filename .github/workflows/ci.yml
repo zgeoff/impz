@@ -174,8 +174,8 @@ jobs:
           persist-credentials: false
 
       # go.mod lives in agent/, so the version and the module cache key both
-      # need pointing there; the key also covers the lint tools and the
-      # Dockerfile difftest module
+      # need pointing there; the key also covers the lint tools, ksm-exec and
+      # the Dockerfile difftest module
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -183,12 +183,13 @@ jobs:
           cache-dependency-path: |
             agent/go.sum
             agent/tools/go.sum
+            host/ksm-exec/go.sum
             scripts/dockerfile-difftest/go.sum
 
       # gofmt -l lists unformatted files and exits 0 either way
       - name: Format
         run: |
-          unformatted=$(gofmt -l . ../scripts/dockerfile-difftest)
+          unformatted=$(gofmt -l . ../host/ksm-exec ../scripts/dockerfile-difftest)
           if [ -n "$unformatted" ]; then
             echo "::error::gofmt wants to reformat:"
             echo "$unformatted"
@@ -199,6 +200,7 @@ jobs:
         run: |
           go vet ./...
           go vet -tags root ./...
+          go -C ../host/ksm-exec vet ./...
           go -C ../scripts/dockerfile-difftest vet ./...
 
       # golangci-lint, govulncheck and deadcode are pinned in tools/go.mod, a
@@ -207,17 +209,23 @@ jobs:
       - name: Lint
         run: |
           go tool -modfile=tools/go.mod golangci-lint run --build-tags root ./...
-          cd ../scripts/dockerfile-difftest
+          cd ../host/ksm-exec
+          go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml ./...
+          cd ../../scripts/dockerfile-difftest
           go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml --disable depguard ./...
 
       - name: Vulnerabilities
-        run: go tool -modfile=tools/go.mod govulncheck ./...
+        run: |
+          go tool -modfile=tools/go.mod govulncheck ./...
+          cd ../host/ksm-exec
+          go tool -modfile=../../agent/tools/go.mod govulncheck ./...
 
       # deadcode lists functions no binary reaches, tests aside, and exits 0
       # either way
       - name: Dead Code
         run: |
-          unreachable=$(go tool -modfile=tools/go.mod deadcode -test=false ./cmd/...)
+          unreachable=$(go tool -modfile=tools/go.mod deadcode -test=false ./cmd/... \
+            && cd ../host/ksm-exec && go tool -modfile=../../agent/tools/go.mod deadcode -test=false .)
           if [ -n "$unreachable" ]; then
             echo "::error::only tests call these; delete them or move them into the tests:"
             echo "$unreachable"
@@ -227,7 +235,9 @@ jobs:
       # gotestsum (pinned as a tool in go.mod) runs go test -race and keeps the
       # JSON event stream, so each run's timings can be compared later
       - name: Test
-        run: ../scripts/test-go.sh
+        run: |
+          ../scripts/test-go.sh
+          go -C ../host/ksm-exec test -race ./...
         env:
           GO_TEST_JSONFILE: ${{ runner.temp }}/go-test.json
 

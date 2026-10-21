@@ -20,12 +20,12 @@ The rules a task needs are not repeated here. Load the skill for the work before
 
 ## Repo structure
 
-imp is one Bun workspace for its TypeScript, plus a Go module for the guest agent. Every package
-takes the name `@impz/<folder>`, and another package imports a library as TypeScript source, with no
-build step.
+imp is one Bun workspace for its TypeScript, plus a Go module for the guest agent and one for the
+host's ksm-exec. Every package takes the name `@impz/<folder>`, and another package imports a
+library as TypeScript source, with no build step.
 
 ```text
-agent/             the guest agent, in Go: imp-agent and ksm-exec under cmd/
+agent/             the guest agent, in Go: imp-agent under cmd/
 packages/
   agent-protocol/  impd's side of the guest agent's vsock protocol: frames, messages, error codes
   api/             the oRPC contract, schemas and exec stream framing of the control API
@@ -39,7 +39,8 @@ packages/
   test-utils/      the test preload and the utils every package's tests share
 proto/             the agent protocol; bun run gen:proto generates the Go, TypeScript and
                    docs/reference/agent-protocol.md from it
-host/              the host container image that runs impd
+host/              the host container image that runs impd, and ksm-exec, the Go program that
+                   starts Firecracker with its memory mergeable
 images/            the guest images that ship with imp
 kernel/            the guest kernel build
 deploy/            the Compose recipe, the systemd units, bootstrap and the NixOS module

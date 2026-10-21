@@ -20,12 +20,12 @@ FROM oven/bun:1.4.2@sha256:9114c058aeae42162ee16dd5084b95fe9473970bb6bcb5b232ab1
 # --- ksm-exec: starts Firecracker so KSM may merge its guest memory, when
 # IMP_KSM is on (docs/architecture/lifecycle/ram-governor.md#ksm) ---
 FROM golang:1.26.8-trixie@sha256:eae2aaa6add2936cbf350dd0d2628b363461542f0c4b3c0b558957e0f2997379 AS ksm-exec
-WORKDIR /src/agent
-COPY agent/go.mod agent/go.sum ./
+WORKDIR /src/ksm-exec
+COPY host/ksm-exec/go.mod host/ksm-exec/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
-COPY agent/cmd/ksm-exec/ ./cmd/ksm-exec/
+COPY host/ksm-exec/*.go ./
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/ksm-exec ./cmd/ksm-exec
+    CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/ksm-exec .
 
 # --- runtime: what every host container needs, dev or release ---
 FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime
