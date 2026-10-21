@@ -30,6 +30,7 @@ import type { TunnelSession } from '../imps/tunnel/tunnel-session';
 import { redeemPeerAddress } from '../network/proxy/forwarded-peers';
 import type { ForwardedPeers } from '../network/proxy/forwarded-peers';
 import { withAuditedOpen } from '../platform/audit/api-audit';
+import { isAllowedOrigin } from '../platform/http/is-allowed-origin';
 import { getImpdLogger } from '../platform/process/get-impd-logger';
 import type { ListenSpec } from '../vm/agent-client/listener-stream';
 import { buildForbiddenError } from './api-errors';
@@ -40,7 +41,6 @@ import { buildGrantedBackend } from './exec/exec-grant';
 import type { ExecGrant } from './exec/exec-grant';
 import { createExecTickets, isCallerLive } from './exec/exec-tickets';
 import type { BuildContextRoute } from './images/build-context-route';
-import { isPublicCrossOrigin } from './is-public-cross-origin';
 import { createMcpEndpoint } from './mcp/mcp-endpoint';
 import { readBufferedAmount } from './read-buffered-amount';
 import { toApiImage } from './to-api-image';
@@ -239,7 +239,8 @@ export function createApp(deps: AppDeps) {
     handleRpc,
     connectExec: openExecSocket,
     readEnds,
-    isCrossOrigin: (request) => isPublicCrossOrigin(request, deps.oauth.issuer),
+    isCrossOrigin: (request) =>
+      !isAllowedOrigin(request, { kind: 'public-route', origin: deps.oauth.issuer }),
     challenge: `Bearer resource_metadata="${deps.oauth.issuer}/.well-known/oauth-protected-resource/mcp", scope="read"`,
   });
 

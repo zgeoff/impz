@@ -1,47 +1,25 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import * as z from 'zod';
+import { isSameDigest } from '../../platform/secrets/is-same-digest';
+import { isValidSignature } from '../../platform/secrets/is-valid-signature';
+import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
+import type { OpaqueToken } from '../../platform/secrets/parse-opaque-token';
+import { sign } from '../../platform/secrets/sign';
 
-const SECRET_BYTES = 32;
 const MOVE_AUTH_SCHEME = 'ImpMove';
 
-export interface ParsedTicket {
-  readonly id: string;
-  readonly secret: string;
-}
-
-export function createTicket(): ParsedTicket & { readonly text: string } {
-  const id = Bun.randomUUIDv7();
-  const secret = randomBytes(SECRET_BYTES).toString('base64url');
-
-  return { id, secret, text: `${id}.${secret}` };
-}
-
-export function parseTicket(text: string): ParsedTicket | null {
-  const dot = text.indexOf('.');
-
-  if (dot <= 0 || dot === text.length - 1) {
-    return null;
-  }
-
-  return { id: text.slice(0, dot), secret: text.slice(dot + 1) };
-}
-
-export function buildSecretHash(secret: string): string {
-  return createHash('sha256').update(secret).digest('hex');
-}
+export const MOVE_TICKET_PREFIX = '';
 
 export function isSameHash(leftItem: string, rightItem: string): boolean {
-  const left = Buffer.from(leftItem, 'hex');
-  const right = Buffer.from(rightItem, 'hex');
-
-  return left.length === right.length && timingSafeEqual(left, right);
+  return isSameDigest(Buffer.from(leftItem, 'hex'), Buffer.from(rightItem, 'hex'));
 }
 
-export function readTicketHeader(request: Request): ParsedTicket | null {
+export function readTicketHeader(request: Request): OpaqueToken | null {
   const header = request.headers.get('authorization') ?? '';
   const prefix = `${MOVE_AUTH_SCHEME} `;
 
-  return header.startsWith(prefix) ? parseTicket(header.slice(prefix.length).trim()) : null;
+  return header.startsWith(prefix)
+    ? parseOpaqueToken(MOVE_TICKET_PREFIX, header.slice(prefix.length).trim())
+    : null;
 }
 
 export function buildTicketHeader(ticket: string): Record<string, string> {
@@ -79,17 +57,13 @@ export type Receipt = z.infer<typeof ReceiptSchema>;
 export function buildReceipt(body: ReadonlyReceiptBody, secret: string): Receipt {
   const text = JSON.stringify(body);
 
-  return { body: text, mac: buildMac(text, secret) };
+  return { body: text, mac: sign(secret, text).toString('hex') };
 }
 
 export function readReceipt(receipt: Readonly<Receipt>, secret: string): ReceiptBody | null {
-  if (!isSameHash(receipt.mac, buildMac(receipt.body, secret))) {
+  if (!isValidSignature(secret, receipt.body, receipt.mac, 'hex')) {
     return null;
   }
 
   return ReceiptBodySchema.parse(JSON.parse(receipt.body));
-}
-
-function buildMac(text: string, secret: string): string {
-  return createHmac('sha256', secret).update(text).digest('hex');
 }

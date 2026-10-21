@@ -25,6 +25,9 @@ import type { MoveTicketRow, NewMoveTicketRow } from '../../platform/db/move-tic
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { SlotTakenError } from '../../platform/db/slot-taken-error';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { hashSecret } from '../../platform/secrets/hash-secret';
+import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
+import type { OpaqueToken } from '../../platform/secrets/parse-opaque-token';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
 import { buildSystemDrivePath } from '../../vm/storage/data-layout';
@@ -36,8 +39,7 @@ import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MOVE_PATHS, MoveOfferSchema } fro
 import { PART_WAIT_MS, createPartPipe } from './move-parts';
 import type { PartPipe } from './move-parts';
 import { MoveRequestError } from './move-request-error';
-import { buildSecretHash, createTicket, isSameHash, readTicketHeader } from './move-tickets';
-import type { ParsedTicket } from './move-tickets';
+import { MOVE_TICKET_PREFIX, isSameHash, readTicketHeader } from './move-tickets';
 import type { PeerRanges } from './peer-address';
 import { readMoveStream } from './read-move-stream';
 import type { Reply } from './read-move-stream';
@@ -82,7 +84,7 @@ export interface MoveReceiverDeps {
 
 interface CheckedTicket {
   readonly row: MoveTicketRow;
-  readonly ticket: ParsedTicket;
+  readonly ticket: OpaqueToken;
 }
 
 interface ReceiveSession {
@@ -106,7 +108,10 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
 
     const row = await readMoveTicket(deps.db, ticket.id);
 
-    if (row === undefined || !isSameHash(row.secret_sha256, buildSecretHash(ticket.secret))) {
+    if (
+      row === undefined ||
+      !isSameHash(row.secret_sha256, hashSecret(ticket.secret).toString('hex'))
+    ) {
       throw new MoveRequestError(401, 'unknown move ticket');
     }
 
@@ -119,12 +124,12 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     fields: Partial<MoveTicketRow>,
     write: (row: NewMoveTicketRow) => Promise<void> = (row) => writeMoveTicket(deps.db, row),
   ) => {
-    const created = createTicket();
+    const created = mintOpaqueToken(MOVE_TICKET_PREFIX);
     const now = deps.now();
 
     await write({
       id: created.id,
-      secret_sha256: buildSecretHash(created.secret),
+      secret_sha256: hashSecret(created.secret).toString('hex'),
       name,
       bytes,
       imp_id: fields.imp_id ?? null,

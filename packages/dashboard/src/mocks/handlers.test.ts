@@ -72,12 +72,20 @@ test('#resolveLogin refuses a body that is not JSON', async () => {
   expect(response.status).toBe(401);
 });
 
-test('#resolveLogin refuses a request from another site', async () => {
+test.each([
+  ['another origin', { origin: 'http://evil.test' }],
+  ['another port on impd’s host', { origin: 'http://impd.test:20001' }],
+  ['the null origin', { origin: 'null' }],
+  ['a same-site page', { 'sec-fetch-site': 'same-site' }],
+  ['another site', { 'sec-fetch-site': 'cross-site' }],
+  ['a navigation the user typed', { 'sec-fetch-site': 'none' }],
+  ['no origin and no fetch site', {}],
+])('#resolveLogin refuses %s', async (_kind, headers) => {
   await tokenCollection.create({ secret: 'imp_ci.secret' });
 
   const request = new Request(LOGIN_URL, {
     method: 'POST',
-    headers: { origin: 'http://evil.test' },
+    headers,
     body: JSON.stringify({ token: 'imp_ci.secret' }),
   });
 
@@ -102,27 +110,16 @@ test('#resolveLogout ends the session of the browser', async () => {
   expect(sessionCollection.count()).toBe(0);
 });
 
-test('#resolveLogout refuses a request with neither Sec-Fetch-Site nor Origin', () => {
-  const request = new Request(LOGOUT_URL, { method: 'POST' });
-
-  const response = resolveLogout({ request });
-
-  expect(response.status).toBe(403);
-});
-
-test('#resolveLogout refuses a request whose origin is null', () => {
-  const request = new Request(LOGOUT_URL, { method: 'POST', headers: { origin: 'null' } });
-
-  const response = resolveLogout({ request });
-
-  expect(response.status).toBe(403);
-});
-
-test('#resolveLogout refuses a request a browser marks cross-site', () => {
-  const request = new Request(LOGOUT_URL, {
-    method: 'POST',
-    headers: { 'sec-fetch-site': 'cross-site' },
-  });
+test.each([
+  ['another origin', { origin: 'http://evil.test' }],
+  ['another port on impd’s host', { origin: 'http://impd.test:20001' }],
+  ['the null origin', { origin: 'null' }],
+  ['a same-site page', { 'sec-fetch-site': 'same-site' }],
+  ['another site', { 'sec-fetch-site': 'cross-site' }],
+  ['a navigation the user typed', { 'sec-fetch-site': 'none' }],
+  ['no origin and no fetch site', {}],
+])('#resolveLogout refuses %s', (_kind, headers) => {
+  const request = new Request(LOGOUT_URL, { method: 'POST', headers });
 
   const response = resolveLogout({ request });
 

@@ -11,6 +11,7 @@ import type { ImpRecord } from '../../platform/db/imps';
 import { updateMoveSend } from '../../platform/db/move-sends';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StartTimer } from '../../platform/process/clock';
+import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
 import { encodeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
 import { readWarmHeader, requireSnapshotMeta } from './check-warm-move';
@@ -24,7 +25,7 @@ import {
 } from './move-header';
 import type { MoveHeader } from './move-header';
 import { sendInParts } from './move-parts';
-import { ReceiptSchema, parseTicket, readReceipt } from './move-tickets';
+import { MOVE_TICKET_PREFIX, ReceiptSchema, readReceipt } from './move-tickets';
 import type { ReadonlyReceiptBody, ReceiptBody } from './move-tickets';
 import { OfferRefusalError } from './offer-refusal-error';
 import { openMoveParts } from './open-move-parts';
@@ -72,7 +73,7 @@ export async function runMoveSend(
 ): Promise<void> {
   const peer = target.peer;
   const ticket = target.ticket;
-  const secret = parseTicket(ticket)?.secret ?? '';
+  const secret = parseOpaqueToken(MOVE_TICKET_PREFIX, ticket)?.secret ?? '';
   const signal = progress.signal;
 
   const image = await readImageById(deps.db, imp.imageId);

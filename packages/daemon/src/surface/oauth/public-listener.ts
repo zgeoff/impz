@@ -3,6 +3,7 @@ import type { HttpTransport } from '@impz/mcp';
 import type { McpAuth } from '../../identity/oauth/create-mcp-auth';
 import type { PublicMcpConfig } from '../../identity/oauth/public-mcp-config';
 import { readBodyText } from '../../identity/oauth/read-body-text';
+import { tapStream } from '../../platform/process/tap-stream';
 
 const MAX_OPEN = 64;
 const MAX_CONTROL = 16;
@@ -134,36 +135,7 @@ function holdUntilDone(
     return response;
   }
 
-  const source: ReadableStream<Uint8Array> = response.body;
-  const reader = source.getReader();
-  const releaseSent = callEnd === null ? release : () => {};
-
-  const held = new ReadableStream<Uint8Array>({
-    pull: async (controller) => {
-      try {
-        const read = await reader.read();
-
-        if (read.done) {
-          releaseSent();
-
-          controller.close();
-
-          return;
-        }
-
-        controller.enqueue(read.value);
-      } catch (error) {
-        releaseSent();
-
-        controller.error(error);
-      }
-    },
-    cancel: async (reason) => {
-      releaseSent();
-
-      await reader.cancel(reason);
-    },
-  });
+  const held = tapStream(response.body, { onEnd: callEnd === null ? release : () => {} });
 
   return new Response(held, {
     status: response.status,

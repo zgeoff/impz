@@ -15,9 +15,9 @@ import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { startRealTimer } from '../../platform/process/start-real-timer';
+import { tapStream } from '../../platform/process/tap-stream';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { MOVING_RETRY_AFTER_S } from '../../surface/api-errors';
-import { buildTrackedBody } from './build-tracked-body';
 import { buildErrorPage } from './error-pages';
 import { PEER_HEADER, isCallerPath } from './forwarded-peers';
 import type { ForwardedPeers } from './forwarded-peers';
@@ -310,13 +310,19 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
       const body =
         upstream.body === null
           ? null
-          : buildTrackedBody(upstream.body, release, (failure) => {
-              logger.warning('the upstream closed {method} {path} mid-stream: {reason}', {
-                ...(options.imp !== null && { imp: options.imp }),
-                method: request.method,
-                path: url.pathname,
-                reason: getErrorMessage(failure),
-              });
+          : tapStream(upstream.body, {
+              onEnd: (end) => {
+                release();
+
+                if (end.kind === 'error') {
+                  logger.warning('the upstream closed {method} {path} mid-stream: {reason}', {
+                    ...(options.imp !== null && { imp: options.imp }),
+                    method: request.method,
+                    path: url.pathname,
+                    reason: getErrorMessage(end.error),
+                  });
+                }
+              },
             });
 
       if (body === null) {

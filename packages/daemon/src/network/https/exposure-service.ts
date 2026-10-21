@@ -4,11 +4,12 @@ import { ORPCError } from '@orpc/server';
 import { readImpByName, updateImpExposure } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { mintSecret } from '../../platform/secrets/mint-secret';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildMovingError, buildNotFoundError } from '../../surface/api-errors';
 import type { HttpsConfig } from './https-config';
 import type { RecordsStatus } from './https-service';
-import { buildCredentialHash, createCredential } from './public-auth';
+import { buildCredentialHash } from './public-auth';
 
 const DEFAULT_USER = 'imp';
 
@@ -57,7 +58,7 @@ export function createExposureService(deps: ExposureDeps): ExposureService {
 
       const imp = await requireImp(request.name);
 
-      const credential = request.auth === 'none' ? null : createCredential();
+      const credential = request.auth === 'none' ? null : mintSecret();
       const user = request.auth === 'basic' ? (request.user ?? DEFAULT_USER) : null;
 
       const changed = await updateImpExposure(deps.db, imp.id, {

@@ -751,11 +751,19 @@ test('it refuses a ticket in the URL in place of the header', async () => {
   });
 });
 
-test('it refuses a ticket the target never issued', async () => {
+test.each([
+  ['{id}.not-the-secret', 'unknown move ticket'],
+  ['not-the-id.{secret}', 'unknown move ticket'],
+  ['{id}.{secret}.more', 'no move ticket in the Authorization header'],
+  ['{id}', 'no move ticket in the Authorization header'],
+  ['{id}.', 'no move ticket in the Authorization header'],
+  ['.{secret}', 'no move ticket in the Authorization header'],
+])('it refuses the forged ticket %s with %p', async (template, error) => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
-  const forged = `${ticket.ticket.slice(0, ticket.ticket.indexOf('.'))}.not-the-secret`;
+  const [id = '', secret = ''] = ticket.ticket.split('.');
+  const forged = template.replace('{id}', id).replace('{secret}', secret);
 
   const response = await ctx.target.moves.respond(
     new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
@@ -769,7 +777,7 @@ test('it refuses a ticket the target never issued', async () => {
   const body: unknown = await response.json();
 
   expect(response.status).toBe(401);
-  expect(body).toStrictEqual({ error: 'unknown move ticket' });
+  expect(body).toStrictEqual({ error });
 });
 
 test('it refuses a stream from off the tailnet', async () => {

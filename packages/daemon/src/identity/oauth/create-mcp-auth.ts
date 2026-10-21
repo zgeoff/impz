@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { mcp } from '@better-auth/mcp';
 import { oauthProvider } from '@better-auth/oauth-provider';
 import type { OAuthOptions, Scope as ProviderScope } from '@better-auth/oauth-provider';
@@ -8,6 +7,7 @@ import { betterAuth } from 'better-auth';
 import type { BetterAuthPlugin } from 'better-auth';
 import { isAPIError } from 'better-auth/api';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { mintSecret } from '../../platform/secrets/mint-secret';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
 import type { Caller } from '../auth/caller';
@@ -101,7 +101,7 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     basePath: '/',
 
     // drawn at start, so a restart ends the sign-ins in progress and no grant
-    secret: randomBytes(32).toString('base64url'),
+    secret: mintSecret(),
     database: { db, type: 'sqlite' },
     telemetry: { enabled: false },
     logger: { disabled: true },

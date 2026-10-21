@@ -106,7 +106,19 @@ test('#login sets the Secure __Host- cookie behind a TLS front that says so', as
   expect(response.headers.get('set-cookie')).toStartWith('__Host-imp_session=');
 });
 
-test('#login refuses a request from another origin', async () => {
+test.each([
+  ['another origin', { origin: 'http://evil.example' }],
+  ['an imp’s port on the same host', { origin: 'http://imp:20001' }],
+  ['the null origin', { origin: 'null' }],
+  ['a same-site page', { 'sec-fetch-site': 'same-site' }],
+  ['another site', { 'sec-fetch-site': 'cross-site' }],
+  ['a navigation the user typed', { 'sec-fetch-site': 'none' }],
+  [
+    'another site that names impd’s origin',
+    { 'sec-fetch-site': 'cross-site', origin: 'http://imp:7070' },
+  ],
+  ['no origin and no fetch site', {}],
+])('#login refuses %s', async (_kind, headers) => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
@@ -115,7 +127,7 @@ test('#login refuses a request from another origin', async () => {
   const response = await routes.login(
     new Request('http://imp:7070/auth/login', {
       method: 'POST',
-      headers: { origin: 'http://evil.example' },
+      headers,
       body: JSON.stringify({ token: 'root-secret' }),
     }),
   );
@@ -222,7 +234,15 @@ test('#logout clears both cookies over HTTPS', async () => {
   ]);
 });
 
-test('#logout refuses a request from another origin, and reports no logout', async () => {
+test.each([
+  ['another origin', { origin: 'http://evil.example' }],
+  ['an imp’s port on the same host', { origin: 'http://imp:20001' }],
+  ['the null origin', { origin: 'null' }],
+  ['a same-site page', { 'sec-fetch-site': 'same-site' }],
+  ['another site', { 'sec-fetch-site': 'cross-site' }],
+  ['a navigation the user typed', { 'sec-fetch-site': 'none' }],
+  ['no origin and no fetch site', {}],
+])('#logout refuses %s, and reports no logout', async (_kind, headers) => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
@@ -230,10 +250,7 @@ test('#logout refuses a request from another origin, and reports no logout', asy
   const routes = createSessionRoutes({ tokens, rootToken: 'root-secret', now: Date.now, onLogout });
 
   const response = routes.logout(
-    new Request('http://imp:7070/auth/logout', {
-      method: 'POST',
-      headers: { 'sec-fetch-site': 'cross-site' },
-    }),
+    new Request('http://imp:7070/auth/logout', { method: 'POST', headers }),
   );
 
   expect(response.status).toBe(403);

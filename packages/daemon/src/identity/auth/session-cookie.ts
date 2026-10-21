@@ -1,4 +1,5 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { isValidSignature } from '../../platform/secrets/is-valid-signature';
+import { sign } from '../../platform/secrets/sign';
 
 const SESSION_COOKIE = 'imp_session';
 
@@ -39,10 +40,12 @@ export function readSession(value: string, rootToken: string, nowMs: number): Se
     return null;
   }
 
-  const given = Buffer.from(signature);
-  const expected = Buffer.from(buildSignature(rootToken, tokenId, expiry));
-
-  return given.length === expected.length && timingSafeEqual(given, expected)
+  return isValidSignature(
+    buildSessionKey(rootToken),
+    buildSignedText(tokenId, expiry),
+    signature,
+    'base64url',
+  )
     ? { tokenId, expiresAt: Number(expiry) }
     : null;
 }
@@ -101,13 +104,15 @@ function buildCookie(value: string, maxAgeS: number, secure: boolean): string {
 }
 
 function buildSignature(rootToken: string, tokenId: string, expiry: string): string {
-  return createHmac('sha256', buildSessionKey(rootToken))
-    .update(`imp-session-${VERSION}.${tokenId}.${expiry}`)
-    .digest('base64url');
+  return sign(buildSessionKey(rootToken), buildSignedText(tokenId, expiry)).toString('base64url');
+}
+
+function buildSignedText(tokenId: string, expiry: string): string {
+  return `imp-session-${VERSION}.${tokenId}.${expiry}`;
 }
 
 // a key of its own, derived from the root token, so the MAC never keys on
 // the token itself
 function buildSessionKey(rootToken: string): Buffer {
-  return createHmac('sha256', rootToken).update('imp-session-key').digest();
+  return sign(rootToken, 'imp-session-key');
 }

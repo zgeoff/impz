@@ -3,8 +3,8 @@ import type { ExecSocket } from '@impz/client';
 import { createHttpTransport, createPatternGuard } from '@impz/mcp';
 import type { HttpTransport } from '@impz/mcp';
 import packageJson from '../../../package.json' with { type: 'json' };
-import { isSameOrigin } from '../../identity/auth/authenticate';
 import type { Caller } from '../../identity/auth/caller';
+import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
 
 const IN_PROCESS_URL = 'http://impd.internal';
 
@@ -20,7 +20,9 @@ export interface McpEndpointDeps {
 export function createMcpEndpoint(deps: Readonly<McpEndpointDeps>): HttpTransport {
   return createHttpTransport({
     version: packageJson.version,
-    isCrossOrigin: deps.isCrossOrigin ?? isCrossOrigin,
+    isCrossOrigin:
+      deps.isCrossOrigin ??
+      ((request) => !isAllowedOrigin(request, { kind: 'browser-same-origin' })),
     ...(deps.challenge !== undefined && { challenge: deps.challenge }),
     authenticate: async (request) => {
       const caller = await deps.findCaller(request);
@@ -46,12 +48,4 @@ export function createMcpEndpoint(deps: Readonly<McpEndpointDeps>): HttpTranspor
       };
     },
   });
-}
-
-// A browser names the page a request comes from in Sec-Fetch-Site or Origin.
-// A client that is no browser sends neither, so the token alone counts.
-function isCrossOrigin(request: Request): boolean {
-  const fromBrowser = request.headers.has('sec-fetch-site') || request.headers.has('origin');
-
-  return fromBrowser && !isSameOrigin(request);
 }
