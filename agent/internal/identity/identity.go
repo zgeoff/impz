@@ -1,4 +1,6 @@
-package boot
+// Package identity names a guest apart from the template it came from: its
+// machine-id, its ssh host keys, and its boot's id.
+package identity
 
 import (
 	"encoding/hex"
@@ -30,12 +32,12 @@ const stagePrefix = ".imp-hostkeys-"
 // keygenFunc writes every default host key under prefix/etc/ssh.
 type keygenFunc func(prefix string) error
 
-// resetIdentity gives an imp made from a template its own machine-id and ssh
+// Reset gives an imp made from a template its own machine-id and ssh
 // host keys, on a boot impd asks it to (imp.reset_identity=1), before any
 // service starts. root is the inner container's root, and ssh-keygen runs
 // in the container. It returns what ping reports: impd keeps asking until a
 // boot reports ok. See docs/guides/templates.md#identity.
-func resetIdentity(runner proc.Runner, root fsroot.FS, env []string) string {
+func Reset(runner proc.Runner, root fsroot.FS, env []string) string {
 	var keygen keygenFunc
 	if path, err := lookPathIn(root, "ssh-keygen", env); err == nil {
 		keygen = func(prefix string) error { return runKeygen(runner, path, prefix, env) }

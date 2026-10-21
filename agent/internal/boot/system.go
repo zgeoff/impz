@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -15,17 +14,22 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/zgeoff/impz/agent/internal/cgroup"
+	"github.com/zgeoff/impz/agent/internal/claim"
 	"github.com/zgeoff/impz/agent/internal/cmdline"
 	"github.com/zgeoff/impz/agent/internal/dial"
 	"github.com/zgeoff/impz/agent/internal/exec"
 	"github.com/zgeoff/impz/agent/internal/files"
 	"github.com/zgeoff/impz/agent/internal/fsroot"
+	"github.com/zgeoff/impz/agent/internal/hosts"
+	"github.com/zgeoff/impz/agent/internal/identity"
 	"github.com/zgeoff/impz/agent/internal/imagecfg"
 	"github.com/zgeoff/impz/agent/internal/inner"
 	"github.com/zgeoff/impz/agent/internal/launch"
 	"github.com/zgeoff/impz/agent/internal/listen"
+	"github.com/zgeoff/impz/agent/internal/memory"
 	"github.com/zgeoff/impz/agent/internal/netcfg"
 	"github.com/zgeoff/impz/agent/internal/outer"
+	"github.com/zgeoff/impz/agent/internal/poweroff"
 	"github.com/zgeoff/impz/agent/internal/proc"
 	"github.com/zgeoff/impz/agent/internal/proto"
 	"github.com/zgeoff/impz/agent/internal/pty"
@@ -34,7 +38,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/server"
 	"github.com/zgeoff/impz/agent/internal/services"
 	"github.com/zgeoff/impz/agent/internal/session"
-	"github.com/zgeoff/impz/agent/internal/sysutil"
 )
 
 // Run is PID 1 from the system drive. It mounts the agent's world and the
@@ -56,7 +59,7 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	if follow := memoryFollower(params); follow != nil {
+	if follow := memory.Follower(params); follow != nil {
 		go follow()
 	}
 	// a boot template parks here, before the user disk is touched; the
@@ -64,14 +67,14 @@ func Run() error {
 	// cmdline
 	claimed := params.Template
 	if params.Template {
-		claim, err := parkForClaim(listenVsock, func(c *proto.Claim) error {
+		c, err := claim.Park(listenVsock, buildPing, func(c *proto.Claim) error {
 			steps.restart()
-			return applyClaim(c)
+			return claim.Apply(c, userDisk)
 		})
 		if err != nil {
 			return err
 		}
-		params = claimParams(claim)
+		params = claim.Params(c)
 		steps.mark("claim")
 	} else {
 		steps.mark("world")
@@ -126,7 +129,7 @@ func Run() error {
 	steps.mark("root")
 	identityReset := ""
 	if params.ResetIdentity {
-		identityReset = resetIdentity(mgr, root, image.Get().Env)
+		identityReset = identity.Reset(mgr, root, image.Get().Env)
 		steps.mark("identity")
 	}
 	if err := sup.Load(); err != nil {
@@ -149,9 +152,9 @@ func Run() error {
 		log.Printf("boot: outer exec: %v; every one is refused", err)
 	}
 	outerRunner := outer.Runner{Next: &proc.Direct{Reaper: r, Agent: inner.AgentBinary}}
-	bootID := readBootID()
+	bootID := identity.ReadBootID()
 	if claimed {
-		bootID = newBootID()
+		bootID = identity.NewBootID()
 	}
 	srv := &server.Server{
 		Exec:     exec.NewManager(launcher, execCgroups),
@@ -181,9 +184,9 @@ func Run() error {
 		defer safe.Recover("poweroff", func() {
 			safe.Call("poweroff: thaw", func() { _ = srv.ThawForPoweroff() })
 			unix.Sync()
-			reboot()
+			poweroff.Reboot()
 		})
-		Poweroff(sup, mgr, srv.ThawForPoweroff)
+		poweroff.Run(sup, mgr, srv.ThawForPoweroff)
 	})
 	srv.Shutdown = powerOff
 
@@ -214,7 +217,7 @@ func prepareRoot(root fsroot.FS, params cmdline.Params, image *imagecfg.Live) {
 		if err := fsroot.WriteFileAtomic(root, "/etc/hostname", []byte(name+"\n"), 0o644); err != nil {
 			log.Printf("hostname: %v", err)
 		}
-		if err := updateHosts(root, "/etc/hosts", name); err != nil {
+		if err := hosts.Update(root, "/etc/hosts", name); err != nil {
 			log.Printf("hosts: %v", err)
 		}
 	}
@@ -228,6 +231,11 @@ func prepareRoot(root fsroot.FS, params cmdline.Params, image *imagecfg.Live) {
 	image.Set(cfg)
 }
 
+// buildPing answers a parked boot template's ping as the server would.
+func buildPing() *proto.Ping {
+	return server.BuildPing(unix.ClockGettime)
+}
+
 // listenVsock listens on the agent's port, for a boot template parked for
 // its claim and for the agent's server.
 func listenVsock() (net.Listener, error) {
@@ -237,24 +245,4 @@ func listenVsock() (net.Listener, error) {
 	}
 	log.Printf("boot: ready on vsock port %d", server.Port)
 	return l, nil
-}
-
-// readBootID returns the guest kernel's boot_id, which every cold boot
-// changes and a wake from memory keeps. Without procfs it is "", and impd
-// keeps no cold boot for it. A restored boot template has the template's.
-func readBootID() string {
-	b, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
-	if err != nil {
-		log.Printf("boot: boot_id: %v", err)
-		return ""
-	}
-	return strings.TrimSpace(string(b))
-}
-
-// newBootID names a claimed boot template's boot: each copy of the template
-// shares the kernel's boot_id, so it draws a random UUID instead, after the
-// claim reseeded the CRNG. A wake from memory keeps it, as it keeps boot_id.
-func newBootID() string {
-	b := sysutil.NewUUID()
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }

@@ -1,4 +1,6 @@
-package boot
+// Package memory sizes the inner container's memory limit to the guest's
+// memory, and moves it as an elastic guest's memory changes.
+package memory
 
 import (
 	"log"
@@ -13,6 +15,11 @@ import (
 )
 
 const (
+	// userReserve is memory the inner container's cgroup leaves to the agent
+	// and the kernel, so a user process that eats all of it meets the OOM
+	// killer inside its cgroup, not the agent.
+	userReserve = 64 << 20
+
 	// noMemoryLimit is memory.max's "max"
 	noMemoryLimit = math.MaxInt64
 
@@ -20,6 +27,30 @@ const (
 	// size: a plug of 256 MiB comes in well under a second
 	memoryFollowInterval = 250 * time.Millisecond
 )
+
+// SetUserMax writes the inner container's memory limit for the guest's
+// memory now; a guest too small to spare userReserve keeps no limit.
+func SetUserMax() {
+	if limit := userMemoryMax(Total()); limit != noMemoryLimit {
+		writeUserMemoryMax(limit)
+	}
+}
+
+// Total is the guest's memory in bytes, or 0.
+func Total() int64 {
+	b, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) >= 2 && f[0] == "MemTotal:" {
+			kib, _ := strconv.ParseInt(f[1], 10, 64)
+			return kib << 10
+		}
+	}
+	return 0
+}
 
 // userMemoryMax is the inner container's memory.max for a guest of total
 // bytes: all but userReserve, or no limit in a guest too small to spare it.
@@ -49,16 +80,16 @@ func userMemoryCurrent() (int64, error) {
 	return strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64)
 }
 
-// memoryFollower is the loop that moves the container's limit with an
+// Follower is the loop that moves the container's limit with an
 // elastic guest's memory (docs/architecture/lifecycle/elastic-memory.md#how-the-guest-grows);
 // nil for a guest whose memory never changes, which keeps its boot limit.
-func memoryFollower(p cmdline.Params) func() {
+func Follower(p cmdline.Params) func() {
 	if !p.HotplugMemory {
 		return nil
 	}
 	return func() {
 		ticker := time.NewTicker(memoryFollowInterval)
-		followMemTotal(ticker.C, memTotal, userMemoryCurrent, writeUserMemoryMax)
+		followMemTotal(ticker.C, Total, userMemoryCurrent, writeUserMemoryMax)
 	}
 }
 

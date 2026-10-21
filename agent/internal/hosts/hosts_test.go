@@ -1,4 +1,4 @@
-package boot
+package hosts
 
 import (
 	"io/fs"
@@ -34,10 +34,10 @@ func TestHostsWithNameMapsTheFirst127011LineToTheName(t *testing.T) {
 	}
 }
 
-func TestUpdateHostsWritesADefaultFileWhenNoneExists(t *testing.T) {
+func TestUpdateWritesADefaultFileWhenNoneExists(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "hosts")
 
-	err := updateHosts(fsroot.Host, p, "imp")
+	err := Update(fsroot.Host, p, "imp")
 
 	assert.NilError(t, err)
 	b, err := os.ReadFile(p)
@@ -45,12 +45,12 @@ func TestUpdateHostsWritesADefaultFileWhenNoneExists(t *testing.T) {
 	assert.Equal(t, string(b), "127.0.0.1\tlocalhost\n::1\tlocalhost ip6-localhost ip6-loopback\n127.0.1.1\timp\n")
 }
 
-func TestUpdateHostsReplacesTheFileWith0644AndLeavesNoTemporaryFile(t *testing.T) {
+func TestUpdateReplacesTheFileWith0644AndLeavesNoTemporaryFile(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "hosts")
 	assert.NilError(t, os.WriteFile(p, []byte("127.0.1.1 old\n"), 0o600))
 
-	err := updateHosts(fsroot.Host, p, "new")
+	err := Update(fsroot.Host, p, "new")
 
 	assert.NilError(t, err)
 	b, err := os.ReadFile(p)
@@ -64,13 +64,13 @@ func TestUpdateHostsReplacesTheFileWith0644AndLeavesNoTemporaryFile(t *testing.T
 	assert.Check(t, cmp.Len(ents, 1), "a temporary file was left behind: %v", ents)
 }
 
-func TestUpdateHostsWritesThroughASymlinkAndKeepsTheLink(t *testing.T) {
+func TestUpdateWritesThroughASymlinkAndKeepsTheLink(t *testing.T) {
 	dir := t.TempDir()
 	target, link := filepath.Join(dir, "real-hosts"), filepath.Join(dir, "hosts")
 	assert.NilError(t, os.WriteFile(target, []byte("127.0.1.1 old\n"), 0o644))
 	assert.NilError(t, os.Symlink("real-hosts", link))
 
-	err := updateHosts(fsroot.Host, link, "new")
+	err := Update(fsroot.Host, link, "new")
 
 	assert.NilError(t, err)
 	fi, err := os.Lstat(link)
@@ -81,11 +81,11 @@ func TestUpdateHostsWritesThroughASymlinkAndKeepsTheLink(t *testing.T) {
 	assert.Check(t, cmp.Equal(string(b), "127.0.1.1\tnew\n"))
 }
 
-func TestUpdateHostsRefusesADanglingSymlinkAndKeepsIt(t *testing.T) {
+func TestUpdateRefusesADanglingSymlinkAndKeepsIt(t *testing.T) {
 	link := filepath.Join(t.TempDir(), "hosts")
 	assert.NilError(t, os.Symlink("missing", link))
 
-	err := updateHosts(fsroot.Host, link, "new")
+	err := Update(fsroot.Host, link, "new")
 
 	assert.Check(t, cmp.ErrorIs(err, fs.ErrNotExist))
 	fi, err := os.Lstat(link)
@@ -95,13 +95,16 @@ func TestUpdateHostsRefusesADanglingSymlinkAndKeepsIt(t *testing.T) {
 
 // A FIFO the user put behind /etc/hosts would block the boot, so it is
 // refused rather than read or written.
-func TestUpdateHostsRefusesASymlinkToAFIFOInTheContainerRoot(t *testing.T) {
+func TestUpdateRefusesASymlinkToAFIFOInTheContainerRoot(t *testing.T) {
 	dir := t.TempDir()
 	assert.NilError(t, os.Mkdir(filepath.Join(dir, "etc"), 0o755))
 	assert.NilError(t, unix.Mkfifo(filepath.Join(dir, "etc/fifo"), 0o644))
 	assert.NilError(t, os.Symlink("fifo", filepath.Join(dir, "etc/hosts")))
+	root, err := fsroot.Open(dir)
+	assert.NilError(t, err)
+	t.Cleanup(func() { root.Close() })
 
-	err := updateHosts(openRoot(t, dir), "/etc/hosts", "new")
+	err = Update(root, "/etc/hosts", "new")
 
 	assert.ErrorIs(t, err, fsroot.ErrNotRegular)
 }

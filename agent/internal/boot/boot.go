@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"strings"
 
 	"golang.org/x/sys/unix"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/zgeoff/impz/agent/internal/disk"
 	"github.com/zgeoff/impz/agent/internal/files"
 	"github.com/zgeoff/impz/agent/internal/inner"
+	"github.com/zgeoff/impz/agent/internal/memory"
 )
 
 const (
@@ -23,11 +23,6 @@ const (
 
 	// agentRunSize caps the agent's own /run: its sockets and little else
 	agentRunSize = "16m"
-
-	// userReserve is memory the inner container's cgroup leaves to the agent
-	// and the kernel, so a user process that eats all of it meets the OOM
-	// killer inside its cgroup, not the agent.
-	userReserve = 64 << 20
 )
 
 // setupAgentWorld mounts the agent's own filesystems on the system drive,
@@ -95,7 +90,7 @@ func protectAgent() {
 }
 
 // setupUserCgroup makes the inner container's cgroup with every controller
-// and a memory limit that leaves userReserve to the agent and the kernel.
+// and a memory limit that leaves some memory to the agent and the kernel.
 func setupUserCgroup() error {
 	if err := cgroup.EnableControllers(cgroup.Root, "boot: "); err != nil {
 		return err
@@ -103,32 +98,14 @@ func setupUserCgroup() error {
 	if err := os.MkdirAll(inner.CgroupDir, 0o755); err != nil {
 		return err
 	}
-	if limit := userMemoryMax(memTotal()); limit != noMemoryLimit {
-		writeUserMemoryMax(limit)
-	}
+	memory.SetUserMax()
 	return nil
-}
-
-// memTotal is the guest's memory in bytes, or 0.
-func memTotal() int64 {
-	b, err := os.ReadFile("/proc/meminfo")
-	if err != nil {
-		return 0
-	}
-	for _, line := range strings.Split(string(b), "\n") {
-		f := strings.Fields(line)
-		if len(f) >= 2 && f[0] == "MemTotal:" {
-			kib, _ := strconv.ParseInt(f[1], 10, 64)
-			return kib << 10
-		}
-	}
-	return 0
 }
 
 // innerRunSize is the inner /run's size: a tenth of memory, as a user's
 // /run full of files must not take the guest's memory.
 func innerRunSize() string {
-	if total := memTotal(); total > 0 {
+	if total := memory.Total(); total > 0 {
 		return strconv.FormatInt(total/10, 10)
 	}
 	return ""

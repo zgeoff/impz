@@ -1,4 +1,5 @@
-package boot
+// Package hosts keeps the user root's hosts file naming the imp.
+package hosts
 
 import (
 	"errors"
@@ -11,13 +12,13 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// updateHosts points the 127.0.1.1 line of the hosts file at name. It runs
+// Update points the 127.0.1.1 line of the hosts file at name. It runs
 // every boot, because a fork or rename gives the imp a new hostname on the
 // same disk. OCI exports leave /etc/hosts empty (Docker bind-mounts it at
 // run time), so an empty or missing file gets a default one. A symlinked
 // hosts file is updated at its target, which resolves inside fsys; the
 // rename must not replace the link.
-func updateHosts(fsys fsroot.FS, path, name string) error {
+func Update(fsys fsroot.FS, path, name string) error {
 	isLink := false
 	if fi, err := fsys.Lstat(path); err == nil && fi.Mode()&fs.ModeSymlink != 0 {
 		if _, err := fsys.Stat(path); err != nil {

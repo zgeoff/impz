@@ -1,4 +1,4 @@
-package boot
+package memory
 
 import (
 	"errors"
@@ -30,7 +30,7 @@ func TestUserMemoryMaxLeavesTheReserveOrNoLimitInASmallGuest(t *testing.T) {
 
 // A plain imp's memory never changes: no follower runs, and its container
 // keeps the limit it got at boot.
-func TestMemoryFollowerRunsOnlyForHotplugMemory(t *testing.T) {
+func TestFollowerRunsOnlyForHotplugMemory(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		params cmdline.Params
@@ -40,7 +40,7 @@ func TestMemoryFollowerRunsOnlyForHotplugMemory(t *testing.T) {
 		{name: "elastic guest", params: cmdline.Params{HotplugMemory: true}, want: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, memoryFollower(tc.params) != nil, tc.want)
+			assert.Equal(t, Follower(tc.params) != nil, tc.want)
 		})
 	}
 }

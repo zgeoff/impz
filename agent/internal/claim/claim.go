@@ -1,4 +1,6 @@
-package boot
+// Package claim parks a boot template until impd claims it, then makes the
+// restored guest the claiming imp's.
+package claim
 
 import (
 	"errors"
@@ -14,7 +16,6 @@ import (
 
 	"github.com/zgeoff/impz/agent/internal/cmdline"
 	"github.com/zgeoff/impz/agent/internal/proto"
-	"github.com/zgeoff/impz/agent/internal/server"
 )
 
 // claimRequestTimeout bounds how long a connection may take to send its
@@ -27,11 +28,12 @@ var errNotParked = &proto.Error{
 	Message: "the guest is a boot template waiting for claim",
 }
 
-// parkForClaim serves ping and claim on the agent's vsock port until a
-// claim is applied, then closes the listener, so the server can take the port.
+// Park serves ping and claim on the agent's vsock port until a claim is
+// applied, then closes the listener, so the server can take the port. ping
+// builds the reply to a ping, which Park marks as a boot template's.
 // It opens no inet socket: the template's snapshot holds no TCP state.
 // docs/architecture/lifecycle/boot-templates.md#restore has the order of the steps.
-func parkForClaim(listen func() (net.Listener, error), apply func(*proto.Claim) error) (*proto.Claim, error) {
+func Park(listen func() (net.Listener, error), ping func() *proto.Ping, apply func(*proto.Claim) error) (*proto.Claim, error) {
 	l, err := listen()
 	if err != nil {
 		return nil, err
@@ -54,7 +56,7 @@ func parkForClaim(listen func() (net.Listener, error), apply func(*proto.Claim) 
 			}
 			continue
 		}
-		claim, done := serveParked(c, apply)
+		claim, done := serveParked(c, ping, apply)
 		if done {
 			return claim, nil
 		}
@@ -62,7 +64,7 @@ func parkForClaim(listen func() (net.Listener, error), apply func(*proto.Claim) 
 }
 
 // serveParked answers one connection; done is true once a claim applied.
-func serveParked(c net.Conn, apply func(*proto.Claim) error) (*proto.Claim, bool) {
+func serveParked(c net.Conn, ping func() *proto.Ping, apply func(*proto.Claim) error) (*proto.Claim, bool) {
 	defer c.Close()
 	r, w := proto.NewReader(c), proto.NewWriter(c)
 	_ = c.SetReadDeadline(time.Now().Add(claimRequestTimeout))
@@ -77,9 +79,9 @@ func serveParked(c net.Conn, apply func(*proto.Claim) error) (*proto.Claim, bool
 	}
 	switch req.Op {
 	case proto.OpPing:
-		ping := server.BuildPing(unix.ClockGettime)
-		ping.Stage = new(proto.StageTemplate)
-		w.WriteMessage(proto.TypeResponse, ping)
+		reply := ping()
+		reply.Stage = new(proto.StageTemplate)
+		w.WriteMessage(proto.TypeResponse, reply)
 		return nil, false
 	case proto.OpClaim:
 		if req.Claim == nil || req.Claim.Hostname == "" || req.Claim.Ip == "" {
@@ -100,9 +102,9 @@ func serveParked(c net.Conn, apply func(*proto.Claim) error) (*proto.Claim, bool
 	}
 }
 
-// claimParams is what the boot goes on with after a claim: the claim's values, never
-// the template's cmdline.
-func claimParams(c *proto.Claim) cmdline.Params {
+// Params is what the boot goes on with after a claim: the claim's values,
+// never the template's cmdline.
+func Params(c *proto.Claim) cmdline.Params {
 	return cmdline.Params{
 		Hostname:      c.Hostname,
 		IP:            c.Ip,
@@ -115,11 +117,11 @@ func claimParams(c *proto.Claim) cmdline.Params {
 	}
 }
 
-// applyClaim makes the restored guest this imp's, in this order: the clock
-// (so nothing below stamps the template's time), the entropy pool and a
-// CRNG reseed, eth0's MAC, and the user disk's cached state, which the
+// Apply makes the restored guest this imp's, in this order: the clock (so
+// nothing below stamps the template's time), the entropy pool and a CRNG
+// reseed, eth0's MAC, and the cached state of the user disk dev, which the
 // template never read but whose size changed under it.
-func applyClaim(c *proto.Claim) error {
+func Apply(c *proto.Claim, dev string) error {
 	var errs []error
 	if c.UnixMs > 0 {
 		ts := unix.NsecToTimespec(int64(c.UnixMs) * int64(time.Millisecond))
@@ -137,12 +139,12 @@ func applyClaim(c *proto.Claim) error {
 	}
 	// a disk still at the placeholder's size would fail its mount;
 	// an error now lets the host boot the kernel at once
-	readSize := func() (uint64, error) { return readDiskBytes(userDisk) }
+	readSize := func() (uint64, error) { return readDiskBytes(dev) }
 	if err := waitForDiskSize(readSize, int64(c.GetDiskBytes()), diskSizeTimeout); err != nil {
-		errs = append(errs, fmt.Errorf("%s: %w", userDisk, err))
+		errs = append(errs, fmt.Errorf("%s: %w", dev, err))
 	}
-	if err := flushDisk(userDisk); err != nil {
-		errs = append(errs, fmt.Errorf("%s: %w", userDisk, err))
+	if err := flushDisk(dev); err != nil {
+		errs = append(errs, fmt.Errorf("%s: %w", dev, err))
 	}
 	return errors.Join(errs...)
 }

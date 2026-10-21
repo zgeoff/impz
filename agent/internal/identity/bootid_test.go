@@ -1,4 +1,4 @@
-package boot
+package identity
 
 import (
 	"regexp"
@@ -17,7 +17,7 @@ func TestNewBootIDIsAFreshVersion4UUIDEachCall(t *testing.T) {
 
 	ids := make([]string, 64)
 	for i := range ids {
-		ids[i] = newBootID()
+		ids[i] = NewBootID()
 	}
 
 	malformed := slices.DeleteFunc(slices.Clone(ids), regexp.MustCompile(shape).MatchString)
