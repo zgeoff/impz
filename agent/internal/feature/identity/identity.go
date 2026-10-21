@@ -167,18 +167,15 @@ func removeStaleStages(root fsroot.FS, dir string) {
 	}
 }
 
-// lookPathIn finds file in the PATH of env, as the container sees it.
+// lookPathIn finds file in the PATH of env, as the container sees it. A
+// relative dir names nothing inside the container's root.
 func lookPathIn(root fsroot.FS, file string, env []string) (string, error) {
-	for _, dir := range filepath.SplitList(proc.Get(env, "PATH")) {
-		if !filepath.IsAbs(dir) {
-			continue
+	return sysutil.FindInPath(file, proc.Get(env, "PATH"), func(p string) (fs.FileInfo, error) {
+		if !filepath.IsAbs(p) {
+			return nil, fs.ErrNotExist
 		}
-		p := filepath.Join(dir, file)
-		if fi, err := root.Stat(p); err == nil && fi.Mode().IsRegular() && fi.Mode().Perm()&0o111 != 0 {
-			return p, nil
-		}
-	}
-	return "", fmt.Errorf("%s: executable file not found in $PATH", file)
+		return root.Stat(p)
+	})
 }
 
 // runKeygen runs ssh-keygen -A -f prefix, which writes every missing default

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/zgeoff/impz/agent/internal/base/reaper"
 	"github.com/zgeoff/impz/agent/internal/host/dropcaps"
+	"github.com/zgeoff/impz/agent/internal/host/sysutil"
 )
 
 // Spec describes one process to start. User, HOME and the binary resolve
@@ -263,29 +263,9 @@ func newDirectProcess(pid, pidfd int, reaped <-chan reaper.Status) *Process {
 // LookPath finds file in the PATH of env, not the agent's own PATH.
 func LookPath(file string, env []string) (string, error) {
 	if strings.Contains(file, "/") {
-		return file, executable(file)
+		return file, sysutil.CheckExecutable(file, os.Stat)
 	}
-	for _, dir := range filepath.SplitList(Get(env, "PATH")) {
-		if dir == "" {
-			dir = "."
-		}
-		p := filepath.Join(dir, file)
-		if executable(p) == nil {
-			return p, nil
-		}
-	}
-	return "", fmt.Errorf("%s: executable file not found in $PATH", file)
-}
-
-func executable(p string) error {
-	fi, err := os.Stat(p)
-	if err != nil {
-		return err
-	}
-	if fi.IsDir() || fi.Mode()&0o111 == 0 {
-		return fmt.Errorf("%s: permission denied", p)
-	}
-	return nil
+	return sysutil.FindInPath(file, Get(env, "PATH"), os.Stat)
 }
 
 // Get returns the value of key in env, or "".
