@@ -34,6 +34,7 @@ import { isAllowedOrigin } from '../platform/http/is-allowed-origin';
 import { getImpdLogger } from '../platform/process/get-impd-logger';
 import type { ListenSpec } from '../vm/agent-client/listener-stream';
 import { buildForbiddenError } from './api-errors';
+import { createSessionHandler } from './auth/session-handler';
 import { createDashboardRoutes } from './create-dashboard-routes';
 import { createRouter } from './create-router';
 import type { RouterDeps } from './create-router';
@@ -244,13 +245,15 @@ export function createApp(deps: AppDeps) {
     challenge: `Bearer resource_metadata="${deps.oauth.issuer}/.well-known/oauth-protected-resource/mcp", scope="read"`,
   });
 
-  const dashboardRoutes = createDashboardRoutes({
+  const handleSession = createSessionHandler({
     tokens: deps.tokens,
     rootToken: deps.rootToken,
     now: deps.now,
     onLogout: logouts.logOut,
-    dashboardDir: deps.config.dashboardDir,
+    logFailure: logRpcFailure,
   });
+
+  const dashboardRoutes = createDashboardRoutes(deps.config.dashboardDir);
 
   const app = new Elysia({ websocket: EXEC_SOCKET_OPTIONS })
     .get('/health', () => ({
@@ -264,6 +267,12 @@ export function createApp(deps: AppDeps) {
     .all(
       '/rpc*',
       async (context) => {
+        const session = await handleSession(context.request);
+
+        if (session !== null) {
+          return session;
+        }
+
         const caller = await findCaller(context.request, context.server, true);
 
         if (caller === null) {

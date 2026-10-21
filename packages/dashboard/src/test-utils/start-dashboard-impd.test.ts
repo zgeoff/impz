@@ -35,8 +35,7 @@ test('it stops sending the session cookie once impd clears it', async () => {
   const ctx = await setupTest();
 
   await ctx.dashboardImpd.logIn();
-
-  await fetch(`${IMPD_ORIGIN}/auth/logout`, { method: 'POST' });
+  await ctx.client.auth.logout();
 
   expect(ctx.client.tokens.whoami()).rejects.toMatchObject({ status: 401 });
 });
@@ -68,8 +67,8 @@ test('it waits until an event stream has started, so an event published after re
 test('it refuses a login with a token impd does not know', async () => {
   const ctx = await setupTest();
 
-  expect(ctx.dashboardImpd.logIn('imp_nobody.secret')).rejects.toThrowWithMessage(
-    Error,
-    'impd refused the login with 401',
-  );
+  expect(ctx.dashboardImpd.logIn('imp_nobody.secret')).rejects.toMatchObject({
+    code: 'UNAUTHORIZED',
+    status: 401,
+  });
 });

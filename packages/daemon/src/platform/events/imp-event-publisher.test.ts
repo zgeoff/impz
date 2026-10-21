@@ -432,13 +432,7 @@ test('it ends a dashboard stream at any logout, and leaves a token’s stream op
 
   const tokenStream = readInBackground(tokenEvents);
 
-  const logout = await ctx.impd.api.app.handle(
-    new Request('http://impd.test/auth/logout', {
-      method: 'POST',
-      headers: { 'sec-fetch-site': 'same-origin' },
-    }),
-  );
-
+  const logout = await dashboard.auth.logout();
   const dashboardEnded = await dashboardStream.ended;
 
   await ctx.client.imps.create({ name: 'dev', image: 'ubuntu' });
@@ -449,7 +443,7 @@ test('it ends a dashboard stream at any logout, and leaves a token’s stream op
 
   controller.abort();
 
-  expect(logout.status).toBe(204);
+  expect(logout).toStrictEqual({});
   expect(dashboardEnded).toBeNull();
 
   expect(tokenStream.items[0]).toMatchObject({

@@ -68,6 +68,7 @@ import { SessionNameSchema, SessionSchema } from '../schemas/session-schema';
 import { DatabaseCopySchema, StorageGcSchema } from '../schemas/storage-schema';
 import { SystemFeaturesInfoSchema, SystemInfoSchema } from '../schemas/system-info-schema';
 import { ScopeSchema } from '../schemas/token-schema';
+import { authContract } from './auth-contract';
 import { IMP_ERRORS } from './imp-errors';
 import { impsContract } from './imps-contract';
 import { tokensContract } from './tokens-contract';
@@ -100,7 +101,8 @@ export const CheckpointCreateInputSchema = z.object({
   label: z.string().min(1).max(64).optional(),
 });
 
-export const impContract = {
+// every procedure that answers an authenticated caller
+export const callerContract = {
   imps: impsContract,
 
   leases: {
@@ -427,5 +429,9 @@ export const impContract = {
 
   tokens: tokensContract,
 };
+
+export type CallerContract = typeof callerContract;
+
+export const impContract = { ...callerContract, auth: authContract };
 
 export type ImpContract = typeof impContract;

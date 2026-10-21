@@ -442,10 +442,10 @@ test('it lets the token’s dashboard session grant a listed secret on its imps'
   });
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: made.secret }),
+      body: JSON.stringify({ json: { token: made.secret } }),
     }),
   );
 
@@ -489,10 +489,10 @@ test.each([
     });
 
     const login = await ctx.sendToImpd(
-      new Request('http://impd.test/auth/login', {
+      new Request('http://impd.test/rpc/auth/login', {
         method: 'POST',
         headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-        body: JSON.stringify({ token: made.secret }),
+        body: JSON.stringify({ json: { token: made.secret } }),
       }),
     );
 
@@ -529,10 +529,10 @@ test('it refuses the token’s dashboard session a fork', async () => {
   });
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: made.secret }),
+      body: JSON.stringify({ json: { token: made.secret } }),
     }),
   );
 
@@ -567,10 +567,10 @@ test('it names the token’s list to its dashboard session', async () => {
   });
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: made.secret }),
+      body: JSON.stringify({ json: { token: made.secret } }),
     }),
   );
 
@@ -809,10 +809,10 @@ test('it refuses the dashboard session a grant of a listed secret deleted and ma
   });
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: made.secret }),
+      body: JSON.stringify({ json: { token: made.secret } }),
     }),
   );
 
@@ -1566,10 +1566,10 @@ test('it refuses a move prepare to the dashboard session of a token whose entrie
   await ctx.client.secrets.delete({ name: 'gh' });
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: made.secret }),
+      body: JSON.stringify({ json: { token: made.secret } }),
     }),
   );
 
@@ -1607,10 +1607,10 @@ test('it refuses a fork to the dashboard session of a token whose entries are al
   await ctx.client.secrets.delete({ name: 'gh' });
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: made.secret }),
+      body: JSON.stringify({ json: { token: made.secret } }),
     }),
   );
 

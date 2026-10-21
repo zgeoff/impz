@@ -38,6 +38,28 @@ test('it stays on the login page with a message for a token impd does not know',
   expect(rendered.router.state.location.pathname).toBe('/login');
 });
 
+test('it stays on the login page with a message when impd fails the login', async () => {
+  const user = userEvent.setup();
+
+  await setupTest();
+
+  server.use(
+    http.post(`${IMPD_ORIGIN}/rpc/auth/login`, () => new HttpResponse(null, { status: 502 })),
+  );
+
+  const rendered = renderApp('/login');
+
+  const field = await rendered.findByLabelText('API token');
+
+  await user.type(field, 'imp_any.secret');
+  await user.click(rendered.getByRole('button', { name: 'Log in' }));
+
+  const alert = await rendered.findByRole('alert');
+
+  expect(alert).toHaveTextContent('impd did not answer the login.');
+  expect(rendered.router.state.location.pathname).toBe('/login');
+});
+
 test('it opens the imps list for a token impd knows', async () => {
   const user = userEvent.setup();
 
@@ -82,7 +104,7 @@ test('it says so and stays when the log out fails', async () => {
   await ctx.logIn();
 
   server.use(
-    http.post(`${IMPD_ORIGIN}/auth/logout`, () => new HttpResponse(null, { status: 502 })),
+    http.post(`${IMPD_ORIGIN}/rpc/auth/logout`, () => new HttpResponse(null, { status: 502 })),
   );
 
   const rendered = renderApp();

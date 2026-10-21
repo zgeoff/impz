@@ -73,11 +73,23 @@ export function stripSessionCookie(header: string): string | null {
   return kept.length === 0 ? null : kept.join('; ');
 }
 
-export function buildSessionCookie(value: string, secure: boolean): string {
+export interface SessionCookie {
+  readonly name: string;
+  readonly value: string;
+  readonly options: {
+    readonly path: '/';
+    readonly maxAge: number;
+    readonly httpOnly: true;
+    readonly sameSite: 'strict';
+    readonly secure: boolean;
+  };
+}
+
+export function buildSessionCookie(value: string, secure: boolean): SessionCookie {
   return buildCookie(value, SESSION_MAX_AGE_S, secure);
 }
 
-export function buildClearedSessionCookies(secure: boolean): readonly string[] {
+export function buildClearedSessionCookies(secure: boolean): readonly SessionCookie[] {
   // a session set over plain HTTP reaches the HTTPS origin too, and over HTTP
   // a browser neither sets nor clears a __Host- cookie
   return secure
@@ -85,22 +97,12 @@ export function buildClearedSessionCookies(secure: boolean): readonly string[] {
     : [buildCookie('', 0, false)];
 }
 
-function buildCookie(value: string, maxAgeS: number, secure: boolean): string {
-  const name = secure ? SECURE_SESSION_COOKIE : SESSION_COOKIE;
-
-  const attributes = [
-    `${name}=${value}`,
-    'Path=/',
-    `Max-Age=${String(maxAgeS)}`,
-    'HttpOnly',
-    'SameSite=Strict',
-  ];
-
-  if (secure) {
-    attributes.push('Secure');
-  }
-
-  return attributes.join('; ');
+function buildCookie(value: string, maxAgeS: number, secure: boolean): SessionCookie {
+  return {
+    name: secure ? SECURE_SESSION_COOKIE : SESSION_COOKIE,
+    value,
+    options: { path: '/', maxAge: maxAgeS, httpOnly: true, sameSite: 'strict', secure },
+  };
 }
 
 function buildSignature(rootToken: string, tokenId: string, expiry: string): string {

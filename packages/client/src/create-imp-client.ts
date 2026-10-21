@@ -121,6 +121,7 @@ export function createImpClient(options: Readonly<ImpClientOptions>): ImpClient 
     system: rpc.system,
     tokens: rpc.tokens,
     oauth: rpc.oauth,
+    auth: rpc.auth,
   } satisfies RpcClient;
 
   const execDeps: ExecDeps = {

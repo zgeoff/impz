@@ -46,14 +46,14 @@ test('it answers a login with the token with a strict session cookie', async () 
   const ctx = await setupTest();
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: 'root-token' }),
+      body: JSON.stringify({ json: { token: 'root-token' } }),
     }),
   );
 
-  expect(login.status).toBe(204);
+  expect(login.status).toBe(200);
   expect(login.headers.get('set-cookie')).toStartWith('imp_session=v2.root.');
   expect(login.headers.get('set-cookie')).toContain('HttpOnly; SameSite=Strict');
 });
@@ -62,10 +62,10 @@ test('it accepts the session from its own page', async () => {
   const ctx = await setupTest();
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: 'root-token' }),
+      body: JSON.stringify({ json: { token: 'root-token' } }),
     }),
   );
 
@@ -95,33 +95,33 @@ test('it answers a login behind TLS with a secure __Host- session cookie', async
   const ctx = await setupTest();
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: {
         origin: 'http://impd.test',
         'content-type': 'application/json',
         'x-forwarded-proto': 'https',
       },
-      body: JSON.stringify({ token: 'root-token' }),
+      body: JSON.stringify({ json: { token: 'root-token' } }),
     }),
   );
 
   expect(login.headers.get('set-cookie')).toStartWith('__Host-imp_session=v2.root.');
-  expect(login.headers.get('set-cookie')).toEndWith('; Secure');
+  expect(login.headers.get('set-cookie')).toInclude('; Secure;');
 });
 
 test('it accepts the __Host- session from its own page', async () => {
   const ctx = await setupTest();
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: {
         origin: 'http://impd.test',
         'content-type': 'application/json',
         'x-forwarded-proto': 'https',
       },
-      body: JSON.stringify({ token: 'root-token' }),
+      body: JSON.stringify({ json: { token: 'root-token' } }),
     }),
   );
 
@@ -151,7 +151,7 @@ test('it clears both cookie names at a logout behind TLS', async () => {
   const ctx = await setupTest();
 
   const logout = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/logout', {
+    new Request('http://impd.test/rpc/auth/logout', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'x-forwarded-proto': 'https' },
     }),
@@ -167,10 +167,10 @@ test('it refuses a login with the wrong token and sets no cookie', async () => {
   const ctx = await setupTest();
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: 'wrong' }),
+      body: JSON.stringify({ json: { token: 'wrong' } }),
     }),
   );
 
@@ -182,10 +182,10 @@ test('it refuses a login from another origin and sets no cookie', async () => {
   const ctx = await setupTest();
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test:20001', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: 'root-token' }),
+      body: JSON.stringify({ json: { token: 'root-token' } }),
     }),
   );
 
@@ -200,10 +200,10 @@ test.each([
   const ctx = await setupTest();
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: 'root-token' }),
+      body: JSON.stringify({ json: { token: 'root-token' } }),
     }),
   );
 
@@ -228,10 +228,10 @@ test.each([
   const ctx = await setupTest();
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: 'root-token' }),
+      body: JSON.stringify({ json: { token: 'root-token' } }),
     }),
   );
 
@@ -257,10 +257,10 @@ test.each([
   const ctx = await setupTest();
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: 'root-token' }),
+      body: JSON.stringify({ json: { token: 'root-token' } }),
     }),
   );
 
@@ -295,7 +295,7 @@ test('it refuses a logout from another origin', async () => {
   const ctx = await setupTest();
 
   const logout = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/logout', {
+    new Request('http://impd.test/rpc/auth/logout', {
       method: 'POST',
       headers: { origin: 'http://impd.test:20001' },
     }),
@@ -308,24 +308,24 @@ test('it clears the cookie at a logout from its own origin', async () => {
   const ctx = await setupTest();
 
   const logout = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/logout', {
+    new Request('http://impd.test/rpc/auth/logout', {
       method: 'POST',
       headers: { origin: 'http://impd.test' },
     }),
   );
 
-  expect(logout.status).toBe(204);
-  expect(logout.headers.get('set-cookie')).toStartWith('imp_session=; Path=/; Max-Age=0');
+  expect(logout.status).toBe(200);
+  expect(logout.headers.get('set-cookie')).toStartWith('imp_session=; Max-Age=0; Path=/');
 });
 
 test('it refuses an /exec socket that carries only the session', async () => {
   const ctx = await setupTest();
 
   const login = await ctx.sendToImpd(
-    new Request('http://impd.test/auth/login', {
+    new Request('http://impd.test/rpc/auth/login', {
       method: 'POST',
       headers: { origin: 'http://impd.test', 'content-type': 'application/json' },
-      body: JSON.stringify({ token: 'root-token' }),
+      body: JSON.stringify({ json: { token: 'root-token' } }),
     }),
   );
 

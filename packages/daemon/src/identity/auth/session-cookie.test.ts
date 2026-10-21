@@ -148,26 +148,42 @@ test.each([
 });
 
 test('#buildSessionCookie sets an http-only strict cookie over plain HTTP', () => {
-  expect(buildSessionCookie('v', false)).toBe(
-    'imp_session=v; Path=/; Max-Age=2592000; HttpOnly; SameSite=Strict',
-  );
+  expect(buildSessionCookie('v', false)).toStrictEqual({
+    name: 'imp_session',
+    value: 'v',
+    options: { path: '/', maxAge: 2_592_000, httpOnly: true, sameSite: 'strict', secure: false },
+  });
 });
 
 test('#buildSessionCookie sets a Secure __Host- cookie behind TLS', () => {
-  expect(buildSessionCookie('v', true)).toBe(
-    '__Host-imp_session=v; Path=/; Max-Age=2592000; HttpOnly; SameSite=Strict; Secure',
-  );
+  expect(buildSessionCookie('v', true)).toStrictEqual({
+    name: '__Host-imp_session',
+    value: 'v',
+    options: { path: '/', maxAge: 2_592_000, httpOnly: true, sameSite: 'strict', secure: true },
+  });
 });
 
 test('#buildClearedSessionCookies clears the plain cookie over plain HTTP', () => {
   expect(buildClearedSessionCookies(false)).toStrictEqual([
-    'imp_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict',
+    {
+      name: 'imp_session',
+      value: '',
+      options: { path: '/', maxAge: 0, httpOnly: true, sameSite: 'strict', secure: false },
+    },
   ]);
 });
 
 test('#buildClearedSessionCookies clears both cookies behind TLS', () => {
   expect(buildClearedSessionCookies(true)).toStrictEqual([
-    'imp_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict',
-    '__Host-imp_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict; Secure',
+    {
+      name: 'imp_session',
+      value: '',
+      options: { path: '/', maxAge: 0, httpOnly: true, sameSite: 'strict', secure: false },
+    },
+    {
+      name: '__Host-imp_session',
+      value: '',
+      options: { path: '/', maxAge: 0, httpOnly: true, sameSite: 'strict', secure: true },
+    },
   ]);
 });

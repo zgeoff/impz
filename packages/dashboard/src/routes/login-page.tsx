@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '../components/button';
 import formStyles from '../components/form.module.css';
+import { useImpd } from '../lib/impd';
 import { readText } from '../lib/read-form';
 import { sendLogin } from '../lib/session';
 import styles from './login-page.module.css';
@@ -13,9 +14,10 @@ const MESSAGES = {
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const impd = useImpd();
 
   const login = useMutation({
-    mutationFn: sendLogin,
+    mutationFn: (token: string) => sendLogin(impd.client, token),
     onSuccess: async (result) => {
       if (result === 'ok') {
         await navigate({ to: '/' });

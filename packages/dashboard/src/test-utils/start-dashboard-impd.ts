@@ -1,3 +1,4 @@
+import { createImpClient } from '@impz/client';
 import { TEST_TOKEN, startTestImpd } from '@impz/daemon/testing';
 import type { TestImpd, TestImpdOptions } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
@@ -75,13 +76,5 @@ function formatCookies(cookies: ReadonlyMap<string, string>): string {
 }
 
 async function logIn(token = TEST_TOKEN): Promise<void> {
-  const response = await fetch(`${IMPD_ORIGIN}/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ token }),
-  });
-
-  if (response.status !== 204) {
-    throw new Error(`impd refused the login with ${String(response.status)}`);
-  }
+  await createImpClient({ url: IMPD_ORIGIN }).auth.login({ token });
 }

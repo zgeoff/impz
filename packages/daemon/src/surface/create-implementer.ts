@@ -1,4 +1,4 @@
-import { impContract } from '@impz/api';
+import { callerContract } from '@impz/api';
 import { implement } from '@orpc/server';
 import {
   checkAccess,
@@ -35,7 +35,7 @@ export function createImplementer(deps: RouterDeps) {
     return secret?.generation ?? null;
   };
 
-  return implement(impContract)
+  return implement(callerContract)
     .$context<RpcContext>()
     .use(async (options, input) => {
       const procedure = options.path.join('.');
