@@ -2,10 +2,11 @@
 
 ## [2.10.0](https://github.com/zgeoff/impz/compare/v2.9.0...v2.10.0) (2026-10-21)
 
-
 ### Features
 
-* **daemon:** evict unused images under storage pressure ([#582](https://github.com/zgeoff/impz/issues/582)) ([1d015f9](https://github.com/zgeoff/impz/commit/1d015f904453d709f78647fe474016c1fc984a67))
+- **daemon:** evict unused images under storage pressure
+  ([#582](https://github.com/zgeoff/impz/issues/582))
+  ([1d015f9](https://github.com/zgeoff/impz/commit/1d015f904453d709f78647fe474016c1fc984a67))
 
 ## [2.9.0](https://github.com/zgeoff/impz/compare/v2.8.3...v2.9.0) (2026-10-21)
 
