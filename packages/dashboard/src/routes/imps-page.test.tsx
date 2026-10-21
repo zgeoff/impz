@@ -1,23 +1,30 @@
-import { expect, mock, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http } from 'msw';
-import { hostCollection } from '../mocks/db/host-collection';
-import { imageCollection } from '../mocks/db/image-collection';
-import { impCollection } from '../mocks/db/imp-collection';
-import { RPC_URL } from '../mocks/handlers';
-import { emitImpdEvent, impdEventListeners } from '../mocks/impd-events';
-import { server } from '../mocks/node';
-import { buildMockImpChangedEvent } from '../test-utils/build-mock-imp-changed-event';
-import { createDashboardSession } from '../test-utils/create-dashboard-session';
-import { readRpcInput } from '../test-utils/read-rpc-input';
 import { renderApp } from '../test-utils/render-app';
+import { startDashboardImpd } from '../test-utils/start-dashboard-impd';
+
+async function setupTest(env: Readonly<Record<string, string>> = {}) {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const dashboardImpd = await startDashboardImpd(stack, { env });
+
+  return {
+    harness: dashboardImpd.harness,
+    client: dashboardImpd.harness.client,
+    logIn: dashboardImpd.logIn,
+  };
+}
 
 test('it lists a running imp with its state, RAM, disk and a sleep button', async () => {
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({ name: 'web', ramMib: 300, diskMib: 32_768 });
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web', diskMib: 32_768 });
+  await ctx.logIn();
 
   const rendered = renderApp();
 
@@ -30,51 +37,69 @@ test('it lists a running imp with its state, RAM, disk and a sleep button', asyn
 });
 
 test('it lists a sleeping imp with its notes and a wake button', async () => {
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({
-    name: 'old',
-    state: 'sleeping',
-    coldBootReason: 'the kernel changed',
-  });
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'old' });
+  await ctx.client.imps.sleep({ name: 'old' });
+
+  const before = ctx.harness.readIdentity();
+
+  await ctx.harness.restartImpd({ ...before, hostKernel: '6.99.0' });
+  await ctx.logIn();
 
   const rendered = renderApp();
 
   const row = await rendered.findByRole('row', { name: /old/u });
 
-  expect(within(row).getByText('next wake boots cold: the kernel changed')).toBeInTheDocument();
+  expect(
+    within(row).getByText(
+      `next wake boots cold: hostKernel changed (${before.hostKernel} → 6.99.0)`,
+    ),
+  ).toBeInTheDocument();
+
   expect(within(row).getByRole('button', { name: 'Wake' })).toBeInTheDocument();
 });
 
 test('it lists a failed imp with its error and a restart button', async () => {
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({ name: 'bad', state: 'error', error: 'boot failed: no agent' });
+  await ctx.harness.createTestImage('base');
+
+  ctx.harness.fake.queue('boot', 'fail');
+
+  await ctx.client.imps.create({ name: 'bad' }).catch(() => null);
+  await ctx.logIn();
+
+  const failed = await ctx.client.imps.get({ name: 'bad' });
 
   const rendered = renderApp();
 
   const row = await rendered.findByRole('row', { name: /bad/u });
 
-  expect(within(row).getByText('boot failed: no agent')).toBeInTheDocument();
+  expect(within(row).getByText(failed.error ?? 'no error')).toBeInTheDocument();
   expect(within(row).getByRole('button', { name: 'Restart' })).toBeInTheDocument();
 });
 
 test('it shows the RAM in use against the budget of the host', async () => {
-  await createDashboardSession();
+  const ctx = await setupTest({ IMP_RAM_BUDGET_MIB: '4096' });
 
-  await hostCollection.create({ ramBudgetMib: 4096 });
-  await impCollection.create({ name: 'web', ramMib: 1024 });
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
 
   const rendered = renderApp();
 
   const meter = await rendered.findByRole('meter', { name: 'RAM in use' });
 
-  expect(meter).toHaveAttribute('aria-valuenow', '1024');
-  expect(rendered.getByText('1.0 GiB of 4.0 GiB')).toBeInTheDocument();
+  expect(meter).toHaveAttribute('aria-valuenow', '300');
+  expect(rendered.getByText('300 MiB of 4.0 GiB')).toBeInTheDocument();
 });
 
 test('it invites a first imp when there are none', async () => {
-  await createDashboardSession();
+  const ctx = await setupTest();
+
+  await ctx.logIn();
 
   const rendered = renderApp();
 
@@ -86,9 +111,11 @@ test('it invites a first imp when there are none', async () => {
 test('it moves the row of an imp to the state its lifecycle button asks for', async () => {
   const user = userEvent.setup();
 
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({ name: 'web' });
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
 
   const rendered = renderApp();
 
@@ -97,17 +124,20 @@ test('it moves the row of an imp to the state its lifecycle button asks for', as
   await user.click(within(row).getByRole('button', { name: 'Sleep' }));
 
   const state = await within(row).findByText('sleeping');
+  const imp = await ctx.client.imps.get({ name: 'web' });
 
   expect(state).toBeInTheDocument();
-  expect(impCollection.findFirst((query) => query.where({ name: 'web' }))?.state).toBe('sleeping');
+  expect(imp.state).toBe('sleeping');
 });
 
 test('it asks before destroying an imp', async () => {
   const user = userEvent.setup();
 
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({ name: 'web' });
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
 
   const rendered = renderApp();
 
@@ -116,17 +146,20 @@ test('it asks before destroying an imp', async () => {
   await user.click(within(row).getByRole('button', { name: 'Destroy' }));
 
   const dialog = await rendered.findByRole('dialog', { name: 'Destroy web?' });
+  const imps = await ctx.client.imps.list();
 
   expect(dialog).toBeInTheDocument();
-  expect(impCollection.findMany().map((imp) => imp.name)).toStrictEqual(['web']);
+  expect(imps.map((imp) => imp.name)).toStrictEqual(['web']);
 });
 
 test('it destroys an imp once the destroy is confirmed', async () => {
   const user = userEvent.setup();
 
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({ name: 'web' });
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
 
   const rendered = renderApp();
 
@@ -142,25 +175,18 @@ test('it destroys an imp once the destroy is confirmed', async () => {
     expect(rendered.queryByRole('row', { name: /web/u })).toBeNull();
   });
 
-  expect(impCollection.count()).toBe(0);
+  const imps = await ctx.client.imps.list();
+
+  expect(imps).toStrictEqual([]);
 });
 
-test('it sends only the fields that were filled in for a new imp', async () => {
+test('it creates a new imp from only the fields that were filled in', async () => {
   const user = userEvent.setup();
-  const received = mock<(input: unknown) => void>();
 
-  await createDashboardSession();
+  const ctx = await setupTest({ IMP_DEFAULT_IMAGE: 'node' });
 
-  await hostCollection.create({ defaultImage: 'node' });
-  await imageCollection.create({ name: 'node' });
-
-  server.use(
-    http.post(`${RPC_URL}/imps/create`, async (info) => {
-      const input = await readRpcInput(info.request);
-
-      received(input);
-    }),
-  );
+  await ctx.harness.createTestImage('node');
+  await ctx.logIn();
 
   const rendered = renderApp();
 
@@ -175,30 +201,25 @@ test('it sends only the fields that were filled in for a new imp', async () => {
   await user.click(within(dialog).getByRole('button', { name: 'Create' }));
   await rendered.findByRole('row', { name: /box/u });
 
-  expect(received).toHaveBeenCalledExactlyOnceWith({ name: 'box', memoryMib: 512 });
+  const imp = await ctx.client.imps.get({ name: 'box' });
+
+  expect(imp).toMatchObject({ name: 'box', image: 'node', memoryMib: 512, vcpus: 2 });
 });
 
+// the views refetch on a timer far longer than a find waits, so only the event
+// stream can show the change in time
 test('it shows a change impd streams without waiting for the next poll', async () => {
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({ name: 'web' });
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
 
   const rendered = renderApp();
 
   const row = await rendered.findByRole('row', { name: /web/u });
 
-  // impd sends its event only to streams open at the time
-  await waitFor(() => {
-    expect(impdEventListeners.size).toBe(1);
-  });
-
-  const slept = await impCollection.update((query) => query.where({ name: 'web' }), {
-    data(imp) {
-      imp.state = 'sleeping';
-    },
-  });
-
-  emitImpdEvent(buildMockImpChangedEvent({ reason: 'slept', imp: { ...slept } }));
+  await ctx.client.imps.sleep({ name: 'web' });
 
   const state = await within(row).findByText('sleeping');
 

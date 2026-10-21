@@ -368,13 +368,9 @@
       }
     },
     {
-      // the dashboard's stand-in for impd's router and the daemon's stand-in
-      // for the VM runner each answer a whole contract in one module, so their
-      // line counts run past the limit
-      "files": [
-        "packages/dashboard/src/mocks/impd-router.ts",
-        "packages/daemon/testing/vm/build-stub-vmm.ts"
-      ],
+      // the daemon's stand-in for the VM runner answers a whole contract in one
+      // module, so its line count runs past the limit
+      "files": ["packages/daemon/testing/vm/build-stub-vmm.ts"],
       "rules": { "max-lines": "off" }
     },
     {

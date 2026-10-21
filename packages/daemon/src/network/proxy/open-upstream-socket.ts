@@ -5,6 +5,15 @@ interface OpenDeadline {
   readonly startTimer: StartTimer;
 }
 
+// Bun's WebSocket takes headers in an options object. bun-types defer to
+// lib.dom's constructor, which takes none, when lib.dom is loaded, as it is in
+// the dashboard's type check, which reads this module.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
+const BunWebSocket = WebSocket as unknown as new (
+  url: string,
+  options: Bun.WebSocketOptions,
+) => WebSocket;
+
 export function openUpstreamSocket(
   target: string,
   protocols: readonly string[],
@@ -12,7 +21,7 @@ export function openUpstreamSocket(
   deadline: Readonly<OpenDeadline>,
 ): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const socket = new WebSocket(target, {
+    const socket = new BunWebSocket(target, {
       protocols: [...protocols],
       headers: Object.fromEntries(headers),
     });

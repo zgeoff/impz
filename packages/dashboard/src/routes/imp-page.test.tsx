@@ -1,47 +1,61 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { buildImpPaths } from '@impz/daemon/testing';
+import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http } from 'msw';
-import { checkpointCollection } from '../mocks/db/checkpoint-collection';
-import { impCollection } from '../mocks/db/imp-collection';
-import { RPC_URL } from '../mocks/handlers';
-import { server } from '../mocks/node';
-import { buildMockDiskUsage } from '../test-utils/build-mock-disk-usage';
-import { buildMockImpResources } from '../test-utils/build-mock-imp-resources';
-import { createDashboardSession } from '../test-utils/create-dashboard-session';
-import { readRpcInput } from '../test-utils/read-rpc-input';
 import { renderApp } from '../test-utils/render-app';
+import { startDashboardImpd } from '../test-utils/start-dashboard-impd';
+
+async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const dashboardImpd = await startDashboardImpd(stack);
+
+  return {
+    harness: dashboardImpd.harness,
+    client: dashboardImpd.harness.client,
+    logIn: dashboardImpd.logIn,
+  };
+}
 
 test('it shows the RAM and disk use of the imp', async () => {
-  await createDashboardSession();
+  const stack = new AsyncDisposableStack();
 
-  await impCollection.create({
-    name: 'web',
-    ramMib: 300,
-    rssMib: 340,
-    diskMib: 32_768,
-    diskUsage: buildMockDiskUsage({
-      exclusiveBytes: 1024 * 1024 * 1024,
-      sharedBytes: 512 * 1024 * 1024,
-      isPartial: false,
-      isUpperBound: false,
-    }),
-  });
+  onTestFinished(() => stack.disposeAsync());
+
+  // the disk use comes from FIEMAP, which a tmpfs lacks
+  const dataDir = await mkdtemp('/var/tmp/dashboard-imp-');
+
+  onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
+
+  const dashboardImpd = await startDashboardImpd(stack, { dataDir });
+
+  const harness = dashboardImpd.harness;
+
+  await harness.createTestImage('base');
+  await harness.client.imps.create({ name: 'web', diskMib: 32_768 });
+  await harness.tickers.fire('disk-usage');
+  await dashboardImpd.logIn();
 
   const rendered = renderApp('/imps/web');
 
   await rendered.findByRole('heading', { name: 'web' });
 
   expect(rendered.getByText('300 MiB owned, 340 MiB resident')).toBeInTheDocument();
-  expect(rendered.getByText('1.0 GiB / 32.0 GiB, 512 MiB shared')).toBeInTheDocument();
+  expect(rendered.getByText('4.0 KiB / 32.0 GiB, 0 B shared')).toBeInTheDocument();
 });
 
 test('it lists the checkpoints of the imp', async () => {
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({ name: 'web' });
-  await checkpointCollection.create({ imp: 'web', label: 'before-upgrade' });
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.client.checkpoints.create({ name: 'web', label: 'before-upgrade' });
+  await ctx.logIn();
 
   const rendered = renderApp('/imps/web');
 
@@ -53,9 +67,11 @@ test('it lists the checkpoints of the imp', async () => {
 test('it takes a checkpoint with a label', async () => {
   const user = userEvent.setup();
 
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({ name: 'web' });
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
 
   const rendered = renderApp('/imps/web');
 
@@ -65,27 +81,27 @@ test('it takes a checkpoint with a label', async () => {
   await user.click(rendered.getByRole('button', { name: 'Checkpoint now' }));
   await rendered.findByRole('row', { name: /v2/u });
 
-  expect(checkpointCollection.findMany().map((checkpoint) => checkpoint.label)).toStrictEqual([
-    'v2',
-  ]);
+  const checkpoints = await ctx.client.checkpoints.list({ name: 'web' });
+
+  expect(checkpoints.map((checkpoint) => checkpoint.label)).toStrictEqual(['v2']);
 });
 
 test('it restores the named checkpoint after a confirm', async () => {
   const user = userEvent.setup();
-  const received = mock<(input: unknown) => void>();
 
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({ name: 'web' });
-  await checkpointCollection.create({ imp: 'web', id: 'cp1', label: 'before-upgrade' });
+  await ctx.harness.createTestImage('base');
 
-  server.use(
-    http.post(`${RPC_URL}/checkpoints/restore`, async (info) => {
-      const input = await readRpcInput(info.request);
+  const imp = await ctx.client.imps.create({ name: 'web' });
 
-      received(input);
-    }),
-  );
+  const disk = buildImpPaths(ctx.harness.dataDir, imp.id).disk;
+
+  await Bun.write(disk, 'before the upgrade');
+  await ctx.client.checkpoints.create({ name: 'web', label: 'before-upgrade' });
+  await Bun.write(disk, 'after the upgrade');
+  await ctx.client.checkpoints.create({ name: 'web', label: 'after-upgrade' });
+  await ctx.logIn();
 
   const rendered = renderApp('/imps/web');
 
@@ -97,27 +113,22 @@ test('it restores the named checkpoint after a confirm', async () => {
 
   await user.click(within(dialog).getByRole('button', { name: 'Restore' }));
 
-  await waitFor(() => {
-    expect(received).toHaveBeenCalledExactlyOnceWith({ name: 'web', checkpoint: 'cp1' });
+  await waitFor(async () => {
+    const content = await Bun.file(disk).text();
+
+    expect(content).toBe('before the upgrade');
   });
 });
 
 test('it opens the new imp after a fork from a checkpoint', async () => {
   const user = userEvent.setup();
-  const received = mock<(input: unknown) => void>();
 
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({ name: 'web' });
-  await checkpointCollection.create({ imp: 'web', id: 'cp1', label: 'before-upgrade' });
-
-  server.use(
-    http.post(`${RPC_URL}/imps/fork`, async (info) => {
-      const input = await readRpcInput(info.request);
-
-      received(input);
-    }),
-  );
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.client.checkpoints.create({ name: 'web', label: 'before-upgrade' });
+  await ctx.logIn();
 
   const rendered = renderApp('/imps/web');
 
@@ -131,17 +142,16 @@ test('it opens the new imp after a fork from a checkpoint', async () => {
   await user.click(within(dialog).getByRole('button', { name: 'Fork' }));
   await rendered.findByRole('heading', { name: 'web2' });
 
-  expect(rendered.router.state.location.pathname).toBe('/imps/web2');
+  const fork = await ctx.client.imps.get({ name: 'web2' });
 
-  expect(received).toHaveBeenCalledExactlyOnceWith({
-    source: 'web',
-    name: 'web2',
-    checkpoint: 'cp1',
-  });
+  expect(rendered.router.state.location.pathname).toBe('/imps/web2');
+  expect(fork.image).toBe('base');
 });
 
 test('it says so when the imp does not exist', async () => {
-  await createDashboardSession();
+  const ctx = await setupTest();
+
+  await ctx.logIn();
 
   const rendered = renderApp('/imps/gone');
 
@@ -154,6 +164,12 @@ test('it goes back to the list without asking for the imp it destroyed', async (
   const user = userEvent.setup();
   const answered = mock<(status: number) => void>();
 
+  const ctx = await setupTest();
+
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
+
   server.events.on('response:mocked', (event) => {
     answered(event.response.status);
   });
@@ -161,10 +177,6 @@ test('it goes back to the list without asking for the imp it destroyed', async (
   onTestFinished(() => {
     server.events.removeAllListeners('response:mocked');
   });
-
-  await createDashboardSession();
-
-  await impCollection.create({ name: 'web' });
 
   const rendered = renderApp('/imps/web');
 
@@ -183,15 +195,32 @@ test('it goes back to the list without asking for the imp it destroyed', async (
 });
 
 test('it shows the network use and awake time of the running imp', async () => {
-  await createDashboardSession();
+  const stack = new AsyncDisposableStack();
 
-  await impCollection.create({
-    name: 'web',
-    resources: buildMockImpResources({
-      awakeMs: 200 * 60_000,
-      sample: { netRxBytes: 2048, netTxBytes: 512 },
-    }),
+  onTestFinished(() => stack.disposeAsync());
+
+  const counters = { rxBytes: 0, txBytes: 0 };
+
+  // the database stamps the wake with the wall clock
+  const clock = { nowMs: Date.now() };
+
+  const dashboardImpd = await startDashboardImpd(stack, {
+    boundaries: { imps: { now: () => clock.nowMs, readNetBytes: () => counters } },
   });
+
+  const harness = dashboardImpd.harness;
+
+  await harness.createTestImage('base');
+  await harness.client.imps.create({ name: 'web' });
+
+  counters.rxBytes = 2048;
+  counters.txBytes = 512;
+
+  // half a minute of slack for the time the create took
+  clock.nowMs = Date.now() + 200 * 60_000 + 30_000;
+
+  await harness.tickers.fire('resources');
+  await dashboardImpd.logIn();
 
   const rendered = renderApp('/imps/web');
 
@@ -201,16 +230,14 @@ test('it shows the network use and awake time of the running imp', async () => {
   expect(rendered.getByText('3h 20m')).toBeInTheDocument();
 });
 
-test('it sets a CPU limit on the running imp', async () => {
+test('it sets a CPU limit on the running imp and keeps its weight', async () => {
   const user = userEvent.setup();
 
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({
-    name: 'web',
-    cpu: { limit: null, weight: 200 },
-    resources: buildMockImpResources({ sample: { cpuPercent: 45 } }),
-  });
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web', cpuWeight: 200 });
+  await ctx.logIn();
 
   const rendered = renderApp('/imps/web');
 
@@ -219,44 +246,9 @@ test('it sets a CPU limit on the running imp', async () => {
   await user.type(field, '0.5');
   await user.click(rendered.getByRole('button', { name: 'Save' }));
 
-  const cpu = await rendered.findByText('45% / 0.5');
+  const cpu = await rendered.findByText(/ \/ 0\.5$/u);
+  const imp = await ctx.client.imps.get({ name: 'web' });
 
   expect(cpu).toBeInTheDocument();
-
-  expect(impCollection.findFirst((query) => query.where({ name: 'web' }))?.cpu).toStrictEqual({
-    limit: 0.5,
-    weight: 200,
-  });
-});
-
-test('it sends the weight of the imp beside a new CPU limit', async () => {
-  const user = userEvent.setup();
-  const received = mock<(input: unknown) => void>();
-
-  await createDashboardSession();
-
-  await impCollection.create({ name: 'web', cpu: { limit: null, weight: 200 } });
-
-  server.use(
-    http.post(`${RPC_URL}/imps/update`, async (info) => {
-      const input = await readRpcInput(info.request);
-
-      received(input);
-    }),
-  );
-
-  const rendered = renderApp('/imps/web');
-
-  const field = await rendered.findByLabelText('Limit (CPUs)');
-
-  await user.type(field, '0.5');
-  await user.click(rendered.getByRole('button', { name: 'Save' }));
-
-  await waitFor(() => {
-    expect(received).toHaveBeenCalledExactlyOnceWith({
-      name: 'web',
-      cpuLimit: 0.5,
-      cpuWeight: 200,
-    });
-  });
+  expect(imp.cpu).toStrictEqual({ limit: 0.5, weight: 200 });
 });

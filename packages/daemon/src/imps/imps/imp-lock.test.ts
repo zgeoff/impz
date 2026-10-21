@@ -38,6 +38,7 @@ async function setupTest() {
     sleepTiming: { now: () => 0, sleep: () => Promise.resolve() },
     kernelOops: NO_KERNEL_OOPS,
     readThreadIds: () => null,
+    readNetBytes: () => null,
   });
 
   return { db: harness.db, image, lock: createImpLock(context) };

@@ -158,7 +158,9 @@ export function createDockerProxy(
   const sendUpstream = (versionPrefix: string, call: UpstreamCall): Promise<Response> => {
     const search = call.query === undefined ? '' : formatQuery(call.query);
 
-    return fetch(`http://docker${versionPrefix}${call.path}${search}`, {
+    // lib.dom's RequestInit has no duplex, and the dashboard's type check reads
+    // this module under lib.dom
+    const init: BunFetchRequestInit & { readonly duplex: 'half' } = {
       method: call.method,
       headers: call.headers ?? {},
       body: call.body ?? null,
@@ -169,7 +171,9 @@ export function createDockerProxy(
       ...(call.longRunning === undefined
         ? { signal: AbortSignal.timeout(options.controlCallMs ?? CONTROL_CALL_MS) }
         : { timeout: false, signal: call.longRunning.signal }),
-    });
+    };
+
+    return fetch(`http://docker${versionPrefix}${call.path}${search}`, init);
   };
 
   const sendAndRelay = async (versionPrefix: string, call: UpstreamCall): Promise<Response> => {
