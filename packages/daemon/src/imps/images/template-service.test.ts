@@ -7,14 +7,14 @@ import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
-import { buildStubStoragePressure } from '../../../testing/vm/build-stub-storage-pressure';
+import { buildStubPressureSwitch } from '../../../testing/vm/build-stub-pressure-switch';
 import { createImage, readImageByName } from '../../platform/db/images';
 import { createImp, readImpByName } from '../../platform/db/imps';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { BUILDER_IMAGE } from './builder-imps';
 
-async function setupTest(options: Readonly<{ isStorageFull?: boolean }> = {}) {
+async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -36,16 +36,14 @@ async function setupTest(options: Readonly<{ isStorageFull?: boolean }> = {}) {
     await clones.after();
   };
 
+  const pressure = buildStubPressureSwitch();
+
   const harness = await startTestImpd(stack, {
     dataDir,
     cloneDisk,
-    ...(options.isStorageFull === true && {
-      env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
-      createStorage: (directory: string) => ({
-        ...createXfsBackend({ dataDir: directory, cloneFile: cloneDisk }),
-        ...buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 }),
-      }),
-    }),
+    env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
+    createStorage: (directory: string) =>
+      pressure.wrap(createXfsBackend({ dataDir: directory, cloneFile: cloneDisk })),
     boundaries: {
       freezer: {
         freeze: () => {
@@ -62,7 +60,7 @@ async function setupTest(options: Readonly<{ isStorageFull?: boolean }> = {}) {
     },
   });
 
-  return Object.assign(harness, { events, clones });
+  return Object.assign(harness, { events, clones, pressure });
 }
 
 test('it freezes a running imp around the clone of its disk', async () => {
@@ -385,7 +383,7 @@ test('it moves a template made again to a new disk under the same image and drop
 });
 
 test('it makes an old template again when an eviction runs during the clone', async () => {
-  const ctx = await setupTest({ isStorageFull: true });
+  const ctx = await setupTest();
 
   const baseImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
@@ -402,6 +400,8 @@ test('it makes an old template again when an eviction runs during the clone', as
     .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
     .where('name', '=', 'tools')
     .execute();
+
+  ctx.pressure.setPressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 });
 
   ctx.clones.after = () => ctx.images.runImageEviction();
 
@@ -437,7 +437,7 @@ test('it records impd clock as the last use of a template it makes', async () =>
 });
 
 test('it evicts an old unused image after it makes a template while storage is full', async () => {
-  const ctx = await setupTest({ isStorageFull: true });
+  const ctx = await setupTest();
 
   const baseImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
   const oldImage = buildMockNewImage({ name: 'web-2222222', sizeBytes: 6 });
@@ -455,6 +455,8 @@ test('it evicts an old unused image after it makes a template while storage is f
     .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
     .where('name', '=', 'web-2222222')
     .execute();
+
+  ctx.pressure.setPressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 });
 
   await ctx.impd.templates.createTemplate('dev', 'tools');
 

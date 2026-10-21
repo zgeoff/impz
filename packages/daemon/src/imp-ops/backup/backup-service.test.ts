@@ -19,8 +19,8 @@ import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-
 import { buildStubRestic } from '../../../testing/imp-ops/build-stub-restic';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { startTestImpd } from '../../../testing/start-test-impd';
+import { buildStubPressureSwitch } from '../../../testing/vm/build-stub-pressure-switch';
 import { buildStubPublishHook } from '../../../testing/vm/build-stub-publish-hook';
-import { buildStubStoragePressure } from '../../../testing/vm/build-stub-storage-pressure';
 import { createTemplateService } from '../../imps/images/template-service';
 import { createNetworkService } from '../../network/networks/network-service';
 import { createCheckpoint, listCheckpoints } from '../../platform/db/checkpoints';
@@ -35,7 +35,7 @@ import { buildBackupsOffError, createBackupService } from './backup-service';
 import type { BackupServiceDeps } from './backup-service';
 import { ResticError } from './restic';
 
-async function setupTest(options: Readonly<{ isStorageFull?: boolean }> = {}) {
+async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -47,18 +47,17 @@ async function setupTest(options: Readonly<{ isStorageFull?: boolean }> = {}) {
   });
 
   const publish = buildStubPublishHook();
+  const pressure = buildStubPressureSwitch();
 
   const host = await startTestImpd(stack, {
     frozenClockMs: Date.UTC(2026, 9, 2),
     createStorage: (dataDir) =>
-      publish.wrap({
-        ...createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
-        ...(options.isStorageFull === true &&
-          buildStubStoragePressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 })),
-      }),
-    ...(options.isStorageFull === true && {
-      env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
-    }),
+      publish.wrap(
+        pressure.wrap(
+          createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+        ),
+      ),
+    env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
   });
 
   const restic = buildStubRestic({ repoDir, now: () => new Date(host.now()) });
@@ -95,7 +94,16 @@ async function setupTest(options: Readonly<{ isStorageFull?: boolean }> = {}) {
     },
   };
 
-  return Object.assign(host, { stack, repoDir, restic, freezes, backupLogs, deps, publish });
+  return Object.assign(host, {
+    stack,
+    repoDir,
+    restic,
+    freezes,
+    backupLogs,
+    deps,
+    publish,
+    pressure,
+  });
 }
 
 test('#runBackup freezes a running imp and copies stopped and sleeping imps as they are', async () => {
@@ -322,7 +330,7 @@ test('#restoreBackup restores an imp stopped, with its disk and its checkpoints 
 });
 
 test('#restoreBackup keeps an old image it reuses when an eviction reaches the restore as it picks the image', async () => {
-  const ctx = await setupTest({ isStorageFull: true });
+  const ctx = await setupTest();
 
   const gate = buildQueryGate('sha256:web-1111111');
 
@@ -350,6 +358,7 @@ test('#restoreBackup keeps an old image it reuses when an eviction reaches the r
     .where('name', '=', 'web-1111111')
     .execute();
 
+  ctx.pressure.setPressure({ usedBytes: 90, availableBytes: 10, freedBytes: 1 });
   gate.arm();
 
   const restoring = backups.restoreBackup({ name: 'dev' });
