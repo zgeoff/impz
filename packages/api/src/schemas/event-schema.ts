@@ -88,10 +88,10 @@ export const ImpEventSchema = z.discriminatedUnion('ev', [
     usedMib: z.int().nonnegative(),
     budgetMib: z.int().positive(),
     reserveMib: z.int().nonnegative().optional(),
+    neededMib: z.int().nonnegative().optional(),
 
     // A count, never names, because not every reader of the stream may see
     // those imps.
-    neededMib: z.int().nonnegative().optional(),
     protectedCount: z.int().nonnegative().optional(),
   }),
 
