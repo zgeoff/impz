@@ -1,4 +1,16 @@
 import { isMessage } from '@bufbuild/protobuf';
+import {
+  DetachedSchema,
+  ErrorDataSchema,
+  ExitSchema,
+  FRAME_TYPES,
+  ResizeSchema,
+  SignalSchema,
+  StartedSchema,
+  decodeMessageFrame,
+  encodeAgentMessage,
+} from '@impz/agent-protocol';
+import type { Previous, Resume, Started } from '@impz/agent-protocol';
 import type {
   ExecRequirement,
   PreviousGeneration,
@@ -9,20 +21,8 @@ import type {
 import { AgentError, openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
 import { buildAgentOutdatedError, handleUnknownOp } from './agent-outdated';
-import {
-  DetachedSchema,
-  ErrorDataSchema,
-  ExitSchema,
-  ResizeSchema,
-  SignalSchema,
-  StartedSchema,
-} from './agent-protocol';
-import type { Previous, Resume, Started } from './agent-protocol';
 import { readFrameWithin, requireNoAgentError, sendRequestFrame } from './agent-requests';
 import type { AgentRequest } from './agent-requests';
-import { decodeAgentMessage } from './decode-agent-message';
-import { encodeAgentMessage } from './encode-agent-message';
-import { FRAME_TYPES, decodeJsonPayload } from './frame-codec';
 import { hasAgentNameForms } from './has-agent-name-forms';
 
 export interface AgentExecRequest {
@@ -166,7 +166,7 @@ async function openStream(
       throw new Error(`agent exec: expected STARTED, got frame type ${String(first.type)}`);
     }
 
-    started = decodeAgentMessage(StartedSchema, decodeJsonPayload(first));
+    started = decodeMessageFrame(StartedSchema, first);
 
     if (!hasAgentNameForms(started)) {
       throw new Error(
@@ -219,13 +219,13 @@ async function* readExecEvents(
 
       yield { type, data: frame.payload };
     } else if (frame.type === FRAME_TYPES.exit) {
-      const exit = decodeAgentMessage(ExitSchema, decodeJsonPayload(frame));
+      const exit = decodeMessageFrame(ExitSchema, frame);
 
       yield { type: 'exit', code: exit.code, signal: exit.signal };
 
       return;
     } else if (frame.type === FRAME_TYPES.detached) {
-      const detached = decodeAgentMessage(DetachedSchema, decodeJsonPayload(frame));
+      const detached = decodeMessageFrame(DetachedSchema, frame);
 
       yield { type: 'detached', reason: detached.reason };
 

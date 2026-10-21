@@ -1,19 +1,22 @@
 import type { Socket } from 'node:net';
-import { RequestSchema, SignalSchema } from '../../src/vm/agent-client/agent-protocol';
-import type { Request } from '../../src/vm/agent-client/agent-protocol';
-import { decodeAgentMessage } from '../../src/vm/agent-client/decode-agent-message';
+import {
+  DetachedSchema,
+  ErrorResponseSchema,
+  ExitSchema,
+  FRAME_TYPES,
+  RequestSchema,
+  SignalSchema,
+  StartedSchema,
+  decodeMessageFrame,
+  encodeFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
+import type { AgentFrame, Request } from '@impz/agent-protocol';
 import type {
   AgentExecRequest,
   ExecEvent,
   ExecStream,
 } from '../../src/vm/agent-client/exec-stream';
-import {
-  FRAME_TYPES,
-  decodeJsonPayload,
-  encodeFrame,
-  encodeJsonFrame,
-} from '../../src/vm/agent-client/frame-codec';
-import type { AgentFrame } from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
 interface StubExecTarget {
@@ -31,11 +34,11 @@ export function startStubExecAgent(path: string, guest: StubExecTarget) {
     const stream = await pending;
 
     socket.write(
-      encodeJsonFrame(FRAME_TYPES.started, {
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
         pid: stream.pid,
         ...(stream.session !== null && { session: stream.session }),
         ...(stream.session !== null && stream.created && { created: true }),
-        ...(stream.groupKill && killGraceMs > 0 && { kill_grace_ms: killGraceMs }),
+        ...(stream.groupKill && killGraceMs > 0 && { killGraceMs }),
       }),
     );
 
@@ -56,11 +59,11 @@ export function startStubExecAgent(path: string, guest: StubExecTarget) {
       return;
     }
 
-    const parsed = decodeAgentMessage(RequestSchema, decodeJsonPayload(request));
+    const parsed = decodeMessageFrame(RequestSchema, request);
 
     if (parsed.op !== 'exec') {
       socket.write(
-        encodeJsonFrame(FRAME_TYPES.response, {
+        encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
           error: { code: 'UNKNOWN_OP', message: `unknown op ${parsed.op}` },
         }),
       );
@@ -92,11 +95,14 @@ export function startStubExecAgent(path: string, guest: StubExecTarget) {
 
 function encodeEventFrame(event: Readonly<ExecEvent>): Uint8Array {
   if (event.type === 'exit') {
-    return encodeJsonFrame(FRAME_TYPES.exit, { code: event.code, signal: event.signal });
+    return encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, {
+      code: event.code,
+      signal: event.signal,
+    });
   }
 
   if (event.type === 'detached') {
-    return encodeJsonFrame(FRAME_TYPES.detached, { reason: event.reason });
+    return encodeMessageFrame(FRAME_TYPES.detached, DetachedSchema, { reason: event.reason });
   }
 
   const type = event.type === 'stdout' ? FRAME_TYPES.stdout : FRAME_TYPES.stderr;
@@ -112,7 +118,7 @@ async function sendInput(pending: Promise<ExecStream>, frame: AgentFrame): Promi
   } else if (frame.type === FRAME_TYPES.stdinEof) {
     stream.closeStdin();
   } else if (frame.type === FRAME_TYPES.signal) {
-    stream.sendSignal(decodeAgentMessage(SignalSchema, decodeJsonPayload(frame)).signal);
+    stream.sendSignal(decodeMessageFrame(SignalSchema, frame).signal);
   }
 }
 

@@ -1,7 +1,6 @@
+import { FilesRemovedSchema, OKSchema, decodeAgentMessage } from '@impz/agent-protocol';
 import { handleUnknownOp } from './agent-outdated';
-import { FilesRemovedSchema, OKSchema } from './agent-protocol';
 import { sendAgentRequest } from './agent-requests';
-import { decodeAgentMessage } from './decode-agent-message';
 
 export async function sendFilesWrite(
   vsockPath: string,

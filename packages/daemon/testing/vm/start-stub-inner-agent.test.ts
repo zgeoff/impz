@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
-import { ActivitySchema, PingSchema } from '../../src/vm/agent-client/agent-protocol';
+import { ActivitySchema, PingSchema } from '@impz/agent-protocol';
 import { sendActivity, sendAgentRequest, sendPing } from '../../src/vm/agent-client/agent-requests';
 import { startStubInnerAgent } from './start-stub-inner-agent';
 
@@ -53,6 +53,7 @@ test('it writes an inner container’s zero fields, as the agent does', async ()
     ok: true,
     version: '0.18.0',
     inner: { up: false, restarts: 0 },
+    boot_steps: [],
   });
 });
 

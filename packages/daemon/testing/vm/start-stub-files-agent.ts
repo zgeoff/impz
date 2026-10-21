@@ -1,14 +1,15 @@
 import type { Socket } from 'node:net';
-import type { JsonValue } from '@bufbuild/protobuf';
-import { FILE_DATA_MAX_BYTES, FILE_SEGMENT_PATTERN } from '@impz/api';
-import { RequestSchema } from '../../src/vm/agent-client/agent-protocol';
-import type { Request } from '../../src/vm/agent-client/agent-protocol';
-import { decodeAgentMessage } from '../../src/vm/agent-client/decode-agent-message';
 import {
+  ErrorResponseSchema,
   FRAME_TYPES,
-  decodeJsonPayload,
-  encodeJsonFrame,
-} from '../../src/vm/agent-client/frame-codec';
+  FilesRemovedSchema,
+  OKSchema,
+  RequestSchema,
+  decodeMessageFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
+import type { Request } from '@impz/agent-protocol';
+import { FILE_DATA_MAX_BYTES, FILE_SEGMENT_PATTERN } from '@impz/api';
 import { startStubAgent } from './start-stub-agent';
 
 interface StubFilesAgentOptions {
@@ -29,7 +30,7 @@ export async function startStubFilesAgent(
   const agent = await startStubAgent(
     vsockPath,
     (socket, frame) => {
-      const request = decodeAgentMessage(RequestSchema, decodeJsonPayload(frame));
+      const request = decodeMessageFrame(RequestSchema, frame);
 
       requests.push(request);
 
@@ -54,7 +55,11 @@ export async function startStubFilesAgent(
       }
 
       if (request.op === 'files.remove') {
-        sendResponse(socket, { removed: files.delete(path) });
+        socket.end(
+          encodeMessageFrame(FRAME_TYPES.response, FilesRemovedSchema, {
+            removed: files.delete(path),
+          }),
+        );
 
         return;
       }
@@ -74,8 +79,7 @@ export async function startStubFilesAgent(
       }
 
       files.set(path, new TextDecoder().decode(data));
-
-      sendResponse(socket, { ok: true });
+      socket.end(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
     },
     { ...(options.stack !== undefined && { stack: options.stack }) },
   );
@@ -84,9 +88,7 @@ export async function startStubFilesAgent(
 }
 
 function sendError(socket: Socket, code: string, message: string): void {
-  sendResponse(socket, { error: { code, message } });
-}
-
-function sendResponse(socket: Socket, value: JsonValue): void {
-  socket.end(encodeJsonFrame(FRAME_TYPES.response, value));
+  socket.end(
+    encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, { error: { code, message } }),
+  );
 }

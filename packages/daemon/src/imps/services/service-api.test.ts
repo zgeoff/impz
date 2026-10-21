@@ -1,5 +1,12 @@
 import { expect, jest, onTestFinished, test } from 'bun:test';
 import { create } from '@bufbuild/protobuf';
+import {
+  ExitSchema,
+  LogCursorSchema,
+  RequestSchema,
+  ServiceDefSchema,
+  ServiceStatusSchema,
+} from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
@@ -11,13 +18,6 @@ import { TEST_TOKEN } from '../../../testing/test-token';
 import { startStubServiceAgent } from '../../../testing/vm/start-stub-service-agent';
 import { createImage } from '../../platform/db/images';
 import { updateImpActivity } from '../../platform/db/imps';
-import {
-  ExitSchema,
-  LogCursorSchema,
-  RequestSchema,
-  ServiceDefSchema,
-  ServiceStatusSchema,
-} from '../../vm/agent-client/agent-protocol';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 import { createServiceApi } from './service-api';

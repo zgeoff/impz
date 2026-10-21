@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
+import { FRAME_TYPES, PingSchema, encodeMessageFrame } from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { buildStubJails } from '../../../testing/vm/build-stub-jails';
 import { createStubKsmExec } from '../../../testing/vm/create-stub-ksm-exec';
@@ -13,9 +14,7 @@ import {
 } from '../../../testing/vm/start-stub-firecracker';
 import { deriveSlotAddress, parseSubnet } from '../../host-net/net/addressing';
 import { stopPid } from '../../platform/process/proc';
-import { PingSchema } from '../agent-client/agent-protocol';
 import { sendPing } from '../agent-client/agent-requests';
-import { FRAME_TYPES, encodeJsonFrame } from '../agent-client/frame-codec';
 import { buildImpPaths, buildSnapshotPaths } from '../storage/data-layout';
 import { probeFirecrackerAlive } from './firecracker-process';
 import { buildJailerCommand } from './jail';
@@ -290,7 +289,9 @@ test('#readGuestUptimeMs reads no uptime from an agent that cannot read its cloc
   const paths = ctx.createImpDir('vm');
 
   await startStubAgent(paths.vsockSocket, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.response, { ok: true, version: '0.1.0' }));
+    socket.end(
+      encodeMessageFrame(FRAME_TYPES.response, PingSchema, { ok: true, version: '0.1.0' }),
+    );
   });
 
   const uptime = await createVmRunner(buildStubJails().jails).readGuestUptimeMs(paths);
@@ -332,16 +333,16 @@ test('#startVm returns the steps the guest reports for its boot', async () => {
 
   await startStubAgent(paths.vsockSocket, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, PingSchema, {
         ok: true,
         version: '0.1.0',
-        // oxlint-disable zgeoff/no-abbreviated-names -- `ms` is BootStep's field in proto/
-        boot_steps: [
+        bootSteps: [
+          // oxlint-disable zgeoff/no-abbreviated-names -- `ms` is BootStep's field in proto/
           { name: 'world', ms: 9 },
           { name: 'mount', ms: 35 },
           { name: 'ready', ms: 1 },
+          // oxlint-enable zgeoff/no-abbreviated-names
         ],
-        // oxlint-enable zgeoff/no-abbreviated-names
       }),
     );
   });

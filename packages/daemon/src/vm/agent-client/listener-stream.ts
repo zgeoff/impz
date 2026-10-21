@@ -1,13 +1,16 @@
+import {
+  ConnectionSchema,
+  FRAME_TYPES,
+  ListeningSchema,
+  decodeMessageFrame,
+} from '@impz/agent-protocol';
 import { openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
 import { handleUnknownOp } from './agent-outdated';
-import { ConnectionSchema, ListeningSchema } from './agent-protocol';
 import { readFrameWithin, requireNoAgentError, sendRequestFrame } from './agent-requests';
 import type { AgentRequest } from './agent-requests';
-import { decodeAgentMessage } from './decode-agent-message';
 import { openRelayStream } from './dial-stream';
 import type { DialStream } from './dial-stream';
-import { FRAME_TYPES, decodeJsonPayload } from './frame-codec';
 
 const ANSWER_TIMEOUT_MS = 10_000;
 
@@ -52,7 +55,7 @@ export async function openListener(vsockPath: string, spec: ListenSpec): Promise
 
     requireNoAgentError(answer);
 
-    const listening = decodeAgentMessage(ListeningSchema, decodeJsonPayload(answer));
+    const listening = decodeMessageFrame(ListeningSchema, answer);
 
     return {
       path: listening.path ?? null,
@@ -92,7 +95,7 @@ async function* readConnections(
     }
 
     if (frame.type === FRAME_TYPES.connection) {
-      yield decodeAgentMessage(ConnectionSchema, decodeJsonPayload(frame)).id;
+      yield decodeMessageFrame(ConnectionSchema, frame).id;
     }
   }
 }

@@ -1,8 +1,8 @@
+import type { SessionInfo } from '@impz/agent-protocol';
 import type { PreviousGeneration, ResumeFrom, SessionLog, SessionLogRead } from '@impz/api';
 import { PreviousGenerationSchema } from '@impz/api';
 import * as z from 'zod';
 import { isAgentLogIdentity } from '../../vm/agent-client/agent-ids';
-import type { SessionInfo } from '../../vm/agent-client/agent-protocol';
 import { openTapStream } from '../../vm/agent-client/exec-stream';
 import type { ExecStream } from '../../vm/agent-client/exec-stream';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';

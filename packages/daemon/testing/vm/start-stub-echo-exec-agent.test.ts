@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { FRAME_TYPES } from '@impz/agent-protocol';
 import { openAgentConnection } from '../../src/vm/agent-client/agent-connection';
-import { FRAME_TYPES } from '../../src/vm/agent-client/frame-codec';
 import { startStubEchoExecAgent } from './start-stub-echo-exec-agent';
 
 function setupTest() {

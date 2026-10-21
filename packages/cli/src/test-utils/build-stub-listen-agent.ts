@@ -1,14 +1,16 @@
 import type { Socket } from 'node:net';
 import {
+  ConnectionSchema,
+  ErrorResponseSchema,
   FRAME_TYPES,
-  decodeJsonPayload,
+  ListeningSchema,
+  OKSchema,
+  RequestSchema,
+  decodeMessageFrame,
   encodeFrame,
-  encodeJsonFrame,
-} from '@impz/daemon/src/vm/agent-client/frame-codec';
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import type { StubAgentHandler } from '@impz/daemon/testing';
-import * as z from 'zod';
-
-const RequestSchema = z.looseObject({ op: z.string() });
 
 interface AgentRefusal {
   readonly code: string;
@@ -33,17 +35,19 @@ export function buildStubListenAgent(options: Readonly<StubListenAgentOptions>) 
       return;
     }
 
-    const op = RequestSchema.parse(decodeJsonPayload(request)).op;
+    const op = decodeMessageFrame(RequestSchema, request).op;
 
     if (op === 'listen' && refusal.error !== null) {
-      socket.end(encodeJsonFrame(FRAME_TYPES.response, { error: refusal.error }));
+      socket.end(
+        encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, { error: refusal.error }),
+      );
     } else if (op === 'listen') {
       listens.push(socket);
 
       const id = listens.length;
 
       socket.write(
-        encodeJsonFrame(FRAME_TYPES.response, {
+        encodeMessageFrame(FRAME_TYPES.response, ListeningSchema, {
           ok: true,
           listener: `fwd${String(id)}`,
           ...options.listening,
@@ -51,10 +55,10 @@ export function buildStubListenAgent(options: Readonly<StubListenAgentOptions>) 
       );
 
       if (options.clientSends !== undefined) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.connection, { id }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.connection, ConnectionSchema, { id }));
       }
     } else if (op === 'agent.accept') {
-      socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
       socket.write(encodeFrame(FRAME_TYPES.stdout, new TextEncoder().encode(options.clientSends)));
     } else {
       socket.end();

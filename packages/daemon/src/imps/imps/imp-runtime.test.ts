@@ -2,6 +2,16 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import {
+  FRAME_TYPES,
+  OKSchema,
+  RequestSchema,
+  StartedSchema,
+  decodeJsonPayload,
+  decodeMessageFrame,
+  encodeJsonFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
@@ -15,7 +25,6 @@ import { startStubInnerAgent } from '../../../testing/vm/start-stub-inner-agent'
 import { startStubSessionAgent } from '../../../testing/vm/start-stub-session-agent';
 import { readImpByName, updateImpActivity } from '../../platform/db/imps';
 import { writeLease } from '../../platform/db/leases';
-import { FRAME_TYPES, decodeJsonPayload, encodeJsonFrame } from '../../vm/agent-client/frame-codec';
 import { readVmIdentity, writeVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 import { createJails } from '../../vm/vmm/jail';
@@ -495,7 +504,7 @@ test('it refuses a session exec on an agent from before sessions before it conne
   const agent = await startStubAgent(
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket) => {
-      socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
     },
     { stack: ctx.stack },
   );
@@ -536,7 +545,7 @@ test('it sends a tcp dial to an agent from before 0.6.0', async () => {
   const agent = await startStubAgent(
     paths.vsockSocket,
     (socket) => {
-      socket.write(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
     },
     { stack: ctx.stack },
   );
@@ -559,7 +568,7 @@ test('it refuses an outer exec to an imp with no agent version on record', async
   const agent = await startStubAgent(
     paths.vsockSocket,
     (socket) => {
-      socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
     },
     { stack: ctx.stack },
   );
@@ -589,7 +598,7 @@ test.each([
   const agent = await startStubAgent(
     paths.vsockSocket,
     (socket) => {
-      socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
     },
     { stack: ctx.stack },
   );
@@ -614,7 +623,7 @@ test('it sends an outer exec to an agent from 0.16.0', async () => {
   const agent = await startStubAgent(
     paths.vsockSocket,
     (socket) => {
-      socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
     },
     { stack: ctx.stack },
   );
@@ -645,7 +654,7 @@ test('it refuses an exec without CAP_SYS_ADMIN to an agent from before 0.20.0', 
   const agent = await startStubAgent(
     paths.vsockSocket,
     (socket) => {
-      socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
     },
     { stack: ctx.stack },
   );
@@ -666,7 +675,7 @@ test('it refuses an exec without CAP_SYS_ADMIN to an imp with no agent version o
   const agent = await startStubAgent(
     paths.vsockSocket,
     (socket) => {
-      socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
     },
     { stack: ctx.stack },
   );
@@ -693,7 +702,7 @@ test('it sends an exec without CAP_SYS_ADMIN to an agent from 0.20.0', async () 
   const agent = await startStubAgent(
     paths.vsockSocket,
     (socket) => {
-      socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+      socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
     },
     { stack: ctx.stack },
   );
@@ -781,17 +790,17 @@ test("it removes an imp's session logs when the imp is destroyed", async () => {
         return;
       }
 
-      const isTap = JSON.stringify(decodeJsonPayload(request)).includes('"session.tap"');
+      const isTap = decodeMessageFrame(RequestSchema, request).op === 'session.tap';
 
       socket.write(
-        encodeJsonFrame(FRAME_TYPES.started, {
+        encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
           pid: 9,
           session: 'main',
           created: !isTap,
           output: {
-            boot_id: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
-            execution_generation: 'c'.repeat(32),
-            buffer_start: 0,
+            bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+            executionGeneration: 'c'.repeat(32),
+            bufferStart: 0,
             end: 0,
             offset: 0,
             prelude: 0,
@@ -837,17 +846,17 @@ test('it logs again for an imp made again under the id of one destroyed, as on a
         return;
       }
 
-      const isTap = JSON.stringify(decodeJsonPayload(request)).includes('"session.tap"');
+      const isTap = decodeMessageFrame(RequestSchema, request).op === 'session.tap';
 
       socket.write(
-        encodeJsonFrame(FRAME_TYPES.started, {
+        encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
           pid: 9,
           session: 'main',
           created: !isTap,
           output: {
-            boot_id: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
-            execution_generation: 'c'.repeat(32),
-            buffer_start: 0,
+            bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+            executionGeneration: 'c'.repeat(32),
+            bufferStart: 0,
             end: 0,
             offset: 0,
             prelude: 0,
@@ -887,17 +896,17 @@ test('it logs again for an imp made again under the id of one destroyed, as on a
         return;
       }
 
-      const isTap = JSON.stringify(decodeJsonPayload(request)).includes('"session.tap"');
+      const isTap = decodeMessageFrame(RequestSchema, request).op === 'session.tap';
 
       socket.write(
-        encodeJsonFrame(FRAME_TYPES.started, {
+        encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
           pid: 9,
           session: 'main',
           created: !isTap,
           output: {
-            boot_id: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
-            execution_generation: 'c'.repeat(32),
-            buffer_start: 0,
+            bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+            executionGeneration: 'c'.repeat(32),
+            bufferStart: 0,
             end: 0,
             offset: 0,
             prelude: 0,
@@ -1002,8 +1011,9 @@ test('it shows no inner container for an agent from before 0.14.0', async () => 
   await startStubAgent(
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket, request) => {
-      const isPing = JSON.stringify(decodeJsonPayload(request)).includes('"ping"');
+      const isPing = decodeMessageFrame(RequestSchema, request).op === 'ping';
 
+      // plain JSON: the schema's encoder writes boot_steps and sessions, which 0.13.0 never sent
       const answer = isPing
         ? { ok: true, version: '0.13.0' }
         : { tcp_established: 0, exec_sessions: 0, load1: 0 };

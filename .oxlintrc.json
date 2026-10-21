@@ -41,10 +41,11 @@
         "zones": {
           "packages": ["packages/**"],
           "shared": ["packages/shared/**"],
+          "agent-protocol": ["packages/agent-protocol/**"],
           "client": ["packages/client/**"],
           "above-client": ["packages/{mcp,cli,daemon,dashboard}/**"],
           "test-utils": ["packages/test-utils/**"],
-          "runtime-neutral": ["packages/{shared,api,client}/**"],
+          "runtime-neutral": ["packages/{shared,agent-protocol,api,client}/**"],
           // the daemon's own test helpers build queries against real databases
           "db": ["packages/daemon/src/platform/db/**", "packages/daemon/testing/**"],
           "tests": [
@@ -287,7 +288,7 @@
             "modules": ["node:*"],
             "from": ["runtime-neutral"],
             "allow": ["tests"],
-            "reason": "@impz/shared, @impz/api and the client run in any runtime"
+            "reason": "@impz/shared, @impz/agent-protocol, @impz/api and the client run in any runtime"
           },
           {
             "name": "package-order",
@@ -295,6 +296,20 @@
             "from": ["shared"],
             "allow": ["tests"],
             "reason": "@impz/shared imports no @impz/* package"
+          },
+          {
+            "name": "package-order",
+            "modules": ["@impz/*"],
+            "from": ["agent-protocol"],
+            "allow": ["tests"],
+            "reason": "@impz/agent-protocol imports no @impz/* package"
+          },
+          {
+            "name": "package-order",
+            "modules": ["@impz/agent-protocol"],
+            "from": ["packages"],
+            "allow": ["daemon-src", "tests"],
+            "reason": "only impd speaks the agent protocol; another package imports @impz/agent-protocol only in its tests"
           },
           {
             "name": "package-order",
@@ -320,6 +335,7 @@
           {
             "name": "package-order",
             "modules": [
+              "@impz/agent-protocol",
               "@impz/local-tar",
               "@impz/api",
               "@impz/client",
@@ -375,6 +391,6 @@
     "kernel/**",
     "agent/**",
     // protoc-gen-es output (bun run gen:proto)
-    "packages/daemon/src/vm/agent-client/gen/**"
+    "packages/agent-protocol/src/gen/**"
   ]
 }

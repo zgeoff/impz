@@ -27,6 +27,7 @@ build step.
 ```text
 agent/             the guest agent, in Go: imp-agent, imp-agentctl and ksm-exec under cmd/
 packages/
+  agent-protocol/  impd's side of the guest agent's vsock protocol: frames, messages, error codes
   api/             the oRPC contract, schemas and exec stream framing of the control API
   cli/             impz, the command-line client
   client/          the typed client for impd

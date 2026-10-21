@@ -1,0 +1,20 @@
+{
+  "name": "@impz/agent-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The vsock protocol between impd and the guest agent: the frame codec, the generated message schemas and the agent's error codes",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@impz/api": "workspace:*",
+    "@impz/test-utils": "workspace:*",
+    "tiny-invariant": "catalog:"
+  }
+}

@@ -1,23 +1,20 @@
 import type { Socket } from 'node:net';
+import type { MessageInitShape } from '@bufbuild/protobuf';
 import {
+  DetachedSchema,
+  ErrorResponseSchema,
+  ExitSchema,
   FRAME_TYPES,
-  decodeJsonPayload,
+  RequestSchema,
+  ResizeSchema,
+  SignalSchema,
+  StartedSchema,
+  decodeMessageFrame,
   encodeFrame,
-  encodeJsonFrame,
-} from '@impz/daemon/src/vm/agent-client/frame-codec';
-import type { AgentFrame } from '@impz/daemon/src/vm/agent-client/frame-codec';
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
+import type { AgentFrame, ErrorSchema, Request } from '@impz/agent-protocol';
 import type { StubAgentHandler } from '@impz/daemon/testing';
-import * as z from 'zod';
-
-const RequestSchema = z.looseObject({
-  op: z.string(),
-  argv: z.array(z.string()).optional(),
-  session: z.string().optional(),
-  kill_grace_ms: z.int().optional(),
-  resume_from: z.object({ execution_generation: z.string(), offset: z.int() }).optional(),
-});
-
-type StubRequest = z.infer<typeof RequestSchema>;
 
 interface Run {
   readonly command: string;
@@ -25,7 +22,7 @@ interface Run {
 }
 
 export function buildStubExecAgent() {
-  const requests: StubRequest[] = [];
+  const requests: Request[] = [];
   const input: string[] = [];
   const closed: string[] = [];
 
@@ -46,12 +43,10 @@ export function buildStubExecAgent() {
       return;
     }
 
-    const parsed = RequestSchema.parse(decodeJsonPayload(request));
+    const parsed = decodeMessageFrame(RequestSchema, request);
 
     const command =
-      parsed.op === 'session.attach'
-        ? `attach ${String(parsed.session)}`
-        : (parsed.argv?.[0] ?? '');
+      parsed.op === 'session.attach' ? `attach ${String(parsed.session)}` : (parsed.argv[0] ?? '');
 
     const run: Run = { command, ended: false };
 
@@ -80,9 +75,6 @@ export function buildStubExecAgent() {
   return { requests, input, closed, readFrame };
 }
 
-const ResizeSchema = z.object({ cols: z.int(), rows: z.int() });
-const SignalSchema = z.object({ signal: z.int() });
-
 const decoder = new TextDecoder();
 
 function readInput(
@@ -105,7 +97,11 @@ function readInput(
     }
 
     if (run.command === 'attach main' && text === 'taken') {
-      stopRun(socket, run, encodeJsonFrame(FRAME_TYPES.detached, { reason: 'taken_over' }));
+      stopRun(
+        socket,
+        run,
+        encodeMessageFrame(FRAME_TYPES.detached, DetachedSchema, { reason: 'taken_over' }),
+      );
     }
   }
 
@@ -118,13 +114,13 @@ function readInput(
   }
 
   if (frame.type === FRAME_TYPES.resize) {
-    const size = ResizeSchema.parse(decodeJsonPayload(frame));
+    const size = decodeMessageFrame(ResizeSchema, frame);
 
     writeInput(`resize:${String(size.cols)}x${String(size.rows)}`);
   }
 
   if (frame.type === FRAME_TYPES.signal) {
-    const signal = SignalSchema.parse(decodeJsonPayload(frame)).signal;
+    const signal = decodeMessageFrame(SignalSchema, frame).signal;
 
     writeInput(`signal:${String(signal)}`);
     sendExit(socket, run, 128 + signal, signal);
@@ -132,7 +128,7 @@ function readInput(
 }
 
 function sendExit(socket: Socket, run: Run, code: number, signal: number): void {
-  stopRun(socket, run, encodeJsonFrame(FRAME_TYPES.exit, { code, signal }));
+  stopRun(socket, run, encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code, signal }));
 }
 
 function stopRun(socket: Socket, run: Run, frame: Uint8Array): void {
@@ -143,20 +139,20 @@ function stopRun(socket: Socket, run: Run, frame: Uint8Array): void {
 
 export const STUB_FLOOD_BYTES = 512 * 1024;
 
-function startExec(socket: Socket, run: Run, request: StubRequest): void {
+function startExec(socket: Socket, run: Run, request: Request): void {
   if (run.command === 'nope') {
     sendRefusal(socket, run, { code: 'EXEC_FAILED', message: 'no such file' });
 
     return;
   }
 
-  const groupKill = request.kill_grace_ms !== undefined && run.command !== 'old';
+  const groupKill = request.killGraceMs !== undefined && run.command !== 'old';
 
   socket.write(
-    encodeJsonFrame(FRAME_TYPES.started, {
+    encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
       pid: 42,
       ...(request.session !== undefined && { session: request.session, created: true }),
-      ...(groupKill && { kill_grace_ms: request.kill_grace_ms }),
+      ...(groupKill && { killGraceMs: request.killGraceMs }),
     }),
   );
 
@@ -180,8 +176,8 @@ function startExec(socket: Socket, run: Run, request: StubRequest): void {
   }
 }
 
-function sendRefusal(socket: Socket, run: Run, error: Readonly<Record<string, unknown>>): void {
-  stopRun(socket, run, encodeJsonFrame(FRAME_TYPES.response, { error }));
+function sendRefusal(socket: Socket, run: Run, error: MessageInitShape<typeof ErrorSchema>): void {
+  stopRun(socket, run, encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, { error }));
 }
 
 const encoder = new TextEncoder();
@@ -195,12 +191,12 @@ const OUTPUT_END = 100;
 
 export const STUB_GENERATION = 'd'.repeat(32);
 
-function startAttach(socket: Socket, run: Run, request: StubRequest): void {
-  if ((request.resume_from?.offset ?? 0) > OUTPUT_END) {
+function startAttach(socket: Socket, run: Run, request: Request): void {
+  if ((request.resumeFrom?.offset ?? 0) > OUTPUT_END) {
     sendRefusal(socket, run, {
       code: 'INVALID_RESUME',
       message: 'past the end',
-      data: { end: OUTPUT_END, buffer_start: 0 },
+      data: { end: OUTPUT_END, bufferStart: 0 },
     });
 
     return;
@@ -208,14 +204,14 @@ function startAttach(socket: Socket, run: Run, request: StubRequest): void {
 
   if (request.session === 'counted') {
     socket.write(
-      encodeJsonFrame(FRAME_TYPES.started, {
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
         pid: 42,
         session: 'counted',
         created: false,
         output: {
-          boot_id: STUB_BOOT_ID,
-          execution_generation: STUB_GENERATION,
-          buffer_start: 0,
+          bootId: STUB_BOOT_ID,
+          executionGeneration: STUB_GENERATION,
+          bufferStart: 0,
           end: OUTPUT_END,
           offset: 95,
           prelude: 0,
@@ -235,9 +231,9 @@ function startAttach(socket: Socket, run: Run, request: StubRequest): void {
       code: 'NO_SESSION',
       message: 'no session "ended"',
       data: {
-        boot_id: STUB_BOOT_ID,
+        bootId: STUB_BOOT_ID,
         previous: {
-          execution_generation: STUB_GENERATION,
+          executionGeneration: STUB_GENERATION,
           end: OUTPUT_END,
           exit: { code: 0, signal: 0 },
         },
@@ -256,7 +252,13 @@ function startAttach(socket: Socket, run: Run, request: StubRequest): void {
     return;
   }
 
-  socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 42, session: 'main', created: false }));
+  socket.write(
+    encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+      pid: 42,
+      session: 'main',
+      created: false,
+    }),
+  );
 
   writeText(socket, FRAME_TYPES.stdout, 'replay');
 }

@@ -12,7 +12,9 @@ The code is one Bun workspace and one Go module. impd is `packages/daemon`. Its 
 `packages/api`, is shared with the CLI, the npm client, the MCP server and the dashboard. Helpers
 that know nothing about imps, such as byte and duration formats, live in `packages/shared`, which
 imports no other workspace package and no Node module, so the dashboard and the published client can
-bundle it. The guest agent is `agent/`.
+bundle it. impd's side of the vsock protocol with the guest agent, the frame codec and the generated
+message types, lives in `packages/agent-protocol`, another leaf, which the client's and the CLI's
+tests use to play the agent. The guest agent is `agent/`.
 
 ## The path of a request
 

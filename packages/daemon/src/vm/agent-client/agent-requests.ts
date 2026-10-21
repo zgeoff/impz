@@ -1,14 +1,19 @@
 import type { JsonObject, JsonValue, MessageInitShape } from '@bufbuild/protobuf';
+import {
+  ErrorResponseSchema,
+  FRAME_TYPES,
+  OKSchema,
+  PingSchema,
+  RequestSchema,
+  decodeAgentMessage,
+  decodeJsonPayload,
+  encodeAgentMessage,
+} from '@impz/agent-protocol';
+import type { Activity, AgentFrame, ErrorResponse, Ping } from '@impz/agent-protocol';
 import { requireWithin } from '../../platform/process/require-within';
 import { AgentError, openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
 import { handleUnknownOp } from './agent-outdated';
-import { ErrorResponseSchema, OKSchema, PingSchema, RequestSchema } from './agent-protocol';
-import type { Activity, ErrorResponse, Ping } from './agent-protocol';
-import { decodeAgentMessage } from './decode-agent-message';
-import { encodeAgentMessage } from './encode-agent-message';
-import { FRAME_TYPES, decodeJsonPayload } from './frame-codec';
-import type { AgentFrame } from './frame-codec';
 import { parseAgentActivity } from './parse-agent-activity';
 
 const CLAIM_TIMEOUT_MS = 5000;

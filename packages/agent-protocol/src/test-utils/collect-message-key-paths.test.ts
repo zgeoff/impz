@@ -1,9 +1,5 @@
 import { expect, test } from 'bun:test';
-import {
-  ActivitySchema,
-  ErrorResponseSchema,
-  ResumeFromSchema,
-} from '../../src/vm/agent-client/agent-protocol';
+import { ActivitySchema, ErrorResponseSchema, ResumeFromSchema } from '../agent-protocol';
 import { collectMessageKeyPaths } from './collect-message-key-paths';
 
 test('it lists the fields of a message under the schema’s names', () => {

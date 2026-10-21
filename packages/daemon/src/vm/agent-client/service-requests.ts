@@ -1,17 +1,22 @@
 import type { MessageInitShape } from '@bufbuild/protobuf';
+import {
+  FRAME_TYPES,
+  LogCursorSchema,
+  OKSchema,
+  ServicesListSchema,
+  decodeAgentMessage,
+  decodeMessageFrame,
+} from '@impz/agent-protocol';
+import type { LogCursor, ServiceDefSchema, ServicesList } from '@impz/agent-protocol';
 import { openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
 import { handleUnknownOp } from './agent-outdated';
-import { LogCursorSchema, OKSchema, ServicesListSchema } from './agent-protocol';
-import type { LogCursor, ServiceDefSchema, ServicesList } from './agent-protocol';
 import {
   readFrameWithin,
   requireNoAgentError,
   sendAgentRequest,
   sendRequestFrame,
 } from './agent-requests';
-import { decodeAgentMessage } from './decode-agent-message';
-import { FRAME_TYPES, decodeJsonPayload } from './frame-codec';
 
 // The agent waits up to 5 s after SIGTERM before it sends SIGKILL, and a restart then starts the
 // service again.
@@ -101,7 +106,7 @@ export async function openServiceLogStream(
     }
 
     requireNoAgentError(first);
-    decodeAgentMessage(OKSchema, decodeJsonPayload(first));
+    decodeMessageFrame(OKSchema, first);
   } catch (error) {
     connection.close();
 
@@ -129,7 +134,7 @@ async function* readLogChunks(
     } else if (frame.type === FRAME_TYPES.cursor) {
       yield {
         kind: 'cursor',
-        cursor: decodeAgentMessage(LogCursorSchema, decodeJsonPayload(frame)),
+        cursor: decodeMessageFrame(LogCursorSchema, frame),
       };
     }
   }

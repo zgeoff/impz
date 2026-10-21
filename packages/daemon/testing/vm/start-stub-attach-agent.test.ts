@@ -3,10 +3,15 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
-import { PingSchema } from '../../src/vm/agent-client/agent-protocol';
+import {
+  ErrorResponseSchema,
+  FRAME_TYPES,
+  PingSchema,
+  StartedSchema,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import { sendPing } from '../../src/vm/agent-client/agent-requests';
 import { openAttachStream } from '../../src/vm/agent-client/exec-stream';
-import { FRAME_TYPES, encodeJsonFrame } from '../../src/vm/agent-client/frame-codec';
 import { startStubAttachAgent } from './start-stub-attach-agent';
 
 async function setupTest() {
@@ -40,7 +45,9 @@ test('it answers a session request with the first reply, and keeps a stream open
 
   await startStubAttachAgent(path, {
     bootId: 'boot-a',
-    replies: [{ frame: encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }), isEnd: false }],
+    replies: [
+      { frame: encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }), isEnd: false },
+    ],
     stack: ctx.stack,
   });
 
@@ -61,9 +68,9 @@ test('it answers the next session request with the next reply, and ends its conn
   await startStubAttachAgent(path, {
     bootId: 'boot-a',
     replies: [
-      { frame: encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }), isEnd: false },
+      { frame: encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }), isEnd: false },
       {
-        frame: encodeJsonFrame(FRAME_TYPES.response, {
+        frame: encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
           error: { code: 'NO_SESSION', message: 'no session "main"' },
         }),
         isEnd: true,

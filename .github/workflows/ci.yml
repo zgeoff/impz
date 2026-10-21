@@ -135,7 +135,7 @@ jobs:
       - name: Generated Protocol Code
         run: |
           bun run gen:proto
-          changed="$(git status --porcelain -- agent/internal/proto packages/daemon/src/vm/agent-client/gen docs/reference)"
+          changed="$(git status --porcelain -- agent/internal/proto packages/agent-protocol/src/gen docs/reference)"
           if [ -n "$changed" ]; then
             echo "$changed"
             echo "::error::the generated protocol code differs from proto/; run bun run gen:proto"

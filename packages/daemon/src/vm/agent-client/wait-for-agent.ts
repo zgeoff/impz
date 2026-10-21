@@ -1,5 +1,5 @@
+import type { Ping } from '@impz/agent-protocol';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-import type { Ping } from './agent-protocol';
 import { sendPing } from './agent-requests';
 
 export interface WaitOptions {

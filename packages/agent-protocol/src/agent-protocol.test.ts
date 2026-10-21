@@ -11,8 +11,6 @@ import {
 } from '@impz/api';
 import { listAgentFixtures } from '@impz/test-utils/list-agent-fixtures';
 import { readAgentFixture } from '@impz/test-utils/read-agent-fixture';
-import { collectJsonKeyPaths } from '../../../testing/platform/collect-json-key-paths';
-import { collectMessageKeyPaths } from '../../../testing/platform/collect-message-key-paths';
 import { AGENT_ERROR_CODES } from './agent-error-codes';
 import {
   ActivitySchema,
@@ -33,6 +31,8 @@ import {
 } from './agent-protocol';
 import { encodeAgentMessage } from './encode-agent-message';
 import { FRAME_TYPES, MAX_PAYLOAD } from './frame-codec';
+import { collectJsonKeyPaths } from './test-utils/collect-json-key-paths';
+import { collectMessageKeyPaths } from './test-utils/collect-message-key-paths';
 
 test.each([
   ['ping', PingSchema],

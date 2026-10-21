@@ -2,16 +2,23 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { faker } from '@faker-js/faker';
+import {
+  ActivitySchema,
+  DetachedSchema,
+  ErrorResponseSchema,
+  ExitSchema,
+  FRAME_TYPES,
+  RequestSchema,
+  StartedSchema,
+  decodeJsonPayload,
+  decodeMessageFrame,
+  encodeFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import { EXEC_CHANNELS } from '@impz/api';
 import { createImpClient } from '@impz/client';
 import { buildStubExecPeer } from '@impz/client/test-utils/build-stub-exec-peer';
 import { createImage } from '@impz/daemon/src/platform/db/images';
-import {
-  FRAME_TYPES,
-  decodeJsonPayload,
-  encodeFrame,
-  encodeJsonFrame,
-} from '@impz/daemon/src/vm/agent-client/frame-codec';
 import {
   buildImagePaths,
   buildImpPaths,
@@ -23,7 +30,6 @@ import {
 } from '@impz/daemon/testing';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import * as z from 'zod';
 import { buildStubCongestedSocket } from '../test-utils/build-stub-congested-socket';
 import { buildStubTerminal } from '../test-utils/build-stub-terminal';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
@@ -93,11 +99,11 @@ test('it streams output and stdin and exits with the command’s code', async ()
 
   const exec = buildStubExecReplies({
     started: [
-      encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }),
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }),
       encodeFrame(FRAME_TYPES.stdout, new TextEncoder().encode('out')),
       encodeFrame(FRAME_TYPES.stderr, new TextEncoder().encode('err')),
     ],
-    exited: [encodeJsonFrame(FRAME_TYPES.exit, { code: 3, signal: 0 })],
+    exited: [encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 3, signal: 0 })],
   });
 
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, exec);
@@ -134,8 +140,8 @@ test('it runs an exec in the agent, outside the container, when asked for outer'
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
-    socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal: 0 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal: 0 }));
   });
 
   const code = await runExec(
@@ -168,7 +174,7 @@ test('it names the cause and runs nothing when impd refuses a required broker', 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
   });
 
   const code = await runExec(
@@ -199,7 +205,7 @@ test('it exits 1 from impz exec --require when impd cannot ensure the requiremen
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
   });
 
   const result: unknown = await runCLIInProcess({
@@ -233,8 +239,8 @@ test.each([
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
-    socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal }));
   });
 
   const code = await runExec({ host: null, name: 'box', argv: ['cmd'], tty: false }, ctx.io);
@@ -340,7 +346,7 @@ test('it exits 127 when the command cannot start', async () => {
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'EXEC_FAILED', message: 'cmd: not found' },
       }),
     );
@@ -376,7 +382,7 @@ test('it explains INNER_DOWN and exits 255', async () => {
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'INNER_DOWN', message: 'the inner container is down' },
       }),
     );
@@ -499,7 +505,7 @@ test('it exits 255 when the agent connection drops after started without an exit
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
+    socket.end(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
   });
 
   const code = await runExec({ host: null, name: 'box', argv: ['cmd'], tty: false }, ctx.io);
@@ -583,8 +589,8 @@ test('it keeps the IMP_URL path prefix of an impd behind a proxy', async () => {
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
-    socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal: 0 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal: 0 }));
   });
 
   const proxy = startStubPrefixProxy(ctx.stack, { target: ctx.url, prefix: '/imp' });
@@ -616,7 +622,7 @@ test('it exits 141 quietly and stops the command when its output goes away', asy
       agentClosed.resolve();
     });
 
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
     socket.write(encodeFrame(FRAME_TYPES.stdout, new TextEncoder().encode('out')));
   });
 
@@ -648,7 +654,7 @@ test('it exits 255 and names the failure when an output write fails other than b
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
     socket.write(encodeFrame(FRAME_TYPES.stdout, new TextEncoder().encode('out')));
   });
 
@@ -725,7 +731,7 @@ test('it pauses stdin while the socket buffers more than the high-water mark', a
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket, _request, frames) => {
       if (frames.length === 1) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
       }
     },
   );
@@ -783,11 +789,11 @@ test('it resumes stdin once the socket buffer drains', async () => {
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket, _request, frames) => {
       if (frames.length === 1) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
       }
 
       if (frames.at(-1)?.type === FRAME_TYPES.stdinEof) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal: 0 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal: 0 }));
       }
     },
   );
@@ -859,7 +865,11 @@ test('it starts a named session and detaches on the detach key without a signal'
         });
 
         socket.write(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: true,
+          }),
         );
       }
     },
@@ -927,7 +937,11 @@ test('it detaches on the detach key in its kitty form', async () => {
         });
 
         socket.write(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: true,
+          }),
         );
       }
     },
@@ -969,9 +983,16 @@ test('it clears the screen before the replay of a session it attaches to', async
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: false }));
+    socket.write(
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+        pid: 7,
+        session: 'main',
+        created: false,
+      }),
+    );
+
     socket.write(encodeFrame(FRAME_TYPES.stdout, new TextEncoder().encode('replay')));
-    socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal: 0 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal: 0 }));
   });
 
   const terminal = buildStubTerminal();
@@ -1014,27 +1035,35 @@ test('it attaches again by itself when impd loses the agent connection of a sess
         return;
       }
 
-      const op = z.looseObject({ op: z.string() }).parse(decodeJsonPayload(request)).op;
+      const op = decodeMessageFrame(RequestSchema, request).op;
 
       if (op === 'activity') {
         socket.end(
-          encodeJsonFrame(FRAME_TYPES.response, {
-            tcp_established: 0,
-            exec_sessions: 0,
+          encodeMessageFrame(FRAME_TYPES.response, ActivitySchema, {
+            tcpEstablished: 0,
+            execSessions: 0,
             load1: 0,
             sessions: [],
           }),
         );
       } else if (op === 'exec') {
         socket.end(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: true,
+          }),
         );
       } else {
         socket.write(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: false }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: false,
+          }),
         );
 
-        socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 4, signal: 0 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 4, signal: 0 }));
       }
     },
   );
@@ -1057,7 +1086,7 @@ test('it attaches again by itself when impd loses the agent connection of a sess
   expect(
     agent.received
       .filter((frame) => frame.type === FRAME_TYPES.request)
-      .map((frame) => z.looseObject({ op: z.string() }).parse(decodeJsonPayload(frame)).op),
+      .map((frame) => decodeMessageFrame(RequestSchema, frame).op),
   ).toStrictEqual(['exec', 'activity', 'session.attach']);
 
   expect(ctx.output.join('')).toInclude('lost the connection to session main; attaching again');
@@ -1081,29 +1110,37 @@ test('it attaches again by itself when the terminal fell behind', async () => {
         return;
       }
 
-      const op = z.looseObject({ op: z.string() }).parse(decodeJsonPayload(request)).op;
+      const op = decodeMessageFrame(RequestSchema, request).op;
 
       if (op === 'activity') {
         socket.end(
-          encodeJsonFrame(FRAME_TYPES.response, {
-            tcp_established: 0,
-            exec_sessions: 0,
+          encodeMessageFrame(FRAME_TYPES.response, ActivitySchema, {
+            tcpEstablished: 0,
+            execSessions: 0,
             load1: 0,
             sessions: [],
           }),
         );
       } else if (op === 'exec') {
         socket.write(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: true,
+          }),
         );
 
-        socket.write(encodeJsonFrame(FRAME_TYPES.detached, { reason: 'slow' }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.detached, DetachedSchema, { reason: 'slow' }));
       } else {
         socket.write(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: false }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: false,
+          }),
         );
 
-        socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 4, signal: 0 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 4, signal: 0 }));
       }
     },
   );
@@ -1143,27 +1180,35 @@ test('it attaches again by itself when impd restarts under a session', async () 
         return;
       }
 
-      const op = z.looseObject({ op: z.string() }).parse(decodeJsonPayload(request)).op;
+      const op = decodeMessageFrame(RequestSchema, request).op;
 
       if (op === 'activity') {
         socket.end(
-          encodeJsonFrame(FRAME_TYPES.response, {
-            tcp_established: 0,
-            exec_sessions: 0,
+          encodeMessageFrame(FRAME_TYPES.response, ActivitySchema, {
+            tcpEstablished: 0,
+            execSessions: 0,
             load1: 0,
             sessions: [],
           }),
         );
       } else if (op === 'exec') {
         socket.write(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: true,
+          }),
         );
       } else {
         socket.write(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: false }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: false,
+          }),
         );
 
-        socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 4, signal: 0 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 4, signal: 0 }));
       }
     },
   );
@@ -1200,7 +1245,7 @@ test('it attaches again by itself when impd restarts under a session', async () 
   expect(
     agent.received
       .filter((frame) => frame.type === FRAME_TYPES.request)
-      .map((frame) => z.looseObject({ op: z.string() }).parse(decodeJsonPayload(frame)).op),
+      .map((frame) => decodeMessageFrame(RequestSchema, frame).op),
   ).toStrictEqual(['exec', 'activity', 'session.attach']);
 
   expect(ctx.output.join('')).toInclude('lost the connection to session main; attaching again');
@@ -1220,27 +1265,35 @@ test('it sends keys typed while it attaches again to the new session', async () 
   const agent = await startStubAgent(
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket, request, frames) => {
-      const op = z.looseObject({ op: z.string() }).parse(decodeJsonPayload(request)).op;
+      const op = decodeMessageFrame(RequestSchema, request).op;
 
       if (op === 'activity') {
         socket.end(
-          encodeJsonFrame(FRAME_TYPES.response, {
-            tcp_established: 0,
-            exec_sessions: 0,
+          encodeMessageFrame(FRAME_TYPES.response, ActivitySchema, {
+            tcpEstablished: 0,
+            execSessions: 0,
             load1: 0,
             sessions: [],
           }),
         );
       } else if (op === 'exec') {
         socket.end(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: true,
+          }),
         );
       } else if (frames.length === 1) {
         socket.write(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: false }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: false,
+          }),
         );
       } else {
-        socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal: 0 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal: 0 }));
       }
     },
   );
@@ -1293,7 +1346,13 @@ test.each([['\u001D'], ['\u001B[93;5u'], ['\u001B[27;5;93~']])(
     const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
     await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-      socket.end(encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }));
+      socket.end(
+        encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+          pid: 7,
+          session: 'main',
+          created: true,
+        }),
+      );
     });
 
     const terminal = buildStubTerminal();
@@ -1334,7 +1393,13 @@ test('it gives up with 130 on ctrl-c while it attaches again', async () => {
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }));
+    socket.end(
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+        pid: 7,
+        session: 'main',
+        created: true,
+      }),
+    );
   });
 
   const terminal = buildStubTerminal();
@@ -1375,13 +1440,13 @@ test('it exits 254 without attaching again once another client attached', async 
   const agent = await startStubAgent(
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket, request) => {
-      const op = z.looseObject({ op: z.string() }).parse(decodeJsonPayload(request)).op;
+      const op = decodeMessageFrame(RequestSchema, request).op;
 
       if (op === 'activity') {
         socket.end(
-          encodeJsonFrame(FRAME_TYPES.response, {
-            tcp_established: 0,
-            exec_sessions: 1,
+          encodeMessageFrame(FRAME_TYPES.response, ActivitySchema, {
+            tcpEstablished: 0,
+            execSessions: 1,
             load1: 0,
             sessions: [
               {
@@ -1392,14 +1457,18 @@ test('it exits 254 without attaching again once another client attached', async 
                 attached: true,
                 cols: 80,
                 rows: 24,
-                started_unix_ms: 0,
+                startedUnixMs: 0,
               },
             ],
           }),
         );
       } else {
         socket.end(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: true,
+          }),
         );
       }
     },
@@ -1423,7 +1492,7 @@ test('it exits 254 without attaching again once another client attached', async 
   expect(
     agent.received
       .filter((frame) => frame.type === FRAME_TYPES.request)
-      .map((frame) => z.looseObject({ op: z.string() }).parse(decodeJsonPayload(frame)).op),
+      .map((frame) => decodeMessageFrame(RequestSchema, frame).op),
   ).toStrictEqual(['exec', 'activity']);
 
   expect(ctx.errors).toStrictEqual([
@@ -1443,8 +1512,17 @@ test('it exits 254 without attaching again when another client takes the session
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const agent = await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }));
-    socket.write(encodeJsonFrame(FRAME_TYPES.detached, { reason: 'taken_over' }));
+    socket.write(
+      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+        pid: 7,
+        session: 'main',
+        created: true,
+      }),
+    );
+
+    socket.write(
+      encodeMessageFrame(FRAME_TYPES.detached, DetachedSchema, { reason: 'taken_over' }),
+    );
   });
 
   const terminal = buildStubTerminal();
@@ -1484,7 +1562,11 @@ test('it doubles the pause before each try, up to 8 s, while impd stays down und
     (socket, _request, frames) => {
       if (frames.length === 1) {
         socket.write(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: true,
+          }),
         );
       }
     },
@@ -1546,7 +1628,11 @@ test('it fails with the last reason once the window to attach again is over, whi
     (socket, _request, frames) => {
       if (frames.length === 1) {
         socket.write(
-          encodeJsonFrame(FRAME_TYPES.started, { pid: 7, session: 'main', created: true }),
+          encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+            pid: 7,
+            session: 'main',
+            created: true,
+          }),
         );
       }
     },
@@ -1609,7 +1695,7 @@ test('it sends the detach key as input to a plain exec and never attaches it aga
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket, _request, frames) => {
       if (frames.length === 1) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
       } else {
         socket.destroy();
       }
@@ -1698,7 +1784,7 @@ test('it sends the first SIGINT to the command and ends the CLI on the second', 
     buildImpPaths(ctx.dataDir, imp.id).vsockSocket,
     (socket, _request, frames) => {
       if (frames.length === 1) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
       }
     },
   );
@@ -1752,7 +1838,7 @@ test('it takes the terminal out of raw mode when an output write calls process.e
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, (socket) => {
-    socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 7 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 7 }));
     socket.write(encodeFrame(FRAME_TYPES.stdout, new TextEncoder().encode('out')));
   });
 

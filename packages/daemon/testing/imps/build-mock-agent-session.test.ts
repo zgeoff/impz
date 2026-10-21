@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { create } from '@bufbuild/protobuf';
-import { ExitSchema } from '../../src/vm/agent-client/agent-protocol';
+import { ExitSchema } from '@impz/agent-protocol';
 import { buildMockAgentSession } from './build-mock-agent-session';
 
 test('it builds a default agent session', () => {

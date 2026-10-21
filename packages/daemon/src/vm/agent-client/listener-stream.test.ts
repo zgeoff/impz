@@ -2,9 +2,17 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import {
+  ConnectionSchema,
+  ErrorResponseSchema,
+  FRAME_TYPES,
+  ListeningSchema,
+  OKSchema,
+  decodeJsonPayload,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
 import { startStubAgent } from '../../../testing/vm/start-stub-agent';
-import { FRAME_TYPES, decodeJsonPayload, encodeJsonFrame } from './frame-codec';
 import { openAccept, openListener } from './listener-stream';
 
 function setupTest() {
@@ -22,7 +30,7 @@ test('#openListener asks the agent for an ssh-agent socket', async () => {
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ListeningSchema, {
         ok: true,
         path: '/run/imp/ssh-agent/ab/agent.sock',
         listener: 'ab',
@@ -44,15 +52,15 @@ test('#openListener answers with its socket, then names each client', async () =
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.write(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ListeningSchema, {
         ok: true,
         path: '/run/imp/ssh-agent/ab/agent.sock',
         listener: 'ab',
       }),
     );
 
-    socket.write(encodeJsonFrame(FRAME_TYPES.connection, { id: 1 }));
-    socket.end(encodeJsonFrame(FRAME_TYPES.connection, { id: 2 }));
+    socket.write(encodeMessageFrame(FRAME_TYPES.connection, ConnectionSchema, { id: 1 }));
+    socket.end(encodeMessageFrame(FRAME_TYPES.connection, ConnectionSchema, { id: 2 }));
   });
 
   const listener = await openListener(ctx.vsockPath, { network: 'ssh-agent' });
@@ -72,7 +80,7 @@ test('#openListener rejects with AGENT_OUTDATED for an agent from before agent f
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'UNKNOWN_OP', message: 'unknown op agent.listen' },
       }),
     );
@@ -88,7 +96,13 @@ test('#openListener listens on a port the agent picks', async () => {
   const ctx = setupTest();
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.response, { ok: true, port: 41_000, listener: 'cd' }));
+    socket.end(
+      encodeMessageFrame(FRAME_TYPES.response, ListeningSchema, {
+        ok: true,
+        port: 41_000,
+        listener: 'cd',
+      }),
+    );
   });
 
   const listener = await openListener(ctx.vsockPath, { network: 'tcp', port: 0 });
@@ -111,7 +125,7 @@ test('#openListener listens on a socket the agent makes for a null path', async 
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ListeningSchema, {
         ok: true,
         path: '/run/imp/forward/cd/sock',
         listener: 'cd',
@@ -139,7 +153,11 @@ test('#openListener listens on the socket path it is given', async () => {
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, { ok: true, path: '/tmp/atc.sock', listener: 'cd' }),
+      encodeMessageFrame(FRAME_TYPES.response, ListeningSchema, {
+        ok: true,
+        path: '/tmp/atc.sock',
+        listener: 'cd',
+      }),
     );
   });
 
@@ -161,7 +179,7 @@ test('#openListener rejects with AGENT_OUTDATED for an agent from before reverse
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'UNKNOWN_OP', message: 'unknown op listen' },
       }),
     );
@@ -190,7 +208,7 @@ test('#openAccept names its listener and client', async () => {
   const ctx = setupTest();
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+    socket.end(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
   });
 
   const stream = await openAccept(ctx.vsockPath, 'ab', 7);
@@ -213,7 +231,7 @@ test('#openAccept rejects with NO_CONNECTION for a client that is gone', async (
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'NO_CONNECTION', message: 'no waiting connection 7' },
       }),
     );

@@ -7,7 +7,7 @@
     "packages/api/protocol-schema.json",
     "packages/cli/json-output-schema.json",
     "packages/daemon/src/platform/db/schema.ts",
-    "packages/daemon/src/vm/agent-client/gen/**"
+    "packages/agent-protocol/src/gen/**"
   ],
   "proseWrap": "always",
   "semi": true,

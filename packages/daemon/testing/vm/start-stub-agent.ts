@@ -3,8 +3,8 @@ import { mkdirSync } from 'node:fs';
 import { createServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { dirname } from 'node:path';
-import { buildFrameDecoder } from '../../src/vm/agent-client/frame-codec';
-import type { AgentFrame } from '../../src/vm/agent-client/frame-codec';
+import { buildFrameDecoder } from '@impz/agent-protocol';
+import type { AgentFrame } from '@impz/agent-protocol';
 
 export type StubAgentHandler = (
   socket: Socket,

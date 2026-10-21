@@ -3,9 +3,9 @@ import { linkSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { FRAME_TYPES, OKSchema, encodeMessageFrame } from '@impz/agent-protocol';
 import { startStubAgent } from '../../../testing/vm/start-stub-agent';
 import { openAgentConnection } from './agent-connection';
-import { FRAME_TYPES, encodeJsonFrame } from './frame-codec';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-vsock-'));
@@ -21,7 +21,7 @@ test('it hands over the frames the agent sends after its OK', async () => {
   const ctx = setupTest();
 
   await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+    socket.end(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
   });
 
   const connection = await openAgentConnection(ctx.vsockPath);

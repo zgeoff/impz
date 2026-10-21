@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { create } from '@bufbuild/protobuf';
-import { ActivitySchema } from './agent-protocol';
+import { ActivitySchema } from '@impz/agent-protocol';
 import { parseAgentActivity } from './parse-agent-activity';
 
 test('it parses the counts and the sessions the agent lists', () => {

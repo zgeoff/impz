@@ -1,10 +1,10 @@
+import { FRAME_TYPES } from '@impz/agent-protocol';
 import { openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
 import { handleUnknownOp } from './agent-outdated';
 import type { AgentFeature } from './agent-outdated';
 import { readFrameWithin, requireNoAgentError, sendRequestFrame } from './agent-requests';
 import type { AgentRequest } from './agent-requests';
-import { FRAME_TYPES } from './frame-codec';
 
 export interface DialTarget {
   readonly network: 'tcp' | 'unix';

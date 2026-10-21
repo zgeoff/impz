@@ -1,7 +1,6 @@
 import type { JsonValue } from '@bufbuild/protobuf';
-import { ActivitySchema, SessionInfoSchema } from './agent-protocol';
-import type { Activity, SessionInfo } from './agent-protocol';
-import { decodeAgentMessage } from './decode-agent-message';
+import { ActivitySchema, SessionInfoSchema, decodeAgentMessage } from '@impz/agent-protocol';
+import type { Activity, SessionInfo } from '@impz/agent-protocol';
 import { hasAgentNameForms } from './has-agent-name-forms';
 import { isAgentSessionState } from './is-agent-session-state';
 

@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { RequestSchema, encodeAgentMessage } from '@impz/agent-protocol';
 import {
   openAttachStream,
   openExecStream,
@@ -162,7 +163,7 @@ test('it creates the session a start names, without offsets', async () => {
   );
 });
 
-test('it records each request in its wire form', async () => {
+test('it records each request it parses', async () => {
   const ctx = await setupTest();
 
   const stream = await openExecStream(ctx.vsockPath, {
@@ -173,9 +174,9 @@ test('it records each request in its wire form', async () => {
 
   await Array.fromAsync(stream.events());
 
-  expect(ctx.agent.requests).toStrictEqual([
-    { op: 'exec', argv: ['fail'], tty: false, cwd: '/srv' },
-  ]);
+  expect(
+    ctx.agent.requests.map((request) => encodeAgentMessage(RequestSchema, request)),
+  ).toStrictEqual([{ op: 'exec', argv: ['fail'], tty: false, cwd: '/srv' }]);
 });
 
 test('it records a command whose connection closed while it ran', async () => {

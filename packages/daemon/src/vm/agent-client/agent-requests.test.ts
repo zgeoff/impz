@@ -3,10 +3,22 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
+import {
+  ActivitySchema,
+  ErrorDataSchema,
+  ErrorResponseSchema,
+  FRAME_TYPES,
+  OKSchema,
+  PingSchema,
+  SessionInfoSchema,
+  decodeJsonPayload,
+  encodeFrame,
+  encodeJsonFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
 import { startStubAgent } from '../../../testing/vm/start-stub-agent';
 import { openAgentConnection } from './agent-connection';
-import { ErrorDataSchema, PingSchema, SessionInfoSchema } from './agent-protocol';
 import {
   readFrameWithin,
   sendActivity,
@@ -15,7 +27,6 @@ import {
   sendPing,
   sendSessionKill,
 } from './agent-requests';
-import { FRAME_TYPES, decodeJsonPayload, encodeFrame, encodeJsonFrame } from './frame-codec';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-vsock-'));
@@ -31,7 +42,13 @@ test('#sendPing sends a ping through the CONNECT handshake', async () => {
   const ctx = setupTest();
 
   const agent = await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.response, { ok: true, version: '0.1.0', uptime_ms: 5 }));
+    socket.end(
+      encodeMessageFrame(FRAME_TYPES.response, PingSchema, {
+        ok: true,
+        version: '0.1.0',
+        uptimeMs: 5,
+      }),
+    );
   });
 
   await sendPing(ctx.vsockPath);
@@ -47,7 +64,13 @@ test("#sendPing resolves with the agent's answer", async () => {
   const ctx = setupTest();
 
   await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.response, { ok: true, version: '0.1.0', uptime_ms: 5 }));
+    socket.end(
+      encodeMessageFrame(FRAME_TYPES.response, PingSchema, {
+        ok: true,
+        version: '0.1.0',
+        uptimeMs: 5,
+      }),
+    );
   });
 
   const ping = await sendPing(ctx.vsockPath);
@@ -103,11 +126,11 @@ test('#sendAgentRequest rejects with the error the agent answers', async () => {
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: {
           code: 'INVALID_RESUME',
           message: 'offset 9999 is past the end',
-          data: { end: 9000, buffer_start: 512 },
+          data: { end: 9000, bufferStart: 512 },
         },
       }),
     );
@@ -143,11 +166,11 @@ test('#sendAgentRequest keeps an error’s code when its data is not readable', 
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: {
           code: 'INVALID_RESUME',
           message: 'offset 9999 is past the end',
-          data: { end: -1, buffer_start: 512 },
+          data: { end: -1, bufferStart: 512 },
         },
       }),
     );
@@ -168,6 +191,7 @@ test.each([
   const ctx = setupTest();
 
   await startStubAgent(ctx.vsockPath, (socket) => {
+    // plain JSON: the schema's encoder always writes ok, so it cannot leave it out
     socket.end(encodeJsonFrame(FRAME_TYPES.response, answer));
   });
 
@@ -181,7 +205,7 @@ test('#sendFreeze resolves when the agent acknowledges the freeze', async () => 
   const ctx = setupTest();
 
   await startStubAgent(ctx.vsockPath, (socket) => {
-    socket.end(encodeJsonFrame(FRAME_TYPES.response, { ok: true }));
+    socket.end(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
   });
 
   await expect(sendFreeze(ctx.vsockPath, 1000)).toResolve();
@@ -202,63 +226,63 @@ test('#sendActivity lists no sessions for an agent from before sessions', async 
 });
 
 test.each([
-  ['generation is a slash', { execution_generation: '/' }],
-  ['generation is a backslash', { execution_generation: '\\' }],
-  ['generation is a path with a slash', { execution_generation: 'a/b' }],
-  ['generation is a path with a backslash', { execution_generation: String.raw`a\b` }],
-  ['generation is the parent directory', { execution_generation: '..' }],
-  ['generation is the current directory', { execution_generation: '.' }],
-  ['generation is a relative traversal', { execution_generation: '../../../evil' }],
-  ['generation is a backslash traversal', { execution_generation: String.raw`..\..\evil` }],
-  ['generation is an absolute path', { execution_generation: '/etc/passwd' }],
-  ['generation is a drive path', { execution_generation: String.raw`C:\evil` }],
-  ['generation is a NUL', { execution_generation: '\0' }],
-  ['generation is a NUL inside a name', { execution_generation: 'a\0b' }],
-  ['generation is a value of 4096 characters', { execution_generation: 'x'.repeat(4096) }],
-  ['generation is 31 hex characters and a slash', { execution_generation: `${'a'.repeat(31)}/` }],
+  ['generation is a slash', { executionGeneration: '/' }],
+  ['generation is a backslash', { executionGeneration: '\\' }],
+  ['generation is a path with a slash', { executionGeneration: 'a/b' }],
+  ['generation is a path with a backslash', { executionGeneration: String.raw`a\b` }],
+  ['generation is the parent directory', { executionGeneration: '..' }],
+  ['generation is the current directory', { executionGeneration: '.' }],
+  ['generation is a relative traversal', { executionGeneration: '../../../evil' }],
+  ['generation is a backslash traversal', { executionGeneration: String.raw`..\..\evil` }],
+  ['generation is an absolute path', { executionGeneration: '/etc/passwd' }],
+  ['generation is a drive path', { executionGeneration: String.raw`C:\evil` }],
+  ['generation is a NUL', { executionGeneration: '\0' }],
+  ['generation is a NUL inside a name', { executionGeneration: 'a\0b' }],
+  ['generation is a value of 4096 characters', { executionGeneration: 'x'.repeat(4096) }],
+  ['generation is 31 hex characters and a slash', { executionGeneration: `${'a'.repeat(31)}/` }],
   [
     'generation is 31 hex characters and a backslash',
-    { execution_generation: `${'a'.repeat(31)}\\` },
+    { executionGeneration: `${'a'.repeat(31)}\\` },
   ],
   [
     'generation is a traversal between hex characters',
-    { execution_generation: `${'a'.repeat(16)}/../${'a'.repeat(13)}` },
+    { executionGeneration: `${'a'.repeat(16)}/../${'a'.repeat(13)}` },
   ],
-  ['generation is a slash and 31 hex characters', { execution_generation: `/${'a'.repeat(31)}` }],
-  ['generation is 31 hex characters and a NUL', { execution_generation: `${'a'.repeat(31)}\0` }],
-  ['generation is 31 hex characters', { execution_generation: 'a'.repeat(31) }],
-  ['generation is 33 hex characters', { execution_generation: 'a'.repeat(33) }],
-  ['generation is 32 uppercase hex characters', { execution_generation: 'A'.repeat(32) }],
-  ['generation is 32 letters that are not hex', { execution_generation: 'g'.repeat(32) }],
-  ['generation is a UUID', { execution_generation: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11' }],
-  ['boot id is a slash', { boot_id: '/' }],
-  ['boot id is a backslash', { boot_id: '\\' }],
-  ['boot id is a path with a slash', { boot_id: 'a/b' }],
-  ['boot id is a path with a backslash', { boot_id: String.raw`a\b` }],
-  ['boot id is the parent directory', { boot_id: '..' }],
-  ['boot id is the current directory', { boot_id: '.' }],
-  ['boot id is a relative traversal', { boot_id: '../../../evil' }],
-  ['boot id is a backslash traversal', { boot_id: String.raw`..\..\evil` }],
-  ['boot id is an absolute path', { boot_id: '/etc/passwd' }],
-  ['boot id is a drive path', { boot_id: String.raw`C:\evil` }],
-  ['boot id is a NUL', { boot_id: '\0' }],
-  ['boot id is a NUL inside a name', { boot_id: 'a\0b' }],
-  ['boot id is a value of 4096 characters', { boot_id: 'x'.repeat(4096) }],
-  ['boot id is a UUID that ends in a slash', { boot_id: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d1/' }],
+  ['generation is a slash and 31 hex characters', { executionGeneration: `/${'a'.repeat(31)}` }],
+  ['generation is 31 hex characters and a NUL', { executionGeneration: `${'a'.repeat(31)}\0` }],
+  ['generation is 31 hex characters', { executionGeneration: 'a'.repeat(31) }],
+  ['generation is 33 hex characters', { executionGeneration: 'a'.repeat(33) }],
+  ['generation is 32 uppercase hex characters', { executionGeneration: 'A'.repeat(32) }],
+  ['generation is 32 letters that are not hex', { executionGeneration: 'g'.repeat(32) }],
+  ['generation is a UUID', { executionGeneration: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11' }],
+  ['boot id is a slash', { bootId: '/' }],
+  ['boot id is a backslash', { bootId: '\\' }],
+  ['boot id is a path with a slash', { bootId: 'a/b' }],
+  ['boot id is a path with a backslash', { bootId: String.raw`a\b` }],
+  ['boot id is the parent directory', { bootId: '..' }],
+  ['boot id is the current directory', { bootId: '.' }],
+  ['boot id is a relative traversal', { bootId: '../../../evil' }],
+  ['boot id is a backslash traversal', { bootId: String.raw`..\..\evil` }],
+  ['boot id is an absolute path', { bootId: '/etc/passwd' }],
+  ['boot id is a drive path', { bootId: String.raw`C:\evil` }],
+  ['boot id is a NUL', { bootId: '\0' }],
+  ['boot id is a NUL inside a name', { bootId: 'a\0b' }],
+  ['boot id is a value of 4096 characters', { bootId: 'x'.repeat(4096) }],
+  ['boot id is a UUID that ends in a slash', { bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d1/' }],
   [
     'boot id is a UUID that ends in a backslash',
-    { boot_id: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d1\\' },
+    { bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d1\\' },
   ],
-  ['boot id is a traversal into a UUID', { boot_id: '../c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11' }],
-  ['boot id is a UUID and a NUL', { boot_id: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11\0' }],
-  ['boot id is a UUID one character short', { boot_id: 'f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11' }],
-  ['boot id is a UUID one character long', { boot_id: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d110' }],
-  ['boot id is an uppercase UUID', { boot_id: '4F3C0F86-8F8B-4C45-A3B4-8E1C1E9B0D11' }],
+  ['boot id is a traversal into a UUID', { bootId: '../c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11' }],
+  ['boot id is a UUID and a NUL', { bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11\0' }],
+  ['boot id is a UUID one character short', { bootId: 'f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11' }],
+  ['boot id is a UUID one character long', { bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d110' }],
+  ['boot id is an uppercase UUID', { bootId: '4F3C0F86-8F8B-4C45-A3B4-8E1C1E9B0D11' }],
   [
     'boot id is a UUID with a letter that is not hex',
-    { boot_id: '4g3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11' },
+    { bootId: '4g3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11' },
   ],
-  ['boot id is a UUID without its dashes', { boot_id: '4f3c0f868f8b4c45a3b48e1c1e9b0d11' }],
+  ['boot id is a UUID without its dashes', { bootId: '4f3c0f868f8b4c45a3b48e1c1e9b0d11' }],
   ['session name is a slash', { name: '/' }],
   ['session name is a backslash', { name: '\\' }],
   ['session name is a path with a slash', { name: 'a/b' }],
@@ -292,16 +316,16 @@ test.each([
       attached: false,
       cols: 80,
       rows: 24,
-      started_unix_ms: 1,
-      execution_generation: '0123456789abcdef0123456789abcdef',
-      boot_id: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+      startedUnixMs: 1,
+      executionGeneration: '0123456789abcdef0123456789abcdef',
+      bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
       log: true,
     };
 
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
-        tcp_established: 0,
-        exec_sessions: 0,
+      encodeMessageFrame(FRAME_TYPES.response, ActivitySchema, {
+        tcpEstablished: 0,
+        execSessions: 0,
         load1: 0,
         sessions: [good, { ...good, ...forged }],
       }),
@@ -373,7 +397,7 @@ test('#sendSessionKill rejects with NO_SESSION for a session that does not exist
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'NO_SESSION', message: 'no session "main"' },
       }),
     );
@@ -387,7 +411,7 @@ test('#sendSessionKill rejects with AGENT_OUTDATED for an agent from before sess
 
   await startStubAgent(ctx.vsockPath, (socket) => {
     socket.end(
-      encodeJsonFrame(FRAME_TYPES.response, {
+      encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
         error: { code: 'UNKNOWN_OP', message: 'unknown op' },
       }),
     );

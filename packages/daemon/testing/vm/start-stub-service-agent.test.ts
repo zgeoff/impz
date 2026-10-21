@@ -3,13 +3,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
-import { waitFor } from '@impz/test-utils/wait-for';
 import {
   LogCursorSchema,
   RequestSchema,
   ServiceStatusSchema,
   ServicesListSchema,
-} from '../../src/vm/agent-client/agent-protocol';
+} from '@impz/agent-protocol';
+import { waitFor } from '@impz/test-utils/wait-for';
 import { sendAgentRequest } from '../../src/vm/agent-client/agent-requests';
 import {
   openServiceLogStream,

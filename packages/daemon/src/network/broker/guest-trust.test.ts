@@ -4,15 +4,17 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rootCertificates } from 'node:tls';
+import {
+  ExitSchema,
+  FRAME_TYPES,
+  StartedSchema,
+  decodeJsonPayload,
+  encodeFrame,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
 import { buildStubExecReplies } from '../../../testing/vm/build-stub-exec-replies';
 import { startStubAgent } from '../../../testing/vm/start-stub-agent';
-import {
-  FRAME_TYPES,
-  decodeJsonPayload,
-  encodeFrame,
-  encodeJsonFrame,
-} from '../../vm/agent-client/frame-codec';
 import {
   buildBrokerEnv,
   buildInstallArgv,
@@ -296,8 +298,8 @@ test('it runs the install as root through the agent with the input on stdin', as
   const agent = await startStubAgent(
     join(ctx.directoryPath, 'v.sock'),
     buildStubExecReplies({
-      started: [encodeJsonFrame(FRAME_TYPES.started, { pid: 9 })],
-      exited: [encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal: 0 })],
+      started: [encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 })],
+      exited: [encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal: 0 })],
     }),
     { stack: ctx.stack },
   );
@@ -340,13 +342,13 @@ test('it throws with the exit code and stderr of an install that fails', async (
     join(ctx.directoryPath, 'v.sock'),
     (socket, _request, frames) => {
       if (frames.length === 1) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
 
         socket.write(
           encodeFrame(FRAME_TYPES.stderr, new TextEncoder().encode('sh: cannot create /etc/imp\n')),
         );
 
-        socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 2, signal: 0 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 2, signal: 0 }));
       }
     },
     { stack: ctx.stack },
@@ -365,7 +367,7 @@ test('it throws when the agent ends the install without an exit', async () => {
     join(ctx.directoryPath, 'v.sock'),
     (socket, _request, frames) => {
       if (frames.length === 1) {
-        socket.end(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+        socket.end(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
       }
     },
     { stack: ctx.stack },
@@ -384,7 +386,7 @@ test('it cuts off an install that outlasts its timeout', async () => {
     join(ctx.directoryPath, 'v.sock'),
     (socket, _request, frames) => {
       if (frames.length === 1) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
       }
     },
     { stack: ctx.stack },
@@ -402,11 +404,11 @@ test('it gives an install 10 seconds to finish', async () => {
     join(ctx.directoryPath, 'v.sock'),
     (socket, _request, frames) => {
       if (frames.length === 1) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.started, { pid: 9 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
       }
 
       if (frames.at(-1)?.type === FRAME_TYPES.stdinEof) {
-        socket.write(encodeJsonFrame(FRAME_TYPES.exit, { code: 0, signal: 0 }));
+        socket.write(encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal: 0 }));
       }
     },
     { stack: ctx.stack },

@@ -1,6 +1,6 @@
+import type { SessionInfo } from '@impz/agent-protocol';
 import { probeBrokerSession, writeBrokerSession } from '../../platform/db/broker-sessions';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import type { SessionInfo } from '../../vm/agent-client/agent-protocol';
 import type { ExecStream } from '../../vm/agent-client/exec-stream';
 import { buildBrokerNotReadyError } from './exec-require';
 
