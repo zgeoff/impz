@@ -3,6 +3,7 @@ import type { TestImpd, TestImpdOptions } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { http } from 'msw';
 import { IMPD_ORIGIN } from './impd-origin';
+import { teeFirstChunk } from './tee-first-chunk';
 
 export interface DashboardImpd {
   readonly harness: TestImpd;
@@ -22,7 +23,7 @@ export async function startDashboardImpd(
 
   const cookies = new Map<string, string>();
 
-  const streamed = Promise.withResolvers<undefined>();
+  const streamed = Promise.withResolvers<Error | null>();
 
   server.use(
     http.all(`${IMPD_ORIGIN}/*`, async (info) => {
@@ -44,42 +45,33 @@ export async function startDashboardImpd(
         }
       }
 
-      return new URL(request.url).pathname === EVENT_STREAM_PATH
-        ? withFirstChunkSignal(response, () => {
-            streamed.resolve(undefined);
-          })
-        : response;
+      if (new URL(request.url).pathname !== EVENT_STREAM_PATH) {
+        return response;
+      }
+
+      // impd subscribes a stream to its events before it sends the stream's first
+      // bytes, so an event published after them reaches the page
+      const teed = teeFirstChunk(response);
+
+      streamed.resolve(teed.firstChunk);
+
+      return teed.response;
     }),
   );
 
-  return { harness, logIn, waitForEventStream: () => streamed.promise };
+  const waitForEventStream = async (): Promise<void> => {
+    const failure = await streamed.promise;
+
+    if (failure !== null) {
+      throw new Error('the event stream failed before its first chunk', { cause: failure });
+    }
+  };
+
+  return { harness, logIn, waitForEventStream };
 }
 
 function formatCookies(cookies: ReadonlyMap<string, string>): string {
   return [...cookies].map(([name, value]) => `${name}=${value}`).join('; ');
-}
-
-// impd subscribes a stream to its events before it sends the stream's first
-// bytes, so an event published after them reaches the page
-function withFirstChunkSignal(response: Response, onFirstChunk: () => void): Response {
-  if (response.body === null) {
-    return response;
-  }
-
-  const [forPage, forSignal] = response.body.tee();
-  const reader = forSignal.getReader();
-
-  const signalFirstChunk = async (): Promise<void> => {
-    await reader.read();
-
-    onFirstChunk();
-
-    await reader.cancel();
-  };
-
-  void signalFirstChunk();
-
-  return new Response(forPage, response);
 }
 
 async function logIn(token = TEST_TOKEN): Promise<void> {
