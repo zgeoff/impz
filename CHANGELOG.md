@@ -2,10 +2,11 @@
 
 ## [2.10.1](https://github.com/zgeoff/impz/compare/v2.10.0...v2.10.1) (2026-10-21)
 
-
 ### Bug Fixes
 
-* **daemon:** log upstream stream cuts in the broker and docker proxy ([#591](https://github.com/zgeoff/impz/issues/591)) ([05ead41](https://github.com/zgeoff/impz/commit/05ead411022098e59f10aaca76f00b1887506833))
+- **daemon:** log upstream stream cuts in the broker and docker proxy
+  ([#591](https://github.com/zgeoff/impz/issues/591))
+  ([05ead41](https://github.com/zgeoff/impz/commit/05ead411022098e59f10aaca76f00b1887506833))
 
 ## [2.10.0](https://github.com/zgeoff/impz/compare/v2.9.0...v2.10.0) (2026-10-21)
 
