@@ -15,6 +15,7 @@ import invariant from 'tiny-invariant';
 import { buildMockBackupConfig } from '../../../testing/imp-ops/build-mock-backup-config';
 import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-checkpoint';
 import { buildStubRestic } from '../../../testing/imp-ops/build-stub-restic';
+import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { createTemplateService } from '../../imps/images/template-service';
 import { createNetworkService } from '../../network/networks/network-service';
@@ -299,6 +300,59 @@ test('#restoreBackup restores an imp stopped, with its disk and its checkpoints 
   );
 
   expect(readdirSync(join(ctx.dataDir, 'backup', 'restore'))).toStrictEqual([]);
+});
+
+test('#restoreBackup keeps an old image it reuses when a prune reaches the restore as it picks the image', async () => {
+  const ctx = await setupTest();
+
+  const gate = buildQueryGate('sha256:agent-1111111');
+
+  ctx.stack.defer(() => {
+    gate.release();
+  });
+
+  const backups = createBackupService({
+    ...ctx.deps,
+    db: gate.wrap(ctx.db),
+    backup: buildMockBackupConfig(),
+  });
+
+  await ctx.createTestImage('agent-1111111');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'agent-1111111', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev', image: 'agent-1111111' });
+  await backups.runBackup();
+  await ctx.imps.destroyImp('dev');
+  await ctx.createTestImage('agent-2222222');
+  await ctx.createTestImage('agent-3333333');
+  await ctx.createTestImage('agent-4444444');
+
+  writeFileSync(join(ctx.dataDir, 'image-keep'), '');
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'agent-1111111')
+    .execute();
+
+  gate.arm();
+
+  const restoring = backups.restoreBackup({ name: 'dev' });
+
+  await gate.reached;
+
+  await ctx.images.runImagePrune();
+
+  gate.release();
+
+  await restoring;
+
+  const image = await readImageByName(ctx.db, 'agent-1111111');
+  const dev = await readImpByName(ctx.db, 'dev');
+
+  expect(image?.name).toBe('agent-1111111');
+  expect(dev?.imageId).toBe(image?.id);
 });
 
 test('#restoreBackup restores the newest backup at or before --at that holds the imp', async () => {
