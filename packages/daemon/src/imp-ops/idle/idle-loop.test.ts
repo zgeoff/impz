@@ -13,7 +13,6 @@ function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // a frozen clock that moves only with advance; impd and the idle loop share it
   return startTestImpd(stack, { frozenClockMs: Date.UTC(2026, 0, 1) });
 }
 
@@ -112,7 +111,6 @@ test('it keeps an idle imp awake while the earlier of its leases runs', async ()
 
   await ctx.impd.imps.releaseLease('dev', { principal: 'token:a', display: 'a' }, 'late');
 
-  // idle long past the timeout: only the lease keeps it awake
   await updateImpActivity(ctx.db, imp.id, new Date(at - 60_000));
 
   const idle = createIdleLoop({
@@ -170,7 +168,6 @@ test('it sleeps an idle imp once the earlier of its leases has ended', async () 
     readCpuTicks: () => null,
   });
 
-  // just past the end of the earlier lease
   ctx.advance(60_000 + 1);
 
   await idle.runCheck();

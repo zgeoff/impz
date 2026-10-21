@@ -15,35 +15,26 @@ import { readSecret } from '../platform/db/secrets';
 import { buildBuilderError, buildForbiddenError } from './api-errors';
 import type { RouterDeps } from './create-router';
 
-// what each call gets from create-app: who made it, and a signal that aborts
-// when what it authenticated with ends (a logout, a removed token); null
-// for nothing that can end
 export interface RpcContext {
   readonly caller: Caller;
   readonly ends: AbortSignal | null;
 }
 
-// what a handler resolved that the call's audit row keeps
 export interface AuditDetail {
   value: string | null;
 }
 
-// the implementer every procedure is built on, which a topic's routes take
-// (create-system-routes.ts, create-token-routes.ts)
 export type RpcImplementer = ReturnType<typeof createImplementer>;
 
 export function createImplementer(deps: RouterDeps) {
-  // read at each grant or revoke, never cached: the secret by a name can be
-  // another one than a token was given
+  // Never cached: a secret's name can come to mean another secret than the
+  // one a token was given.
   const readGeneration = async (name: string): Promise<string | null> => {
     const secret = await readSecret(deps.db, name);
 
     return secret?.generation ?? null;
   };
 
-  // every call is checked against its access rule (auth/access-policy.ts);
-  // every call that changes something, refused or not, leaves an audit row
-  // after its answer
   return implement(impContract)
     .$context<RpcContext>()
     .use(async (options, input) => {
@@ -68,7 +59,6 @@ export function createImplementer(deps: RouterDeps) {
         }
       };
 
-      // what a handler resolved for the audit row, such as an add's pull
       const auditDetail: AuditDetail = { value: null };
       const startedAt = deps.now();
 
@@ -108,8 +98,6 @@ export function createImplementer(deps: RouterDeps) {
         return result;
       } catch (error) {
         deps.audit.record(buildCall(null), error);
-
-        // a refusal names only the leases and imps the caller may see
         throw toCallerError(error, caller);
       }
     });

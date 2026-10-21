@@ -42,8 +42,8 @@ test('it closes the database file when the test finishes, even one no query open
 
   createUnmigratedDatabase(join(directory, 'older.sqlite'));
 
-  // runs after the helper's own close, and after the dir's removal, which
-  // leaves an open file listed as deleted: no descriptor names the file
+  // runs after the helper's close and the directory's removal; Linux still lists a removed
+  // file that a descriptor holds open, marked deleted
   onTestFinished(() => {
     const descriptors = Bun.spawnSync(['ls', '-l', `/proc/${String(process.pid)}/fd`]);
 

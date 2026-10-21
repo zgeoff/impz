@@ -114,7 +114,6 @@ test('it closes a connection it still holds when stopped', async () => {
   client.resume();
   client.write('POST /build HTTP/1.1\r\nHost: docker\r\n\r\n');
 
-  // the engine has answered and holds the connection
   await held.promise;
 
   await engine.stop();
@@ -175,7 +174,6 @@ test('it leaves started unsettled for a connection that sends nothing', async ()
     client.end();
   });
 
-  // the engine has seen the connection come and go
   await engine.closed;
 
   // a settled started wins the race, being first

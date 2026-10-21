@@ -1,10 +1,6 @@
-// What the echo saw of one request: the path and Host it got, and the
-// headers a proxy in front of it adds, keeps or strips.
 interface HeaderEcho {
   readonly path: string;
   readonly proto: string | null;
-
-  // the dashboard's same-origin check compares the Origin with this
   readonly host: string;
   readonly cookie: string | null;
   readonly authorization: string | null;
@@ -14,9 +10,6 @@ interface HeaderEcho {
   readonly forwardedHost: string | null;
 }
 
-// An imp or impd's API behind a proxy: it answers each request with a
-// HeaderEcho as JSON and sends each WebSocket message back. Its release,
-// deferred into `stack`, closes every connection it holds.
 export function startStubHeaderEcho(stack: Readonly<AsyncDisposableStack>): {
   readonly port: number;
 } {

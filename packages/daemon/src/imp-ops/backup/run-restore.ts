@@ -41,7 +41,6 @@ export interface RestoreInput {
   readonly merge?: boolean | undefined;
 }
 
-// what a restore reads from the backup service, its defaults resolved
 export interface RestoreDeps {
   readonly db: ImpDatabase;
   readonly imps: Pick<Imps, 'createImp' | 'destroyImp'>;
@@ -71,7 +70,7 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
     throw new ORPCError('BAD_REQUEST', { message: '`as` renames one imp, not all of them' });
   }
 
-  // a stale lock from a crashed run would block even reading the repository
+  // A stale lock from a crashed run would block even reading the repository.
   await deps.restic.unlock();
 
   const point = await readPoint(deps, input.at ?? deps.now(), input.name);
@@ -83,7 +82,6 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
   const manifest = BackupManifestSchema.parse(JSON.parse(manifestText));
   const chosen = manifest.imps.filter((imp) => input.all === true || imp.name === input.name);
 
-  // the backup names these imps but holds none of their files
   const notRestorable = manifest.excluded
     .filter((imp) => input.all === true || imp.name === input.name)
     .map((imp) => ({ imp: imp.name, reason: imp.reason }));
@@ -122,7 +120,6 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
   const skippedGrants: SkippedGrant[] = [];
 
   try {
-    // before the imps, so their grants find the secrets by name
     const database =
       input.all === true && manifest.database !== null
         ? await createRestoredDatabase(deps, point, base, manifest.database, workDir)
@@ -130,7 +127,6 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
 
     const imageNames = new Map<string, string>();
 
-    // images before the imps on them; with all, every template too
     const templates = manifest.images.filter((image) => image.source === 'imp');
 
     const digests = new Set([
@@ -177,8 +173,6 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
   }
 }
 
-// the newest point at or before `at` that holds `name`, or that names it
-// as left out, when one is given
 async function readPoint(
   deps: RestoreDeps,
   at: Date,
@@ -201,9 +195,6 @@ async function readPoint(
   return point;
 }
 
-// the tokens and secrets of the backup's database copy, which stay when
-// the imps' restore fails after them: a second restore of all skips them.
-// It holds the copy's size while restic writes and impd reads it.
 async function createRestoredDatabase(
   deps: RestoreDeps,
   point: ResticSnapshot,
@@ -227,8 +218,8 @@ async function createRestoredDatabase(
   return access;
 }
 
-// The one path a run writes the copy at: a manifest that names another, as
-// one altered could, would restore a file outside the restore's directory
+// An altered manifest could name another path, which would restore a file
+// outside the restore's directory.
 function requireTreeDatabase(database: string): string {
   if (database !== BACKUP_TREE.database) {
     throw new Error(
@@ -239,9 +230,6 @@ function requireTreeDatabase(database: string): string {
   return database;
 }
 
-// An image with the same digest is reused; the name gets a digest suffix
-// when another image has it. It joins the storage gate until its row
-// commits, so a GC never takes the image in between.
 function createRestoredImage(
   deps: RestoreDeps,
   point: ResticSnapshot,
@@ -269,7 +257,6 @@ async function createJoinedImage(
     return existing.name;
   }
 
-  // the name first: a clash on the fallback fails before any storage
   const name = await resolveRestoredImageName(deps, image);
 
   const directory = join(workDir, image.dir);
@@ -298,7 +285,6 @@ async function createJoinedImage(
   return name;
 }
 
-// its own name, else `<name>-<tag>` when another image has it
 async function resolveRestoredImageName(deps: RestoreDeps, image: ManifestImage): Promise<string> {
   const taken = await readImageByName(deps.db, image.name);
 
@@ -321,7 +307,6 @@ async function resolveRestoredImageName(deps: RestoreDeps, image: ManifestImage)
   return fallback;
 }
 
-// the restored imp's name and the image it names
 interface RestoreTarget {
   readonly name: string;
   readonly image: string;
@@ -332,8 +317,6 @@ interface RestoredSizes {
   readonly usedBytes?: number | undefined;
 }
 
-// Each checkpoint is written over the disk in turn and snapshotted, oldest
-// first, so the checkpoints share every block they did before.
 async function createRestoredImp(
   deps: RestoreDeps,
   point: ResticSnapshot,
@@ -344,9 +327,6 @@ async function createRestoredImp(
 ): Promise<Imp> {
   const created = { id: null as string | null };
 
-  // One file at a time, each gone once written: ten checkpoints never sit
-  // on the host as ten full disks at once. It holds twice the file's blocks
-  // (restic's sparse copy, then the disk), or an older manifest's disk size.
   const writeRestoredFile = (file: string, disk: string, sizes: RestoredSizes) => {
     const bytes = sizes.usedBytes === undefined ? sizes.diskBytes : 2 * sizes.usedBytes;
 
@@ -388,7 +368,6 @@ async function createRestoredImp(
     await writeRestoredFile(imp.disk, disk, imp);
   };
 
-  // a network the restore made goes again when the imp does not come back
   const networks = await deps.networks.writeMissingNetworks(imp.networks);
 
   try {
@@ -416,7 +395,7 @@ async function createRestoredImp(
 
 const ID_ATTEMPTS = 3;
 
-// ZFS can still hold a deleted checkpoint's id in a snapshot a fork needs
+// ZFS can still hold a deleted checkpoint's id in a snapshot a fork needs.
 async function createCheckpointDisk(deps: RestoreDeps, impId: string) {
   for (let attempt = 1; ; attempt += 1) {
     const id = buildCheckpointId();
@@ -433,8 +412,6 @@ async function createCheckpointDisk(deps: RestoreDeps, impId: string) {
   }
 }
 
-// A policy this impd cannot read, from a newer backup, comes back as
-// `none`, with a warning: never more open than it was.
 function resolveEgressPolicy(deps: RestoreDeps, name: string, imp: ManifestImp): EgressPolicy {
   const parsed = EgressPolicySchema.safeParse({ mode: imp.egressPolicy, allow: imp.egressAllow });
 
@@ -449,7 +426,6 @@ function resolveEgressPolicy(deps: RestoreDeps, name: string, imp: ManifestImp):
   return { mode: 'none', allow: [] };
 }
 
-// only the imp this restore made: a name clash fails before any disk
 async function removeFailedImp(
   deps: RestoreDeps,
   name: string,
@@ -466,8 +442,6 @@ async function removeFailedImp(
   });
 }
 
-// Grants by secret name: a value never leaves its host, so a grant comes
-// back only where a secret of that name exists, and the rest are reported.
 async function createRestoredGrants(deps: RestoreDeps, impName: string, imp: ManifestImp) {
   const skipped: SkippedGrant[] = [];
 

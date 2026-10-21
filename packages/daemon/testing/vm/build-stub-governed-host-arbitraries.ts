@@ -1,13 +1,10 @@
 import fc from 'fast-check';
 import type { HostChange } from './create-stub-governed-host';
 
-// Generators for the property cases of createStubGovernedHost over imps
-// `ids`: the imps awake at the start, an admit, and a change between calls.
 export function buildStubGovernedHostArbitraries(ids: readonly string[]) {
   const id = fc.constantFrom(...ids);
 
   return {
-    // imps that start awake, with what they measure; one in four fails to sleep
     awake: fc.uniqueArray(
       fc.record({
         id,

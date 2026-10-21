@@ -1,9 +1,6 @@
 import { createServer } from 'node:net';
 import type { Socket } from 'node:net';
 
-// The far end of a plain tunnel on a free loopback port: raw TCP, which the
-// broker relays byte for byte. It reads each request head, records it in
-// `received`, then answers a 200 whose body is `body` and closes.
 export async function startStubBrokerReplyTarget(
   stack: Readonly<AsyncDisposableStack>,
   body: string,

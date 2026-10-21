@@ -1,6 +1,5 @@
 import type { ClientChannel } from 'ssh2';
 
-// everything a channel printed, and how it exited
 interface ChannelResult {
   readonly stdout: string;
   readonly stderr: string;
@@ -10,9 +9,8 @@ interface ChannelResult {
 
 type OpenCallback = (failure: Readonly<Error> | undefined, channel: ClientChannel) => void;
 
-// Opens a channel through an ssh2 callback method, or rejects with its
-// failure. Output is collected from the open on: `exit` can come in the
-// open's packet, before a caller could listen. `result` settles on close.
+// ssh2 can deliver `exit` in the open's packet, before a caller could listen, so the
+// output is collected from the open on.
 export function openSshChannel(
   open: (done: OpenCallback) => void,
 ): Promise<{ readonly channel: ClientChannel; readonly result: Promise<ChannelResult> }> {

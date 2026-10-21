@@ -2,7 +2,6 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { join } from 'node:path';
 import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';
 
-// what `docker image inspect <ref>` prints one element of
 interface StubDockerInspect {
   readonly Id: string;
   readonly RepoDigests?: readonly string[];
@@ -12,42 +11,23 @@ interface StubDockerInspect {
   readonly Size?: number;
 }
 
-// how a `docker pull --quiet <ref>` goes: it lands the image, reports
-// success but leaves none (as when it is removed before the next call),
-// fails with this stderr, or hangs until it is killed or its directory goes
 export type StubDockerPull = 'ok' | 'lost' | 'hang' | { readonly stderr: string };
 
 export interface StubDockerImage {
-  // every spelling the CLI is called with for this image
   readonly refs: readonly string[];
-
-  // each inspect prints the next of these, then the last again: an image
-  // that moves between a pull and the next inspect
   readonly inspects: readonly StubDockerInspect[];
-
-  // on the host before any pull; true by default
   readonly isOnHost?: boolean;
   readonly pull?: StubDockerPull;
 }
 
 export interface StubDockerCliOptions {
-  // a directory of the test's own; the script goes in its `bin`
   readonly directory: string;
-
-  // what `docker version` prints, `"<os>" "<arch>"`; linux x86_64 by default.
-  // `stdout` prints that line as it is, such as `null null` from an engine
-  // that reports no server
   readonly version?: { readonly os: string; readonly arch: string } | { readonly stdout: string };
   readonly images?: readonly StubDockerImage[];
-
-  // the container `docker create` makes, or its failure
   readonly create?: { readonly id: string } | { readonly stderr: string };
-
-  // the tar `docker export` prints
   readonly exportTar?: Uint8Array;
 }
 
-// the inspect formats impd passes, and how each renders an inspect
 const FORMATS: ReadonlyMap<string, (inspect: StubDockerInspect) => string> = new Map([
   ['', (inspect: StubDockerInspect) => JSON.stringify([inspect])],
   ['{{.Id}}', (inspect: StubDockerInspect) => inspect.Id],
@@ -65,9 +45,6 @@ const FORMATS: ReadonlyMap<string, (inspect: StubDockerInspect) => string> = new
   ],
 ]);
 
-// A `docker` CLI in `<dir>/bin` for the host engine: version, inspect in
-// each format impd passes, pull, create, export and rm. It logs each argv,
-// joined by spaces, and fails any call it does not model.
 export function createStubDockerCli(options: Readonly<StubDockerCliOptions>) {
   const bin = join(options.directory, 'bin');
   const state = join(options.directory, 'stub-docker');
@@ -138,18 +115,15 @@ export function createStubDockerCli(options: Readonly<StubDockerCliOptions>) {
   return {
     bin,
 
-    // PATH with the stub first
     path: `${bin}:${process.env['PATH'] ?? ''}`,
 
-    // each call's argv, joined by spaces, in order
     readCalls: (): string[] =>
       existsSync(log) ? readFileSync(log, 'utf8').trimEnd().split('\n') : [],
   };
 }
 
-// One image's inspect arm for one format: the next inspect of its
-// sequence, once the image is on the host. Each call appends a line to the
-// count: a count rewritten in place reads empty to a parallel call.
+// Each call appends a line to the count, because a count rewritten in place reads empty to
+// a parallel call.
 function buildInspectArm(
   index: number,
   image: StubDockerImage,
@@ -180,7 +154,6 @@ function formatShellWord(value: string): string {
 
 function buildPullArm(index: number, ref: string, pull: StubDockerPull, state: string): string {
   if (pull === 'hang') {
-    // until its kill, or until the test's state directory is gone
     return `  ${formatShellWord(`pull --quiet ${ref}`)}) while [ -d ${formatShellWord(state)} ]; do sleep 0.05; done; exit 1 ;;`;
   }
 

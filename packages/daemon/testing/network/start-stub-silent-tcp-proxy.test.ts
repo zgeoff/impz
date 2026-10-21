@@ -6,8 +6,6 @@ import invariant from 'tiny-invariant';
 import { z } from 'zod';
 import { startStubSilentTcpProxy } from './start-stub-silent-tcp-proxy';
 
-// a target on loopback that records what reaches it and keeps its sockets,
-// so a test can send to the client through the proxy
 async function setupTest() {
   const received: string[] = [];
   const sockets: Socket[] = [];
@@ -34,7 +32,6 @@ async function setupTest() {
     target.close();
   });
 
-  // a server listening on a TCP port reports an object with its port
   const address = z.object({ port: z.number() }).parse(target.address());
 
   return { targetPort: address.port, received, sockets };
@@ -182,7 +179,7 @@ test('it stops listening and drops its connections when the test finishes', asyn
     expect(ctx.sockets).toHaveLength(1);
   });
 
-  // registered after the proxy's own cleanup, so it runs once that is done
+  // Bun runs this after the proxy's own cleanup, which registered first.
   onTestFinished(async () => {
     await closed.promise;
 

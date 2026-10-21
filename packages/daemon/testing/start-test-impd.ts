@@ -40,118 +40,61 @@ import { buildStubVmm } from './vm/build-stub-vmm';
 
 export interface TestImpdOptions {
   readonly env?: Readonly<Record<string, string>>;
-
-  // a data dir the caller owns; a temp dir that the dispose removes by default
   readonly dataDir?: string;
 
-  // a plain copy by default: the test tmpdir is not XFS
+  // a plain copy by default, because the test tmpdir is not XFS
   readonly cloneDisk?: (source: string, target: string) => Promise<void>;
-
-  // the host's grow of a new disk's filesystem, once recorded; at once by default
   readonly growFilesystem?: (disk: string) => Promise<boolean>;
-
-  // sees each log line as impd writes it
   readonly onLog?: (message: string) => void;
-
-  // the broker's CA install into a guest; records the vsock path by default
   readonly installBundle?: InstallBundle;
-
-  // where the broker's plain tunnels dial, in place of DNS and its checks;
-  // by default a tunnel is refused, so no test reaches the network
   readonly resolveTunnelTarget?: (host: string) => Promise<string>;
   readonly dialTunnel?: (address: string, port: number) => Socket;
-
-  // holds a broker request between its rule read and its value read
   readonly afterRuleRead?: () => Promise<void>;
-
-  // the broker's token calls for oauth secrets, and its clock; its refresh
-  // timer never runs in the harness, so no test reaches a token endpoint
-  // unasked
   readonly oauthFetch?: OAuthFetch;
   readonly brokerNow?: () => number;
-
-  // nft in place of the real one; by default it records each script
   readonly runNft?: (script: string) => Promise<void>;
-
-  // what `iptables -S FORWARD` prints; setup-net's rules by default
   readonly forwardRules?: string;
 
-  // the clock's start, also a sleep's timing clock; it moves only with
-  // `advance` and a young guest wait's pauses, which take no real time
+  // the clock moves only with `advance` and with a young guest's wait, which takes no real time
   readonly frozenClockMs?: number;
-
-  // each impd's storage backend over the data dir; XFS on plain files by default
   readonly createStorage?: (dataDir: string) => StorageBackend;
-
-  // files that stand for /proc/sys/kernel/tainted, read on the harness's
-  // clock, /proc/sys/kernel/random/boot_id, /dev/kmsg and /proc/self/ns/pid;
-  // the kernel never oopses without them
   readonly kernelFiles?: {
     readonly taintPath: string;
     readonly bootIdPath: string;
     readonly kmsgPath: string;
     readonly pidNamespacePath: string;
   };
-
-  // a /proc stand-in with each VM's <pid>/task; no VM has a thread without it
   readonly procRoot?: string;
-
-  // CPU limits: none enforced, and 8 cores, by default
   readonly cgroups?: CpuCgroups;
   readonly hostCpus?: number;
-
-  // IPv6 for imps, as impd resolved it; none by default
   readonly ipv6?: Ipv6Plan;
-
-  // the host's default-route interfaces; eth0 in each family by default
   readonly readUplinks?: () => Promise<Uplinks>;
-
-  // IMP_KSM's readers: the unshared size a sleep records, the merge flag, and
-  // the host counters
   readonly readUnsharedRamMib?: (pid: number) => number | null;
   readonly checkGuestMerge?: (pid: number) => Promise<boolean | null>;
   readonly readKsmProfitMib?: (pid: number) => Promise<number | null>;
   readonly readKsmHostStats?: () => KsmHostStats | null;
-
-  // the jailer that releases a stopped VM's jail; none by default
   readonly jails?: Jails;
-
-  // the root token the client sends; TEST_TOKEN by default
   readonly rootToken?: string;
-
-  // the database impd queries, made from the harness's own, such as one a
-  // query gate wraps; the harness's own by default
   readonly wrapDatabase?: (db: ImpDatabase) => ImpDatabase;
-
-  // any other boundary createImpd takes, over the harness's own; `taps`
-  // replaces the harness's tap recorders
   readonly boundaries?: Partial<ImpdBoundaries>;
 }
 
-// every awake fake VM holds this much, as the governor measures it
 const FAKE_VM_RAM_MIB = 300;
 const FAKE_VM_RSS_MIB = 340;
-
-// the sha256 of the system drive every test impd starts with
 const TEST_DRIVE = 'd1'.repeat(32);
 
-// what system.info reports about the guest kernel and the system drive
 const TEST_SYSTEM_FILES = {
   guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
   systemDrive: { sha256: 'b'.repeat(64) },
 };
 
-// the freeze a checkpoint or a template asks of the guest; the fake VMs
-// run no agent to ask
+// the fake VMs run no guest agent to freeze the disk
 const NO_FREEZER = { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() };
 
-// for IMP_KSM: a kernel that keeps KSM's merge flag, and an idle ksmd
+// a kernel release that keeps KSM's merge flag
 const KSM_KERNEL = '6.12.0';
 const IDLE_KSM: KsmHostStats = { running: true, sharedMib: 0, profitMib: 0, zeroMib: 0 };
 
-// impd as main.ts starts it, through createImpd, on the stub VMM and a
-// stand-in for each host boundary, with its releases in the caller's `stack`.
-// A ticker runs only when `tickers.fire` steps it.
 export async function startTestImpd(
   stack: Readonly<AsyncDisposableStack>,
   options: TestImpdOptions = {},
@@ -170,15 +113,15 @@ export async function startTestImpd(
     options.onLog?.('test harness: database closed');
   });
 
-  // the API's and the broker's ports, below the imps' port range
+  // below the imps' port range, where the config refuses impd's own ports
   const ports = claimFreePorts(3, {
     pick: () => 10_000 + Math.floor(Math.random() * 10_000),
     onRelease: stack.defer.bind(stack),
   });
 
-  // a new disk stays the size of its image: the fake clone copies every byte
+  // a new disk stays the size of its image, because the fake clone copies every byte
   const config: Config = {
-    // unjailed unless a test asks: the fake VMs have no cgroups
+    // unjailed unless a test asks, because the fake VMs have no cgroups
     ...loadConfig({
       IMP_DATA_DIR: dataDir,
       IMP_BOOT_TEMPLATES: 'false',
@@ -197,11 +140,7 @@ export async function startTestImpd(
   const taps: string[] = [];
   const removedTaps: string[] = [];
   const logs: string[] = [];
-
-  // disks whose filesystem the host grew; the test disks hold no ext4
   const filesystemGrows: string[] = [];
-
-  // the clock for holds and reservations; a test moves it with `advance`
   const clock = { offsetMs: 0 };
   const frozenAt = options.frozenClockMs;
   const readClock = () => (frozenAt ?? Date.now()) + clock.offsetMs;
@@ -217,7 +156,6 @@ export async function startTestImpd(
   const createStorage = (): StorageBackend =>
     options.createStorage?.(dataDir) ?? createXfsBackend({ dataDir, cloneFile: cloneDisk });
 
-  // the host's free space as the budget sees it; a test lowers it
   const diskUsage = { usedBytes: 0, availableBytes: 1024 ** 4 };
 
   const printTestLog = (message: string): void => {
@@ -225,7 +163,6 @@ export async function startTestImpd(
     options.onLog?.(message);
   };
 
-  // each unexpected failure the API's router hit; the stub VMM makes plenty
   const rpcFailures: unknown[] = [];
 
   const printRpcFailure = (failure: unknown): void => {
@@ -234,7 +171,6 @@ export async function startTestImpd(
     printTestLog(`impd: rpc failed: ${Bun.inspect(failure)}`);
   };
 
-  // a system drive file, as setupSystemFiles installs it
   const createSystemDrive = (drive: string): HostIdentity => {
     const identity = buildTestIdentity(dataDir, drive);
 
@@ -245,16 +181,10 @@ export async function startTestImpd(
   };
 
   const host = { identity: createSystemDrive(TEST_DRIVE) };
-
-  // the vsock paths the broker installed its CA through
   const bundleInstalls: string[] = [];
-
-  // every nft script and conntrack flush the egress firewall ran
   const nftScripts: string[] = [];
   const flushed: string[] = [];
   const flushedPairs: string[] = [];
-
-  // each limit impd sets on an imp's memory, in order
   const memoryLimits: { impId: string; guestMib: number }[] = [];
 
   const kernelOops =
@@ -310,11 +240,9 @@ export async function startTestImpd(
       hostKernelRelease: extra.hostKernelRelease ?? KSM_KERNEL,
       readKsmHostStats: options.readKsmHostStats ?? (() => IDLE_KSM),
       tickerTimer: tickers.timer,
-
-      // any free port: the imps' ports are the config's to hand out
       proxyPorts: extra.proxyPorts ?? { proxy: 0, slot: () => 0 },
 
-      // loopback only, as TEST_TOKEN is root to anyone who reaches the API
+      // loopback only, because the fixed test token is root to anyone who reaches the API
       apiHostname: '127.0.0.1',
       images: { seedRef: null, ...extra.images },
       taps: extra.taps ?? {
@@ -343,8 +271,6 @@ export async function startTestImpd(
         ...(options.dialTunnel !== undefined && { dialTunnel: options.dialTunnel }),
         ...(options.afterRuleRead !== undefined && { afterRuleRead: options.afterRuleRead }),
         ...(options.oauthFetch !== undefined && { oauthFetch: options.oauthFetch }),
-
-        // on the wall clock unless a test asks
         now: options.brokerNow ?? Date.now,
         runOAuthTimer: false,
         ...extra.broker,
@@ -388,8 +314,6 @@ export async function startTestImpd(
 
           return options.growFilesystem?.(disk) ?? Promise.resolve(true);
         },
-
-        // recorded, then written as impd does when a test passes cgroups
         memoryLimit: {
           setGuestMib: (impId, guestMib) => {
             memoryLimits.push({ impId, guestMib });
@@ -422,9 +346,6 @@ export async function startTestImpd(
     };
   };
 
-  // as a crash leaves it: every ticker stopped and every port closed before
-  // the next impd opens its own, but a lifecycle step under way never
-  // waited for
   const stopImpd = async (impd: Impd): Promise<void> => {
     fake.releaseHangs();
 
@@ -469,7 +390,6 @@ export async function startTestImpd(
 
   const client = buildClient(options.rootToken ?? TEST_TOKEN);
 
-  // an image row whose rootfs is a small file in the data dir
   const createTestImage = async (name: string): Promise<ImageRecord> => {
     await Bun.write(`${dataDir}/images/${name}/rootfs.ext4`, 'rootfs');
 
@@ -502,17 +422,11 @@ export async function startTestImpd(
     createSystemDrive,
     createTestImage,
     readIdentity: () => host.identity,
-
-    // a root client that calls the API without a socket, and one for any token
     client,
     buildClient,
-
-    // the API on loopback, as a client outside the process reaches it
     get url(): string {
       return `http://127.0.0.1:${String(current.impd.app.server?.port)}`;
     },
-
-    // the impd that runs now, and its parts
     get impd(): Impd {
       return current.impd;
     },
@@ -559,8 +473,7 @@ export async function startTestImpd(
       return current.impd.moves;
     },
 
-    // a new impd on this one's database, data dir and VMs, after this one
-    // stops as a crash would; with `identity`, as an upgrade would
+    // the old impd stops as a crash would leave it
     restartImpd: async (identity: HostIdentity = host.identity): Promise<Impd> => {
       // first, so a hung call the stop releases parks instead of finishing
       const runner = fake.startGeneration();
@@ -578,7 +491,6 @@ export async function startTestImpd(
 
 export type TestImpd = Awaited<ReturnType<typeof startTestImpd>>;
 
-// what a host with `drive` installed in `dataDir` boots imps with
 function buildTestIdentity(dataDir: string, drive: string): HostIdentity {
   return {
     firecrackerVersion: 'v1.17.0',

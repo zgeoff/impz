@@ -1,6 +1,5 @@
-// A rule's plain-HTTP upstream on a free loopback port: a real listener, for
-// a test of what goes on the wire, such as the Host header, which
-// interception never sees. Its stop goes into the caller's stack.
+// A real listener, because MSW interception never sees what goes on the wire,
+// such as the Host header.
 export function startStubBrokerPlainUpstream(
   stack: Readonly<AsyncDisposableStack>,
   fetch: (request: Request) => Response | Promise<Response>,

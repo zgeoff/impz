@@ -4,8 +4,6 @@ import type { ImpEvent } from '@impz/api';
 
 type GovernorDecision = Extract<ImpEvent, { ev: 'GovernorDecision' }>;
 
-// A GovernorDecision event as the RAM governor publishes one: an admitted
-// boot of an imp whose name, time and RAM numbers are arbitrary.
 export function buildMockGovernorDecision(
   overrides: Partial<GovernorDecision> = {},
 ): GovernorDecision {

@@ -3,16 +3,12 @@ import { onTestFinished } from 'bun:test';
 interface StubFirecrackerAnswer {
   readonly status: number;
 
-  // the body as Firecracker sends it; a value is sent as JSON
   readonly body?: unknown;
 }
 
 interface StubFirecrackerApiOptions {
-  // answers by `<METHOD> <path>`; any other GET gets 200 and an empty JSON
-  // object, and any other PUT or PATCH 204 and no body
   readonly answers?: Readonly<Record<string, StubFirecrackerAnswer>>;
 
-  // true: it takes each request and never answers, like a wedged VMM
   readonly isWedged?: boolean;
 }
 
@@ -22,9 +18,6 @@ interface StubFirecrackerCall {
   readonly body: unknown;
 }
 
-// Firecracker's HTTP API on its unix socket at `socketPath`. `calls` records
-// each request with its parsed JSON body, or null for none. It stops when
-// the test ends.
 export function startStubFirecrackerApi(
   socketPath: string,
   options: Readonly<StubFirecrackerApiOptions> = {},

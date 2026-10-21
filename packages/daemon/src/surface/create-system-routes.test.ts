@@ -15,21 +15,14 @@ import { createImage } from '../platform/db/images';
 import { MIGRATIONS } from '../platform/db/run-migrations';
 import { buildImagePaths } from '../vm/storage/data-layout';
 
-// system.features, and system.copyDatabase through the API
-// (docs/guides/operations.md#database-copy-and-restore)
-
-// impd's real app on stub VMs, with its database and data dir, and a root
-// client that reaches the app in process
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the pids each RAM reading measured
   const ramReads: number[] = [];
 
   const harness = await startTestImpd(stack, {
-    // a frozen clock, so a copy's name and creation time are known
     frozenClockMs: Date.UTC(2026, 0, 2, 3, 4, 5),
     boundaries: {
       imps: {
@@ -44,7 +37,6 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imps.create boots when it names none
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
@@ -116,8 +108,6 @@ test('it answers a copy with its path, size, schema version, impd version and ti
   const copy = await ctx.client.system.copyDatabase({ name: 'before-upgrade' });
 
   const path = join(ctx.dataDir, 'db-copies', 'before-upgrade.sqlite');
-
-  // the schema version is the newest migration this impd holds
   const lastMigration = Object.keys(MIGRATIONS).toSorted().at(-1);
 
   invariant(lastMigration !== undefined);
@@ -166,7 +156,6 @@ test('it records the copy in the API audit log', async () => {
 
   await ctx.client.system.copyDatabase({ name: 'before-upgrade' });
 
-  // each audit row lands after its answer
   const audit = await waitFor(async () => {
     const calls = await listApiCalls(ctx.db, null, 100, null);
 

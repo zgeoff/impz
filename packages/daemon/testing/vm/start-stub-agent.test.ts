@@ -268,7 +268,6 @@ test('it closes when the test finishes', async () => {
 
   await startStubAgent(path, () => {});
 
-  // runs after the stand-in's own close
   onTestFinished(async () => {
     const refused = await new Promise((resolve) => {
       const client = createConnection(path);
@@ -319,8 +318,6 @@ test('it leaves its close to the stack it was given, not the test’s end', asyn
 
   await startStubAgent(path, () => {}, { stack });
 
-  // runs after any close the stand-in registered for the test's end, and
-  // releases the stack, which holds only the agent's close, before it asserts
   onTestFinished(async () => {
     const reached = await new Promise((resolve) => {
       const client = createConnection(path);

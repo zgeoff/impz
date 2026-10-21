@@ -10,9 +10,6 @@ import { listTokenRecords, listTokenSshKeyRecords } from '../../platform/db/toke
 
 type RestoredAccess = NonNullable<BackupRestore['database']>;
 
-// Tokens, their keys and secret rows from a backup's database copy, migrated
-// forward first; a newer impd's copy is refused. Secrets go first, so the
-// restore's grants find them (docs/architecture/storage/backups.md).
 export async function createRestoredAccess(
   db: ImpDatabase,
   tokens: Pick<TokenStore, 'createRestored'>,
@@ -49,9 +46,9 @@ async function readCopiedAccess(copyPath: string) {
   }
 }
 
-// The broker reads and removes a value file by name in the secrets directory,
-// so an altered copy must name none outside it: only `<name>`, from an older
-// impd, or `<name>.<16 hex>`.
+// The broker reads and removes a value file by its name in the secrets
+// directory, so a row from an altered copy may name only `<name>` or
+// `<name>.<16 hex>`, never a file outside it.
 function isOwnValueFile(row: Readonly<SecretRow>): boolean {
   if (!SecretNameSchema.safeParse(row.name).success) {
     return false;

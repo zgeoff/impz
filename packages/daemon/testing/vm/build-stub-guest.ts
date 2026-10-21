@@ -7,7 +7,6 @@ import type {
 export interface StubRun {
   readonly argv: readonly string[];
 
-  // resolves with all of stdin once the exec closes it
   readonly readStdin: () => Promise<Uint8Array>;
 }
 
@@ -16,10 +15,8 @@ export interface StubAnswer {
   readonly stderr?: string;
   readonly code?: number;
 
-  // after its output, no exit: the exec stays open until impd closes it
   readonly stall?: boolean;
 
-  // after its output, the agent's connection drops: no exit ever comes
   readonly isDropped?: boolean;
 }
 
@@ -29,8 +26,6 @@ interface FakeRecord {
   closed: boolean;
 }
 
-// A builder's agent for tests: each exec gets `answer`'s output, then its
-// exit. Records each exec's argv, the signals it got and when it closed.
 export function buildStubGuest(answer: (run: StubRun) => Promise<StubAnswer> | StubAnswer) {
   const runs: FakeRecord[] = [];
 
@@ -78,7 +73,6 @@ export function buildStubGuest(answer: (run: StubRun) => Promise<StubAnswer> | S
 
 const encoder = new TextEncoder();
 
-// the answer's output, then its exit; nothing once the exec is closed
 async function* readFakeEvents(
   answering: Promise<StubAnswer | null>,
   closing: Promise<null>,
@@ -95,7 +89,6 @@ async function* readFakeEvents(
 
   const chunks = readChunks(stdout ?? []);
 
-  // a close ends the output while a stream still owes its next chunk
   for (;;) {
     const next = await Promise.race([chunks.next(), closing]);
 
@@ -127,8 +120,6 @@ async function* readFakeEvents(
   yield { type: 'exit', code: answered.code ?? 0, signal: 0 };
 }
 
-// a list has no next() to race against the close, which for await hides
-// from a stream; this gives both one
 async function* readChunks(
   source: readonly Uint8Array[] | AsyncIterable<Uint8Array>,
 ): AsyncGenerator<Uint8Array, void, undefined> {

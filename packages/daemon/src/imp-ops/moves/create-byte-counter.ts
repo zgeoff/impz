@@ -1,6 +1,5 @@
 import { MoveRequestError } from './move-request-error';
 
-// the data bytes a stream carried; past its ticket's count, it stops
 export interface ByteCounter {
   readonly add: (bytes: number) => void;
 }

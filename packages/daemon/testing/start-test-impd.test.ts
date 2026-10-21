@@ -307,8 +307,6 @@ test('it parks a boot the replaced impd had hung, so the boot never finishes', a
   await harness.createTestImage('ubuntu');
 
   harness.fake.queue('boot', 'hang');
-
-  // never settles: its boot parks once the impd is replaced
   void Promise.allSettled([harness.imps.createImp({ name: 'dev' })]);
 
   await waitFor(() => {
@@ -367,7 +365,6 @@ test('it never waits for the template build of an impd that restartImpd replaced
 
   await held.reached;
 
-  // the build's VM call comes back to a replaced impd, so it parks
   await harness.restartImpd();
 
   held.release();
@@ -405,9 +402,8 @@ test('it settles the template build of a replaced impd before it closes the data
     expect(harness.fake.templateBuilds).toHaveLength(1);
   });
 
-  // the build's VM call came back to a live impd, so the rest of it runs.
-  // It is built, or it fails when the next impd's startup removes its work
-  // dir as a build cut short, as a crash leaves it.
+  // the next impd's startup may remove the build's work dir as a build cut short, so the
+  // build either finishes or fails
   await harness.restartImpd();
   await stack.disposeAsync();
 
@@ -445,7 +441,6 @@ test('it moves a frozen clock by the pauses of a young guest wait', async () => 
   await harness.createTestImage('ubuntu');
   await harness.imps.createImp({ name: 'dev' });
 
-  // 100 ms old against a 300 ms minimum
   harness.fake.setGuestUptime(100);
 
   await harness.imps.sleepImp('dev');

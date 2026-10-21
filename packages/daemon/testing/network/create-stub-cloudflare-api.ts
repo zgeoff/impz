@@ -7,10 +7,9 @@ import type {
   CloudflareZone,
 } from '../../src/network/https/dns/cloudflare-provider';
 
-// Cloudflare's v4 API, where impd's provider sends every call
 const CLOUDFLARE_API = 'https://api.cloudflare.com/client/v4';
 
-// a list's page size when none is asked for, as Cloudflare's docs give it
+// Cloudflare's docs give this page size for a list that asks for none.
 const DEFAULT_PER_PAGE = 100;
 
 const ZoneSchema = z.object({
@@ -27,51 +26,38 @@ const ZoneSchema = z.object({
 const RecordSchema = z.object({
   id: z.string().default(buildCloudflareId),
   zone_id: z.string().default(buildCloudflareId),
-
-  // the record's kind gives the rest their meaning: an A record by default
   type: z.string().default('A'),
   name: z.string().default(() => faker.internet.domainName()),
   content: z.string().default(() => faker.internet.ipv4()),
   ttl: z.number().default(1),
   proxied: z.boolean().default(false),
 
-  // Cloudflare answers null for a record made without one
+  // Cloudflare answers null for a record made without a comment.
   comment: z.string().nullable().default(null),
 });
 
 type StubRecord = z.output<typeof RecordSchema>;
 
-// one call as the API received it
 interface StubCloudflareRequest {
   readonly method: string;
-
-  // after /client/v4, with the query as sent
   readonly path: string;
-
-  // the bearer token it came with
   readonly token: string;
 }
 
 interface StubCloudflareOptions {
-  // the tokens it accepts; any other gets the 403 Cloudflare sends
   readonly tokens: readonly string[];
 
-  // the most records one page holds, below what a list asks for; Cloudflare
-  // itself serves up to what was asked
+  // Cloudflare serves as many records as a list asks for, so only a lower cap
+  // makes a client page.
   readonly maxPerPage?: number;
 
-  // false leaves result_info off a list's answer
   readonly hasResultInfo?: boolean;
 
-  // the ids of the zones each token's scope holds; a token left out sees
-  // every zone. Cloudflare lists only those zones to it, and refuses it the
-  // records of any other.
+  // Cloudflare lists a scoped token only the zones in its scope, and refuses
+  // it the records of any other zone.
   readonly zonesOf?: Readonly<Record<string, readonly string[]>>;
 }
 
-// Cloudflare's v4 zones and DNS records as MSW handlers over collections:
-// records listed by type, name or suffix and paged, made, overwritten and
-// deleted. An unknown token gets Cloudflare's 403, a missing record its 404.
 export function createStubCloudflareApi(options: Readonly<StubCloudflareOptions>) {
   const zones = new Collection({ schema: ZoneSchema });
   const records = new Collection({ schema: RecordSchema });
@@ -81,7 +67,6 @@ export function createStubCloudflareApi(options: Readonly<StubCloudflareOptions>
   const maxPerPage = options.maxPerPage ?? Number.MAX_SAFE_INTEGER;
   const hasResultInfo = options.hasResultInfo ?? true;
 
-  // records the call; the token's refusal, or null when the call may go on
   const checkToken = (request: Request): Response | null => {
     const url = new URL(request.url);
 
@@ -106,7 +91,6 @@ export function createStubCloudflareApi(options: Readonly<StubCloudflareOptions>
     return scope === undefined || scope.includes(zoneId);
   };
 
-  // a zone outside the token's scope gets Cloudflare's authentication error
   const checkZone = (request: Request, zoneId: string): Response | null => {
     if (!canSee(request, zoneId)) {
       return buildFailure(403, { code: 10_000, message: 'Authentication error' });
@@ -282,8 +266,6 @@ export function createStubCloudflareApi(options: Readonly<StubCloudflareOptions>
     records,
     tokens,
     requests,
-
-    // every record as plain data, in the order they were made
     readRecords: (): StubRecord[] => records.all().map((record) => RecordSchema.parse(record)),
   };
 }
@@ -292,7 +274,6 @@ function buildCloudflareId(): string {
   return faker.string.hexadecimal({ length: 32, casing: 'lower', prefix: '' });
 }
 
-// the bearer token a call came with, or '' for none
 function getToken(request: Request): string {
   return request.headers.get('authorization')?.replace(/^Bearer /v, '') ?? '';
 }
@@ -313,7 +294,6 @@ function buildMissingZone(zoneId: string): Response {
   return buildFailure(404, { code: 7003, message: `Could not route to /zones/${zoneId}` });
 }
 
-// Cloudflare's envelope around every answer
 function buildEnvelope(result: unknown, resultInfo?: unknown): Record<string, unknown> {
   return {
     success: true,
@@ -324,7 +304,6 @@ function buildEnvelope(result: unknown, resultInfo?: unknown): Record<string, un
   };
 }
 
-// a record in the fields Cloudflare answers and impd reads
 function toAnswer(record: StubRecord): CloudflareRecord {
   return {
     id: record.id,
@@ -336,7 +315,7 @@ function toAnswer(record: StubRecord): CloudflareRecord {
   };
 }
 
-// what a create or an overwrite sends; Cloudflare refuses one without these
+// Cloudflare refuses a create or an overwrite without a type, name and content.
 const RecordBodySchema = z.object({
   type: z.string(),
   name: z.string(),

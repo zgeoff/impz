@@ -44,21 +44,12 @@ import type { Reply } from './read-move-stream';
 import { removeStagedImp } from './remove-staged-imp';
 import { collectWarmMismatches } from './warm-facts';
 
-// a stream must start this soon after its ticket
-// (docs/architecture/storage/moves.md#one-live-copy)
 const STREAM_WINDOW_MS = 10 * 60 * 1000;
 
 export interface MoveReceiver {
-  // with `warm`, a warm move's: checked against this host, its slot kept
   readonly issueTicket: (name: string, bytes: number, warm?: WarmMove) => Promise<MoveTicket>;
-
-  // a fresh commit ticket for an imp staged `receiving`
   readonly reissueTicket: (name: string) => Promise<MoveTicket>;
-
-  // `/move/*`, from `peer`, the connected socket's address
   readonly respond: (request: Request, peer: string | null) => Promise<Response>;
-
-  // at start: a stream a crash cut short leaves its staged imp; it goes
   readonly recover: () => Promise<void>;
 }
 
@@ -80,15 +71,9 @@ export interface MoveReceiverDeps {
   readonly grants: Pick<Broker, 'addGrant' | 'listSecrets'>;
   readonly egress: Pick<EgressService, 'writeAnswers'>;
   readonly ranges: PeerRanges;
-
-  // what loads a memory snapshot here, and the facts a warm move must match
   readonly readIdentity: () => HostIdentity;
   readonly readWarmHost: () => WarmHost;
-
-  // this host's base URL as a source reaches it
   readonly readPeerUrl: () => Promise<string>;
-
-  // after a commit: the tailnet-names pass, which gives the imp its name here
   readonly onCommitted: (name: string) => void;
   readonly audit: Pick<ApiAudit, 'record'>;
   readonly now: () => number;
@@ -103,11 +88,7 @@ interface CheckedTicket {
 interface ReceiveSession {
   readonly pipe: PartPipe;
   nextPart: number;
-
-  // by impd's clock: a part later than PART_WAIT_MS after this ends it
   lastPartAt: number;
-
-  // the receipt, or the error, once the stream is read
   readonly result: Promise<Reply>;
 }
 
@@ -116,7 +97,6 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
 
   const sessions = new Map<string, ReceiveSession>();
 
-  // the ticket in the header, checked against its stored hash
   const requireTicket = async (request: Request): Promise<CheckedTicket> => {
     const ticket = readTicketHeader(request);
 
@@ -133,8 +113,6 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     return { row, ticket };
   };
 
-  // a new ticket's row and the ticket the source presents; `write` stores
-  // the row, a warm move's in its slot
   const writeTicketRow = async (
     name: string,
     bytes: number,
@@ -190,7 +168,6 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     });
   };
 
-  // a failed read fails the pipe, so a part waiting on it answers too
   const readStreamOrFail = async (
     pipe: PartPipe,
     row: MoveTicketRow,
@@ -203,21 +180,17 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
 
       pipe.fail(failure);
 
-      // the ticket streams once, so a refused header or a failed stream
-      // gives up its slot now, abort or not
       await updateMoveTicket(deps.db, row.id, { slot: null });
 
       return readErrorReply(error, deps.log);
     }
   };
 
-  // the first part uses the ticket up and starts the stream
   const openSession = async (row: MoveTicketRow, secret: string): Promise<ReceiveSession> => {
     if (deps.now() > row.stream_by) {
       throw new MoveRequestError(410, 'the move ticket expired before its stream started');
     }
 
-    // single use: only the first stream marks it
     const isClaimed = await claimMoveTicketStream(deps.db, row.id, deps.now());
 
     if (!isClaimed) {
@@ -229,9 +202,6 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     const session: ReceiveSession = { pipe, nextPart: 0, lastPartAt: deps.now(), result };
 
     sessions.set(row.id, session);
-
-    // a stream lasts as long as its parts keep coming; once it is read, a
-    // source that never sends its finish leaves the session this long
     void removeSessionLater(row.id, result);
 
     return session;
@@ -245,7 +215,6 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     }, PART_WAIT_MS).unref();
   };
 
-  // A part's body goes into the stream; the finish waits for the receipt.
   const handleReceive = async (request: Request): Promise<Response> => {
     const checked = await requireTicket(request);
 
@@ -289,7 +258,6 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     try {
       await session.pipe.push(request.body);
 
-      // the gap runs from the end of one part to the start of the next
       session.lastPartAt = deps.now();
     } catch {
       const reply = await session.result;
@@ -300,21 +268,17 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     return Response.json({ part }, { status: 202 });
   };
 
-  // The commit's two writes, the mark and the ticket, as one
   const writeCommit = async (imp: ImpRecord, row: MoveTicketRow): Promise<void> => {
     const isWarm = row.slot !== null;
 
-    // a warm imp commits sleeping, only on a snapshot that loads
     if (isWarm && readSnapshotMeta(deps.storage.resolveImpPaths(imp.id)) === null) {
       throw new MoveRequestError(409, 'the received memory snapshot is not complete');
     }
 
     const committed = await updateImpCommitted(deps.db, imp.id, deps.now(), isWarm);
 
-    // the imp lives here from the write on; a throw below must not skip it
     deps.onCommitted(row.name);
 
-    // its leases are live here only now: `held`, as an acquire says it
     const leases = await listLeases(deps.db, deps.now(), [imp.id]);
 
     if (leases.length > 0) {
@@ -324,8 +288,6 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     deps.log(`impd: move: ${row.name}: committed; it lives here now`);
   };
 
-  // Idempotent, under the imp's lock, so a commit and an abort never cross:
-  // a commit the target made already answers the same
   const handleCommit = async (request: Request): Promise<Response> => {
     const checked = await requireTicket(request);
 
@@ -358,14 +320,11 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     });
   };
 
-  // Refused once committed: the source must destroy its copy instead. The
-  // tickets go under the lock, so no commit follows; the staged imp after.
   const handleAbort = async (request: Request): Promise<Response> => {
     const checked = await requireTicket(request);
 
     const impId = checked.row.imp_id;
 
-    // a stream still open stops reading now
     sessions.get(checked.row.id)?.pipe.fail(new Error('the source aborted the move'));
     const removeTickets = () => removeMoveTickets(deps.db, checked.row.id, impId);
 
@@ -478,7 +437,6 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
         });
       }
 
-      // a warm move's slot too: the commit reads warm from it
       return writeTicketRow(name, 0, {
         imp_id: imp.id,
         stream_used_at: deps.now(),
@@ -494,15 +452,12 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       const path = new URL(request.url).pathname;
 
       const ticket = readTicketHeader(request);
-
-      // before the route: an abort removes the ticket
       const row = ticket === null ? undefined : await readMoveTicket(deps.db, ticket.id);
 
       const response = await handleRoute(request, peer);
 
       const failure = response.ok ? null : new ORPCError(readStatusCode(response.status));
 
-      // as a call on /rpc, by the peer: `move.receive` and the rest
       deps.audit.record(
         {
           procedure: `move.${path.slice(path.lastIndexOf('/') + 1)}`,
@@ -523,7 +478,6 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
         const isCutShort = row.stream_used_at !== null && row.receipt === null;
         const isUnused = row.stream_used_at === null && deps.now() > row.stream_by;
 
-        // a commit answers a retry until its window ends, then it is history
         const isSpent =
           row.committed_at !== null && row.commit_until !== null && deps.now() > row.commit_until;
 
@@ -536,7 +490,6 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
         }
       }
 
-      // an abort that removed the tickets, then stopped before the imp
       const left = await listMoveTickets(deps.db);
 
       const ticketed = new Set(left.map((row) => row.imp_id));
@@ -562,7 +515,6 @@ function readErrorReply(error: unknown, log: (message: string) => void): Reply {
   return { status, body: { error: getErrorMessage(error) } };
 }
 
-// a slot another imp took since the ticket is a conflict, not a fault
 function readErrorStatus(error: unknown): number {
   if (error instanceof MoveRequestError) {
     return error.status;
@@ -571,8 +523,6 @@ function readErrorStatus(error: unknown): number {
   return error instanceof SlotTakenError ? 409 : 500;
 }
 
-// Where a ticket's imp stands. Committed once the ticket says so, or once
-// the imp lives here unmarked: a mark gone means the commit landed.
 function readSettled(
   row: MoveTicketRow,
   imp: ImpRecord | undefined,
@@ -584,7 +534,6 @@ function readSettled(
   return imp?.moveState === 'receiving' ? 'staged' : 'none';
 }
 
-// an HTTP status as the audit log names a refusal
 const STATUS_CODES: Readonly<Record<number, string>> = {
   400: 'BAD_REQUEST',
   401: 'UNAUTHORIZED',

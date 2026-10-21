@@ -59,7 +59,6 @@ test('it rejects a fingerprint of a key it cannot parse', () => {
   expect(() => readFingerprint('garbage')).toThrow();
 });
 
-// ssh2's generator makes a key that does not parse about once in 256
 test('it makes the key again when the first one does not read back', () => {
   const readable = generateEd25519Key();
   const pairs = [{ private: 'garbage', public: 'garbage' }, readable];

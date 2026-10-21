@@ -93,7 +93,6 @@ test('it keeps a stalled exec open after its output', async () => {
 
   const other = await guest.open({ argv: ['true'], tty: false });
 
-  // a whole other exec runs to its exit while the stalled one waits
   await Array.fromAsync(other.events());
 
   expect(Bun.peek.status(next)).toBe('pending');

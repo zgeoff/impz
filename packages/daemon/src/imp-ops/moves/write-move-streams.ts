@@ -24,7 +24,6 @@ interface MoveStreamsDeps {
 
 type ReceivedFile = ReceiptBody['files'][number];
 
-// ZFS to ZFS: each stream into `zfs recv`, then the checkpoints' rows
 export async function writeMoveStreams(
   deps: MoveStreamsDeps,
   impId: string,
@@ -75,8 +74,6 @@ export async function writeMoveStreams(
   }
 }
 
-// the header's streams name each checkpoint once; the storage checks their
-// order, the disk's last
 function checkStreams(header: MoveHeader): NonNullable<MoveHeader['streams']> {
   const streams = header.streams ?? [];
 
@@ -101,7 +98,6 @@ interface StreamFile {
   readonly bytes: number;
 }
 
-// One stream of the move as bytes: FILE, DATA at running offsets, FILE_END.
 // `zfs recv` commits at the stream's end record, not at EOF, so the last
 // DATA frame waits until FILE_END's sum matches.
 function readStreamFile(
@@ -133,7 +129,6 @@ function readStreamFile(
     state.isStarted = true;
   };
 
-  // the next DATA frame's bytes, or null once FILE_END's sum holds
   const readNext = async (): Promise<Uint8Array | null> => {
     const frame = await reader.readFrame();
 
@@ -169,8 +164,8 @@ function readStreamFile(
   };
 
   return new ReadableStream<Uint8Array>({
-    // a pull that enqueues nothing is not called again, so the first one
-    // reads on until it has a frame to pass
+    // A stream never calls again a pull that enqueued nothing, so the first
+    // one reads on until it has a frame to pass.
     pull: async (controller) => {
       if (!state.isStarted) {
         await requireStart();

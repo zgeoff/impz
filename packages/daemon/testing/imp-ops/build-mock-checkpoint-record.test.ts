@@ -4,7 +4,6 @@ import { buildMockCheckpointRecord } from './build-mock-checkpoint-record';
 
 test('it builds a default checkpoint record', () => {
   expect(buildMockCheckpointRecord()).toStrictEqual({
-    // shaped as buildCheckpointId makes one: six characters of its alphabet
     id: expect.toSatisfy((id: string) =>
       new RegExp(`^cp-[${CHECKPOINT_ID_ALPHABET}]{6}$`, 'v').test(id),
     ),

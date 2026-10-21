@@ -1,13 +1,7 @@
-// WebSocket clients for impd's /exec and /tunnel, for tests
-
-// where a client opens impd's `path` on the loopback `port`, with `query`
 export function buildImpdSocketUrl(port: string, path: '/exec' | '/tunnel', query: string): string {
   return `ws://127.0.0.1:${port}${path}?${query}`;
 }
 
-// opens /exec with `query` and reports whether the upgrade succeeded; a
-// session it opens sends `start` for `name` and reports the first message, or
-// 'closed' when the server closes it before sending one
 export async function tryExecSocket(
   port: string,
   query: string,
@@ -42,8 +36,6 @@ export async function tryExecSocket(
   }
 }
 
-// opens /tunnel and reports the first message for `open`, 'rejected', or
-// 'closed' when the server closes it before sending one
 export async function tryTunnelSocket(
   port: string,
   query: string,

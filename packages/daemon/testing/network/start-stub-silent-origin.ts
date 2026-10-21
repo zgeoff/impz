@@ -1,22 +1,10 @@
 interface SilentOriginOptions {
-  // the control's path; `/control` by default
   readonly controlPath?: string;
-
-  // what another path answers; the text "the long answer" by default
   readonly answer?: () => Response;
-
-  // the answer to a request it does not hold, or null to hold it; null for
-  // every request by default
   readonly answerAtOnce?: (request: Request) => Response | null;
-
-  // a unix socket to listen on, as Docker's engine does; loopback TCP when
-  // left out
   readonly unix?: string;
 }
 
-// A silent HTTP origin: the control waits until its client gives up, and any
-// other path until then, so its answer outlasts the client's idle limit that
-// the control's end proves expired.
 export function startStubSilentOrigin(
   stack: Readonly<AsyncDisposableStack>,
   options: Readonly<SilentOriginOptions> = {},
@@ -53,8 +41,8 @@ export function startStubSilentOrigin(
     return isControl ? new Response('too late') : answerLong();
   };
 
-  // the origin's own limit never ends a held answer; Bun's types leave
-  // idleTimeout off unix servers, but it applies there too
+  // Bun's types leave idleTimeout off unix servers, but Bun applies it there
+  // too.
   const listen =
     options.unix === undefined ? { port: 0, hostname: '127.0.0.1' } : { unix: options.unix };
 
@@ -70,15 +58,9 @@ export function startStubSilentOrigin(
   return {
     origin:
       options.unix === undefined ? `http://127.0.0.1:${String(server.port)}` : 'http://docker',
-
-    // the origin holds the control's answer, or another path's
     controlHeld: controlHeld.promise,
     longHeld: longHeld.promise,
-
-    // the control's client gave up
     controlGone: controlGone.promise,
-
-    // a client of another path gave up
     longGone: longGone.promise,
   };
 }

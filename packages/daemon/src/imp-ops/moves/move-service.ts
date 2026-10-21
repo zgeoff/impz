@@ -9,13 +9,9 @@ import type { MoveSender, MoveSenderDeps } from './move-sender';
 import { createPeerRanges } from './peer-address';
 import { readWarmHost } from './warm-facts';
 
-// Moves between hosts (docs/architecture/storage/moves.md): this host as a source,
-// its sender, and as a target, its receiver
 export type MoveService = MoveSender &
   Pick<MoveReceiver, 'issueTicket' | 'reissueTicket' | 'respond'> & {
     readonly recover: () => Promise<void>;
-
-    // what a warm move to this host must match
     readonly readFacts: () => WarmHost;
   };
 
@@ -31,12 +27,8 @@ export interface MoveServiceDeps
 
   readonly grants: MoveSenderDeps['grants'] & MoveReceiverDeps['grants'];
   readonly egress: MoveSenderDeps['egress'] & MoveReceiverDeps['egress'];
-
-  // the tailnet IP, for a peer URL when IMP_PEER_URL is unset
   readonly readTailnetIp: () => Promise<string | null>;
 
-  // tests only: two impds in one process cannot share a data dir, which a
-  // warm move must match, so a test hands both hosts the same facts
   readonly readWarmHost?: () => WarmHost;
 }
 

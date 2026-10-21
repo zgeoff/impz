@@ -1,6 +1,3 @@
-// DNS wire format as RFC 1035 lays it out, for the mock messages: type codes
-// (RFC 3596 for AAAA), names without compression, and 16-bit fields.
-
 export const DNS_TYPE_CODES = {
   // oxlint-disable-next-line id-length -- `A` is the record type's name in RFC 1035
   A: 1,

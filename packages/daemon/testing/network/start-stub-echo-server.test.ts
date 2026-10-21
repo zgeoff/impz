@@ -51,7 +51,6 @@ test('it holds a connection open until its release', async () => {
 
   await connected.promise;
 
-  // an echo proves the server still holds the connection before the release
   const echoed = Promise.withResolvers<void>();
 
   client.once('data', () => {

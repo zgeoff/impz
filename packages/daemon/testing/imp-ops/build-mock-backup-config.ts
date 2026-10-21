@@ -5,9 +5,6 @@ type BackupConfigOverrides = Partial<Omit<BackupConfig, 'keep'>> & {
   readonly keep?: Partial<BackupKeep>;
 };
 
-// impd's backup settings, as loadBackupConfig reads them: arbitrary paths,
-// interval and limits, retention in every bucket, forget on and the
-// database copy left out. A keep override merges into the default retention.
 export function buildMockBackupConfig(
   overrides: Readonly<BackupConfigOverrides> = {},
 ): BackupConfig {

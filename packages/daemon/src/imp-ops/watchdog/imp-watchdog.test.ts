@@ -15,7 +15,6 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // a frozen clock that moves only with advance, past the watchdog's timeout
   const harness = await startTestImpd(stack, {
     env: readImpEnv(),
     frozenClockMs: Date.UTC(2026, 0, 1),
@@ -23,7 +22,6 @@ async function setupTest() {
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  // the image every imp boots from: a create needs one
   await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
 
   await createImage(harness.db, image);
@@ -43,7 +41,6 @@ test('it marks since when the agent is silent and keeps the imp running under re
 
   invariant(typeof created?.pid === 'number');
 
-  // the idle loop's two looks, 11 s apart, and the confirming ping fails
   ctx.impd.imps.watchdog.observe(created, false);
   ctx.advance(11_000);
   ctx.fake.queue('agentReady', 'fail', 'fail');
@@ -70,7 +67,6 @@ test('it kills the VM and boots the imp cold under restart, saying why', async (
 
   invariant(typeof created?.pid === 'number');
 
-  // the confirming ping fails, and so does the look under the lock
   ctx.impd.imps.watchdog.observe(created, false);
   ctx.advance(11_000);
   ctx.fake.queue('agentReady', 'fail', 'fail');
@@ -106,7 +102,6 @@ test('it records a watchdog restart as the cause of a cold boot', async () => {
 
   await ctx.impd.imps.watchdog.settle();
 
-  // the restart ended every session generation: a client learns why
   const boots = await listColdBoots(ctx.db, created.id);
 
   expect(boots.map((boot) => boot.cause)).toStrictEqual(['watchdog', 'start']);
@@ -181,7 +176,6 @@ test('it boots the imp cold with no slot under snapshot when the disk has no roo
 
   invariant(typeof created?.pid === 'number');
 
-  // below the 5 GiB reserve
   ctx.diskUsage.availableBytes = 4 * 1024 ** 3;
 
   ctx.impd.imps.watchdog.observe(created, false);
@@ -212,7 +206,6 @@ test('it keeps the VM under restart when the agent answers again under the lock'
 
   invariant(typeof created?.pid === 'number');
 
-  // the confirming ping fails; the look under the lock gets an answer
   ctx.impd.imps.watchdog.observe(created, false);
   ctx.advance(11_000);
   ctx.fake.queue('agentReady', 'fail', 'ok');
@@ -239,7 +232,6 @@ test('it leaves alone under restart a VM that a sleep and a wake replaced during
 
   invariant(typeof created?.pid === 'number');
 
-  // the watchdog saw an older pid than the record holds now
   const seen = { ...created, pid: created.pid + 1000 };
 
   ctx.impd.imps.watchdog.observe(seen, false);

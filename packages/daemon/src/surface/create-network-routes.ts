@@ -2,10 +2,8 @@ import { isImpAllowed } from '@impz/api';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 
-// `networks.*`: the networks imps join
 export function createNetworkRoutes(os: RpcImplementer, deps: RouterDeps) {
   return {
-    // a caller limited to some imps sees those members only
     list: os.networks.list.handler(async (context) => {
       const patterns = context.context.caller.imps;
 

@@ -6,21 +6,17 @@ import {
 } from '../../src/imp-ops/moves/move-header';
 import type { FetchHook } from './create-move-hosts';
 
-// one frame of a move stream: its type byte and its payload
 export interface MoveFrame {
   readonly type: number;
   readonly payload: Uint8Array;
 }
 
-// a frame whose payload is `value` as JSON, as the header, FILE, FILE_END
-// and END frames carry theirs
 export function buildJsonMoveFrame(type: number, value: unknown): MoveFrame {
   return { type, payload: new TextEncoder().encode(JSON.stringify(value)) };
 }
 
-// A faulty source: the first part's frames go through `rewrite`. The whole
-// stream must fit that part, as a small imp's does at the default part size;
-// a second part fails the send; other requests go as sent. It reads no host.
+// Only the first part goes through `rewrite`, so the whole stream must fit in it, as a
+// small imp's does at the default part size; a second part fails the send.
 export function makeStubMoveStreamRewrite(
   rewrite: (frames: readonly MoveFrame[]) => readonly MoveFrame[],
 ): (request: Request, forward: Parameters<FetchHook>[1]) => Promise<Response> {
@@ -60,8 +56,6 @@ async function readMoveFrames(body: Uint8Array): Promise<MoveFrame[]> {
   return frames;
 }
 
-// a frame as docs/architecture/storage/moves.md#the-stream lays it out: the type
-// byte, the payload's length as 4 bytes big-endian, the payload
 function encodeMoveFrame(frame: Readonly<MoveFrame>): Uint8Array {
   const bytes = new Uint8Array(5 + frame.payload.length);
   const view = new DataView(bytes.buffer);

@@ -1,6 +1,3 @@
-// Bash that builds a host's networks in a fresh network and mount namespace:
-// guests g0 and g3 behind their taps, an uplink up0 whose neighbour wan
-// answers for the internet, and tailscale0 with a subnet route to ts.
 export function buildStubPublicNetwork(): string {
   return `
 mount -t tmpfs tmpfs /run

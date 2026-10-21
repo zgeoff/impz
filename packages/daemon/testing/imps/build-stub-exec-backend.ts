@@ -18,16 +18,10 @@ type StubOpen =
   | { readonly kind: 'attach'; readonly name: string; readonly request: AgentAttachRequest };
 
 interface StubExecBackendOptions {
-  // what an exec opens to: a stream, or an error it rejects with
   readonly exec?: ExecStream | Error;
-
-  // what an attach opens to, likewise
   readonly attach?: ExecStream | Error;
 }
 
-// The imp service behind an `/exec` socket: `opens` records each open, and
-// `activity` each imp a session reports once its stream ends. An open given
-// no outcome is refused as a stopped imp's unwoken attach (see openOutcome).
 export function buildStubExecBackend(options: StubExecBackendOptions = {}) {
   const opens: StubOpen[] = [];
   const activity: string[] = [];
@@ -54,8 +48,8 @@ export function buildStubExecBackend(options: StubExecBackendOptions = {}) {
 }
 
 function openOutcome(outcome: ExecStream | Error | undefined): Promise<ExecStream> {
-  // imp-runtime's readNotAwakeError, with no cold boots on record; the real
-  // service boots a stopped imp for an exec, so there it is any typed refusal
+  // the refusal a stopped imp's attach gets with no cold boots on record; the real service
+  // boots a stopped imp for an exec, so there this stands for any typed refusal
   if (outcome === undefined) {
     const refused = buildInvalidStateError('stopped', ['running'], 'attach without a wake to');
 

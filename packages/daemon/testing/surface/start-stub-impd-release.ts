@@ -1,9 +1,6 @@
 import { buildStubImpdReleaseFetch } from './build-stub-impd-release-fetch';
 import type { StubImpdReleaseOptions } from './build-stub-impd-release-fetch';
 
-// Another release of impd on a loopback port for a child process, answered
-// as buildStubImpdReleaseFetch answers it. Its stop goes into `stack`, so it
-// closes before the impd behind it.
 export function startStubImpdRelease(
   stack: Readonly<AsyncDisposableStack>,
   fetch: (request: Request) => Promise<Response>,

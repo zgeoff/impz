@@ -6,9 +6,6 @@ type TemplateBuildPlanOverrides = Partial<Omit<TemplateBuildPlan, 'paths'>> & {
   readonly paths?: Partial<TemplateBuildPlan['paths']>;
 };
 
-// The cold boot a template is made from: unjailed, outside any cgroup, with
-// no wait for the guest's age. Its run paths and snapshot follow its work
-// dir; a `paths` override merges into those.
 export function buildMockTemplateBuildPlan(
   overrides: TemplateBuildPlanOverrides = {},
 ): TemplateBuildPlan {

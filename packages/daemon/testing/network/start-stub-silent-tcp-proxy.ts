@@ -2,9 +2,6 @@ import { onTestFinished } from 'bun:test';
 import { createConnection, createServer } from 'node:net';
 import type { Socket } from 'node:net';
 
-// A loopback TCP proxy to `targetPort` that falls silent as a client's
-// machine that vanishes without a FIN: it drops the client's bytes, while
-// the target's still reach the client.
 export async function startStubSilentTcpProxy(targetPort: number) {
   const link = { isSilent: false, dropped: 0, passedChunks: 0 };
 
@@ -71,15 +68,9 @@ export async function startStubSilentTcpProxy(targetPort: number) {
 
   return {
     port: address.port,
-
-    // the bytes the client sent since the proxy fell silent
     readDropped: (): number => link.dropped,
-
-    // the chunks of the client's bytes passed on to the target, so a test
-    // can wait for the client's next packets
     readPassedChunks: (): number => link.passedChunks,
 
-    // stops passing the client's bytes on, for every connection
     silence: (): void => {
       link.isSilent = true;
     },

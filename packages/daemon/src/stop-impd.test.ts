@@ -3,7 +3,6 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { stopImpd } from './stop-impd';
 import type { ImpdStopParts } from './stop-impd';
 
-// every part as a recorder that stops at once
 function setupTest() {
   const firstTicker = { stop: mock(() => Promise.resolve()) };
   const secondTicker = { stop: mock(() => Promise.resolve()) };

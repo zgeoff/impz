@@ -33,16 +33,11 @@ import { createXfsBackend } from './vm/storage/xfs-backend';
 import type { CpuCgroups } from './vm/vmm/cpu-cgroups';
 
 interface SetupOptions {
-  // the host's cgroup tree; one that enforces CPU limits by default
   readonly cgroups?: CpuCgroups;
-
-  // the progress events of a streamed image call
   readonly boundaries?: Pick<
     ImpdBoundaries,
     'keepaliveMs' | 'keepaliveRepeat' | 'readProcStatus' | 'images'
   >;
-
-  // the database impd gets, in place of the one the test reads
   readonly wrapDatabase?: (db: ImpDatabase) => ImpDatabase;
 }
 
@@ -51,7 +46,6 @@ function setupTest(options: SetupOptions = {}) {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // a frozen clock, far from the wall clock, that moves only with advance
   return startTestImpd(stack, {
     env: readImpEnv(),
     frozenClockMs: Date.UTC(2026, 0, 1),
@@ -174,7 +168,7 @@ test('it closes the ports it opened when a later startup step fails', async () =
 
   onTestFinished(() => stack.disposeAsync());
 
-  // below the imps' port range, which the config keeps impd's own ports out of
+  // below the imps' port range, where the config refuses impd's own ports
   const free = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
   const apiPort = free.take();
   const dnsPort = free.take();
@@ -333,8 +327,7 @@ test('it ends a lease once its clock passes the lease end', async () => {
   expect(left).toStrictEqual([]);
 });
 
-// The harness always gives impd a clock, so this boot is createImpd's own,
-// with no `now` among its boundaries.
+// The test harness always passes impd a clock, so this test boots impd itself with no clock.
 test('it closes the database it opened itself when it stops', async () => {
   const stack = new AsyncDisposableStack();
 
@@ -344,8 +337,7 @@ test('it closes the database it opened itself when it stops', async () => {
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  // no jailer, no boot template, no SSH; the API, the broker and the
-  // resolver each take a free port below the imps' port range
+  // below the imps' port range, where the config refuses impd's own ports
   const ports = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
 
   const config = {
@@ -361,7 +353,6 @@ test('it closes the database it opened itself when it stops', async () => {
     defaultDiskBytes: 0,
   };
 
-  // the system drive impd boots imps with, as setupSystemFiles installs it
   const drive = 'd1'.repeat(32);
   const systemDrivePath = buildSystemDrivePath(dataDir, drive);
 
@@ -370,7 +361,6 @@ test('it closes the database it opened itself when it stops', async () => {
 
   const vmm = buildStubVmm();
 
-  // no db: impd opens the one in its data dir
   const impd = await createImpd(config, {
     rootToken: TEST_TOKEN,
     storage: createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
@@ -423,9 +413,6 @@ test('it closes the database it opened itself when it stops', async () => {
       hostCpus: 8,
     },
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-
-    // no ticker runs on its own, the wake proxy takes any free port, and a
-    // first start pulls no default image
     tickerTimer: buildStubTickerTimer().timer,
     proxyPorts: { proxy: 0, slot: () => 0 },
     images: { seedRef: null },
@@ -449,8 +436,7 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
 
   stack.defer(() => db.destroy());
 
-  // no jailer, no boot template, no SSH; the API, the broker and the
-  // resolver each take a free port below the imps' port range
+  // below the imps' port range, where the config refuses impd's own ports
   const ports = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
 
   const config = {
@@ -466,7 +452,6 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
     defaultDiskBytes: 0,
   };
 
-  // the system drive impd boots imps with, as setupSystemFiles installs it
   const drive = 'd1'.repeat(32);
   const systemDrivePath = buildSystemDrivePath(dataDir, drive);
 
@@ -528,9 +513,6 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
       hostCpus: 8,
     },
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-
-    // no ticker runs on its own, the wake proxy takes any free port, and a
-    // first start pulls no default image
     tickerTimer: buildStubTickerTimer().timer,
     proxyPorts: { proxy: 0, slot: () => 0 },
     images: { seedRef: null },
@@ -561,8 +543,7 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
   expect(acquired.lease.until?.getTime()).toBeWithin(startedMs + 30_000, Date.now() + 30_001);
 });
 
-// The harness waits for the default image's seed, so this boot is
-// createImpd's own, with a seed whose pull holds.
+// The test harness waits for the default image's seed, so this test boots impd itself.
 test('it answers /health without a token, not ready before the default image is seeded', async () => {
   const stack = new AsyncDisposableStack();
 
@@ -572,8 +553,7 @@ test('it answers /health without a token, not ready before the default image is 
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  // docker on the host, where a first start pulls the seed; the pull holds
-  // until the stub's dir goes
+  // the stub docker's pull of the seed holds until its directory goes
   const dockerDir = await mkdtemp(join(tmpdir(), 'create-impd-docker-'));
 
   const docker = createStubDockerCli({
@@ -594,8 +574,7 @@ test('it answers /health without a token, not ready before the default image is 
 
   stack.defer(() => db.destroy());
 
-  // no jailer, no boot template, no SSH; the API, the broker and the
-  // resolver each take a free port below the imps' port range
+  // below the imps' port range, where the config refuses impd's own ports
   const ports = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
 
   const config = {
@@ -612,7 +591,6 @@ test('it answers /health without a token, not ready before the default image is 
     defaultDiskBytes: 0,
   };
 
-  // the system drive impd boots imps with, as setupSystemFiles installs it
   const drive = 'd1'.repeat(32);
   const systemDrivePath = buildSystemDrivePath(dataDir, drive);
 
@@ -674,8 +652,6 @@ test('it answers /health without a token, not ready before the default image is 
       hostCpus: 8,
     },
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-
-    // no ticker runs on its own, and the wake proxy takes any free port
     tickerTimer: buildStubTickerTimer().timer,
     proxyPorts: { proxy: 0, slot: () => 0 },
     images: { seedRef: 'seed.test/ubuntu:24.04' },
@@ -685,7 +661,7 @@ test('it answers /health without a token, not ready before the default image is 
     await impd.stop({ sleepImps: false });
   });
 
-  // the held pull ends first, so the seed fails before impd stops
+  // deferred last, so the held pull ends and the seed fails before impd stops
   stack.defer(() => rm(dockerDir, { recursive: true, force: true }));
 
   await waitFor(() => {
@@ -703,7 +679,6 @@ test('it sends a streamed build its progress at the keepalive gap it is given', 
 
   const ctx = await setupTest({ boundaries: { keepaliveMs: 20, keepaliveRepeat: repeat.repeat } });
 
-  // an upload that has not ended, so the build waits in its upload phase
   const upload = Promise.withResolvers<ReadableStreamDefaultController<Uint8Array>>();
 
   const context = new ReadableStream<Uint8Array>({
@@ -742,12 +717,10 @@ test('it sends a streamed build its progress at the keepalive gap it is given', 
 
   onTestFinished(() => reader.cancel());
 
-  // three gaps of 20 ms pass; a gap of any other length moves nothing
   repeat.tick(20);
   repeat.tick(20);
   repeat.tick(20);
 
-  // each progress event is one chunk of the stream
   const first = await reader.read();
   const second = await reader.read();
   const third = await reader.read();

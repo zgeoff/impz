@@ -46,7 +46,6 @@ test('it ends a held connection when the test finishes', async () => {
 
   await connected.promise;
 
-  // runs after the stand-in's own release
   onTestFinished(async () => {
     await closed.promise;
 
@@ -57,7 +56,6 @@ test('it ends a held connection when the test finishes', async () => {
 test('it removes its socket dir when the test finishes', async () => {
   const agent = await startStubSshAgent({ mode: 'answer' });
 
-  // runs after the stand-in's own release
   onTestFinished(() => {
     expect(existsSync(dirname(agent.path))).toBeFalse();
   });

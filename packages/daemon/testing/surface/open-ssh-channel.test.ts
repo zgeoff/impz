@@ -3,10 +3,7 @@ import { openSshChannel } from './open-ssh-channel';
 import { openSshClient } from './open-ssh-client';
 import { startStubSshServer } from './start-stub-ssh-server';
 
-// An SSH server on loopback and a client logged in to it. The server answers
-// each exec with the test's `server.exec.answer` and refuses every forward.
 async function setupTest() {
-  // the client needs the server's one password to log in
   const server = await startStubSshServer({ password: 'secret' });
 
   const client = await openSshClient({

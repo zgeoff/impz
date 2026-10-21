@@ -8,22 +8,11 @@ import { buildMockDnsReply } from './build-mock-dns-reply';
 import type { MockDnsRecord } from './build-mock-dns-reply';
 
 interface StubEgressServiceOptions {
-  // IMP_SUBNET; 10.66.0.0/16 by default
   readonly subnet?: string;
-
-  // each slot that holds an imp, with the verdict on each name it may ask
-  // for: a name it does not list is refused, and a slot it does not list
-  // holds no imp
   readonly verdicts?: Readonly<Record<number, Readonly<Record<string, QueryVerdict>>>>;
-
-  // the records the upstream answers each name with; none for the rest
   readonly upstream?: Readonly<Record<string, readonly MockDnsRecord[]>>;
-
-  // the networks impd knows, and their members
   readonly networks?: readonly string[];
   readonly members?: readonly NetworkMember[];
-
-  // the addresses a public imp may not reach
   readonly screened?: readonly string[];
 }
 
@@ -33,9 +22,6 @@ interface AdmittedAnswer {
   readonly answers: readonly AddressAnswer[];
 }
 
-// The egress service as its resolver sees it (createQueryHandler's deps):
-// the test's verdicts and upstream records, recorded set writes and
-// forwards, and a clock that moves only with `advance`.
 export function buildStubEgressService(options: Readonly<StubEgressServiceOptions> = {}) {
   const subnet = parseSubnet(options.subnet ?? '10.66.0.0/16');
   const verdicts = options.verdicts ?? {};
@@ -68,7 +54,7 @@ export function buildStubEgressService(options: Readonly<StubEgressServiceOption
 
       forwarded.push(name);
 
-      // names are case-insensitive upstream as in DNS
+      // DNS names are case-insensitive.
       const answers = upstream[name.toLowerCase()] ?? [];
 
       return Promise.resolve(buildMockDnsReply(query, { answers }));

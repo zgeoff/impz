@@ -14,7 +14,6 @@ import type { AgentFrame } from '../../src/vm/agent-client/frame-codec';
 import { buildStubExecReplies } from './build-stub-exec-replies';
 import { startStubAgent } from './start-stub-agent';
 
-// a temp dir that holds the agent's socket
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'stub-exec-replies-'));
 

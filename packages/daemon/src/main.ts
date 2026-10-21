@@ -11,9 +11,8 @@ async function main(): Promise<void> {
 
   const stopState = { stopping: false };
 
-  // SIGTERM and SIGINT (container stop): every running imp goes to sleep, so a container
-  // restart keeps memory. SIGHUP (impd restart in place): VMs keep running and the next impd
-  // re-adopts them (docs/architecture/lifecycle/lifecycle.md#recovery-after-a-restart).
+  // A container stop sends SIGTERM, and a sleep keeps each imp's memory across the restart.
+  // SIGHUP restarts impd in place, and the next impd re-adopts the running VMs.
   const stopOnSignal = (sleepImps: boolean): void => {
     if (stopState.stopping) {
       return;
@@ -41,8 +40,8 @@ async function main(): Promise<void> {
   });
 }
 
-// The release pipeline runs `impd --version` in the built image to check it
-// reports the tag it is published under. host/entrypoint runs `impd --network-env`.
+// The release pipeline checks `impd --version` against the tag it publishes, and
+// host/entrypoint runs `impd --network-env`.
 if (process.argv[2] === '--version') {
   process.stdout.write(`${packageJson.version}\n`);
 } else if (process.argv[2] === '--network-env') {

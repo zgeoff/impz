@@ -3,19 +3,12 @@ import { createServer } from 'node:net';
 import type { Socket } from 'node:net';
 
 interface StubSilentBuildEngineOptions {
-  // the unix socket the engine listens on
   readonly socketPath: string;
-
-  // the image the build ends with
   readonly imageId: string;
-
-  // called on each build; the engine stays silent until it settles
   readonly holdUntil: () => Promise<void>;
 }
 
-// Docker's engine answering a build at once, then silent until `holdUntil`
-// settles, as through a RUN step with no output; a raw socket server, so no
-// Bun server idle limit ends the silence. It stops when the test ends.
+// a raw socket server, so no Bun server idle limit ends the engine's silence
 export async function startStubSilentBuildEngine(options: StubSilentBuildEngineOptions) {
   const sockets = new Set<Socket>();
 
@@ -42,7 +35,6 @@ export async function startStubSilentBuildEngine(options: StubSilentBuildEngineO
     engine.listen(options.socketPath, resolve);
   });
 
-  // the first stop closes the engine; a later one waits on the same close
   const stopping: { done: Promise<void> | null } = { done: null };
 
   const stop = (): Promise<void> => {
@@ -62,16 +54,12 @@ export async function startStubSilentBuildEngine(options: StubSilentBuildEngineO
   onTestFinished(stop);
 
   return {
-    // settles once the first connection closes, from either end
     closed: firstClose.promise,
-
-    // settles once the first request has arrived and been answered at once
     started: firstRequest.promise,
     stop,
   };
 }
 
-// the build's answer: a trace at once, the image id when the hold settles
 async function sendBuildAnswer(
   socket: Socket,
   options: StubSilentBuildEngineOptions,
@@ -85,7 +73,6 @@ async function sendBuildAnswer(
   socket.end(`${toChunk({ id: 'moby.image.id', aux: { ID: options.imageId } })}0\r\n\r\n`);
 }
 
-// one line of the engine's JSON stream, as an HTTP chunk
 function toChunk(line: unknown): string {
   const text = `${JSON.stringify(line)}\n`;
 

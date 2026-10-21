@@ -49,17 +49,12 @@ import { readLiveStorage } from './vm/storage/read-live-storage';
 import { setupSystemFiles } from './vm/storage/setup-system-files';
 import { checkKsmHost, readKsmHostStats } from './vm/vmm/ksm';
 
-// impd as a host runs it: each of IMPD_STARTUP_STEPS in order, recorded in
-// `startup`. A step that throws first stops what the steps before it
-// acquired. main.ts loads the config and wires the signals to `stop`.
 export async function createImpd(config: Config, boundaries: Readonly<ImpdBoundaries> = {}) {
-  // what the stop takes out of service, filled as each step acquires it
   const plan: ImpdStopParts = { log: boundaries.log ?? printLog };
 
   try {
     return await startImpdParts(config, boundaries, plan);
   } catch (error) {
-    // as a restart in place stops: the VMs keep running
     await stopImpd(plan, { sleepImps: false });
 
     throw error;
@@ -68,7 +63,6 @@ export async function createImpd(config: Config, boundaries: Readonly<ImpdBounda
 
 export type Impd = Awaited<ReturnType<typeof createImpd>>;
 
-// every startup step; each sets its part on `plan` once it has it
 async function startImpdParts(
   config: Config,
   boundaries: Readonly<ImpdBoundaries>,
@@ -107,7 +101,7 @@ async function startImpdParts(
     }
   });
 
-  // before any instrument is made: a meter taken earlier stays a no-op
+  // OpenTelemetry leaves a meter taken before the export starts a no-op
   const stopTelemetry = await runStep('telemetry', () =>
     startOtlpExport(process.env, packageJson.version),
   );
@@ -119,7 +113,6 @@ async function startImpdParts(
 
     const files = await (boundaries.systemFiles ?? setupSystemFiles(config));
 
-    // a start-time hint; an image with a file capability still fails its build
     const setfcapWarning = readSetfcapWarning(boundaries.readProcStatus?.());
 
     if (setfcapWarning !== null) {
@@ -136,7 +129,6 @@ async function startImpdParts(
 
   plan.db = boundaries.db === undefined ? db : null;
 
-  // one watch of the taint flag: the imps' hold and storage's reclaim log
   const kernelOops = boundaries.imps?.kernelOops ?? createKernelOopsWatch();
 
   const storage =
@@ -152,7 +144,7 @@ async function startImpdParts(
     imps: { ...boundaries.imps, kernelOops },
   };
 
-  // before any VM is re-adopted or woken: on ZFS the disks are mounted here
+  // on ZFS this mounts the disks, so it runs before any VM is re-adopted or woken
   await runStep('storage', async () => {
     const live = await readLiveStorage(db);
 
@@ -171,7 +163,6 @@ async function startImpdParts(
     log(HOST_ADD_WARNING);
   }
 
-  // the broker's and the GC's: the GC lists and removes what the broker kept aside
   const secretFiles = createSecretFiles(config.dataDir);
 
   const firewall = await runStep('firewall', () =>
@@ -204,7 +195,6 @@ async function startImpdParts(
 
   plan.imps = imps;
 
-  // the syncs a write started, which the stop waits for
   const writeWork = new Set<Promise<unknown>>();
 
   const runWriteWork = async (work: Promise<unknown> | undefined): Promise<void> => {
@@ -221,10 +211,7 @@ async function startImpdParts(
     }
   };
 
-  // an imp that comes or goes opens or closes its proxy port and its grants
   const unsubscribeWrites = db.writes.subscribe((write) => {
-    // storage comes or goes with an imp or a checkpoint, and changes when
-    // its disk grows or a stop or sleep writes it out
     if (write.kind !== 'changed' || CHANGES_USAGE.has(write.reason)) {
       diskUsage.requestRefresh();
     }
@@ -248,7 +235,6 @@ async function startImpdParts(
 
   await runStep('reconcile', () => imps.reconcileImps());
 
-  // the image builders, which run as imps
   const builders = createBuilders({
     config,
     db,
@@ -259,17 +245,16 @@ async function startImpdParts(
 
   stored.setBuilders(builders);
 
-  // a build that a stop cut short left its builder
   await runStep('builders', () => builders.removeLeftovers());
 
-  // templates this host no longer boots go first, so their drives can too
+  // stale templates go first, so the drive sweep can remove their drives
   runStep('boot-templates', () => {
     for (const key of imps.bootTemplates?.removeStale() ?? []) {
       log(`impd: removed boot template ${key.slice(0, 12)}: this host boots something else`);
     }
   });
 
-  // before anything can boot or sleep an imp, so the set of drives in use holds
+  // runs before anything can boot or sleep an imp, so the set of drives in use holds still
   await runStep('system-drives', async () => {
     const removed = await removeUnusedDrives(
       db,
@@ -293,8 +278,8 @@ async function startImpdParts(
 
   const state = { ready: false };
 
-  // a key in this file cannot be bound to a token, so the gateway and the
-  // token store read the same one
+  // a key in this file cannot be bound to a token, so the SSH gateway and the token store
+  // share one reader
   const authorizedKeys = createAuthorizedKeys(
     join(setupSshDir(config.dataDir), 'authorized_keys'),
     log,
@@ -357,8 +342,6 @@ async function startImpdParts(
       releaseName: async () => {
         await tailnetNames?.runSync();
       },
-
-      // the received disk counts here now; the source's ImpRemoved counts there
       onCommitted: () => {
         diskUsage.requestRefresh();
         void tailnetNames?.runSync();
@@ -436,7 +419,6 @@ async function startImpdParts(
 
   plan.tickers = tickers;
 
-  // a caller's log takes a failed seed too; the image logger by default
   const printSeedFailure = (error: unknown): void => {
     if (boundaries.log === undefined) {
       getImpdLogger('image').error('could not add the default image: {error}', { error });
@@ -445,7 +427,6 @@ async function startImpdParts(
     }
   };
 
-  // ready either way: a failed seed leaves `impz image add` to the user
   const ready = runStep('default-image', async () => {
     await setupDefaultImage(config, stored.images, { log, printSeedFailure });
 
@@ -480,19 +461,12 @@ async function startImpdParts(
     identity,
     state,
     startup,
-
-    // the default image's seed, which impd does not wait for
     ready,
-
-    // takes impd out of service; the process exits after it. A database
-    // the caller passed stays open.
     stop: (options: Readonly<ImpdStopOptions>): Promise<readonly ImpdStopStep[]> =>
       stopImpd(plan, options),
   };
 }
 
-// The default image on a first start, and a warning when the configured
-// one is missing; a failure is logged, never thrown
 async function setupDefaultImage(
   config: Config,
   images: Readonly<ImpdStorage['images']>,

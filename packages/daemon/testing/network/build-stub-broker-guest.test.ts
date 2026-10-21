@@ -14,13 +14,10 @@ async function setupTest() {
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  // the CA bundle the guest trusts; no test gets as far as a TLS handshake
   const caFile = join(directory, 'ca.pem');
 
   await writeFile(caFile, '');
 
-  // a proxy that records the first line and the peer, then refuses with the
-  // status the test sets through `refuseWith`
   const seen: { address: string; line: string }[] = [];
   const refusal = { status: '' };
 

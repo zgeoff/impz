@@ -6,13 +6,10 @@ type HeldOperation = 'create' | 'append' | 'removeOldestSegment';
 interface GateOptions {
   readonly operation: HeldOperation;
 
-  // which call of the operation to hold, counted from 1 across every log
+  // counted from 1 across every log
   readonly call: number;
 }
 
-// The session logs' `createLog` seam over real generation logs: it holds one
-// call of one operation until `release`, and `reached` resolves once that
-// call arrives. Every other call goes straight through.
 export function buildStubGenerationLogGate(options: Readonly<GateOptions>) {
   const reached = Promise.withResolvers<undefined>();
   const released = Promise.withResolvers<undefined>();

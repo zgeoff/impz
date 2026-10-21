@@ -1,6 +1,3 @@
-// A child Bun that streams the imp `web` through the wake proxy, with impd's
-// log on stdout, then cuts the stream at the imp's server. Stderr shows what
-// Bun printed unhandled; stdout ends with the client's outcome as JSON.
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

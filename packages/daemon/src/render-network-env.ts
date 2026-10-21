@@ -1,10 +1,8 @@
 import { NetworkEnvSchema } from './config';
 import { formatSubnet, parseSubnet } from './host-net/net/addressing';
 
-// `impd --network-env`: the settings that the host container's network setup reads, as impd
-// resolves them with its defaults, for the entrypoint to export before setup-net.sh runs
 export function renderNetworkEnv(env: Readonly<Record<string, string | undefined>>): string {
-  // an empty variable means unset, as loadConfig reads it
+  // an empty variable (`IMP_SUBNET=` in an env file) means unset
   const present = Object.fromEntries(Object.entries(env).filter(([, value]) => value !== ''));
   const parsed = NetworkEnvSchema.parse(present);
 

@@ -8,9 +8,6 @@ export interface WarmMoveOverrides {
   readonly host?: Partial<WarmMove['host']>;
 }
 
-// A sleeping box imp's side of a warm move (buildWarmMove): its snapshot has
-// its CPU and no IPv6, on XFS on the default /16. Versions, the CPU, the slot,
-// paths and ports are arbitrary; a nested override merges into its defaults.
 export function buildMockWarmMove(overrides: WarmMoveOverrides = {}): WarmMove {
   return {
     slot: overrides.slot ?? faker.number.int({ min: 0, max: 4095 }),

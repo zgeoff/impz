@@ -2,17 +2,11 @@ import { existsSync } from 'node:fs';
 import type { Jails } from '../../src/vm/vmm/jail';
 
 interface StubJailsOptions {
-  // the command a prepare hands back; without one a prepare rejects, as for
-  // a VM that must run unjailed
   readonly argv?: readonly string[];
 
-  // gets each note as it is made, besides `notes`, such as a log the stub
-  // VMM appends to as well
   readonly onNote?: (note: string) => void;
 }
 
-// The jails of the VM runner and template VMs, without mounts or root: each
-// call is noted in order, and each plan a prepare gets is kept.
 export function buildStubJails(options: Readonly<StubJailsOptions> = {}) {
   const notes: string[] = [];
   const plans: unknown[] = [];
@@ -83,12 +77,10 @@ export function buildStubJails(options: Readonly<StubJailsOptions> = {}) {
     notes,
     plans,
 
-    // from now on each prepare rejects with `error`, as a bind mount that fails
     refusePrepare: (error: Error): void => {
       refusals.prepare = error;
     },
 
-    // from now on each seal throws `error`, as one that finds run/ planted
     refuseSeal: (error: Error): void => {
       refusals.seal = error;
     },

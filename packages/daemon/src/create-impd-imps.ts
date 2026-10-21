@@ -49,14 +49,9 @@ export interface GovernedImps {
   readonly imps: Imps;
   readonly governor: RamGovernor;
   readonly memory: MemoryController;
-
-  // what this host boots imps with
   readonly identity: HostIdentity;
 }
 
-// The imp service, its RAM governor and its memory controller, on the
-// host's own cgroups, Firecracker and readers unless the deps stand in. The
-// governor admits each boot, and sleeps imps through the service.
 export function createImpdImps(
   config: Config,
   deps: Readonly<ImpdDeps>,
@@ -74,12 +69,11 @@ export function createImpdImps(
     log(`impd: no cpu controller under /sys/fs/cgroup/imps; ${effect}`);
   }
 
-  // spawns Firecracker once per version flag; system.info reuses it
   const identity = (
     deps.readIdentity ?? ((files, prefix) => readHostIdentity(config.firecrackerBin, files, prefix))
   )(deps.systemFiles, parts.ipv6?.prefix.text ?? null);
 
-  // even with the jailer off, impd cleans up after jailed VMs it adopted
+  // a VM adopted from a start with the jailer on still needs its jail cleaned up
   const vms =
     deps.vms ??
     createVmRunner(
@@ -102,7 +96,6 @@ export function createImpdImps(
 
   const holder: { governor: RamGovernor | null } = { governor: null };
 
-  // the governor exists before any request reaches the service
   const admission: RamAdmission = {
     admit: (request) => holder.governor?.admit(request) ?? Promise.resolve(),
     release: (id) => {
@@ -111,8 +104,6 @@ export function createImpdImps(
   };
 
   const pluggedSizes = createPluggedSizes();
-
-  // each VM's memory.max follows what its elastic guest holds
   const memoryLimit = deps.imps?.memoryLimit ?? cgroups;
 
   const serviceDeps: ImpServiceDeps = {
@@ -147,8 +138,7 @@ export function createImpdImps(
   const imps = createImpService(serviceDeps);
   const ksm = config.ksm;
 
-  // what KSM saves in the awake VMs only, not in the host's other processes;
-  // a VM's profit is negative while its metadata outweighs what it merged
+  // KSM reports a VM's profit as negative while its metadata outweighs what it merged
   const readHeadroomMib = async (pids: readonly number[]): Promise<number> => {
     if (ksm === null) {
       return 0;
@@ -161,10 +151,8 @@ export function createImpdImps(
     return Math.ceil((Math.max(profitMib, 0) * ksm.headroomPercent) / 100);
   };
 
-  // an open exec session or proxied request pins the imp, like a hold
   const isBusy = (id: string) => imps.isImpBusy(id) || imps.tracker.count(id) > 0;
 
-  // elastic guests grow and shrink here (docs/architecture/lifecycle/elastic-memory.md)
   const memory = createMemoryController({
     listElastic: async () => {
       const listed = await listImps(deps.db);
@@ -253,9 +241,6 @@ export function createImpdImps(
   return { imps, governor, memory, identity };
 }
 
-// Every reader and tool the imps reach on the host, the host's own where a
-// test passes no stand-in: /proc, KSM, the filesystem grow, the cores, the
-// clocks and the kernel's taint flag.
 function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
   const readRam = boundaries.readRamMib;
   const readRss = boundaries.readRssMib;
@@ -265,8 +250,7 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
     readRamMib,
     readRssMib: readRss ?? readRssMib,
 
-    // a stand-in's readers take the place of smaps_rollup, which impd reads
-    // once for both
+    // the real reader reads smaps_rollup once for both values
     readVmMemory:
       readRam === undefined && readRss === undefined
         ? readVmMemory

@@ -12,17 +12,11 @@ import {
 import { startStubAgent } from './start-stub-agent';
 
 interface StubFilesAgentOptions {
-  // false: an agent from before the read-only files, which answers their
-  // ops UNKNOWN_OP
   readonly knowsFiles: boolean;
 
-  // closes with this stack, else at the test's end
   readonly stack?: Readonly<AsyncDisposableStack>;
 }
 
-// An imp's agent on `vsockPath` keeping read-only files as agent/internal/
-// files does: BAD_REQUEST for a path or size it refuses, and NO_SPACE for
-// every write while `full.isFull`. `files` holds each file's text.
 export async function startStubFilesAgent(
   vsockPath: string,
   options: Readonly<StubFilesAgentOptions>,

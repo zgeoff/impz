@@ -29,9 +29,6 @@ import { buildBackupsOffError, createBackupService } from './backup-service';
 import type { BackupServiceDeps } from './backup-service';
 import { ResticError } from './restic';
 
-// One host's imps and the backup service's deps over a stub restic in a temp
-// repository; each test picks its backup settings. `stack` and `repoDir` let
-// a test add a second host on that repository, released before it.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -43,12 +40,9 @@ async function setupTest() {
     rmSync(repoDir, { recursive: true, force: true });
   });
 
-  // a frozen clock, so a scheduled run is due only once the test advances it
   const host = await startTestImpd(stack, { frozenClockMs: Date.UTC(2026, 9, 2) });
 
   const restic = buildStubRestic({ repoDir, now: () => new Date(host.now()) });
-
-  // the freezer's calls, and the service's log lines
   const freezes: string[] = [];
   const backupLogs: string[] = [];
 
@@ -81,7 +75,6 @@ async function setupTest() {
     },
   };
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(host, { stack, repoDir, restic, freezes, backupLogs, deps });
 }
 
@@ -278,7 +271,6 @@ test('#restoreBackup restores an imp stopped, with its disk and its checkpoints 
 
   expect(readFileSync(buildImpPaths(ctx.dataDir, restored.id).disk, 'utf8')).toBe('now');
 
-  // new ids, with the original times and disk sizes
   expect(checkpoints).toStrictEqual([
     {
       id: expect.not.toBeOneOf(['cp-one', 'cp-two']),
@@ -513,7 +505,6 @@ test('#restoreBackup restores every imp and its image on a fresh host, renaming 
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
-  // a different image under the same name
   await fresh.createTestImage('other');
   await fresh.db.updateTable('images').set({ name: 'base' }).execute();
 
@@ -560,7 +551,6 @@ test('#restoreBackup rejects a restored image as CONFLICT when its name and its 
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
-  // other images hold the backup's image name, base, and its tagged one
   await fresh.createTestImage('other');
   await fresh.db.updateTable('images').set({ name: 'base' }).where('name', '=', 'other').execute();
   await fresh.createTestImage('third');
@@ -602,8 +592,6 @@ test('#runBackup records templates with their source imp and an identity reset s
   await ctx.imps.stopImp('dev');
   await templates.createTemplate('dev', 'tools');
   await templates.createTemplate('dev', 'spare');
-
-  // made stopped, so its identity reset is still owed
   await ctx.imps.createImp({ name: 'copy', image: 'tools', start: false });
 
   const run = await backups.runBackup();
@@ -677,7 +665,6 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
-  // a docker image named tools
   await fresh.createTestImage('tools');
 
   const restored = await freshBackups.restoreBackup({ all: true });
@@ -725,8 +712,6 @@ test('#restoreBackup leaves no imp behind when a restore fails part way', async 
   const manifestText = readFileSync(join(ctx.repoDir, run.snapshotId, 'manifest.json'), 'utf8');
   const manifest = BackupManifestSchema.parse(JSON.parse(manifestText));
 
-  // a pack restic could not read: the newest disk is missing, after the
-  // checkpoint restored
   rmSync(join(ctx.repoDir, run.snapshotId, manifest.imps[0]?.disk ?? ''));
 
   expect(backups.restoreBackup({ name: 'dev', as: 'copy' })).rejects.toThrow('ENOENT');
@@ -878,7 +863,6 @@ test('#runScheduled logs a failed weekly check loudly and reports it in the stat
 
   expect(status.lastCheck?.error).toContain('ciphertext verification failed');
 
-  // both runs stay restore points, oldest first
   expect(status.points).toStrictEqual([
     { id: expect.toBeString(), time: new Date('2026-10-02T00:00:00Z'), imps: ['dev'] },
     { id: expect.toBeString(), time: new Date('2026-10-09T00:00:00Z'), imps: ['dev'] },
@@ -910,7 +894,6 @@ test('#runScheduled tries a prune that met a lock again on the next tick, not th
 
   const before = ctx.restic.calls.length;
 
-  // the next tick, well inside the interval
   ctx.advance(5 * 60 * 1000);
 
   await backups.runScheduled();
@@ -983,7 +966,6 @@ test('#runScheduled stops trying a prune again after six in a row meet a lock', 
 
   const before = ctx.restic.calls.length;
 
-  // six ticks after the run's prune
   for (let tick = 0; tick < 6; tick += 1) {
     ctx.advance(5 * 60 * 1000);
 
@@ -1014,7 +996,6 @@ test('#runScheduled starts a new series of prune tries with the next run', async
     ),
   );
 
-  // the run's prune and five ticks' meet six locks; the sixth tick tries none
   await backups.runScheduled();
 
   for (let tick = 0; tick < 6; tick += 1) {
@@ -1025,7 +1006,6 @@ test('#runScheduled starts a new series of prune tries with the next run', async
 
   const before = ctx.restic.calls.length;
 
-  // the next run's prune meets the seventh lock, and the tick after succeeds
   ctx.advance(60 * 60 * 1000);
 
   await backups.runScheduled();
@@ -1143,8 +1123,6 @@ test('#runBackup leaves out an imp replaced under its name since the database co
   await ctx.imps.createImp({ name: 'dev' });
   await ctx.imps.stopImp('dev');
 
-  // the freeze of `a` comes after the database copy and before the lock of
-  // `dev`, which the run takes in name order
   const backups = createBackupService({
     ...ctx.deps,
     backup: buildMockBackupConfig(),
@@ -1386,7 +1364,6 @@ test('#restoreBackup restores an egress policy this impd cannot read as none, ne
 
   const run = await backups.runBackup();
 
-  // a policy from a newer impd
   const manifestPath = join(ctx.repoDir, run.snapshotId, 'manifest.json');
   const manifest = BackupManifestSchema.parse(JSON.parse(readFileSync(manifestPath, 'utf8')));
 
@@ -1460,7 +1437,6 @@ test('#runScheduled ends the backoff of a failed scheduled run after a manual ru
 
   const before = ctx.restic.calls.length;
 
-  // with the backoff left, the retry would be due 5 minutes after the failure
   ctx.advance(5 * 60 * 1000);
 
   await backups.runScheduled();
@@ -1477,7 +1453,6 @@ test('#runScheduled waits twice as long after each failed scheduled run, up to t
     backup: buildMockBackupConfig({ intervalS: 3600 }),
   });
 
-  // whether each tick, the given minutes after the last, started a run
   const ticks: boolean[] = [];
 
   ctx.restic.state.failBackup = true;
@@ -1492,7 +1467,6 @@ test('#runScheduled waits twice as long after each failed scheduled run, up to t
     ticks.push(ctx.restic.calls.length > before);
   }
 
-  // the first failure, then 5, 10, 20 and 40 minutes, then the hour's interval
   expect(ticks).toStrictEqual([true, false, true, false, true, true, true, false, true]);
 });
 
@@ -1510,12 +1484,10 @@ test('#runScheduled waits the whole interval again after a scheduled run that su
 
   ctx.restic.state.failBackup = false;
 
-  // the retry, due 5 minutes after the failure, succeeds
   ctx.advance(5 * 60 * 1000);
 
   await backups.runScheduled();
 
-  // whether each tick, the given minutes after the last, started a run
   const ticks: boolean[] = [];
 
   for (const minutes of [5, 25, 30]) {
@@ -1558,7 +1530,6 @@ test('#runBackup records the blocks each disk file holds in the manifest, not it
   const manifestText = readFileSync(join(ctx.repoDir, run.snapshotId, 'manifest.json'), 'utf8');
   const manifest = BackupManifestSchema.parse(JSON.parse(manifestText));
 
-  // a few bytes in each file, so a block or so, not the 32 GiB sparse size
   expect(manifest.imps[0]?.usedBytes).toBeWithin(1, 1024 ** 2);
   expect(manifest.imps[0]?.checkpoints[0]?.usedBytes).toBeWithin(1, 1024 ** 2);
 });
@@ -1620,7 +1591,6 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
-  // what each restore of a dir sees as it starts; a GC would wait for each
   const seen: { directory: string; isJoined: boolean; pendingBytes: number }[] = [];
 
   freshRestic.state.onRestore = async (directory) => {
@@ -1642,7 +1612,6 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
       pendingBytes: expect.toSatisfy((bytes: number) => bytes > 0),
     },
 
-    // twice each file's blocks: restic's sparse copy, then the disk
     { directory: dirname(checkpoint.disk), isJoined: true, pendingBytes: 2 * checkpointUsedBytes },
     { directory: dirname(recorded.disk), isJoined: true, pendingBytes: 2 * usedBytes },
   ]);
@@ -1702,7 +1671,6 @@ test('#restoreBackup grants a restored imp so that a token’s list entry from b
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_value' });
   await ctx.broker.addGrant('dev', 'gh');
 
-  // a token for back* that may grant gh as it is before the rebind
   const made = await ctx.tokens.create({
     name: 'agent',
     scope: 'manage',
@@ -2003,7 +1971,6 @@ test('#runBackup puts no secret value, key, password or root token in a backup w
 test('#runBackup holds the database copy’s size from the disk budget while it writes the copy', async () => {
   const ctx = await setupTest();
 
-  // the sizes each hold asks for, on the host's real budget
   const held: number[] = [];
 
   const backups = createBackupService({
@@ -2149,7 +2116,6 @@ test('#restoreBackup holds the database copy’s size from the disk budget while
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
-  // the bytes the budget holds as each restore of a dir starts
   const seen: { directory: string; pendingBytes: number }[] = [];
 
   freshRestic.state.onRestore = async (directory) => {

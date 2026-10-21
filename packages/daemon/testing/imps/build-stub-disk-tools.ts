@@ -1,8 +1,6 @@
 import { onTestFinished } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 
-// One step a test holds: `reached` resolves when a call arrives, and every
-// call waits until `release`, which the test's end also runs.
 interface DiskToolHold {
   readonly reached: Promise<void>;
   readonly release: () => void;
@@ -13,13 +11,9 @@ interface HoldGate {
   readonly reached: () => void;
 }
 
-// startTestImpd's `cloneDisk` and `growFilesystem`: a clone copies the file,
-// as an XFS reflink ends with the same bytes, and a grow reports success
-// unless a test set the filesystem unclean.
+// a plain copy ends with the same bytes an XFS reflink clone does
 export function buildStubDiskTools() {
   const settings = { isCloneFailing: false, isCloneEmpty: false, isUnclean: false };
-
-  // the target of each clone that finished, and each disk grown, in order
   const clones: string[] = [];
   const grows: string[] = [];
   const holds: { clone: HoldGate | null; grow: HoldGate | null } = { clone: null, grow: null };
@@ -51,7 +45,6 @@ export function buildStubDiskTools() {
       },
     };
 
-    // a test that fails while it holds a step still lets the call finish
     onTestFinished(() => {
       held.release();
     });
@@ -82,22 +75,18 @@ export function buildStubDiskTools() {
 
       grows.push(disk);
 
-      // false: resize2fs is never run on a filesystem not unmounted cleanly
+      // resize2fs never runs on a filesystem that was not unmounted cleanly
       return !settings.isUnclean;
     },
 
-    // every later clone throws, until set back
     setCloneFailing: (isFailing: boolean) => {
       settings.isCloneFailing = isFailing;
     },
 
-    // every later clone succeeds with no file at the target, until set back
     setCloneEmpty: (isEmpty: boolean) => {
       settings.isCloneEmpty = isEmpty;
     },
 
-    // every later grow finds the filesystem unclean and leaves it, until set
-    // back
     setUnclean: (isUnclean: boolean) => {
       settings.isUnclean = isUnclean;
     },

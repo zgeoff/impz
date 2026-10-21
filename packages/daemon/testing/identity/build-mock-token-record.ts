@@ -2,8 +2,6 @@ import { createHash } from 'node:crypto';
 import { faker } from '@faker-js/faker';
 import type { TokenRecord } from '../../src/platform/db/tokens';
 
-// A made token's row as the token store writes it: a manage token for every
-// imp with no grantable list; its id, name, secret hash and age arbitrary.
 export function buildMockTokenRecord(overrides: Partial<TokenRecord> = {}): TokenRecord {
   return {
     id: faker.string.alphanumeric(16),

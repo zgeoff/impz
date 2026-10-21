@@ -34,17 +34,14 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // this impd's own root token, which its root client sends
   const rootToken = randomUUID();
 
-  // the port impd's own public listener takes, below the imps' ports
   const publicPort = claimFreePorts(1, {
     pick: () => 10_000 + Math.floor(Math.random() * 10_000),
   }).take();
 
-  // the public route on loopback, as tests name it; impd's clock is the
-  // wall clock: better-auth checks its sessions and tokens against it, and
-  // a sign-in bucket refills one start per 6 s, longer than a test
+  // impd keeps the wall clock, because better-auth checks its sessions and
+  // tokens against it.
   const harness = await startTestImpd(stack, {
     rootToken,
     env: {
@@ -57,13 +54,10 @@ async function setupTest() {
 
   invariant(publicMcp);
 
-  // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, {
     stack,
     rootToken,
     publicMcp,
-
-    // the public route's handler over impd's own OAuth service and /mcp
     handle: createPublicHandler({
       config: publicMcp,
       oauth: harness.impd.oauth,
@@ -374,7 +368,6 @@ test('it answers a too-busy sign-in with a 429 and when to try again', async () 
     scope: 'read',
   });
 
-  // the burst of 10 sign-ins a client may start at once
   await Promise.all(
     Array.from({ length: 10 }, async () => {
       await ctx.handle(
@@ -646,8 +639,6 @@ test('it signs an MCP client in through its OAuth provider and lists the tools i
 
   ctx.stack.defer(() => listener.stop());
 
-  // the operator's front: a request for the route's origin goes to the
-  // listener's own port, with the origin's host
   const sendThroughFront = (url: string | URL, init?: RequestInit): Promise<Response> => {
     const target = new URL(url);
 
@@ -660,7 +651,6 @@ test('it signs an MCP client in through its OAuth provider and lists the tools i
     return fetch(target, { ...init, headers, redirect: 'manual' });
   };
 
-  // what the client keeps between its runs, as a connector stores it
   const saved: {
     tokens?: OAuthTokens;
     discovery?: OAuthDiscoveryState;
@@ -719,7 +709,6 @@ test('it signs an MCP client in through its OAuth provider and lists the tools i
 
   const code = /impz oauth approve (?<code>[A-Z0-9\-]+)/v.exec(loginPage)?.groups?.['code'] ?? '';
 
-  // the client asks for the scope the route's 401 names, read
   ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'read', undefined);
 
   const continued = await sendThroughFront(`${origin}/login`, {
@@ -743,7 +732,6 @@ test('it signs an MCP client in through its OAuth provider and lists the tools i
 
   const back = new URL(allowed.headers.get('location') ?? '');
 
-  // the redirect's whole query, code and iss, as the client's callback reads it
   await first.finishAuth(back.searchParams);
 
   const client = new Client({ name: 'test', version: '1.0.0' });
@@ -814,7 +802,6 @@ test('it lists an exec grant’s tools over /mcp, without the manage ones', asyn
     null,
   );
 
-  // read to its end, as a client does, so it holds no slot
   await mcpOpened.text();
 
   const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
@@ -864,7 +851,6 @@ test('it ends a grant’s running command when the grant is revoked', async () =
     guest,
   );
 
-  // closed before impd stops; its own fallback close then does nothing
   ctx.stack.defer(() => {
     boxAgent.close();
   });
@@ -912,7 +898,6 @@ test('it ends a grant’s running command when the grant is revoked', async () =
     null,
   );
 
-  // read to its end, as a client does, so it holds no slot
   await mcpOpened.text();
 
   const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
@@ -957,7 +942,6 @@ test('it ends a grant’s running command when the grant is revoked', async () =
     expect(guest.closed).toStrictEqual(['sleepy']);
   });
 
-  // the stream ends with no result for the call
   expect(text).toBe('');
 });
 
@@ -1006,7 +990,6 @@ test('it refuses /mcp to a revoked grant’s session', async () => {
     null,
   );
 
-  // read to its end, as a client does, so it holds no slot
   await mcpOpened.text();
 
   const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
@@ -1056,7 +1039,6 @@ test('it ends the grant a removed token approved, and its running command', asyn
     guest,
   );
 
-  // closed before impd stops; its own fallback close then does nothing
   ctx.stack.defer(() => {
     boxAgent.close();
   });
@@ -1104,7 +1086,6 @@ test('it ends the grant a removed token approved, and its running command', asyn
     null,
   );
 
-  // read to its end, as a client does, so it holds no slot
   await mcpOpened.text();
 
   const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
@@ -1209,7 +1190,6 @@ test('it lists only the read tools to a read grant', async () => {
     null,
   );
 
-  // read to its end, as a client does, so it holds no slot
   await mcpOpened.text();
 
   const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
@@ -1268,7 +1248,6 @@ test.each([
       guest,
     );
 
-    // closed before impd stops; its own fallback close then does nothing
     ctx.stack.defer(() => {
       boxAgent.close();
     });
@@ -1284,7 +1263,6 @@ test.each([
       guest,
     );
 
-    // closed before impd stops; its own fallback close then does nothing
     ctx.stack.defer(() => {
       devaAgent.close();
     });
@@ -1332,7 +1310,6 @@ test.each([
       null,
     );
 
-    // read to its end, as a client does, so it holds no slot
     await mcpOpened.text();
 
     const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
@@ -1396,7 +1373,6 @@ test('it audits a grant’s change under its client and grant id', async () => {
     guest,
   );
 
-  // closed before impd stops; its own fallback close then does nothing
   ctx.stack.defer(() => {
     devaAgent.close();
   });
@@ -1444,7 +1420,6 @@ test('it audits a grant’s change under its client and grant id', async () => {
     null,
   );
 
-  // read to its end, as a client does, so it holds no slot
   await mcpOpened.text();
 
   const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
@@ -1502,7 +1477,6 @@ test('it audits a grant’s change refused past its patterns as FORBIDDEN', asyn
     guest,
   );
 
-  // closed before impd stops; its own fallback close then does nothing
   ctx.stack.defer(() => {
     boxAgent.close();
   });
@@ -1550,7 +1524,6 @@ test('it audits a grant’s change refused past its patterns as FORBIDDEN', asyn
     null,
   );
 
-  // read to its end, as a client does, so it holds no slot
   await mcpOpened.text();
 
   const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
@@ -1718,8 +1691,6 @@ test('it keeps a tool call’s slot until the tool ends, though its client goes'
     mcp: transport,
   });
 
-  // 64 long calls whose clients go away at once fill every slot
-
   await Promise.all(
     Array.from({ length: 64 }, async () => {
       const response = await handle(
@@ -1755,8 +1726,6 @@ test('it frees a tool call’s slot once the tool ends', async () => {
     oauth: ctx.impd.oauth,
     mcp: transport,
   });
-
-  // 64 long calls whose clients go away at once fill every slot
 
   await Promise.all(
     Array.from({ length: 64 }, async () => {
@@ -1815,8 +1784,6 @@ test('it reads at most 16 bodies at once for requests past every slot', async ()
     mcp: transport,
   });
 
-  // 64 calls that never end hold every slot
-
   await Promise.all(
     Array.from({ length: 64 }, async () => {
       const response = await handle(
@@ -1831,7 +1798,6 @@ test('it reads at most 16 bodies at once for requests past every slot', async ()
     }),
   );
 
-  // 33 bodies that never finish; each records whether anything read it
   const reads = Array.from({ length: 33 }, () => false);
   const outcomes: (number | 'waiting')[] = Array.from({ length: 33 }, () => 'waiting');
 
@@ -1890,7 +1856,6 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
     guest,
   );
 
-  // closed before impd stops; its own fallback close then does nothing
   ctx.stack.defer(() => {
     boxAgent.close();
   });
@@ -1938,12 +1903,9 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
     null,
   );
 
-  // read to its end, as a client does, so it holds no slot
   await mcpOpened.text();
 
   const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
-
-  // 64 long calls whose clients go away at once fill every slot
 
   await Promise.all(
     Array.from({ length: 64 }, async (_, offset) => {
@@ -1975,7 +1937,6 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
     expect(guest.requests).toHaveLength(64);
   });
 
-  // impd still holds every slot though each client went
   const refused = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
       method: 'POST',
@@ -2053,8 +2014,6 @@ test('it refuses a request that starts work with every slot held', async () => {
     mcp: transport,
   });
 
-  // 64 long calls whose clients go away at once fill every slot
-
   await Promise.all(
     Array.from({ length: 64 }, async () => {
       const response = await handle(
@@ -2102,7 +2061,6 @@ test('it refuses a signed-in notification too large for the allowance with every
     guest,
   );
 
-  // closed before impd stops; its own fallback close then does nothing
   ctx.stack.defer(() => {
     boxAgent.close();
   });
@@ -2150,12 +2108,9 @@ test('it refuses a signed-in notification too large for the allowance with every
     null,
   );
 
-  // read to its end, as a client does, so it holds no slot
   await mcpOpened.text();
 
   const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
-
-  // 64 long calls whose clients go away at once fill every slot
 
   await Promise.all(
     Array.from({ length: 64 }, async (_, offset) => {
@@ -2233,7 +2188,6 @@ test('it ends a signed-in session with its DELETE with every slot held', async (
     guest,
   );
 
-  // closed before impd stops; its own fallback close then does nothing
   ctx.stack.defer(() => {
     boxAgent.close();
   });
@@ -2281,12 +2235,9 @@ test('it ends a signed-in session with its DELETE with every slot held', async (
     null,
   );
 
-  // read to its end, as a client does, so it holds no slot
   await mcpOpened.text();
 
   const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
-
-  // 64 long calls whose clients go away at once fill every slot
 
   await Promise.all(
     Array.from({ length: 64 }, async (_, offset) => {

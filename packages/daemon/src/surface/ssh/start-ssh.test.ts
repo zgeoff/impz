@@ -22,8 +22,6 @@ import { createImp } from '../../platform/db/imps';
 import { generateEd25519Key, readFingerprint } from './host-key';
 import { startSsh } from './start-ssh';
 
-// impd's data dir with an owner-only ssh/ the test fills, its database, and
-// the deps startSsh takes besides the config
 async function setupTest() {
   const dataDir = await mkdtemp(join(tmpdir(), 'imp-start-ssh-'));
 
@@ -89,7 +87,6 @@ test('it starts no gateway when IMP_SSH_PORT turns it off', async () => {
   expect(ctx.logs).toStrictEqual([]);
 });
 
-// impd stays up for the API and the proxy, as without the gateway
 test('it logs a corrupt host key and leaves the gateway off', async () => {
   const ctx = await setupTest();
 
@@ -107,7 +104,6 @@ test('it logs a corrupt host key and leaves the gateway off', async () => {
   ]);
 });
 
-// a directory where the key file should be: reading it fails
 test('it logs an unreadable host key and leaves the gateway off', async () => {
   const ctx = await setupTest();
 
@@ -130,7 +126,6 @@ test('it logs a key from authorized_keys in to an imp in the database', async ()
 
   const key = generateEd25519Key();
 
-  // the image the imp row refers to
   const image = await createImage(ctx.db, buildMockNewImage({ name: 'base' }));
 
   await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: image.id }));
@@ -162,12 +157,10 @@ test('it audits a command an ssh login opens as the key that logged in', async (
 
   const key = generateEd25519Key();
 
-  // the image the imp row refers to
   const image = await createImage(ctx.db, buildMockNewImage({ name: 'base' }));
 
   await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: image.id }));
 
-  // the running imp the stub agent answers for
   ctx.ssh.putImp(buildMockImpRecord({ name: 'dev' }));
 
   ctx.ssh.stub.onExec = (run) => {
@@ -225,7 +218,6 @@ test('it refuses a key from authorized_keys when IMP_SSH_AUTHORIZED_KEYS is fals
 
   const key = generateEd25519Key();
 
-  // the image the imp row refers to
   const image = await createImage(ctx.db, buildMockNewImage({ name: 'base' }));
 
   await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: image.id }));

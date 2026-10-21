@@ -3,10 +3,8 @@ import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 import { requireNamedImp } from './require-named-imp';
 
-// audit rows `audit.list` gives when the caller names no limit
 const AUDIT_LIMIT = 100;
 
-// `audit.*`: the broker's and the API's audit rows
 export function buildAuditRoutes(os: RpcImplementer, deps: RouterDeps) {
   return {
     list: os.audit.list.handler((context) => {

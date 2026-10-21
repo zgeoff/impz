@@ -50,8 +50,6 @@ interface MoveSendDeps {
   readonly log: (message: string) => void;
 }
 
-// where a send goes, with its ticket, how it carries the disk, and whether
-// the memory goes too
 export interface SendTarget {
   readonly peer: string;
   readonly ticket: string;
@@ -59,7 +57,6 @@ export interface SendTarget {
   readonly isWarm: boolean;
 }
 
-// what a running send reports as it goes
 interface SendProgress {
   readonly signal: AbortSignal;
   readonly onData: (bytes: number) => void;
@@ -67,8 +64,6 @@ interface SendProgress {
 
 type SentFile = ReceiptBody['files'][number];
 
-// The send up to a receipt that matches it: the offer, the stream in parts
-// and the finish. From here both hosts hold the imp, until the commit.
 export async function runMoveSend(
   deps: MoveSendDeps,
   imp: ImpRecord,
@@ -101,7 +96,6 @@ export async function runMoveSend(
     throw new Error('the target is not on ZFS any more; prepare the move again');
   }
 
-  // a target from before elastic memory would land the imp at a fixed size
   if (imp.maxMemoryMib > imp.memoryMib && !reply.keepsMaxMemory) {
     throw new OfferRefusalError(
       "the target's impd predates elastic memory and would drop the imp's max memory; upgrade it first",
@@ -110,14 +104,12 @@ export async function runMoveSend(
 
   await requireLeasesKept(deps, imp, reply.keepsLeases);
 
-  // a target from before the setting would put the imp's disk in its backups
   if (!imp.isBackedUp && !reply.keepsBackupOff) {
     throw new OfferRefusalError(
       "the target's impd predates imps left out of backups and would back this one up; upgrade it first",
     );
   }
 
-  // a move never changes the policy, either way
   const policy = await deps.egress.readPolicy(imp.name);
 
   if (EGRESS_MODE_TRAITS[policy.mode].isPublic && !reply.keepsPublicEgress) {
@@ -173,8 +165,6 @@ export async function runMoveSend(
 
   checkReceiptFiles(body, imp, sent);
 
-  // from here both hosts hold the imp, and neither may wake it: sending →
-  // moved, as MOVE_TRANSITIONS holds
   await updateMoveSend(deps.db, imp.id, { receipt: JSON.stringify(receipt) });
   await updateImpMove(deps.db, imp.id, 'moved');
 }
@@ -241,8 +231,6 @@ async function readHeader(
   };
 }
 
-// The stream: the header, each file's frames, END. `onFile` gets each
-// file's sha256 as it ends, for the receipt to repeat.
 async function* encodeStream(
   header: Readonly<MoveHeader>,
   parts: readonly StreamPart[],
@@ -277,8 +265,6 @@ async function* encodeStream(
   yield encodeJsonFrame(MOVE_FRAMES.end, {});
 }
 
-// The header as JSON: a warm move's snapshot record goes as meta.json holds
-// it, its sessions and services in the agent's own JSON form
 function encodeHeader(header: Readonly<MoveHeader>): unknown {
   if (header.warm === null) {
     return header;
@@ -287,7 +273,6 @@ function encodeHeader(header: Readonly<MoveHeader>): unknown {
   return { ...header, warm: { ...header.warm, meta: encodeSnapshotMeta(header.warm.meta) } };
 }
 
-// the receipt must name this imp and repeat every sha256 the stream sent
 function checkReceiptFiles(
   body: ReadonlyReceiptBody,
   imp: Readonly<ImpRecord>,

@@ -10,9 +10,6 @@ import { buildSnapshotIdentity, writeSnapshotMeta } from '../../vm/sleep/snapsho
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildWatchdogSlot } from '../../vm/storage/data-layout';
 
-// The silent VM's memory, for a post-mortem, in a slot only the owner reads;
-// the VM stops. Without room, or on a failed snapshot, it logs why and leaves
-// the VM to the restart that follows.
 export async function writeWatchdogSnapshot(
   context: ImpHost & ImpVms & ImpDisk,
   ops: Pick<ImpVmOps, 'withSleepSlot'>,
@@ -26,11 +23,10 @@ export async function writeWatchdogSnapshot(
     return;
   }
 
-  // the old slot goes first: its files count against the disk check
   rmSync(slot.snapshotDir, { recursive: true, force: true });
 
   const writeSlot = async () => {
-    // a jailed VM opens the files impd makes in it, so it can pass through
+    // A jailed VM opens the files impd makes here, so it must pass through.
     mkdirSync(slot.snapshotDir, { recursive: true, mode: 0o711 });
 
     const cgroup = context.cgroups.setup(imp.id, imp.cpu, imp.memoryMib);
@@ -44,7 +40,6 @@ export async function writeWatchdogSnapshot(
       ramMib: 0,
     });
 
-    // the VM's own files back to impd: only the owner reads them
     for (const file of [slot.vmstate, slot.memFile, slot.snapshotMeta]) {
       lchownSync(file, IMPD_USER.uid, IMPD_USER.gid);
       chmodSync(file, 0o600);

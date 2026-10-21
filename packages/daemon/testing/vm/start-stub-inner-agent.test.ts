@@ -7,8 +7,6 @@ import { ActivitySchema, PingSchema } from '../../src/vm/agent-client/agent-prot
 import { sendActivity, sendAgentRequest, sendPing } from '../../src/vm/agent-client/agent-requests';
 import { startStubInnerAgent } from './start-stub-inner-agent';
 
-// a temp dir for the agent's socket, and `stack`, whose releases (the
-// agent's first) run before the dir goes
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 

@@ -14,8 +14,6 @@ import { createSecret, readSecret } from '../../platform/db/secrets';
 import { writeTokenRecord } from '../../platform/db/tokens';
 import { createRestoredAccess } from './create-restored-access';
 
-// This host's database and token store, and a directory for the copy a test
-// writes from a database of its own.
 async function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'impd-restored-access-'));
 
@@ -93,7 +91,6 @@ test('it keeps this host’s own secret under a name the copy has', async () => 
 test('it migrates a copy from an older impd forward before it reads the copy', async () => {
   const ctx = await setupTest();
 
-  // an impd from before grantable lists and secret generations
   const source = createUnmigratedDatabase();
 
   await runMigrationsTo(source, '019_add_imp_max_memory');

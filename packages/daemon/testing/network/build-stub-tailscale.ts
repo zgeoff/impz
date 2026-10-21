@@ -2,29 +2,21 @@ import { faker } from '@faker-js/faker';
 import type { TailscaleStatus } from '../../src/host-net/net/tailscale-status';
 import type { CommandResult } from '../../src/platform/process/run-command';
 
-// a node on the tailnet, as a test names it: the short MagicDNS name, the
-// user's login (null for a tagged node), its tags and its stable ID
 interface StubTailnetNode {
   readonly node: string;
   readonly login: string | null;
   readonly tags?: readonly string[];
 
-  // left out of the whois answer when null or not given, as an older
-  // tailscale does
+  // An older tailscale leaves the stable ID out of its whois answer.
   readonly stableId?: string | null;
 }
 
 interface StubTailscaleOptions {
-  // the node impd runs on; a running node with an arbitrary name and one
-  // tailnet IPv4 address by default
   readonly status?: Partial<TailscaleStatus>;
 }
 
 const TAILNET = 'tail1234.ts.net';
 
-// The `tailscale` CLI at its command layer: `run` answers whois for each
-// registered peer (exit 1 for any other address) and status for the node;
-// `asked` holds every address whois was asked about, in order.
 export function buildStubTailscale(options: Readonly<StubTailscaleOptions> = {}) {
   const hostname = faker.word.noun().toLowerCase();
   const ip = `100.${String(faker.number.int({ min: 64, max: 127 }))}.${String(faker.number.int(255))}.${String(faker.number.int({ min: 1, max: 254 }))}`;
@@ -45,7 +37,7 @@ export function buildStubTailscale(options: Readonly<StubTailscaleOptions> = {})
   const registerPeer = (address: string, peer: Readonly<StubTailnetNode>): void => {
     const tags = peer.tags ?? [];
 
-    // a tagged node's whois user is tailscale's placeholder
+    // tailscale's whois answers a tagged node with a placeholder user.
     const login = tags.length > 0 || peer.login === null ? 'tagged-devices' : peer.login;
 
     peers.set(

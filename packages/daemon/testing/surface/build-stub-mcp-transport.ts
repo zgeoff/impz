@@ -1,19 +1,12 @@
 import type { HttpTransport } from '@impz/mcp';
 
-// one request the transport took, and the end of its tool call
 interface StubMcpCall {
   readonly request: Request;
-
-  // ends the call's tool: readCallEnd's promise resolves
   readonly end: () => void;
 }
 
-// MCP's HTTP transport with every answer a tool call's open event stream,
-// whose tool runs until the test ends it: `calls` holds each request with
-// its `end`, and `closes` counts the transport's close.
 export function buildStubMcpTransport(
   options: Readonly<{
-    // rejects each request instead, as a broken transport does
     failure?: Error;
   }> = {},
 ) {

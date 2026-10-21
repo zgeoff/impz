@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { renderNetworkEnv } from './render-network-env';
 
-// host/scripts/setup-net.sh keeps no default of its own: these are the ones it gets
+// host/scripts/setup-net.sh keeps no default of its own, so these are the ones it uses
 test("it renders impd's defaults for the network setup when nothing sets them", () => {
   expect(renderNetworkEnv({})).toBe(
     'IMP_SUBNET=10.66.0.0/16\nIMP_BROKER_PORT=7081\nIMP_EGRESS_DNS_PORT=7053\n',
@@ -40,8 +40,8 @@ test('it runs as impd --network-env, from the settings in its environment', () =
   });
 });
 
-// the entrypoint runs it before tailscale-up.sh, so a tailnet setting impd checks against the
-// joined tailnet must not stop it
+// the entrypoint runs this before tailscale-up.sh, so a setting that needs the joined
+// tailnet must not stop it
 test('it runs as impd --network-env with tailnet names on, before the host joins the tailnet', () => {
   const result = Bun.spawnSync(
     [process.execPath, new URL('main.ts', import.meta.url).pathname, '--network-env'],

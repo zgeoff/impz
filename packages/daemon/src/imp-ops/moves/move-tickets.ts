@@ -1,11 +1,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import * as z from 'zod';
 
-// a ticket's two parts travel as `<id>.<secret>`; the target keeps only the
-// secret's sha256
 const SECRET_BYTES = 32;
-
-// the header a ticket travels in, never the URL
 const MOVE_AUTH_SCHEME = 'ImpMove';
 
 export interface ParsedTicket {
@@ -41,7 +37,6 @@ export function isSameHash(leftItem: string, rightItem: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-// the ticket in `Authorization: ImpMove <ticket>`
 export function readTicketHeader(request: Request): ParsedTicket | null {
   const header = request.headers.get('authorization') ?? '';
   const prefix = `${MOVE_AUTH_SCHEME} `;
@@ -81,15 +76,12 @@ export const ReceiptSchema = z.object({ body: z.string(), mac: z.string() });
 
 export type Receipt = z.infer<typeof ReceiptSchema>;
 
-// The target's word that it holds every file: an HMAC keyed by the ticket's
-// secret, which only the two hosts know
 export function buildReceipt(body: ReadonlyReceiptBody, secret: string): Receipt {
   const text = JSON.stringify(body);
 
   return { body: text, mac: buildMac(text, secret) };
 }
 
-// the receipt's body, or null when the MAC does not hold
 export function readReceipt(receipt: Readonly<Receipt>, secret: string): ReceiptBody | null {
   if (!isSameHash(receipt.mac, buildMac(receipt.body, secret))) {
     return null;

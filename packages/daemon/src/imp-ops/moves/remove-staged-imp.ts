@@ -9,7 +9,6 @@ interface StagedImpDeps {
   readonly log: (message: string) => void;
 }
 
-// only an imp a move staged here, never a live one of the same name
 export async function removeStagedImp(
   deps: StagedImpDeps,
   name: string,

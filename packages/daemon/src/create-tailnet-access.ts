@@ -6,8 +6,7 @@ import { createTailnetIdentities, runWhois } from './identity/auth/tailnet-ident
 import type { ImpdDeps } from './impd-deps';
 import type { AppDeps } from './surface/create-app';
 
-// tailnet identity, when IMP_TAILNET_IDENTITIES has rules; both ask about
-// the node on every request, so they share one cached status
+// both checks ask tailscaled about the node on every request, so they share one cached status
 export function createTailnetAccess(
   config: Config,
   deps: Readonly<Pick<ImpdDeps, 'now' | 'whois'>>,

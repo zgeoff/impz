@@ -17,7 +17,6 @@ async function setupTest() {
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  // every runner call takes an imp's paths; the fake writes snapshots there
   const paths = buildImpPaths(directory, 'imp-1');
   const fake = buildStubVmm();
   const runner = fake.startGeneration();
@@ -1400,8 +1399,6 @@ test('#buildStubVmm leaves the parked-build signal pending for a template build 
   });
 
   ctx.fake.startGeneration();
-
-  // a call other than a template build parks, and settles nothing
   void ctx.runner.probeAgentReady(ctx.paths);
 
   await waitFor(() => {

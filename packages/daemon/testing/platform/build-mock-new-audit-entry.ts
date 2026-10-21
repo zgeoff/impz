@@ -1,9 +1,6 @@
 import { faker } from '@faker-js/faker';
 import type { NewAuditEntry } from '../../src/platform/db/broker-audit';
 
-// A forwarded request as the broker writes it to its audit log: a GET that
-// got a 200, for an arbitrary imp, secret, host and path, at an arbitrary
-// recent time.
 export function buildMockNewAuditEntry(overrides: Partial<NewAuditEntry> = {}): NewAuditEntry {
   return {
     impId: faker.string.uuid(),

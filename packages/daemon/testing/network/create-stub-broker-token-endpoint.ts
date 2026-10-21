@@ -1,6 +1,5 @@
 import { HttpResponse, http } from 'msw';
 
-// what a token endpoint answers a refresh with, in its own field names
 export interface StubTokenAnswer {
   readonly access_token?: string;
   readonly refresh_token?: string;
@@ -8,19 +7,13 @@ export interface StubTokenAnswer {
   readonly expires_in?: number;
 }
 
-// one token request as the endpoint received it
 interface StubTokenRequest {
   readonly contentType: string | null;
   readonly accept: string | null;
   readonly body: string;
-
-  // the refresh token the body carries, form or JSON
   readonly refreshToken: string | null;
 }
 
-// An OAuth token endpoint at `tokenUrl` as an MSW handler, over the answers
-// queued for each refresh token, one per request; a token with none left
-// gets the 400 invalid_grant a dead one gets. Every request is recorded.
 export function createStubBrokerTokenEndpoint(tokenUrl: string) {
   const answers = new Map<string, StubTokenAnswer[]>();
 
@@ -51,8 +44,6 @@ export function createStubBrokerTokenEndpoint(tokenUrl: string) {
   return {
     handler,
     requests,
-
-    // queues one answer for a refresh with `refreshToken`
     issue: (refreshToken: string, answer: StubTokenAnswer): void => {
       answers.set(refreshToken, [...(answers.get(refreshToken) ?? []), answer]);
     },

@@ -1,5 +1,4 @@
-// A shell script imported as text (`with { type: 'text' }`), which
-// `bun build --compile` embeds in the binary.
+// `bun build --compile` embeds a shell script imported with `{ type: 'text' }` in the binary
 declare module '*.sh' {
   const text: string;
 

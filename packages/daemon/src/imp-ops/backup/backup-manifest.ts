@@ -9,15 +9,11 @@ const ManifestCheckpointSchema = z
     createdAt: z.coerce.date(),
     disk: z.string(),
 
-    // a manifest from before disk sizes had 32 GiB disks only
     diskBytes: z.int().positive().default(LEGACY_DISK_BYTES),
-
-    // the blocks the file held in the tree; older manifests leave it out
     usedBytes: z.int().nonnegative().optional(),
   })
   .readonly();
 
-// a grant with its method and path filter
 const FilteredGrantSchema = z.object({ secret: z.string(), filter: GrantFilterSchema }).readonly();
 
 const ManifestImpSchema = z
@@ -27,43 +23,27 @@ const ManifestImpSchema = z
     imageDigest: z.string(),
     vcpus: z.int(),
     memoryMib: z.int(),
-
-    // an elastic imp's max (docs/architecture/lifecycle/elastic-memory.md); null when it does
-    // not grow, left out by older manifests
     maxMemoryMib: z.int().nullable().optional(),
     httpPort: z.int(),
     state: z.string(),
-
-    // false: the guest was not frozen, so the disk is as after a power cut
     synced: z.boolean(),
 
     // oxlint-disable-next-line zgeoff/no-abbreviated-names -- stored backups hold this key
     dir: z.string(),
     disk: z.string(),
 
-    // the database's size; the disk file in the tree has the size it had
-    // when copied, which a resize during the run can pass
     diskBytes: z.int().positive().default(LEGACY_DISK_BYTES),
     usedBytes: z.int().nonnegative().optional(),
-
-    // the egress policy's mode and allow-list, and the names of the secrets
-    // granted: never a value (docs/architecture/storage/backups.md#what-a-backup-holds)
     egressPolicy: z.string().default('open'),
     egressAllow: z.array(z.string()).readonly().default([]),
     grants: z.array(z.string()).readonly().default([]),
 
-    // the grants with a method and path filter, apart from `grants` so that
-    // an impd from before filters restores none of them rather than grant
-    // the whole host; a manifest from before filters has none
+    // Kept apart from the plain grants, so an impd that predates filters
+    // restores none of them rather than grant the whole host.
     filteredGrants: z.array(FilteredGrantSchema).readonly().default([]),
-
-    // a template copy whose first boot has not reset its identity yet
     identityResetPending: z.boolean().default(false),
-
-    // the networks it is on, by name
     networks: z.array(z.string()).readonly().default([]),
 
-    // oldest first
     checkpoints: z.array(ManifestCheckpointSchema).readonly(),
   })
   .readonly();
@@ -73,12 +53,7 @@ const ManifestImageSchema = z
     name: z.string(),
     ref: z.string(),
     digest: z.string(),
-
-    // a template has no docker ref to pull again, so a restore of all brings
-    // it back with no imp on it; oci in a backup from before templates
     source: ImageSourceSchema.default('oci'),
-
-    // a template's source imp, which a limited token must reach to copy it
     sourceImp: z.string().nullable().default(null),
     sizeBytes: z.int(),
 
@@ -87,26 +62,16 @@ const ManifestImageSchema = z
   })
   .readonly();
 
-// an imp created with backup off: its name and why, and none of its files
 const ManifestExcludedSchema = z.object({ name: z.string(), reason: z.string() }).readonly();
 
-// What a restore needs to rebuild each imp, and nothing more: no tokens, no
-// secrets, no slots or addresses (docs/architecture/storage/backups.md#what-a-backup-holds).
-// Paths are relative to the backup tree.
 export const BackupManifestSchema = z
   .object({
     version: z.literal(1),
     runId: z.string(),
     createdAt: z.coerce.date(),
     imps: z.array(ManifestImpSchema).readonly(),
-
-    // so a restore can say why an imp is not there; older manifests leave
-    // it out (docs/architecture/storage/backups.md#imps-left-out)
     excluded: z.array(ManifestExcludedSchema).readonly().default([]),
     images: z.array(ManifestImageSchema).readonly(),
-
-    // impd's database copy and its size, with IMP_BACKUP_DATABASE; null
-    // without it (docs/architecture/storage/backups.md#the-database-copy)
     database: z
       .object({ file: z.string(), sizeBytes: z.int().nonnegative() })
       .readonly()

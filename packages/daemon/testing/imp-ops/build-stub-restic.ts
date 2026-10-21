@@ -5,17 +5,10 @@ import type { Restic, ResticSnapshot } from '../../src/imp-ops/backup/restic';
 import { buildNotFoundError } from '../../src/surface/api-errors';
 
 interface StubResticOptions {
-  // each snapshot's tree, and the snapshot list every stub over this
-  // directory shares, as hosts share a repository
   readonly repoDir: string;
-
-  // the snapshot time a backup records
   readonly now: () => Date;
 }
 
-// Restic over a directory: a backup copies the tree to <repoDir>/<id> and
-// lists it as `snapshots --json` would; a missing snapshot is NOT_FOUND.
-// `calls`, `restores` and `state` record commands and hold a test's faults.
 export function buildStubRestic(options: Readonly<StubResticOptions>) {
   const indexPath = join(options.repoDir, 'snapshots.json');
   const calls: string[] = [];
@@ -25,10 +18,8 @@ export function buildStubRestic(options: Readonly<StubResticOptions>) {
     failCheck: false,
     failBackup: false,
 
-    // what the next prunes throw, one each
     pruneErrors: [] as Error[],
 
-    // runs as each restore starts, with the dir it restores
     onRestore: null as ((directory: string) => Promise<void>) | null,
   };
 
@@ -126,7 +117,6 @@ export function buildStubRestic(options: Readonly<StubResticOptions>) {
   return { restic, calls, restores, state, readSnapshots };
 }
 
-// a path inside the snapshot, relative to the dir it backed up
 function readInside(snapshot: Readonly<ResticSnapshot>, path: string): string {
   return relative(snapshot.paths[0] ?? '', path);
 }

@@ -44,19 +44,15 @@ import type { RestoreInput } from './run-restore';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// prune holds restic's exclusive lock, so once a day; a check reads packs
-// back from the bucket, so once a week and a part at a time
+// A prune holds restic's exclusive lock, so it runs once a day; a check reads
+// packs back from the bucket, so it runs once a week and a part at a time.
 const PRUNE_EVERY_MS = DAY_MS;
 const CHECK_EVERY_MS = 7 * DAY_MS;
 const CHECK_SUBSET = '5%';
 
-// Prunes in a row that may meet a lock before the next try waits for a run:
-// six ticks of 5 minutes outlast restic's 30 minutes, after which a lock
-// left behind is stale and unlock removes it.
+// Six ticks of 5 minutes outlast restic's 30 minutes, after which a lock left
+// behind is stale and unlock removes it.
 const PRUNE_LOCK_TRIES = 6;
-
-// the wait after a failed scheduled run, doubled for each failure in a row
-// up to the interval: a full bucket must not freeze every guest each tick
 const RETRY_FIRST_MS = 5 * 60 * 1000;
 
 const BackupStateSchema = z.object({
@@ -68,7 +64,6 @@ const BackupStateSchema = z.object({
 
 type BackupState = z.infer<typeof BackupStateSchema>;
 
-// an imp's disk in a run, as its lock found it
 interface DiskCopy {
   readonly state: ImpState;
   readonly synced: boolean;
@@ -79,10 +74,6 @@ export interface BackupService {
   readonly readStatus: () => Promise<BackupStatus>;
   readonly restoreBackup: (input: RestoreInput) => Promise<BackupRestore>;
   readonly checkBackups: (subset?: string) => Promise<void>;
-
-  // The schedule's tick: when IMP_BACKUP_INTERVAL_S has passed since the last
-  // run, a backup, then a prune once a day and a check once a week. Failures
-  // are logged.
   readonly runScheduled: () => Promise<void>;
 }
 
@@ -91,30 +82,18 @@ export interface BackupServiceDeps {
   readonly backup: BackupConfig;
   readonly db: ImpDatabase;
   readonly imps: Pick<Imps, 'createImp' | 'destroyImp' | 'lockImp'>;
-
-  // the broker's grant, checked as `impz grant` checks one
   readonly grants: Pick<Broker, 'addGrant'>;
-
-  // the named tokens a restore of all brings back from the database copy
   readonly tokens: Pick<TokenStore, 'createRestored'>;
-
-  // a restored imp's networks, made when missing
   readonly networks: Pick<NetworkService, 'writeMissingNetworks' | 'removeEmptyNetworks'>;
   readonly storage: StorageBackend;
   readonly restic?: Restic;
   readonly freezer?: DiskFreezer;
   readonly log?: (message: string) => void;
   readonly now?: () => Date;
-
-  // a run and a restored image join it: storage no row names yet
   readonly storageGate: StorageGate;
-
-  // a run's copies are thin, but restic's cache grows: none starts past the
-  // reserve; a restore holds each file's size while it writes it
   readonly diskBudget: Pick<DiskBudget, 'requireRoom' | 'withRoom'>;
 }
 
-// PRECONDITION_FAILED when impd has no repository set
 export function buildBackupsOffError(): ORPCError<'PRECONDITION_FAILED', undefined> {
   return new ORPCError('PRECONDITION_FAILED', {
     message: 'backups are off: set IMP_BACKUP_REPOSITORY (docs/guides/configuration.md)',
@@ -131,13 +110,8 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
   const storageGate = deps.storageGate;
   const diskBudget = deps.diskBudget;
   const restoreDeps = { ...deps, restic, paths, log, now };
-
-  // a run, a restore, a prune and a check never overlap
   const mutex = buildKeyedMutex();
   const runExclusive = <T>(task: () => Promise<T>) => mutex.runExclusive('backup', task);
-
-  // pruneLocks: prunes in a row that found another restic's lock. The next
-  // tick tries again, up to PRUNE_LOCK_TRIES, instead of waiting for a run.
   const retry = { failures: 0, lastFailureAt: 0, pruneLocks: 0 };
 
   const probeRunDue = (): boolean => {
@@ -166,9 +140,6 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
     writeFileDurably(paths.state, JSON.stringify({ ...readState(), ...change }));
   };
 
-  // Under the imp's lock. A running guest is frozen around the copy; a
-  // sleeping one is copied as it is, since waking it to sync would cost
-  // more than a crash-consistent disk (docs/architecture/storage/backups.md).
   const createCopy = async (imp: LockedImp, runId: string): Promise<DiskCopy> => {
     if (imp.state !== 'running') {
       await storage.createBackupCopy(imp.id, runId, { isReusable: true });
@@ -201,7 +172,8 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
     return { state: imp.state, synced: true };
   };
 
-  // a sparse disk's blocks, which restic restores sparse again
+  // restic restores a sparse disk sparse again, so its blocks measure the room
+  // a restore needs.
   const readTreeUsedBytes = (file: string): number => statSync(join(paths.tree, file)).blocks * 512;
 
   const readManifest = (
@@ -291,12 +263,9 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
 
     await restic.setupRepository();
 
-    // a lock a crashed prune left would block the run
+    // A lock a crashed prune left would block the run.
     await restic.unlock();
 
-    // outside the tree: the manifest is what a restore reads, and the
-    // database copy would carry whatever later tables hold, so only
-    // IMP_BACKUP_DATABASE puts it in
     const copyPath = join(paths.directoryPath, 'db.sqlite');
 
     const copy = await readDatabaseCopy(deps.db, copyPath);
@@ -305,7 +274,6 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
 
     const skipped: { name: string; reason: string }[] = [];
 
-    // never locked or copied, so no file of theirs reaches the tree
     const excluded = copy.imps
       .filter((imp) => imp.backup === 0)
       .map((imp) => ({ name: imp.name, reason: NOT_BACKED_UP_REASON }));
@@ -363,8 +331,6 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
 
       const names = manifest.imps.map((imp) => imp.name);
 
-      // excluded=<name> lets a restore of the name find the point that
-      // says why it holds nothing of it
       const summary = await restic.backup(paths.tree, [
         `run=${runId}`,
         ...names.map((name) => `imp=${name}`),
@@ -373,7 +339,6 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
 
       writeState({ lastRunAt: now() });
 
-      // a manual run that succeeds ends a scheduled run's backoff too
       retry.failures = 0;
 
       if (deps.backup.forget) {
@@ -393,9 +358,6 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
     }
   };
 
-  // The copy goes in with the setting on, holding its size from the disk
-  // budget while it writes. With it off, the copy a run with it on left in
-  // the tree goes, so no later snapshot holds the database.
   const writeTreeDatabase = async (
     copyPath: string,
     database: BackupManifest['database'],
@@ -417,8 +379,6 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
     });
   };
 
-  // after an unlock, which drops only stale locks: a crashed run's would
-  // otherwise block the exclusive lock prune and check take
   const runCheck = async (subset: string): Promise<void> => {
     await restic.unlock();
 
@@ -455,7 +415,6 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
     const at = now().getTime();
 
     if (deps.backup.forget && at - (state.lastPruneAt?.getTime() ?? 0) >= PRUNE_EVERY_MS) {
-      // a run starts a new series of tries
       retry.pruneLocks = 0;
 
       await runPrune();

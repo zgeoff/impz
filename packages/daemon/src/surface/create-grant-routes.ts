@@ -2,12 +2,8 @@ import { findGrantAuthority } from '../identity/auth/access-policy';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 
-// `grants.*`: which imps a secret reaches
 export function createGrantRoutes(os: RpcImplementer, deps: RouterDeps) {
   return {
-    // a caller for some imps grants the secret its list names, checked
-    // again in the grant's transaction: it could be deleted and made
-    // again since the access check
     add: os.grants.add.handler(async (context) => {
       const input = context.input;
 

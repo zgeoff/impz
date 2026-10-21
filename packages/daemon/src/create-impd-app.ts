@@ -33,13 +33,10 @@ export interface ImpdAppParts {
   readonly readTailscale: () => Promise<TailscaleStatus>;
   readonly readTailnetNames: AppDeps['readTailnetNames'];
   readonly isReady: () => boolean;
-
-  // the gap between the progress events of a streamed image call
   readonly keepaliveMs?: number;
   readonly readKsmHostStats?: AppDeps['readKsmHostStats'];
 }
 
-// impd's HTTP app: the RPC API, exec, tunnels, the dashboard and MCP
 export function createImpdApp(
   config: Config,
   deps: Readonly<ImpdDeps>,

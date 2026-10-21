@@ -2,21 +2,14 @@ import { onTestFinished } from 'bun:test';
 import { randomInt } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 
-// How many ports below the kernel's ephemeral range a test picks from
 const PICK_SPAN = 4000;
 
 interface FindFreePortsOptions {
-  // the next port to try; a random one from just below the ephemeral range by default
   readonly pick?: () => number;
-
-  // registers the release of the claims; onTestFinished by default, a
-  // stack's defer for a caller outside the test runner
   readonly onRelease?: (release: () => void) => void;
 }
 
-// `count` distinct free ports from just below the ephemeral range, claimed
-// until their release runs, so no picker in another process hands one out
-// again. A process that binds such a port without a claim can still race.
+// A process that binds one of these ports without taking a claim can still race for it.
 export function claimFreePorts(count: number, options: FindFreePortsOptions = {}) {
   const top = readEphemeralStart();
   const pick = options.pick ?? (() => randomInt(top - PICK_SPAN, top));
@@ -58,17 +51,16 @@ export function claimFreePorts(count: number, options: FindFreePortsOptions = {}
   };
 }
 
-// The first port the kernel hands out on its own, to a bind to port 0 or an
-// outgoing connection. Ports below it are taken only by an explicit bind.
+// The kernel gives a bind to port 0 or an outgoing connection a port from this start up,
+// so a port below it is taken only by an explicit bind.
 function readEphemeralStart(): number {
   const range = readFileSync('/proc/sys/net/ipv4/ip_local_port_range', 'utf8');
 
   return Number(range.trim().split(/\s+/u)[0]);
 }
 
-// A claim on `port` that every picker in every process on this host sees: an
-// abstract unix socket, which only one holder can bind and which the kernel
-// frees when its process dies. Null when another picker holds it.
+// Only one process on the host can bind an abstract unix socket, and the kernel frees it
+// when that process dies, so the claim holds across test processes and never leaks.
 function claimPort(port: number) {
   try {
     return Bun.listen({ unix: `\0imp-test-port-${String(port)}`, socket: { data: () => {} } });
@@ -77,10 +69,8 @@ function claimPort(port: number) {
   }
 }
 
-// The socket tables of this network namespace, for every family a test binds
 const SOCKET_TABLES = ['tcp', 'tcp6', 'udp', 'udp6'].map((name) => `/proc/net/${name}`);
 
-// Every local port a TCP or UDP socket of any state holds, on any address
 function readBusyPorts(): ReadonlySet<number> {
   const busy = new Set<number>();
 

@@ -16,11 +16,8 @@ import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { createIdleLoop } from '../idle/idle-loop';
 import { MOVE_PART_HEADER } from './move-header';
 
-// Two impds. The source's storage is XFS on plain files, as the harness's,
-// with faults a test can set.
 async function setupTest(
   config: Readonly<Pick<MoveHostsOptions, 'hook' | 'isShared' | 'partBytes'>> & {
-    // each host's frozen clock; left out, a host reads the wall clock
     readonly source?: Pick<NonNullable<MoveHostsOptions['source']>, 'frozenClockMs'>;
     readonly target?: Pick<NonNullable<MoveHostsOptions['target']>, 'frozenClockMs'>;
   } = {},
@@ -104,7 +101,6 @@ test('it refuses a stop move of a leased sleeping imp without force, and leaves 
 });
 
 test('it ends the leases from leases.* on a forced stop move, and moves the hold with its time left', async () => {
-  // clocks an hour apart, so a lease's end on the target shows whose clock it followed
   const ctx = await setupTest({
     source: { frozenClockMs: Date.parse('2026-10-03T12:00:00.000Z') },
     target: { frozenClockMs: Date.parse('2026-10-03T13:00:00.000Z') },
@@ -163,7 +159,6 @@ test('it ends the leases from leases.* on a forced stop move, and moves the hold
 });
 
 test('it keeps each lease of a warm move, with its owner and its time left on the target clock', async () => {
-  // clocks an hour apart, so a lease's end on the target shows whose clock it followed
   const ctx = await setupTest({
     isShared: true,
     source: { frozenClockMs: Date.parse('2026-10-03T12:00:00.000Z') },
@@ -268,7 +263,6 @@ test('it holds a warm-moved imp past a century while its legacy hold has no end'
 });
 
 test('it lets the same tailnet node renew its warm-moved lease on the target', async () => {
-  // clocks an hour apart, so the renewed end shows it follows the target's clock
   const ctx = await setupTest({
     isShared: true,
     source: { frozenClockMs: Date.parse('2026-10-03T12:00:00.000Z') },
@@ -344,7 +338,6 @@ test("it refuses a target token the warm-moved lease of the source's token", asy
 });
 
 test('it keeps the hold of a stopped imp on a cold move, and says the commit is held', async () => {
-  // clocks an hour apart, so the hold's end on the target shows whose clock it followed
   const ctx = await setupTest({
     source: { frozenClockMs: Date.parse('2026-10-03T12:00:00.000Z') },
     target: { frozenClockMs: Date.parse('2026-10-03T13:00:00.000Z') },
@@ -394,13 +387,10 @@ test('it keeps the hold of a stopped imp on a cold move, and says the commit is 
 });
 
 test('it ends each lease from when the target read the header, and leaves out one that ended during the disk', async () => {
-  // clocks an hour apart, so each end on the target shows whose clock it followed
   const ctx = await setupTest({
     source: { frozenClockMs: Date.parse('2026-10-03T12:00:00.000Z') },
     target: { frozenClockMs: Date.parse('2026-10-03T13:00:00.000Z') },
     partBytes: 4096,
-
-    // the disk's later parts come 30 s after the header, on the target's clock
     hook: (request, forward, hosts) => {
       if (request.headers.get(MOVE_PART_HEADER) === '1') {
         hosts.target.advance(30_000);
@@ -420,7 +410,6 @@ test('it ends each lease from when the target read the header, and leaves out on
 
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
-  // a disk of many parts, so the clock moves after the header
   writeFileSync(ctx.source.storage.resolveImpPaths(created.id).disk, 'x'.repeat(64 * 1024));
 
   const short = buildMockLeaseRecord({
@@ -475,7 +464,6 @@ test('it keeps the leases and runs the imp again when a forced prepare fails aft
 
   await writeLease(ctx.source.db, job, { at: sourceNow, reason: null });
 
-  // the count after the halt cannot open the disk
   ctx.sourceFaults.failOnce('openMoveSource', new Error('the disk is unreadable'));
 
   const prepared = ctx.sourceApp.client.moves.prepare({ name: 'dev', stop: true, force: true });
@@ -512,7 +500,6 @@ test('it moves the imp once the fault that failed its forced prepare is gone', a
 
   await writeLease(ctx.source.db, job, { at: sourceNow, reason: null });
 
-  // one count after the halt cannot open the disk; the next can
   ctx.sourceFaults.failOnce('openMoveSource', new Error('the disk is unreadable'));
 
   const failed = await ctx.sourceApp.client.moves
@@ -534,7 +521,6 @@ test.each([
 ])(
   'it refuses an older target an imp with %s, before any byte goes',
   async (_hold, principal, display) => {
-    // a target from before moving leases
     const ctx = await setupTest({ hook: makeStubOlderMoveTarget('keepsLeases') });
 
     await createUbuntuImage(ctx.source);
@@ -570,8 +556,6 @@ test.each([
     const leases = await listLeases(ctx.source.db, ctx.source.now(), [created.id]);
     const landed = await readImpByName(ctx.target.db, 'dev');
 
-    // the forced stop ended the job lease; the hold refused the send, and the
-    // halted imp runs again
     expect(status.error).toInclude('predates moving leases');
     expect(status.sentBytes).toBe(0);
     expect(imp).toMatchObject({ state: 'running', moveState: null });
@@ -581,7 +565,6 @@ test.each([
 );
 
 test('it moves an imp with no lease to an older target', async () => {
-  // a target from before moving leases
   const ctx = await setupTest({ hook: makeStubOlderMoveTarget('keepsLeases') });
 
   await createUbuntuImage(ctx.source);
@@ -595,7 +578,6 @@ test('it moves an imp with no lease to an older target', async () => {
 });
 
 test('it keeps the source leases and leaves the target none on an abort after the receipt', async () => {
-  // the network drops the first commit
   const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
   await createUbuntuImage(ctx.source);
@@ -620,7 +602,6 @@ test('it keeps the source leases and leaves the target none on an abort after th
 
   await ctx.runMove('dev');
 
-  // the staged imp shows its lease until the abort
   const staged = await listLeases(ctx.target.db, ctx.target.now(), [created.id]);
 
   await ctx.sourceApp.client.moves.abort({ name: 'dev' });
@@ -634,7 +615,6 @@ test('it keeps the source leases and leaves the target none on an abort after th
 });
 
 test("it removes a staged imp's leases with it when the target restarts before the receipt", async () => {
-  // the network drops every commit
   const ctx = await setupTest({
     hook: makeStubDroppedCommit({ count: Number.POSITIVE_INFINITY }),
   });
@@ -663,7 +643,6 @@ test("it removes a staged imp's leases with it when the target restarts before t
 
   const staged = await listLeases(ctx.target.db, ctx.target.now(), [created.id]);
 
-  // a crash before the receipt: the stream counts as cut short
   await ctx.target.db.updateTable('move_tickets').set({ receipt: null }).execute();
   await ctx.target.moves.recover();
   await ctx.target.moves.waitForRecovery();
@@ -677,7 +656,6 @@ test("it removes a staged imp's leases with it when the target restarts before t
 });
 
 test('it keeps the leases of a committed imp when the target restarts', async () => {
-  // clocks an hour apart, so the hold's end on the target shows whose clock it followed
   const ctx = await setupTest({
     source: { frozenClockMs: Date.parse('2026-10-03T12:00:00.000Z') },
     target: { frozenClockMs: Date.parse('2026-10-03T13:00:00.000Z') },
@@ -799,7 +777,6 @@ test("it leaves a warm-moved leased imp awake through the target's idle loop", a
   await ctx.runMove('dev');
   await ctx.targetApp.client.imps.wake({ name: 'dev' });
 
-  // idle for a day: only the lease keeps it awake
   await updateImpActivity(ctx.target.db, created.id, new Date(ctx.target.now() - 86_400_000));
 
   const idle = createIdleLoop({
@@ -829,7 +806,6 @@ test("it sleeps a warm-moved imp with no lease through the target's idle loop", 
   await ctx.runMove('dev');
   await ctx.targetApp.client.imps.wake({ name: 'dev' });
 
-  // idle for a day, with no lease to keep it awake
   await updateImpActivity(ctx.target.db, created.id, new Date(ctx.target.now() - 86_400_000));
 
   const idle = createIdleLoop({
@@ -873,7 +849,6 @@ test('it refuses a RAM admission that needs a warm-moved leased imp asleep on th
   await ctx.runMove('dev');
   await ctx.targetApp.client.imps.wake({ name: 'dev' });
 
-  // room for all but 100 MiB of the budget needs dev's RAM back
   const reserveMib = ctx.target.config.ramBudgetMib - 100;
 
   const admitted = ctx.target.governor.admit({
@@ -897,7 +872,6 @@ test('it admits a RAM reservation by sleeping a warm-moved imp with no lease on 
   await ctx.runMove('dev');
   await ctx.targetApp.client.imps.wake({ name: 'dev' });
 
-  // room for all but 100 MiB of the budget needs dev's RAM back
   const reserveMib = ctx.target.config.ramBudgetMib - 100;
 
   const admitted = ctx.target.governor.admit({
@@ -934,7 +908,6 @@ test('it undoes the mark, keeps the leases and runs the imp when an expose lands
 
   await writeLease(ctx.source.db, job, { at: sourceNow, reason: null });
 
-  // the expose lands while the halt's stop is held, after prepare's own check
   const halt = ctx.source.fake.hold('stop');
   const prepared = ctx.sourceApp.client.moves.prepare({ name: 'dev', stop: true, force: true });
 
@@ -964,7 +937,6 @@ test('it refuses at the offer an imp with more leases than a move carries, and r
 
   const sourceNow = ctx.source.now();
 
-  // 1025 holds, one past the most a move carries; a forced stop keeps holds
   const holds = Array.from({ length: 1025 }, (_unused, index) =>
     buildMockLeaseRecord({
       impId: created.id,

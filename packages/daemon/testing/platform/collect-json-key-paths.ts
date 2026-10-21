@@ -1,6 +1,3 @@
-// Every key path in a JSON value, sorted: `a`, `a.b`, and `a[]` for an
-// array's items, so `a[].b` for a key of an item. A fixture's paths show
-// which fields it sets.
 export function collectJsonKeyPaths(value: unknown, prefix = ''): string[] {
   const paths = new Set<string>();
 

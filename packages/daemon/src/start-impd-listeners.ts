@@ -34,20 +34,14 @@ export interface ImpdListenerParts {
   readonly dnsToken: DnsToken | null;
   readonly readTailscale: () => Promise<TailscaleStatus>;
   readonly tailnetNames: TailnetNames | null;
-
-  // where the wake proxy goes once it is up, for the imps' writes
   readonly proxyHolder: { proxy: WakeProxy | null };
 }
 
-// how createImpd runs a step, and the stop plan each opened port goes on
 interface ImpdListenerStartup {
   readonly runStep: RunImpdStartupStep;
   readonly plan: Pick<ImpdStopParts, 'api' | 'publicMcp' | 'proxy' | 'https' | 'ssh'>;
 }
 
-// Every port impd serves, each opened in its own startup step: the API,
-// the public MCP route, the wake proxy, HTTPS, the broker and SSH. A part
-// the config leaves off is null.
 export async function startImpdListeners(
   config: Config,
   deps: Readonly<ImpdDeps>,
@@ -88,7 +82,6 @@ export async function startImpdListeners(
 
   plan.api = { stop: api.stop };
 
-  // off unless the operator names the route's origin
   const publicMcp = runStep('public-mcp', () =>
     config.publicMcp === null
       ? null
@@ -141,7 +134,7 @@ export async function startImpdListeners(
     return service;
   });
 
-  // in the background: an API or tailscaled outage never holds up impd
+  // not awaited, so a Tailscale API or tailscaled outage never holds up impd
   runStep('tailnet-names', () => {
     void parts.tailnetNames?.runSync();
   });

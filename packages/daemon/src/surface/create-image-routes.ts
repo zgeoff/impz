@@ -7,7 +7,6 @@ import type { AuditDetail, RpcContext, RpcImplementer } from './create-implement
 import type { RouterDeps } from './create-router';
 import { toApiImage } from './to-api-image';
 
-// `images.*`: pulls, builds and templates
 export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
   return {
     list: os.images.list.handler(async () => {
@@ -15,13 +14,10 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
 
       return images.map((image) => toApiImage(image));
     }),
-
-    // a client that goes, or whose token ends, ends a pull and its builder
     add: os.images.add.handler(async (context) => {
       const input = context.input;
       const signal = mergeSignals(context.signal, context.context.ends);
 
-      // the reference the pull resolved goes in the audit row
       const onResolved = (reference: string): void => {
         context.context.auditDetail.value = reference;
       };
@@ -37,15 +33,12 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
       const input = context.input;
       const firstPhase = 'imp' in input ? 'copy' : 'pull';
 
-      // the reference the pull resolved goes in the audit row, as for add
       const onResolved = (reference: string): void => {
         context.context.auditDetail.value = reference;
       };
 
       return runImageOp(
         async (signal, report) => {
-          // a template copies an imp's disk under its lock: no client
-          // stops it, as with images.add
           const image =
             'imp' in input
               ? await deps.templates.createTemplate(input.imp, input.name)
@@ -80,8 +73,6 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
     ),
     builds: os.images.builds.handler(() => deps.images.listBuildRuns()),
     build: os.images.build.handler(async (context) => {
-      // a client that goes stops the build on the engine, which may run
-      // past any fetch limit
       const image = await deps.images.runImageBuild(
         context.input.contextDir,
         context.input.name,
@@ -99,15 +90,12 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
   };
 }
 
-// what a streamed image call's options are made from
 interface ImageOpCall {
   readonly context: RpcContext & { readonly auditDetail: Readonly<AuditDetail> };
   readonly input: unknown;
   readonly signal?: AbortSignal | undefined;
 }
 
-// A streamed image call audits itself as its work ends, so the row holds
-// the outcome rather than the stream's opening (access-policy.ts)
 function buildImageOpOptions(
   deps: RouterDeps,
   call: Readonly<ImageOpCall>,

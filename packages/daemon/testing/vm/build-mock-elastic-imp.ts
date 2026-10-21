@@ -2,8 +2,6 @@ import { faker } from '@faker-js/faker';
 import type { ElasticImp } from '../../src/vm/memory/memory-controller';
 import { buildImpPaths } from '../../src/vm/storage/data-layout';
 
-// A running imp that may grow, as the memory controller lists it: its paths
-// follow its id under /data, and its max is twice its memory.
 export function buildMockElasticImp(overrides: Partial<ElasticImp> = {}): ElasticImp {
   const id = overrides.id ?? faker.string.alphanumeric({ length: 12, casing: 'lower' });
   const memoryMib = overrides.memoryMib ?? faker.helpers.arrayElement([256, 512, 1024]);

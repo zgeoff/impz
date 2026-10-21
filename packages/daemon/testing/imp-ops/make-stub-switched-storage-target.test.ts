@@ -4,7 +4,6 @@ import { buildTicketHeader } from '../../src/imp-ops/moves/move-tickets';
 import { SOURCE_PEER, TARGET_URL, setupMoveHosts } from './create-move-hosts';
 import { makeStubSwitchedStorageTarget } from './make-stub-switched-storage-target';
 
-// a real target to answer the stub's forwards
 function setupTest() {
   return setupMoveHosts();
 }

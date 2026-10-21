@@ -1,27 +1,17 @@
-// A sign-in started on the public MCP route, as a browser starts one: the
-// client's authorize request, then the login page better-auth sends it to.
-// Throws, naming the step, when either goes another way.
-
 // RFC 7636's example verifier and its S256 challenge
 export const PKCE_VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
 const PKCE_CHALLENGE = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
 
 export interface SignInRoute {
-  // the route's handler, as the listener calls it
   readonly respond: (request: Request) => Promise<Response>;
   readonly origin: string;
   readonly clientID: string;
   readonly redirectURI: string;
-
-  // as the client asks for it, such as `read exec`
   readonly scope: string;
 }
 
 interface PendingSignIn {
-  // what `impz oauth approve` takes, as the page shows it
   readonly code: string;
-
-  // the signed query the login page's form posts back
   readonly oauthQuery: string;
 }
 

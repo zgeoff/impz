@@ -14,14 +14,9 @@ export interface SessionRouteDeps {
   readonly tokens: TokenStore;
   readonly rootToken: string;
   readonly now: () => number;
-
-  // after a logout: the dashboard's event streams end
   readonly onLogout?: () => void;
 }
 
-// POST /auth/login with {"token": "…"} sets a session cookie with that
-// token's scope; POST /auth/logout clears it. Both only from impd's own
-// origin, so no other page logs a browser in with its token, or out.
 export function createSessionRoutes(deps: Readonly<SessionRouteDeps>) {
   return {
     login: async (request: Request): Promise<Response> => {
@@ -74,9 +69,9 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
-// A TLS front such as tailscale serve says so in x-forwarded-proto. Any
-// client can send that header, so it only adds Secure to the cookie and must
-// never decide what a request may do.
+// A TLS front such as tailscale serve sets x-forwarded-proto, but any client
+// can send that header, so it only adds Secure to the cookie and never
+// decides what a request may do.
 function isSecure(request: Request): boolean {
   return (
     new URL(request.url).protocol === 'https:' ||

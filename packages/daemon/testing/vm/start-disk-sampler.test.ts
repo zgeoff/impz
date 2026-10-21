@@ -110,8 +110,6 @@ test('it refuses a fill over a file it did not make, and keeps that file', async
   const sampler = await startDiskSampler(ctx.mount, taken);
 
   const stats = statfsSync(ctx.mount);
-
-  // a fill of about 64 MiB, were the path free
   const filling = sampler.fill(1024 ** 2, stats.bavail * stats.bsize - 64 * 1024 ** 2);
 
   await filling.catch(() => {});
@@ -128,8 +126,6 @@ test('it refuses a fill over a file it did not make, and keeps that file', async
 
 test('it fails a fill whose fallocate fails, with its stderr', async () => {
   const ctx = await setupTest();
-
-  // a filler in a directory that is not there, so fallocate cannot make it
   const sampler = await startDiskSampler(ctx.mount, join(ctx.mount, 'missing', 'filler'));
 
   const stats = statfsSync(ctx.mount);
@@ -144,9 +140,6 @@ test('it fails a fill whose fallocate fails, with its stderr', async () => {
 
 test('it removes its filler when the test ends', async () => {
   const ctx = await setupTest();
-
-  // the filler's own directory, which setupTest's cleanup of the mount does
-  // not reach before the check below
   const fillers = await mkdtemp(join('/dev/shm', 'disk-sampler-fillers-'));
   const sampler = await startDiskSampler(ctx.mount, join(fillers, 'filler'));
 
@@ -154,9 +147,8 @@ test('it removes its filler when the test ends', async () => {
 
   await sampler.fill(1024 ** 2, stats.bavail * stats.bsize - 8 * 1024 ** 2);
 
-  // registered after fill's own removal, so it runs once that has; one hook
-  // reads, removes the directory, then checks, because on Bun 1.4.2 a hook
-  // that throws skips the hooks after it and would leak the directory
+  // On Bun 1.4.2 a hook that throws skips the hooks after it, so one hook
+  // reads, removes the directory, then checks, and never leaks it.
   onTestFinished(async () => {
     const left = await readdir(fillers);
 

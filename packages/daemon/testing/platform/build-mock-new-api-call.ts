@@ -1,8 +1,6 @@
 import { faker } from '@faker-js/faker';
 import type { NewApiCall } from '../../src/platform/db/api-audit';
 
-// An API call as writeApiCall takes it: a token's call that named an
-// arbitrary imp and went through, with no detail, at an arbitrary recent time.
 export function buildMockNewApiCall(overrides: Partial<NewApiCall> = {}): NewApiCall {
   return {
     at: faker.date.recent(),

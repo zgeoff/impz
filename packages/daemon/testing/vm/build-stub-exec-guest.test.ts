@@ -220,7 +220,6 @@ test('it emits nothing for wait while the wait runs', async () => {
 
   const first = waiting.events().next();
 
-  // a full read of another stream lets any event already queued for wait through
   await Array.fromAsync(echoing.events());
 
   expect(Bun.peek.status(first)).toBe('pending');

@@ -5,9 +5,6 @@ type StreamFields = Pick<
   'pid' | 'session' | 'created' | 'groupKill' | 'output' | 'stdinDrained'
 >;
 
-// The agent's exec stream as an `/exec` session reads it, fed by the test.
-// `drop` is a lost agent connection; `close` destroys it as the real one
-// does. `input` records each call made on it.
 export function buildStubAgentExecStream(fields: Partial<StreamFields> = {}) {
   const queue: ExecEvent[] = [];
   const input: string[] = [];
@@ -19,7 +16,6 @@ export function buildStubAgentExecStream(fields: Partial<StreamFields> = {}) {
     waiting.wake = null;
   };
 
-  // a pending read ends once it has read the events fed before
   const stopConnection = (): void => {
     connection.ended = true;
 
@@ -76,7 +72,6 @@ export function buildStubAgentExecStream(fields: Partial<StreamFields> = {}) {
     stream,
     input,
 
-    // an event fed once the connection ended never arrives
     emitEvent: (event: ExecEvent): void => {
       if (!connection.ended) {
         queue.push(event);
@@ -88,7 +83,6 @@ export function buildStubAgentExecStream(fields: Partial<StreamFields> = {}) {
   };
 }
 
-// the events up to an exit or a detached; null ends them without one
 async function* readEvents(
   readNext: () => Promise<ExecEvent | null>,
 ): AsyncGenerator<ExecEvent, void, undefined> {

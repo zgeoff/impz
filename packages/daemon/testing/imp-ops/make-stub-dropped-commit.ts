@@ -2,16 +2,10 @@ import { MOVE_PATHS } from '../../src/imp-ops/moves/move-header';
 import type { FetchHook } from './create-move-hosts';
 
 interface DroppedCommitOptions {
-  // how many commits the network drops before it lets one through
   readonly count?: number;
-
-  // `request`: the commit never reaches the target; `answer`: the target
-  // commits, and its answer never reaches the source
   readonly drops?: 'request' | 'answer';
 }
 
-// A network that drops the first commits of a move, as a cut connection
-// would: the source's fetch rejects. Every other request goes as sent.
 export function makeStubDroppedCommit(options: Readonly<DroppedCommitOptions> = {}): FetchHook {
   const left = { count: options.count ?? 1 };
   const drops = options.drops ?? 'request';

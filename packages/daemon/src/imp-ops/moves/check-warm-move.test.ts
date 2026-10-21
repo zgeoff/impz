@@ -27,7 +27,6 @@ import {
   MoveOfferReplySchema,
 } from './move-header';
 
-// Two impds, each with the image a create reads
 async function setupTest(
   config: Pick<
     MoveHostsOptions,
@@ -45,7 +44,6 @@ async function setupTest(
 test('it moves a sleeping imp with its memory into its own slot', async () => {
   const ctx = await setupTest({ isShared: true });
 
-  // slot 0 goes to another imp, so the target's lowest free slot is not dev's
   await ctx.sourceApp.client.imps.create({ name: 'first', image: 'ubuntu' });
 
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
@@ -81,7 +79,6 @@ test('it sends the sessions and services of a warm move in the form an older imp
   const ctx = await setupTest({
     isShared: true,
 
-    // passes the stream on as sent, and keeps its header's JSON
     hook: makeStubMoveStreamRewrite((frames) => {
       const header = frames.find((frame) => frame.type === MOVE_FRAMES.header);
 
@@ -127,8 +124,6 @@ test('it sends the sessions and services of a warm move in the form an older imp
 
   await ctx.runMove('dev');
 
-  // the sessions and services as the impd before the protobuf agent
-  // protocol parsed them, which drops the fields it does not name
   const OlderSessionSchema = z.object({
     name: z.string(),
     pid: z.int(),
@@ -250,13 +245,11 @@ test('it lets the first wake on the target hold the memory an elastic imp had pl
   expect(lastLimit).toStrictEqual({ impId: created.id, guestMib: 768 });
 });
 
-// The target's Firecracker runs as the uid the target gives the imp, never
-// the source's (docs/architecture/isolation.md#the-jailer)
 test("it gives a jailed imp moved warm the target's own jail uid", async () => {
   const ctx = await setupTest({
     isShared: true,
 
-    // both hosts run every VM under the jailer, which needs a cgroup per VM
+    // The jailer needs a cgroup per VM.
     source: {
       cgroups: buildStubCpuCgroups({ isMemoryEnforced: true }).cgroups,
       env: { IMP_JAILER: 'true' },
@@ -271,7 +264,6 @@ test("it gives a jailed imp moved warm the target's own jail uid", async () => {
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
-  // the source's first imp holds the first uid, so dev's there is the next
   const before = await readImpByName(ctx.source.db, 'dev');
 
   await ctx.runMove('dev');
@@ -282,13 +274,10 @@ test("it gives a jailed imp moved warm the target's own jail uid", async () => {
   expect(moved?.jailUid).toBe(JAIL_UIDS.first);
 });
 
-// The wake's jail prepare chowns the disk and the snapshot to the imp's uid,
-// so they must be in place by then
 test('it wakes a jailed imp moved warm as its jail uid, with its files in place', async () => {
   const ctx = await setupTest({
     isShared: true,
 
-    // both hosts run every VM under the jailer, which needs a cgroup per VM
     source: {
       cgroups: buildStubCpuCgroups({ isMemoryEnforced: true }).cgroups,
       env: { IMP_JAILER: 'true' },
@@ -417,7 +406,6 @@ test('it refuses a commit with the memory snapshot incomplete, and the source ke
   const ctx = await setupTest({
     isShared: true,
 
-    // the target's snapshot record goes missing just before the commit
     hook: (request, forward) => {
       if (new URL(request.url).pathname === MOVE_PATHS.commit && state.metaPath !== null) {
         rmSync(state.metaPath, { force: true });
@@ -447,7 +435,6 @@ test('it refuses a warm stream whose header names another slot than its ticket k
   const ctx = await setupTest({
     isShared: true,
 
-    // a faulty source: the header's slot is one past the slot it was offered
     hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
@@ -481,7 +468,6 @@ test('it refuses a cold stream on the ticket of a warm move', async () => {
   const ctx = await setupTest({
     isShared: true,
 
-    // a faulty source: the header drops the memory it was offered with
     hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
@@ -509,7 +495,6 @@ test('it refuses a warm stream whose header names facts the target does not shar
   const ctx = await setupTest({
     isShared: true,
 
-    // a faulty source: the header's CPU flags are not the ones it offered
     hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
@@ -547,7 +532,6 @@ test('it refuses a warm stream whose snapshot record the target cannot load', as
   const ctx = await setupTest({
     isShared: true,
 
-    // a faulty source: the snapshot record names a kernel the move facts do not
     hook: makeStubMoveStreamRewrite((frames) =>
       frames.map((frame) => {
         if (frame.type !== MOVE_FRAMES.header) {
@@ -626,7 +610,6 @@ test("it installs the target's broker CA once at the first wake after a warm mov
 
   await ctx.targetApp.client.imps.wake({ name: 'dev' });
 
-  // the wake itself does the install, so it is done when the wake returns
   const after = await ctx.target.db
     .selectFrom('imps')
     .select('trust_pending')
@@ -641,7 +624,6 @@ test('it refuses a system drive the target lacks whose sum is not its name', asy
   const ctx = await setupTest({
     isShared: true,
 
-    // in one process both hosts open one drive file: the target says it lacks it
     hook: async (request, forward) => {
       const response = await forward();
 
@@ -661,7 +643,6 @@ test('it refuses a system drive the target lacks whose sum is not its name', asy
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
-  // the test drive's bytes are not the data its name hashes
   const status = await ctx.runMove('dev');
   const staged = await readImpByName(ctx.target.db, 'dev');
   const isFree = await probeSlotFree(ctx.target.db, created.slot, ctx.target.now());
@@ -679,7 +660,6 @@ test("it refuses a snapshot that opens a drive off the target's own path, and fr
   const ctx = await setupTest({
     isShared: true,
 
-    // the source's abort never arrives: the refusal alone frees the slot
     hook: async (request, forward) => {
       if (request.url.endsWith(MOVE_PATHS.abort)) {
         throw new Error('the source is gone');
@@ -687,7 +667,6 @@ test("it refuses a snapshot that opens a drive off the target's own path, and fr
 
       const response = await forward();
 
-      // what the target answered the stream with, as the source read it
       if (request.url.endsWith(MOVE_PATHS.receive) && !response.ok) {
         const body = await response.clone().text();
 
@@ -723,7 +702,6 @@ test('it commits a warm move whose commit was lost on resume, with a reissued ti
   const ctx = await setupTest({
     isShared: true,
 
-    // the network drops the first commit
     hook: (request, forward) => {
       if (request.url.endsWith(MOVE_PATHS.commit) && lost.commits > 0) {
         lost.commits -= 1;
@@ -759,7 +737,6 @@ test('it commits a verified warm move warm when the source restarts', async () =
   const ctx = await setupTest({
     isShared: true,
 
-    // the network drops the first commit
     hook: (request, forward) => {
       if (request.url.endsWith(MOVE_PATHS.commit) && lost.commits > 0) {
         lost.commits -= 1;
@@ -791,7 +768,6 @@ test('it frees the slot and removes the memory on the target on an abort after t
   const ctx = await setupTest({
     isShared: true,
 
-    // the network drops every commit
     hook: (request, forward) =>
       request.url.endsWith(MOVE_PATHS.commit)
         ? Promise.reject(new Error('the network dropped the commit'))
@@ -816,7 +792,6 @@ test('it leaves the imp asleep on the source to wake there after an abort after 
   const ctx = await setupTest({
     isShared: true,
 
-    // the network drops every commit
     hook: (request, forward) =>
       request.url.endsWith(MOVE_PATHS.commit)
         ? Promise.reject(new Error('the network dropped the commit'))
@@ -838,8 +813,6 @@ test('it removes the memory and frees the slot of a warm stream cut short with n
     isShared: true,
     partBytes: 4096,
 
-    // the source goes quiet past the gap after the first part, and its
-    // abort never arrives
     hook: (request, forward, hosts) => {
       if (request.url.endsWith(MOVE_PATHS.abort)) {
         return Promise.reject(new Error('the source is gone'));
@@ -857,14 +830,12 @@ test('it removes the memory and frees the slot of a warm stream cut short with n
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
-  // a disk of many parts
   writeFileSync(ctx.source.storage.resolveImpPaths(created.id).disk, 'x'.repeat(64 * 1024));
 
   const status = await ctx.runMove('dev');
   const staged = await readImpByName(ctx.target.db, 'dev');
   const isFree = await probeSlotFree(ctx.target.db, created.slot, ctx.target.now());
 
-  // the target ended the stream on its own; the source still owes the abort
   expect(status.error).toInclude('did not confirm the abort');
   expect(staged).toBeUndefined();
   expect(isFree).toBe(true);
@@ -1009,9 +980,6 @@ test("it adds no cold boot when the target records the carried boot as a memory 
 
   await ctx.runMove('dev');
 
-  // the write a memory wake makes when the agent reports the boot the guest
-  // slept in; the stub VMM keeps boot ids per host, so a wake on the target
-  // cannot report the source's
   await writeUnknownBoot(ctx.target.db, created.id, slept.bootId, new Date());
 
   const after = await listColdBoots(ctx.target.db, created.id);
@@ -1022,8 +990,6 @@ test("it adds no cold boot when the target records the carried boot as a memory 
 test('it boots a warm-moved imp cold with the cause wake_fallback when its memory cannot load', async () => {
   const ctx = await setupTest({ isShared: true });
 
-  // each stub VMM numbers its VMs from one, and a boot id follows the
-  // number: another imp first keeps dev's boot ids apart on the two hosts
   await ctx.sourceApp.client.imps.create({ name: 'first', image: 'ubuntu' });
 
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });

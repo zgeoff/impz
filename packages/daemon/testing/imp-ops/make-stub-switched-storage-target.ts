@@ -1,9 +1,6 @@
 import { MOVE_PATHS, MoveOfferReplySchema } from '../../src/imp-ops/moves/move-header';
 import type { FetchHook } from './create-move-hosts';
 
-// A target whose storage changed between the prepare and the send, as a
-// host moved to another backend would: its offer reply names `storage`.
-// Every other request's answer goes as the target sent it.
 export function makeStubSwitchedStorageTarget(storage: 'xfs' | 'zfs'): FetchHook {
   return async (request, forward) => {
     const response = await forward();

@@ -23,7 +23,6 @@ async function setupTest() {
 test('#imps.setPolicy refuses a builder', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -47,7 +46,6 @@ test('#imps.setPolicy refuses a builder', async () => {
 test('#exec.ticket refuses a builder', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -68,7 +66,6 @@ test('#exec.ticket refuses a builder', async () => {
 test('#imps.fork refuses a builder as its source', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -89,7 +86,6 @@ test('#imps.fork refuses a builder as its source', async () => {
 test('#imps.stop refuses a builder', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -110,7 +106,6 @@ test('#imps.stop refuses a builder', async () => {
 test('#checkpoints.create refuses a builder', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -131,7 +126,6 @@ test('#checkpoints.create refuses a builder', async () => {
 test('#images.add refuses a template of a builder', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -152,7 +146,6 @@ test('#images.add refuses a template of a builder', async () => {
 test('#moves.prepare refuses a builder', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -173,7 +166,6 @@ test('#moves.prepare refuses a builder', async () => {
 test('#imps.list leaves out a builder unless the caller asks for builders', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -192,7 +184,6 @@ test('#imps.list leaves out a builder unless the caller asks for builders', asyn
 test('#imps.list lists a builder when the caller asks for builders', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -214,7 +205,6 @@ test('#imps.list lists a builder when the caller asks for builders', async () =>
 test('#imps.get shows a builder by its name as a builder', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(
@@ -232,7 +222,6 @@ test('#imps.get shows a builder by its name as a builder', async () => {
 test('#imps.destroy removes a builder', async () => {
   const ctx = await setupTest();
 
-  // a rootfs of the image's size, at the path its digest names
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
 
   await createImage(

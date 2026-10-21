@@ -20,25 +20,18 @@ import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { LoginKeys } from './login-keys';
 
-// How long and how often the gateway waits on a client.
 export interface SshGatewayLimits {
-  // a client must log in within this time of connecting, or it is dropped
   readonly authTimeoutMs: number;
-
-  // at most this many connections waiting to log in; more are dropped at once
   readonly maxUnauthenticated: number;
-
-  // rejected logins before the connection is dropped
   readonly maxAuthFailures: number;
 
-  // a client that vanished without a FIN would keep its imp awake for good;
-  // after this many unanswered keepalives, this far apart, it is dropped
+  // A client that vanished without a FIN would keep its imp awake for good.
   readonly keepaliveIntervalMs: number;
   readonly keepaliveCountMax: number;
 }
 
 // OpenSSH's MaxAuthTries is 6; the keepalive drops a silent client after
-// about 45 s
+// about 45 s.
 export const DEFAULT_LIMITS: SshGatewayLimits = {
   authTimeoutMs: 30_000,
   maxUnauthenticated: 32,
@@ -51,48 +44,30 @@ export interface SshGatewayDeps {
   readonly hostKey: string;
   readonly keys: LoginKeys;
   readonly backend: SshBackend;
-
-  // aborts when the token or key with this id is removed; null for none
   readonly readRevocation: (id: string | null) => AbortSignal | null;
   readonly log: (message: string) => void;
-
-  // the defaults outside tests
   readonly limits?: Partial<SshGatewayLimits>;
-
-  // the auth timeout's timer, returning its cancel; setTimeout by default
   readonly startTimer?: StartTimer;
 }
 
 export interface SshGateway {
   readonly port: number;
-
-  // drops every connection and stops listening
   readonly stop: () => Promise<void>;
 }
 
-// a connection that has not logged in yet
 interface PendingSocket {
   readonly socket: Socket;
-
-  // cancels the auth timeout
   readonly cancelTimer: () => void;
 }
 
-// a full login with its imp and who it runs as, a key query to accept, or
-// a refusal
 type LoginOutcome = Login | 'query' | 'rejected';
 
 interface Login {
   readonly imp: ImpRecord;
   readonly caller: Caller;
-
-  // the bound key's id; null for a key in authorized_keys
   readonly keyId: string | null;
 }
 
-// The SSH gateway: `ssh <imp>@<host>` lands in the imp, waking it if needed.
-// impd accepts each TCP connection and hands it to ssh2, so the login limits
-// cover the handshake, and SSH_CONNECTION knows the local address.
 export async function startSshGateway(
   deps: SshGatewayDeps,
   port: number,
@@ -127,7 +102,6 @@ export async function startSshGateway(
         clients.delete(client);
       });
 
-      // a client that resets the connection or fails the handshake
       client.on('error', () => {
         client.end();
       });
@@ -201,7 +175,6 @@ function buildRemoteKey(ip: string, port: number): string {
   return `${ip} ${String(port)}`;
 }
 
-// Logs a client in and serves its channels.
 function handleClient(
   client: Connection,
   info: ClientInfo,
@@ -236,7 +209,7 @@ function handleClient(
       return;
     }
 
-    // ssh2 emits `ready` inside accept, so the login is set first
+    // ssh2 emits `ready` inside accept, so the login is set first.
     if (outcome !== 'query') {
       login.granted = outcome;
     }
@@ -265,9 +238,8 @@ function handleClient(
   });
 }
 
-// An unknown user, an unknown key and a key without `exec` on the imp get
-// one answer, so nobody can probe for imp names; a key query, whatever its
-// scope, is answered from the key alone. Nothing here wakes the imp.
+// An unknown user, an unknown key and a key without `exec` on the imp get one
+// answer, so nobody can probe for imp names.
 async function checkLogin(ctx: AuthContext, deps: SshGatewayDeps): Promise<LoginOutcome> {
   if (ctx.method !== 'publickey') {
     return 'rejected';
@@ -287,9 +259,9 @@ async function checkLogin(ctx: AuthContext, deps: SshGatewayDeps): Promise<Login
     return 'rejected';
   }
 
-  // Checked once, for the whole connection: every channel runs on this imp.
-  // That holds only because a token never changes (token-store.test.ts).
-  // Before the lookup, so the time taken shows nothing of which imps exist.
+  // Checked once for the whole connection, which holds only because a token
+  // never changes. Checked before the lookup, so the time taken shows nothing
+  // of which imps exist.
   if (!isCallerAllowed(found.caller, 'exec', ctx.username)) {
     return 'rejected';
   }
@@ -303,8 +275,6 @@ async function checkLogin(ctx: AuthContext, deps: SshGatewayDeps): Promise<Login
   return { imp, caller: found.caller, keyId: found.keyId };
 }
 
-// An authenticated connection counts as activity until it closes. It starts
-// the imp's wake at once, while the client still opens its channels.
 function handleLogin(
   client: Connection,
   granted: Login,
@@ -327,7 +297,6 @@ function handleLogin(
 
   const awake = wakeImp();
 
-  // a connection that opens no channel never awaits the wake
   const printWakeFailure = async (): Promise<void> => {
     try {
       await awake;
@@ -357,7 +326,6 @@ function handleLogin(
     log: deps.log,
   };
 
-  // the idle timeout counts from the end of the connection
   const updateLastActive = async (): Promise<void> => {
     await backend.recordActivity(imp.name).catch(() => null);
   };
@@ -385,8 +353,6 @@ function handleLogin(
     void handleForward(accept, reject, resolveSocketTarget(request.socketPath), context);
   });
 
-  // Remote forwards (`ssh -R`) listen in the guest, on its loopback. ssh2
-  // types this event for TCP; a unix socket request carries socketPath.
   client.on('request', (accept, reject, name, info) => {
     const request = readForwardRequest(name, info);
 
@@ -398,7 +364,8 @@ function handleLogin(
   });
 }
 
-// a global request as a remote forward: ssh2 passes either kind's fields
+// ssh2 types a global request's info for TCP, but a unix socket request
+// carries socketPath.
 function readForwardRequest(name: string, info: object): RemoteForwardRequest {
   if (name.includes('streamlocal')) {
     const socketPath: unknown = Reflect.get(info, 'socketPath');
@@ -420,7 +387,8 @@ function readIsCancel(name: string): boolean {
   return name.startsWith('cancel-');
 }
 
-// as sshd sets them: the client's address and port, then the server's
+// The variables as sshd sets them: the client's address and port, then the
+// server's.
 function buildSshEnv(info: ClientInfo, socket: Socket): readonly string[] {
   const client = `${info.ip} ${String(info.port)}`;
   const localPort = String(socket.localPort ?? 0);
@@ -431,8 +399,6 @@ function buildSshEnv(info: ClientInfo, socket: Socket): readonly string[] {
   ];
 }
 
-// Removing the token or the key behind a login ends the connection. One that
-// logged in just before the removal gets a signal that is aborted already.
 function handleRevocations(
   client: Connection,
   ids: readonly (string | null)[],

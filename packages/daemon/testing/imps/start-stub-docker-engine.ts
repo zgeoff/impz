@@ -6,39 +6,28 @@ import { z } from 'zod';
 import type { ContainerSchema as ProxyContainerSchema } from '../../src/imps/docker-proxy/proxy';
 import type { PinInspectSchema } from '../../src/imps/images/image-pin';
 
-// a container a test adds: its full ID, its labels, and what its export
-// streams (nothing by default)
 interface StubEngineContainer {
   readonly id: string;
   readonly labels: Readonly<Record<string, string>>;
   readonly exportBytes?: Uint8Array<ArrayBuffer>;
 }
 
-// one request as the engine got it
 interface StubEngineRequest {
   readonly method: string;
-
-  // the path and query, as sent
   readonly target: string;
   readonly headers: Readonly<Record<string, string>>;
   readonly body: Uint8Array;
-
-  // the client cut the body off before its end
   readonly isBodyCut: boolean;
 }
 
-// A test's own answer for one request, ahead of the engine's defaults;
-// null leaves the request to them. The request's body is read already.
+// The engine has read the request's body before it calls an answer.
 export type StubEngineAnswer = (
   request: Request,
   seen: StubEngineRequest,
 ) => Response | null | Promise<Response | null>;
 
 export interface StubDockerEngineOptions {
-  // a directory of the test's own, where the socket goes
   readonly directoryPath: string;
-
-  // the ID a build answers with
   readonly builtImageId?: string;
 }
 
@@ -46,20 +35,14 @@ export interface StubDockerEngineOptions {
 const API_VERSION = '1.55';
 const CONTAINER_PATH = /^\/containers\/(?<id>[^\/]+)(?<rest>\/json|\/export)?$/v;
 const IMAGE_PATH = /^\/images\/(?<name>.+)\/json$/v;
-
-// the part of POST /containers/create the engine keeps
 const CreateBodySchema = z.object({ Labels: z.record(z.string(), z.string()).nullish() });
 
-// a container the engine holds: its full ID, the labels of its create, and
-// the bytes GET /containers/<id>/export streams
 const ContainerSchema = z.object({
   id: z.string().default(buildEngineId),
   labels: z.record(z.string(), z.string()).default({}),
   exportBytes: z.instanceof(Uint8Array).default(() => new Uint8Array()),
 });
 
-// an image the engine holds, by one reference in its normalised form,
-// `docker.io/library/name:tag` or `<repository>@<digest>`
 const ImageSchema = z.object({
   ref: z
     .string()
@@ -69,9 +52,6 @@ const ImageSchema = z.object({
   id: z.string().default(() => `sha256:${buildEngineId()}`),
 });
 
-// The Docker engine API on a unix socket in `dir`, as impd and
-// imp-docker-proxy call it, over schema-backed collections; a call it does
-// not model gets a 500 that names it. It stops when the test ends.
 export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>) {
   const socket = join(options.directoryPath, 'engine.sock');
   const seen: StubEngineRequest[] = [];
@@ -120,7 +100,6 @@ export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>
     const familiar = toFamiliarRef(image.ref);
     const isDigest = familiar.includes('@');
 
-    // the fields impd and the proxy read, as the engine sends them
     const inspect = {
       Id: image.id,
       RepoTags: isDigest ? [] : [familiar],
@@ -238,7 +217,6 @@ export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>
     fetch: handleRequest,
   });
 
-  // the first stop closes the engine; a later one waits on the same close
   const stopping: { done: Promise<void> | null } = { done: null };
 
   const stop = (): Promise<void> => {
@@ -250,23 +228,16 @@ export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>
   onTestFinished(stop);
 
   return {
-    // DOCKER_HOST for this engine
     dockerHost: `unix://${socket}`,
     socket,
     seen,
-
-    // each call the engine does not model, as `<method> <path>`
     unexpected,
-
-    // a container as if created earlier, with these labels
     addContainer: (container: Readonly<StubEngineContainer>) =>
       containers.create({
         id: container.id,
         labels: { ...container.labels },
         exportBytes: container.exportBytes ?? new Uint8Array(),
       }),
-
-    // an image the engine has, as `name:tag` or `name@digest`
     addImage: (ref?: string) => {
       const record = ref === undefined ? {} : { ref: normalizeImageRef(ref) };
 
@@ -276,8 +247,6 @@ export function startStubDockerEngine(options: Readonly<StubDockerEngineOptions>
       containers.findFirst((query) => query.where({ id })) !== undefined,
     hasImage: (ref: string) =>
       images.findFirst((query) => query.where({ ref: normalizeImageRef(ref) })) !== undefined,
-
-    // the test's own answers, ahead of the defaults
     setAnswer: (answer: StubEngineAnswer | null) => {
       state.answer = answer;
     },
@@ -289,14 +258,12 @@ function buildEngineId(): string {
   return faker.string.hexadecimal({ length: 64, casing: 'lower', prefix: '' });
 }
 
-// the engine's error body, as every refused or missing call carries it
 function buildError(status: number, message: string): Response {
   return Response.json({ message }, { status });
 }
 
-// What a reference names, as the engine's reference parser reads it: a
-// name with no registry is on docker.io, a one-part docker.io name is in
-// library/, and a name with neither tag nor digest takes `latest`.
+// Docker's reference parser puts a name with no registry on docker.io and a one-part
+// docker.io name in library/, and gives a name with neither tag nor digest `latest`.
 function normalizeImageRef(ref: string): string {
   const [named = '', digest] = ref.split('@');
   const slash = named.lastIndexOf('/');
@@ -316,8 +283,7 @@ function normalizeImageRef(ref: string): string {
   return digest === undefined ? `${full}:${tag}` : `${full}@${digest}`;
 }
 
-// a normalised reference as the engine shows it in RepoTags and
-// RepoDigests: docker.io/library/ and docker.io/ left off
+// the engine leaves docker.io/library/ and docker.io/ off RepoTags and RepoDigests
 function toFamiliarRef(ref: string): string {
   return ref.replace(/^docker\.io\/(?:library\/)?/v, '');
 }

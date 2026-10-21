@@ -125,7 +125,7 @@ test('it reads a dropped UDP query and sends nothing back', async () => {
     expect(upstream.queries).toHaveLength(1);
   });
 
-  // a datagram to itself: the socket reads it after any reply already sent
+  // A loopback datagram to itself arrives after any reply already sent.
   client.send('fence', client.port, '127.0.0.1');
 
   await waitFor(() => {
@@ -300,7 +300,7 @@ test('it frees its port when the test that started it finishes', async () => {
 
   await startStubDnsUpstream({ port });
 
-  // runs after the stand-in's own release: both sockets bind its port again
+  // Bun runs this after the stand-in's own cleanup, which registered first.
   onTestFinished(async () => {
     const udp = await Bun.udpSocket({ hostname: '127.0.0.1', port });
 

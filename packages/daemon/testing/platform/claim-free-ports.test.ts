@@ -168,8 +168,7 @@ test('it never hands two pickers in separate processes the same port', async () 
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  // ports past 65535, which no socket can hold, and the pid keeps other
-  // runs' claims off; both pickers try them in this order
+  // past 65535 no socket can hold them; the pid keeps other runs' claims off them
   const sequence = [0, 1, 2, 3].map((offset) => 65_536 + process.pid * 4 + offset);
 
   await writeFile(

@@ -95,7 +95,6 @@ test('#createPartPipe keeps waiting for the next part until its deadline passes'
     expect(timer.countPending()).toBe(1);
   });
 
-  // at the deadline, not past it: the pipe waits on
   timer.runFor(20);
 
   await waitFor(() => {

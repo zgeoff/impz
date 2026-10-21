@@ -11,9 +11,6 @@ interface MoveLeasesDeps {
   readonly log: (message: string) => void;
 }
 
-// The imp's live leases, each with the time it has left now: the target
-// ends it that long after it reads the header. The mark keeps every lease
-// call off the imp until the commit, so the rows here stay as sent.
 export async function readMovedLeases(
   deps: MoveLeasesDeps,
   imp: ImpRecord,
@@ -25,7 +22,6 @@ export async function readMovedLeases(
   return leases.map((lease) => {
     const remainingMs = lease.until === null ? null : lease.until.getTime() - at;
 
-    // a hold past what a header carries ends at the cap on the target
     if (remainingMs !== null && remainingMs > MAX_LEASE_REMAINING_MS) {
       deps.log(
         `impd: move: ${imp.name}: lease ${lease.principal} ${lease.label} ends past 100 years; it moves with 100 years left`,
@@ -42,8 +38,6 @@ export async function readMovedLeases(
   });
 }
 
-// Any live lease, a hold too, goes only to a target that keeps leases,
-// and only as many as a header carries
 export async function requireLeasesKept(
   deps: Pick<MoveLeasesDeps, 'db' | 'now'>,
   imp: ImpRecord,
@@ -63,7 +57,6 @@ export async function requireLeasesKept(
     );
   }
 
-  // the target would refuse the header after the stream started
   const unfit = leases.find((lease) => !MovedLeaseOwnerSchema.safeParse(lease).success);
 
   if (unfit !== undefined) {
@@ -73,8 +66,6 @@ export async function requireLeasesKept(
   }
 }
 
-// The leases as of the header, less any that ended while the disk came.
-// An older source sends none: the imp arrives unleased.
 export async function writeReceivedLeases(
   deps: MoveLeasesDeps,
   header: MoveHeader,

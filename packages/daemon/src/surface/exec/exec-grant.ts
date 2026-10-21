@@ -5,13 +5,10 @@ import { toCallerError } from '../../identity/auth/caller-view';
 import type { ExecBackend } from '../../imps/exec/exec-session';
 import { buildForbiddenError } from '../api-errors';
 
-// What an `/exec` socket may start: its caller, and a ticket's one imp. Each
-// start checks the scope, so a client reads FORBIDDEN on the socket, not a
-// refused upgrade it cannot read. No grant starts nothing.
+// Each start checks the scope, so a client reads FORBIDDEN on the socket
+// instead of a refused upgrade it cannot read.
 export interface ExecGrant {
   readonly caller: Caller;
-
-  // the ticket's imp; null for a bearer token or a tailnet identity
   readonly name: string | null;
 }
 
@@ -49,7 +46,6 @@ export function buildGrantedBackend(
     return null;
   };
 
-  // a refusal to boot names only the imps the caller may read
   const openAsCaller = async <T>(opening: Promise<T>): Promise<T> => {
     try {
       return await opening;
@@ -59,9 +55,8 @@ export function buildGrantedBackend(
   };
 
   return {
-    // A tool runs as root, which `exec` scope must not reach (a forward runs
-    // as the image user), so it needs `manage`; a ticket never starts one.
-    // An outer exec, whatever its feature, needs host-wide `manage`.
+    // A tool runs as root, which `exec` scope must not reach, so it needs
+    // `manage`, and a ticket never starts one.
     openExec: (name, request, feature) => {
       const refused = checkGrant(name) ?? (request.outer === true ? checkOuter() : null);
 

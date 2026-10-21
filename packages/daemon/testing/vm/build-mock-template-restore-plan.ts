@@ -7,9 +7,6 @@ type TemplateRestorePlanOverrides = Partial<Omit<TemplateRestorePlan, 'paths' | 
   readonly claim?: Partial<TemplateRestorePlan['claim']>;
 };
 
-// One imp's restore of a template: unjailed, outside any cgroup, its disk
-// ready at once. Its paths follow its imp id, its disk path its paths, and
-// the claim's id the imp's; `paths` and `claim` overrides merge into those.
 export function buildMockTemplateRestorePlan(
   overrides: TemplateRestorePlanOverrides = {},
 ): TemplateRestorePlan {

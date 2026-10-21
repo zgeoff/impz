@@ -244,7 +244,6 @@ test('it refuses an add with UNKNOWN_OP as an agent from before the services API
 
   await startStubServiceAgent(ctx.vsockPath, { knowsServices: false });
 
-  // the client reads the agent's UNKNOWN_OP as an outdated agent
   expect(
     sendServicesAdd(ctx.vsockPath, { name: 'web', argv: ['httpd'] }, false),
   ).rejects.toMatchObject({ code: 'AGENT_OUTDATED' });

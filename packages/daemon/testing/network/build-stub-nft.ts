@@ -18,19 +18,13 @@ interface Hold {
 }
 
 interface RefuseOptions {
-  // nft's first line of stderr, as runNft reports it
   readonly reason: string;
-
-  // the scripts refused; every one by default
   readonly match?: (script: string) => boolean;
-
-  // how many it refuses before it takes them again; no end by default
   readonly times?: number;
 }
 
-// `nft -f -` in memory. A script is one transaction: one it takes is
-// recorded whole; one it refuses rejects as runNft does and changes nothing.
-// A test picks each fault itself.
+// `nft -f` applies a script as one transaction, so a refused script changes
+// nothing.
 export function buildStubNft() {
   const scripts: string[] = [];
   const runs: NftRun[] = [];
@@ -62,14 +56,8 @@ export function buildStubNft() {
 
   return {
     runNft,
-
-    // every script nft took, in order
     scripts: scripts as readonly string[],
-
-    // every script it was given, in order, and whether it took it
     runs: runs as readonly NftRun[],
-
-    // the last whole table nft took, or null before the first
     readTable: (): string | null =>
       scripts.findLast((script) => script.startsWith('table inet imp_egress {}\n')) ?? null,
 
@@ -81,13 +69,10 @@ export function buildStubNft() {
       });
     },
 
-    // takes every script again
     accept: (): void => {
       refusals.length = 0;
     },
 
-    // the next script `match` picks waits, before nft takes or refuses it,
-    // until the test releases it; `reached` resolves with that script
     hold: (match: (script: string) => boolean) => {
       const hold: Hold = {
         match,

@@ -9,8 +9,6 @@ interface MoveAbortDeps {
   readonly fetch?: (request: Request) => Promise<Response>;
 }
 
-// The target's answer to an abort. Before the receipt it cannot have
-// committed, so a ticket it no longer knows means it holds nothing.
 export async function sendMoveAbort(
   deps: MoveAbortDeps,
   imp: ImpRecord,

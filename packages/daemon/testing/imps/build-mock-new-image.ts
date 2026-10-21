@@ -1,8 +1,6 @@
 import { faker } from '@faker-js/faker';
 import type { NewImage } from '../../src/platform/db/images';
 
-// An image as createImage takes it: a docker image with an arbitrary name,
-// reference, digest and size.
 export function buildMockNewImage(overrides: Partial<NewImage> = {}): NewImage {
   return {
     name: faker.string.alphanumeric({ length: 12, casing: 'lower' }),

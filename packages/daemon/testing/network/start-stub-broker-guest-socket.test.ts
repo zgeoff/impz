@@ -8,8 +8,6 @@ function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  // the broker's front port: it hands over the first connection and the
-  // first bytes that arrive on it
   const accepted = Promise.withResolvers<Socket>();
   const received = Promise.withResolvers<string>();
 

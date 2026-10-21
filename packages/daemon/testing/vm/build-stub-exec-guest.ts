@@ -5,28 +5,19 @@ import type {
 } from '../../src/vm/agent-client/exec-stream';
 
 interface StubExecGuestOptions {
-  // the agent predates the group kill (protocol 0.8.0)
   readonly oldAgent?: boolean;
 
-  // waits out a `wait N` command
   readonly wait?: (durationMs: number) => Promise<void>;
 }
 
-// An imp's guest agent for the fake VMs, by argv: `head -c N PATH` reads from `files`, the
-// write script stores its stdin there, `/bin/sh -c` runs createShellStream's
-// scripts, and `signals` holds each signal a command got as `command:number`.
 export function buildStubExecGuest(options: Readonly<StubExecGuestOptions> = {}) {
   const oldAgent = options.oldAgent ?? false;
-
-  // the real timer serves only the MCP endpoint's idle-timeout test
   const wait = options.wait ?? Bun.sleep;
 
   const files = new Map<string, Uint8Array>();
 
   const requests: AgentExecRequest[] = [];
   const signals: string[] = [];
-
-  // the commands whose stream impd closed, as when its client went away
   const closed: string[] = [];
 
   const openExec = (_name: string, request: Readonly<AgentExecRequest>): Promise<ExecStream> => {
@@ -134,7 +125,6 @@ function buildEventStream() {
   };
 }
 
-// the events in order, up to and including the exit
 async function* readEvents(
   next: () => Promise<ExecEvent>,
 ): AsyncGenerator<ExecEvent, void, undefined> {
@@ -149,7 +139,6 @@ async function* readEvents(
   }
 }
 
-// /readonly/... fails, as a read-only file system would
 function buildWriteStream(path: string, store: (data: Uint8Array) => void) {
   const stream = buildEventStream();
   const chunks: Uint8Array[] = [];
@@ -180,9 +169,6 @@ function buildWriteStream(path: string, store: (data: Uint8Array) => void) {
 const SIGKILL = 9;
 const SIGTERM = 15;
 
-// `echo TEXT`, `kill …` (exits 0), `fail` (stderr and exit 3), `flood N` (N
-// bytes from HEAD to TAIL), `cat` (echoes stdin), `sleepy` (runs until
-// SIGTERM) and `stubborn` (ignores SIGTERM, as a trap or a nohup'd child does)
 function createShellStream(
   command: string,
   wait: (durationMs: number) => Promise<void>,
@@ -196,7 +182,6 @@ function createShellStream(
     stream.emit({ type: 'exit', code: 0, signal: 0 });
   }
 
-  // a command that runs for N ms, longer than any idle timeout on the way
   if (verb === 'wait') {
     const runWait = async () => {
       await wait(Number(rest[0]));
@@ -208,7 +193,6 @@ function createShellStream(
     void runWait();
   }
 
-  // the sweep that kills what is left of a stopped command's group
   if (verb === 'kill') {
     stream.emit({ type: 'exit', code: 0, signal: 0 });
   }

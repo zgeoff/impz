@@ -53,7 +53,6 @@ import { createTokenRoutes } from './create-token-routes';
 import type { ExecTickets } from './exec/exec-tickets';
 import { requireNamedImp } from './require-named-imp';
 
-// log lines `services.logs` sends first when the caller names no count
 const DEFAULT_LOG_LINES = 100;
 
 export interface RouterDeps {
@@ -67,24 +66,14 @@ export interface RouterDeps {
   readonly broker: Broker;
   readonly egress: Pick<EgressService, 'readPolicy' | 'setPolicy' | 'isEnforced'>;
   readonly networks: NetworkService;
-
-  // null when no repository is set
   readonly backups: BackupService | null;
   readonly moves: Omit<MoveService, 'respond' | 'recover'>;
   readonly firecrackerVersion: string | null;
   readonly systemFiles: SystemFileInfo;
-
-  // the host's KSM counters; null without KSM
   readonly readKsmHostStats?: () => KsmHostStats | null;
   readonly readTailscale: () => Promise<TailscaleStatus>;
-
-  // per-imp names on the tailnet; null when IMP_TAILNET_NAMES is off
   readonly readTailnetNames: (() => TailnetNamesStatus) | null;
-
-  // the HTTPS service's public records, once it runs
   readonly publicRecords: PublicRecordsLink;
-
-  // reads the DNS API token now; null for a provider without one
   readonly checkDnsToken: (() => Promise<DnsTokenStatus>) | null;
   readonly execTickets: ExecTickets;
   readonly storage: Pick<StorageBackend, 'kind' | 'readWarnings'>;
@@ -94,14 +83,8 @@ export interface RouterDeps {
   readonly log: (message: string) => void;
   readonly audit: ApiAudit;
   readonly tokens: TokenStore;
-
-  // the gap between progress events of a streamed image add or build
   readonly imageKeepaliveMs: number;
-
-  // the timer of those progress events; runOnInterval by default
   readonly imageKeepaliveRepeat?: Repeat;
-
-  // OAuth for the public MCP route (docs/guides/mcp.md#public-route)
   readonly oauth: McpAuth;
 }
 
@@ -114,7 +97,6 @@ export function createRouter(deps: RouterDeps) {
 
   const os = createImplementer(deps);
 
-  // the caller's imps as its event stream opens
   const readSnapshot = async (caller: Readonly<Caller>): Promise<ImpEvent[]> => {
     const imps = await listCallerImps(caller);
 
@@ -123,7 +105,6 @@ export function createRouter(deps: RouterDeps) {
     return imps.map((imp) => ({ v: EVENT_VERSION, at, ev: 'ImpAdded', reason: 'snapshot', imp }));
   };
 
-  // one for every stream: each event is checked once, whoever reads it
   const isEventValid = createEventCheck({ log: deps.log, now: deps.now });
 
   const listCallerImps = async (caller: Readonly<Caller>) => {
@@ -132,9 +113,6 @@ export function createRouter(deps: RouterDeps) {
     return imps.filter((imp) => isImpAllowed(caller.imps, imp.name));
   };
 
-  // The presenter shows an imp's leases as a count; the caller sees its own,
-  // or every owner with host-wide manage. The records are the ones the
-  // presenter read; an imp from elsewhere has its read here.
   const readCallerImps = async (caller: Readonly<Caller>, imps: readonly Imp[]): Promise<Imp[]> => {
     const unread = imps.filter((imp) => readPresentedLeases(imp) === undefined);
 
@@ -167,7 +145,6 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     imps: {
-      // a network reaches past a caller's imp patterns, as a join does
       create: os.imps.create.handler(async (context) => {
         const caller = context.context.caller;
         const { networks, backup, ...input } = context.input;
@@ -178,8 +155,6 @@ export function createRouter(deps: RouterDeps) {
           );
         }
 
-        // a template holds its source imp's disk: a caller limited to some
-        // imps must reach the source, as for a fork
         if (caller.imps !== null) {
           const image = await deps.images.resolveImage(input.image);
 
@@ -269,9 +244,6 @@ export function createRouter(deps: RouterDeps) {
 
         return readCallerImp(context.context.caller, deps.imps.readImp(context.input.name));
       }),
-
-      // a fork gets its source's grants the caller could make, as it gets
-      // its disk; the answer names the rest
       fork: os.imps.fork.handler(async (context) => {
         const caller = context.context.caller;
 
@@ -326,8 +298,6 @@ export function createRouter(deps: RouterDeps) {
 
         return { released };
       }),
-
-      // the caller's imps only, and on them the leases it may see
       list: os.leases.list.handler(async (context) => {
         const caller = context.context.caller;
         const name = context.input.name;
@@ -408,7 +378,6 @@ export function createRouter(deps: RouterDeps) {
     },
     images: createImageRoutes(os, deps),
     exec: {
-      // NOT_FOUND now, rather than at the socket's start
       ticket: os.exec.ticket.handler(async (context) => {
         await deps.imps.readImp(context.input.name);
 
@@ -483,8 +452,6 @@ export function createRouter(deps: RouterDeps) {
     grants: createGrantRoutes(os, deps),
     audit: buildAuditRoutes(os, deps),
     events: {
-      // a dashboard's stream ends when its session expires or at a logout;
-      // any stream ends when its token is removed
       stream: os.events.stream.handler((options) => {
         const caller = options.context.caller;
 

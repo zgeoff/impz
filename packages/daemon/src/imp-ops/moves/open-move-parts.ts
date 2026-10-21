@@ -15,7 +15,6 @@ interface MovePartsDeps {
   readonly storage: Pick<StorageBackend, 'openMoveSource' | 'resolveImpPaths'>;
 }
 
-// One piece of the stream after the header: a file, or a command's output
 export type StreamPart =
   | { readonly kind: 'file'; readonly path: string; readonly file: MoveFile }
   | { readonly kind: 'command'; readonly open: () => StreamedCommand; readonly file: MoveFile };
@@ -23,14 +22,10 @@ export type StreamPart =
 export interface OpenedParts {
   readonly parts: readonly StreamPart[];
   readonly streams: MoveHeader['streams'];
-
-  // what `zfs send` says its streams take; null for files
   readonly estimateBytes: number | null;
   readonly close: () => Promise<void>;
 }
 
-// What a send carries after the header, in order: the image (when asked),
-// then each checkpoint oldest first and the disk, as files or as streams
 export async function openMoveParts(
   deps: MovePartsDeps,
   imp: ImpRecord,
@@ -44,7 +39,6 @@ export async function openMoveParts(
     return opened;
   }
 
-  // after the disk: the drive the snapshot reopens, then its two files
   const paths = deps.storage.resolveImpPaths(imp.id);
 
   const memory: StreamPart[] = [

@@ -1,21 +1,17 @@
 import { fstatSync } from 'node:fs';
 import { readErrno, readLibc } from '../../platform/process/libc';
 
-// lseek(2) whence values and the one errno that is an answer, on Linux
+// Linux's lseek(2) whence values, and the one errno that is an answer.
 const SEEK_DATA = 3;
 const SEEK_HOLE = 4;
 const ENXIO = 6;
 
-// an lseek result: the offset, or the errno of a -1
 type SeekResult = { readonly offset: number } | { readonly errno: number };
 
 export type SeekFile = (fd: number, offset: number, whence: number) => SeekResult;
 
 export type ReadAllocated = (fd: number) => number;
 
-// The indexes of the `blockBytes` blocks that hold data: SEEK_DATA skips a
-// sparse disk's holes. Any answer it cannot confirm means every block from
-// there, never a block left out.
 export function readDataBlocks(
   fd: number,
   size: number,
@@ -97,13 +93,13 @@ function buildBlocksFrom(
   return blocks;
 }
 
-// allocated bytes past the found data that are still file-system metadata,
-// not data the scan missed; a file restic restored measured 0 on XFS and ext4
+// Allocated bytes past the found data can be file-system metadata rather than
+// data the scan missed; a file restic restored measured 0 on XFS and ext4.
 const SLACK_MIN_BYTES = 1024 * 1024;
 const SLACK_FRACTION = 0.001;
 
-// The scan ended early when the file holds more allocated bytes than the
-// data it found, past the slack. This needs no errno, which may be stale.
+// The errno lseek leaves may be stale, so the check compares allocated bytes
+// with the data found instead.
 function isScanShort(foundBytes: number, allocated: number): boolean {
   return allocated - foundBytes > Math.max(SLACK_MIN_BYTES, allocated * SLACK_FRACTION);
 }

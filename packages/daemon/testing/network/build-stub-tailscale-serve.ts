@@ -1,25 +1,18 @@
 import { runChecked } from '../../src/platform/process/run-command';
 import type { CommandResult } from '../../src/platform/process/run-command';
 
-// one Tailscale Service's serve config: the target behind each port
 type StubServiceConfig = Map<
   number,
   { readonly scheme: 'http' | 'https'; readonly target: string }
 >;
 
 interface StubTailscaleServeOptions {
-  // the tailnet's MagicDNS suffix, which names each service's web host
   readonly tailnet?: string;
 }
 
-// The `tailscale serve` CLI: `status --json`, `--service=<svc>
-// --http|--https=<port> <target>` and `clear <svc>`; any other argv exits 1.
-// Status is tailscale's ipn.ServeConfig as runServeStatus indents it.
 export function buildStubTailscaleServe(options: Readonly<StubTailscaleServeOptions> = {}) {
   const tailnet = options.tailnet ?? 'tail1234.ts.net';
 
-  // node-level ports serve holds, outside any service, as `tailscale serve
-  // --https=443` leaves them
   const nodePorts = new Set<number>();
   const services = new Map<string, StubServiceConfig>();
 
@@ -111,19 +104,14 @@ export function buildStubTailscaleServe(options: Readonly<StubTailscaleServeOpti
   };
 
   return {
-    // answers as runCommand does; `calls` holds every argv, in order
     run,
     calls,
-
-    // the real runChecked over `run`
     runChecked: (argv: readonly string[]): Promise<string> => runChecked(argv, {}, run),
 
-    // a node-level port serve holds, outside any service
     holdPort: (port: number): void => {
       nodePorts.add(port);
     },
 
-    // the next call exits 1 with `stderr`, whatever its argv
     failNext: (stderr: string): void => {
       failures.push(stderr);
     },

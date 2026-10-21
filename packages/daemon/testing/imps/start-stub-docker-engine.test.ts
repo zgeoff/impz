@@ -73,7 +73,6 @@ test('it marks a body the client cut off before its end', async () => {
 
   const pulls = { count: 0 };
 
-  // one chunk, then an error once the engine has started to read
   const body = new ReadableStream<Uint8Array>({
     pull(controller) {
       pulls.count += 1;
@@ -470,7 +469,6 @@ test('it stops when the test that started it ends', async () => {
 
   const engine = startStubDockerEngine({ directoryPath: directory });
 
-  // a ping the engine holds open, which only its stop ends
   engine.setAnswer(() => new Promise<Response>(() => {}));
 
   // settles, never rejects, so nothing waits on it unhandled

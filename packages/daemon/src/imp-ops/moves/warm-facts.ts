@@ -6,8 +6,6 @@ import { UNKNOWN_CPU } from '../../vm/sleep/cpu-identity';
 import type { SnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
 
-// What this host shares with the source of a warm move
-// (docs/architecture/storage/moves.md#warm-moves)
 export function readWarmHost(
   config: Pick<Config, 'dataDir' | 'subnet' | 'brokerPort' | 'dns'>,
   identity: Readonly<HostIdentity>,
@@ -28,7 +26,6 @@ export function readWarmHost(
   };
 }
 
-// a sleeping imp's side: its snapshot's facts, and the host it sleeps on
 export function buildWarmMove(
   slot: number,
   egressMode: string,
@@ -56,8 +53,6 @@ export function buildWarmMove(
   };
 }
 
-// Each fact of a warm move the target does not match; empty when it can
-// take the imp with its memory
 export function collectWarmMismatches(
   move: Readonly<WarmMove>,
   target: Readonly<WarmHost>,
@@ -87,7 +82,7 @@ export function collectWarmMismatches(
     }
   }
 
-  // a routed /64 belongs to one host, and `auto` makes a ULA per host
+  // A routed /64 belongs to one host, and `auto` makes a ULA per host.
   if (snapshot.ipv6Prefix !== null) {
     found.push(`the imp has an IPv6 address in ${snapshot.ipv6Prefix}, this host's prefix`);
   }
@@ -97,7 +92,6 @@ export function collectWarmMismatches(
   checkFact('IMP_SUBNET', move.host.subnet, target.subnet);
   checkFact('IMP_BROKER_PORT', String(move.host.brokerPort), String(target.brokerPort));
 
-  // an open imp asks IMP_DNS itself; nothing redirects its queries
   if (isOpenMode(move.egressMode)) {
     checkFact('IMP_DNS', move.host.dns.join(','), target.dns.join(','));
   }
@@ -109,7 +103,6 @@ export function collectWarmMismatches(
   return found;
 }
 
-// the source's mode, sent as a string: one this host does not know is not open
 function isOpenMode(egressMode: string): boolean {
   const mode = EgressModeSchema.safeParse(egressMode);
 

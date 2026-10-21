@@ -63,7 +63,6 @@ test('it answers a wake with the wake time a test sets', async () => {
   expect(running).toStrictEqual({ imp, wokeMs: 840 });
 });
 
-// a put with a new pid stands for a wake into a new VM
 test('it answers a wake with the imp put last under its name', async () => {
   const ssh = buildStubSshBackend();
   const imp = buildMockImpRecord({ pid: 100 });
@@ -237,7 +236,6 @@ test('it rejects an exec with the exec error a test sets, and counts nothing', (
   expect(ssh.tracker.count(imp.id)).toBe(0);
 });
 
-// as an HTTP server answers a whole request
 test('it answers a dial with got and its input once the client half-closes', async () => {
   const ssh = buildStubSshBackend();
 

@@ -33,7 +33,6 @@ test('it reads a sysctl key it was given', async () => {
   expect(result).toStrictEqual({ exitCode: 0, stdout: '0\n', stderr: '' });
 });
 
-// sysctl exits 255 for a key /proc/sys does not have
 test('it fails a read of a sysctl key it was not given, as sysctl does', async () => {
   const ip = buildStubIpCommand();
 

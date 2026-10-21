@@ -1,18 +1,13 @@
 import * as z from 'zod';
 
-// RFC 8555 7.4: the identifiers a new order names, inside the JWS payload
 const IdentifierSchema = z.object({ type: z.literal('dns'), value: z.string() });
 const OrderPayloadSchema = z.object({ identifiers: z.array(IdentifierSchema) });
 const JwsSchema = z.object({ payload: z.string() });
 
-// An ACME server on a free loopback port, up to the challenge: a directory,
-// a nonce on each answer, an account, an order, and per name an
-// authorization that offers the test's challenge types.
 export function startStubAcmeServer(
   stack: Readonly<AsyncDisposableStack>,
   options: Readonly<{ challengeTypes: readonly string[] }>,
 ) {
-  // each call it does not model, which gets a 500 that names it
   const unexpected: string[] = [];
   const orders: { value: string }[][] = [];
   const nonces = { count: 0 };
@@ -77,7 +72,7 @@ export function startStubAcmeServer(
     const identifier = orders[Number(authz?.['order']) - 1]?.[Number(authz?.['index'])];
 
     if (request.method === 'POST' && identifier !== undefined) {
-      // RFC 8555 7.1.4: a wildcard's authorization names its base domain
+      // RFC 8555 7.1.4: a wildcard's authorization names its base domain.
       const isWildcard = identifier.value.startsWith('*.');
 
       return Response.json(

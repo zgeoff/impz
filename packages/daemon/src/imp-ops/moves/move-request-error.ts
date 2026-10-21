@@ -1,4 +1,3 @@
-// A refusal of a `/move/*` request, answered with its HTTP status
 export class MoveRequestError extends Error {
   override name = 'MoveRequestError';
 

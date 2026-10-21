@@ -11,8 +11,6 @@ import { readKsmHostStats } from '../vm/vmm/ksm';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 
-// `system.*`: what the host runs and holds, what impd can do, its storage GC, and a copy of
-// its database
 export function createSystemRoutes(os: RpcImplementer, deps: RouterDeps) {
   return {
     info: os.system.info.handler(() => readSystemInfo(deps)),
@@ -37,7 +35,7 @@ export function createSystemRoutes(os: RpcImplementer, deps: RouterDeps) {
         deps.now,
       );
 
-      // in the contract's order, which a restore script's output follows
+      // A restore script prints these fields in this order.
       return {
         path: copy.path,
         sizeBytes: copy.sizeBytes,
@@ -50,12 +48,8 @@ export function createSystemRoutes(os: RpcImplementer, deps: RouterDeps) {
   };
 }
 
-// the base image's /tmp, on the imp's disk: a cold boot keeps its files
 const GUEST_INFO: NonNullable<SystemInfo['guest']> = { scratchDir: '/tmp', isClearedOnBoot: false };
 
-// RAM used is measured (what awake Firecrackers own); committed is the memory
-// the awake imps were given
-// (docs/architecture/lifecycle/ram-governor.md#what-it-measures).
 async function readSystemInfo(deps: RouterDeps): Promise<SystemInfo> {
   const [imps, usage, tailscale, storage, defaultImage] = await Promise.all([
     listImps(deps.db),
@@ -161,7 +155,6 @@ async function readHttpsInfo(deps: RouterDeps): Promise<SystemInfo['https']> {
   };
 }
 
-// imp-20261004-061233: a name's form, in UTC, to the second
 function buildCopyName(now: number): string {
   const stamp = new Date(now).toISOString().slice(0, 19).replaceAll(/[-:]/gu, '').replace('T', '-');
 

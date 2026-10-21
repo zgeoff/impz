@@ -1,8 +1,5 @@
 import { DNS_CLASS_IN, DNS_TYPE_CODES, encodeDnsName, encodeDnsUint16 } from './write-dns-wire';
 
-// An upstream's reply, byte by byte from RFC 1035 (RFC 3596 for AAAA), with
-// no name compression.
-
 const QR = 0x80_00;
 const TC = 0x02_00;
 const RD = 0x01_00;
@@ -12,8 +9,6 @@ export interface MockDnsRecord {
   readonly type: 'A' | 'AAAA' | 'CNAME';
   readonly name: string;
   readonly ttl: number;
-
-  // an address, or for a CNAME the name it points at
   readonly data: string;
 }
 
@@ -21,16 +16,10 @@ interface MockDnsReply {
   readonly answers: readonly MockDnsRecord[];
   readonly authorities: readonly MockDnsRecord[];
   readonly additionals: readonly MockDnsRecord[];
-
-  // TC: the answer did not fit, so the client asks again over TCP
   readonly truncated: boolean;
-
-  // the id the reply carries; the query's by default
   readonly id: number;
 }
 
-// An upstream's reply to `query`: its id and question, recursion available,
-// NOERROR, and the records given in each section.
 export function buildMockDnsReply(
   query: Uint8Array,
   reply: Readonly<Partial<MockDnsReply>> = {},
@@ -53,7 +42,6 @@ export function buildMockDnsReply(
   ]);
 }
 
-// the query's one question, as it came: the name's labels, type and class
 function getQuestion(query: Uint8Array): number[] {
   let end = 12;
 

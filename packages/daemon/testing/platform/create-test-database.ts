@@ -6,7 +6,6 @@ interface TestDatabase {
   readonly db: ImpDatabase;
 }
 
-// a migrated in-memory database, empty, closed when the test finishes
 export async function createTestDatabase(): Promise<TestDatabase> {
   const db = await openDatabase(':memory:');
 

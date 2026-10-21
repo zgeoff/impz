@@ -5,9 +5,6 @@ import {
 } from '../../src/vm/agent-client/frame-codec';
 import { startStubAgent } from './start-stub-agent';
 
-// The agent of a template's guest on `vsockSocket`: parked (stage template)
-// until a claim, then booted on as the claimed imp with its boot's steps; a
-// minute old, so old enough to snapshot. It closes when the test ends.
 export function startStubParkedAgent(vsockSocket: string) {
   const claimed = { isClaimed: false };
 

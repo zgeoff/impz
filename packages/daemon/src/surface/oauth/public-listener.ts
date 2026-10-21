@@ -4,25 +4,12 @@ import type { McpAuth } from '../../identity/oauth/create-mcp-auth';
 import type { PublicMcpConfig } from '../../identity/oauth/public-mcp-config';
 import { readBodyText } from '../../identity/oauth/read-body-text';
 
-// The public MCP route's listener (docs/guides/mcp.md#public-route): plain
-// HTTP behind the operator's TLS front. It reads no client address or
-// forwarded header, and logs nothing a request carries.
-
-// requests open at once
 const MAX_OPEN = 64;
-
-// with every slot taken, requests that start no work, at once: a session's
-// DELETE, or a notification such as notifications/cancelled
 const MAX_CONTROL = 16;
-
-// such a notification; a cancel is a few hundred bytes
 const MAX_CONTROL_BYTES = 16 * 1024;
 
-// a JSON-RPC message, a file write's content included (4 MiB as text)
+// A JSON-RPC message carries a file write's content, 4 MiB as text.
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
-
-// seconds a request may sit idle; /mcp has none, as a tool call can run for
-// minutes
 const IDLE_TIMEOUT_S = 30;
 const NOT_FOUND = 'not found';
 
@@ -37,7 +24,6 @@ export interface PublicListener {
   readonly stop: () => Promise<void>;
 }
 
-// the routes, apart from the server, for tests to call
 export function createPublicHandler(
   deps: Readonly<PublicListenerDeps>,
 ): (request: Request, server: Pick<Bun.Server<undefined>, 'timeout'> | null) => Promise<Response> {
@@ -50,7 +36,7 @@ export function createPublicHandler(
   ): Promise<Response> => {
     const url = new URL(request.url);
 
-    // a name the front did not route here, or a page that rebinds DNS
+    // A name the front did not route here, or a page that rebinds DNS.
     if ((request.headers.get('host') ?? '').toLowerCase() !== host) {
       return buildNotFound();
     }
@@ -68,16 +54,11 @@ export function createPublicHandler(
     return answered ?? buildNotFound();
   };
 
-  // Every slot taken: only a request that starts no work gets through, on
-  // its own allowance, so a cancel can still stop a call and free a slot.
-  // It keeps the idle timeout: it is short, and made again here.
   const handleControl = async (request: Request): Promise<Response> => {
     if (state.control >= MAX_CONTROL) {
       return buildTooMany();
     }
 
-    // counted before its body is read, so no more than MAX_CONTROL bodies
-    // are read at once
     state.control += 1;
 
     try {
@@ -111,7 +92,6 @@ export function createPublicHandler(
   };
 }
 
-// `release`, made safe to call more than once
 function createRelease(release: () => void): () => void {
   const state = { isReleased: false };
 
@@ -124,9 +104,8 @@ function createRelease(release: () => void): () => void {
   };
 }
 
-// A request counts until it is done. A tool call is done when the tool
-// ends: as MCP says, a dropped stream is no cancel, so the call runs on and
-// keeps its room. Any other response is done once sent, or the client goes.
+// MCP treats a dropped stream as no cancel, so a tool call runs on and keeps
+// its slot until the tool ends.
 async function waitThenRelease(callEnd: Promise<void>, release: () => void): Promise<void> {
   try {
     await callEnd;
@@ -207,8 +186,6 @@ export function startPublicListener(
     maxRequestBodySize: MAX_BODY_BYTES,
     idleTimeout: IDLE_TIMEOUT_S,
     fetch: handleRequest,
-
-    // the reason stays in impd's log; the client gets none
     error: (error) => {
       log(`impd: public mcp: ${error.message}`);
 
@@ -227,9 +204,6 @@ export function startPublicListener(
   };
 }
 
-// A request to /mcp that starts no work: a DELETE, or a POST of one
-// JSON-RPC notification (a method and no id). Its body is read here, so the
-// request is made again for the transport; null for any other.
 async function readControlRequest(request: Request): Promise<Request | null> {
   if (new URL(request.url).pathname !== MCP_PATH) {
     return null;
@@ -249,6 +223,7 @@ async function readControlRequest(request: Request): Promise<Request | null> {
     return null;
   }
 
+  // Reading the body consumed it, so the transport gets a new request.
   return new Request(request.url, {
     method: 'POST',
     headers: request.headers,
