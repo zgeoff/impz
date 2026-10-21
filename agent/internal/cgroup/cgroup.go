@@ -1,12 +1,15 @@
 // Package cgroup gives each exec a cgroup v2 leaf of its own, so a stop can
 // kill every process the command started, including the ones that left its
-// process group, with cgroup.kill and no pid-reuse window.
+// process group, with cgroup.kill and no pid-reuse window. A delegated tree
+// also hands controllers down to each exec's cgroup, so its processes can
+// make cgroups of their own with limits, such as a memory cap.
 package cgroup
 
 import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,21 +19,33 @@ import (
 	"time"
 )
 
-// poll is how often a leaf is checked for members.
-const poll = 20 * time.Millisecond
+const (
+	// poll is how often a leaf is checked for members.
+	poll = 20 * time.Millisecond
+
+	// CommandLeaf is the cgroup a delegated exec's command starts in, under
+	// the exec's own: a cgroup that hands controllers down takes no process.
+	CommandLeaf = "command"
+)
 
 // Tree hands out numbered leaves under one parent cgroup, which holds no
-// process itself and enables no controller, so the "no internal processes"
-// rule never applies. The parent is a parameter: tests point it at a plain
-// directory, and an inner container points it at its own subtree.
+// process itself, so the "no internal processes" rule never applies. The
+// parent is a parameter: tests point it at a plain directory, and an inner
+// container points it at its own subtree.
 type Tree struct {
 	parent string
 	// prepare, if set, runs on the parent before each new leaf, so limits
 	// set on it hold even after root removed it and it was made again
 	prepare func(parent string) error
+	// delegate, if set, is the subtree_control line that the parent and
+	// each exec's cgroup get, such as "+memory"
+	delegate string
 
 	mu   sync.Mutex
 	next uint64
+	// delegateFailing holds whether the last delegation failed, so a
+	// failure logs once when it starts, not on each exec
+	delegateFailing bool
 	// ended holds the leaves of sessions that are over but still had a
 	// member (a nohup child, say) when they ended. Only these are swept:
 	// a live session's leaf may be empty because its child is not yet
@@ -68,7 +83,27 @@ func NewLimitedTree(parent string, prepare func(parent string) error) (*Tree, er
 	return t, nil
 }
 
-// Group is one exec's leaf.
+// NewDelegatedTree is NewTree whose leaves hand controllers down: the parent
+// and each exec's cgroup enable them, and the command starts in CommandLeaf
+// under the exec's cgroup. A process of the exec can then make a cgroup next
+// to CommandLeaf, set its limits and move into it, and a stop still kills it.
+// A cgroup that cannot enable them still gets its leaf, without limits.
+func NewDelegatedTree(parent string, controllers ...string) (*Tree, error) {
+	t, err := NewTree(parent)
+	if err != nil {
+		return nil, err
+	}
+	enable := make([]string, 0, len(controllers))
+	for _, c := range controllers {
+		enable = append(enable, "+"+c)
+	}
+	t.delegate = strings.Join(enable, " ")
+	t.enableDelegated(parent)
+	return t, nil
+}
+
+// Group is one exec's cgroup, and the leaf its command starts in: the same
+// cgroup in a tree that delegates nothing.
 type Group struct {
 	path string
 	dir  *os.File
@@ -92,22 +127,55 @@ func (t *Tree) New() (*Group, error) {
 			return nil, err
 		}
 	}
+	if t.delegate != "" {
+		// the parent again: the inner init enables the controllers above
+		// it only once it runs, and a restart makes the parent anew
+		t.enableDelegated(t.parent)
+	}
 	if err := os.Mkdir(path, 0o755); err != nil {
 		return nil, err
 	}
-	dir, err := os.OpenFile(path, os.O_RDONLY|syscall.O_DIRECTORY, 0)
+	leaf := path
+	if t.delegate != "" {
+		t.enableDelegated(path)
+		leaf = filepath.Join(path, CommandLeaf)
+		if err := os.Mkdir(leaf, 0o755); err != nil {
+			os.Remove(path)
+			return nil, err
+		}
+	}
+	dir, err := os.OpenFile(leaf, os.O_RDONLY|syscall.O_DIRECTORY, 0)
 	if err != nil {
-		os.Remove(path)
+		_ = removeCgroup(path)
 		return nil, err
 	}
 	return &Group{path: path, dir: dir}, nil
 }
 
-// Release ends g's session: its leaf goes now if it is empty, or at a later
-// sweep once its last member exits.
+// enableDelegated writes the delegated controllers to dir's subtree_control.
+func (t *Tree) enableDelegated(dir string) {
+	// no O_CREATE: a directory without the file is no cgroup
+	f, err := os.OpenFile(filepath.Join(dir, "cgroup.subtree_control"), os.O_WRONLY, 0)
+	if err == nil {
+		_, err = f.Write([]byte(t.delegate))
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+	}
+	t.mu.Lock()
+	started := err != nil && !t.delegateFailing
+	t.delegateFailing = err != nil
+	t.mu.Unlock()
+	if started {
+		log.Printf("cgroup: enable %s in %s: %v; an exec's processes cannot set its limits", t.delegate, dir, err)
+	}
+}
+
+// Release ends g's session: its cgroup, with every cgroup under it, goes now
+// if it is empty, or at a later sweep once its last member exits.
 func (t *Tree) Release(g *Group) {
 	g.dir.Close()
-	if err := os.Remove(g.path); err == nil || errors.Is(err, os.ErrNotExist) {
+	if err := removeCgroup(g.path); err == nil || errors.Is(err, os.ErrNotExist) {
 		return
 	}
 	t.mu.Lock()
@@ -117,10 +185,27 @@ func (t *Tree) Release(g *Group) {
 
 func (t *Tree) sweepLocked() {
 	for path := range t.ended {
-		if err := os.Remove(path); err == nil || errors.Is(err, os.ErrNotExist) {
+		if err := removeCgroup(path); err == nil || errors.Is(err, os.ErrNotExist) {
 			delete(t.ended, path)
 		}
 	}
+}
+
+// removeCgroup removes dir and the cgroups under it, deepest first. rmdir
+// takes an empty cgroup with its files, and refuses one with members or
+// children. The cgroups a member still holds stay, and so does dir.
+func removeCgroup(dir string) error {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range ents {
+		if e.IsDir() {
+			// a child that stays makes the removal of dir fail, which reports it
+			_ = removeCgroup(filepath.Join(dir, e.Name()))
+		}
+	}
+	return os.Remove(dir)
 }
 
 // Dir is the leaf's directory fd, for clone3's CLONE_INTO_CGROUP.

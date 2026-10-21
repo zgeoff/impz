@@ -138,14 +138,21 @@ test('it gives an exec its cgroup even after the exec parent is removed inside',
     [
       // Out of its own leaf first, which would keep the parent busy.
       'echo $$ > /sys/fs/cgroup/init/cgroup.procs',
-      'rmdir /sys/fs/cgroup/exec/* 2>/dev/null',
+      'rmdir /sys/fs/cgroup/exec/*/* /sys/fs/cgroup/exec/* 2>/dev/null',
       'rmdir /sys/fs/cgroup/exec',
     ].join('\n'),
   );
 
-  const cgroup = await runInImp(name, 'cat', '/proc/self/cgroup');
+  const cgroup = await runShellInImp(
+    name,
+    [
+      'own=$(sed -n "s/^0:://p" /proc/self/cgroup)',
+      'echo "$own"',
+      'cat "/sys/fs/cgroup$(dirname "$own")/cgroup.subtree_control"',
+    ].join('\n'),
+  );
 
-  expect(cgroup).toMatch(/^0::\/exec\/\d+$/v);
+  expect(cgroup).toMatch(/^\/exec\/\d+\/command\nmemory$/v);
 });
 
 test('it ignores signals to PID 1 from inside', async () => {

@@ -134,9 +134,10 @@ func Run() error {
 	}
 	steps.mark("services")
 
-	// Each non-tty exec gets a cgroup leaf, so a stop kills its escapees too
+	// Each non-tty exec gets a cgroup leaf, so a stop kills its escapees too,
+	// and a memory controller, so a command can cap its own memory
 	// (docs/architecture/guest/agent.md#execs-and-services).
-	execCgroups, err := cgroup.NewTree(inner.ExecCgroupDir)
+	execCgroups, err := cgroup.NewDelegatedTree(inner.ExecCgroupDir, "memory")
 	if err != nil {
 		log.Printf("boot: exec cgroups: %v; a stop reaches only the process group", err)
 		execCgroups = nil

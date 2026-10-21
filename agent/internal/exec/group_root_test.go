@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 	"gotest.tools/v3/poll"
 
 	"github.com/zgeoff/impz/agent/internal/cgroup"
@@ -53,6 +54,54 @@ func TestKillGraceReachesAChildThatLeftTheProcessGroup(t *testing.T) {
 	h.wait(t, 10*time.Second)
 
 	assert.Check(t, !alive(escapee), "escapee %d survived the stop", escapee)
+}
+
+// cappedScript runs dd with a 400 MiB buffer in a cgroup that the command
+// makes next to its own, capped at memoryMax bytes with no swap, then prints
+// the cap's oom_kill count and exits with dd's status.
+func cappedScript(memoryMax int) string {
+	return fmt.Sprintf(`set -e
+own=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
+capped=${own%%/*}/capped
+mkdir "$capped"
+echo %d > "$capped/memory.max"
+echo 0 > "$capped/memory.swap.max"
+status=0
+sh -c 'echo $$ > "$1/cgroup.procs"; exec dd if=/dev/zero of=/dev/null bs=400M count=1 2>/dev/null' sh "$capped" || status=$?
+grep '^oom_kill ' "$capped/memory.events"
+exit $status`, memoryMax)
+}
+
+// runCapped runs cappedScript through a manager on a delegated tree under a
+// fresh cgroup, and returns its output and exit.
+func runCapped(t *testing.T, memoryMax int) (string, *proto.Exit) {
+	t.Helper()
+	parent, err := os.MkdirTemp("/sys/fs/cgroup", "imp-exec-test-")
+	if err != nil {
+		t.Fatalf("needs a writable cgroup2: %v", err)
+	}
+	t.Cleanup(func() { removeCgroup(t, parent) })
+	tree, err := cgroup.NewDelegatedTree(parent, "memory")
+	assert.NilError(t, err)
+	m := NewManager(launch.New(&proc.Direct{Reaper: testReaper}, imagecfg.NewLive(imagecfg.Config{Env: []string{"PATH=/usr/bin:/bin"}}), nil), tree)
+	h := startExec(t, m, &proto.Request{Argv: []string{"sh", "-c", cappedScript(memoryMax)}})
+	h.started(t)
+	return h.wait(t, 30*time.Second)
+}
+
+func TestACommandCappedAt256MiBIsOOMKilledWhenItTakes400MiB(t *testing.T) {
+	out, exit := runCapped(t, 256<<20)
+
+	// the shell may also report the killed child on stderr
+	assert.Check(t, cmp.Contains(out, "oom_kill 1\n"))
+	assert.Check(t, cmp.Equal(exit.GetCode(), int32(128+int32(syscall.SIGKILL))))
+}
+
+func TestACommandCappedAt1024MiBTakes400MiB(t *testing.T) {
+	out, exit := runCapped(t, 1024<<20)
+
+	assert.Check(t, cmp.Equal(out, "oom_kill 0\n"))
+	assert.Check(t, cmp.Equal(exit.GetCode(), int32(0)))
 }
 
 // removeCgroup kills whatever still runs in the cgroup dir this test made

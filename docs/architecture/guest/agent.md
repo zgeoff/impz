@@ -127,6 +127,16 @@ otherwise, so a process can move itself out of its leaf, and the containers of a
 started live in cgroups of their own: a stop does not reach those. A tty exec has no leaf, because
 its session leader owns the terminal's process group.
 
+The agent delegates the memory controller to each non-tty exec, so a command can cap its own memory.
+The exec's cgroup enables the controller for its children and holds no process itself, because the
+kernel lets only a cgroup without processes hand a controller down. The command starts in a leaf
+under it. To cap itself, a process makes a cgroup next to its own, sets `memory.max` and
+`memory.swap.max` there, and moves into it. The cap cgroup sits inside the exec's cgroup, so a stop
+still kills what runs in it, and the agent removes it with the exec's cgroup. A session or a service
+runs in the init's cgroup, whose parent is the namespace root, and the init enables every controller
+at that root, so the same step works there. With `memory.swap.max` at 0, a command that outgrows its
+cap dies by the OOM killer instead of swapping, whatever swap the guest has.
+
 An outer exec runs a command as root in the agent's own world, outside the container, to see why the
 container is down or look at the disk after an `rm -rf /` inside. It runs in a small cgroup with a
 hard memory limit, or not at all, and resets its OOM score, so the kernel can kill it. Only a caller
