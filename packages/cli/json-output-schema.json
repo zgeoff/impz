@@ -561,6 +561,9 @@
               },
               "guestScratch": {
                 "type": "boolean"
+              },
+              "imagePins": {
+                "type": "boolean"
               }
             },
             "required": [

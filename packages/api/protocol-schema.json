@@ -7528,6 +7528,10 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 9007199254740991
+            },
+            "pinned": {
+              "default": false,
+              "type": "boolean"
             }
           },
           "required": [
@@ -7537,7 +7541,8 @@
             "digest",
             "source",
             "createdAt",
-            "sizeBytes"
+            "sizeBytes",
+            "pinned"
           ],
           "additionalProperties": false
         }
@@ -7614,6 +7619,10 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "pinned": {
+            "default": false,
+            "type": "boolean"
           }
         },
         "required": [
@@ -7623,7 +7632,8 @@
           "digest",
           "source",
           "createdAt",
-          "sizeBytes"
+          "sizeBytes",
+          "pinned"
         ],
         "additionalProperties": false
       },
@@ -7686,6 +7696,10 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "pinned": {
+            "default": false,
+            "type": "boolean"
           }
         },
         "required": [
@@ -7695,7 +7709,8 @@
           "digest",
           "source",
           "createdAt",
-          "sizeBytes"
+          "sizeBytes",
+          "pinned"
         ],
         "additionalProperties": false
       },
@@ -7831,6 +7846,10 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9007199254740991
+                  },
+                  "pinned": {
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -7840,7 +7859,8 @@
                   "digest",
                   "source",
                   "createdAt",
-                  "sizeBytes"
+                  "sizeBytes",
+                  "pinned"
                 ],
                 "additionalProperties": false
               }
@@ -7972,6 +7992,10 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9007199254740991
+                  },
+                  "pinned": {
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -7981,7 +8005,8 @@
                   "digest",
                   "source",
                   "createdAt",
-                  "sizeBytes"
+                  "sizeBytes",
+                  "pinned"
                 ],
                 "additionalProperties": false
               }
@@ -8071,6 +8096,134 @@
       "output": {
         "type": "object",
         "properties": {},
+        "additionalProperties": false
+      },
+      "stream": false
+    },
+    "images.pin": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "oci",
+              "imp"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pinned": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ref",
+          "digest",
+          "source",
+          "createdAt",
+          "sizeBytes",
+          "pinned"
+        ],
+        "additionalProperties": false
+      },
+      "stream": false
+    },
+    "images.unpin": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "oci",
+              "imp"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pinned": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ref",
+          "digest",
+          "source",
+          "createdAt",
+          "sizeBytes",
+          "pinned"
+        ],
         "additionalProperties": false
       },
       "stream": false
@@ -12396,6 +12549,9 @@
               },
               "guestScratch": {
                 "type": "boolean"
+              },
+              "imagePins": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -12503,6 +12659,9 @@
                 "type": "boolean"
               },
               "guestScratch": {
+                "type": "boolean"
+              },
+              "imagePins": {
                 "type": "boolean"
               }
             },
@@ -14532,6 +14691,10 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9007199254740991
+                  },
+                  "pinned": {
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -14606,6 +14769,10 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "pinned": {
+            "default": false,
+            "type": "boolean"
           }
         },
         "required": [

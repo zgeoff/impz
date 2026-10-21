@@ -65,6 +65,7 @@ test('it lets a nixie-* token add nixie-x from a pinned ref under its prefix', a
     source: 'oci',
     createdAt: expect.toBeValidDate() as unknown,
     sizeBytes: expect.any(Number) as unknown,
+    pinned: false,
   });
 });
 
