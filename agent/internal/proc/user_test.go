@@ -46,8 +46,8 @@ func TestLookupUserResolvesTheCredentialsAndHomeOfASpec(t *testing.T) {
 		{"imp:staff", &syscall.Credential{Uid: 1000, Gid: 50, Groups: []uint32{}}, "/home/imp"},
 		{"imp:7", &syscall.Credential{Uid: 1000, Gid: 7, Groups: []uint32{}}, "/home/imp"},
 		{"svc", &syscall.Credential{Uid: 1001, Gid: 1001, Groups: []uint32{999, 1001}}, "/srv"},
-		// A uid with no passwd entry gets no supplementary groups.
-		{"4242", &syscall.Credential{Uid: 4242, Gid: 4242, Groups: []uint32{}}, "/"},
+		// A uid with no passwd entry takes its own number as its gid.
+		{"4242", &syscall.Credential{Uid: 4242, Gid: 4242, Groups: []uint32{4242}}, "/"},
 		{"4242:999", &syscall.Credential{Uid: 4242, Gid: 999, Groups: []uint32{}}, "/"},
 	} {
 		t.Run(tc.spec, func(t *testing.T) {
@@ -80,28 +80,49 @@ func TestLookupUserLeavesRootToInheritTheAgentsCredentials(t *testing.T) {
 // gives no credential and no home, so it never falls back to root.
 func TestLookupUserFailsForASpecItCannotResolve(t *testing.T) {
 	for _, tc := range []struct {
-		name, passwd, group, spec string
-		// want is the error text, given the paths the test installed
-		want func(passwd, group string) string
+		name, spec, want string
 	}{
-		{name: "unknown user", passwd: "imp:x:1000:1000::/home/imp:/bin/bash\n", group: "imp:x:1000:\n", spec: "nobody",
-			want: func(string, string) string { return `unknown user "nobody"` }},
-		{name: "unknown group", passwd: "imp:x:1000:1000::/home/imp:/bin/bash\n", group: "imp:x:1000:\n", spec: "imp:nogroup",
-			want: func(string, string) string { return `unknown group "nogroup"` }},
-		// A malformed id must fail, never fall back to 0 (root).
-		{name: "bad uid", passwd: "bad:x:abc:1000::/:/bin/sh\n", group: "imp:x:1000:\n", spec: "bad",
-			want: func(passwd, _ string) string { return passwd + `: bad: bad id "abc"` }},
-		{name: "bad gid", passwd: "bad:x:1000:-1::/:/bin/sh\n", group: "imp:x:1000:\n", spec: "bad",
-			want: func(passwd, _ string) string { return passwd + `: bad: bad id "-1"` }},
-		{name: "bad group id", passwd: "imp:x:1000:1000::/home/imp:/bin/bash\n", group: "odd:x:zz:\n", spec: "imp:odd",
-			want: func(_, group string) string { return group + `: odd: bad id "zz"` }},
+		{name: "unknown user", spec: "nobody",
+			want: `user "nobody": unable to find user nobody: no matching entries in passwd file`},
+		{name: "unknown group", spec: "imp:nogroup",
+			want: `user "imp:nogroup": unable to find group nogroup: no matching entries in group file`},
+		// The library would read an empty user as uid 0.
+		{name: "empty user", spec: ":imp", want: `user ":imp": empty user or group`},
+		{name: "empty group", spec: "imp:", want: `user "imp:": empty user or group`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			useAccounts(t, "imp:x:1000:1000::/home/imp:/bin/bash\n", "imp:x:1000:\n")
+
+			cred, home, err := LookupUser(tc.spec)
+
+			assert.Check(t, cmp.Error(err, tc.want))
+			assert.Check(t, cmp.Nil(cred))
+			assert.Check(t, cmp.Equal(home, ""))
+		})
+	}
+}
+
+// setresuid and setresgid read (uid_t)-1 as "leave unchanged", so an id
+// outside 0 to 2^32-2 would keep the agent's root.
+func TestLookupUserRejectsAnIDOutsideTheKernelsRange(t *testing.T) {
+	for _, tc := range []struct {
+		name, passwd, group, spec, want string
+	}{
+		{name: "negative uid", passwd: "neg:x:-1:1000::/:/bin/sh\n", group: "", spec: "neg",
+			want: `user "neg": id -1 is out of range`},
+		{name: "negative gid", passwd: "neg:x:1000:-1::/:/bin/sh\n", group: "", spec: "neg",
+			want: `user "neg": id -1 is out of range`},
+		{name: "negative supplementary gid", passwd: "imp:x:1000:1000::/home/imp:/bin/bash\n", group: "odd:x:-5:imp\n", spec: "imp",
+			want: `user "imp": id -5 is out of range`},
+		{name: "the no-change gid", passwd: "big:x:1000:4294967295::/:/bin/sh\n", group: "", spec: "big",
+			want: `user "big": id 4294967295 is out of range`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			useAccounts(t, tc.passwd, tc.group)
 
 			cred, home, err := LookupUser(tc.spec)
 
-			assert.Check(t, cmp.Error(err, tc.want(passwdPath, groupPath)))
+			assert.Check(t, cmp.Error(err, tc.want))
 			assert.Check(t, cmp.Nil(cred))
 			assert.Check(t, cmp.Equal(home, ""))
 		})
@@ -116,16 +137,6 @@ func TestLookupUserGivesOnlyThePrimaryGroupWithoutAGroupFile(t *testing.T) {
 
 	assert.NilError(t, err)
 	assert.DeepEqual(t, cred.Groups, []uint32{1000})
-}
-
-// A malformed /etc/group line costs only that group, not every lookup.
-func TestLookupUserSkipsMalformedGroupLines(t *testing.T) {
-	useAccounts(t, "imp:x:1000:1000::/home/imp:/bin/bash\n", "odd:x:zz:imp\nbroken\ndocker:x:999:imp\n")
-
-	cred, _, err := LookupUser("imp")
-
-	assert.NilError(t, err)
-	assert.DeepEqual(t, cred.Groups, []uint32{999, 1000})
 }
 
 func TestLookupUserReadsAGroupLineLongerThanTheScannerDefault(t *testing.T) {

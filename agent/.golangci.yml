@@ -41,6 +41,7 @@ linters:
             - github.com/zgeoff/impz/agent
             - github.com/charmbracelet/x/ansi
             - github.com/mdlayher/vsock
+            - github.com/moby/sys/user
             - github.com/pkg/sftp
             - github.com/vishvananda/netlink
             - golang.org/x/sys
