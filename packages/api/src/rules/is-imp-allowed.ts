@@ -1,7 +1,3 @@
-// Imp patterns limit a token to some imps: an imp name with `*` for any run
-// of characters (ImpPatternSchema). Null patterns allow every imp. impd
-// checks every call with it; the CLI asks it before it places an imp.
-
 export function isImpAllowed(patterns: readonly string[] | null, name: string): boolean {
   return patterns === null || patterns.some((pattern) => isPatternMatch(pattern, name));
 }
@@ -19,7 +15,6 @@ function isPatternMatch(pattern: string, name: string): boolean {
     return false;
   }
 
-  // each middle part in order, between the prefix and the suffix
   let at = first.length;
   const end = name.length - last.length;
 

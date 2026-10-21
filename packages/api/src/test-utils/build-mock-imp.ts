@@ -5,9 +5,6 @@ type Nested<T> = T extends Date | readonly unknown[] | null ? T : T extends obje
 
 type ImpOverrides = { readonly [K in keyof Imp]?: Nested<Exclude<Imp[K], undefined>> };
 
-// A running imp with every field filled. Dates count back from faker's
-// reference date, which the preload fixes, so a seed gives the same imp;
-// nested overrides merge into their defaults.
 export function buildMockImp(overrides: ImpOverrides = {}): Imp {
   const createdAt = faker.date.past();
   const lastActiveAt = faker.date.between({ from: createdAt, to: faker.defaultRefDate() });
@@ -35,8 +32,8 @@ export function buildMockImp(overrides: ImpOverrides = {}): Imp {
     awakeMs: faker.number.int({ min: 0, max: 86_400_000 }),
   };
 
-  // keys in the order impd encodes them, so the JSON text of an imp matches;
-  // an override keeps its key's place
+  // Keys in the order impd encodes them, so the JSON text of an imp matches
+  // impd's.
   const defaults: Imp = {
     id: faker.string.uuid(),
     name: faker.helpers.fromRegExp(/[a-z][a-z0-9-]{2,12}/u),

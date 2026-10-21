@@ -1,6 +1,5 @@
 const UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB'] as const;
 
-// binary units, with one decimal below 100: "512 B", "1.5 KiB", "300 MiB"
 export function formatBytes(bytes: number): string {
   let value = bytes;
   let unit = 0;

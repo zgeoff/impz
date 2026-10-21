@@ -4,8 +4,6 @@ import type { ImpEvent } from '../schemas/event-schema';
 
 type GovernorDecision = Extract<ImpEvent, { ev: 'GovernorDecision' }>;
 
-// The RAM governor's event on impd's stream: an admitted boot of an imp,
-// within the budget.
 export function buildMockGovernorDecision(
   overrides: Partial<GovernorDecision> = {},
 ): GovernorDecision {

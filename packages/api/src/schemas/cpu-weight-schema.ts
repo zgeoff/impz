@@ -1,4 +1,4 @@
 import * as z from 'zod';
 
-// cgroup v2 cpu.weight; 100 is the default share
+// The range of cgroup v2's cpu.weight, whose default share is 100.
 export const CpuWeightSchema = z.int().min(1).max(10_000);

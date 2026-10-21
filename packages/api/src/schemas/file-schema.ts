@@ -1,20 +1,15 @@
 import * as z from 'zod';
 
-// One segment of a read-only file's path. No segment starts with a dot, so
-// no path names a file the agent stages. The agent checks the same rule
-// (agent/internal/files).
+// No segment starts with a dot, so no path names a file the guest agent
+// stages. The guest agent checks the same rule.
 export const FILE_SEGMENT_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$/u;
 
-// the most bytes one read-only file holds, as the agent caps them
+// The guest agent holds the same cap.
 export const FILE_DATA_MAX_BYTES = 524_288;
-
-// where the read-only files show in the guest
 export const FILES_GUEST_DIR = '/run/imp/files';
 const FILE_PATH_MAX_SEGMENTS = 8;
 const FILE_PATH_MAX_LENGTH = 512;
 
-// a read-only file's path under FILES_GUEST_DIR
-// (docs/architecture/guest/agent.md#read-only-files)
 export const FilePathSchema = z
   .string()
   .min(1)
@@ -33,7 +28,6 @@ export const FilePathSchema = z
     },
   );
 
-// a read-only file's content, as UTF-8 text within the agent's cap
 export const FileContentSchema = z
   .string()
   .refine((content) => new TextEncoder().encode(content).byteLength <= FILE_DATA_MAX_BYTES, {

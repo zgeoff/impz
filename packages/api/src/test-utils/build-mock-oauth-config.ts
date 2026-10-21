@@ -1,7 +1,6 @@
 import { faker } from '@faker-js/faker';
 import type { OAuthConfig } from '../schemas/secret-schema';
 
-// A form-encoded token endpoint on an arbitrary host, for an arbitrary client
 export function buildMockOAuthConfig(overrides: Partial<OAuthConfig> = {}): OAuthConfig {
   return {
     tokenUrl: `https://${faker.internet.domainName().toLowerCase()}/oauth/token`,
