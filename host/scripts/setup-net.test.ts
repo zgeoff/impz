@@ -1,33 +1,15 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { probeUnshare } from '../../packages/daemon/testing/host-net/probe-unshare';
+import { buildSetupNetGates } from '../../packages/daemon/testing/host-net/build-setup-net-gates';
+import { readHostNetfilter } from '../../packages/daemon/testing/host-net/read-host-netfilter';
 import { runInNetns } from '../../packages/daemon/testing/host-net/run-in-netns';
 
 // setup-net.sh runs as root in a fresh network namespace, through a user
 // namespace when not root, with a dummy uplink. Each test skips where that or
 // a tool it runs is missing, unless IMP_HOST_TESTS=required: `bun run test:host`.
 
-// A kernel can list the tables yet lack the rpfilter and hl matches a full run
-// appends, as a cloud imp's does. At module level: Bun 1.4.2's skipIf takes a
-// boolean and has no in-body skip.
-const fullNetfilter = probeUnshare([
-  'sh',
-  '-c',
-  [
-    'iptables -t raw -A PREROUTING -m rpfilter --invert -j DROP',
-    'ip6tables -t raw -A PREROUTING -m rpfilter --invert -j DROP',
-    'ip6tables -A INPUT -p ipv6-icmp --icmpv6-type 133 -m hl --hl-eq 255 -j ACCEPT',
-    'ip link',
-    'command -v sysctl',
-  ].join(' && '),
-]);
-
-// a refusal test stops before the first rule, so it needs only IPv4 nat
-const ipv4Netfilter = probeUnshare([
-  'sh',
-  '-c',
-  'iptables -t nat -S && ip link && command -v sysctl',
-]);
+// At module level: Bun 1.4.2's skipIf takes a boolean and has no in-body skip.
+const gates = buildSetupNetGates(readHostNetfilter());
 
 // it changes nothing before the check, so it runs anywhere
 test('it refuses to start without the settings host/entrypoint takes from impd', () => {
@@ -47,7 +29,7 @@ test('it refuses to start without the settings host/entrypoint takes from impd',
   });
 });
 
-test.skipIf(!fullNetfilter)(
+test.skipIf(!gates.fullRun)(
   'it leaves one pair of broker rules after a port change and an older INPUT drop',
   () => {
     const run = runInNetns({
@@ -84,7 +66,7 @@ iptables -t raw -S PREROUTING | grep imp-broker
   },
 );
 
-test.skipIf(!fullNetfilter)(
+test.skipIf(!gates.fullRun)(
   'it drops a connection to the broker port from outside the taps',
   () => {
     // lo stands in for eth0 and tailscale0: anything that is not imp+. The
@@ -124,7 +106,7 @@ kill "$LISTENER_PID"
   },
 );
 
-test.skipIf(!ipv4Netfilter)('it refuses to start with IPv4 forwarding off', () => {
+test.skipIf(!gates.refusals)('it refuses to start with IPv4 forwarding off', () => {
   const run = runInNetns({
     script: `
 ip link add up0 type dummy
@@ -151,7 +133,7 @@ bash "$SETUP_NET"
   });
 });
 
-test.skipIf(!ipv4Netfilter)('it refuses to start without a default route', () => {
+test.skipIf(!gates.refusals)('it refuses to start without a default route', () => {
   const run = runInNetns({
     script: `
 ip link add up0 type dummy
@@ -172,7 +154,7 @@ bash "$SETUP_NET"
   expect(run).toStrictEqual({ stdout: '', stderr: 'setup-net: no default route\n', exitCode: 1 });
 });
 
-test.skipIf(!fullNetfilter)(
+test.skipIf(!gates.fullRun)(
   'it leaves one UDP and one TCP pair of egress DNS rules after a resolver port change',
   () => {
     const run = runInNetns({
@@ -210,7 +192,7 @@ iptables -t raw -S PREROUTING | grep imp-egress-dns
   },
 );
 
-test.skipIf(!fullNetfilter)(
+test.skipIf(!gates.fullRun)(
   'it writes the IPv6 guest rules, the MSS clamp and the forwarding sysctls once, with an IPv6 uplink',
   () => {
     const run = runInNetns({
@@ -264,7 +246,7 @@ sysctl -n net.ipv6.conf.up0.accept_ra net.ipv6.conf.default.accept_ra net.ipv6.c
   },
 );
 
-test.skipIf(!fullNetfilter)(
+test.skipIf(!gates.fullRun)(
   'it replaces an older 0x2/0x2 network mark rule with the 0x1000000 one, ahead of the drop between taps',
   () => {
     const run = runInNetns({
