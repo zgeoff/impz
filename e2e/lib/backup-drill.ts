@@ -98,7 +98,7 @@ function readMinioName(): string {
   return `${instance.container}-minio`;
 }
 
-export async function startMinio(secrets: Readonly<BackupSecrets>): Promise<void> {
+async function startMinio(secrets: Readonly<BackupSecrets>): Promise<void> {
   await runCommand(['docker', 'rm', '-f', readMinioName()]);
 
   await runChecked([
@@ -141,7 +141,7 @@ export async function startMinio(secrets: Readonly<BackupSecrets>): Promise<void
   }
 }
 
-export async function stopMinio(): Promise<void> {
+async function stopMinio(): Promise<void> {
   await runCommand(['docker', 'rm', '-f', readMinioName()]);
 }
 
@@ -191,7 +191,7 @@ export function startRestic(secrets: Readonly<BackupSecrets>, ...args: readonly 
   return runCommand(['docker', 'exec', '-d', ...buildResticExecArgs(secrets, args)]);
 }
 
-export async function runBackup() {
+async function runBackup() {
   const stdout = await runImp('backup', 'run', '--json');
 
   return BackupRunSchema.parse(JSON.parse(stdout));
