@@ -30,9 +30,11 @@ const sockFd = 3
 // maxMessage bounds one message: an exec's argv and env, with room.
 const maxMessage = 4 << 20
 
-// The ops on the socket. The agent sends spawn and signal; the inner init
-// answers each by id, and sends ready once and exit for each spawned child.
+// The ops on the socket. The agent sends start once, then spawn and
+// signal; the inner init answers each by id, and sends ready once and exit
+// for each spawned child.
 const (
+	opStart  = "start"
 	opReady  = "ready"
 	opSpawn  = "spawn"
 	opSignal = "signal"

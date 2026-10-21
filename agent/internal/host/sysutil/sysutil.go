@@ -1,6 +1,6 @@
 // Package sysutil holds the small system helpers that several of the agent's
-// packages share: random names, the fds a unix socket passes, and the
-// search of a PATH.
+// packages share: random names, the fds a unix socket passes, the search
+// of a PATH, and a mount that happens once.
 package sysutil
 
 import (

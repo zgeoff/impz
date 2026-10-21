@@ -165,6 +165,28 @@ func TestAFailedSpawnKeepsItsErrno(t *testing.T) {
 	assert.ErrorIs(t, err, syscall.ENOENT)
 }
 
+func TestAwaitStartReturnsOnTheAgentsStart(t *testing.T) {
+	sp, err := newSocketpair()
+	assert.NilError(t, err)
+	t.Cleanup(func() { unix.Close(sp[0]); unix.Close(sp[1]) })
+	assert.NilError(t, send(sp[0], message{Op: opStart}, nil))
+
+	err = awaitStart(sp[1])
+
+	assert.NilError(t, err)
+}
+
+func TestAwaitStartRefusesAnotherOpBeforeTheStart(t *testing.T) {
+	sp, err := newSocketpair()
+	assert.NilError(t, err)
+	t.Cleanup(func() { unix.Close(sp[0]); unix.Close(sp[1]) })
+	assert.NilError(t, send(sp[0], message{ID: 1, Op: opSpawn}, nil))
+
+	err = awaitStart(sp[1])
+
+	assert.Error(t, err, `the agent said "spawn" before the start`)
+}
+
 func TestWhenTheInitDiesEveryWaitEnds(t *testing.T) {
 	c, kill := pair(t)
 	null := devnull(t)

@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/zgeoff/impz/agent/internal/base/reaper"
 	"github.com/zgeoff/impz/agent/internal/base/safe"
 	"github.com/zgeoff/impz/agent/internal/host/cgroup"
@@ -53,6 +55,8 @@ type Manager struct {
 	firstBackoff time.Duration
 	// readyTimeout bounds each init's setup
 	readyTimeout time.Duration
+	// early is the fork Prestart started, which the first start takes
+	early chan forkedInit
 
 	mu      sync.Mutex
 	current *client
@@ -127,21 +131,36 @@ func (m *Manager) startOnce() error {
 	return err
 }
 
+// Prestart forks the container's init ahead of Launch, which takes it: the
+// boot calls it before it mounts the user disk, so the init's start-up runs
+// beside the mount. The init waits for Launch to start it. Call it at most
+// once, before Launch.
+func (m *Manager) Prestart() {
+	early := make(chan forkedInit, 1)
+	m.early = early
+	safe.Go("inner: prestart", func() {
+		p, err := m.forkInit()
+		early <- forkedInit{p, err}
+	}, func() { early <- forkedInit{nil, errors.New("panic")} })
+}
+
+// forkedInit is the outcome of a fork that Prestart started.
+type forkedInit struct {
+	p   *initProc
+	err error
+}
+
 func (m *Manager) tryStart() error {
-	// what a container left behind (a cgroup that outlived the last wait,
-	// say) must not fail this one
-	m.cleanCgroup()
-	trace("i.clean")
-	cg, err := os.Open(m.cgroupDir)
-	if err != nil {
-		return fmt.Errorf("open %s: %w", m.cgroupDir, err)
-	}
-	defer cg.Close()
-	p, err := m.startInit(cg)
+	p, err := m.takeInit()
 	if err != nil {
 		return err
 	}
-	trace("i.fork")
+	if err := send(p.sock, message{Op: opStart}, nil); err != nil {
+		p.kill()
+		unix.Close(p.sock)
+		m.cleanCgroup()
+		return fmt.Errorf("start the inner init: %w", err)
+	}
 	c, err := connect(p, m.readyTimeout)
 	if err != nil {
 		m.cleanCgroup()
@@ -174,6 +193,36 @@ func (m *Manager) tryStart() error {
 		p.kill()
 	}
 	return nil
+}
+
+// takeInit returns the init that Prestart forked, the first time, or forks
+// one.
+func (m *Manager) takeInit() (*initProc, error) {
+	if early := m.early; early != nil {
+		m.early = nil
+		f := <-early
+		return f.p, f.err
+	}
+	return m.forkInit()
+}
+
+// forkInit forks one inner init into the container's cgroup.
+func (m *Manager) forkInit() (*initProc, error) {
+	// what a container left behind (a cgroup that outlived the last wait,
+	// say) must not fail this one
+	m.cleanCgroup()
+	trace("i.clean")
+	cg, err := os.Open(m.cgroupDir)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", m.cgroupDir, err)
+	}
+	defer cg.Close()
+	p, err := m.startInit(cg)
+	if err != nil {
+		return nil, err
+	}
+	trace("i.fork")
+	return p, nil
 }
 
 // watch waits for the container to end: its init dying, or its socket

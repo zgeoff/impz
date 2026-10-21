@@ -71,7 +71,14 @@ func testManager(t *testing.T, gate <-chan struct{}, entered chan<- struct{}) (*
 			return nil, err
 		}
 		f := &fakeInit{died: make(chan reaper.Status, 1), sp: pair[1], served: make(chan error, 1), killed: make(chan struct{})}
-		go func() { f.served <- serve(pair[1], &proc.Direct{Reaper: testReaper}) }()
+		// as the real init, it sets up nothing until the manager starts it
+		go func() {
+			if err := awaitStart(pair[1]); err != nil {
+				f.served <- err
+				return
+			}
+			f.served <- serve(pair[1], &proc.Direct{Reaper: testReaper})
+		}()
 		mu.Lock()
 		made = append(made, f)
 		mu.Unlock()
@@ -136,6 +143,31 @@ func TestLaunchBringsTheContainerUp(t *testing.T) {
 
 	receive(t, inits, 5*time.Second, "init")
 	assert.DeepEqual(t, m.Status(), Status{Up: true})
+}
+
+func TestLaunchStartsTheInitThatPrestartForked(t *testing.T) {
+	m, inits := testManager(t, nil, nil)
+	m.Prestart()
+	receive(t, inits, 5*time.Second, "prestarted init")
+
+	m.Launch()
+
+	assert.DeepEqual(t, m.Status(), Status{Up: true})
+	assert.Check(t, cmp.Len(inits, 0), "Launch forked a second init")
+}
+
+func TestAPrestartedInitThatDiesBeforeTheStartIsABadStart(t *testing.T) {
+	m, inits := testManager(t, nil, nil)
+	m.firstBackoff = time.Hour
+	m.Prestart()
+	f := receive(t, inits, 5*time.Second, "prestarted init")
+	f.die()
+
+	m.Launch()
+
+	st := m.Status()
+	assert.Check(t, !st.Up)
+	assert.Check(t, st.LastErr != "", "the failed start left no error")
 }
 
 func TestARestartRunsOnDownThenOnUp(t *testing.T) {

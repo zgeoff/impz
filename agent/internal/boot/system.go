@@ -69,7 +69,7 @@ func Run() error {
 	if params.Template {
 		c, err := claim.Park(listenVsock, buildPing, func(c *proto.Claim) error {
 			steps.restart()
-			return claim.Apply(c, userDisk)
+			return claim.Apply(c, inner.UserDisk)
 		})
 		if err != nil {
 			return err
@@ -79,7 +79,12 @@ func Run() error {
 	} else {
 		steps.mark("world")
 	}
-	if err := mountUserDisk(); err != nil {
+	// the container's init starts up while the agent mounts the disk it
+	// runs on
+	mgr := inner.New(r, inner.Config{RunSize: innerRunSize()})
+	mPre := inner.Mono()
+	mgr.Prestart()
+	if err := inner.MountUserDisk(); err != nil {
 		return err
 	}
 	steps.mark("mount")
@@ -100,7 +105,6 @@ func Run() error {
 	}
 	steps.mark("network")
 
-	mgr := inner.New(r, inner.Config{RunSize: innerRunSize()})
 	root := mgr.Root()
 	image := imagecfg.NewLive(imagecfg.Config{})
 	sup := services.New(mgr, root, image)
@@ -124,13 +128,10 @@ func Run() error {
 	// with the container down, the image config stays at its defaults
 	// until it starts
 	steps.mark("i.new")
-	m0 := inner.Mono()
 	mgr.Launch()
 	for _, t := range inner.TakeTrace() {
-		steps.steps = append(steps.steps, &proto.BootStep{Name: t.Name, Ms: uint32(max(t.Mono-m0, 0) / 1e6)})
-		m0 = t.Mono
+		steps.steps = append(steps.steps, &proto.BootStep{Name: t.Name, Ms: uint32(max(t.Mono-mPre, 0) / 1e6)})
 	}
-	steps.last = time.Now().Add(-time.Duration(inner.Mono() - m0))
 	steps.mark("inner")
 	prepareRoot(root, params, image, steps.mark)
 	steps.mark("root")
@@ -221,7 +222,7 @@ func Run() error {
 // disk.
 func prepareRoot(root fsroot.FS, params cmdline.Params, image *imagecfg.Live, mark func(string)) {
 	if name := params.Hostname; name != "" {
-		if err := fsroot.WriteFileAtomic(root, "/etc/hostname", []byte(name+"\n"), 0o644); err != nil {
+		if err := fsroot.RewriteFile(root, "/etc/hostname", []byte(name+"\n"), 0o644); err != nil {
 			log.Printf("hostname: %v", err)
 		}
 		mark("r.hostname")
