@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
+import { hashSecret } from '../../platform/secrets/hash-secret';
 
 export function deriveTokenHash(token: string): string {
-  return createHash('sha256').update(token).digest('base64url');
+  return hashSecret(token).toString('base64url');
 }

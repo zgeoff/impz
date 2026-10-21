@@ -4,7 +4,7 @@ import { buildStubTailscale } from '../../../testing/network/build-stub-tailscal
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { generateEd25519Key } from '../../surface/ssh/host-key';
 import { createKnownHosts } from './ambient-request';
-import { isSameOrigin, resolveCaller } from './authenticate';
+import { resolveCaller } from './authenticate';
 import { buildSessionValue } from './session-cookie';
 import { createTailnetIdentities, runWhois } from './tailnet-identity';
 import { ROOT_TOKEN_ID, loadTokenStore } from './token-store';
@@ -702,38 +702,4 @@ test('#resolveCaller takes a tailnet identity from the dashboard’s own page', 
   );
 
   expect(caller?.kind).toBe('tailnet');
-});
-
-test.each([
-  ['http://imp:7070', true],
-  ['https://imp:7070', true],
-  ['http://imp:20001', false],
-  ['http://other:7070', false],
-  ['null', false],
-  ['not a url', false],
-])('#isSameOrigin without fetch metadata answers the origin %p with %p', (origin, same) => {
-  const request = new Request('http://imp:7070/rpc/imps/list', {
-    method: 'POST',
-    headers: { host: 'imp:7070', origin },
-  });
-
-  expect(isSameOrigin(request)).toBe(same);
-});
-
-test('#isSameOrigin refuses a request with no origin and no fetch metadata', () => {
-  const request = new Request('http://imp:7070/rpc/imps/list', {
-    method: 'POST',
-    headers: { host: 'imp:7070' },
-  });
-
-  expect(isSameOrigin(request)).toBeFalse();
-});
-
-test('#isSameOrigin lets fetch metadata win over a matching origin', () => {
-  const request = new Request('http://imp:7070/rpc/imps/list', {
-    method: 'POST',
-    headers: { host: 'imp:7070', origin: 'http://imp:7070', 'sec-fetch-site': 'cross-site' },
-  });
-
-  expect(isSameOrigin(request)).toBeFalse();
 });

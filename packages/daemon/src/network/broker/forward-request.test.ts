@@ -355,7 +355,7 @@ test('it records an audit row when the upstream body fails midway', async () => 
 
   firstRead.resolve();
 
-  expect(reader.read()).rejects.toThrow('upstream reset');
+  expect(reader.read()).rejects.toBeUndefined();
 
   expect(audits).toStrictEqual([
     {

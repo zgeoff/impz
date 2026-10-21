@@ -1,18 +1,13 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { PublicImp } from '../../platform/db/exposure';
 import type { StoredPublicAuth } from '../../platform/db/imps';
+import { hashSecret } from '../../platform/secrets/hash-secret';
+import { isSameDigest } from '../../platform/secrets/is-same-digest';
 import type { ProxyRoute } from '../proxy/wake-proxy';
 import type { ListenerScope } from './https-listeners';
 import type { PublicLimits } from './public-limits';
 
-export function createCredential(): string {
-  return randomBytes(32).toString('base64url');
-}
-
 export function buildCredentialHash(credential: string): string {
-  // impd makes every credential long enough that a fast hash is safe to
-  // store and to check on every request
-  return createHash('sha256').update(credential).digest('base64url');
+  return hashSecret(credential).toString('base64url');
 }
 
 export function createPublicScope(
@@ -99,16 +94,15 @@ function checkCredential(stored: StoredPublicAuth, authorization: string | null)
     return false;
   }
 
-  const storedDigest = Buffer.from(stored.hash, 'base64url');
-  const presentedDigest = buildDigest(presented.secret);
+  // the user name as sha256 digests too, so its length leaks no timing
+  const isUser =
+    stored.auth !== 'basic' ||
+    isSameDigest(hashSecret(presented.user ?? ''), hashSecret(stored.user ?? ''));
 
-  if (storedDigest.length !== presentedDigest.length) {
-    return false;
-  }
-
-  // both sides as sha256 digests: equal lengths, compared in constant time
-  const isUser = stored.auth !== 'basic' || isSameDigest(presented.user ?? '', stored.user ?? '');
-  const isSecret = timingSafeEqual(presentedDigest, storedDigest);
+  const isSecret = isSameDigest(
+    hashSecret(presented.secret),
+    Buffer.from(stored.hash, 'base64url'),
+  );
 
   return isUser && isSecret;
 }
@@ -139,12 +133,4 @@ function readPresented(stored: StoredPublicAuth, authorization: string | null): 
   const colon = decoded.indexOf(':');
 
   return colon === -1 ? null : { user: decoded.slice(0, colon), secret: decoded.slice(colon + 1) };
-}
-
-function buildDigest(text: string): Buffer {
-  return createHash('sha256').update(text).digest();
-}
-
-function isSameDigest(left: string, right: string): boolean {
-  return timingSafeEqual(buildDigest(left), buildDigest(right));
 }

@@ -1,5 +1,4 @@
 import * as z from 'zod';
-import { isSameOrigin } from '../../identity/auth/authenticate';
 import {
   SESSION_MAX_AGE_S,
   buildClearedSessionCookies,
@@ -7,6 +6,7 @@ import {
   buildSessionValue,
 } from '../../identity/auth/session-cookie';
 import type { TokenStore } from '../../identity/auth/token-store';
+import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
 
 const LoginSchema = z.object({ token: z.string() });
 
@@ -20,7 +20,7 @@ export interface SessionRouteDeps {
 export function createSessionRoutes(deps: Readonly<SessionRouteDeps>) {
   return {
     login: async (request: Request): Promise<Response> => {
-      if (!isSameOrigin(request)) {
+      if (!isAllowedOrigin(request, { kind: 'same-origin' })) {
         return Response.json({ error: 'cross-origin' }, { status: 403 });
       }
 
@@ -44,7 +44,7 @@ export function createSessionRoutes(deps: Readonly<SessionRouteDeps>) {
       });
     },
     logout: (request: Request): Response => {
-      if (!isSameOrigin(request)) {
+      if (!isAllowedOrigin(request, { kind: 'same-origin' })) {
         return Response.json({ error: 'cross-origin' }, { status: 403 });
       }
 

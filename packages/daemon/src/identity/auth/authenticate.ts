@@ -1,3 +1,4 @@
+import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
 import { isAllowedAmbientRequest } from './ambient-request';
 import type { KnownHosts } from './ambient-request';
 import type { Caller } from './caller';
@@ -34,7 +35,9 @@ export async function resolveCaller(
     return sources.tokens.authenticate(bearer);
   }
 
-  if (options.cookie && isSameOrigin(request)) {
+  // imps serve pages on other ports of this host, which SameSite counts as the
+  // same site, so only a same-origin request may use the cookie
+  if (options.cookie && isAllowedOrigin(request, { kind: 'same-origin' })) {
     const session = readSessionCaller(request, sources);
 
     if (session !== null) {
@@ -70,29 +73,4 @@ function readSessionCaller(request: Request, sources: Readonly<CallerSources>): 
   }
 
   return null;
-}
-
-export function isSameOrigin(request: Request): boolean {
-  // imps serve pages on other ports of this host, which SameSite counts as the
-  // same site, so only a same-origin request may use the cookie
-  const site = request.headers.get('sec-fetch-site');
-
-  if (site !== null) {
-    return site === 'same-origin';
-  }
-
-  const origin = request.headers.get('origin');
-
-  if (origin === null) {
-    return false;
-  }
-
-  // host and port only (Bun builds the request URL from the Host header): a
-  // TLS front such as tailscale serve talks plain HTTP to impd, so the scheme
-  // the browser saw is not the one impd sees
-  try {
-    return new URL(origin).host === new URL(request.url).host;
-  } catch {
-    return false;
-  }
 }

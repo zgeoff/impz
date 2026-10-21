@@ -1,5 +1,7 @@
 import type { AuditRefusal, GrantFilter } from '@impz/api';
 import type { NewAuditEntry } from '../../platform/db/broker-audit';
+import { sendWithCa } from '../../platform/http/send-with-ca';
+import { tapStream } from '../../platform/process/tap-stream';
 import { isRequestInFilter } from './is-request-in-filter';
 
 export interface Credential {
@@ -53,7 +55,7 @@ const METHOD_OVERRIDE_HEADERS = ['x-http-method-override', 'x-http-method', 'x-m
 const MAX_AUDIT_PATH = 512;
 
 export function createForwarder(deps: ForwardDeps): (request: Request) => Promise<Response> {
-  const fetchUpstream = deps.fetch ?? sendUpstream;
+  const fetchUpstream = deps.fetch ?? sendWithCa;
 
   return async (request) => {
     const started = performance.now();
@@ -239,12 +241,6 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
   };
 }
 
-function sendUpstream(url: string, init: UpstreamInit): Promise<Response> {
-  const tls = init.tls === undefined ? {} : { tls: { ca: [...init.tls.ca] } };
-
-  return fetch(url, { ...init, ...tls });
-}
-
 function findHostName(value: string | null): string | null {
   if (value === null) {
     return null;
@@ -294,46 +290,14 @@ function countBytes(
   body: ReadableStream<Uint8Array>,
   onEnd: (bytes: number) => void,
 ): ReadableStream<Uint8Array> {
-  const reader = body.getReader();
-  const state = { bytes: 0, ended: false };
+  const state = { bytes: 0 };
 
-  const emitEnd = (): void => {
-    if (!state.ended) {
-      state.ended = true;
-
-      onEnd(state.bytes);
-    }
-  };
-
-  return new ReadableStream<Uint8Array>(
-    {
-      pull: async (controller) => {
-        try {
-          const chunk = await reader.read();
-
-          if (chunk.done) {
-            emitEnd();
-
-            controller.close();
-
-            return;
-          }
-
-          state.bytes += chunk.value.byteLength;
-
-          controller.enqueue(chunk.value);
-        } catch (error) {
-          emitEnd();
-
-          controller.error(error);
-        }
-      },
-      cancel: async (reason) => {
-        emitEnd();
-
-        await reader.cancel(reason);
-      },
+  return tapStream(body, {
+    onChunk: (chunk) => {
+      state.bytes += chunk.byteLength;
     },
-    { highWaterMark: 0 },
-  );
+    onEnd: () => {
+      onEnd(state.bytes);
+    },
+  });
 }

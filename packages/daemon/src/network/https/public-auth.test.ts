@@ -1,16 +1,8 @@
 import { expect, test } from 'bun:test';
 import { buildMockPublicImp } from '../../../testing/network/build-mock-public-imp';
 import { buildMockStoredPublicAuth } from '../../../testing/network/build-mock-stored-public-auth';
-import { buildCredentialHash, createCredential, createPublicRoute } from './public-auth';
+import { buildCredentialHash, createPublicRoute } from './public-auth';
 import { createPublicLimits } from './public-limits';
-
-test('#createCredential makes 32 random bytes as base64url', () => {
-  expect(createCredential()).toMatch(/^[\w\-]{43}$/v);
-});
-
-test('#createCredential makes a different credential each time', () => {
-  expect(createCredential()).not.toBe(createCredential());
-});
 
 test('#buildCredentialHash keeps the sha256 of the credential, not the credential', () => {
   // the sha256 of the credential in base64url, as `openssl dgst -sha256` gives it

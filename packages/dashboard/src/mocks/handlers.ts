@@ -1,4 +1,4 @@
-import { isSameOrigin } from '@impz/daemon/src/identity/auth/authenticate';
+import { isAllowedOrigin } from '@impz/daemon/src/platform/http/is-allowed-origin';
 import { RPCHandler } from '@orpc/server/fetch';
 import { HttpResponse, http } from 'msw';
 import * as z from 'zod';
@@ -22,7 +22,7 @@ const LoginSchema = z.object({ token: z.string() });
 const rpc = new RPCHandler(impdRouter);
 
 export function resolveLogin(context: RouteContext): Promise<Response> {
-  if (!isSameOrigin(context.request)) {
+  if (!isAllowedOrigin(context.request, { kind: 'same-origin' })) {
     return Promise.resolve(HttpResponse.json({ error: 'cross-origin' }, { status: 403 }));
   }
 
@@ -30,7 +30,7 @@ export function resolveLogin(context: RouteContext): Promise<Response> {
 }
 
 export function resolveLogout(context: RouteContext): Response {
-  if (!isSameOrigin(context.request)) {
+  if (!isAllowedOrigin(context.request, { kind: 'same-origin' })) {
     return HttpResponse.json({ error: 'cross-origin' }, { status: 403 });
   }
 
@@ -84,7 +84,9 @@ async function resolveLoginBody(json: unknown): Promise<Response> {
 }
 
 function readSession(request: Request): ImpdSession | null {
-  const session = isSameOrigin(request) ? sessionCollection.findFirst() : undefined;
+  const session = isAllowedOrigin(request, { kind: 'same-origin' })
+    ? sessionCollection.findFirst()
+    : undefined;
 
   if (session === undefined || session.expiresAt.getTime() <= Date.now()) {
     return null;

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { MAX_SSH_KEYS } from '@impz/api';
 import type { Scope, SshKey, Token } from '@impz/api';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
@@ -17,6 +17,10 @@ import {
   writeTokenSshKeyRecord,
 } from '../../platform/db/tokens';
 import type { GrantableSecret, TokenRecord, TokenSshKeyRecord } from '../../platform/db/tokens';
+import { hashSecret } from '../../platform/secrets/hash-secret';
+import { isSameDigest } from '../../platform/secrets/is-same-digest';
+import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
+import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
 import type { Caller } from './caller';
@@ -117,7 +121,7 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
     }
   }
 
-  const rootHash = buildSecretHash(deps.rootToken);
+  const rootHash = hashSecret(deps.rootToken);
 
   const rootCaller: Caller = {
     kind: 'token',
@@ -215,8 +219,8 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
         throw buildConflictError('token', token.name);
       }
 
-      const id = randomBytes(12).toString('base64url');
-      const secret = randomBytes(32).toString('base64url');
+      const minted = mintOpaqueToken(SECRET_PREFIX);
+      const id = minted.id;
       const entries = buildKeyEntries(token.sshKeys ?? [], (line) => buildKeyEntry(id, line));
 
       const grantable = await readGrantable(deps.db, token.grantable ?? [], token);
@@ -228,7 +232,7 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
       const record: TokenRecord = {
         id,
         name: token.name,
-        secretHash: buildSecretHash(secret).toString('hex'),
+        secretHash: hashSecret(minted.secret).toString('hex'),
         scope: token.scope,
         imps: token.imps,
         grantable,
@@ -248,7 +252,7 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
         keysByFingerprint.set(entry.record.fingerprint, entry);
       }
 
-      return { token: toFullToken(record), secret: `${SECRET_PREFIX}${id}.${secret}` };
+      return { token: toFullToken(record), secret: minted.text };
     },
     update: async (name, change) => {
       const record = requireByName(name);
@@ -343,16 +347,16 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
       };
     },
     authenticate: (secret) => {
-      const parsed = parseSecret(secret);
+      const parsed = parseOpaqueToken(SECRET_PREFIX, secret);
       const record = parsed === null ? undefined : byId.get(parsed.id);
 
       if (parsed !== null && record !== undefined) {
-        return isSameHash(buildSecretHash(parsed.secret), Buffer.from(record.secretHash, 'hex'))
+        return isSameDigest(hashSecret(parsed.secret), Buffer.from(record.secretHash, 'hex'))
           ? toCaller(record)
           : null;
       }
 
-      return isSameHash(buildSecretHash(secret), rootHash) ? rootCaller : null;
+      return isSameDigest(hashSecret(secret), rootHash) ? rootCaller : null;
     },
     findById: (id) => {
       if (id === ROOT_TOKEN_ID) {
@@ -478,27 +482,6 @@ function buildKeyEntries(lines: readonly string[], build: (line: string) => KeyE
 
 export function findBearer(header: string | null): string | null {
   return header !== null && header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
-}
-
-function parseSecret(text: string): { readonly id: string; readonly secret: string } | null {
-  if (!text.startsWith(SECRET_PREFIX)) {
-    return null;
-  }
-
-  const [id, secret, ...rest] = text.slice(SECRET_PREFIX.length).split('.');
-
-  return id === undefined || secret === undefined || rest.length > 0 ? null : { id, secret };
-}
-
-function buildSecretHash(secret: string): Buffer {
-  // 256 random bits need no slow hash; a slow hash is for secrets a person picks
-  return createHash('sha256').update(secret).digest();
-}
-
-// both are SHA-256 digests, so the lengths match and the compare is constant
-// time; the check guards a stored hash that is not one
-function isSameHash(given: Buffer, expected: Buffer): boolean {
-  return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
 function toToken(record: Readonly<TokenRecord>): Omit<Token, 'sshKeys'> {

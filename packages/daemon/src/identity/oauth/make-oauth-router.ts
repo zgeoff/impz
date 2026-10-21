@@ -1,6 +1,7 @@
 import { verifyOAuthQueryParams } from '@better-auth/oauth-provider';
 import type { Scope } from '@impz/api';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
 import type { Caller } from '../auth/caller';
 import { buildBadTokenRequest } from './build-bad-token-request';
 import { buildConsentBinding } from './build-consent-binding';
@@ -9,7 +10,6 @@ import { formatApprovalCode } from './create-sign-ins';
 import { deriveTokenHash } from './derive-token-hash';
 import { expandScopes } from './expand-scopes';
 import { formatScopeList, pickGrantScope } from './grant-limits';
-import { isSameOriginForm } from './is-same-origin-form';
 import {
   buildPageHeaders,
   renderAllowPage,
@@ -540,7 +540,10 @@ export function makeOAuthRouter(
       return Promise.resolve(null);
     }
 
-    if (request.method === 'POST' && !isSameOriginForm(request, deps.origin)) {
+    if (
+      request.method === 'POST' &&
+      !isAllowedOrigin(request, { kind: 'same-origin-form', origin: deps.origin })
+    ) {
       return Promise.resolve(buildErrorPage('bad_request'));
     }
 

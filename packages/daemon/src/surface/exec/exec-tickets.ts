@@ -1,9 +1,13 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Caller } from '../../identity/auth/caller';
 import type { Revocations } from '../../identity/auth/revocations';
 import type { TokenStore } from '../../identity/auth/token-store';
 import { createTtlCache } from '../../platform/process/ttl-cache';
+import { hashSecret } from '../../platform/secrets/hash-secret';
+import { isSameDigest } from '../../platform/secrets/is-same-digest';
+import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
+import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
 
+const TICKET_PREFIX = '';
 const TICKET_TTL_MS = 30_000;
 const MAX_LIVE_TICKETS_PER_CALLER = 32;
 const MAX_LIVE_TICKETS = 1024;
@@ -24,7 +28,7 @@ export interface ExecTickets {
 }
 
 interface LiveTicket {
-  readonly secret: Buffer;
+  readonly secretHash: Buffer;
   readonly holder: TicketHolder;
   readonly owner: string;
 }
@@ -74,34 +78,30 @@ export function createExecTickets(deps: Readonly<ExecTicketsDeps>): ExecTickets 
         live.delete(owned[0]);
       }
 
-      const id = randomBytes(12).toString('base64url');
-      const secret = randomBytes(32);
+      const minted = mintOpaqueToken(TICKET_PREFIX);
       const expiresAt = at + TICKET_TTL_MS;
 
-      live.set(id, { secret, holder: { name, caller }, owner });
+      live.set(minted.id, {
+        secretHash: hashSecret(minted.secret),
+        holder: { name, caller },
+        owner,
+      });
 
-      return { ticket: `${id}.${secret.toString('base64url')}`, expiresAt: new Date(expiresAt) };
+      return { ticket: minted.text, expiresAt: new Date(expiresAt) };
     },
     redeem: (ticket) => {
-      const [id, secretText, ...rest] = ticket.split('.');
+      const parsed = parseOpaqueToken(TICKET_PREFIX, ticket);
+      const entry = parsed === null ? undefined : live.peek(parsed.id);
 
-      if (id === undefined || secretText === undefined || rest.length > 0) {
+      if (
+        parsed === null ||
+        entry === undefined ||
+        !isSameDigest(hashSecret(parsed.secret), entry.secretHash)
+      ) {
         return null;
       }
 
-      const entry = live.peek(id);
-
-      if (entry === undefined) {
-        return null;
-      }
-
-      const given = Buffer.from(secretText, 'base64url');
-
-      if (given.length !== entry.secret.length || !timingSafeEqual(given, entry.secret)) {
-        return null;
-      }
-
-      live.delete(id);
+      live.delete(parsed.id);
 
       return deps.isLive(entry.holder.caller) ? entry.holder : null;
     },

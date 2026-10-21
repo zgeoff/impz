@@ -1,4 +1,5 @@
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
+import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
 
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
 
@@ -31,29 +32,7 @@ export function isAllowedAmbientRequest(request: Request, hosts: ReadonlySet<str
   // come from impd's own origin, not an imp's port
   const host = findHostName(request.headers.get('host'));
 
-  if (host === null || !hosts.has(host)) {
-    return false;
-  }
-
-  const site = request.headers.get('sec-fetch-site');
-
-  // `none` is a navigation the user typed
-  if (site !== null && site !== 'same-origin' && site !== 'none') {
-    return false;
-  }
-
-  // a client that is not a browser sends no Origin
-  const origin = request.headers.get('origin');
-
-  if (origin === null) {
-    return true;
-  }
-
-  try {
-    return new URL(origin).host === request.headers.get('host')?.toLowerCase();
-  } catch {
-    return false;
-  }
+  return host !== null && hosts.has(host) && isAllowedOrigin(request, { kind: 'ambient' });
 }
 
 function readAddressHost(ip: string): string | null {
