@@ -116,7 +116,7 @@ to the server and run it as root. Take it from a release tag: it runs the image 
 <!-- x-release-please-start-version -->
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/zgeoff/impz/v2.9.0/deploy/bootstrap.sh
+curl -fsSLO https://raw.githubusercontent.com/zgeoff/impz/v2.10.0/deploy/bootstrap.sh
 install -m 0600 /dev/null /root/ts-key && vi /root/ts-key        # the auth key, one line
 bash bootstrap.sh --dry-run --data-device /dev/nvme1n1 --tailscale-authkey-file /root/ts-key
 bash bootstrap.sh --yes --data-device /dev/nvme1n1 --tailscale-authkey-file /root/ts-key
@@ -435,7 +435,7 @@ gh attestation verify oci://ghcr.io/zgeoff/imp-host:<version> -R zgeoff/impz
 <!-- x-release-please-start-version -->
 
 ```sh
-docker pull ghcr.io/zgeoff/imp-host:2.9.0
+docker pull ghcr.io/zgeoff/imp-host:2.10.0
 gh release download -R zgeoff/impz -p 'impz-linux-x64' -p SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS && install -m 0755 impz-linux-x64 ~/.local/bin/impz
 ```
