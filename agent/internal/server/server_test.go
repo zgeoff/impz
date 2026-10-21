@@ -12,8 +12,8 @@ import (
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 
+	"github.com/zgeoff/impz/agent/internal/base/reaper"
 	"github.com/zgeoff/impz/agent/internal/proto"
-	"github.com/zgeoff/impz/agent/internal/reaper"
 )
 
 // The reaper runs a process-wide wait4 loop: two in one process would reap
@@ -173,8 +173,7 @@ func TestHandleRefusesARequestWithoutItsRequiredField(t *testing.T) {
 // A freeze over the wire that finds the root frozen replies FROZEN.
 func TestHandleRepliesFrozenToASecondFreeze(t *testing.T) {
 	var f fakeIoctl
-	f.install(t)
-	s := &Server{}
+	s := &Server{rootIoctl: f.ioctl}
 	assert.NilError(t, s.freeze(time.Hour))
 	t.Cleanup(func() { s.thaw() })
 

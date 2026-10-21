@@ -18,16 +18,11 @@ type fakeIoctl struct {
 	calls []uint
 }
 
-func (f *fakeIoctl) install(t *testing.T) {
-	t.Helper()
-	prev := rootIoctl
-	rootIoctl = func(req uint) error {
-		f.mu.Lock()
-		defer f.mu.Unlock()
-		f.calls = append(f.calls, req)
-		return nil
-	}
-	t.Cleanup(func() { rootIoctl = prev })
+func (f *fakeIoctl) ioctl(req uint) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, req)
+	return nil
 }
 
 func (f *fakeIoctl) get() []uint {
@@ -41,8 +36,7 @@ func (f *fakeIoctl) get() []uint {
 func TestFreezeThawsItselfWhenTheTimeoutPasses(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var f fakeIoctl
-		f.install(t)
-		s := &Server{}
+		s := &Server{rootIoctl: f.ioctl}
 		assert.NilError(t, s.freeze(time.Second))
 
 		time.Sleep(time.Second - time.Nanosecond)
@@ -59,8 +53,7 @@ func TestFreezeThawsItselfWhenTheTimeoutPasses(t *testing.T) {
 func TestFreezeWithoutATimeoutThawsItselfAfterTheDefault(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var f fakeIoctl
-		f.install(t)
-		s := &Server{}
+		s := &Server{rootIoctl: f.ioctl}
 		assert.NilError(t, s.freeze(0))
 
 		time.Sleep(defaultFreezeTimeout - time.Nanosecond)
@@ -80,15 +73,11 @@ func TestFreezeWithoutATimeoutThawsItselfAfterTheDefault(t *testing.T) {
 // the blocked callback would once it took the lock.
 func TestStaleAutoThawLeavesALaterFreezeFrozen(t *testing.T) {
 	var f fakeIoctl
-	f.install(t)
 	var callbacks []func()
-	prev := afterFunc
-	afterFunc = func(d time.Duration, fn func()) *time.Timer {
+	s := &Server{rootIoctl: f.ioctl, afterFunc: func(d time.Duration, fn func()) *time.Timer {
 		callbacks = append(callbacks, fn)
-		return prev(d, func() {})
-	}
-	t.Cleanup(func() { afterFunc = prev })
-	s := &Server{}
+		return time.AfterFunc(d, func() {})
+	}}
 	assert.NilError(t, s.freeze(time.Millisecond))
 	t.Cleanup(func() { s.thaw() })
 	assert.NilError(t, s.thaw())
@@ -104,21 +93,16 @@ func TestStaleAutoThawLeavesALaterFreezeFrozen(t *testing.T) {
 // its freeze thawed and a new one in place, and leaves the new one frozen.
 func TestAutoThawThatFiresWhileTheLockIsHeldWaitsAndThenLeavesALaterFreeze(t *testing.T) {
 	var f fakeIoctl
-	f.install(t)
 	var callbacks []func()
-	prev := afterFunc
-	afterFunc = func(d time.Duration, fn func()) *time.Timer {
+	s := &Server{rootIoctl: f.ioctl, afterFunc: func(d time.Duration, fn func()) *time.Timer {
 		callbacks = append(callbacks, fn)
-		return prev(time.Hour, func() {})
-	}
-	t.Cleanup(func() { afterFunc = prev })
-	s := &Server{}
+		return time.AfterFunc(time.Hour, func() {})
+	}}
 	assert.NilError(t, s.freeze(time.Millisecond))
 	t.Cleanup(func() { s.thaw() })
 	autoThaw := callbacks[0]
 	started := make(chan struct{})
-	autoThawFired = func() { close(started) }
-	t.Cleanup(func() { autoThawFired = nil })
+	s.autoThawFired = func() { close(started) }
 	s.freezeMu.Lock()
 	held := true
 	fired := make(chan struct{})
@@ -165,8 +149,7 @@ func TestAutoThawThatFiresWhileTheLockIsHeldWaitsAndThenLeavesALaterFreeze(t *te
 
 func TestFreezeRefusesASecondFreezeAsFrozen(t *testing.T) {
 	var f fakeIoctl
-	f.install(t)
-	s := &Server{}
+	s := &Server{rootIoctl: f.ioctl}
 	assert.NilError(t, s.freeze(time.Hour))
 	t.Cleanup(func() { s.thaw() })
 
@@ -178,8 +161,7 @@ func TestFreezeRefusesASecondFreezeAsFrozen(t *testing.T) {
 
 func TestThawThawsASecondFreeze(t *testing.T) {
 	var f fakeIoctl
-	f.install(t)
-	s := &Server{}
+	s := &Server{rootIoctl: f.ioctl}
 	assert.NilError(t, s.freeze(time.Hour))
 	t.Cleanup(func() { s.thaw() })
 	assert.NilError(t, s.thaw())
@@ -194,8 +176,7 @@ func TestThawThawsASecondFreeze(t *testing.T) {
 
 func TestFreezeSucceedsAgainAfterAThaw(t *testing.T) {
 	var f fakeIoctl
-	f.install(t)
-	s := &Server{}
+	s := &Server{rootIoctl: f.ioctl}
 	assert.NilError(t, s.freeze(time.Hour))
 	t.Cleanup(func() { s.thaw() })
 	assert.NilError(t, s.thaw())
@@ -208,20 +189,15 @@ func TestFreezeSucceedsAgainAfterAThaw(t *testing.T) {
 
 // EBUSY is a filesystem frozen from inside the guest.
 func TestFreezeOfARootFrozenInTheGuestIsFrozen(t *testing.T) {
-	prev := rootIoctl
-	rootIoctl = func(uint) error { return unix.EBUSY }
-	t.Cleanup(func() { rootIoctl = prev })
+	s := &Server{rootIoctl: func(uint) error { return unix.EBUSY }}
 
-	err := (&Server{}).freeze(time.Hour)
+	err := s.freeze(time.Hour)
 
 	assert.ErrorIs(t, err, errFrozen)
 }
 
 func TestFreezeReportsAnotherIoctlFailure(t *testing.T) {
-	prev := rootIoctl
-	rootIoctl = func(uint) error { return unix.EPERM }
-	t.Cleanup(func() { rootIoctl = prev })
-	s := &Server{}
+	s := &Server{rootIoctl: func(uint) error { return unix.EPERM }}
 
 	err := s.freeze(time.Hour)
 
@@ -230,19 +206,16 @@ func TestFreezeReportsAnotherIoctlFailure(t *testing.T) {
 }
 
 func TestThawOfAnUnfrozenRootIsNotAnError(t *testing.T) {
-	prev := rootIoctl
-	rootIoctl = func(uint) error { return unix.EINVAL }
-	t.Cleanup(func() { rootIoctl = prev })
+	s := &Server{rootIoctl: func(uint) error { return unix.EINVAL }}
 
-	err := (&Server{}).thaw()
+	err := s.thaw()
 
 	assert.NilError(t, err)
 }
 
 func TestThawForPoweroffThawsAFrozenRoot(t *testing.T) {
 	var f fakeIoctl
-	f.install(t)
-	s := &Server{}
+	s := &Server{rootIoctl: f.ioctl}
 	assert.NilError(t, s.freeze(time.Hour))
 	t.Cleanup(func() { s.thaw() })
 
@@ -254,8 +227,7 @@ func TestThawForPoweroffThawsAFrozenRoot(t *testing.T) {
 
 func TestFreezeAfterThawForPoweroffIsPoweringOff(t *testing.T) {
 	var f fakeIoctl
-	f.install(t)
-	s := &Server{}
+	s := &Server{rootIoctl: f.ioctl}
 	assert.NilError(t, s.ThawForPoweroff())
 
 	err := s.freeze(time.Hour)
@@ -265,37 +237,32 @@ func TestFreezeAfterThawForPoweroffIsPoweringOff(t *testing.T) {
 }
 
 // fakeGrow records the sizes grow asks the disk for.
-func fakeGrow(t *testing.T) *[]int64 {
-	t.Helper()
-	var grown []int64
-	prev := waitAndGrow
-	waitAndGrow = func(_ string, target int64, _ time.Duration) error {
-		grown = append(grown, target)
-		return nil
-	}
-	t.Cleanup(func() { waitAndGrow = prev })
-	return &grown
+type fakeGrow struct {
+	grown []int64
+}
+
+func (g *fakeGrow) waitAndGrow(_ string, target int64, _ time.Duration) error {
+	g.grown = append(g.grown, target)
+	return nil
 }
 
 func TestGrowWhileFrozenIsRefusedAsFrozen(t *testing.T) {
 	var f fakeIoctl
-	f.install(t)
-	grown := fakeGrow(t)
-	s := &Server{}
+	var g fakeGrow
+	s := &Server{rootIoctl: f.ioctl, waitAndGrow: g.waitAndGrow}
 	assert.NilError(t, s.freeze(time.Minute))
 	t.Cleanup(func() { s.thaw() })
 
 	err := s.grow(1 << 30)
 
 	assert.Check(t, cmp.ErrorIs(err, errFrozen))
-	assert.Check(t, cmp.Len(*grown, 0), "the refused grow reached the disk")
+	assert.Check(t, cmp.Len(g.grown, 0), "the refused grow reached the disk")
 }
 
 func TestGrowAfterAThawGrowsTheDisk(t *testing.T) {
 	var f fakeIoctl
-	f.install(t)
-	grown := fakeGrow(t)
-	s := &Server{}
+	var g fakeGrow
+	s := &Server{rootIoctl: f.ioctl, waitAndGrow: g.waitAndGrow}
 	assert.NilError(t, s.freeze(time.Minute))
 	t.Cleanup(func() { s.thaw() })
 	assert.NilError(t, s.thaw())
@@ -303,5 +270,5 @@ func TestGrowAfterAThawGrowsTheDisk(t *testing.T) {
 	err := s.grow(1 << 30)
 
 	assert.Check(t, cmp.Nil(err))
-	assert.Check(t, cmp.DeepEqual(*grown, []int64{1 << 30}))
+	assert.Check(t, cmp.DeepEqual(g.grown, []int64{1 << 30}))
 }

@@ -56,3 +56,8 @@ pre-push:
       glob: 'agent/**/*.go'
       root: agent/
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
+    - name: go:fmt-vet-ksm-exec
+      files: bun run --silent files:branch
+      glob: 'host/ksm-exec/**/*.go'
+      root: host/ksm-exec/
+      run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...

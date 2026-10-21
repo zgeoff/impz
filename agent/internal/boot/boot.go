@@ -8,13 +8,14 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"strings"
 
 	"golang.org/x/sys/unix"
 
-	"github.com/zgeoff/impz/agent/internal/disk"
-	"github.com/zgeoff/impz/agent/internal/files"
-	"github.com/zgeoff/impz/agent/internal/inner"
+	"github.com/zgeoff/impz/agent/internal/feature/files"
+	"github.com/zgeoff/impz/agent/internal/feature/inner"
+	"github.com/zgeoff/impz/agent/internal/feature/memory"
+	"github.com/zgeoff/impz/agent/internal/host/cgroup"
+	"github.com/zgeoff/impz/agent/internal/host/disk"
 )
 
 const (
@@ -22,11 +23,6 @@ const (
 
 	// agentRunSize caps the agent's own /run: its sockets and little else
 	agentRunSize = "16m"
-
-	// userReserve is memory the inner container's cgroup leaves to the agent
-	// and the kernel, so a user process that eats all of it meets the OOM
-	// killer inside its cgroup, not the agent.
-	userReserve = 64 << 20
 )
 
 // setupAgentWorld mounts the agent's own filesystems on the system drive,
@@ -42,7 +38,7 @@ func setupAgentWorld() error {
 	if err := mountOnce("sysfs", "/sys", "sysfs", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, ""); err != nil {
 		return err
 	}
-	if err := mountOnce("cgroup2", "/sys/fs/cgroup", "cgroup2",
+	if err := mountOnce("cgroup2", cgroup.Root, "cgroup2",
 		unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC|unix.MS_RELATIME, "nsdelegate"); err != nil {
 		return err
 	}
@@ -94,49 +90,22 @@ func protectAgent() {
 }
 
 // setupUserCgroup makes the inner container's cgroup with every controller
-// and a memory limit that leaves userReserve to the agent and the kernel.
+// and a memory limit that leaves some memory to the agent and the kernel.
 func setupUserCgroup() error {
-	const root = "/sys/fs/cgroup"
-	controllers, err := os.ReadFile(root + "/cgroup.controllers")
-	if err != nil {
+	if err := cgroup.EnableControllers(cgroup.Root, "boot: "); err != nil {
 		return err
-	}
-	var enable []string
-	for _, c := range strings.Fields(string(controllers)) {
-		enable = append(enable, "+"+c)
-	}
-	if err := os.WriteFile(root+"/cgroup.subtree_control", []byte(strings.Join(enable, " ")), 0); err != nil { //nolint:gosec // G703: the path is the cgroup root the agent mounted, not input
-		log.Printf("boot: enable %v: %v", enable, err)
 	}
 	if err := os.MkdirAll(inner.CgroupDir, 0o755); err != nil {
 		return err
 	}
-	if limit := userMemoryMax(memTotal()); limit != noMemoryLimit {
-		writeUserMemoryMax(limit)
-	}
+	memory.SetUserMax()
 	return nil
-}
-
-// memTotal is the guest's memory in bytes, or 0.
-func memTotal() int64 {
-	b, err := os.ReadFile("/proc/meminfo")
-	if err != nil {
-		return 0
-	}
-	for _, line := range strings.Split(string(b), "\n") {
-		f := strings.Fields(line)
-		if len(f) >= 2 && f[0] == "MemTotal:" {
-			kib, _ := strconv.ParseInt(f[1], 10, 64)
-			return kib << 10
-		}
-	}
-	return 0
 }
 
 // innerRunSize is the inner /run's size: a tenth of memory, as a user's
 // /run full of files must not take the guest's memory.
 func innerRunSize() string {
-	if total := memTotal(); total > 0 {
+	if total := memory.Total(); total > 0 {
 		return strconv.FormatInt(total/10, 10)
 	}
 	return ""

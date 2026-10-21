@@ -1,5 +1,7 @@
 package proto
 
+import "errors"
+
 // Version is the agent protocol version reported by ping.
 const Version = "0.21.0"
 
@@ -95,6 +97,16 @@ const (
 	IdentityResetOK     = "ok"
 	IdentityResetFailed = "failed"
 )
+
+// ReplyError writes err as an error response: a *Error as it is, and any
+// other error as INTERNAL with its text.
+func ReplyError(w *Writer, err error) error {
+	var pe *Error
+	if !errors.As(err, &pe) {
+		pe = &Error{Code: ErrInternal, Message: err.Error()}
+	}
+	return w.WriteMessage(TypeResponse, &ErrorResponse{Error: pe})
+}
 
 // StartError is the error for a process that could not start.
 func StartError(err error, down bool) *Error {

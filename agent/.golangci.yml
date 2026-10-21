@@ -16,6 +16,7 @@ linters:
       exclude-functions:
         - (*github.com/zgeoff/impz/agent/internal/proto.Writer).Write
         - (*github.com/zgeoff/impz/agent/internal/proto.Writer).WriteMessage
+        - github.com/zgeoff/impz/agent/internal/proto.ReplyError
     gosec:
       excludes:
         # errcheck checks unhandled errors
@@ -41,124 +42,51 @@ linters:
             - github.com/zgeoff/impz/agent
             - github.com/charmbracelet/x/ansi
             - github.com/mdlayher/vsock
+            - github.com/moby/sys/user
             - github.com/pkg/sftp
             - github.com/vishvananda/netlink
             - golang.org/x/sys
-            - golang.org/x/term
             - google.golang.org/protobuf
             - gotest.tools/v3
-        # the agent's layers from the bottom up: the wire and the reaper, the
-        # host helpers, the features, the server, then boot. A package imports
-        # only its own layer and the layers below it.
-        layer-wire:
+        # the agent's layers from the bottom up, one folder each under
+        # internal/: base (with proto, whose path the generated code fixes),
+        # host, feature, server, then boot. A package imports only its own
+        # layer and the layers below it. A folder's trailing slash keeps its
+        # rule off a package whose name only starts with the folder's.
+        layer-base:
           files:
             - '**/internal/proto/*.go'
-            - '**/internal/safe/*.go'
-            - '**/internal/reaper/*.go'
+            - '**/internal/base/**'
           deny:
-            - pkg: github.com/zgeoff/impz/agent/internal/proc
-              desc: the host layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/fsroot
-              desc: the host layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/pty
-              desc: the host layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/cgroup
-              desc: the host layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/cmdline
-              desc: the host layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/imagecfg
-              desc: the host layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/netcfg
-              desc: the host layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/disk
-              desc: the host layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/dropcaps
-              desc: the host layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/inner
-              desc: the features layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/launch
-              desc: the features layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/dial
-              desc: the features layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/listen
-              desc: the features layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/exec
-              desc: the features layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/session
-              desc: the features layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/services
-              desc: the features layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/outer
-              desc: the features layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/tartool
-              desc: the features layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/sftpserver
-              desc: the features layer sits above the wire layer
-            - pkg: github.com/zgeoff/impz/agent/internal/files
-              desc: the features layer sits above the wire layer
+            - pkg: github.com/zgeoff/impz/agent/internal/host/
+              desc: the host layer sits above the base layer
+            - pkg: github.com/zgeoff/impz/agent/internal/feature/
+              desc: the feature layer sits above the base layer
             - pkg: github.com/zgeoff/impz/agent/internal/server
-              desc: the server layer sits above the wire layer
+              desc: the server layer sits above the base layer
             - pkg: github.com/zgeoff/impz/agent/internal/boot
-              desc: the boot layer sits above the wire layer
+              desc: the boot layer sits above the base layer
         layer-host:
           files:
-            - '**/internal/proc/*.go'
-            - '**/internal/fsroot/*.go'
-            - '**/internal/pty/*.go'
-            - '**/internal/cgroup/*.go'
-            - '**/internal/cmdline/*.go'
-            - '**/internal/imagecfg/*.go'
-            - '**/internal/netcfg/*.go'
-            - '**/internal/disk/*.go'
-            - '**/internal/dropcaps/*.go'
+            - '**/internal/host/**'
           deny:
-            - pkg: github.com/zgeoff/impz/agent/internal/inner
-              desc: the features layer sits above the host layer
-            - pkg: github.com/zgeoff/impz/agent/internal/launch
-              desc: the features layer sits above the host layer
-            - pkg: github.com/zgeoff/impz/agent/internal/dial
-              desc: the features layer sits above the host layer
-            - pkg: github.com/zgeoff/impz/agent/internal/listen
-              desc: the features layer sits above the host layer
-            - pkg: github.com/zgeoff/impz/agent/internal/exec
-              desc: the features layer sits above the host layer
-            - pkg: github.com/zgeoff/impz/agent/internal/session
-              desc: the features layer sits above the host layer
-            - pkg: github.com/zgeoff/impz/agent/internal/services
-              desc: the features layer sits above the host layer
-            - pkg: github.com/zgeoff/impz/agent/internal/outer
-              desc: the features layer sits above the host layer
-            - pkg: github.com/zgeoff/impz/agent/internal/tartool
-              desc: the features layer sits above the host layer
-            - pkg: github.com/zgeoff/impz/agent/internal/sftpserver
-              desc: the features layer sits above the host layer
-            - pkg: github.com/zgeoff/impz/agent/internal/files
-              desc: the features layer sits above the host layer
+            - pkg: github.com/zgeoff/impz/agent/internal/feature/
+              desc: the feature layer sits above the host layer
             - pkg: github.com/zgeoff/impz/agent/internal/server
               desc: the server layer sits above the host layer
             - pkg: github.com/zgeoff/impz/agent/internal/boot
               desc: the boot layer sits above the host layer
-        layer-features:
+        layer-feature:
           files:
-            - '**/internal/inner/*.go'
-            - '**/internal/launch/*.go'
-            - '**/internal/dial/*.go'
-            - '**/internal/listen/*.go'
-            - '**/internal/exec/*.go'
-            - '**/internal/session/*.go'
-            - '**/internal/services/*.go'
-            - '**/internal/outer/*.go'
-            - '**/internal/tartool/*.go'
-            - '**/internal/sftpserver/*.go'
-            - '**/internal/files/*.go'
+            - '**/internal/feature/**'
           deny:
             - pkg: github.com/zgeoff/impz/agent/internal/server
-              desc: the server layer sits above the features layer
+              desc: the server layer sits above the feature layer
             - pkg: github.com/zgeoff/impz/agent/internal/boot
-              desc: the boot layer sits above the features layer
+              desc: the boot layer sits above the feature layer
         layer-server:
           files:
-            - '**/internal/server/*.go'
+            - '**/internal/server/**'
           deny:
             - pkg: github.com/zgeoff/impz/agent/internal/boot
               desc: the boot layer sits above the server layer

@@ -20,12 +20,12 @@ FROM oven/bun:1.4.2@sha256:9114c058aeae42162ee16dd5084b95fe9473970bb6bcb5b232ab1
 # --- ksm-exec: starts Firecracker so KSM may merge its guest memory, when
 # IMP_KSM is on (docs/architecture/lifecycle/ram-governor.md#ksm) ---
 FROM golang:1.26.8-trixie@sha256:eae2aaa6add2936cbf350dd0d2628b363461542f0c4b3c0b558957e0f2997379 AS ksm-exec
-WORKDIR /src/agent
-COPY agent/go.mod agent/go.sum ./
+WORKDIR /src/ksm-exec
+COPY host/ksm-exec/go.mod host/ksm-exec/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
-COPY agent/cmd/ksm-exec/ ./cmd/ksm-exec/
+COPY host/ksm-exec/*.go ./
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/ksm-exec ./cmd/ksm-exec
+    CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/ksm-exec .
 
 # --- runtime: what every host container needs, dev or release ---
 FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime
@@ -147,9 +147,9 @@ COPY kernel/config-base kernel/docker.fragment kernel/make-vmlinux.sh ./
 ARG JOBS=
 RUN ./build.sh --in-builder && rm -rf /k/.build
 
-# --- agent: the static guest agent, imp-agentctl, and the system drive that
-# holds the agent. scripts/release/build-system-drive.sh builds the same stage for
-# the dev instance. ---
+# --- agent: the static guest agent and the system drive that holds it.
+# scripts/release/build-system-drive.sh builds the same stage for the dev
+# instance. ---
 FROM golang:1.26.8-trixie@sha256:eae2aaa6add2936cbf350dd0d2628b363461542f0c4b3c0b558957e0f2997379 AS agent
 
 ARG DEBIAN_SNAPSHOT=20261001T000000Z
@@ -197,9 +197,7 @@ RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY agent/ ./
 # -buildvcs=false and -trimpath keep git state and paths out of the binaries.
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    for cmd in imp-agent imp-agentctl; do \
-      CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o "/out/$cmd" "./cmd/$cmd" || exit 1; \
-    done
+    CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/imp-agent ./cmd/imp-agent
 
 # The drive is mounted read-only as the root of the agent's world, so its
 # mountpoints must exist in it: /user takes the user disk. /bin holds

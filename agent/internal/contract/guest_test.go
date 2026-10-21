@@ -11,12 +11,12 @@ import (
 
 	"gotest.tools/v3/assert"
 
-	"github.com/zgeoff/impz/agent/internal/exec"
-	"github.com/zgeoff/impz/agent/internal/files"
+	"github.com/zgeoff/impz/agent/internal/feature/exec"
+	"github.com/zgeoff/impz/agent/internal/feature/files"
+	"github.com/zgeoff/impz/agent/internal/feature/services"
+	"github.com/zgeoff/impz/agent/internal/feature/session"
+	"github.com/zgeoff/impz/agent/internal/feature/tartool"
 	"github.com/zgeoff/impz/agent/internal/proto"
-	"github.com/zgeoff/impz/agent/internal/services"
-	"github.com/zgeoff/impz/agent/internal/session"
-	"github.com/zgeoff/impz/agent/internal/tartool"
 )
 
 var write = flag.Bool("write", false, "rewrite testdata/guest from the values in guest_test.go")

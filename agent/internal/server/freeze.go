@@ -9,10 +9,10 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/zgeoff/impz/agent/internal/disk"
-	"github.com/zgeoff/impz/agent/internal/inner"
+	"github.com/zgeoff/impz/agent/internal/base/safe"
+	"github.com/zgeoff/impz/agent/internal/feature/inner"
+	"github.com/zgeoff/impz/agent/internal/host/disk"
 	"github.com/zgeoff/impz/agent/internal/proto"
-	"github.com/zgeoff/impz/agent/internal/safe"
 )
 
 // defaultFreezeTimeout auto-thaws / if the host never sends thaw, so a host
@@ -24,17 +24,6 @@ const (
 	fiFreeze = 0xC0045877
 	fiThaw   = 0xC0045878
 )
-
-// rootIoctl is a variable so tests can run without root.
-var rootIoctl = ioctlRoot
-
-// afterFunc schedules the auto-thaw; a variable so a test can run a fired
-// timer's callback at the moment it chooses.
-var afterFunc = time.AfterFunc
-
-// autoThawFired, when a test sets it, runs as an auto-thaw callback starts,
-// before it takes freezeMu. Nil in the agent.
-var autoThawFired func()
 
 var (
 	errFrozen      = &proto.Error{Code: proto.ErrFrozen, Message: "the root filesystem is already frozen"}
@@ -57,7 +46,7 @@ func (s *Server) freeze(timeout time.Duration) error {
 	}
 	// No unix.Sync first: freeze_super syncs the filesystem itself, and a
 	// global sync would block on another frozen filesystem.
-	if err := rootIoctl(fiFreeze); err != nil {
+	if err := s.ioctl(fiFreeze); err != nil {
 		// EBUSY: frozen by someone else, such as fsfreeze in the guest.
 		if errors.Is(err, unix.EBUSY) {
 			return errFrozen
@@ -69,10 +58,14 @@ func (s *Server) freeze(timeout time.Duration) error {
 	gen := s.freezeGen
 	// Stop cannot cancel a callback that already fired and waits on
 	// freezeMu, so the callback checks that its freeze is still current.
+	afterFunc := time.AfterFunc
+	if s.afterFunc != nil {
+		afterFunc = s.afterFunc
+	}
 	s.thawTimer = afterFunc(timeout, func() {
 		defer safe.Recover("auto-thaw", nil)
-		if autoThawFired != nil {
-			autoThawFired()
+		if s.autoThawFired != nil {
+			s.autoThawFired()
 		}
 		s.freezeMu.Lock()
 		defer s.freezeMu.Unlock()
@@ -90,9 +83,6 @@ func (s *Server) freeze(timeout time.Duration) error {
 // growTimeout bounds the wait for the guest to see the disk's new size.
 const growTimeout = 10 * time.Second
 
-// waitAndGrow is a variable so tests can run without a disk.
-var waitAndGrow = disk.WaitAndGrow
-
 // grow resizes the root filesystem once the disk reaches diskBytes. A frozen
 // filesystem would block the resize, so a grow during a freeze fails with
 // FROZEN, and a freeze waits for a grow. impd sends grow, freeze and thaw
@@ -103,6 +93,10 @@ func (s *Server) grow(diskBytes int64) error {
 	defer s.freezeMu.Unlock()
 	if s.frozen {
 		return errFrozen
+	}
+	waitAndGrow := disk.WaitAndGrow
+	if s.waitAndGrow != nil {
+		waitAndGrow = s.waitAndGrow
 	}
 	return waitAndGrow(inner.UserRoot, diskBytes, growTimeout)
 }
@@ -129,11 +123,18 @@ func (s *Server) thawLocked() error {
 		s.thawTimer.Stop()
 		s.thawTimer = nil
 	}
-	if err := rootIoctl(fiThaw); err != nil && err != unix.EINVAL {
+	if err := s.ioctl(fiThaw); err != nil && err != unix.EINVAL {
 		return fmt.Errorf("FITHAW: %w", err)
 	}
 	s.frozen = false
 	return nil
+}
+
+func (s *Server) ioctl(req uint) error {
+	if s.rootIoctl != nil {
+		return s.rootIoctl(req)
+	}
+	return ioctlRoot(req)
 }
 
 func ioctlRoot(req uint) error {

@@ -12,14 +12,14 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	"github.com/zgeoff/impz/agent/internal/dial"
-	"github.com/zgeoff/impz/agent/internal/exec"
-	"github.com/zgeoff/impz/agent/internal/files"
-	"github.com/zgeoff/impz/agent/internal/listen"
+	"github.com/zgeoff/impz/agent/internal/base/safe"
+	"github.com/zgeoff/impz/agent/internal/feature/dial"
+	"github.com/zgeoff/impz/agent/internal/feature/exec"
+	"github.com/zgeoff/impz/agent/internal/feature/files"
+	"github.com/zgeoff/impz/agent/internal/feature/listen"
+	"github.com/zgeoff/impz/agent/internal/feature/services"
+	"github.com/zgeoff/impz/agent/internal/feature/session"
 	"github.com/zgeoff/impz/agent/internal/proto"
-	"github.com/zgeoff/impz/agent/internal/safe"
-	"github.com/zgeoff/impz/agent/internal/services"
-	"github.com/zgeoff/impz/agent/internal/session"
 )
 
 // Port is the vsock port the agent listens on.
@@ -58,6 +58,15 @@ type Server struct {
 	frozen    bool
 	// poweringOff refuses freezes once poweroff has thawed for good.
 	poweringOff bool
+
+	// Tests set these to run without root, a disk or a real timer; nil is
+	// the real kernel call, time.AfterFunc and disk.WaitAndGrow.
+	rootIoctl   func(req uint) error
+	afterFunc   func(d time.Duration, fn func()) *time.Timer
+	waitAndGrow func(mountpoint string, target int64, timeout time.Duration) error
+	// autoThawFired runs as an auto-thaw callback starts, before it takes
+	// freezeMu
+	autoThawFired func()
 }
 
 // Listen backoff bounds. A snapshot restore resets the vsock transport; the
@@ -114,12 +123,12 @@ func (s *Server) handle(c net.Conn) {
 		return
 	}
 	if f.Type != proto.TypeRequest {
-		replyErr(w, proto.ErrBadRequest, "first frame must be REQUEST, got "+f.Type.String())
+		proto.ReplyError(w, &proto.Error{Code: proto.ErrBadRequest, Message: "first frame must be REQUEST, got " + f.Type.String()})
 		return
 	}
 	req := &proto.Request{}
 	if err := proto.Unmarshal(f.Payload, req); err != nil {
-		replyErr(w, proto.ErrBadRequest, err.Error())
+		proto.ReplyError(w, &proto.Error{Code: proto.ErrBadRequest, Message: err.Error()})
 		return
 	}
 
@@ -173,11 +182,7 @@ func (s *Server) handle(c net.Conn) {
 	}
 	resp, err := s.safeUnary(req)
 	if err != nil {
-		var pe *proto.Error
-		if !errors.As(err, &pe) {
-			pe = &proto.Error{Code: proto.ErrInternal, Message: err.Error()}
-		}
-		w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: pe})
+		proto.ReplyError(w, err)
 		return
 	}
 	w.WriteMessage(proto.TypeResponse, resp)
@@ -256,14 +261,10 @@ func (s *Server) unary(req *proto.Request) (protoreflect.ProtoMessage, error) {
 // agent's world has no accounts, and a session would outlive the caller.
 func (s *Server) serveOuter(req *proto.Request, r *proto.Reader, w *proto.Writer) error {
 	if req.GetSession() != "" {
-		return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{
-			Error: &proto.Error{Code: proto.ErrBadRequest, Message: "an outer exec takes no session"},
-		})
+		return proto.ReplyError(w, &proto.Error{Code: proto.ErrBadRequest, Message: "an outer exec takes no session"})
 	}
 	if req.GetUser() != "" && req.GetUser() != "root" && req.GetUser() != "0" {
-		return w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{
-			Error: &proto.Error{Code: proto.ErrBadRequest, Message: "an outer exec runs as root"},
-		})
+		return proto.ReplyError(w, &proto.Error{Code: proto.ErrBadRequest, Message: "an outer exec runs as root"})
 	}
 	return s.Outer.Serve(req, r, w)
 }
@@ -284,14 +285,10 @@ func (s *Server) serveLogs(req *proto.Request, r *proto.Reader, w *proto.Writer)
 	err := s.Services.Logs(req.GetService(), logReq, w, done)
 	var pe *proto.Error
 	if errors.As(err, &pe) {
-		w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: pe})
+		proto.ReplyError(w, pe)
 	} else if err != nil {
 		log.Printf("services.logs %s: %v", req.GetService(), err)
 	}
-}
-
-func replyErr(w *proto.Writer, code, msg string) {
-	w.WriteMessage(proto.TypeResponse, &proto.ErrorResponse{Error: &proto.Error{Code: code, Message: msg}})
 }
 
 // BuildPing reports the uptime from CLOCK_BOOTTIME, or none when the clock
