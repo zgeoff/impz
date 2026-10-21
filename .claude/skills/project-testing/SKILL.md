@@ -89,6 +89,8 @@ read that CI job's result instead of working around it.
 
 - Plain `bun test` loads every `*.test.ts` except `packages/dashboard/**`, which only
   `bun run test:dashboard` runs.
+- A client or MCP server test that needs a real impd lives in
+  [`packages/integration/`](../../../packages/integration/), not beside its module.
 - `*.e2e.ts` and `*.pebble.ts` never run in plain `bun test`; each runs only when its `./` path is
   given, which the e2e harness and `test:pebble` do.
 - Gated tests load in plain `bun test` and skip: the real-pool ZFS tests until `IMP_TEST_ZFS_ROOT`
