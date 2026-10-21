@@ -432,6 +432,8 @@ export const callerContract = {
 
 export type CallerContract = typeof callerContract;
 
-export const impContract = { ...callerContract, auth: authContract };
+// every procedure that impd answers with no caller
+export const sessionContract = { auth: authContract };
+export const impContract = { ...callerContract, ...sessionContract };
 
 export type ImpContract = typeof impContract;

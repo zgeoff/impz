@@ -1,4 +1,4 @@
-import { authContract } from '@impz/api';
+import { sessionContract } from '@impz/api';
 import { ORPCError, implement, onError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { setCookie } from '@orpc/server/helpers';
@@ -23,7 +23,13 @@ export interface SessionHandlerDeps {
   readonly logFailure?: (failure: unknown) => void;
 }
 
-const SESSION_PATH = '/rpc/auth/';
+const RPC_PREFIX = '/rpc';
+
+const SESSION_PATHS: ReadonlySet<string> = new Set(
+  Object.entries(sessionContract).flatMap(([namespace, procedures]) =>
+    Object.keys(procedures).map((name) => `${RPC_PREFIX}/${namespace}/${name}`),
+  ),
+);
 
 interface SessionContext {
   readonly request: Request;
@@ -31,7 +37,7 @@ interface SessionContext {
 }
 
 export function createSessionHandler(deps: Readonly<SessionHandlerDeps>) {
-  const auth = implement(authContract)
+  const session = implement(sessionContract)
     .$context<SessionContext>()
     .use((options) => {
       if (!isAllowedOrigin(options.context.request, { kind: 'same-origin' })) {
@@ -41,7 +47,9 @@ export function createSessionHandler(deps: Readonly<SessionHandlerDeps>) {
       return options.next();
     });
 
-  const router = {
+  const auth = session.auth;
+
+  const router = session.router({
     auth: {
       login: auth.login.handler((options) => {
         const caller = deps.tokens.authenticate(options.input.token);
@@ -69,7 +77,7 @@ export function createSessionHandler(deps: Readonly<SessionHandlerDeps>) {
         return {};
       }),
     },
-  };
+  });
 
   const handler = new RPCHandler(router, {
     // A GET is what a link or an <img> on any page can make the browser send.
@@ -84,10 +92,9 @@ export function createSessionHandler(deps: Readonly<SessionHandlerDeps>) {
   });
 
   return {
-    isSessionCall: (request: Request): boolean =>
-      new URL(request.url).pathname.startsWith(SESSION_PATH),
+    isSessionCall: (request: Request): boolean => SESSION_PATHS.has(new URL(request.url).pathname),
     respond: async (request: Request): Promise<Response> => {
-      const handled = await handler.handle(request, { prefix: '/rpc', context: { request } });
+      const handled = await handler.handle(request, { prefix: RPC_PREFIX, context: { request } });
 
       return handled.matched ? handled.response : new Response('not found', { status: 404 });
     },

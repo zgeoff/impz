@@ -332,6 +332,7 @@ test.each([
 test.each([
   ['/rpc/auth/login', true],
   ['/rpc/auth/logout', true],
+  ['/rpc/auth/whoami', false],
   ['/rpc/system/info', false],
   ['/rpc/authors', false],
 ])('#isSessionCall takes %s as a session call: %p', async (path, isSession) => {
