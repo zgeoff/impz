@@ -27,6 +27,10 @@ interface OptionalGroup {
 interface OpenGroup {
   readonly start: number;
   hasAlternation: boolean;
+
+  // a negative lookaround inverts what its body matches, so a group made
+  // required in it widens the pattern
+  readonly isNegated: boolean;
 }
 
 function collectOptionalGroups(pattern: string): OptionalGroup[] {
@@ -44,7 +48,14 @@ function collectOptionalGroups(pattern: string): OptionalGroup[] {
     } else if (character === '[') {
       inClass = true;
     } else if (character === '(') {
-      open.push({ start: index, hasAlternation: false });
+      open.push({
+        start: index,
+        hasAlternation: false,
+        isNegated:
+          open.at(-1)?.isNegated === true ||
+          pattern.startsWith('(?!', index) ||
+          pattern.startsWith('(?<!', index),
+      });
     } else if (character === '|') {
       const innermost = open.at(-1);
 
@@ -56,6 +67,7 @@ function collectOptionalGroups(pattern: string): OptionalGroup[] {
 
       if (
         group !== undefined &&
+        !group.isNegated &&
         pattern.startsWith('(?:', group.start) &&
         pattern[index + 1] === '?' &&
         pattern[index + 2] !== '?'

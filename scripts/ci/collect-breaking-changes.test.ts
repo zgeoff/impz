@@ -1961,3 +1961,41 @@ test('#collectBreakingChanges reports an output whose pattern unwraps an optiona
     'procedure imps.get output .size: pattern "^[0-9]+(?:k|m)?b$" → "^[0-9]+k|mb$"',
   ]);
 });
+
+test('#collectBreakingChanges reports an output whose pattern makes an optional group in a negative lookahead required', () => {
+  const base = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: { label: { type: 'string', pattern: '^(?!(?:x)?$).*$' } },
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  const head = {
+    procedures: {
+      'imps.get': {
+        input: { type: 'object' },
+        output: {
+          type: 'object',
+          properties: { label: { type: 'string', pattern: '^(?!(?:x)$).*$' } },
+        },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  expect(collectBreakingChanges(base, head)).toStrictEqual([
+    'procedure imps.get output .label: pattern "^(?!(?:x)?$).*$" → "^(?!(?:x)$).*$"',
+  ]);
+});
