@@ -197,6 +197,8 @@ async function runBackup() {
   return BackupRunSchema.parse(JSON.parse(stdout));
 }
 
+const BACKUP_STATE_FILE = '/var/lib/imp/backup/state.json';
+
 export interface BackupDrill {
   readonly reboot: (env: Readonly<Record<string, string>>) => Promise<void>;
   readonly startMinio: (secrets: Readonly<BackupSecrets>) => Promise<void>;
@@ -234,10 +236,17 @@ export function createBackupDrill(stack: AsyncDisposableStack, metric: string): 
   });
 
   return {
-    // impd sets up its repository at start, so each test reboots onto one of
-    // its own instead of taking suite settings.
+    // impd sets up its repository at start, so each test reboots onto its own.
+    // impd keeps its last prune time across reboots and prunes once a day, so
+    // an earlier test's prune would hold off this one's.
     reboot: async (env) => {
       const rebootStarted = Date.now();
+
+      const removed = await runInContainer(['rm', '-f', BACKUP_STATE_FILE]);
+
+      if (removed.exitCode !== 0) {
+        throw new Error(`the backup state could not go: ${removed.stderr}`);
+      }
 
       reached.isRebooted = true;
 
