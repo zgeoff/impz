@@ -1,5 +1,6 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
@@ -8,8 +9,12 @@ import { createTestDatabase } from '../../../testing/platform/create-test-databa
 import { loadConfig } from '../../config';
 import { createImage, listImageUses } from '../../platform/db/images';
 import { createImp } from '../../platform/db/imps';
+import { buildImagePaths } from '../../vm/storage/data-layout';
+import { createDiskBudget } from '../../vm/storage/disk-budget';
 import { createStorageGate } from '../../vm/storage/storage-gate';
+import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { createImagePrune } from './create-image-prune';
+import { createImageWriter } from './create-image-writer';
 
 async function setupTest() {
   const dataDir = await mkdtemp(join(tmpdir(), 'image-prune-'));
@@ -18,10 +23,23 @@ async function setupTest() {
 
   const database = await createTestDatabase();
 
+  const writer = createImageWriter({
+    config: loadConfig({ IMP_DATA_DIR: dataDir }),
+    db: database.db,
+    storage: createXfsBackend({ dataDir }),
+    storageGate: createStorageGate(),
+    diskBudget: createDiskBudget({
+      storage: { readUsage: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }) },
+      reserveBytes: null,
+      log: () => {},
+    }),
+    log: () => {},
+  });
+
   return {
     dataDir,
     db: database.db,
-    removeIdleRootfs: mock<(digest: string) => Promise<void>>(() => Promise.resolve()),
+    writer,
     log: mock<(message: string) => void>(() => {}),
   };
 }
@@ -33,7 +51,7 @@ test('it keeps every image, and says why once, while the keep file is missing', 
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
     db: ctx.db,
     storageGate: createStorageGate(),
-    removeIdleRootfs: ctx.removeIdleRootfs,
+    removeIdleImage: ctx.writer.removeIdleImage,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
@@ -49,7 +67,6 @@ test('it keeps every image, and says why once, while the keep file is missing', 
   const uses = await listImageUses(ctx.db);
 
   expect(uses.map((use) => use.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
-  expect(ctx.removeIdleRootfs).not.toHaveBeenCalled();
 
   expect(ctx.log.mock.calls).toStrictEqual([
     [
@@ -67,7 +84,7 @@ test('it keeps every image while the keep file holds a line that is no image nam
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
     db: ctx.db,
     storageGate: createStorageGate(),
-    removeIdleRootfs: ctx.removeIdleRootfs,
+    removeIdleImage: ctx.writer.removeIdleImage,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
@@ -98,7 +115,7 @@ test('it removes the unused agent images past the rollback count, and logs each'
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
     db: ctx.db,
     storageGate: createStorageGate(),
-    removeIdleRootfs: ctx.removeIdleRootfs,
+    removeIdleImage: ctx.writer.removeIdleImage,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
@@ -112,6 +129,8 @@ test('it removes the unused agent images past the rollback count, and logs each'
   );
 
   await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+  await mkdir(buildImagePaths(ctx.dataDir, 'sha256:1').directory, { recursive: true });
+  await writeFile(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs, '');
 
   await ctx.db
     .updateTable('images')
@@ -130,7 +149,7 @@ test('it removes the unused agent images past the rollback count, and logs each'
   const uses = await listImageUses(ctx.db);
 
   expect(uses.map((use) => use.name)).toStrictEqual(['agent-2222222']);
-  expect(ctx.removeIdleRootfs.mock.calls).toStrictEqual([['sha256:1']]);
+  expect(existsSync(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs)).toBeFalse();
 
   expect(ctx.log.mock.calls).toStrictEqual([
     ['impd: image prune: removed agent-1111111 (1.6 GiB, last used 2026-09-01T00:00:00.000Z)'],
@@ -148,7 +167,7 @@ test('it never removes an image an imp uses, a kept name holds, or impd boots by
     }),
     db: ctx.db,
     storageGate: createStorageGate(),
-    removeIdleRootfs: ctx.removeIdleRootfs,
+    removeIdleImage: ctx.writer.removeIdleImage,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),
@@ -183,7 +202,7 @@ test('it records the prune as the last use of each image in use', async () => {
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storageGate: createStorageGate(),
-    removeIdleRootfs: ctx.removeIdleRootfs,
+    removeIdleImage: ctx.writer.removeIdleImage,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2030-01-01T00:00:00Z'),
@@ -220,7 +239,7 @@ test('it prunes only the images whose name starts with IMP_IMAGE_PRUNE_PREFIX', 
     }),
     db: ctx.db,
     storageGate: createStorageGate(),
-    removeIdleRootfs: ctx.removeIdleRootfs,
+    removeIdleImage: ctx.writer.removeIdleImage,
     readKeepFile: (path) => readFile(path, 'utf8'),
     log: ctx.log,
     now: () => Date.parse('2026-10-01T00:00:00Z'),

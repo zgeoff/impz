@@ -7,6 +7,7 @@ import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSingleFlight } from '../../platform/process/single-flight';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import { FALLBACK_DEFAULT_IMAGE } from './create-image-adds';
+import type { ImageWriter } from './create-image-writer';
 import { parseImageKeepFile } from './parse-image-keep-file';
 import type { ImageKeepFile } from './parse-image-keep-file';
 import { pickPrunedImages } from './pick-pruned-images';
@@ -19,7 +20,7 @@ export interface ImagePruneDeps {
   readonly config: Pick<Config, 'imagePrune' | 'defaultImage'>;
   readonly db: ImpDatabase;
   readonly storageGate: Pick<StorageGate, 'join'>;
-  readonly removeIdleRootfs: (digest: string) => Promise<void>;
+  readonly removeIdleImage: ImageWriter['removeIdleImage'];
   readonly readKeepFile: (path: string) => Promise<string>;
   readonly log: (message: string) => void;
   readonly now?: () => number;
@@ -33,15 +34,9 @@ export function createImagePrune(deps: ImagePruneDeps): ImagePrune {
 
   const removeImage = async (use: Readonly<ImageUse>): Promise<void> => {
     try {
-      const isRemoved = await deps.storageGate.join(async () => {
-        if (!(await removeUnusedImage(deps.db, use.id, use.lastUsedAt))) {
-          return false;
-        }
-
-        await deps.removeIdleRootfs(use.digest);
-
-        return true;
-      });
+      const isRemoved = await deps.storageGate.join(() =>
+        deps.removeIdleImage(use.digest, () => removeUnusedImage(deps.db, use.id, use.lastUsedAt)),
+      );
 
       if (isRemoved) {
         deps.log(

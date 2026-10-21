@@ -586,6 +586,248 @@ test('it keeps an old agent image that a build of the same digest rebuilds', asy
   expect(kept.map((image) => image.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
 });
 
+test('it returns a row that still exists when a prune reaches a same-digest rebuild between its rootfs and its row', async () => {
+  const ctx = await setupTest();
+
+  const gate = buildQueryGate('agent-1111111');
+
+  ctx.stack.defer(() => {
+    gate.release();
+  });
+
+  const exports = { count: 0 };
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+    onExport: () => {
+      exports.count += 1;
+
+      if (exports.count === 2) {
+        gate.arm();
+      }
+
+      return Promise.resolve();
+    },
+  });
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    db: gate.wrap(ctx.db),
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => builder.builders,
+    readImageKeepFile: (path) => readFile(path, 'utf8'),
+    log: () => {},
+  });
+
+  await writeFile(join(ctx.dataDir, 'image-keep'), '');
+
+  await Bun.write(
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+  );
+
+  await images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'agent-1111111',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'agent-1111111')
+    .execute();
+
+  const rebuilding = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'agent-1111111',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  await gate.reached;
+
+  await images.runImagePrune();
+
+  gate.release();
+
+  const rebuilt = await rebuilding;
+  const rows = await listImages(ctx.db);
+
+  expect(rows.map((row) => row.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
+  expect(rows[0]?.id).toBe(rebuilt.id);
+  expect(existsSync(buildImagePaths(ctx.dataDir, rebuilt.digest).rootfs)).toBeTrue();
+});
+
+test('it rebuilds an image under a new digest when a prune reaches the build before its row', async () => {
+  const ctx = await setupTest();
+
+  const gate = buildQueryGate('agent-1111111');
+
+  ctx.stack.defer(() => {
+    gate.release();
+  });
+
+  const first = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the first build\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+  });
+
+  const second = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the second build\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+    onExport: () => {
+      gate.arm();
+
+      return Promise.resolve();
+    },
+  });
+
+  const holder = { builders: first.builders };
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    db: gate.wrap(ctx.db),
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => holder.builders,
+    readImageKeepFile: (path) => readFile(path, 'utf8'),
+    log: () => {},
+  });
+
+  await writeFile(join(ctx.dataDir, 'image-keep'), '');
+
+  await Bun.write(
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+  );
+
+  const old = await images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'agent-1111111',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'agent-1111111')
+    .execute();
+
+  holder.builders = second.builders;
+
+  const rebuilding = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'agent-1111111',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  await gate.reached;
+
+  await images.runImagePrune();
+
+  gate.release();
+
+  const rebuilt = await rebuilding;
+  const rows = await listImages(ctx.db);
+
+  expect(rebuilt.digest).not.toBe(old.digest);
+
+  expect(rows.map((row) => [row.name, row.digest])).toStrictEqual([
+    ['agent-1111111', rebuilt.digest],
+    ['agent-2222222', expect.toBeString()],
+  ]);
+});
+
+test('it keeps an image while a build of another name publishes its digest', async () => {
+  const ctx = await setupTest();
+
+  const gate = buildQueryGate('agent-3333333');
+
+  ctx.stack.defer(() => {
+    gate.release();
+  });
+
+  const exports = { count: 0 };
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+    onExport: () => {
+      exports.count += 1;
+
+      if (exports.count === 2) {
+        gate.arm();
+      }
+
+      return Promise.resolve();
+    },
+  });
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_IMAGE_PRUNE_ROLLBACK: '1' }),
+    db: gate.wrap(ctx.db),
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => builder.builders,
+    readImageKeepFile: (path) => readFile(path, 'utf8'),
+    log: () => {},
+  });
+
+  await writeFile(join(ctx.dataDir, 'image-keep'), '');
+
+  await Bun.write(
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+  );
+
+  await images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'agent-1111111',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'agent-2222222' }));
+
+  await ctx.db
+    .updateTable('images')
+    .set({ last_used_at: Date.parse('2026-08-01T00:00:00Z') })
+    .where('name', '=', 'agent-1111111')
+    .execute();
+
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'agent-3333333',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  await gate.reached;
+
+  await images.runImagePrune();
+
+  const rows = await listImages(ctx.db);
+
+  gate.release();
+
+  await building;
+
+  expect(rows.map((row) => row.name)).toStrictEqual(['agent-1111111', 'agent-2222222']);
+});
+
 test('it releases the disk hold when the export is over the file limit', async () => {
   const ctx = await setupTest();
 

@@ -63,7 +63,7 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
     config: deps.config,
     db: deps.db,
     storageGate: deps.storageGate,
-    removeIdleRootfs: writer.removeIdleRootfs,
+    removeIdleImage: writer.removeIdleImage,
     readKeepFile:
       deps.readImageKeepFile ??
       (() => Promise.reject(new Error('this impd was given no keep file reader'))),

@@ -70,6 +70,8 @@ export interface ImageWriter {
   ) => Promise<ImageRecord>;
 
   readonly removeIdleRootfs: (digest: string) => Promise<void>;
+
+  readonly removeIdleImage: (digest: string, removeRow: () => Promise<boolean>) => Promise<boolean>;
 }
 
 interface ImageWriterDeps {
@@ -98,7 +100,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   const storageGate = deps.storageGate;
   const building = createSingleFlight<number>();
 
-  const guestWriters = new Map<string, number>();
+  const publishers = new Map<string, number>();
   const freshRootfs = new Set<string>();
 
   const guestRootfsLock = buildKeyedMutex();
@@ -202,6 +204,10 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     digest: string,
     sizeBytes: number,
   ): Promise<ImageRecord> => {
+    // The use goes in before the read, so an image prune either sees it and keeps the row, or
+    // removed the row first and the read finds nothing.
+    await updateImageUse(deps.db, 'name', [imageName], Date.now());
+
     const existing = await readImageByName(deps.db, imageName);
 
     requireDockerImage(existing);
@@ -211,8 +217,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     }
 
     if (existing.digest === digest) {
-      await updateImageUse(deps.db, 'id', [existing.id], Date.now());
-
       return existing;
     }
 
@@ -233,13 +237,56 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
 
   const removeIdleRootfs = (digest: string): Promise<void> =>
     guestRootfsLock.runExclusive(digest, async () => {
-      if (guestWriters.has(digest)) {
+      if (publishers.has(digest)) {
         freshRootfs.add(digest);
 
         return;
       }
 
       await removeUnusedRootfs(digest);
+    });
+
+  const removeIdleImage = (digest: string, removeRow: () => Promise<boolean>): Promise<boolean> =>
+    guestRootfsLock.runExclusive(digest, async () => {
+      if (publishers.has(digest) || !(await removeRow())) {
+        return false;
+      }
+
+      await removeUnusedRootfs(digest);
+
+      return true;
+    });
+
+  const holdPublisher = (digest: string): Promise<void> =>
+    guestRootfsLock.runExclusive(digest, () => {
+      publishers.set(digest, (publishers.get(digest) ?? 0) + 1);
+
+      return Promise.resolve();
+    });
+
+  const releasePublisher = (digest: string, imageName: string): Promise<void> =>
+    guestRootfsLock.runExclusive(digest, async () => {
+      const left = (publishers.get(digest) ?? 1) - 1;
+
+      if (left > 0) {
+        publishers.set(digest, left);
+
+        return;
+      }
+
+      publishers.delete(digest);
+
+      if (!freshRootfs.delete(digest)) {
+        return;
+      }
+
+      try {
+        await removeUnusedRootfs(digest);
+      } catch (error) {
+        deps.log(
+          `impd: image ${imageName}: could not remove the unused rootfs of ${digest}: ${getErrorMessage(error)}`,
+        );
+      }
     });
 
   const createImageOnHost = async (
@@ -263,11 +310,17 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
 
     return withRoom(buildBytes, () =>
       storageGate.join(async () => {
-        const sizeBytes = await createRootfsOnce(inspect.Id, () =>
-          createRootfs(ref, inspect.Id, inspect.Config),
-        );
+        await holdPublisher(inspect.Id);
 
-        return writeImageRow(imageName, ref, inspect.Id, sizeBytes);
+        try {
+          const sizeBytes = await createRootfsOnce(inspect.Id, () =>
+            createRootfs(ref, inspect.Id, inspect.Config),
+          );
+
+          return await writeImageRow(imageName, ref, inspect.Id, sizeBytes);
+        } finally {
+          await releasePublisher(inspect.Id, imageName);
+        }
       }),
     );
   };
@@ -276,11 +329,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     const digest = guest.digest;
     const rootfs = buildImagePaths(deps.config.dataDir, digest).rootfs;
 
-    await guestRootfsLock.runExclusive(digest, () => {
-      guestWriters.set(digest, (guestWriters.get(digest) ?? 0) + 1);
-
-      return Promise.resolve();
-    });
+    await holdPublisher(digest);
 
     try {
       guest.signal.throwIfAborted();
@@ -301,29 +350,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
 
       return await writeImageRow(guest.imageName, guest.ref, digest, sizeBytes);
     } finally {
-      await guestRootfsLock.runExclusive(digest, async () => {
-        const left = (guestWriters.get(digest) ?? 1) - 1;
-
-        if (left > 0) {
-          guestWriters.set(digest, left);
-
-          return;
-        }
-
-        guestWriters.delete(digest);
-
-        if (!freshRootfs.delete(digest)) {
-          return;
-        }
-
-        try {
-          await removeUnusedRootfs(digest);
-        } catch (error) {
-          deps.log(
-            `impd: image ${guest.imageName}: could not remove the unused rootfs of ${digest}: ${getErrorMessage(error)}`,
-          );
-        }
-      });
+      await releasePublisher(digest, guest.imageName);
     }
   };
 
@@ -364,7 +391,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     );
   };
 
-  return { createImageOnHost, writeGuestImage, removeIdleRootfs };
+  return { createImageOnHost, writeGuestImage, removeIdleRootfs, removeIdleImage };
 }
 
 export function requireClientImageName(name: string): string {
