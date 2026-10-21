@@ -109,14 +109,15 @@ the command nor a setuid binary it runs gets the capabilities back, because an e
 permitted set from the bounding set. `CAP_SYS_PTRACE` goes with it, because a tracer could otherwise
 make a process that still holds `CAP_SYS_ADMIN`, such as the container's init, run the remount. A
 new user namespace gives the tree no way back either: the kernel locks the read-only flag on each
-mount it copies into a namespace that the tree owns. The image's own start-up runs as services,
-outside that tree, so a service such as `dockerd` keeps its capabilities. The tree can still ask
-such a service to act for it, for example a privileged container that binds the files, so a caller
-that drops the capabilities to protect a file also runs no `dockerd` that the tree can reach. The
-tree cannot mount filesystems or start `dockerd` itself. A start that drops the capabilities, for a
-session that runs with them, fails with `BAD_REQUEST`, so the caller never attaches to a process
-that holds them. impd refuses the option for an agent that cannot drop the capabilities, because
-such an agent ignores the field.
+mount it copies into a namespace that the tree owns.
+
+The image's own start-up runs as services, outside that tree, so a service such as `dockerd` keeps
+its capabilities. The tree can still ask such a service to act for it, for example a privileged
+container that binds the files, so a caller that drops the capabilities to protect a file also runs
+no `dockerd` that the tree can reach. The tree cannot mount filesystems or start `dockerd` itself. A
+start that drops the capabilities, for a session that runs with them, fails with `BAD_REQUEST`, so
+the caller never attaches to a process that holds them. impd refuses the option for an agent that
+cannot drop the capabilities, because such an agent ignores the field.
 
 ## Execs and services
 
@@ -126,6 +127,16 @@ inside, and a stop kills the whole leaf at once. A command runs as root unless t
 otherwise, so a process can move itself out of its leaf, and the containers of a `dockerd` it
 started live in cgroups of their own: a stop does not reach those. A tty exec has no leaf, because
 its session leader owns the terminal's process group.
+
+The agent delegates the memory controller to each non-tty exec, so a command can cap its own memory.
+The exec's cgroup enables the controller for its children and holds no process itself, because the
+kernel lets only a cgroup without processes hand a controller down. The command starts in a leaf
+under it. To cap itself, a process makes a cgroup next to its own, sets `memory.max` and
+`memory.swap.max` there, and moves into it. The cap cgroup sits inside the exec's cgroup, so a stop
+still kills what runs in it, and the agent removes it with the exec's cgroup. A session or a service
+runs in the init's cgroup, whose parent is the namespace root, and the init enables every controller
+at that root, so the same step works there. With `memory.swap.max` at 0, a command that outgrows its
+cap dies by the OOM killer instead of swapping, whatever swap the guest has.
 
 An outer exec runs a command as root in the agent's own world, outside the container, to see why the
 container is down or look at the disk after an `rm -rf /` inside. It runs in a small cgroup with a
