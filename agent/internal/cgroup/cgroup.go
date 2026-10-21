@@ -146,7 +146,7 @@ func (t *Tree) New() (*Group, error) {
 	}
 	dir, err := os.OpenFile(leaf, os.O_RDONLY|syscall.O_DIRECTORY, 0)
 	if err != nil {
-		removeCgroup(path)
+		_ = removeCgroup(path)
 		return nil, err
 	}
 	return &Group{path: path, dir: dir}, nil
@@ -201,7 +201,8 @@ func removeCgroup(dir string) error {
 	}
 	for _, e := range ents {
 		if e.IsDir() {
-			removeCgroup(filepath.Join(dir, e.Name()))
+			// a child that stays makes the removal of dir fail, which reports it
+			_ = removeCgroup(filepath.Join(dir, e.Name()))
 		}
 	}
 	return os.Remove(dir)
