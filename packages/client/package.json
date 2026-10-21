@@ -34,8 +34,7 @@
     "msw": "catalog:",
     "tar-stream": "catalog:",
     "tiny-invariant": "catalog:",
-    "tsdown": "catalog:",
-    "tsrs": "catalog:"
+    "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@opentelemetry/api": ">=1.9.0"
