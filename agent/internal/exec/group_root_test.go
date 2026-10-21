@@ -92,7 +92,8 @@ func runCapped(t *testing.T, memoryMax int) (string, *proto.Exit) {
 func TestACommandCappedAt256MiBIsOOMKilledWhenItTakes400MiB(t *testing.T) {
 	out, exit := runCapped(t, 256<<20)
 
-	assert.Check(t, cmp.Equal(out, "oom_kill 1\n"))
+	// the shell may also report the killed child on stderr
+	assert.Check(t, cmp.Contains(out, "oom_kill 1\n"))
 	assert.Check(t, cmp.Equal(exit.GetCode(), int32(128+int32(syscall.SIGKILL))))
 }
 
