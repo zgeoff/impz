@@ -2,10 +2,11 @@
 
 ## [2.10.3](https://github.com/zgeoff/impz/compare/v2.10.2...v2.10.3) (2026-10-22)
 
-
 ### Bug Fixes
 
-* **agent:** set a session's previous before its name frees ([#614](https://github.com/zgeoff/impz/issues/614)) ([ec43c0c](https://github.com/zgeoff/impz/commit/ec43c0c423b48cd3ccf7a67d3a773cdc9ee4bbce))
+- **agent:** set a session's previous before its name frees
+  ([#614](https://github.com/zgeoff/impz/issues/614))
+  ([ec43c0c](https://github.com/zgeoff/impz/commit/ec43c0c423b48cd3ccf7a67d3a773cdc9ee4bbce))
 
 ## [2.10.2](https://github.com/zgeoff/impz/compare/v2.10.1...v2.10.2) (2026-10-21)
 
