@@ -25,21 +25,27 @@
       "project": ["e2e/**/*.ts", "scripts/**/*.ts", "deploy/**/*.ts", "host/**/*.ts", "*.test.ts"]
     },
     "packages/*": {
-      "project": ["src/**/*.ts"]
+      "project": ["src/**/*.ts!", "!src/test-utils/**!"]
     },
     "packages/daemon": {
-      // imp-docker-proxy, which host/Dockerfile compiles beside impd, the
-      // suites only their own scripts run (test:pebble), and the scripts a
-      // test runs in a child Bun
-      "entry": ["src/imps/docker-proxy/main.ts", "src/**/*.pebble.ts", "testing/*/run-*.ts"],
-      "project": ["src/**/*.ts", "testing/**/*.ts"],
+      // impd and imp-docker-proxy, which host/Dockerfile compiles, the pebble suites,
+      // the scripts a test runs in a child Bun, and render:db-schema's dump
+      "entry": [
+        // a pattern ending in ! is production code for knip --production
+        "src/main.ts!",
+        "src/imps/docker-proxy/main.ts!",
+        "src/**/*.pebble.ts",
+        "testing/*/run-*.ts",
+        "src/platform/db/dump-schema.ts"
+      ],
+      "project": ["src/**/*.ts!", "testing/**/*.ts"],
       // kysely-codegen writes every table, used or not
       "ignoreIssues": {
         "src/platform/db/schema.ts": ["types"]
       }
     },
     "packages/agent-protocol": {
-      "project": ["src/**/*.ts"],
+      "project": ["src/**/*.ts!", "!src/test-utils/**!"],
       // protoc-gen-es writes every message, used or not
       "ignoreIssues": {
         "src/gen/**": ["exports", "types"]
@@ -47,13 +53,13 @@
     },
     "packages/dashboard": {
       "entry": ["augment-bun-test.ts", "e2e/*.e2e.ts"],
-      "project": ["src/**/*.{ts,tsx}", "e2e/**/*.ts"]
+      "project": ["src/**/*.{ts,tsx}!", "!src/test-utils/**!", "e2e/**/*.ts"]
     },
     "packages/client": {
       // the package smoke (scripts/release/check-client-runtimes.sh), and
       // the scripts a test runs in a child Bun
       "entry": ["smoke/*.ts", "src/test-utils/run-*.ts"],
-      "project": ["src/**/*.ts", "smoke/*.ts"]
+      "project": ["src/**/*.ts!", "!src/test-utils/**!", "smoke/*.ts"]
     }
   }
 }

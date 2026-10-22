@@ -3,6 +3,7 @@ import { OffsetSchema } from './offset-schema';
 
 export const ExecutionGenerationSchema = z.string().regex(/^[0-9a-f]{32}$/u);
 
+/* @internal */
 export const COLD_BOOT_CAUSES = [
   'start',
   'wake_fallback',
@@ -16,6 +17,7 @@ export const ColdBootCauseSchema = z.enum(COLD_BOOT_CAUSES);
 
 export type ColdBootCause = z.infer<typeof ColdBootCauseSchema>;
 
+/* @internal */
 export const ColdBootSchema = z
   .object({
     bootId: z.string(),
@@ -47,6 +49,7 @@ export const ResumeFromSchema = z
 
 export type ResumeFrom = z.infer<typeof ResumeFromSchema>;
 
+/* @internal */
 export const ResumeResultSchema = z
   .discriminatedUnion('kind', [
     z.object({ kind: z.literal('exact') }),

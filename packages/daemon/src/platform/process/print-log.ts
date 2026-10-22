@@ -61,6 +61,7 @@ export function printLog(message: string): void {
   });
 }
 
+/* @internal */
 export function parseLegacyLine(message: string): LegacyLine {
   const head = /^impd: (?<word>[\w.\-]+)(?<colon>:?)/v.exec(message)?.groups;
   const word = head?.['word'];

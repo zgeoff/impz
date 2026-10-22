@@ -131,6 +131,7 @@ interface ApproveRequest {
   readonly isConfirmed: boolean;
 }
 
+/* @internal */
 export async function runApprove(
   client: Readonly<ApprovalsClient>,
   request: Readonly<ApproveRequest>,

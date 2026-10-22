@@ -58,6 +58,7 @@ export function createNftWriter(run: NftRunner = runNft): (script: string) => Pr
   };
 }
 
+/* @internal */
 export function createNftRunner(nftBin = 'nft'): NftRunner {
   return async (script) => {
     const child = Bun.spawn([nftBin, '-f', '-'], {

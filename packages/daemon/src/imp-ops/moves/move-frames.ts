@@ -9,6 +9,7 @@ export const MOVE_FRAMES = { header: 1, file: 2, data: 3, fileEnd: 4, end: 5 } a
 
 type FrameType = (typeof MOVE_FRAMES)[keyof typeof MOVE_FRAMES];
 
+/* @internal */
 export const MOVE_BLOCK_BYTES = 1024 * 1024;
 const OFFSET_BYTES = 8;
 const HEADER_BYTES = 5;

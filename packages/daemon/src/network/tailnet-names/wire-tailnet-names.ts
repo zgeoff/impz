@@ -50,6 +50,7 @@ export function wireTailnetNames(options: BuildTailnetNamesOptions): TailnetName
   });
 }
 
+/* @internal */
 export function createPresenceCheck(
   imps: Pick<Imps, 'lockImp'>,
   db: ImpDatabase,

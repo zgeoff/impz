@@ -59,6 +59,7 @@ export function buildInstallInput(caPem: string): string {
   return `${caPem.trim()}\n${ROOTS_MARKER}\n${rootCertificates.join('\n')}\n`;
 }
 
+/* @internal */
 export function buildInstallArgv(
   target = GUEST_BUNDLE_PATH,
   rootPaths: readonly string[] = GUEST_ROOT_PATHS,

@@ -19,6 +19,7 @@ const PHASE_WORDS: Readonly<Record<ImageBuildPhase, string>> = {
 const QUIET_LINE_MS = 30_000;
 const TTY_STEP_MAX_CHARS = 60;
 
+/* @internal */
 export function formatBuildStatus(
   phase: ImageBuildPhase,
   elapsedMs: number,

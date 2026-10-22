@@ -22,6 +22,7 @@ const VERSION_PREFIX = /^\/v1\.\d{1,3}(?=\/)/v;
 const IMAGE_NAME = /^[A-Za-z0-9][A-Za-z0-9._\/:@\-]*$/v;
 const CONTAINER_ID = /^[A-Za-z0-9][A-Za-z0-9_.\-]*$/v;
 
+/* @internal */
 export function parseQuery(raw: string): ReadonlyMap<string, readonly string[]> {
   const query = new Map<string, string[]>();
 

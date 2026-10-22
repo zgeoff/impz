@@ -57,6 +57,7 @@ export function loadBackupConfig(
   };
 }
 
+/* @internal */
 export function parseBackupKeep(value: string): BackupKeep {
   const keep = { hourly: 0, daily: 0, weekly: 0 };
 

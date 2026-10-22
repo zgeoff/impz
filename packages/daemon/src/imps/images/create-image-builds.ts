@@ -468,6 +468,7 @@ function runOnHost(argv: readonly string[], signal: AbortSignal): ReturnType<Eng
   return command === 'docker' ? runDocker(args, { signal }) : runCommand(argv, { signal });
 }
 
+/* @internal */
 export function normalizeDockerfilePath(path: string | undefined): string {
   const normalized = posix.normalize(path ?? 'Dockerfile');
 

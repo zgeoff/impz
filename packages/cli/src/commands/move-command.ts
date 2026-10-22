@@ -12,6 +12,7 @@ import type { ProgressOutput } from '../cp/copy-progress';
 
 const POLL_MS = 1000;
 
+/* @internal */
 export async function runMove(run: MoveRun): Promise<void> {
   if (run.mode === 'abort') {
     const status = await run.from.moves.abort({ name: run.name });

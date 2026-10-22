@@ -19,6 +19,7 @@ const STALL_MS = 2000;
 // a grow they still miss after this long stops holding back the next one.
 const GROW_UNCOUNTED_MS = 3000;
 
+/* @internal */
 export interface ElasticImp {
   readonly id: string;
   readonly name: string;

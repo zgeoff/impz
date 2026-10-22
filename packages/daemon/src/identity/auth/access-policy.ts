@@ -58,7 +58,7 @@ type ProcedurePath<T, Prefix extends string = ''> = {
     : ProcedurePath<T[K], `${Prefix}${K}.`>;
 }[keyof T & string];
 
-export type ImpProcedurePath = ProcedurePath<CallerContract>;
+type ImpProcedurePath = ProcedurePath<CallerContract>;
 
 const IMP = ['name'] as const;
 const readAny: Access = { scope: 'read', on: 'any' };
@@ -69,6 +69,7 @@ const manageHost: Access = { scope: 'manage', on: 'host' };
 const manageImpNoGrantable: Access = { ...manageImp, noGrantable: true };
 const manageGrant: Access = { scope: 'manage', on: 'grant', fields: IMP, secretField: 'secret' };
 
+/* @internal */
 export const PROCEDURE_ACCESS: Readonly<Record<ImpProcedurePath, Access>> = {
   'imps.create': manageImp,
   'imps.list': readAny,

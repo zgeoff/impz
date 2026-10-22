@@ -451,6 +451,7 @@ async function readTreeUsage(root: string): Promise<{ bytes: number; inodes: num
   return { bytes: parseDuCount(bytes), inodes: parseDuCount(inodes) };
 }
 
+/* @internal */
 export function parseDuCount(stdout: string): number {
   const count = Number(stdout.split(/\s/u)[0]);
 

@@ -18,6 +18,7 @@ import {
 } from './rules';
 import type { Check } from './rules';
 
+/* @internal */
 export const PROXY_LABEL = 'imp.docker-proxy';
 const CONTROL_CALL_MS = 120_000;
 const CREATE_BODY_MAX_BYTES = 1024 ** 2;
@@ -31,6 +32,7 @@ const DROPPED_RESPONSE_HEADERS = new Set([
 
 const LabelsSchema = z.record(z.string(), z.string()).nullish();
 
+/* @internal */
 export const ContainerSchema = z.object({
   Id: z.string().regex(/^[a-f0-9]{64}$/v),
   Config: z.object({ Labels: LabelsSchema }),

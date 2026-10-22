@@ -8,6 +8,7 @@ const NAT66_TABLE = 'ip6 imp_nat66';
 const PEER_MARK = '0x01000000';
 const OPEN_BLOCKED_RANGES: readonly string[] = ['169.254.0.0/16', '100.64.0.0/10'];
 
+/* @internal */
 export interface FirewallSlot {
   readonly slot: number;
   readonly tap: string;

@@ -76,6 +76,7 @@ interface AllImpsRun {
   readonly startTimer?: StartTimer;
 }
 
+/* @internal */
 export async function listAllImps(run: Readonly<AllImpsRun>): Promise<number> {
   const input = run.hasBuilders ? { builders: true } : undefined;
 
@@ -251,6 +252,7 @@ export const policyCommand = defineCommand({
     }),
 });
 
+/* @internal */
 export function listForkWarnings(
   source: string,
   fork: Readonly<Pick<ForkResult, 'name' | 'grantsNotCopied' | 'grantsError'>>,
@@ -407,6 +409,7 @@ interface ConsoleSessionArgs {
   readonly 'no-session'?: boolean | undefined;
 }
 
+/* @internal */
 export function pickConsoleSession(
   args: Readonly<ConsoleSessionArgs>,
   isTerminal: boolean,

@@ -36,6 +36,7 @@ export async function checkServer(
 // The client and impd release together. A major change breaks the API, and
 // before 1.0 a minor change does too, because release-please bumps the minor
 // for a feat before 1.0.
+/* @internal */
 export function isCompatibleVersion(client: string, server: string): boolean {
   const ours = parseVersion(client);
   const theirs = parseVersion(server);

@@ -17,6 +17,7 @@ const STATES: readonly ImpState[] = ['creating', 'running', 'sleeping', 'stopped
 
 const VIAS: ReadonlySet<string> = new Set<TransitionVia>(['any', 'warm move']);
 
+/* @internal */
 export function canTransition(from: ImpState, to: ImpState, via: TransitionVia = 'any'): boolean {
   if (!VIAS.has(via) || !Object.hasOwn(TRANSITIONS, from)) {
     return false;
@@ -33,6 +34,7 @@ export function canTransition(from: ImpState, to: ImpState, via: TransitionVia =
   return edge === 'any' || edge === via;
 }
 
+/* @internal */
 export function collectStatesLeadingTo(to: ImpState, via: TransitionVia = 'any'): ImpState[] {
   return STATES.filter((from) => canTransition(from, to, via));
 }

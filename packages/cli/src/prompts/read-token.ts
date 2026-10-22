@@ -13,6 +13,7 @@ export class PromptCancelledError extends Error {
   override name = 'PromptCancelledError';
 }
 
+/* @internal */
 export interface SignalSource {
   readonly on: (signal: NodeJS.Signals, listener: () => void) => unknown;
   readonly off: (signal: NodeJS.Signals, listener: () => void) => unknown;

@@ -12,6 +12,7 @@ const PrintableSchema = z.string().regex(/^[!-~]+$/u, 'must be printable ASCII w
 
 export const SecretValueSchema = PrintableSchema.min(1).max(8192);
 
+/* @internal */
 export const BrokerHostSchema = z
   .string()
   .max(253)

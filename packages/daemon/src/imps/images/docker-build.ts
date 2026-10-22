@@ -79,6 +79,7 @@ async function* readJsonLines(body: ReadableStream<Uint8Array>): AsyncGenerator 
 
 // The Docker engine answers 200 for a build that fails, and reports the failure in the
 // message stream.
+/* @internal */
 export async function readBuiltImageId(
   messages: Readonly<AsyncIterable<unknown> | Iterable<unknown>>,
   onTrace?: (trace: BuildTrace) => void,
@@ -151,6 +152,7 @@ async function readRefusal(response: Response): Promise<Error> {
   return new Error(`docker build: the engine answered ${status}: ${message}`);
 }
 
+/* @internal */
 export function readDockerSocket(dockerHost: string | null): string {
   if (dockerHost === null) {
     return '/var/run/docker.sock';

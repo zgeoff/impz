@@ -10,7 +10,7 @@ export interface AuthorizedKey {
   readonly verify: (data: Buffer, signature: Buffer, hashAlgo: string | undefined) => boolean;
 }
 
-export interface ParsedAuthorizedKeys {
+interface ParsedAuthorizedKeys {
   readonly keys: readonly AuthorizedKey[];
   readonly problems: readonly string[];
 }
@@ -19,6 +19,7 @@ export interface ParsedAuthorizedKeys {
 // that starts with them is refused rather than granting more than it says.
 const KEY_TYPE = /^(?:ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521))$/u;
 
+/* @internal */
 export function parseAuthorizedKeys(text: string): ParsedAuthorizedKeys {
   const keys: AuthorizedKey[] = [];
   const problems: string[] = [];

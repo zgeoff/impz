@@ -53,6 +53,7 @@ export function normalizePlatform(os: string, architecture: string): string {
   return platform;
 }
 
+/* @internal */
 export function toRepository(ref: string): string {
   const named = ref.split('@')[0] ?? ref;
   const slash = named.lastIndexOf('/');

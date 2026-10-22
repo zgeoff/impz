@@ -186,6 +186,7 @@ export function checkReferenceRegistry(reference: string): string | null {
   return checkRegistry(parseImageReference(reference).registry);
 }
 
+/* @internal */
 export function checkImageReference(reference: string, hostImage: string): Check {
   if (!/^[A-Za-z0-9][A-Za-z0-9._\/:@\[\]\-]*$/v.test(reference)) {
     return buildFailure(`image ${JSON.stringify(reference)} is not a reference`);

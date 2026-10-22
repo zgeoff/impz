@@ -34,6 +34,7 @@ interface KeyPair {
   readonly public: string;
 }
 
+/* @internal */
 export function generateEd25519Key(
   generate: () => KeyPair = () => utils.generateKeyPairSync('ed25519'),
 ): KeyPair {

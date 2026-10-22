@@ -37,6 +37,7 @@ export interface ImpDiskUsage {
   readonly isUpperBound: boolean;
 }
 
+/* @internal */
 export interface DiskUsageReport {
   readonly imps: ReadonlyMap<string, ImpDiskUsage>;
   readonly isPartial: boolean;

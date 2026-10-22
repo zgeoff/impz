@@ -25,6 +25,7 @@ export async function readConnectedPrefixes4(
   return parseConnectedPrefixes4(routes, addresses);
 }
 
+/* @internal */
 export function parseConnectedPrefixes4(routes: string, addresses: string): readonly string[] {
   const found = [
     ...routes.split('\n').flatMap((line) => {
@@ -72,6 +73,7 @@ export async function readUplinks(
   return { ipv4: parseUplinks(ipv4), ipv6: parseUplinks(ipv6) };
 }
 
+/* @internal */
 export function parseUplinks(routes: string): readonly string[] {
   let isDefault = false;
 
@@ -99,6 +101,7 @@ export async function readRouteDevice(
   return parseRouteDevice(route, address);
 }
 
+/* @internal */
 export function parseRouteDevice(route: string, address: string): string {
   const dev = /\bdev (?<dev>\S+)/v.exec(route)?.groups?.['dev'];
 

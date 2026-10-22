@@ -10,6 +10,7 @@ import { formatBackupRun, formatBackupStatus, formatOutput } from '../output/for
 const ZONED_TIME = /(?:Z|[+\-]\d{2}:?\d{2})$/iv;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/v;
 
+/* @internal */
 export function parseUtcTime(text: string): Date {
   const zoned = ZONED_TIME.test(text) || DATE_ONLY.test(text) ? text : `${text}Z`;
 

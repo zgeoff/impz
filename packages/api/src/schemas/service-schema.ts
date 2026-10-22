@@ -28,6 +28,7 @@ export const ServiceDefSchema = z.object({
 
 export const ServiceStateSchema = z.enum(['starting', 'running', 'backoff', 'stopped', 'exited']);
 
+/* @internal */
 export const ServiceSchema = z.object({
   name: z.string(),
   state: ServiceStateSchema,

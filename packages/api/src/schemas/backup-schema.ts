@@ -1,6 +1,7 @@
 import * as z from 'zod';
 import { ImpSchema } from './imp-schema';
 
+/* @internal */
 export const BackupPointSchema = z
   .object({
     id: z.string(),

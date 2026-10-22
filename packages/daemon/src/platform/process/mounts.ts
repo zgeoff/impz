@@ -6,7 +6,7 @@ export interface MountEntry {
   readonly fstype: string;
 }
 
-export interface MountInfoEntry {
+interface MountInfoEntry {
   readonly mountPoint: string;
   readonly fstype: string;
   readonly source: string;
@@ -28,6 +28,7 @@ export function parseMounts(mounts: string): MountEntry[] {
 }
 
 // <id> <parent> <dev> <root> <mount point> <options> [<optional>...] - <fstype> <source> ...
+/* @internal */
 export function parseMountInfo(mountInfo: string): MountInfoEntry[] {
   return mountInfo
     .split('\n')

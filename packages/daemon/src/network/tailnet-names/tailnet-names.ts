@@ -8,6 +8,7 @@ import type { ServiceDefinition, ServicesApi, TailnetService } from './services-
 import type { TailnetNamesConfig } from './tailnet-names-config';
 
 // the tailnet policy must let tag:imp hosts serve this tag and members reach it
+/* @internal */
 export const SERVICE_TAG = 'tag:imp-svc';
 const SERVICE_PORTS = ['tcp:80', 'tcp:443'];
 

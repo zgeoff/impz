@@ -92,6 +92,7 @@ export function buildRanking(
   return { ranked: ranked.toSorted((first, second) => second.freeMib - first.freeMib), dropped };
 }
 
+/* @internal */
 export function getFreeMib(info: SystemInfo): number {
   return info.ramBudgetMib - info.ramUsedMib - info.ramReservedMib - (info.ramSleepingMib ?? 0);
 }

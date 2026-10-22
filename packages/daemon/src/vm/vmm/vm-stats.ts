@@ -5,6 +5,7 @@ import { probeFirecrackerAlive } from './firecracker-process';
 
 const KIB_PER_MIB = 1024;
 
+/* @internal */
 export function parseSmapsRollup(text: string): ReadonlyMap<string, number> {
   const fields = new Map<string, number>();
 
@@ -59,6 +60,7 @@ export function readUnsharedRamMib(
   return fields === null ? null : countUnsharedMib(fields);
 }
 
+/* @internal */
 export function countUnsharedMib(fields: ReadonlyMap<string, number>): number {
   // KSM splits a merged page's Pss across the VMs that map it, and a write unmerges the page, so a
   // wake reserve counts every page in full.

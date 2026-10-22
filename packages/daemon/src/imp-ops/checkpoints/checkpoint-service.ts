@@ -33,6 +33,7 @@ import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 
+/* @internal */
 export const CHECKPOINT_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
 const CHECKPOINT_ID_PREFIX = 'cp-';
 const ID_ATTEMPTS = 3;
@@ -77,6 +78,7 @@ export function buildCheckpointId(random: () => number = Math.random): string {
   return CHECKPOINT_ID_PREFIX + picks.map((pick) => CHECKPOINT_ID_ALPHABET[pick]).join('');
 }
 
+/* @internal */
 export function isValidCheckpointLabel(label: string): boolean {
   return !label.startsWith(CHECKPOINT_ID_PREFIX);
 }

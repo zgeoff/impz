@@ -45,8 +45,10 @@ const RecordListSchema = z.array(RecordSchema);
 
 type Zone = z.infer<typeof ZoneSchema>;
 
+/* @internal */
 export type CloudflareZone = z.input<typeof ZoneSchema>;
 
+/* @internal */
 export type CloudflareRecord = z.input<typeof RecordSchema>;
 
 interface CloudflareOptions {

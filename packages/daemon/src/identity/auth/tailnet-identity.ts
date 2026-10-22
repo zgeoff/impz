@@ -97,6 +97,7 @@ export function createTailnetIdentities(deps: Readonly<TailnetIdentitiesDeps>): 
   };
 }
 
+/* @internal */
 export function findTailnetCaller(
   rules: readonly TailnetRule[],
   peer: Readonly<TailnetPeer>,
@@ -133,6 +134,7 @@ function findTailnetPrincipal(peer: Readonly<TailnetPeer>): string | null {
   return peer.stableId === null ? null : `tailnet:${peer.stableId}`;
 }
 
+/* @internal */
 export function parseWhois(json: string): TailnetPeer | null {
   try {
     const whois = WhoisSchema.parse(JSON.parse(json));
@@ -186,6 +188,7 @@ async function probeOwnAddress(
 
 // tailscaled drops packets from Tailscale's ranges that do not come in on
 // tailscale0, and so does setup-net.sh, so the source address is the peer's.
+/* @internal */
 export function isTailnetAddress(address: string): boolean {
   const plain = normalizeAddress(address);
   const octets = plain.split('.');

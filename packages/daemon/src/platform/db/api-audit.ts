@@ -5,6 +5,7 @@ import { toLikePattern } from '../../identity/auth/imp-patterns';
 import type { ImpDatabase } from './open-database';
 import type { ApiAudit } from './schema';
 
+/* @internal */
 export const API_AUDIT_ROWS = 10_000;
 
 export interface NewApiCall {

@@ -16,6 +16,7 @@ export interface EventSource extends ClientEventSource {
   readonly warn: (line: string) => void;
 }
 
+/* @internal */
 export async function printEvents(
   source: EventSource,
   name: string | null,

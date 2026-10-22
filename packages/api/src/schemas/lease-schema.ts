@@ -7,6 +7,7 @@ export const LeaseLabelSchema = z
 
 export const LeaseTtlSchema = z.int().min(10).max(3600);
 
+/* @internal */
 export const LeaseOwnerSchema = z.object({
   principal: z.string(),
   display: z.string(),
