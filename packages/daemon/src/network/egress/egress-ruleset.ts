@@ -4,7 +4,6 @@ import type { EgressMode } from '@impz/api';
 // The table only drops and rejects: an accept in one base chain still passes
 // the packet to the next, and a drop in any base chain is final.
 const EGRESS_TABLE = 'inet imp_egress';
-const NAT66_TABLE = 'ip6 imp_nat66';
 const PEER_MARK = '0x01000000';
 const OPEN_BLOCKED_RANGES: readonly string[] = ['169.254.0.0/16', '100.64.0.0/10'];
 
@@ -290,22 +289,4 @@ function buildSet(options: BuildSetOptions): readonly string[] {
 
 function formatTap(tap: string): string {
   return `"${tap}"`;
-}
-
-export function buildNat66Removal(): string {
-  return `table ${NAT66_TABLE} {}\ndelete table ${NAT66_TABLE}\n`;
-}
-
-export function buildNat66Ruleset(prefix: string, uplink: string): string {
-  return [
-    `table ${NAT66_TABLE} {}`,
-    `delete table ${NAT66_TABLE}`,
-    `table ${NAT66_TABLE} {`,
-    '  chain postrouting {',
-    '    type nat hook postrouting priority srcnat; policy accept;',
-    `    oifname "${uplink}" ip6 saddr ${prefix} masquerade`,
-    '  }',
-    '}',
-    '',
-  ].join('\n');
 }

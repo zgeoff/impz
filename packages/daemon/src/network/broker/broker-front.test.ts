@@ -5,6 +5,8 @@ import { startStubBrokerGuestSocket } from '../../../testing/network/start-stub-
 import { startStubBrokerReplyTarget } from '../../../testing/network/start-stub-broker-reply-target';
 import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { parseSubnet } from '../../host-net/net/addressing';
+import { buildRangeMatcher } from '../../host-net/net/range-matcher';
+import { REFUSED_RANGES4 } from '../../host-net/net/ranges';
 import type { NewAuditEntry } from '../../platform/db/broker-audit';
 import type { BrokerPeer } from '../../platform/db/read-broker-peer';
 import { startBrokerFront } from './broker-front';
@@ -241,6 +243,8 @@ test('it refuses a tunnel to a target the check refuses with a 403 that says why
       resolveTunnelTarget(host, {
         resolve: () => Promise.resolve(['10.0.0.1']),
         readHostAddresses: () => new Set(),
+        isRefused: buildRangeMatcher(REFUSED_RANGES4),
+        hasIPv6: false,
       }),
     log: () => {},
   });
@@ -304,6 +308,8 @@ test('it answers 502 when resolving the target fails for another reason', async 
       resolveTunnelTarget(host, {
         resolve: () => Promise.reject(new Error('getaddrinfo ENOTFOUND host.test')),
         readHostAddresses: () => new Set(),
+        isRefused: () => false,
+        hasIPv6: false,
       }),
     log: () => {},
   });
@@ -599,6 +605,8 @@ test('it records a refused audit row for a tunnel to an address the check refuse
       resolveTunnelTarget(host, {
         resolve: () => Promise.resolve(['10.0.0.1']),
         readHostAddresses: () => new Set(),
+        isRefused: buildRangeMatcher(REFUSED_RANGES4),
+        hasIPv6: false,
       }),
     log: () => {},
   });
@@ -645,6 +653,8 @@ test('it records no audit row when resolving the target fails', async () => {
       resolveTunnelTarget(host, {
         resolve: () => Promise.reject(new Error('getaddrinfo ENOTFOUND host.test')),
         readHostAddresses: () => new Set(),
+        isRefused: () => false,
+        hasIPv6: false,
       }),
     log: () => {},
   });

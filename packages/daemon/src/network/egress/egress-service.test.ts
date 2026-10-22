@@ -18,6 +18,7 @@ import type { EgressDeps } from './egress-service';
 interface SetupOptions {
   readonly nft?: Readonly<ReturnType<typeof buildStubNft>>;
   readonly egress?: Readonly<Partial<NonNullable<ImpdDeps['egress']>>>;
+  readonly reach?: ImpdDeps['reach'];
   readonly broker?: Readonly<Partial<NonNullable<ImpdDeps['broker']>>>;
   readonly resolveIpv6?: ImpdDeps['resolveIpv6'];
 }
@@ -50,7 +51,8 @@ async function setupTest(options: Readonly<SetupOptions> = {}) {
         removeTap: () => Promise.resolve(),
       },
 
-      egress: { ...buildStubHostRoutes().deps, ...options.egress },
+      ...(options.egress !== undefined && { egress: options.egress }),
+      reach: { ...buildStubHostRoutes().deps, ...options.reach },
     },
   });
 
@@ -551,7 +553,7 @@ test('it lets a public imp out only by the uplinks, and refuses it the private r
     uplinks: { ipv4: ['eth0'], ipv6: ['eth0'] },
   });
 
-  const ctx = await setupTest({ egress: routes.deps });
+  const ctx = await setupTest({ reach: routes.deps });
 
   await ctx.createTestImage('base');
   await ctx.impd.imps.createImp({ name: 'dev' });
@@ -753,7 +755,7 @@ test('it keeps the plain tunnels of an imp that stays public', async () => {
 test('it refuses a public policy whose routes cannot be read, and leaves the imp as it was', async () => {
   const routes = buildStubHostRoutes({ uplinks: { ipv4: ['eth0'], ipv6: [] } });
 
-  const ctx = await setupTest({ egress: routes.deps });
+  const ctx = await setupTest({ reach: routes.deps });
 
   await ctx.createTestImage('base');
   await ctx.impd.imps.createImp({ name: 'dev' });
@@ -775,7 +777,7 @@ test('it refuses a public policy whose routes cannot be read, and leaves the imp
 test('it leaves a running public imp no uplink while the routes cannot be read', async () => {
   const routes = buildStubHostRoutes({ uplinks: { ipv4: ['eth0'], ipv6: [] } });
 
-  const ctx = await setupTest({ egress: routes.deps });
+  const ctx = await setupTest({ reach: routes.deps });
 
   await ctx.createTestImage('base');
   await ctx.impd.imps.createImp({ name: 'pub', policy: { mode: 'public', allow: [] } });
@@ -794,7 +796,7 @@ test('it leaves a running public imp no uplink while the routes cannot be read',
 test('it refuses a public policy outright while the routes cannot be read', async () => {
   const routes = buildStubHostRoutes({ uplinks: { ipv4: ['eth0'], ipv6: [] } });
 
-  const ctx = await setupTest({ egress: routes.deps });
+  const ctx = await setupTest({ reach: routes.deps });
 
   await ctx.createTestImage('base');
   await ctx.impd.imps.createImp({ name: 'pub', policy: { mode: 'public', allow: [] } });
@@ -814,7 +816,7 @@ test('it refuses a public policy outright while the routes cannot be read', asyn
 test('it accepts a public policy once the routes are back', async () => {
   const routes = buildStubHostRoutes({ uplinks: { ipv4: ['eth0'], ipv6: [] } });
 
-  const ctx = await setupTest({ egress: routes.deps });
+  const ctx = await setupTest({ reach: routes.deps });
 
   await ctx.createTestImage('base');
   await ctx.impd.imps.createImp({ name: 'pub', policy: { mode: 'public', allow: [] } });
@@ -842,7 +844,7 @@ test('it accepts a public policy once the routes are back', async () => {
 test('it builds the table again for a public imp once the routes are back', async () => {
   const routes = buildStubHostRoutes({ uplinks: { ipv4: ['eth0'], ipv6: [] } });
 
-  const ctx = await setupTest({ egress: routes.deps });
+  const ctx = await setupTest({ reach: routes.deps });
 
   await ctx.createTestImage('base');
   await ctx.impd.imps.createImp({ name: 'pub', policy: { mode: 'public', allow: [] } });
@@ -1069,7 +1071,7 @@ test("it checks an IPv6 slot's source /128, and blocks the imps' /64 and the con
 
   const ctx = await setupTest({
     resolveIpv6: () => Promise.resolve({ prefix, nat66: true, uplink: 'eth0' }),
-    egress: routes.deps,
+    reach: routes.deps,
   });
 
   await ctx.createTestImage('base');

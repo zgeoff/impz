@@ -402,6 +402,8 @@ test('it closes the database it opened itself when it stops', async () => {
       readForwardRules: () => Promise.resolve(''),
       forward: () => Promise.reject(new Error('no upstream in tests')),
       resolveExact: () => Promise.resolve([]),
+    },
+    reach: {
       readConnected4: () => Promise.resolve(['172.17.0.0/16']),
       readConnected6: () => Promise.resolve([]),
       readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
@@ -502,6 +504,8 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
       readForwardRules: () => Promise.resolve(''),
       forward: () => Promise.reject(new Error('no upstream in tests')),
       resolveExact: () => Promise.resolve([]),
+    },
+    reach: {
       readConnected4: () => Promise.resolve(['172.17.0.0/16']),
       readConnected6: () => Promise.resolve([]),
       readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),
@@ -641,6 +645,8 @@ test('it answers /health without a token, not ready before the default image is 
       readForwardRules: () => Promise.resolve(''),
       forward: () => Promise.reject(new Error('no upstream in tests')),
       resolveExact: () => Promise.resolve([]),
+    },
+    reach: {
       readConnected4: () => Promise.resolve(['172.17.0.0/16']),
       readConnected6: () => Promise.resolve([]),
       readUplinks: () => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }),

@@ -5,16 +5,10 @@ import { ORPCError } from '@orpc/server';
 import type { Config } from '../../config';
 import { formatSubnet, parseIpv4 } from '../../host-net/net/addressing';
 import { deriveGuestIp6 } from '../../host-net/net/addressing6';
-import { readConnectedPrefixes4, readUplinks } from '../../host-net/net/host-routes';
-import type { Uplinks } from '../../host-net/net/host-routes';
-import { readConnectedPrefixes6 } from '../../host-net/net/ipv6-plan';
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
-import { createRangeChecker } from '../../host-net/net/range-checker';
-import {
-  BLOCKED_RANGES6,
-  DOCUMENTATION_RANGES6,
-  RESERVED_RANGES6,
-} from '../../host-net/net/ranges6';
+import { buildRangeMatcher } from '../../host-net/net/range-matcher';
+import { NO_HOST_ROUTES } from '../../host-net/net/reach-policy';
+import type { HostRoutes, ReachPolicy, ReachRanges } from '../../host-net/net/reach-policy';
 import { listEgressSlots, readEgressPolicy } from '../../platform/db/egress';
 import type { EgressSlot } from '../../platform/db/egress';
 import { readImpByName } from '../../platform/db/imps';
@@ -24,9 +18,9 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { startInterval } from '../../platform/process/start-interval';
+import type { BucketSpec } from '../../platform/process/token-buckets';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { buildNotFoundError } from '../../surface/api-errors';
-import { REFUSED_RANGES } from '../broker/tunnel-target';
 import { checkPeerAccept } from './check-peer-accept';
 import { createExactResolver } from './create-exact-resolver';
 import { createDnsForward } from './dns-upstream';
@@ -35,7 +29,7 @@ import { runConntrackFlush, runForwardRulesList, runPairFlush } from './egress-c
 import { createNftWriter, formatNftError, runNft } from './egress-firewall';
 import type { NftRunner } from './egress-firewall';
 import { createQueryHandler, startResolverServer } from './egress-resolver';
-import type { QueryVerdict, RateLimit, ResolverServer } from './egress-resolver';
+import type { QueryVerdict, ResolverServer } from './egress-resolver';
 import { buildAllowRules, isNameAllowed, listExactNames } from './egress-rules';
 import type { AllowRules } from './egress-rules';
 import { buildElementChange, buildRuleset } from './egress-ruleset';
@@ -47,15 +41,13 @@ import { makeChangeNetworks } from './make-change-networks';
 import type { NetworkChange } from './make-change-networks';
 import { makeSetPolicy } from './make-set-policy';
 import { resolveNetworkName } from './network-names';
-import { readHostNetwork } from './read-host-network';
-import type { HostNetwork } from './read-host-network';
 
 const MIN_TTL_S = 300;
 const MAX_TTL_S = 86_400;
 const SET_SIZE = 4096;
 const SWEEP_MS = 30_000;
-const CLOSED_RATE: RateLimit = { burst: 500, perSecond: 100 };
-const OPEN_RATE: RateLimit = { burst: 2000, perSecond: 1000 };
+const CLOSED_RATE: BucketSpec = { size: 500, refillMs: 10 };
+const OPEN_RATE: BucketSpec = { size: 2000, refillMs: 1 };
 
 export interface EgressDeps {
   readonly config: Pick<
@@ -69,11 +61,9 @@ export interface EgressDeps {
   readonly closeTunnels: (impId: string, keep: (host: string) => boolean) => void;
 
   readonly ipv6?: Ipv6Plan | null;
+  readonly reach: ReachPolicy;
 
   readonly runNft?: NftRunner;
-  readonly readConnected6?: () => Promise<readonly string[]>;
-  readonly readConnected4?: () => Promise<readonly string[]>;
-  readonly readUplinks?: () => Promise<Uplinks>;
   readonly flushConnections?: (guestIp: string) => Promise<void>;
   readonly flushPair?: (first: string, second: string) => Promise<void>;
   readonly readForwardRules?: () => Promise<string>;
@@ -116,6 +106,13 @@ interface SlotView {
   readonly rules: AllowRules;
 }
 
+interface HostRanges {
+  readonly ranges: ReachRanges;
+  readonly uplinks: HostRoutes['uplinks'];
+
+  readonly error: string | null;
+}
+
 export function createEgressService(deps: EgressDeps): EgressService {
   const now = deps.now ?? Date.now;
   const repeat = deps.repeat ?? startInterval;
@@ -125,28 +122,29 @@ export function createEgressService(deps: EgressDeps): EgressService {
   const readForwardRules = deps.readForwardRules ?? (() => runForwardRulesList());
   const forward = deps.forward ?? createDnsForward(deps.config.dns);
   const ipv6 = deps.ipv6 ?? null;
-
-  const hostReaders = {
-    hasIPv6: ipv6 !== null,
-    readConnected6: deps.readConnected6 ?? readConnectedPrefixes6,
-    readConnected4: deps.readConnected4 ?? readConnectedPrefixes4,
-    readUplinks: deps.readUplinks ?? readUplinks,
-    log: deps.log,
-  };
-
+  const reach = deps.reach;
   const resolveExact = deps.resolveExact ?? createExactResolver(deps.config.dns, ipv6 !== null);
   const sets = createEgressSets({ minTtlS: MIN_TTL_S, maxTtlS: MAX_TTL_S, maxPerSlot: SET_SIZE });
   const mutex = buildKeyedMutex();
+  const startRanges = reach.buildRanges(NO_HOST_ROUTES);
 
-  const privateRanges = [
-    ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-    formatSubnet(deps.config.subnet),
-  ];
+  const readHostRanges = async (hasPublic: boolean): Promise<HostRanges> => {
+    try {
+      const host = await reach.read(hasPublic);
 
-  const [deny4, deny6] = [
-    deps.config.egressDeny.filter((cidr) => !cidr.includes(':')),
-    deps.config.egressDeny.filter((cidr) => cidr.includes(':')),
-  ];
+      return { ranges: host.ranges, uplinks: host.uplinks, error: null };
+    } catch (error) {
+      const message = getErrorMessage(error);
+
+      deps.log(`impd: egress: reading the host container's routes: ${message}`);
+
+      return {
+        ranges: startRanges,
+        uplinks: NO_HOST_ROUTES.uplinks,
+        error: hasPublic ? message : null,
+      };
+    }
+  };
 
   const state: {
     slots: Map<number, SlotView>;
@@ -173,11 +171,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
     unenforced: null,
     server: null,
     stopSweep: null,
-    isScreened: createRangeChecker(privateRanges, [
-      ...BLOCKED_RANGES6,
-      ...DOCUMENTATION_RANGES6,
-      ...RESERVED_RANGES6,
-    ]),
+    isScreened: buildRangeMatcher([...startRanges.public4, ...startRanges.public6]),
     publicUnenforced: null,
     denyListMissing: false,
   };
@@ -188,32 +182,19 @@ export function createEgressService(deps: EgressDeps): EgressService {
     return ipv6 === null || ip === null ? null : deriveGuestIp6(ipv6.prefix, ip);
   };
 
-  const listBlocked6 = (host: HostNetwork): string[] => [
-    ...BLOCKED_RANGES6,
-    ...(ipv6 === null ? [] : [ipv6.prefix.text]),
-    ...host.connected6,
-  ];
-
-  const listPublicRanges = (host: HostNetwork): readonly [string[], string[]] => [
-    [...privateRanges, ...host.connected4, ...deny4],
-    [...listBlocked6(host), ...DOCUMENTATION_RANGES6, ...RESERVED_RANGES6, ...deny6],
-  ];
-
   const buildScript = (
     views: ReadonlyMap<number, SlotView>,
-    host: HostNetwork,
+    host: HostRanges,
     members: readonly NetworkMember[],
-  ): string => {
-    const [public4, public6] = listPublicRanges(host);
-
-    return buildRuleset({
+  ): string =>
+    buildRuleset({
       networks: listPeerGroups(members),
       subnet: formatSubnet(deps.config.subnet),
       dnsServers: deps.config.dns,
-      privateRanges,
-      blocked6: listBlocked6(host),
-      public4,
-      public6,
+      privateRanges: host.ranges.private4,
+      blocked6: host.ranges.blocked6,
+      public4: host.ranges.public4,
+      public6: host.ranges.public6,
       uplinks4: host.uplinks.ipv4,
       uplinks6: host.uplinks.ipv6,
       dnsPort: deps.config.egressDnsPort,
@@ -230,7 +211,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
           : [],
       })),
     });
-  };
 
   const applyTable = (): Promise<void> =>
     mutex.runExclusive('table', async () => {
@@ -255,13 +235,11 @@ export function createEgressService(deps: EgressDeps): EgressService {
           (view) => EGRESS_MODE_TRAITS[view.entry.policy.mode].isPublic,
         );
 
-        const host = await readHostNetwork(hasPublic, hostReaders);
+        const host = await readHostRanges(hasPublic);
 
         await write(buildScript(slots, host, members));
 
-        const [public4, public6] = listPublicRanges(host);
-
-        state.isScreened = createRangeChecker(public4, public6);
+        state.isScreened = buildRangeMatcher([...host.ranges.public4, ...host.ranges.public6]);
         state.publicUnenforced = host.error;
 
         const isMissing = isMissingHostAddresses(hasPublic, deps.config.hostAddresses);

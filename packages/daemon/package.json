@@ -33,6 +33,7 @@
     "better-auth": "catalog:",
     "dns-packet": "catalog:",
     "elysia": "catalog:",
+    "ipaddr.js": "catalog:",
     "kysely": "catalog:",
     "lru-cache": "catalog:",
     "reflect-metadata": "catalog:",

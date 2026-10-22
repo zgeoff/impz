@@ -144,6 +144,7 @@
         "better-auth": "catalog:",
         "dns-packet": "catalog:",
         "elysia": "catalog:",
+        "ipaddr.js": "catalog:",
         "kysely": "catalog:",
         "lru-cache": "catalog:",
         "reflect-metadata": "catalog:",
@@ -326,6 +327,7 @@
     "elysia": "1.4.29",
     "fast-check": "4.10.2",
     "gunshi": "1.0.0-rc.1",
+    "ipaddr.js": "2.5.0",
     "knip": "6.24.0",
     "kysely": "0.29.5",
     "kysely-codegen": "0.20.0",
@@ -1468,6 +1470,8 @@
     "indent-string": ["indent-string@4.0.0", "", {}, "sha512-EdDDZu4A2OyIK7Lr/2zG+w5jmbuk1DVBnEwREQvBzspBJkCEbRa8GxU1lghYcaGJCnRWibjDXlq779X1/y5xwg=="],
 
     "ini": ["ini@6.0.0", "", {}, "sha512-IBTdIkzZNOpqm7q3dRqJvMaldXjDHWkEDfrwGEQTs5eaQMWV+djAhR+wahyNNMAa+qpbDUhBMVt4ZKNwpPm7xQ=="],
+
+    "ipaddr.js": ["ipaddr.js@2.5.0", "", {}, "sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w=="],
 
     "is-arrayish": ["is-arrayish@0.2.1", "", {}, "sha512-zz06S8t0ozoDXMG+ube26zeCTNXcKIPJZJi8hBrF4idCLms4CG9QtK7qBl1boi5ODzFpjswb5JPmHCbMpjaYzg=="],
 

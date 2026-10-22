@@ -1,12 +1,9 @@
 import { join } from 'node:path';
 import type { Config } from './config';
-import {
-  checkHostRules6,
-  readIpv6DefaultRoute,
-  readOrCreateUlaPrefix,
-  resolveIpv6Plan,
-} from './host-net/net/ipv6-plan';
+import { readIpv6DefaultRoute } from './host-net/net/host-routes';
+import { checkHostRules6, readOrCreateUlaPrefix, resolveIpv6Plan } from './host-net/net/ipv6-plan';
 import type { Ipv6Plan } from './host-net/net/ipv6-plan';
+import { createReachPolicy } from './host-net/net/reach-policy';
 import type { ImpdDeps } from './impd-deps';
 import { createBroker } from './network/broker/broker-service';
 import type { Broker } from './network/broker/broker-service';
@@ -43,11 +40,20 @@ export async function createImpdFirewall(
       }))
   )();
 
+  const reach = createReachPolicy({
+    subnet: config.subnet,
+    deny: config.egressDeny,
+    ipv6,
+    now: deps.now ?? Date.now,
+    ...deps.reach,
+  });
+
   const broker = await createBroker({
     config,
     db: deps.db,
     log,
     ipv6,
+    reach,
     secretFiles,
     ...(deps.now !== undefined && { now: deps.now }),
     ...deps.broker,
@@ -59,6 +65,7 @@ export async function createImpdFirewall(
     config,
     db: deps.db,
     ipv6,
+    reach,
     log,
     isGranted: broker.isGranted,
     closeTunnels: broker.closeTunnels,

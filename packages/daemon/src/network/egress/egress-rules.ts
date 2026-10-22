@@ -1,35 +1,27 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
-import { parseIpv4 } from '../../host-net/net/addressing';
-import { parseIpv6 } from '../../host-net/net/addressing6';
+import { parseCidr } from '../../host-net/net/parse-cidr';
+import { buildRangeMatcher } from '../../host-net/net/range-matcher';
 
 export interface AllowRules {
   readonly names: ReadonlySet<string>;
   readonly suffixes: readonly string[];
-  readonly ranges: readonly (readonly [number, number])[];
-  readonly ranges6: readonly (readonly [bigint, bigint])[];
   readonly cidrs: readonly string[];
+
+  readonly isAddressIn: (address: string) => boolean;
 }
 
 export function buildAllowRules(allow: readonly string[]): AllowRules {
   const names = new Set<string>();
 
   const suffixes: string[] = [];
-  const ranges: (readonly [number, number])[] = [];
-  const ranges6: (readonly [bigint, bigint])[] = [];
   const cidrs: string[] = [];
 
   for (const entry of allow) {
     const range = parseCidr(entry);
-    const [address6 = '', prefix6 = '128'] = entry.split('/');
-    const first6 = parseIpv6(address6);
 
-    if (first6 !== null) {
-      ranges6.push([first6, 2n ** BigInt(128 - Number(prefix6))]);
-      cidrs.push(`${address6}/${prefix6}`);
-    } else if (range !== null) {
-      ranges.push([range.first, range.size]);
-      cidrs.push(range.text);
+    if (range !== null) {
+      cidrs.push(`${entry.split('/')[0] ?? ''}/${String(range.bits)}`);
     } else if (entry.startsWith('*.')) {
       suffixes.push(entry.slice(1));
     } else {
@@ -37,7 +29,7 @@ export function buildAllowRules(allow: readonly string[]): AllowRules {
     }
   }
 
-  return { names, suffixes, ranges, ranges6, cidrs };
+  return { names, suffixes, cidrs, isAddressIn: buildRangeMatcher(cidrs) };
 }
 
 export function normalizeName(name: string): string {
@@ -50,19 +42,6 @@ export function isNameAllowed(rules: AllowRules, name: string): boolean {
   return rules.names.has(normal) || rules.suffixes.some((suffix) => normal.endsWith(suffix));
 }
 
-/* @internal */
-export function isAddressAllowed(rules: AllowRules, address: string): boolean {
-  const ip6 = parseIpv6(address);
-
-  if (ip6 !== null) {
-    return rules.ranges6.some(([first, size]) => ip6 >= first && ip6 < first + size);
-  }
-
-  const ip = parseIpv4(address);
-
-  return ip !== null && rules.ranges.some(([first, size]) => ip >= first && ip < first + size);
-}
-
 export function isTunnelAllowed(policy: EgressPolicy, host: string): boolean {
   const traits = EGRESS_MODE_TRAITS[policy.mode];
 
@@ -72,24 +51,9 @@ export function isTunnelAllowed(policy: EgressPolicy, host: string): boolean {
 
   const rules = buildAllowRules(policy.allow);
 
-  return isNameAllowed(rules, host) || isAddressAllowed(rules, host);
+  return isNameAllowed(rules, host) || rules.isAddressIn(host);
 }
 
 export function listExactNames(allow: readonly string[]): readonly string[] {
   return [...buildAllowRules(allow).names];
-}
-
-function parseCidr(
-  entry: string,
-): { readonly first: number; readonly size: number; readonly text: string } | null {
-  const [address = '', prefixText] = entry.split('/');
-  const first = parseIpv4(address);
-
-  if (first === null) {
-    return null;
-  }
-
-  const prefix = prefixText === undefined ? 32 : Number(prefixText);
-
-  return { first, size: 2 ** (32 - prefix), text: `${address}/${String(prefix)}` };
 }

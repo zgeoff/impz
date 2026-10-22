@@ -1,9 +1,10 @@
+import type { ServedServices } from '../../host-net/net/tailscale-serve';
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { listServeEntries } from './service-serve';
-import type { ServedServices, ServiceServe } from './service-serve';
+import type { ServiceServe } from './service-serve';
 import type { ServiceDefinition, ServicesApi, TailnetService } from './services-api';
 import type { TailnetNamesConfig } from './tailnet-names-config';
 

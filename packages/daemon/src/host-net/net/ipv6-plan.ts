@@ -1,13 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 breaks the net and egress cycle
-import { buildNat66Removal, buildNat66Ruleset } from '../../network/egress/egress-ruleset';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-import { runChecked, runCommand } from '../../platform/process/run-command';
+import { runCommand } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';
-import { buildUlaPrefix, formatCidr6, parsePrefix64 } from './addressing6';
+import { buildUlaPrefix, parsePrefix64 } from './addressing6';
 import type { Prefix64 } from './addressing6';
+import { buildNat66Removal, buildNat66Ruleset } from './nat66-ruleset';
 
 export type Ipv6Setting =
   | { readonly kind: 'auto' }
@@ -153,64 +152,6 @@ function readSysctl(path: string): string | null {
   } catch {
     return null;
   }
-}
-
-export async function readIpv6DefaultRoute(
-  run: CommandRunner = runCommand,
-): Promise<string | null> {
-  const result = await run(['ip', '-6', 'route', 'show', 'default']);
-
-  if (result.exitCode !== 0) {
-    return null;
-  }
-
-  return /\bdev (?<dev>\S+)/u.exec(result.stdout)?.groups?.['dev'] ?? null;
-}
-
-// A failed read throws: a blocklist without these prefixes would let an imp
-// or a tunnel reach them.
-export async function readConnectedPrefixes6(
-  run: (argv: readonly string[]) => Promise<string> = runChecked,
-): Promise<readonly string[]> {
-  const routes = await run(['ip', '-6', 'route', 'show']);
-  const addresses = await run(['ip', '-6', '-o', 'addr', 'show']);
-
-  return parseConnectedPrefixes(routes, addresses);
-}
-
-/* @internal */
-export function parseConnectedPrefixes(routes: string, addresses: string): readonly string[] {
-  const found = [
-    ...routes.split('\n').flatMap((line) => {
-      const [destination = ''] = line.split(' ');
-      const dev = /\bdev (?<dev>\S+)/u.exec(line)?.groups?.['dev'] ?? '';
-
-      return line.includes(' via ') || dev.startsWith('imp') ? [] : [destination];
-    }),
-    ...addresses.split('\n').flatMap((line) => {
-      const match = /^\d+:\s+(?<dev>\S+)\s+inet6\s+(?<cidr>\S+)\s+scope\s+(?<scope>\S+)/u.exec(
-        line,
-      );
-
-      const groups = match?.groups ?? {};
-      const isGlobal = groups['scope'] === 'global' && !(groups['dev'] ?? 'imp').startsWith('imp');
-
-      return isGlobal ? [groups['cidr'] ?? ''] : [];
-    }),
-  ];
-
-  const prefixes = new Set<string>();
-
-  for (const text of found) {
-    const prefix = formatCidr6(text);
-    const isLocalOnly = prefix === null || prefix.startsWith('fe80:') || prefix.startsWith('ff');
-
-    if (prefix !== null && !isLocalOnly) {
-      prefixes.add(prefix);
-    }
-  }
-
-  return [...prefixes];
 }
 
 export function readOrCreateUlaPrefix(path: string): Prefix64 {

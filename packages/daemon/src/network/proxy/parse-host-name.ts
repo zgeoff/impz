@@ -1,11 +1,13 @@
 import { NameSchema } from '@impz/api';
+import { normalizeHost } from './normalize-host';
 
 export function parseHostName(host: string | null): string | null {
-  if (host === null || host.startsWith('[')) {
+  const hostname = normalizeHost(host);
+
+  if (hostname === null) {
     return null;
   }
 
-  const hostname = host.replace(/:\d+$/u, '').replace(/\.$/u, '').toLowerCase();
   const labels = hostname.split('.');
 
   if (labels.length < 2 || /^[\d.]+$/u.test(hostname)) {

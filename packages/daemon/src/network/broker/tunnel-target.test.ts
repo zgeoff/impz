@@ -1,5 +1,6 @@
-import { expect, test } from 'bun:test';
-import { BLOCKED_RANGES6, createRangeChecker6 } from '../../host-net/net/ranges6';
+import { expect, mock, test } from 'bun:test';
+import { buildRangeMatcher } from '../../host-net/net/range-matcher';
+import { REFUSED_RANGES4 } from '../../host-net/net/ranges';
 import {
   TunnelRefusedError,
   isRefusedAddress,
@@ -8,124 +9,53 @@ import {
 } from './tunnel-target';
 
 test.each([
-  ['loopback', '127.0.0.1'],
-  ['this network', '0.0.0.0'],
-  ['private 10/8', '10.66.0.1'],
-  ['private 172.16/12', '172.17.0.1'],
-  ['private 192.168/16', '192.168.1.1'],
-  ['link-local and cloud metadata', '169.254.169.254'],
-  ['shared 100.64/10 (tailnet)', '100.101.102.103'],
-  ['multicast', '239.1.2.3'],
-  ['reserved', '250.0.0.1'],
-  ['broadcast', '255.255.255.255'],
-  ['documentation', '198.51.100.9'],
-  ['benchmarking', '198.18.0.1'],
-  ['a host address', '203.0.114.7'],
-  ['ipv6 without an IPv6 plan', '2606:4700::1111'],
-  ['ipv6 loopback', '::1'],
-  ['v4-mapped loopback', '::ffff:127.0.0.1'],
-  ['v4-mapped metadata', '::ffff:169.254.169.254'],
-])('it refuses %s (%s) to a tunnel', (_what, address) => {
-  expect(isRefusedAddress(address, new Set(['203.0.114.7', '10.66.0.1']))).toBeTrue();
-});
-
-// the first and last address of every block the IANA IPv4 Special-Purpose
-// Address Registry (2025-10-09) marks not globally reachable, and multicast
-test.each([
-  ['0.0.0.0'],
-  ['0.255.255.255'],
-  ['10.0.0.0'],
-  ['10.255.255.255'],
-  ['100.64.0.0'],
-  ['100.127.255.255'],
-  ['127.0.0.0'],
-  ['127.255.255.255'],
-  ['169.254.0.0'],
-  ['169.254.255.255'],
-  ['172.16.0.0'],
-  ['172.31.255.255'],
-  ['192.0.0.0'],
-  ['192.0.0.255'],
-  ['192.0.2.0'],
-  ['192.0.2.255'],
-  ['192.88.99.0'],
-  ['192.88.99.255'],
-  ['192.168.0.0'],
-  ['192.168.255.255'],
-  ['198.18.0.0'],
-  ['198.19.255.255'],
-  ['198.51.100.0'],
-  ['198.51.100.255'],
-  ['203.0.113.0'],
-  ['203.0.113.255'],
-  ['224.0.0.0'],
-  ['239.255.255.255'],
-  ['240.0.0.0'],
-  ['255.255.255.254'],
-  ['255.255.255.255'],
-])('it refuses the registry edge address %s to a tunnel', (address) => {
-  expect(isRefusedAddress(address, new Set())).toBeTrue();
-});
-
-test.each([
-  ['93.184.215.14'],
-  ['140.82.112.3'],
-  ['::ffff:140.82.112.3'],
-  ['1.1.1.1'],
-  ['100.63.255.255'],
-  ['100.128.0.0'],
-  ['172.32.0.1'],
-])('it lets public IPv4 %s through', (address) => {
-  expect(isRefusedAddress(address, new Set(['203.0.114.7', '10.66.0.1']))).toBeFalse();
-});
-
-test.each([
-  ['2606:4700::1111', false],
-  ['fd12:3456:789a::a42:6', true],
-  ['fd00:ec2::254', true],
-  ['64:ff9b::a9fe:a9fe', true],
-  ['2001:db8:a::2', true],
-] as const)('it holds IPv6 %s refused: %p, with an IPv6 plan', (address, refused) => {
-  const isBlocked6 = createRangeChecker6([...BLOCKED_RANGES6, 'fd12:3456:789a::/64']);
-
-  expect(
-    isRefusedAddress(address, new Set(['203.0.114.7', '10.66.0.1', '2001:db8:a::2']), isBlocked6),
-  ).toBe(refused);
-});
-
-test.each([
+  ['2001:db8:a::2'],
   ['2001:DB8:A::2'],
   ['2001:0db8:000a:0000:0000:0000:0000:0002'],
+  ['10.66.0.1'],
   ['::ffff:10.66.0.1'],
-  ['010.066.000.001'],
-])("it matches the host's own address spelt %s", (address) => {
-  const isBlocked6 = createRangeChecker6(BLOCKED_RANGES6);
-
-  expect(isRefusedAddress(address, new Set(['2001:db8:a::2', '10.66.0.1']), isBlocked6)).toBeTrue();
+])("it refuses the host's own address spelt %s", (address) => {
+  expect(
+    isRefusedAddress(address, new Set(['2001:db8:a::2', '10.66.0.1']), () => false),
+  ).toBeTrue();
 });
 
-test("it lets through an IPv6 address next to the host's own", () => {
-  const isBlocked6 = createRangeChecker6(BLOCKED_RANGES6);
-
+test("it lets through an address next to the host's own", () => {
   expect(
-    isRefusedAddress('2001:db8:a::3', new Set(['2001:db8:a::2', '10.66.0.1']), isBlocked6),
+    isRefusedAddress('2001:db8:a::3', new Set(['2001:db8:a::2', '10.66.0.1']), () => false),
   ).toBeFalse();
+});
+
+test('it asks the reach policy about a mapped address as the IPv4 address it carries', () => {
+  const isRefused = mock<(address: string) => boolean>(() => false);
+
+  isRefusedAddress('::ffff:140.82.112.3', new Set(), isRefused);
+
+  expect(isRefused).toHaveBeenCalledExactlyOnceWith('140.82.112.3');
+});
+
+test('it refuses an address the reach policy refuses', () => {
+  expect(isRefusedAddress('140.82.112.3', new Set(), () => true)).toBeTrue();
 });
 
 test('it dials the first address of a name whose answers all pass', async () => {
   const target = await resolveTunnelTarget('public.test', {
     resolve: () => Promise.resolve(['140.82.112.3', '140.82.112.4']),
     readHostAddresses: () => new Set(['203.0.114.7', '10.66.0.1']),
+    isRefused: () => false,
+    hasIPv6: false,
   });
 
   expect(target).toBe('140.82.112.3');
 });
 
-test('it refuses a name with any inside answer', () => {
+test('it refuses a name with any refused answer', () => {
   expect(
     resolveTunnelTarget('rebind.test', {
       resolve: () => Promise.resolve(['140.82.112.3', '127.0.0.1']),
       readHostAddresses: () => new Set(['203.0.114.7', '10.66.0.1']),
+      isRefused: buildRangeMatcher(REFUSED_RANGES4),
+      hasIPv6: false,
     }),
   ).rejects.toThrowWithMessage(
     TunnelRefusedError,
@@ -138,75 +68,53 @@ test('it refuses a name with no answer', () => {
     resolveTunnelTarget('none.test', {
       resolve: () => Promise.resolve([]),
       readHostAddresses: () => new Set(['203.0.114.7', '10.66.0.1']),
+      isRefused: () => false,
+      hasIPv6: false,
     }),
   ).rejects.toThrowWithMessage(TunnelRefusedError, 'none.test has no address a tunnel may dial');
 });
 
-test.each([['127.0.0.1'], ['10.66.0.1'], ['::1'], ['203.0.114.7']])(
-  'it refuses the IP literal %s without DNS',
-  (host) => {
-    expect(
-      resolveTunnelTarget(host, { readHostAddresses: () => new Set(['203.0.114.7', '10.66.0.1']) }),
-    ).rejects.toThrowWithMessage(
-      TunnelRefusedError,
-      `${host} resolves to ${host}, which a tunnel may not reach`,
-    );
-  },
-);
+test("it refuses the host's own IP literal without DNS", () => {
+  expect(
+    resolveTunnelTarget('203.0.114.7', {
+      readHostAddresses: () => new Set(['203.0.114.7', '10.66.0.1']),
+      isRefused: () => false,
+      hasIPv6: false,
+    }),
+  ).rejects.toThrowWithMessage(
+    TunnelRefusedError,
+    '203.0.114.7 resolves to 203.0.114.7, which a tunnel may not reach',
+  );
+});
 
 test('it dials a public IP literal as it is', async () => {
   const target = await resolveTunnelTarget('140.82.112.3', {
     readHostAddresses: () => new Set(['203.0.114.7', '10.66.0.1']),
+    isRefused: () => false,
+    hasIPv6: false,
   });
 
   expect(target).toBe('140.82.112.3');
 });
 
-test('it refuses a name whose answer from the system resolver is loopback', () => {
-  expect(
-    resolveTunnelTarget('localhost', { readHostAddresses: () => new Set() }),
-  ).rejects.toThrowWithMessage(
-    TunnelRefusedError,
-    'localhost resolves to 127.0.0.1, which a tunnel may not reach',
-  );
+test('it resolves a name through the system resolver', async () => {
+  const target = await resolveTunnelTarget('localhost', {
+    readHostAddresses: () => new Set(),
+    isRefused: () => false,
+    hasIPv6: false,
+  });
+
+  expect(target).toBe('127.0.0.1');
 });
 
 test("it refuses the host's own interface address by default", () => {
-  expect(resolveTunnelTarget('::1', { isBlocked6: () => false })).rejects.toThrowWithMessage(
+  expect(
+    resolveTunnelTarget('::1', { isRefused: () => false, hasIPv6: true }),
+  ).rejects.toThrowWithMessage(
     TunnelRefusedError,
     '::1 resolves to ::1, which a tunnel may not reach',
   );
 });
-
-test("it dials a public imp's name whose answers pass its own ranges", async () => {
-  const target = await resolveTunnelTarget('public.test', {
-    resolve: () => Promise.resolve(['140.82.112.3']),
-    readHostAddresses: () => new Set(['203.0.114.7', '10.66.0.1']),
-    isRefusedMore: (address) => address === '8.8.4.4',
-  });
-
-  expect(target).toBe('140.82.112.3');
-});
-
-test.each([
-  ['host.test', ['140.82.112.3', '8.8.4.4'], '8.8.4.4'],
-  ['mapped.test', ['::ffff:8.8.4.4'], '8.8.4.4'],
-  ['8.8.4.4', ['8.8.4.4'], '8.8.4.4'],
-])(
-  "it refuses a public imp's %s, whose answers hold one of its ranges",
-  (host, answers, refused) => {
-    expect(
-      resolveTunnelTarget(host, {
-        resolve: () => Promise.resolve(answers),
-        readHostAddresses: () => new Set(['203.0.114.7', '10.66.0.1']),
-        isRefusedMore: (address) => address === '8.8.4.4',
-      }),
-    ).rejects.toThrowWithMessage(
-      TunnelRefusedError,
-      `${host} resolves to ${refused}, which a tunnel may not reach`,
-    );
-  },
-);
 
 test.each([
   ['dual.test', ['2606:4700::1111', '140.82.112.3'], '140.82.112.3'],
@@ -216,7 +124,8 @@ test.each([
   const target = await resolveTunnelTarget(host, {
     resolve: () => Promise.resolve(answers),
     readHostAddresses: () => new Set(['203.0.114.7', '10.66.0.1']),
-    isBlocked6: createRangeChecker6([...BLOCKED_RANGES6, 'fd12:3456:789a::/64']),
+    isRefused: () => false,
+    hasIPv6: true,
   });
 
   expect(target).toBe(expected);

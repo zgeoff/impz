@@ -1,43 +1,12 @@
 import { lookup } from 'node:dns/promises';
 import { networkInterfaces } from 'node:os';
 import { parseIpv4 } from '../../host-net/net/addressing';
-import { formatIpv6, parseIpv6 } from '../../host-net/net/addressing6';
-import { findMappedIpv4 } from '../../host-net/net/ranges6';
+import { findMappedIpv4, formatIpv6, parseIpv6 } from '../../host-net/net/addressing6';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 
 // Where a plain tunnel may go. It starts in the host container, past the
 // `INPUT -i imp+ DROP` rule: unchecked, a guest could reach impd's API, the
 // wake proxy and other imps' ports.
-
-// every block the IANA IPv4 Special-Purpose Address Registry marks not
-// globally reachable, and multicast
-export const REFUSED_RANGES: readonly (readonly [string, number])[] = [
-  ['0.0.0.0', 8],
-  ['10.0.0.0', 8],
-  ['100.64.0.0', 10],
-  ['127.0.0.0', 8],
-  ['169.254.0.0', 16],
-  ['172.16.0.0', 12],
-  ['192.0.0.0', 24],
-  ['192.0.2.0', 24],
-  ['192.88.99.0', 24],
-  ['192.168.0.0', 16],
-  ['198.18.0.0', 15],
-  ['198.51.100.0', 24],
-  ['203.0.113.0', 24],
-  ['224.0.0.0', 4],
-  ['240.0.0.0', 4],
-];
-
-const PARSED_RANGES = REFUSED_RANGES.map(([network, prefix]) => {
-  const parsed = parseIpv4(network);
-
-  if (parsed === null) {
-    throw new Error(`bad range ${network}`);
-  }
-
-  return { network: parsed, size: 2 ** (32 - prefix) };
-});
 
 export class TunnelRefusedError extends Error {
   override name = 'TunnelRefusedError';
@@ -47,23 +16,13 @@ export class TunnelRefusedError extends Error {
 export function isRefusedAddress(
   address: string,
   hostAddresses: ReadonlySet<string>,
-  isBlocked6: ((address: string) => boolean) | null = null,
+  isRefused: (address: string) => boolean,
 ): boolean {
   const hostKeys = new Set([...hostAddresses].map((host) => formatAddressKey(host)));
 
-  const mapped = findMappedIpv4(address);
+  const plain = findMappedIpv4(address) ?? address;
 
-  if (hostKeys.has(formatAddressKey(mapped ?? address))) {
-    return true;
-  }
-
-  const ip = parseIpv4(mapped ?? address);
-
-  if (ip === null) {
-    return isBlocked6 === null || parseIpv6(address) === null || isBlocked6(address);
-  }
-
-  return PARSED_RANGES.some((range) => ip >= range.network && ip < range.network + range.size);
+  return hostKeys.has(formatAddressKey(plain)) || isRefused(plain);
 }
 
 function formatAddressKey(address: string): string {
@@ -88,20 +47,15 @@ function readHostAddresses(): ReadonlySet<string> {
 }
 
 export interface TunnelTargetDeps {
+  readonly isRefused: (address: string) => boolean;
+  readonly hasIPv6: boolean;
+
   readonly resolve?: (host: string) => Promise<readonly string[]>;
   readonly readHostAddresses?: () => ReadonlySet<string>;
-
-  readonly isBlocked6?: ((address: string) => boolean) | null;
-
-  readonly isRefusedMore?: (address: string) => boolean;
 }
 
-export async function resolveTunnelTarget(
-  host: string,
-  deps: TunnelTargetDeps = {},
-): Promise<string> {
-  const isBlocked6 = deps.isBlocked6 ?? null;
-  const resolve = deps.resolve ?? ((name: string) => resolveAddresses(name, isBlocked6 !== null));
+export async function resolveTunnelTarget(host: string, deps: TunnelTargetDeps): Promise<string> {
+  const resolve = deps.resolve ?? ((name: string) => resolveAddresses(name, deps.hasIPv6));
   const hostAddresses = (deps.readHostAddresses ?? readHostAddresses)();
 
   // resolved once and dialled as checked, so a DNS rebind cannot swap the address
@@ -118,10 +72,8 @@ export async function resolveTunnelTarget(
     throw new TunnelRefusedError(`${host} has no address a tunnel may dial`);
   }
 
-  const isRefusedMore = deps.isRefusedMore ?? (() => false);
-
-  const refused = addresses.find(
-    (address) => isRefusedAddress(address, hostAddresses, isBlocked6) || isRefusedMore(address),
+  const refused = addresses.find((address) =>
+    isRefusedAddress(address, hostAddresses, deps.isRefused),
   );
 
   if (refused !== undefined) {

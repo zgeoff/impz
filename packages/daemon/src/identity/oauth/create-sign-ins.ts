@@ -3,7 +3,7 @@ import { hasScope } from '@impz/api';
 import type { OAuthApproval, Scope } from '@impz/api';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import { ORPCError } from '@orpc/server';
-import { createBuckets } from '../../network/https/public-limits';
+import { createTokenBuckets } from '../../platform/process/token-buckets';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildConflictError,
@@ -82,8 +82,8 @@ export function createSignIns(deps: Readonly<SignInsDeps>): SignIns {
   const pending = new Map<string, SignIn>();
   const byCode = new Map<string, string>();
 
-  const tryStart = createBuckets(START_BUCKET, deps.now);
-  const tryApproveFailure = createBuckets(APPROVE_FAILURE_BUCKET, deps.now);
+  const tryStart = createTokenBuckets(() => START_BUCKET, deps.now);
+  const tryApproveFailure = createTokenBuckets(() => APPROVE_FAILURE_BUCKET, deps.now);
 
   const removeEntry = (entry: Readonly<SignIn>): void => {
     pending.delete(entry.key);

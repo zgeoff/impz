@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { loadConfig } from './config';
-import { createRangeChecker } from './host-net/net/range-checker';
+import { buildRangeMatcher } from './host-net/net/range-matcher';
 
 test('it fills every setting from its default when the env is empty', () => {
   const config = loadConfig({});
@@ -420,11 +420,7 @@ test.each([
   ['203.0.114.1', false],
 ])('it denies %s beside the host on its LAN: %p', (address, expected) => {
   const config = loadConfig({ IMP_HOST_ADDRESSES: '203.0.113.9/24,2001:db8:1::5/64' });
-
-  const isDenied = createRangeChecker(
-    config.egressDeny.filter((cidr) => !cidr.includes(':')),
-    config.egressDeny.filter((cidr) => cidr.includes(':')),
-  );
+  const isDenied = buildRangeMatcher(config.egressDeny);
 
   expect(isDenied(address)).toBe(expected);
 });

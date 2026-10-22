@@ -1,5 +1,22 @@
-import { BlockList } from 'node:net';
-import { parseIpv6 } from './addressing6';
+// every block the IANA IPv4 Special-Purpose Address Registry marks not
+// globally reachable, and multicast
+export const REFUSED_RANGES4: readonly string[] = [
+  '0.0.0.0/8',
+  '10.0.0.0/8',
+  '100.64.0.0/10',
+  '127.0.0.0/8',
+  '169.254.0.0/16',
+  '172.16.0.0/12',
+  '192.0.0.0/24',
+  '192.0.2.0/24',
+  '192.88.99.0/24',
+  '192.168.0.0/16',
+  '198.18.0.0/15',
+  '198.51.100.0/24',
+  '203.0.113.0/24',
+  '224.0.0.0/4',
+  '240.0.0.0/4',
+];
 
 export const BLOCKED_RANGES6: readonly string[] = [
   'fc00::/7',
@@ -51,27 +68,3 @@ export const RESERVED_RANGES6: readonly string[] = [
   '2001:80::/25',
   '2001:100::/24',
 ];
-
-export function createRangeChecker6(ranges: readonly string[]): (address: string) => boolean {
-  const list = new BlockList();
-
-  for (const range of ranges) {
-    const [network = '', prefix = '128'] = range.split('/');
-
-    list.addSubnet(network, Number(prefix), 'ipv6');
-  }
-
-  return (address) => parseIpv6(address) === null || list.check(address, 'ipv6');
-}
-
-export function findMappedIpv4(address: string): string | null {
-  const parsed = parseIpv6(address);
-
-  if (parsed === null || parsed >> 32n !== 0xff_ffn) {
-    return null;
-  }
-
-  const mapped = Number(parsed & 0xff_ff_ff_ffn);
-
-  return [24, 16, 8, 0].map((shift) => String(Math.floor(mapped / 2 ** shift) % 256)).join('.');
-}

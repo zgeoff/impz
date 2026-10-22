@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test';
 import {
   buildAllowRules,
-  isAddressAllowed,
   isNameAllowed,
   isTunnelAllowed,
   listExactNames,
@@ -21,15 +20,8 @@ test('#buildAllowRules splits a list into names, suffixes and ranges of each fam
   expect(rules).toStrictEqual({
     names: new Set(['github.com']),
     suffixes: ['.npmjs.org'],
-    ranges: [
-      [2_886_795_265, 1],
-      [3_405_803_776, 256],
-    ],
-    ranges6: [
-      [0x20_01_0d_b8_00_0b_00_00_00_00_00_00_00_00_00_01n, 1n],
-      [0x20_01_0d_b8_00_0c_00_00_00_00_00_00_00_00_00_00n, 2n ** 80n],
-    ],
     cidrs: ['172.17.0.1/32', '203.0.113.0/24', '2001:db8:b::1/128', '2001:db8:c::/48'],
+    isAddressIn: expect.any(Function),
   });
 });
 
@@ -70,17 +62,21 @@ test.each([
   ['2001:db8:b::2', false],
   ['2001:db8:c:ffff::1', true],
   ['2001:db8:d::1', false],
-])('#isAddressAllowed under a /32, a /24, a /128 and a /48 takes %p as %p', (address, allowed) => {
-  const rules = buildAllowRules([
-    '172.17.0.1',
-    '203.0.113.0/24',
-    '2001:db8:b::1',
-    '2001:db8:c::/48',
-    'github.com',
-  ]);
+  ['::ffff:203.0.113.9', true],
+])(
+  '#buildAllowRules under a /32, a /24, a /128 and a /48 holds %p in its ranges: %p',
+  (address, allowed) => {
+    const rules = buildAllowRules([
+      '172.17.0.1',
+      '203.0.113.0/24',
+      '2001:db8:b::1',
+      '2001:db8:c::/48',
+      'github.com',
+    ]);
 
-  expect(isAddressAllowed(rules, address)).toBe(allowed);
-});
+    expect(rules.isAddressIn(address)).toBe(allowed);
+  },
+);
 
 test.each([
   ['open', [], 'example.org', true],

@@ -3,21 +3,10 @@ import { join } from 'node:path';
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressMode } from '@impz/api';
 import type { Config } from '../../config';
-import {
-  readConnectedPrefixes4,
-  readRouteDevice,
-  readUplinks,
-} from '../../host-net/net/host-routes';
-import type { Uplinks } from '../../host-net/net/host-routes';
-import { readConnectedPrefixes6 } from '../../host-net/net/ipv6-plan';
+import { readRouteDevice } from '../../host-net/net/host-routes';
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
-import { createRangeChecker } from '../../host-net/net/range-checker';
-import {
-  BLOCKED_RANGES6,
-  DOCUMENTATION_RANGES6,
-  RESERVED_RANGES6,
-  createRangeChecker6,
-} from '../../host-net/net/ranges6';
+import { createReachPolicy } from '../../host-net/net/reach-policy';
+import type { ReachPolicy } from '../../host-net/net/reach-policy';
 import { writeAuditEntry } from '../../platform/db/broker-audit';
 import type { NewAuditEntry } from '../../platform/db/broker-audit';
 import type { ImpDatabase } from '../../platform/db/open-database';
@@ -25,7 +14,6 @@ import { readBrokerPeer } from '../../platform/db/read-broker-peer';
 import { listGrantedRules } from '../../platform/db/secrets';
 import type { GrantedRule } from '../../platform/db/secrets';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-import { createTtlCache } from '../../platform/process/ttl-cache';
 import type { BrokerCa } from './broker-ca';
 import { startBrokerFront } from './broker-front';
 import type { BrokerFront } from './broker-front';
@@ -65,12 +53,12 @@ interface BrokerProxyDeps {
   readonly resolveTunnelTarget?: ((host: string, mode: EgressMode) => Promise<string>) | undefined;
   readonly dialTunnel?: ((address: string, port: number) => Socket) | undefined;
   readonly ipv6?: Ipv6Plan | null | undefined;
+  readonly reach?: ReachPolicy | undefined;
   readonly afterRuleRead?: (() => Promise<void>) | undefined;
 
   readonly refreshAfterRejection?: ForwardDeps['refreshAfterRejection'] | undefined;
 }
 
-const CONNECTED_CACHE_MS = 30_000;
 const REFUSED_AUDITS_PER_SECOND = 20;
 
 export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
@@ -81,75 +69,28 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
   const now = deps.now;
   const ca = deps.ca;
 
-  const blocked6 = createTtlCache<'blocked6', (address: string) => boolean>({
-    max: 1,
-    ttlMs: CONNECTED_CACHE_MS,
-    now,
-  });
-
-  const readBlocked6 = async (): Promise<((address: string) => boolean) | null> => {
-    const ipv6 = deps.ipv6 ?? null;
-
-    if (ipv6 === null) {
-      return null;
-    }
-
-    const cached = blocked6.get('blocked6');
-
-    if (cached !== undefined) {
-      return cached;
-    }
-
-    const connected = await readConnectedPrefixes6();
-
-    const check = createRangeChecker6([...BLOCKED_RANGES6, ipv6.prefix.text, ...connected]);
-
-    blocked6.set('blocked6', check);
-
-    return check;
-  };
-
-  const publicRefused = createTtlCache<
-    'public',
-    { readonly check: (address: string) => boolean; readonly uplinks: Uplinks }
-  >({ max: 1, ttlMs: CONNECTED_CACHE_MS, now });
-
-  const readPublicRefused = async (): Promise<{
-    readonly check: (address: string) => boolean;
-    readonly uplinks: Uplinks;
-  }> => {
-    const cached = publicRefused.get('public');
-
-    if (cached !== undefined) {
-      return cached;
-    }
-
-    const connected = await readConnectedPrefixes4();
-    const uplinks = await readUplinks();
-
-    const deny = config.egressDeny;
-
-    const check = createRangeChecker(
-      [...connected, ...deny.filter((cidr) => !cidr.includes(':'))],
-      [...DOCUMENTATION_RANGES6, ...RESERVED_RANGES6, ...deny.filter((cidr) => cidr.includes(':'))],
-    );
-
-    publicRefused.set('public', { check, uplinks });
-
-    return { check, uplinks };
-  };
+  const reach =
+    deps.reach ??
+    createReachPolicy({
+      subnet: config.subnet,
+      deny: config.egressDeny,
+      ipv6: deps.ipv6 ?? null,
+      now,
+    });
 
   const resolveTarget = async (host: string, mode: EgressMode): Promise<string> => {
-    const isBlocked6 = await readBlocked6();
+    const isPublic = EGRESS_MODE_TRAITS[mode].isPublic;
 
-    if (!EGRESS_MODE_TRAITS[mode].isPublic) {
-      return resolveTunnelTarget(host, { isBlocked6 });
+    const hostReach = await reach.readCached(isPublic);
+
+    const address = await resolveTunnelTarget(host, {
+      isRefused: (target) => hostReach.isRefused(target, isPublic),
+      hasIPv6: reach.hasIPv6,
+    });
+
+    if (isPublic) {
+      await requireUplinkRoute(host, address, hostReach.uplinks, readRouteDevice);
     }
-
-    const refused = await readPublicRefused();
-    const address = await resolveTunnelTarget(host, { isBlocked6, isRefusedMore: refused.check });
-
-    await requireUplinkRoute(host, address, refused.uplinks, readRouteDevice);
 
     return address;
   };

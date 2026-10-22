@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import * as z from 'zod';
+import { buildRangeMatcher } from '../../host-net/net/range-matcher';
 import type { DnsTokenSource } from './dns/dns-token';
 
 const LETS_ENCRYPT_DIRECTORY = 'https://acme-v02.api.letsencrypt.org/directory';
@@ -134,14 +135,14 @@ export function readHttpsConfig(env: z.infer<typeof HttpsEnvSchema>): HttpsConfi
   };
 }
 
-const UNREACHABLE_RANGES: readonly (readonly [number, number, number])[] = [
-  [10, 0, 255],
-  [100, 64, 127],
-  [127, 0, 255],
-  [169, 254, 254],
-  [172, 16, 31],
-  [192, 168, 168],
-];
+const isUnreachable = buildRangeMatcher([
+  '10.0.0.0/8',
+  '100.64.0.0/10',
+  '127.0.0.0/8',
+  '169.254.0.0/16',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+]);
 
 export function listHttpsWarnings(env: z.infer<typeof HttpsEnvSchema>): string[] {
   const warnings: string[] = [];
@@ -159,14 +160,6 @@ export function listHttpsWarnings(env: z.infer<typeof HttpsEnvSchema>): string[]
   }
 
   return warnings;
-}
-
-function isUnreachable(ip: string): boolean {
-  const [first = 0, second = 0] = ip.split('.').map(Number);
-
-  return UNREACHABLE_RANGES.some(
-    ([octet, from, to]) => first === octet && second >= from && second <= to,
-  );
 }
 
 function findTokenSource(env: z.infer<typeof HttpsEnvSchema>): DnsTokenSource | null {

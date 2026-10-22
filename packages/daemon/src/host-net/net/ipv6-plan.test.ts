@@ -7,10 +7,7 @@ import { buildStubIpCommand } from '../../../testing/host-net/build-stub-ip-comm
 import { parsePrefix64 } from './addressing6';
 import {
   checkHostRules6,
-  parseConnectedPrefixes,
   parseIpv6Setting,
-  readConnectedPrefixes6,
-  readIpv6DefaultRoute,
   readOrCreateUlaPrefix,
   resolveIpv6Plan,
 } from './ipv6-plan';
@@ -399,88 +396,6 @@ test('#checkHostRules6 names an IPv6 sysctl that holds the wrong value', async (
   const missing = await checkHostRules6(ctx.directoryPath, ip.run);
 
   expect(missing).toBe('net.ipv6.conf.all.forwarding is 0, not 1');
-});
-
-test('#readIpv6DefaultRoute reads the device of the first IPv6 default route', async () => {
-  const ip = buildStubIpCommand({
-    outputs: {
-      'ip -6 route show default': [
-        'default via fe80::1 dev eth1 metric 1024 pref medium',
-        'default via fe80::2 dev eth2 metric 2048 pref medium',
-        '',
-      ].join('\n'),
-    },
-  });
-
-  const dev = await readIpv6DefaultRoute(ip.run);
-
-  expect(dev).toBe('eth1');
-});
-
-test('#readIpv6DefaultRoute reads no IPv6 default route when there is none', async () => {
-  const ip = buildStubIpCommand({ outputs: { 'ip -6 route show default': '' } });
-
-  const dev = await readIpv6DefaultRoute(ip.run);
-
-  expect(dev).toBeNull();
-});
-
-test('#readIpv6DefaultRoute reads no IPv6 default route when ip fails', async () => {
-  const ip = buildStubIpCommand({
-    failures: { 'ip -6 route': 'RTNETLINK answers: Address family not supported by protocol' },
-  });
-
-  const dev = await readIpv6DefaultRoute(ip.run);
-
-  expect(dev).toBeNull();
-});
-
-test('#parseConnectedPrefixes reads the on-link routes and global addresses off the taps as connected prefixes', () => {
-  const routes = [
-    '2001:db8:a::/64 dev eth0 proto kernel metric 256 pref medium',
-    '2001:DB8:0e::/64 dev eth1 proto ra metric 1024 expires 86000sec pref medium',
-    'fd00:1::/64 dev eth1 proto kernel metric 256 pref medium',
-    'fd12:3456:789a::a42:2 dev imp0 metric 1024 pref medium',
-    'fe80::/64 dev eth0 proto kernel metric 256 pref medium',
-    'default via 2001:db8:a::1 dev eth0 metric 1024 pref medium',
-  ].join('\n');
-
-  const addresses = [
-    '1: lo    inet6 ::1/128 scope host noprefixroute',
-    '2: eth0    inet6 2001:0db8:000a:0000::2/64 scope global',
-    '3: eth2    inet6 2001:db8:f:0:1234::9/80 scope global dynamic mngtmpaddr',
-    '4: imp0    inet6 fe80::1/64 scope link nodad',
-    '2: eth0    inet6 fe80::42:acff:fe11:2/64 scope link',
-  ].join('\n');
-
-  expect(parseConnectedPrefixes(routes, addresses)).toStrictEqual([
-    '2001:db8:a::/64',
-    '2001:db8:e::/64',
-    'fd00:1::/64',
-    '2001:db8:f:0:1234::/80',
-  ]);
-});
-
-test('#readConnectedPrefixes6 reads the connected IPv6 prefixes from the host routes and addresses', async () => {
-  const ip = buildStubIpCommand({
-    outputs: {
-      'ip -6 route show': '2001:db8:a::/64 dev eth0 proto kernel metric 256 pref medium\n',
-      'ip -6 -o addr show': '3: eth2    inet6 2001:db8:f::9/64 scope global\n',
-    },
-  });
-
-  const prefixes = await readConnectedPrefixes6(ip.runChecked);
-
-  expect(prefixes).toStrictEqual(['2001:db8:a::/64', '2001:db8:f::/64']);
-});
-
-test('#readConnectedPrefixes6 fails when ip fails', () => {
-  const ip = buildStubIpCommand({ failures: { 'ip -6 route': 'Cannot open netlink socket' } });
-
-  expect(readConnectedPrefixes6(ip.runChecked)).rejects.toThrowWithMessage(
-    Error,
-    'ip -6 route show exited 2: Cannot open netlink socket',
-  );
 });
 
 test('#readOrCreateUlaPrefix makes a unique local prefix on first need and writes it under the data dir', async () => {

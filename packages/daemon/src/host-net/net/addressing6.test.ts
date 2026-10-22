@@ -3,6 +3,7 @@ import invariant from 'tiny-invariant';
 import {
   buildUlaPrefix,
   deriveGuestIp6,
+  findMappedIpv4,
   formatCidr6,
   formatIpv6,
   parseIpv6,
@@ -78,5 +79,19 @@ test.each(['2001:db8::/129', '2001:db8::/-1', '2001:db8::/1.5', '2001:db8::/64/1
   '#formatCidr6 gives no CIDR for %p',
   (text) => {
     expect(formatCidr6(text)).toBeNull();
+  },
+);
+
+test.each([
+  ['::ffff:169.254.169.254', '169.254.169.254'],
+  ['::ffff:a9fe:a9fe', '169.254.169.254'],
+])('#findMappedIpv4 reads the IPv4-mapped address %s as %s', (address, ipv4) => {
+  expect(findMappedIpv4(address)).toBe(ipv4);
+});
+
+test.each(['::169.254.169.254', '2001:db8::1', '169.254.169.254', 'example.com'])(
+  '#findMappedIpv4 reads %p as holding no IPv4 address',
+  (address) => {
+    expect(findMappedIpv4(address)).toBeNull();
   },
 );
