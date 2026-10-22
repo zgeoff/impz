@@ -8,13 +8,21 @@ import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import type { AgentExecRequest } from '../../vm/agent-client/exec-stream';
 import type { ExecBackend } from './exec-session';
 
-export function buildAuditedBackend(
-  backend: ExecBackend,
-  audit: ApiAudit,
-  actor: AuditActor,
-  events: EventBus,
-  now: () => number,
-): ExecBackend {
+interface BuildAuditedBackendOptions {
+  readonly backend: ExecBackend;
+  readonly audit: ApiAudit;
+  readonly actor: AuditActor;
+  readonly events: EventBus;
+  readonly now: () => number;
+}
+
+export function buildAuditedBackend(options: BuildAuditedBackendOptions): ExecBackend {
+  const backend = options.backend;
+  const audit = options.audit;
+  const actor = options.actor;
+  const events = options.events;
+  const now = options.now;
+
   const buildCall = (procedure: string, name: string) => ({
     procedure,
     actor,

@@ -4,14 +4,22 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import type { ExecStream } from '../../vm/agent-client/exec-stream';
 import { buildBrokerNotReadyError } from './exec-require';
 
+interface CheckBrokerAttachOptions {
+  readonly impId: string;
+  readonly name: string;
+  readonly resumeGeneration: string | undefined;
+  readonly sessions: readonly SessionInfo[];
+}
+
 export async function checkBrokerAttach(
   db: ImpDatabase,
-  impId: string,
-  name: string,
-  resumeGeneration: string | undefined,
-  sessions: readonly SessionInfo[],
+  options: CheckBrokerAttachOptions,
 ): Promise<Error | null> {
-  const attached = sessions.filter(
+  const impId = options.impId;
+  const name = options.name;
+  const resumeGeneration = options.resumeGeneration;
+
+  const attached = options.sessions.filter(
     (session) =>
       session.name === name &&
       (session.state === 'running' ||
@@ -31,23 +39,28 @@ export async function checkBrokerAttach(
   return null;
 }
 
+interface CheckOpenedSessionOptions {
+  readonly impId: string;
+  readonly name: string;
+  readonly stream: Pick<ExecStream, 'created' | 'output'>;
+  readonly sessions: readonly SessionInfo[];
+}
+
 export async function checkOpenedSession(
   db: ImpDatabase,
-  impId: string,
-  name: string,
-  stream: Pick<ExecStream, 'created' | 'output'>,
-  sessions: readonly SessionInfo[],
+  options: CheckOpenedSessionOptions,
 ): Promise<Error | null> {
-  const output = stream.output;
+  const impId = options.impId;
+  const output = options.stream.output;
   const generation = output?.continuity === 'offsets' ? output.executionGeneration : undefined;
 
-  if (!stream.created) {
-    return checkCoverage(db, impId, generation, name);
+  if (!options.stream.created) {
+    return checkCoverage(db, impId, generation, options.name);
   }
 
   if (generation !== undefined) {
     // The agent keeps an exited run listed while a resume can still attach to it.
-    const listed = sessions.flatMap((session) =>
+    const listed = options.sessions.flatMap((session) =>
       session.executionGeneration === '' ? [] : [session.executionGeneration],
     );
 

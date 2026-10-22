@@ -93,6 +93,22 @@ interface SessionLogDeps {
 
 const NoSessionPreviousSchema = z.object({ previous: PreviousGenerationSchema.optional() });
 
+interface StartNextGenerationOptions {
+  readonly imp: SessionLogImp;
+  readonly entry: LiveLog;
+  readonly tap: Readonly<ExecStream>;
+  readonly life: number;
+  readonly emitReached: () => void;
+}
+
+interface OpenEntryTapOptions {
+  readonly imp: SessionLogImp;
+  readonly entry: LiveLog;
+  readonly life: number;
+  readonly opening: OpeningTap;
+  readonly emitReached: () => void;
+}
+
 export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
   const openTap = deps.openTap ?? openTapStream;
   const createLog = deps.createLog ?? createGenerationLog;
@@ -119,7 +135,13 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
           return;
         }
 
-        ctx.setLive(imp, meta.executionGeneration, meta.session, log, meta.stopped !== undefined);
+        ctx.setLive({
+          imp,
+          generation: meta.executionGeneration,
+          session: meta.session,
+          log,
+          isStopped: meta.stopped !== undefined,
+        });
       }
     }
   };
@@ -128,13 +150,11 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
   const createLiveLog = makeCreateLiveLog(ctx, { limits: deps.limits, now: deps.now, createLog });
   const runTap = makeRunTap(ctx, { log: deps.log, applyImpLimit });
 
-  const startNextGeneration = async (
-    imp: SessionLogImp,
-    entry: LiveLog,
-    tap: Readonly<ExecStream>,
-    life: number,
-    emitReached: () => void,
-  ): Promise<void> => {
+  const startNextGeneration = async (options: StartNextGenerationOptions): Promise<void> => {
+    const imp = options.imp;
+    const entry = options.entry;
+    const tap = options.tap;
+    const life = options.life;
     const output = tap.output;
 
     if (output?.continuity !== 'offsets') {
@@ -177,13 +197,13 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
     let next: LiveLog | null;
 
     try {
-      next = await createLiveLog(
+      next = await createLiveLog({
         imp,
-        output.executionGeneration,
-        entry.session,
-        output.bootId,
+        generation: output.executionGeneration,
+        session: entry.session,
+        bootId: output.bootId,
         life,
-      );
+      });
     } catch (error) {
       ctx.send({ type: 'tap.release', key, owner: tap });
       tap.close();
@@ -198,8 +218,7 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
     }
 
     next.log.setOrigin(output.offset);
-
-    emitReached();
+    options.emitReached();
 
     await runTap(imp, next, tap, life);
   };
@@ -210,13 +229,12 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
     await ctx.writeEnd(entry, toPreviousEnd(previous, entry.generation));
   };
 
-  const openEntryTap = async (
-    imp: SessionLogImp,
-    entry: LiveLog,
-    life: number,
-    opening: OpeningTap,
-    emitReached: () => void,
-  ): Promise<void> => {
+  const openEntryTap = async (options: OpenEntryTapOptions): Promise<void> => {
+    const imp = options.imp;
+    const entry = options.entry;
+    const life = options.life;
+    const opening = options.opening;
+    const emitReached = options.emitReached;
     const meta = entry.log.readMeta();
     const logEnd = getGenerationBounds(meta).logEnd;
 
@@ -257,7 +275,7 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
     if (resume?.kind === 'generation_changed') {
       ctx.send({ type: 'tap.release', key: entry.key, owner: opening });
 
-      await startNextGeneration(imp, entry, tap, life, emitReached);
+      await startNextGeneration({ imp, entry, tap, life, emitReached });
 
       return;
     }
@@ -317,7 +335,13 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
           return;
         }
 
-        const created = await createLiveLog(imp, generation, session.name, bootId, life);
+        const created = await createLiveLog({
+          imp,
+          generation,
+          session: session.name,
+          bootId,
+          life,
+        });
 
         if (created === null) {
           ctx.send({ type: 'tap.release', key, owner: opening });
@@ -334,7 +358,7 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
         return;
       }
 
-      await openEntryTap(imp, entry, life, opening, emitReached);
+      await openEntryTap({ imp, entry, life, opening, emitReached });
     } catch (error) {
       ctx.send({ type: 'tap.release', key, owner: opening });
       throw error;

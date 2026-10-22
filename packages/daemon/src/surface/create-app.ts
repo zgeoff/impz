@@ -134,13 +134,13 @@ export function createApp(deps: AppDeps) {
   const buildExecBackend = (grant: ExecGrant | undefined) => {
     const actor = grant?.caller ?? { kind: 'token', name: 'unknown' };
 
-    return buildAuditedBackend(
-      buildGrantedBackend(deps.imps, grant),
-      deps.audit,
+    return buildAuditedBackend({
+      backend: buildGrantedBackend(deps.imps, grant),
+      audit: deps.audit,
       actor,
-      deps.imps.events,
-      deps.now,
-    );
+      events: deps.imps.events,
+      now: deps.now,
+    });
   };
 
   const readRevoked = (caller: Readonly<Caller> | undefined): AbortSignal | null => {

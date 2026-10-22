@@ -102,6 +102,15 @@ export function buildBackupsOffError(): ORPCError<'PRECONDITION_FAILED', undefin
   });
 }
 
+interface ReadManifestOptions {
+  readonly runId: string;
+  readonly copy: DatabaseCopy;
+  readonly copies: ReadonlyMap<string, DiskCopy>;
+  readonly tree: BackupTree;
+  readonly excluded: BackupManifest['excluded'];
+  readonly database: BackupManifest['database'];
+}
+
 export function createBackupService(deps: BackupServiceDeps): BackupService {
   const log = deps.log ?? printLog;
   const now = deps.now ?? (() => new Date());
@@ -178,19 +187,16 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
   // a restore needs.
   const readTreeUsedBytes = (file: string): number => statSync(join(paths.tree, file)).blocks * 512;
 
-  const readManifest = (
-    runId: string,
-    copy: DatabaseCopy,
-    copies: ReadonlyMap<string, DiskCopy>,
-    tree: BackupTree,
-    excluded: BackupManifest['excluded'],
-    database: BackupManifest['database'],
-  ): BackupManifest => {
+  const readManifest = (options: ReadManifestOptions): BackupManifest => {
+    const copy = options.copy;
+    const copies = options.copies;
+    const tree = options.tree;
+
     const digests = new Map(copy.images.map((image) => [image.id, image.digest]));
 
     return {
       version: 1,
-      runId,
+      runId: options.runId,
       createdAt: now(),
       imps: copy.imps
         .filter((imp) => tree.impIds.has(imp.id))
@@ -236,7 +242,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
               usedBytes: readTreeUsedBytes(BACKUP_TREE.buildCheckpointDisk(imp.id, checkpoint.id)),
             })),
         })),
-      excluded,
+      excluded: options.excluded,
       images: copy.images
         .filter((image) => tree.imageDigests.has(image.digest))
         .map((image) => ({
@@ -249,7 +255,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
           // oxlint-disable-next-line zgeoff/no-abbreviated-names -- a key of the manifest that backups store
           dir: BACKUP_TREE.buildImageDir(image.digest),
         })),
-      database,
+      database: options.database,
     };
   };
 
@@ -322,7 +328,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
       ? { file: BACKUP_TREE.database, sizeBytes: statSync(copyPath).size }
       : null;
 
-    const manifest = readManifest(runId, copy, copies, tree, excluded, database);
+    const manifest = readManifest({ runId, copy, copies, tree, excluded, database });
 
     try {
       mkdirSync(paths.tree, { recursive: true });

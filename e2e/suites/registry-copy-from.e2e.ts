@@ -80,13 +80,13 @@ test.skipIf(registryMissing)(
 
     registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, copied));
 
-    const seen = await runBuildAndListRequests(
-      ctx.registry,
-      ctx.directoryPath,
+    const seen = await runBuildAndListRequests({
+      registry: ctx.registry,
+      directory: ctx.directoryPath,
       repository,
       dockerfile,
-      copied,
-    );
+      name: copied,
+    });
 
     const fromCopy = await readFileInImage(copied, '/copied');
     const fromMount = await readFileInImage(copied, '/mounted');

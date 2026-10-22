@@ -86,7 +86,7 @@ export async function* encodeFile(
     const hash = createHash('sha256');
     const buffer = Buffer.alloc(MOVE_BLOCK_BYTES);
 
-    for (const block of readDataBlocks(handle.fd, size, MOVE_BLOCK_BYTES)) {
+    for (const block of readDataBlocks({ fd: handle.fd, size, blockBytes: MOVE_BLOCK_BYTES })) {
       const offset = block * MOVE_BLOCK_BYTES;
       const length = Math.min(MOVE_BLOCK_BYTES, size - offset);
 
@@ -160,7 +160,7 @@ export async function countDataBytes(path: string): Promise<number> {
     const size = stat.size;
     let bytes = 0;
 
-    for (const block of readDataBlocks(handle.fd, size, MOVE_BLOCK_BYTES)) {
+    for (const block of readDataBlocks({ fd: handle.fd, size, blockBytes: MOVE_BLOCK_BYTES })) {
       bytes += Math.min(MOVE_BLOCK_BYTES, size - block * MOVE_BLOCK_BYTES);
     }
 

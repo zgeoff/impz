@@ -256,13 +256,12 @@ async function startImpdParts(
 
   // runs before anything can boot or sleep an imp, so the set of drives in use holds still
   await runStep('system-drives', async () => {
-    const removed = await removeUnusedDrives(
-      db,
-      config.dataDir,
-      storage.resolveImpPaths,
-      systemFiles.systemDrivePath,
-      imps.bootTemplates?.listDrivePaths() ?? [],
-    );
+    const removed = await removeUnusedDrives(db, {
+      dataDir: config.dataDir,
+      findPaths: storage.resolveImpPaths,
+      currentDrivePath: systemFiles.systemDrivePath,
+      templateDrivePaths: imps.bootTemplates?.listDrivePaths() ?? [],
+    });
 
     for (const name of removed) {
       log(`impd: removed system drive ${name}: no imp uses it`);

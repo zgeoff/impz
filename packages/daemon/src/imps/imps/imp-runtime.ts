@@ -127,6 +127,14 @@ interface ImpRuntimeParts {
 
 const INNER_PING_TIMEOUT_MS = 1000;
 
+interface OpenStreamOptions<T extends { readonly close: () => void }> {
+  readonly name: string;
+  readonly kind: ConnectionKind | null;
+  readonly open: (paths: ImpPaths, imp: ImpRecord) => Promise<T>;
+  readonly wake?: boolean;
+  readonly isBuilderAllowed?: boolean;
+}
+
 export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
   const context = parts.context;
   const lock = parts.lock;
@@ -193,12 +201,12 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
   };
 
   const openStream = async <T extends { readonly close: () => void }>(
-    name: string,
-    kind: ConnectionKind | null,
-    open: (paths: ImpPaths, imp: ImpRecord) => Promise<T>,
-    wake = true,
-    isBuilderAllowed = false,
+    options: OpenStreamOptions<T>,
   ): Promise<T> => {
+    const name = options.name;
+    const kind = options.kind;
+    const wake = options.wake ?? true;
+    const isBuilderAllowed = options.isBuilderAllowed ?? false;
     const opened = { release: () => {} };
 
     const onFound = (found: ImpRecord) => {
@@ -216,7 +224,7 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
 
       await updateImpActivity(context.db, imp.id, new Date());
 
-      const stream = await open(context.findPaths(imp.id), imp);
+      const stream = await options.open(context.findPaths(imp.id), imp);
 
       return {
         ...stream,
@@ -289,37 +297,58 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
 
   return {
     openExec: (name, request, feature) =>
-      openStream(name, 'exec', (paths, imp) =>
-        openImpExec(parts, name, request, feature, paths, imp),
-      ),
-    openBuilderExec: (name, request) =>
-      openStream(name, 'exec', (paths) => openExecStream(paths.vsockSocket, request), true, true),
-    openAttach: (name, request) =>
-      openStream(
+      openStream({
         name,
-        'exec',
-        (paths, imp) => withColdBoots(context, imp, openAttachStream(paths.vsockSocket, request)),
-        request.wake ?? true,
-      ),
+        kind: 'exec',
+        open: (paths, imp) => openImpExec(parts, { name, request, feature, paths, imp }),
+      }),
+    openBuilderExec: (name, request) =>
+      openStream({
+        name,
+        kind: 'exec',
+        open: (paths) => openExecStream(paths.vsockSocket, request),
+        wake: true,
+        isBuilderAllowed: true,
+      }),
+    openAttach: (name, request) =>
+      openStream({
+        name,
+        kind: 'exec',
+        open: (paths, imp) =>
+          withColdBoots(context, imp, openAttachStream(paths.vsockSocket, request)),
+        wake: request.wake ?? true,
+      }),
     openDial: (name, target, kind) =>
-      openStream(name, kind, (paths) => {
-        // An older agent dials a unix socket as root, past the socket's mode.
-        const feature = target.network === 'unix' ? 'unix-dial-as-user' : 'ssh';
+      openStream({
+        name,
+        kind,
+        open: (paths) => {
+          // An older agent dials a unix socket as root, past the socket's mode.
+          const feature = target.network === 'unix' ? 'unix-dial-as-user' : 'ssh';
 
-        requireFeature(paths, feature);
+          requireFeature(paths, feature);
 
-        return openDialStream(paths.vsockSocket, target);
+          return openDialStream(paths.vsockSocket, target);
+        },
       }),
     openListener: (name, spec, kind) =>
-      openStream(name, kind, (paths) => {
-        const feature = spec.network === 'ssh-agent' ? 'agent-forwarding' : 'reverse-forward';
+      openStream({
+        name,
+        kind,
+        open: (paths) => {
+          const feature = spec.network === 'ssh-agent' ? 'agent-forwarding' : 'reverse-forward';
 
-        requireFeature(paths, feature);
+          requireFeature(paths, feature);
 
-        return openListener(paths.vsockSocket, spec);
+          return openListener(paths.vsockSocket, spec);
+        },
       }),
     openAccept: (name, listener, connection, kind) =>
-      openStream(name, kind, (paths) => openAccept(paths.vsockSocket, listener, connection)),
+      openStream({
+        name,
+        kind,
+        open: (paths) => openAccept(paths.vsockSocket, listener, connection),
+      }),
 
     readActivity: async (imp) => {
       const vsockPath = context.findPaths(imp.id).vsockSocket;
@@ -344,12 +373,16 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
     },
 
     openAgentStream: (name, open, feature) =>
-      openStream(name, 'exec', (paths) => {
-        if (feature !== undefined) {
-          requireFeature(paths, feature);
-        }
+      openStream({
+        name,
+        kind: 'exec',
+        open: (paths) => {
+          if (feature !== undefined) {
+            requireFeature(paths, feature);
+          }
 
-        return open(paths.vsockSocket);
+          return open(paths.vsockSocket);
+        },
       }),
 
     readAgent: async (name, feature) => {
@@ -373,14 +406,18 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
     },
 
     sendToAgent: async (name, send, feature) => {
-      const sent = await openStream(name, 'exec', async (paths) => {
-        if (feature !== undefined) {
-          requireFeature(paths, feature);
-        }
+      const sent = await openStream({
+        name,
+        kind: 'exec',
+        open: async (paths) => {
+          if (feature !== undefined) {
+            requireFeature(paths, feature);
+          }
 
-        const value = await send(paths.vsockSocket);
+          const value = await send(paths.vsockSocket);
 
-        return { value, close: () => {} };
+          return { value, close: () => {} };
+        },
       });
 
       sent.close();

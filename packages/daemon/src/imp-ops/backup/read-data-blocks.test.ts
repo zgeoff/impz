@@ -28,7 +28,9 @@ test('it finds the blocks of a sparse file that hold data, and skips the holes',
   writeSync(ctx.fd, 'middle', 5 * 1024 ** 2 + 10);
   writeSync(ctx.fd, 'tail', 64 * 1024 ** 2 - 4);
 
-  expect([...readDataBlocks(ctx.fd, 64 * 1024 ** 2, 1024 ** 2)]).toIncludeSameMembers([0, 5, 63]);
+  expect([
+    ...readDataBlocks({ fd: ctx.fd, size: 64 * 1024 ** 2, blockBytes: 1024 ** 2 }),
+  ]).toIncludeSameMembers([0, 5, 63]);
 });
 
 test('it finds no blocks in a scan of no length', () => {
@@ -36,7 +38,7 @@ test('it finds no blocks in a scan of no length', () => {
 
   writeSync(ctx.fd, 'head', 0);
 
-  expect(readDataBlocks(ctx.fd, 0, 1024 ** 2)).toBeEmpty();
+  expect(readDataBlocks({ fd: ctx.fd, size: 0, blockBytes: 1024 ** 2 })).toBeEmpty();
 });
 
 test('it finds data past 4 GiB, where a 32-bit offset would wrap', () => {
@@ -46,11 +48,9 @@ test('it finds data past 4 GiB, where a 32-bit offset would wrap', () => {
   writeSync(ctx.fd, 'nine', 9 * 1024 ** 3);
   writeSync(ctx.fd, 'end', 32 * 1024 ** 3 - 3);
 
-  expect([...readDataBlocks(ctx.fd, 32 * 1024 ** 3, 1024 ** 2)]).toIncludeSameMembers([
-    5 * 1024,
-    9 * 1024,
-    32 * 1024 - 1,
-  ]);
+  expect([
+    ...readDataBlocks({ fd: ctx.fd, size: 32 * 1024 ** 3, blockBytes: 1024 ** 2 }),
+  ]).toIncludeSameMembers([5 * 1024, 9 * 1024, 32 * 1024 - 1]);
 });
 
 test('it reads every block from the data found when SEEK_HOLE fails', () => {
@@ -60,21 +60,41 @@ test('it reads every block from the data found when SEEK_HOLE fails', () => {
     holeErrno: 22,
   });
 
-  const blocks = readDataBlocks(3, 4 * 1024 ** 2, 1024 ** 2, lseek.seek, lseek.readAllocated);
+  const blocks = readDataBlocks({
+    fd: 3,
+    size: 4 * 1024 ** 2,
+    blockBytes: 1024 ** 2,
+    seek: lseek.seek,
+    readAllocated: lseek.readAllocated,
+  });
 
   expect([...blocks]).toIncludeSameMembers([0, 1, 2, 3]);
 });
 
 test('it reads every block when SEEK_DATA fails with an error other than ENXIO', () => {
   const lseek = buildStubLseek({ size: 2 * 1024 ** 2, extents: [[0, 1024 ** 2]], dataErrno: 5 });
-  const blocks = readDataBlocks(3, 2 * 1024 ** 2, 1024 ** 2, lseek.seek, lseek.readAllocated);
+
+  const blocks = readDataBlocks({
+    fd: 3,
+    size: 2 * 1024 ** 2,
+    blockBytes: 1024 ** 2,
+    seek: lseek.seek,
+    readAllocated: lseek.readAllocated,
+  });
 
   expect([...blocks]).toIncludeSameMembers([0, 1]);
 });
 
 test('it finds no blocks in a file that is one hole', () => {
   const lseek = buildStubLseek({ size: 2 * 1024 ** 2, extents: [] });
-  const blocks = readDataBlocks(3, 2 * 1024 ** 2, 1024 ** 2, lseek.seek, lseek.readAllocated);
+
+  const blocks = readDataBlocks({
+    fd: 3,
+    size: 2 * 1024 ** 2,
+    blockBytes: 1024 ** 2,
+    seek: lseek.seek,
+    readAllocated: lseek.readAllocated,
+  });
 
   expect(blocks).toBeEmpty();
 });
@@ -89,7 +109,13 @@ test('it reads every block from a hole start when fstat counts more than a stale
     staleEnxioFrom: 1024 ** 2,
   });
 
-  const blocks = readDataBlocks(3, 4 * 1024 ** 2, 1024 ** 2, lseek.seek, lseek.readAllocated);
+  const blocks = readDataBlocks({
+    fd: 3,
+    size: 4 * 1024 ** 2,
+    blockBytes: 1024 ** 2,
+    seek: lseek.seek,
+    readAllocated: lseek.readAllocated,
+  });
 
   expect([...blocks]).toIncludeSameMembers([0, 1, 2, 3]);
 });
@@ -101,7 +127,13 @@ test('it keeps the scan when fstat counts no more than metadata past what it fou
     metadataBytes: 4096,
   });
 
-  const blocks = readDataBlocks(3, 4 * 1024 ** 2, 1024 ** 2, lseek.seek, lseek.readAllocated);
+  const blocks = readDataBlocks({
+    fd: 3,
+    size: 4 * 1024 ** 2,
+    blockBytes: 1024 ** 2,
+    seek: lseek.seek,
+    readAllocated: lseek.readAllocated,
+  });
 
   expect([...blocks]).toIncludeSameMembers([0]);
 });
@@ -112,9 +144,9 @@ test('it finds the extents of a real sparse file', () => {
   writeSync(ctx.fd, Buffer.alloc(3 * 1024 ** 2, 1), 0, 3 * 1024 ** 2, 0);
   writeSync(ctx.fd, Buffer.alloc(2 * 1024 ** 2, 2), 0, 2 * 1024 ** 2, 40 * 1024 ** 2);
 
-  expect([...readDataBlocks(ctx.fd, 42 * 1024 ** 2, 1024 ** 2)]).toIncludeSameMembers([
-    0, 1, 2, 40, 41,
-  ]);
+  expect([
+    ...readDataBlocks({ fd: ctx.fd, size: 42 * 1024 ** 2, blockBytes: 1024 ** 2 }),
+  ]).toIncludeSameMembers([0, 1, 2, 40, 41]);
 });
 
 test('it reads every block of a real sparse file when fstat shows an extent a stale ENXIO hid', () => {
@@ -132,7 +164,12 @@ test('it reads every block of a real sparse file when fstat shows an extent a st
     staleEnxioFrom: 3 * 1024 ** 2,
   });
 
-  const blocks = readDataBlocks(ctx.fd, 42 * 1024 ** 2, 1024 ** 2, lseek.seek);
+  const blocks = readDataBlocks({
+    fd: ctx.fd,
+    size: 42 * 1024 ** 2,
+    blockBytes: 1024 ** 2,
+    seek: lseek.seek,
+  });
 
   expect(blocks.size).toBe(42);
 });

@@ -24,14 +24,20 @@ interface MoveStreamsDeps {
 
 type ReceivedFile = ReceiptBody['files'][number];
 
+interface WriteMoveStreamsOptions {
+  readonly impId: string;
+  readonly header: MoveHeader;
+  readonly reader: FrameReader;
+  readonly count: ByteCounter;
+  readonly onFile: (file: ReceivedFile) => void;
+}
+
 export async function writeMoveStreams(
   deps: MoveStreamsDeps,
-  impId: string,
-  header: MoveHeader,
-  reader: FrameReader,
-  count: ByteCounter,
-  onFile: (file: ReceivedFile) => void,
+  options: WriteMoveStreamsOptions,
 ): Promise<void> {
+  const impId = options.impId;
+  const header = options.header;
   const streams = checkStreams(header);
 
   if (deps.storage.kind !== 'zfs') {
@@ -48,8 +54,8 @@ export async function writeMoveStreams(
     impId,
     steps,
     (index) =>
-      readStreamFile(reader, index, count, (got) => {
-        onFile({ kind: 'zfs-stream', index, sha256: got.sha256, bytes: got.bytes });
+      readStreamFile(options.reader, index, options.count, (got) => {
+        options.onFile({ kind: 'zfs-stream', index, sha256: got.sha256, bytes: got.bytes });
       }),
     buildCheckpointId,
   );

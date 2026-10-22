@@ -12,13 +12,13 @@ test('it audits a terminal exec as a console, with what it failed with', () => {
   const stub = buildStubExecBackend({ exec: failure });
   const record = mock<ApiAudit['record']>();
 
-  const audited = buildAuditedBackend(
-    stub.backend,
-    { record },
-    { kind: 'dashboard', name: 'laptop' },
-    createEventBus(),
-    () => 5,
-  );
+  const audited = buildAuditedBackend({
+    backend: stub.backend,
+    audit: { record },
+    actor: { kind: 'dashboard', name: 'laptop' },
+    events: createEventBus(),
+    now: () => 5,
+  });
 
   expect(audited.openExec('dev', { argv: ['bash'], tty: true })).rejects.toBe(failure);
 
@@ -37,13 +37,13 @@ test('it audits a plain exec as an exec, with no failure once it opens', async (
   const stub = buildStubExecBackend({ exec: buildStubAgentExecStream().stream });
   const record = mock<ApiAudit['record']>();
 
-  const audited = buildAuditedBackend(
-    stub.backend,
-    { record },
-    { kind: 'dashboard', name: 'laptop' },
-    createEventBus(),
-    () => 5,
-  );
+  const audited = buildAuditedBackend({
+    backend: stub.backend,
+    audit: { record },
+    actor: { kind: 'dashboard', name: 'laptop' },
+    events: createEventBus(),
+    now: () => 5,
+  });
 
   await audited.openExec('dev', { argv: ['ls'], tty: false });
 
@@ -62,13 +62,13 @@ test('it audits the tar tool as cp', async () => {
   const stub = buildStubExecBackend({ exec: buildStubAgentExecStream().stream });
   const record = mock<ApiAudit['record']>();
 
-  const audited = buildAuditedBackend(
-    stub.backend,
-    { record },
-    { kind: 'dashboard', name: 'laptop' },
-    createEventBus(),
-    () => 5,
-  );
+  const audited = buildAuditedBackend({
+    backend: stub.backend,
+    audit: { record },
+    actor: { kind: 'dashboard', name: 'laptop' },
+    events: createEventBus(),
+    now: () => 5,
+  });
 
   await audited.openExec('dev', { argv: ['imp-agent', 'tar'], tty: false }, 'cp');
 
@@ -89,13 +89,13 @@ test('it audits an attach as an attach', () => {
   const stub = buildStubExecBackend({ attach: failure });
   const record = mock<ApiAudit['record']>();
 
-  const audited = buildAuditedBackend(
-    stub.backend,
-    { record },
-    { kind: 'dashboard', name: 'laptop' },
-    createEventBus(),
-    () => 5,
-  );
+  const audited = buildAuditedBackend({
+    backend: stub.backend,
+    audit: { record },
+    actor: { kind: 'dashboard', name: 'laptop' },
+    events: createEventBus(),
+    now: () => 5,
+  });
 
   expect(audited.openAttach('dev', { session: 's1' })).rejects.toBe(failure);
 
@@ -114,13 +114,13 @@ test('it audits an exec in the agent as exec-agent', async () => {
   const stub = buildStubExecBackend({ exec: buildStubAgentExecStream().stream });
   const record = mock<ApiAudit['record']>();
 
-  const audited = buildAuditedBackend(
-    stub.backend,
-    { record },
-    { kind: 'token', name: 'admin' },
-    createEventBus(),
-    () => 5,
-  );
+  const audited = buildAuditedBackend({
+    backend: stub.backend,
+    audit: { record },
+    actor: { kind: 'token', name: 'admin' },
+    events: createEventBus(),
+    now: () => 5,
+  });
 
   await audited.openExec('dev', { argv: ['sh'], tty: true, outer: true }, 'outer-exec');
 
@@ -144,13 +144,13 @@ test('it publishes an exec in the agent once the agent took it, naming only the 
     events.push(event);
   });
 
-  const audited = buildAuditedBackend(
-    stub.backend,
-    { record: mock<ApiAudit['record']>() },
-    { kind: 'token', name: 'admin' },
-    bus,
-    () => 5,
-  );
+  const audited = buildAuditedBackend({
+    backend: stub.backend,
+    audit: { record: mock<ApiAudit['record']>() },
+    actor: { kind: 'token', name: 'admin' },
+    events: bus,
+    now: () => 5,
+  });
 
   await audited.openExec(
     'dev',
@@ -184,13 +184,13 @@ test('it publishes nothing for an exec in the agent that the agent refused', () 
     events.push(event);
   });
 
-  const audited = buildAuditedBackend(
-    stub.backend,
-    { record: mock<ApiAudit['record']>() },
-    { kind: 'token', name: 'admin' },
-    bus,
-    () => 5,
-  );
+  const audited = buildAuditedBackend({
+    backend: stub.backend,
+    audit: { record: mock<ApiAudit['record']>() },
+    actor: { kind: 'token', name: 'admin' },
+    events: bus,
+    now: () => 5,
+  });
 
   expect(
     audited.openExec('dev', { argv: ['sh'], tty: true, outer: true }, 'outer-exec'),
@@ -208,13 +208,13 @@ test('it publishes nothing for a plain exec', async () => {
     events.push(event);
   });
 
-  const audited = buildAuditedBackend(
-    stub.backend,
-    { record: mock<ApiAudit['record']>() },
-    { kind: 'token', name: 'admin' },
-    bus,
-    () => 5,
-  );
+  const audited = buildAuditedBackend({
+    backend: stub.backend,
+    audit: { record: mock<ApiAudit['record']>() },
+    actor: { kind: 'token', name: 'admin' },
+    events: bus,
+    now: () => 5,
+  });
 
   await audited.openExec('dev', { argv: ['ls'], tty: false });
 

@@ -84,14 +84,19 @@ export interface Reply {
 
 type ReceivedFile = ReceiptBody['files'][number];
 
+interface ReadMoveStreamOptions {
+  readonly tempDir: string;
+  readonly stream: ReadableStream<Uint8Array>;
+  readonly row: MoveTicketRow;
+  readonly secret: string;
+}
+
 export async function readMoveStream(
   deps: ReceiveStreamDeps,
-  tempDir: string,
-  stream: ReadableStream<Uint8Array>,
-  row: MoveTicketRow,
-  secret: string,
+  options: ReadMoveStreamOptions,
 ): Promise<Reply> {
-  const reader = createFrameReader(stream);
+  const row = options.row;
+  const reader = createFrameReader(options.stream);
 
   const first = await reader.readFrame();
 
@@ -124,14 +129,20 @@ export async function readMoveStream(
   const count = createByteCounter(row.bytes);
   const files: ReceivedFile[] = [];
 
-  mkdirSync(tempDir, { recursive: true, mode: 0o700 });
+  mkdirSync(options.tempDir, { recursive: true, mode: 0o700 });
 
-  const temp = join(tempDir, `${row.id}.part`);
+  const temp = join(options.tempDir, `${row.id}.part`);
 
   const writeDisk = async (impId: string): Promise<void> => {
     if (header.streams !== null) {
-      await writeMoveStreams(deps, impId, header, reader, count, (file) => {
-        files.push(file);
+      await writeMoveStreams(deps, {
+        impId,
+        header,
+        reader,
+        count,
+        onFile: (file) => {
+          files.push(file);
+        },
       });
 
       return;
@@ -172,7 +183,7 @@ export async function readMoveStream(
     const room = header.streams === null ? 2 * row.bytes : row.bytes + imageBytes;
 
     await deps.diskBudget.withRoom(room, async () => {
-      const image = await requireImage(deps, reader, header, count, temp);
+      const image = await requireImage(deps, { reader, header, count, tempBase: temp });
 
       files.push(...image.files);
 
@@ -230,7 +241,7 @@ export async function readMoveStream(
 
   const receipt = buildReceipt(
     { ticketId: row.id, name: header.imp.name, impId: header.imp.id, files },
-    secret,
+    options.secret,
   );
 
   await updateMoveTicket(deps.db, row.id, {
@@ -333,13 +344,19 @@ async function createCheckpointDisk(deps: ReceiveStreamDeps, impId: string) {
   }
 }
 
+interface RequireImageOptions {
+  readonly reader: FrameReader;
+  readonly header: MoveHeader;
+  readonly count: ByteCounter;
+  readonly tempBase: string;
+}
+
 async function requireImage(
   deps: ReceiveStreamDeps,
-  reader: FrameReader,
-  header: MoveHeader,
-  count: ByteCounter,
-  tempBase: string,
+  options: RequireImageOptions,
 ): Promise<{ readonly name: string; readonly files: readonly ReceivedFile[] }> {
+  const header = options.header;
+
   // The use goes in before each read, so an image eviction keeps the image this move picks.
   await updateImageUse(deps.db, 'digest', [header.image.digest], deps.now());
 
@@ -353,11 +370,11 @@ async function requireImage(
     throw new MoveRequestError(409, `this host has no image ${header.image.digest}`);
   }
 
-  const temps = { rootfs: `${tempBase}.rootfs`, config: `${tempBase}.config` };
+  const temps = { rootfs: `${options.tempBase}.rootfs`, config: `${options.tempBase}.config` };
 
   try {
-    const rootfs = await readFileInto(reader, 'image-rootfs', temps.rootfs, count);
-    const config = await readFileInto(reader, 'image-config', temps.config, count);
+    const rootfs = await readFileInto(options.reader, 'image-rootfs', temps.rootfs, options.count);
+    const config = await readFileInto(options.reader, 'image-config', temps.config, options.count);
 
     const files: ReceivedFile[] = [
       { kind: 'image-rootfs', sha256: rootfs.sha256, bytes: rootfs.bytes },

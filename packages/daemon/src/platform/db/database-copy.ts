@@ -33,13 +33,19 @@ function buildDatabaseCopyPath(dataDir: string, name: string): string {
   return join(dataDir, 'db-copies', `${name}.sqlite`);
 }
 
+export interface WriteDatabaseCopyOptions {
+  readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
+  readonly dataDir: string;
+  readonly name: string;
+  readonly now: () => number;
+}
+
 export async function writeDatabaseCopy(
   db: ImpQueries,
-  diskBudget: Pick<DiskBudget, 'withRoom'>,
-  dataDir: string,
-  name: string,
-  now: () => number,
+  options: WriteDatabaseCopyOptions,
 ): Promise<DatabaseCopyFile> {
+  const dataDir = options.dataDir;
+  const name = options.name;
   const path = buildDatabaseCopyPath(dataDir, name);
   const directory = join(dataDir, 'db-copies');
 
@@ -50,7 +56,7 @@ export async function writeDatabaseCopy(
 
   const sizeBytes = await readDatabaseBytes(db);
 
-  return diskBudget.withRoom(sizeBytes, async () => {
+  return options.diskBudget.withRoom(sizeBytes, async () => {
     try {
       closeSync(openSync(path, 'wx', 0o600));
     } catch (error) {
@@ -68,7 +74,7 @@ export async function writeDatabaseCopy(
         path,
         sizeBytes: statSync(path).size,
         ...readCopyFacts(path),
-        createdAt: new Date(now()),
+        createdAt: new Date(options.now()),
       };
     } catch (error) {
       rmSync(path, { force: true });

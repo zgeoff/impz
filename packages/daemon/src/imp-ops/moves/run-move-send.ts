@@ -80,13 +80,18 @@ export async function runMoveSend(
 
   const meta = target.isWarm ? requireSnapshotMeta(deps, imp) : null;
 
-  const offer = await sendToPeer(deps, peer, MOVE_PATHS.offer, ticket, {
-    body: JSON.stringify({
-      imageDigest: image?.digest ?? '',
-      ...(meta !== null && { systemDrive: meta.systemDrive }),
-    }),
-    signal,
-    extraHeaders: { 'content-type': 'application/json' },
+  const offer = await sendToPeer(deps, {
+    peer,
+    path: MOVE_PATHS.offer,
+    ticket,
+    init: {
+      body: JSON.stringify({
+        imageDigest: image?.digest ?? '',
+        ...(meta !== null && { systemDrive: meta.systemDrive }),
+      }),
+      signal,
+      extraHeaders: { 'content-type': 'application/json' },
+    },
   });
 
   const offered = await requireOk(offer, 'offer');
@@ -121,12 +126,22 @@ export async function runMoveSend(
 
   const warm = meta === null ? null : { meta, isDriveIncluded: reply.needsSystemDrive };
 
-  const opened = await openMoveParts(deps, imp, target.mode, reply.needsImage, warm);
+  const opened = await openMoveParts(deps, {
+    imp,
+    mode: target.mode,
+    isImageIncluded: reply.needsImage,
+    warm,
+  });
 
   const sent: SentFile[] = [];
 
   try {
-    const header = await readHeader(deps, imp, reply.needsImage, opened.streams, warm);
+    const header = await readHeader(deps, {
+      imp,
+      isImageIncluded: reply.needsImage,
+      streams: opened.streams,
+      warm,
+    });
 
     const frames = encodeStream(header, opened.parts, progress.onData, (file) => {
       sent.push(file);
@@ -135,11 +150,16 @@ export async function runMoveSend(
     await sendInParts(
       frames,
       async (part, body) => {
-        const sentPart = await sendToPeer(deps, peer, MOVE_PATHS.receive, ticket, {
-          body,
-          duplex: 'half',
-          signal,
-          extraHeaders: { [MOVE_PART_HEADER]: String(part) },
+        const sentPart = await sendToPeer(deps, {
+          peer,
+          path: MOVE_PATHS.receive,
+          ticket,
+          init: {
+            body,
+            duplex: 'half',
+            signal,
+            extraHeaders: { [MOVE_PART_HEADER]: String(part) },
+          },
         });
 
         await requireOk(sentPart, `part ${String(part)}`);
@@ -150,9 +170,11 @@ export async function runMoveSend(
     await removeMoveParts(deps, opened);
   }
 
-  const response = await sendToPeer(deps, peer, MOVE_PATHS.receive, ticket, {
-    signal,
-    extraHeaders: { [MOVE_FINISH_HEADER]: '1' },
+  const response = await sendToPeer(deps, {
+    peer,
+    path: MOVE_PATHS.receive,
+    ticket,
+    init: { signal, extraHeaders: { [MOVE_FINISH_HEADER]: '1' } },
   });
 
   const answer = await requireOk(response, 'receive');
@@ -170,13 +192,17 @@ export async function runMoveSend(
   await updateImpMove(deps.db, imp.id, 'moved');
 }
 
-async function readHeader(
-  deps: MoveSendDeps,
-  imp: ImpRecord,
-  isImageIncluded: boolean,
-  streams: MoveHeader['streams'],
-  warm: WarmParts | null,
-): Promise<MoveHeader> {
+interface ReadHeaderOptions {
+  readonly imp: ImpRecord;
+  readonly isImageIncluded: boolean;
+  readonly streams: MoveHeader['streams'];
+  readonly warm: WarmParts | null;
+}
+
+async function readHeader(deps: MoveSendDeps, options: ReadHeaderOptions): Promise<MoveHeader> {
+  const imp = options.imp;
+  const warm = options.warm;
+
   const image = await readImageById(deps.db, imp.imageId);
 
   if (image === undefined) {
@@ -220,14 +246,14 @@ async function readHeader(
       sizeBytes: image.sizeBytes,
       source: image.source,
       sourceImp: image.sourceImp,
-      isIncluded: isImageIncluded,
+      isIncluded: options.isImageIncluded,
     },
     checkpoints: checkpoints.map((checkpoint) => ({
       label: checkpoint.label,
       createdAt: checkpoint.createdAt,
       diskBytes: checkpoint.diskBytes,
     })),
-    streams,
+    streams: options.streams,
     warm: warm === null ? null : await readWarmHeader(deps, imp, warm),
   };
 }

@@ -86,6 +86,14 @@ export interface ProxyListenOptions {
 
 type ProxyServer = Server<SocketData>;
 
+interface HandleWebSocketOptions {
+  readonly request: Request;
+  readonly server: ProxyServer;
+  readonly target: string;
+  readonly headers: Readonly<Headers>;
+  readonly release: () => void;
+}
+
 interface UpstreamOptions {
   readonly release: () => void;
   readonly wokeMs: number | null;
@@ -278,7 +286,13 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     }
 
     if (request.headers.get('upgrade')?.toLowerCase() === 'websocket') {
-      return handleWebSocket(request, server, `ws://${target}`, upstreamHeaders, release);
+      return handleWebSocket({
+        request,
+        server,
+        target: `ws://${target}`,
+        headers: upstreamHeaders,
+        release,
+      });
     }
 
     try {
@@ -342,12 +356,12 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
   };
 
   const handleWebSocket = async (
-    request: Request,
-    server: ProxyServer,
-    target: string,
-    headers: Readonly<Headers>,
-    release: () => void,
+    options: HandleWebSocketOptions,
   ): Promise<Response | undefined> => {
+    const request = options.request;
+    const target = options.target;
+    const release = options.release;
+
     const protocols = (request.headers.get('sec-websocket-protocol') ?? '')
       .split(',')
       .map((protocol) => protocol.trim())
@@ -357,7 +371,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     const pending: (string | ArrayBuffer)[] = [];
 
     try {
-      upstream = await openUpstreamSocket(target, protocols, headers, {
+      upstream = await openUpstreamSocket(target, protocols, options.headers, {
         timeoutMs: upstreamSocketTimeoutMs,
         startTimer,
       });
@@ -375,7 +389,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
 
     upstream.addEventListener('message', handleEarlyMessage);
 
-    const upgraded = server.upgrade(request, {
+    const upgraded = options.server.upgrade(request, {
       data: { upstream, pending, handleEarlyMessage, release },
       ...(upstream.protocol !== '' && { headers: { 'sec-websocket-protocol': upstream.protocol } }),
     });

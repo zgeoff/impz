@@ -43,6 +43,15 @@ interface SleepDeps {
   readonly withSleepSlot: <T>(task: () => Promise<T>) => Promise<T>;
 }
 
+interface SleepWithRoomOptions {
+  readonly imp: LockedImp;
+  readonly paths: ImpPaths;
+  readonly pid: number;
+  readonly reason: string;
+  readonly waitedMs: number;
+  readonly requestedAt: number;
+}
+
 export function makeSleepImpVm(
   deps: SleepDeps,
 ): (imp: LockedImp, reason: string, youngGuest?: YoungGuestWait) => Promise<LockedImp> {
@@ -97,14 +106,13 @@ export function makeSleepImpVm(
     }
   };
 
-  const sleepWithRoom = async (
-    imp: LockedImp,
-    paths: ImpPaths,
-    pid: number,
-    reason: string,
-    waitedMs: number,
-    requestedAt: number,
-  ): Promise<LockedImp> => {
+  const sleepWithRoom = async (options: SleepWithRoomOptions): Promise<LockedImp> => {
+    const imp = options.imp;
+    const paths = options.paths;
+    const pid = options.pid;
+    const reason = options.reason;
+    const waitedMs = options.waitedMs;
+
     const pluggedMib = await shrinkForSleep(imp, paths);
 
     const ramMib = context.readSleepRamMib(pid, paths.apiSocket) ?? 0;
@@ -151,7 +159,7 @@ export function makeSleepImpVm(
       slept.detail = {
         trigger: reason,
         durationMs: sleepMs,
-        prepareMs: Math.round(started - requestedAt),
+        prepareMs: Math.round(started - options.requestedAt),
         steps: timings,
       };
 
@@ -233,7 +241,7 @@ export function makeSleepImpVm(
         return imp;
       }
 
-      return sleepWithRoom(imp, paths, pid, reason, waitedMs, requestedAt);
+      return sleepWithRoom({ imp, paths, pid, reason, waitedMs, requestedAt });
     });
 
     return slept;

@@ -22,26 +22,28 @@ const PEER_DEADLINES_MS = {
   control: 10 * 60 * 1000,
 } as const;
 
-export function sendToPeer(
-  deps: PeerDeps,
-  peer: string,
-  path: string,
-  ticket: string,
-  init: PeerRequest = {},
-): Promise<Response> {
-  const { extraHeaders, ...rest } = init;
+interface SendToPeerOptions {
+  readonly peer: string;
+  readonly path: string;
+  readonly ticket: string;
+  readonly init?: PeerRequest;
+}
+
+export function sendToPeer(deps: PeerDeps, options: SendToPeerOptions): Promise<Response> {
+  const path = options.path;
+  const { extraHeaders, ...rest } = options.init ?? {};
 
   const durationMs =
     path === MOVE_PATHS.receive ? PEER_DEADLINES_MS.stream : PEER_DEADLINES_MS.control;
 
   // A followed redirect could send the ticket to another host.
   return sendLongRequest(
-    new URL(path, peer).toString(),
+    new URL(path, options.peer).toString(),
     {
       method: 'POST',
       redirect: 'manual',
       ...rest,
-      headers: { ...buildTicketHeader(ticket), ...extraHeaders },
+      headers: { ...buildTicketHeader(options.ticket), ...extraHeaders },
     },
     {
       deadline: {

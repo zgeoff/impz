@@ -48,35 +48,45 @@ type BuildOutcome =
   | { readonly ok: true; readonly image: Image }
   | { readonly ok: false; readonly failure: BuildFailure };
 
+interface RunBuildOptions {
+  readonly request: Request;
+  readonly query: ImageBuildQuery;
+  readonly limitBytes: number;
+  readonly signal: AbortSignal;
+  readonly report: Readonly<BuildReport>;
+  readonly setBuilder: (name: string) => void;
+}
+
 export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRoute {
   const uploadsDir = buildUploadsDir(deps.config.dataDir);
 
   rmSync(uploadsDir, { recursive: true, force: true });
   mkdirSync(uploadsDir, { recursive: true, mode: 0o700 });
 
-  const runBuild = async (
-    request: Request,
-    query: ImageBuildQuery,
-    limitBytes: number,
-    signal: AbortSignal,
-    report: Readonly<BuildReport>,
-    setBuilder: (name: string) => void,
-  ): Promise<ImageRecord> => {
+  const runBuild = async (options: RunBuildOptions): Promise<ImageRecord> => {
+    const limitBytes = options.limitBytes;
+    const signal = options.signal;
+    const report = options.report;
     const tarPath = join(uploadsDir, `${Bun.randomUUIDv7()}.tar`);
 
     try {
       return await deps.diskBudget.withRoom(limitBytes, async () => {
-        await writeBody(request, tarPath, limitBytes, deps.config.buildContextMaxBytes);
+        await writeBody(options.request, tarPath, limitBytes, deps.config.buildContextMaxBytes);
 
         signal.throwIfAborted();
         report.setPhase('build');
 
-        return deps.images.buildImageFromContext(tarPath, query.name, query.dockerfile, {
-          signal,
-          setPhase: report.setPhase,
-          output: report.output,
-          setBuilder,
-        });
+        return deps.images.buildImageFromContext(
+          tarPath,
+          options.query.name,
+          options.query.dockerfile,
+          {
+            signal,
+            setPhase: report.setPhase,
+            output: report.output,
+            setBuilder: options.setBuilder,
+          },
+        );
       });
     } finally {
       rmSync(tarPath, { force: true });
@@ -160,14 +170,14 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
         };
 
         try {
-          const image = await runBuild(
+          const image = await runBuild({
             request,
-            parsed.data,
-            reserved.limitBytes,
+            query: parsed.data,
+            limitBytes: reserved.limitBytes,
             signal,
-            tracked,
-            run.setBuilder,
-          );
+            report: tracked,
+            setBuilder: run.setBuilder,
+          });
 
           deps.audit.record(
             { procedure: PROCEDURE, actor: caller, impName: null, startedAt },

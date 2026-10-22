@@ -42,13 +42,12 @@ test('#writeDatabaseCopy returns the copy’s path, size, schema version and int
     log: () => {},
   });
 
-  const copy = await writeDatabaseCopy(
-    ctx.db,
-    budget,
-    ctx.dataDir,
-    'nightly',
-    () => 1_800_000_000_000,
-  );
+  const copy = await writeDatabaseCopy(ctx.db, {
+    diskBudget: budget,
+    dataDir: ctx.dataDir,
+    name: 'nightly',
+    now: () => 1_800_000_000_000,
+  });
 
   const lastMigration = Object.keys(MIGRATIONS).toSorted().at(-1);
   const written = statSync(join(ctx.dataDir, 'db-copies', 'nightly.sqlite'));
@@ -75,7 +74,12 @@ test('#writeDatabaseCopy makes the copy readable by its owner only', async () =>
     log: () => {},
   });
 
-  await writeDatabaseCopy(ctx.db, budget, ctx.dataDir, 'nightly', Date.now);
+  await writeDatabaseCopy(ctx.db, {
+    diskBudget: budget,
+    dataDir: ctx.dataDir,
+    name: 'nightly',
+    now: Date.now,
+  });
 
   expect(statSync(join(ctx.dataDir, 'db-copies', 'nightly.sqlite')).mode & 0o777).toBe(0o600);
 });
@@ -93,7 +97,12 @@ test('#writeDatabaseCopy makes an existing copies directory owner-only', async (
     log: () => {},
   });
 
-  await writeDatabaseCopy(ctx.db, budget, ctx.dataDir, 'mode', Date.now);
+  await writeDatabaseCopy(ctx.db, {
+    diskBudget: budget,
+    dataDir: ctx.dataDir,
+    name: 'mode',
+    now: Date.now,
+  });
 
   expect(statSync(join(ctx.dataDir, 'db-copies')).mode & 0o777).toBe(0o700);
 });
@@ -115,7 +124,12 @@ test('#writeDatabaseCopy takes a whole copy while writes run', async () => {
   );
 
   const [copy] = await Promise.all([
-    writeDatabaseCopy(ctx.db, budget, ctx.dataDir, 'busy', Date.now),
+    writeDatabaseCopy(ctx.db, {
+      diskBudget: budget,
+      dataDir: ctx.dataDir,
+      name: 'busy',
+      now: Date.now,
+    }),
     ...writes,
   ]);
 
@@ -145,7 +159,12 @@ test('#writeDatabaseCopy holds a prefix of the writes that run meanwhile', async
   );
 
   const [copy] = await Promise.all([
-    writeDatabaseCopy(ctx.db, budget, ctx.dataDir, 'busy', Date.now),
+    writeDatabaseCopy(ctx.db, {
+      diskBudget: budget,
+      dataDir: ctx.dataDir,
+      name: 'busy',
+      now: Date.now,
+    }),
     ...writes,
   ]);
 
@@ -174,7 +193,12 @@ test('#writeDatabaseCopy refuses a copy past the disk reserve, and leaves no fil
     log: () => {},
   });
 
-  const refused = writeDatabaseCopy(ctx.db, budget, ctx.dataDir, 'full', Date.now);
+  const refused = writeDatabaseCopy(ctx.db, {
+    diskBudget: budget,
+    dataDir: ctx.dataDir,
+    name: 'full',
+    now: Date.now,
+  });
 
   await refused.catch(() => {});
 
@@ -196,7 +220,12 @@ test('#writeDatabaseCopy refuses a name a copy already has, and keeps that copy'
   mkdirSync(join(ctx.dataDir, 'db-copies'));
   writeFileSync(join(ctx.dataDir, 'db-copies', 'nightly.sqlite'), 'an earlier copy');
 
-  const refused = writeDatabaseCopy(ctx.db, budget, ctx.dataDir, 'nightly', Date.now);
+  const refused = writeDatabaseCopy(ctx.db, {
+    diskBudget: budget,
+    dataDir: ctx.dataDir,
+    name: 'nightly',
+    now: Date.now,
+  });
 
   await refused.catch(() => {});
 
@@ -222,9 +251,14 @@ test('#writeDatabaseCopy removes the half-written copy of a copy that fails', as
   });
 
   // VACUUM INTO cannot run inside a transaction, so the copy step fails
-  const failed = ctx.db
-    .transaction()
-    .execute((trx) => writeDatabaseCopy(trx, budget, ctx.dataDir, 'nightly', Date.now));
+  const failed = ctx.db.transaction().execute((trx) =>
+    writeDatabaseCopy(trx, {
+      diskBudget: budget,
+      dataDir: ctx.dataDir,
+      name: 'nightly',
+      now: Date.now,
+    }),
+  );
 
   await failed.catch(() => {});
 

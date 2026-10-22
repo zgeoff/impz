@@ -253,7 +253,12 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
         await deps.beforeGrantWrite();
       }
 
-      const outcome = await createCheckedGrant(db, imp.id, secretName, authority ?? null, filter);
+      const outcome = await createCheckedGrant(db, {
+        impId: imp.id,
+        secretName,
+        authority: authority ?? null,
+        filter,
+      });
 
       if (outcome.kind === 'granted') {
         return;

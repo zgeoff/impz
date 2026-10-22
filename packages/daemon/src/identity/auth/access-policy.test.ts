@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { callerContract } from '@impz/api';
+import type { Scope } from '@impz/api';
 import { traverseContractProcedures } from '@orpc/server';
 import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
 import {
@@ -12,6 +13,8 @@ import {
   isAuditedProcedure,
   isRefusalAudited,
 } from './access-policy';
+import type { Refusal } from './access-policy';
+import type { Caller } from './caller';
 
 test('#PROCEDURE_ACCESS has a rule for every procedure a caller reaches, and no stale rule', () => {
   const paths: string[] = [];
@@ -488,70 +491,149 @@ test('#checkAccess lets a caller with the same patterns and no list fork', async
   expect(refusal).toBeNull();
 });
 
-test.each([
-  ['grants.add', 'read', null, [], 'oauth laptop has scope read; this needs manage', 'scope'],
-  ['grants.delete', 'read', null, [], 'oauth laptop has scope read; this needs manage', 'scope'],
-  ['grants.add', 'read', ['dev-*'], [], 'oauth laptop has scope read; this needs manage', 'scope'],
-  [
-    'grants.delete',
-    'read',
-    ['dev-*'],
-    [],
-    'oauth laptop has scope read; this needs manage',
-    'scope',
-  ],
-  ['grants.add', 'exec', null, [], 'oauth laptop has scope exec; this needs manage', 'scope'],
-  ['grants.delete', 'exec', null, [], 'oauth laptop has scope exec; this needs manage', 'scope'],
-  ['grants.add', 'exec', ['dev-*'], [], 'oauth laptop has scope exec; this needs manage', 'scope'],
-  [
-    'grants.delete',
-    'exec',
-    ['dev-*'],
-    [],
-    'oauth laptop has scope exec; this needs manage',
-    'scope',
-  ],
-  ['grants.add', 'manage', null, [], 'oauth laptop may not grant or revoke secrets', null],
-  ['grants.delete', 'manage', null, [], 'oauth laptop may not grant or revoke secrets', null],
-  ['grants.add', 'manage', ['dev-*'], [], 'oauth laptop may not grant or revoke secrets', null],
-  ['grants.delete', 'manage', ['dev-*'], [], 'oauth laptop may not grant or revoke secrets', null],
-  [
-    'grants.add',
-    'manage',
-    ['dev-*'],
-    [{ name: 'gh', generation: 'gen-gh' }],
-    'oauth laptop may not grant or revoke secrets',
-    null,
-  ],
-  [
-    'grants.delete',
-    'manage',
-    ['dev-*'],
-    [{ name: 'gh', generation: 'gen-gh' }],
-    'oauth laptop may not grant or revoke secrets',
-    null,
-  ],
-] as const)(
-  '#checkAccess refuses an OAuth grant %s of a secret, with scope %s, patterns %p and list %p',
-  async (path, scope, imps, grantable, message, reason) => {
+interface OAuthGrantRefusalRow {
+  readonly path: string;
+  readonly scope: Scope;
+  readonly imps: readonly string[] | null;
+  readonly grantable: Caller['grantable'];
+  readonly message: string;
+  readonly reason: Refusal['reason'];
+}
+
+test.each<OAuthGrantRefusalRow>([
+  {
+    path: 'grants.add',
+    scope: 'read',
+    imps: null,
+    grantable: [],
+    message: 'oauth laptop has scope read; this needs manage',
+    reason: 'scope',
+  },
+  {
+    path: 'grants.delete',
+    scope: 'read',
+    imps: null,
+    grantable: [],
+    message: 'oauth laptop has scope read; this needs manage',
+    reason: 'scope',
+  },
+  {
+    path: 'grants.add',
+    scope: 'read',
+    imps: ['dev-*'],
+    grantable: [],
+    message: 'oauth laptop has scope read; this needs manage',
+    reason: 'scope',
+  },
+  {
+    path: 'grants.delete',
+    scope: 'read',
+    imps: ['dev-*'],
+    grantable: [],
+    message: 'oauth laptop has scope read; this needs manage',
+    reason: 'scope',
+  },
+  {
+    path: 'grants.add',
+    scope: 'exec',
+    imps: null,
+    grantable: [],
+    message: 'oauth laptop has scope exec; this needs manage',
+    reason: 'scope',
+  },
+  {
+    path: 'grants.delete',
+    scope: 'exec',
+    imps: null,
+    grantable: [],
+    message: 'oauth laptop has scope exec; this needs manage',
+    reason: 'scope',
+  },
+  {
+    path: 'grants.add',
+    scope: 'exec',
+    imps: ['dev-*'],
+    grantable: [],
+    message: 'oauth laptop has scope exec; this needs manage',
+    reason: 'scope',
+  },
+  {
+    path: 'grants.delete',
+    scope: 'exec',
+    imps: ['dev-*'],
+    grantable: [],
+    message: 'oauth laptop has scope exec; this needs manage',
+    reason: 'scope',
+  },
+  {
+    path: 'grants.add',
+    scope: 'manage',
+    imps: null,
+    grantable: [],
+    message: 'oauth laptop may not grant or revoke secrets',
+    reason: null,
+  },
+  {
+    path: 'grants.delete',
+    scope: 'manage',
+    imps: null,
+    grantable: [],
+    message: 'oauth laptop may not grant or revoke secrets',
+    reason: null,
+  },
+  {
+    path: 'grants.add',
+    scope: 'manage',
+    imps: ['dev-*'],
+    grantable: [],
+    message: 'oauth laptop may not grant or revoke secrets',
+    reason: null,
+  },
+  {
+    path: 'grants.delete',
+    scope: 'manage',
+    imps: ['dev-*'],
+    grantable: [],
+    message: 'oauth laptop may not grant or revoke secrets',
+    reason: null,
+  },
+  {
+    path: 'grants.add',
+    scope: 'manage',
+    imps: ['dev-*'],
+    grantable: [{ name: 'gh', generation: 'gen-gh' }],
+    message: 'oauth laptop may not grant or revoke secrets',
+    reason: null,
+  },
+  {
+    path: 'grants.delete',
+    scope: 'manage',
+    imps: ['dev-*'],
+    grantable: [{ name: 'gh', generation: 'gen-gh' }],
+    message: 'oauth laptop may not grant or revoke secrets',
+    reason: null,
+  },
+])(
+  '#checkAccess refuses an OAuth grant $path of a secret, with scope $scope, patterns $imps and list $grantable',
+  async (row) => {
     const caller = buildMockCaller({
       kind: 'oauth',
       name: 'laptop',
-      scope,
-      imps,
-      grantable,
+      scope: row.scope,
+      imps: row.imps,
+      grantable: row.grantable,
       grantId: 'grant-a',
       principal: 'grant:grant-a',
     });
 
     const refusal = await checkAccess(
-      findAccess(path),
+      findAccess(row.path),
       caller,
       { name: 'dev-a', secret: 'gh' },
       () => Promise.resolve('gen-gh'),
     );
 
-    expect(refusal).toStrictEqual({ message, reason });
+    expect(refusal).toStrictEqual({ message: row.message, reason: row.reason });
   },
 );
 

@@ -125,7 +125,7 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
     intervalMs: number,
     task: () => Promise<void>,
     taskLog: (message: string) => void,
-  ): Ticker => startTicker(label, intervalMs, task, taskLog, deps.timer);
+  ): Ticker => startTicker({ label, intervalMs, task, log: taskLog, timer: deps.timer });
 
   const runRenewal = async (): Promise<void> => {
     const certificate = await certs.renew();

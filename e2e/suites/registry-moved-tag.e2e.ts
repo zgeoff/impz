@@ -71,13 +71,13 @@ test.skipIf(registryMissing)(
 
     registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, mutable));
 
-    const seen = await runBuildAndListRequests(
-      ctx.registry,
-      ctx.directoryPath,
+    const seen = await runBuildAndListRequests({
+      registry: ctx.registry,
+      directory: ctx.directoryPath,
       repository,
-      `FROM ${moved.tag}\nRUN cat /v\n`,
-      mutable,
-    );
+      dockerfile: `FROM ${moved.tag}\nRUN cat /v\n`,
+      name: mutable,
+    });
 
     const content = await readFileInImage(mutable, '/v');
 

@@ -103,8 +103,15 @@ test('it finds the same blocks as the kernel’s lseek on a real sparse file', (
     ],
   });
 
-  const real = readDataBlocks(fd, 48 * 1024 ** 2, 1024 ** 2);
-  const stubbed = readDataBlocks(3, 48 * 1024 ** 2, 1024 ** 2, lseek.seek, lseek.readAllocated);
+  const real = readDataBlocks({ fd, size: 48 * 1024 ** 2, blockBytes: 1024 ** 2 });
+
+  const stubbed = readDataBlocks({
+    fd: 3,
+    size: 48 * 1024 ** 2,
+    blockBytes: 1024 ** 2,
+    seek: lseek.seek,
+    readAllocated: lseek.readAllocated,
+  });
 
   expect([...stubbed]).toIncludeSameMembers([...real]);
 });

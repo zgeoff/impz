@@ -63,28 +63,38 @@ export function buildRuleset(input: RulesetInput): string {
     `table ${EGRESS_TABLE} {}`,
     `delete table ${EGRESS_TABLE}`,
     `table ${EGRESS_TABLE} {`,
-    ...buildSet('private', 'ipv4_addr', input.privateRanges, ['flags interval', 'auto-merge']),
-    ...buildSet('blocked6', 'ipv6_addr', input.blocked6, ['flags interval', 'auto-merge']),
+    ...buildSet({
+      name: 'private',
+      type: 'ipv4_addr',
+      elements: input.privateRanges,
+      properties: ['flags interval', 'auto-merge'],
+    }),
+    ...buildSet({
+      name: 'blocked6',
+      type: 'ipv6_addr',
+      elements: input.blocked6,
+      properties: ['flags interval', 'auto-merge'],
+    }),
     ...(hasPublic ? buildPublicSets(input) : []),
-    ...buildSet(
-      'dns_taps',
-      'ifname',
-      redirected.map((slot) => formatTap(slot.tap)),
-      [],
-    ),
-    ...buildSet(
-      'open_peer_taps',
-      'ifname',
-      openPeers.map((slot) => formatTap(slot.tap)),
-      [],
-    ),
+    ...buildSet({
+      name: 'dns_taps',
+      type: 'ifname',
+      elements: redirected.map((slot) => formatTap(slot.tap)),
+      properties: [],
+    }),
+    ...buildSet({
+      name: 'open_peer_taps',
+      type: 'ifname',
+      elements: openPeers.map((slot) => formatTap(slot.tap)),
+      properties: [],
+    }),
     ...input.networks.flatMap((peers, index) =>
-      buildSet(
-        `net${String(index)}`,
-        'ifname . ipv4_addr',
-        peers.map((peer) => `${formatTap(peer.tap)} . ${peer.guestIp}`),
-        [],
-      ),
+      buildSet({
+        name: `net${String(index)}`,
+        type: 'ifname . ipv4_addr',
+        elements: peers.map((peer) => `${formatTap(peer.tap)} . ${peer.guestIp}`),
+        properties: [],
+      }),
     ),
     ...box.flatMap((slot) => buildBoxSets(slot, input.setSize)),
 
@@ -95,13 +105,13 @@ export function buildRuleset(input: RulesetInput): string {
     '    reject with icmpx admin-prohibited',
     '  }',
     ...input.slots.flatMap((slot) => buildSlotChain(slot)),
-    ...buildSet(
-      'slots',
-      'ifname : verdict',
-      input.slots.map((slot) => `${formatTap(slot.tap)} : jump slot${String(slot.slot)}`),
-      [],
-      'map',
-    ),
+    ...buildSet({
+      name: 'slots',
+      type: 'ifname : verdict',
+      elements: input.slots.map((slot) => `${formatTap(slot.tap)} : jump slot${String(slot.slot)}`),
+      properties: [],
+      kind: 'map',
+    }),
     '  chain forward {',
     '    type filter hook forward priority filter - 1; policy accept;',
     '    iifname != "imp*" accept',
@@ -160,20 +170,30 @@ function buildPublicSets(input: RulesetInput): readonly string[] {
   const interval = ['flags interval', 'auto-merge'];
 
   return [
-    ...buildSet('public4', 'ipv4_addr', input.public4, interval),
-    ...buildSet('public6', 'ipv6_addr', input.public6, interval),
-    ...buildSet(
-      'uplinks4',
-      'ifname',
-      input.uplinks4.map((uplink) => formatTap(uplink)),
-      [],
-    ),
-    ...buildSet(
-      'uplinks6',
-      'ifname',
-      input.uplinks6.map((uplink) => formatTap(uplink)),
-      [],
-    ),
+    ...buildSet({
+      name: 'public4',
+      type: 'ipv4_addr',
+      elements: input.public4,
+      properties: interval,
+    }),
+    ...buildSet({
+      name: 'public6',
+      type: 'ipv6_addr',
+      elements: input.public6,
+      properties: interval,
+    }),
+    ...buildSet({
+      name: 'uplinks4',
+      type: 'ifname',
+      elements: input.uplinks4.map((uplink) => formatTap(uplink)),
+      properties: [],
+    }),
+    ...buildSet({
+      name: 'uplinks6',
+      type: 'ifname',
+      elements: input.uplinks6.map((uplink) => formatTap(uplink)),
+      properties: [],
+    }),
   ];
 }
 
@@ -185,10 +205,10 @@ function buildBoxSets(slot: FirewallSlot, setSize: number): readonly string[] {
   const interval = ['flags interval', 'auto-merge'];
 
   return [
-    ...buildSet(`allow${id}`, 'ipv4_addr', addresses, size),
-    ...buildSet(`cidr${id}`, 'ipv4_addr', cidrs, interval),
-    ...buildSet(`allow6${id}`, 'ipv6_addr', addresses6, size),
-    ...buildSet(`cidr6${id}`, 'ipv6_addr', cidrs6, interval),
+    ...buildSet({ name: `allow${id}`, type: 'ipv4_addr', elements: addresses, properties: size }),
+    ...buildSet({ name: `cidr${id}`, type: 'ipv4_addr', elements: cidrs, properties: interval }),
+    ...buildSet({ name: `allow6${id}`, type: 'ipv6_addr', elements: addresses6, properties: size }),
+    ...buildSet({ name: `cidr6${id}`, type: 'ipv6_addr', elements: cidrs6, properties: interval }),
   ];
 }
 
@@ -248,17 +268,21 @@ function buildSlotChain(slot: FirewallSlot): readonly string[] {
   ];
 }
 
-function buildSet(
-  name: string,
-  type: string,
-  elements: readonly string[],
-  options: readonly string[],
-  kind: 'set' | 'map' = 'set',
-): readonly string[] {
+interface BuildSetOptions {
+  readonly name: string;
+  readonly type: string;
+  readonly elements: readonly string[];
+  readonly properties: readonly string[];
+  readonly kind?: 'set' | 'map';
+}
+
+function buildSet(options: BuildSetOptions): readonly string[] {
+  const elements = options.elements;
+
   return [
-    `  ${kind} ${name} {`,
-    `    type ${type}`,
-    ...options.map((option) => `    ${option}`),
+    `  ${options.kind ?? 'set'} ${options.name} {`,
+    `    type ${options.type}`,
+    ...options.properties.map((property) => `    ${property}`),
     ...(elements.length === 0 ? [] : [`    elements = { ${elements.join(', ')} }`]),
     '  }',
   ];

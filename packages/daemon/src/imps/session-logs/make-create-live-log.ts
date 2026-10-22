@@ -12,30 +12,30 @@ interface CreateLiveLogDeps {
   readonly createLog: typeof createGenerationLog;
 }
 
+interface CreateLiveLogOptions {
+  readonly imp: SessionLogImp;
+  readonly generation: string;
+  readonly session: string;
+  readonly bootId: string;
+  readonly life: number;
+}
+
 export function makeCreateLiveLog(
   ctx: SessionLogState,
   deps: CreateLiveLogDeps,
-): (
-  imp: SessionLogImp,
-  generation: string,
-  session: string,
-  bootId: string,
-  life: number,
-) => Promise<LiveLog | null> {
-  const createLiveLog = async (
-    imp: SessionLogImp,
-    generation: string,
-    session: string,
-    bootId: string,
-    life: number,
-  ): Promise<LiveLog | null> => {
+): (options: CreateLiveLogOptions) => Promise<LiveLog | null> {
+  const createLiveLog = async (options: CreateLiveLogOptions): Promise<LiveLog | null> => {
+    const imp = options.imp;
+    const generation = options.generation;
+    const session = options.session;
+    const bootId = options.bootId;
     const key = buildLogKey(imp.id, generation);
 
     if (!isAgentLogIdentity({ generation, session, bootId })) {
       return null;
     }
 
-    if (ctx.isForgotten(imp.id, life) || probeTombstone(imp.sessionLogsDir, generation)) {
+    if (ctx.isForgotten(imp.id, options.life) || probeTombstone(imp.sessionLogsDir, generation)) {
       return null;
     }
 
@@ -59,7 +59,7 @@ export function makeCreateLiveLog(
       ctx.send({ type: 'creation.end', key });
     }
 
-    if (ctx.isForgotten(imp.id, life)) {
+    if (ctx.isForgotten(imp.id, options.life)) {
       log.abandon();
 
       if (ctx.isDestroyed(imp.id)) {
@@ -70,7 +70,7 @@ export function makeCreateLiveLog(
       return null;
     }
 
-    return ctx.setLive(imp, generation, session, log);
+    return ctx.setLive({ imp, generation, session, log });
   };
 
   return createLiveLog;

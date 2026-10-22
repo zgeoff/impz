@@ -114,7 +114,7 @@ export function createResourceSampler(readers: SamplerReaders): ResourceSampler 
         last: counters,
         lastAt: now,
         totals: ZERO,
-        sample: buildSample(now, now, ZERO, memory, undefined),
+        sample: buildSample({ now, since: now, totals: ZERO, memory, cpuPercent: undefined }),
         threadIds: new Set(threads),
       };
 
@@ -146,7 +146,7 @@ export function createResourceSampler(readers: SamplerReaders): ResourceSampler 
       last: counters,
       lastAt: now,
       totals,
-      sample: buildSample(now, previous.since, totals, memory, cpuPercent),
+      sample: buildSample({ now, since: previous.since, totals, memory, cpuPercent }),
       threadIds: new Set([...previous.threadIds, ...threads]),
     };
 
@@ -200,22 +200,26 @@ export function createResourceSampler(readers: SamplerReaders): ResourceSampler 
   };
 }
 
-function buildSample(
-  now: number,
-  since: number,
-  totals: Counters,
-  memory: VmMemory,
-  cpuPercent: number | undefined,
-): ResourceSample {
+interface BuildSampleOptions {
+  readonly now: number;
+  readonly since: number;
+  readonly totals: Counters;
+  readonly memory: VmMemory;
+  readonly cpuPercent: number | undefined;
+}
+
+function buildSample(options: BuildSampleOptions): ResourceSample {
+  const cpuPercent = options.cpuPercent;
+
   return {
-    measuredAt: new Date(now),
-    since: new Date(since),
+    measuredAt: new Date(options.now),
+    since: new Date(options.since),
     ...(cpuPercent !== undefined && { cpuPercent: Math.round(cpuPercent * 10) / 10 }),
-    cpuThrottledMs: Math.round(totals.throttledUsec / 1000),
-    netRxBytes: totals.rx,
-    netTxBytes: totals.tx,
-    ramMib: memory.ramMib,
-    rssMib: memory.rssMib,
+    cpuThrottledMs: Math.round(options.totals.throttledUsec / 1000),
+    netRxBytes: options.totals.rx,
+    netTxBytes: options.totals.tx,
+    ramMib: options.memory.ramMib,
+    rssMib: options.memory.rssMib,
   };
 }
 

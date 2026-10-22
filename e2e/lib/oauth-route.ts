@@ -77,22 +77,31 @@ export interface McpAnswer {
   readonly body: unknown;
 }
 
-export async function sendMcp(
-  origin: string,
-  bearer: string,
-  session: string,
-  method: string,
-  params: unknown = {},
-): Promise<McpAnswer> {
-  const response = await fetch(`${origin}/mcp`, {
+interface SendMcpOptions {
+  readonly origin: string;
+  readonly bearer: string;
+  readonly session: string;
+  readonly method: string;
+  readonly params?: unknown;
+}
+
+export async function sendMcp(options: SendMcpOptions): Promise<McpAnswer> {
+  const session = options.session;
+
+  const response = await fetch(`${options.origin}/mcp`, {
     method: 'POST',
     headers: {
-      authorization: `Bearer ${bearer}`,
+      authorization: `Bearer ${options.bearer}`,
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
       ...(session !== '' && { 'mcp-session-id': session }),
     },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: options.method,
+      params: options.params ?? {},
+    }),
   });
 
   const text = await response.text();
@@ -105,10 +114,16 @@ export async function sendMcp(
 }
 
 export async function openRouteMcp(origin: string, bearer: string): Promise<string> {
-  const opened = await sendMcp(origin, bearer, '', 'initialize', {
-    protocolVersion: '2025-06-18',
-    capabilities: {},
-    clientInfo: { name: 'e2e', version: '1.0.0' },
+  const opened = await sendMcp({
+    origin,
+    bearer,
+    session: '',
+    method: 'initialize',
+    params: {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: { name: 'e2e', version: '1.0.0' },
+    },
   });
 
   if (opened.status !== 200) {

@@ -199,7 +199,7 @@ async function runNew(
       throw error;
     }
 
-    throw printPlacedFailure(io, imp, placed, error, request.json);
+    throw printPlacedFailure(io, { imp, placed, error, json: request.json });
   }
 
   if (request.json) {
@@ -220,18 +220,21 @@ async function runNew(
   io.print(text);
 }
 
+interface PrintPlacedFailureOptions {
+  readonly imp: Imp;
+  readonly placed: SavedTarget;
+  readonly error: unknown;
+  readonly json: boolean;
+}
+
 // only a stderr line names the host of a placed create, so the error names it
 // too; a plain Error, because placement must not try the next host for it
-function printPlacedFailure(
-  io: CommandIO,
-  imp: Imp,
-  placed: SavedTarget,
-  error: unknown,
-  json: boolean,
-): Error {
-  const message = formatError(error, placed.config);
+function printPlacedFailure(io: CommandIO, options: PrintPlacedFailureOptions): Error {
+  const imp = options.imp;
+  const placed = options.placed;
+  const message = formatError(options.error, placed.config);
 
-  if (json) {
+  if (options.json) {
     io.print(formatJson({ host: placed.host, imp, error: message }));
   }
 

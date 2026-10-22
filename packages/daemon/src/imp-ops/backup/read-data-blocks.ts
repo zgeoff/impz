@@ -12,13 +12,21 @@ export type SeekFile = (fd: number, offset: number, whence: number) => SeekResul
 
 export type ReadAllocated = (fd: number) => number;
 
-export function readDataBlocks(
-  fd: number,
-  size: number,
-  blockBytes: number,
-  seek: SeekFile = runLseek,
-  readAllocated: ReadAllocated = readFileAllocated,
-): Set<number> {
+interface ReadDataBlocksOptions {
+  readonly fd: number;
+  readonly size: number;
+  readonly blockBytes: number;
+  readonly seek?: SeekFile;
+  readonly readAllocated?: ReadAllocated;
+}
+
+export function readDataBlocks(options: ReadDataBlocksOptions): Set<number> {
+  const fd = options.fd;
+  const size = options.size;
+  const blockBytes = options.blockBytes;
+  const seek = options.seek ?? runLseek;
+  const readAllocated = options.readAllocated ?? readFileAllocated;
+
   const blocks = new Set<number>();
 
   let foundBytes = 0;

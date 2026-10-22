@@ -35,7 +35,7 @@ export function startImpdTickers(
   const log = options.log;
 
   const start = (label: string, intervalMs: number, task: () => Promise<void>): Ticker =>
-    startTicker(label, intervalMs, task, log, options.timer);
+    startTicker({ label, intervalMs, task, log, timer: options.timer });
 
   const tickers = [
     start('idle', 2000, parts.idle.runCheck),

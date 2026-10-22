@@ -15,7 +15,7 @@ export async function sendMoveAbort(
   peer: string,
   ticket: string,
 ): Promise<'aborted' | 'committed'> {
-  const response = await sendToPeer(deps, peer, MOVE_PATHS.abort, ticket);
+  const response = await sendToPeer(deps, { peer, path: MOVE_PATHS.abort, ticket });
   const answer = await readJsonBody(response);
 
   const reply = MoveCommitReplySchema.safeParse(answer);
