@@ -1,13 +1,13 @@
-import { BlockList } from 'node:net';
 import { join } from 'node:path';
 import * as z from 'zod';
 import { countSlots, formatCidr4, isTailnetOverlap, parseSubnet } from './host-net/net/addressing';
 import { formatCidr6 } from './host-net/net/addressing6';
 import { parseIpv6Setting } from './host-net/net/ipv6-plan';
+import { buildRangeMatcher } from './host-net/net/range-matcher';
 import { parseTailnetRules } from './identity/auth/parse-tailnet-rules';
 import { PublicMcpEnvSchema, parsePublicMcpConfig } from './identity/oauth/public-mcp-config';
 import { loadBackupConfig } from './imp-ops/backup/backup-config';
-import { createPeerRanges, readPeerUrlAddress } from './imp-ops/moves/peer-address';
+import { buildPeerRanges, parsePeerUrlAddress } from './imp-ops/moves/peer-address';
 import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from './imps/images/build-image';
 import type { ImageEvictionConfig } from './imps/imps-config';
 import { checkPublicPorts } from './network/https/check-public-ports';
@@ -131,11 +131,7 @@ function splitList(value: string): string[] {
   return value.split(',').map((item) => item.trim());
 }
 
-const PRIVATE_V4 = new BlockList();
-
-PRIVATE_V4.addSubnet('10.0.0.0', 8, 'ipv4');
-PRIVATE_V4.addSubnet('172.16.0.0', 12, 'ipv4');
-PRIVATE_V4.addSubnet('192.168.0.0', 16, 'ipv4');
+const isPrivate4 = buildRangeMatcher(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']);
 
 // The peer URL is checked against the ranges a source sends to here, so a source never
 // refuses it late.
@@ -153,7 +149,7 @@ function checkMoveSettings(
 
     const [address = '', prefix = ''] = testCidr.split('/');
 
-    if (Number(prefix) < 16 || !PRIVATE_V4.check(address, 'ipv4')) {
+    if (Number(prefix) < 16 || !isPrivate4(address)) {
       throw new Error(`IMP_MOVE_TEST_CIDR must be a private range of /16 or narrower: ${testCidr}`);
     }
   }
@@ -162,13 +158,13 @@ function checkMoveSettings(
     return;
   }
 
-  const address = readPeerUrlAddress(peerUrl);
+  const address = parsePeerUrlAddress(peerUrl);
 
   if (address === null) {
     throw new Error(`IMP_PEER_URL must name a literal address, not a name: ${peerUrl}`);
   }
 
-  if (!createPeerRanges(testCidr ?? null).isAllowed(address)) {
+  if (!buildPeerRanges(testCidr ?? null).isAllowed(address)) {
     throw new Error(
       `IMP_PEER_URL must name a tailnet address${isE2e ? ' or one in IMP_MOVE_TEST_CIDR' : ''}: ${peerUrl}`,
     );

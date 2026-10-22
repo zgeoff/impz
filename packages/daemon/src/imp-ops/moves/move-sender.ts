@@ -23,7 +23,7 @@ import { checkWarmMove, requireSnapshotMeta } from './check-warm-move';
 import { countMoveBytes } from './count-move-bytes';
 import { MOVE_PATHS, MoveCommitReplySchema } from './move-header';
 import { OfferRefusalError } from './offer-refusal-error';
-import { readPeerUrlAddress } from './peer-address';
+import { parsePeerUrlAddress } from './peer-address';
 import type { PeerRanges } from './peer-address';
 import { requireOk } from './require-ok';
 import { runMoveSend } from './run-move-send';
@@ -320,7 +320,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   };
 
   const requirePeer = (to: string): string => {
-    const address = readPeerUrlAddress(to);
+    const address = parsePeerUrlAddress(to);
 
     if (address === null || !deps.ranges.isAllowed(address)) {
       throw new ImpdError('BAD_REQUEST', {

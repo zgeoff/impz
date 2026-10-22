@@ -1,45 +1,20 @@
-import { BlockList, isIP } from 'node:net';
+import { isIP } from 'node:net';
+import { buildRangeMatcher } from '../../host-net/net/range-matcher';
 
-const TAILNET_V4 = { address: '100.64.0.0', prefix: 10 } as const;
-const TAILNET_V6 = { address: 'fd7a:115c:a1e0::', prefix: 48 } as const;
+const TAILNET_RANGES = ['100.64.0.0/10', 'fd7a:115c:a1e0::/48'];
 
 export interface PeerRanges {
   readonly isAllowed: (address: string) => boolean;
   readonly testCidr: string | null;
 }
 
-export function createPeerRanges(testCidr: string | null): PeerRanges {
-  const list = new BlockList();
+export function buildPeerRanges(testCidr: string | null): PeerRanges {
+  const ranges = testCidr === null ? TAILNET_RANGES : [...TAILNET_RANGES, testCidr];
 
-  list.addSubnet(TAILNET_V4.address, TAILNET_V4.prefix, 'ipv4');
-  list.addSubnet(TAILNET_V6.address, TAILNET_V6.prefix, 'ipv6');
-
-  if (testCidr !== null) {
-    const [address = '', prefix = ''] = testCidr.split('/');
-    const family = isIP(address) === 6 ? 'ipv6' : 'ipv4';
-
-    list.addSubnet(address, Number(prefix), family);
-  }
-
-  return {
-    isAllowed: (address) => {
-      // An IPv4 client on a dual-stack socket shows as ::ffff:a.b.c.d.
-      const plain = address.startsWith('::ffff:') ? address.slice(7) : address;
-      const family = isIP(plain);
-
-      if (family === 0) {
-        return false;
-      }
-
-      const kind = family === 6 ? 'ipv6' : 'ipv4';
-
-      return list.check(plain, kind);
-    },
-    testCidr,
-  };
+  return { isAllowed: buildRangeMatcher(ranges), testCidr };
 }
 
-export function readPeerUrlAddress(url: string): string | null {
+export function parsePeerUrlAddress(url: string): string | null {
   const host = new URL(url).hostname.replaceAll(/^\[|\]$/gu, '');
 
   // A host name is refused, because its DNS lookup could send the bytes off the

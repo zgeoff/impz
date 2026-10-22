@@ -5,7 +5,7 @@ import { createMoveReceiver } from './move-receiver';
 import type { MoveReceiver, MoveReceiverDeps } from './move-receiver';
 import { createMoveSender } from './move-sender';
 import type { MoveSender, MoveSenderDeps } from './move-sender';
-import { createPeerRanges } from './peer-address';
+import { buildPeerRanges } from './peer-address';
 import { readWarmHost } from './warm-facts';
 
 export type MoveService = MoveSender &
@@ -35,7 +35,7 @@ export interface MoveServiceDeps
 }
 
 export function createMoveService(deps: MoveServiceDeps): MoveService {
-  const ranges = createPeerRanges(deps.config.moves.testCidr);
+  const ranges = buildPeerRanges(deps.config.moves.testCidr);
 
   if (ranges.testCidr !== null) {
     deps.log(
