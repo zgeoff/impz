@@ -799,9 +799,13 @@ jobs:
           client-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           # what the steps below use it for: release-please, the push to the
-          # release branch and the auto-merge; the App holds no more
+          # release branch and the auto-merge; the App holds no more.
+          # Workflows lets release-please tag a release commit that main has
+          # since moved past with a change under .github/workflows/: GitHub
+          # refuses that release to an App token without it.
           permission-contents: write
           permission-pull-requests: write
+          permission-workflows: write
 
       - name: Run release-please
         id: release

@@ -60,10 +60,12 @@ These steps are done for `zgeoff/impz`. They are here for a new repository, or t
 
 1. **The release App.** Events from `GITHUB_TOKEN` start no workflows, so a release PR opened with
    it would get no CI run, and the `release-please` job is skipped until an App is configured.
-   Create a GitHub App, or reuse `zgeoff-release`, with no webhook and with Contents and Pull
-   requests read and write. Install it on the repository and on `zgeoff/homebrew-tap`. Add the
-   Actions variable `RELEASE_APP_ID` (the App's client ID) and the Actions secret
-   `RELEASE_APP_PRIVATE_KEY`, and turn on Settings → General → "Allow auto-merge".
+   Create a GitHub App, or reuse `zgeoff-release`, with no webhook and with Contents, Pull requests
+   and Workflows read and write. Workflows lets the App tag a release commit when `main` has moved
+   past it with a workflow change, because GitHub refuses that release to an App without it. Install
+   it on the repository and on `zgeoff/homebrew-tap`. Add the Actions variable `RELEASE_APP_ID` (the
+   App's client ID) and the Actions secret `RELEASE_APP_PRIVATE_KEY`, and turn on Settings → General
+   → "Allow auto-merge".
 2. **GHCR.** The first push creates the `imp-host` and `imp-base` packages as private. Make each one
    public in its package settings, so a server pulls it without a login, and link `imp-base` to the
    repository.
