@@ -15,19 +15,25 @@ import { openDatabase } from './open-database';
 import { updateImpState } from './update-imp-state';
 
 function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const directory = mkdtempSync(join(tmpdir(), 'imp-open-database-'));
 
-  onTestFinished(() => {
+  stack.defer(() => {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  return { directory };
+  return { directory, stack };
 }
 
 test('it closes the database file when the database is destroyed', async () => {
   const ctx = setupTest();
 
   const db = await openDatabase(join(ctx.directory, 'imp.sqlite'));
+
+  ctx.stack.defer(() => db.destroy());
 
   await createImage(db, buildMockNewImage());
 
