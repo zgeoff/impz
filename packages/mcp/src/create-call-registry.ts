@@ -42,6 +42,16 @@ export function createCallRegistry(): CallRegistry {
     if (arrival !== undefined) {
       arrival.cancelled = !arrival.cancellable;
 
+      // The SDK sends a cancelled call no answer, so a call it refuses before
+      // the call starts would keep its id.
+      if (arrival.cancellable) {
+        setImmediate(() => {
+          if (arriving.get(requestId) === arrival) {
+            arriving.delete(requestId);
+          }
+        });
+      }
+
       return arrival.cancelled;
     }
 

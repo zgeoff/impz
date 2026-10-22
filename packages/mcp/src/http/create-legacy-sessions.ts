@@ -1,5 +1,5 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
-import type { Server } from '@modelcontextprotocol/server';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { createCallRegistry } from '../create-call-registry';
 import type { CallRegistry } from '../create-call-registry';
 import type { McpCaller } from '../create-caller-auth';
@@ -11,8 +11,7 @@ export interface LegacySession {
 }
 
 interface SessionState extends LegacySession {
-  // oxlint-disable-next-line no-deprecated -- create-imp-server.ts says why it is the low-level Server
-  readonly server: Server;
+  readonly server: McpServer;
   readonly drain: () => Promise<void>;
   lastUsedAt: number;
   busy: number;
@@ -36,8 +35,10 @@ interface LegacySessionsOptions {
   // call's stream.
   readonly keepaliveMs: number;
 
-  // oxlint-disable-next-line no-deprecated -- create-imp-server.ts says why it is the low-level Server
-  readonly createServer: (owner: Readonly<SessionOwner>, calls: Readonly<CallRegistry>) => Server;
+  readonly createServer: (
+    owner: Readonly<SessionOwner>,
+    calls: Readonly<CallRegistry>,
+  ) => McpServer;
 }
 
 // The SDK's transport has no hook for a session limit, an idle sweep or the

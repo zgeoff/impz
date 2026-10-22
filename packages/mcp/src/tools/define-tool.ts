@@ -1,6 +1,12 @@
 import type { Scope } from '@impz/api';
 import { ExecError, ORPCError } from '@impz/client';
-import type { CallToolResult, Tool as ToolDefinition } from '@modelcontextprotocol/server';
+import type {
+  CallToolResult,
+  McpServer,
+  ServerContext,
+  StandardSchemaWithJSON,
+  Tool as ToolDefinition,
+} from '@modelcontextprotocol/server';
 import * as z from 'zod';
 import type { After } from '../after';
 import { GuardError } from '../imp-guard';
@@ -28,6 +34,11 @@ interface ToolAnnotations {
   readonly openWorldHint: boolean;
 }
 
+export type ToolCallRunner = (
+  ctx: ServerContext,
+  call: (context: Readonly<ToolContext>) => Promise<CallToolResult>,
+) => Promise<CallToolResult>;
+
 export interface Tool {
   readonly definition: ToolDefinition;
 
@@ -38,7 +49,7 @@ export interface Tool {
   // impd finishes some calls once started, so their result still goes out
   // after a cancel and the agent learns the name of what it made.
   readonly cancellable: boolean;
-  readonly call: (args: unknown, context: Readonly<ToolContext>) => Promise<CallToolResult>;
+  readonly register: (server: McpServer, runCall: ToolCallRunner) => void;
 }
 
 interface ToolOutput {
@@ -70,42 +81,48 @@ export function defineTool<Input extends z.ZodObject>(spec: Readonly<ToolSpec<In
 
   const cancellable = spec.cancellable ?? true;
 
+  const runTool = async (
+    input: z.output<Input>,
+    context: Readonly<ToolContext>,
+  ): Promise<CallToolResult> => {
+    try {
+      const output = await spec.run(input, context);
+
+      // Parsing the text back makes each date the same ISO string in the
+      // structured content as in the text.
+      const text = JSON.stringify(output.data, null, 2);
+      const data = JsonObjectSchema.parse(JSON.parse(text));
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: output.failed === undefined ? text : `${output.failed}\n${text}`,
+          },
+        ],
+        structuredContent: data,
+        isError: output.failed !== undefined,
+      };
+    } catch (error) {
+      if (cancellable && context.signal.aborted) {
+        throw error;
+      }
+
+      return buildErrorResult(formatErrorText(error));
+    }
+  };
+
+  // A bare type parameter leaves the SDK's callback type unresolved.
+  const inputSchema: StandardSchemaWithJSON<z.input<Input>, z.output<Input>> = spec.input;
+
   return {
     definition,
     scope: spec.scope,
     cancellable,
-    call: async (args, context) => {
-      const parsed = spec.input.safeParse(args ?? {});
-
-      if (!parsed.success) {
-        return buildErrorResult(`invalid arguments: ${z.prettifyError(parsed.error)}`);
-      }
-
-      try {
-        const output = await spec.run(parsed.data, context);
-
-        // Parsing the text back makes each date the same ISO string in the
-        // structured content as in the text.
-        const text = JSON.stringify(output.data, null, 2);
-        const data = JsonObjectSchema.parse(JSON.parse(text));
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: output.failed === undefined ? text : `${output.failed}\n${text}`,
-            },
-          ],
-          structuredContent: data,
-          isError: output.failed !== undefined,
-        };
-      } catch (error) {
-        if (cancellable && context.signal.aborted) {
-          throw error;
-        }
-
-        return buildErrorResult(formatErrorText(error));
-      }
+    register: (server, runCall) => {
+      server.registerTool(spec.name, { inputSchema }, (input, ctx) =>
+        runCall(ctx, (context) => runTool(input, context)),
+      );
     },
   };
 }

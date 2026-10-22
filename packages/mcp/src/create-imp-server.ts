@@ -1,6 +1,6 @@
 import { hasScope } from '@impz/api';
-import { ProtocolError, ProtocolErrorCode, Server } from '@modelcontextprotocol/server';
-import type { CallToolRequest, ServerContext } from '@modelcontextprotocol/server';
+import { McpServer, ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server';
+import type { ServerContext } from '@modelcontextprotocol/server';
 import { runAfter } from './after';
 import type { After } from './after';
 import type { CallRegistry } from './create-call-registry';
@@ -8,7 +8,7 @@ import { findCallerAuth } from './create-caller-auth';
 import type { McpCaller } from './create-caller-auth';
 import { runOnInterval } from './repeat';
 import type { Repeat } from './repeat';
-import type { Tool } from './tools/define-tool';
+import type { Tool, ToolCallRunner } from './tools/define-tool';
 import { TOOLS } from './tools/tool-list';
 
 // Newest first: the SDK answers a client that asks for another version with
@@ -29,24 +29,18 @@ export interface ImpServerOptions {
   readonly printError?: (message: string, error: unknown) => void;
 }
 
-// oxlint-disable-next-line no-deprecated -- the low-level Server lets tools/list filter by caller and a fallback answer unknown methods
-type ImpServer = Server;
-
 export function createImpServer(
   options: Readonly<ImpServerOptions>,
   caller: Readonly<McpCaller>,
   calls: Readonly<CallRegistry>,
-): ImpServer {
-  const tools = new Map<string, Tool>(TOOLS.map((tool) => [tool.definition.name, tool]));
-
+): McpServer {
   const progressIntervalMs = options.progressIntervalMs ?? PROGRESS_INTERVAL_MS;
   const killGraceMs = options.killGraceMs ?? KILL_GRACE_MS;
   const repeat = options.repeat ?? runOnInterval;
   const after = options.after ?? runAfter;
   const printError = options.printError ?? console.error;
 
-  // oxlint-disable-next-line no-deprecated -- the ImpServer type above says why
-  const server = new Server(
+  const server = new McpServer(
     { name: 'imp', title: 'imp', version: options.version },
     {
       capabilities: { tools: { listChanged: false } },
@@ -60,12 +54,13 @@ export function createImpServer(
   );
 
   // The SDK's own answer to an unknown method does not name the method.
-  server.fallbackRequestHandler = (request) =>
+  server.server.fallbackRequestHandler = (request) =>
     Promise.reject(
       new ProtocolError(ProtocolErrorCode.MethodNotFound, `unknown method: ${request.method}`),
     );
 
-  server.setRequestHandler('tools/list', (_request, ctx) => {
+  // The SDK lists every registered tool to every caller.
+  server.server.setRequestHandler('tools/list', (_request, ctx) => {
     const scope = (findCallerAuth(ctx.http?.authInfo)?.caller ?? caller).scope;
 
     return {
@@ -73,71 +68,68 @@ export function createImpServer(
     };
   });
 
-  const runToolCall = async (request: CallToolRequest, ctx: ServerContext) => {
-    const id = ctx.mcpReq.id;
-    const tool = tools.get(request.params.name);
+  const makeCallRunner =
+    (tool: Readonly<Tool>): ToolCallRunner =>
+    async (ctx, call) => {
+      const id = ctx.mcpReq.id;
+      const auth = findCallerAuth(ctx.http?.authInfo);
+      const requestCaller = auth?.caller ?? caller;
 
-    if (tool === undefined) {
-      throw new ProtocolError(
-        ProtocolErrorCode.InvalidParams,
-        `unknown tool: ${request.params.name}`,
-      );
-    }
+      auth?.onCallStart();
 
-    const requestCaller = findCallerAuth(ctx.http?.authInfo)?.caller ?? caller;
+      // The SDK drops a cancelled request's answer, so a call that cannot be
+      // cancelled gets its own controller, which only the gate aborts.
+      const abort = new AbortController();
 
-    // The SDK drops a cancelled request's answer, so a call that cannot be
-    // cancelled gets its own controller, which only the gate aborts.
-    const abort = new AbortController();
+      const done = Promise.withResolvers<void>();
 
-    const done = Promise.withResolvers<void>();
+      const stopCall = (): void => {
+        abort.abort(ctx.mcpReq.signal.reason);
+      };
 
-    const stopCall = (): void => {
-      abort.abort(ctx.mcpReq.signal.reason);
-    };
-
-    ctx.mcpReq.signal.addEventListener('abort', stopCall, { once: true });
-    calls.add(id, { abort, cancellable: tool.cancellable, done: done.promise });
-
-    const stopProgress = startProgress(ctx, {
-      intervalMs: progressIntervalMs,
-      repeat,
-      signal: abort.signal,
-    });
-
-    try {
-      return await tool.call(request.params.arguments, {
-        client: requestCaller.client,
-        guard: requestCaller.guard,
-        signal: abort.signal,
-        killGraceMs,
-        after,
-      });
-    } catch (error) {
-      // The SDK drops a cancelled call's answer.
-      if (!abort.signal.aborted || !tool.cancellable) {
-        printError('impz mcp: request failed:', error);
+      // The SDK checks the arguments before this runs, and a cancel can land
+      // during that check.
+      if (ctx.mcpReq.signal.aborted) {
+        stopCall();
       }
 
-      throw new ProtocolError(ProtocolErrorCode.InternalError, 'internal error');
-    } finally {
-      stopProgress();
+      ctx.mcpReq.signal.addEventListener('abort', stopCall, { once: true });
+      calls.add(id, { abort, cancellable: tool.cancellable, done: done.promise });
 
-      ctx.mcpReq.signal.removeEventListener('abort', stopCall);
-      calls.remove(id);
-      done.resolve();
-    }
-  };
+      const stopProgress = startProgress(ctx, {
+        intervalMs: progressIntervalMs,
+        repeat,
+        signal: abort.signal,
+      });
 
-  server.setRequestHandler('tools/call', async (request, ctx) => {
-    findCallerAuth(ctx.http?.authInfo)?.onCallStart();
+      try {
+        return await call({
+          client: requestCaller.client,
+          guard: requestCaller.guard,
+          signal: abort.signal,
+          killGraceMs,
+          after,
+        });
+      } catch (error) {
+        // The SDK drops a cancelled call's answer.
+        if (!abort.signal.aborted || !tool.cancellable) {
+          printError('impz mcp: request failed:', error);
+        }
 
-    try {
-      return await runToolCall(request, ctx);
-    } finally {
-      findCallerAuth(ctx.http?.authInfo)?.onCallEnd();
-    }
-  });
+        return { content: [{ type: 'text', text: 'internal error' }], isError: true };
+      } finally {
+        stopProgress();
+
+        ctx.mcpReq.signal.removeEventListener('abort', stopCall);
+        calls.remove(id);
+        done.resolve();
+        auth?.onCallEnd();
+      }
+    };
+
+  for (const tool of TOOLS) {
+    tool.register(server, makeCallRunner(tool));
+  }
 
   return server;
 }

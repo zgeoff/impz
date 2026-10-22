@@ -220,6 +220,38 @@ test('it lists every tool to a manage caller', async () => {
   ]);
 });
 
+test('it lists only the read tools to a read caller on a server a manage caller opened', async () => {
+  const ctx = await setupTest();
+
+  const server = createMcpServer({ version: '1.2.3' });
+
+  await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }), {
+    reply: ctx.reply,
+    client: ctx.client,
+    guard: buildImpGuard({ all: true }),
+    scope: 'manage',
+  });
+
+  await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }), {
+    reply: ctx.reply,
+    client: ctx.client,
+    guard: buildImpGuard({ all: true }),
+    scope: 'read',
+  });
+
+  const Tool = z.object({ name: z.string() });
+
+  const tools = z.object({ result: z.object({ tools: z.array(Tool) }) }).parse(ctx.sent[1])
+    .result.tools;
+
+  expect(tools.map((tool) => tool.name)).toStrictEqual([
+    'imp_list',
+    'imp_url',
+    'imp_image_list',
+    'imp_checkpoint_list',
+  ]);
+});
+
 test('it marks the destructive tools with a destructive hint', async () => {
   const ctx = await setupTest();
 
@@ -352,7 +384,7 @@ test('it answers a call of an unknown tool with an invalid-params error', async 
     {
       jsonrpc: '2.0',
       id: 1,
-      error: { code: INVALID_PARAMS, message: 'unknown tool: imp_teleport' },
+      error: { code: INVALID_PARAMS, message: 'Tool imp_teleport not found' },
     },
   ]);
 });
@@ -512,6 +544,63 @@ test('it cancels the first call after refusing a second with its id', async () =
       jsonrpc: '2.0',
       id: 7,
       error: { code: INVALID_PARAMS, message: 'request 7 is already running' },
+    },
+  ]);
+});
+
+test('it runs a call that reuses the id of a call cancelled while its arguments were refused', async () => {
+  const ctx = await setupTest();
+
+  const server = createMcpServer({ version: '1.2.3' });
+
+  const context = {
+    reply: ctx.reply,
+    client: ctx.client,
+    guard: buildImpGuard({ all: true }),
+    scope: 'manage',
+  } as const;
+
+  await server.receive('{"jsonrpc":"2.0","id":0,"method":"ping"}', {
+    ...context,
+    reply: () => {},
+  });
+
+  // The SDK sends a cancelled call no answer, and a refused call never
+  // starts, so nothing resolves this receive.
+  void server.receive(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'imp_list', arguments: { outer: true } },
+    }),
+    context,
+  );
+
+  await server.receive(
+    JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 7 } }),
+    context,
+  );
+
+  await server.receive(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'imp_list', arguments: {} },
+    }),
+    context,
+  );
+
+  expect(ctx.sent).toStrictEqual([
+    {
+      jsonrpc: '2.0',
+      id: 7,
+      result: {
+        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        structuredContent: { imps: [] },
+        isError: false,
+      },
     },
   ]);
 });

@@ -392,7 +392,7 @@ test('it refuses an unknown requirement before anything runs', async () => {
         content: [
           {
             type: 'text',
-            text: expect.stringMatching(/^invalid arguments: .*require/su) as unknown,
+            text: 'Input validation error: Invalid arguments for tool imp_exec: require.0: Invalid input: expected "broker"',
           },
         ],
         isError: true,
@@ -513,7 +513,10 @@ test('it refuses an outer exec in the agent, and nothing runs', async () => {
       id: 1,
       result: {
         content: [
-          { type: 'text', text: expect.stringMatching(/^invalid arguments: .*outer/su) as unknown },
+          {
+            type: 'text',
+            text: 'Input validation error: Invalid arguments for tool imp_exec: Unrecognized key: "outer"',
+          },
         ],
         isError: true,
       },
@@ -859,6 +862,62 @@ test('it stops a cancelled exec and sends no response', async () => {
 
   expect(ctx.sent).toStrictEqual([]);
   expect(guest.signals).toStrictEqual(['stubborn:15', 'stubborn:9']);
+});
+
+test('it never starts an exec whose cancel arrives while its arguments are checked', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const guest = buildStubExecGuest();
+
+  await ctx.rootClient.imps.create({ name: 'dev' });
+
+  const record = await readImpByName(ctx.db, 'dev');
+
+  invariant(record);
+
+  const agent = await startStubExecAgent(buildImpPaths(ctx.dataDir, record.id).vsockSocket, guest);
+
+  ctx.stack.defer(() => {
+    agent.close();
+  });
+
+  const context = {
+    reply: ctx.reply,
+    client: createImpClient({ url: ctx.url, token: 'root-token' }),
+    guard: buildImpGuard({ all: true }),
+    scope: 'manage' as const,
+  };
+
+  await ctx.mcp.receive('{"jsonrpc":"2.0","id":0,"method":"ping"}', {
+    ...context,
+    reply: () => {},
+  });
+
+  const call = ctx.mcp.receive(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'imp_exec', arguments: { name: 'dev', command: 'echo hi' } },
+    }),
+    context,
+  );
+
+  const cancelled = ctx.mcp.receive(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'notifications/cancelled',
+      params: { requestId: 7, reason: 'user' },
+    }),
+    context,
+  );
+
+  await Promise.all([call, cancelled]);
+
+  expect(ctx.sent).toStrictEqual([]);
+  expect(guest.requests).toStrictEqual([]);
 });
 
 test('it stops every call in flight on close, as when the client goes away', async () => {
