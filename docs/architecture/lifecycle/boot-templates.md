@@ -28,9 +28,11 @@ time, because they share one tap.
    only, so it never sleeps an imp ([the RAM governor](./ram-governor.md#admission)).
 2. impd boots a VM with nothing on its command line that names an imp, and a small placeholder disk
    at a path every template shares, since a snapshot records its drive's path.
-3. The agent mounts its own filesystems, makes the inner container's cgroup, and parks. A parked
-   agent answers only `ping` and `claim`, and opens no network socket, so the kernel has made no TCP
-   secrets yet.
+3. The agent mounts its own filesystems, makes the inner container's cgroup, reads its own binary
+   through, and parks. The read leaves the binary's pages in the guest's page cache, so a restored
+   guest runs the code it never ran before the snapshot without decompressing it from the system
+   drive again. A parked agent answers only `ping` and `claim`, and opens no network socket, so the
+   kernel has made no TCP secrets yet.
 4. impd waits until the guest is old enough for a fast wake
    ([young guests](./sleep-and-wake.md#young-guests)), pauses it, and writes the snapshot into a new
    directory, which it renames into place.

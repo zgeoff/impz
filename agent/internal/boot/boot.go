@@ -5,6 +5,7 @@ package boot
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -62,6 +63,18 @@ func setupAgentWorld() error {
 		return err
 	}
 	return nil
+}
+
+// cacheFile reads the file at path through once, which leaves its pages in
+// the page cache.
+func cacheFile(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(io.Discard, f)
+	return err
 }
 
 // growUserDisk grows the mounted user disk to its device: the host may have
