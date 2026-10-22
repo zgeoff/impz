@@ -45,9 +45,6 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, { rootToken });
 
-  // impd checks the agent's version before each dial and listen
-  harness.fake.agent.version = '0.18.0';
-
   const server = harness.impd.app.server;
 
   invariant(server);
@@ -60,6 +57,7 @@ async function setupTest() {
     dataDir: harness.dataDir,
     db: harness.db,
     impd: harness.impd,
+    fake: harness.fake,
     server,
     url,
     client: createImpClient({ url, token: rootToken }),
@@ -68,6 +66,8 @@ async function setupTest() {
 
 test('#startProxy relays a half-closed request and its reply on both loopbacks', async () => {
   const ctx = await setupTest();
+
+  ctx.fake.agent.version = '0.18.0';
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
@@ -120,6 +120,8 @@ test('#startProxy relays a half-closed request and its reply on both loopbacks',
 
 test('#startProxy stops reading an upload at the window while the guest takes none of it', async () => {
   const ctx = await setupTest();
+
+  ctx.fake.agent.version = '0.18.0';
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
@@ -179,6 +181,8 @@ test('#startProxy stops reading an upload at the window while the guest takes no
 
 test('#startProxy sends the rest of an upload once the guest takes it again', async () => {
   const ctx = await setupTest();
+
+  ctx.fake.agent.version = '0.18.0';
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
@@ -357,6 +361,8 @@ test('#startProxy rejects an imp that impd does not have, and frees its local po
 test('#startProxy reports impd’s refusal of a dial and resets the local connection', async () => {
   const ctx = await setupTest();
 
+  ctx.fake.agent.version = '0.18.0';
+
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
@@ -407,6 +413,8 @@ test('#startProxy reports impd’s refusal of a dial and resets the local connec
 
 test('#startProxy ends only the tunnel that gets a message that is not JSON, and closes its local connection', async () => {
   const ctx = await setupTest();
+
+  ctx.fake.agent.version = '0.18.0';
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
@@ -492,6 +500,8 @@ test('#startProxy ends only the tunnel that gets a message that is not JSON, and
 
 test('#startProxy says impd restarted when impd closes an open tunnel to restart', async () => {
   const ctx = await setupTest();
+
+  ctx.fake.agent.version = '0.18.0';
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 

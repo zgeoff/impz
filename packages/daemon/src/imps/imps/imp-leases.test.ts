@@ -20,7 +20,7 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, {
     env: readImpEnv(),
-    frozenClockMs: Date.now(),
+    frozenClockMs: Date.UTC(2026, 0, 1),
     wrapDatabase: leaseReads.wrap,
   });
 
@@ -44,6 +44,8 @@ async function setupTest() {
 
 test('it answers an acquire with the lease’s owner and end', async () => {
   const ctx = await setupTest();
+
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
 
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
@@ -164,6 +166,8 @@ test('it names a token’s own leases on the imp and counts the others', async (
 test('it names every lease on the imp to root and holds it until the longest ends', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
+
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
@@ -238,6 +242,8 @@ test('it answers a release of a lease already released with released false', asy
 test('it moves the end of a live lease on a renew', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
+
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 30 });
@@ -263,6 +269,8 @@ test('it never shortens a lease on a renew with a shorter ttl', async () => {
 
 test('it refuses a renew of an ended lease and wakes nothing', async () => {
   const ctx = await setupTest();
+
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
 
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
@@ -417,6 +425,8 @@ test('it refuses root’s sleep of a leased imp with LEASED and keeps it running
 test('it ends every lease on a forced sleep and keeps the holds', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
+
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
@@ -509,6 +519,8 @@ test('it sleeps a held imp on a sleep without force', async () => {
 test('it stops a held imp and keeps the hold', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
+
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.hold({ name: 'dev', seconds: 600 });
@@ -521,6 +533,8 @@ test('it stops a held imp and keeps the hold', async () => {
 
 test('it releases the caller’s hold and a legacy one on hold 0, and keeps the others', async () => {
   const ctx = await setupTest();
+
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
 
   await ctx.createTestImage('ubuntu');
 
@@ -688,6 +702,8 @@ test('it refuses a limited caller the leases of an imp it may not reach', async 
 test('it sleeps a leased imp in the shutdown pass and keeps its lease', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
+
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
@@ -780,6 +796,8 @@ test('it emits the governor’s refusal with every protected imp counted', async
 test('it holds the imp until the longest of its leases ends', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
+
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.leases.acquire({ name: 'dev', label: 'short', ttlSeconds: 60 });
@@ -792,6 +810,8 @@ test('it holds the imp until the longest of its leases ends', async () => {
 
 test('it moves the imp’s hold out when a renew makes a lease the longest', async () => {
   const ctx = await setupTest();
+
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
 
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
@@ -807,6 +827,8 @@ test('it moves the imp’s hold out when a renew makes a lease the longest', asy
 test('it moves the imp’s hold in when the longest lease is released', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
+
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.leases.acquire({ name: 'dev', label: 'short', ttlSeconds: 900 });
@@ -821,6 +843,8 @@ test('it moves the imp’s hold in when the longest lease is released', async ()
 test('it keeps the imp held by its leases when the caller’s hold is released', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
+
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.leases.acquire({ name: 'dev', label: 'long', ttlSeconds: 600 });
@@ -834,6 +858,8 @@ test('it keeps the imp held by its leases when the caller’s hold is released',
 
 test('it holds the imp by root’s hold alone after a forced sleep ends its leases', async () => {
   const ctx = await setupTest();
+
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
 
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
@@ -857,6 +883,8 @@ test('it holds the imp by root’s hold alone after a forced sleep ends its leas
 
 test('it keeps the leases and emits no release when a forced sleep fails', async () => {
   const ctx = await setupTest();
+
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
 
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
@@ -900,6 +928,8 @@ test('it answers a sleep of a leased imp the shutdown pass slept', async () => {
 
 test('it answers a stop of a stopped imp another owner leases and keeps the lease', async () => {
   const ctx = await setupTest();
+
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
 
   await ctx.createTestImage('ubuntu');
 

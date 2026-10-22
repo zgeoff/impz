@@ -25,8 +25,6 @@ async function setupTest() {
 
   const impd = harness.impd;
 
-  harness.fake.agent.version = '0.18.0';
-
   server.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
 
   const url = harness.url;
@@ -37,6 +35,7 @@ async function setupTest() {
     stack,
     dataDir: harness.dataDir,
     createTestImage: harness.createTestImage,
+    fake: harness.fake,
     impd,
     url,
     client,
