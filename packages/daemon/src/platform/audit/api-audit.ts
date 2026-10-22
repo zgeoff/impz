@@ -1,7 +1,6 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 moves the caller into platform
-import type { AuditActor } from '../../identity/auth/caller';
 import { writeApiCall } from '../db/api-audit';
 import type { ImpDatabase } from '../db/open-database';
+import type { AuditActor } from '../principal/caller';
 import { getErrorMessage } from '../process/get-error-message';
 
 const IMP_NAMESPACES: ReadonlySet<string> = new Set([

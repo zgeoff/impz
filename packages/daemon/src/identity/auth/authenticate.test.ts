@@ -2,10 +2,10 @@ import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { buildStubTailscale } from '../../../testing/network/build-stub-tailscale';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
+import { buildSessionValue } from '../../platform/http/session-cookie';
 import { generateEd25519Key } from '../../surface/ssh/host-key';
 import { createKnownHosts } from './ambient-request';
 import { resolveCaller } from './authenticate';
-import { buildSessionValue } from './session-cookie';
 import { createTailnetIdentities, runWhois } from './tailnet-identity';
 import { ROOT_TOKEN_ID, loadTokenStore } from './token-store';
 

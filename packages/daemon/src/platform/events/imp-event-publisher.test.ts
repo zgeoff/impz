@@ -9,11 +9,11 @@ import { readInBackground } from '../../../testing/platform/read-in-background';
 import { readQueuedText } from '../../../testing/platform/read-queued-text';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildMockGovernorDecision } from '../../../testing/vm/build-mock-governor-decision';
-import { buildSessionValue } from '../../identity/auth/session-cookie';
 import { ROOT_TOKEN_ID } from '../../identity/auth/token-store';
 import { listApiCalls } from '../db/api-audit';
 import type { ImpWrite } from '../db/imp-write-feed';
 import { readImpByName } from '../db/imps';
+import { buildSessionValue } from '../http/session-cookie';
 
 function setupTest() {
   const stack = new AsyncDisposableStack();

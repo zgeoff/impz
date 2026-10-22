@@ -3,6 +3,7 @@ import { callerContract } from '@impz/api';
 import type { Scope } from '@impz/api';
 import { traverseContractProcedures } from '@orpc/server';
 import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
+import type { Caller } from '../../platform/principal/caller';
 import {
   PROCEDURE_ACCESS,
   checkAccess,
@@ -14,7 +15,6 @@ import {
   isRefusalAudited,
 } from './access-policy';
 import type { Refusal } from './access-policy';
-import type { Caller } from './caller';
 
 test('#PROCEDURE_ACCESS has a rule for every procedure a caller reaches, and no stale rule', () => {
   const paths: string[] = [];

@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
-import { readSession, readSessionCookies } from '../../identity/auth/session-cookie';
 import { loadTokenStore } from '../../identity/auth/token-store';
+import { readSession, readSessionCookies } from '../../platform/http/session-cookie';
 import { createSessionHandler } from './session-handler';
 
 async function setupTest() {

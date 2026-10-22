@@ -2,8 +2,6 @@ import { EVENT_VERSION, hasScope, isImpAllowed } from '@impz/api';
 import type { Imp, ImpEvent } from '@impz/api';
 import type { TailscaleStatus } from '../host-net/net/tailscale-status';
 import { findForkAuthority } from '../identity/auth/access-policy';
-import { formatCaller, isCallerAllowed } from '../identity/auth/caller';
-import type { Caller } from '../identity/auth/caller';
 import {
   isLeaseVisible,
   requireLeaseHolder,
@@ -33,6 +31,8 @@ import type { ImpDatabase } from '../platform/db/open-database';
 import { buildForbiddenError } from '../platform/errors/impd-errors';
 import { createEventCheck } from '../platform/events/event-check';
 import { openEventStream } from '../platform/events/event-stream';
+import { formatCaller, isCallerAllowed } from '../platform/principal/caller';
+import type { Caller } from '../platform/principal/caller';
 import { mergeSignals } from '../platform/process/merge-signals';
 import type { RamGovernor } from '../vm/governor/ram-governor';
 import type { DiskBudget } from '../vm/storage/disk-budget';

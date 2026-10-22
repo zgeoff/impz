@@ -7,8 +7,8 @@ import {
   buildForbiddenError,
   buildNotFoundError,
 } from '../../platform/errors/impd-errors';
+import type { Caller } from '../../platform/principal/caller';
 import { createTokenBuckets } from '../../platform/process/token-buckets';
-import type { Caller } from '../auth/caller';
 import { ROOT_TOKEN_ID } from '../auth/token-store';
 import { isGrantPattern, isPatternsWithin } from './grant-limits';
 

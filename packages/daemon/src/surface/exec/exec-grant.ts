@@ -1,9 +1,9 @@
 import { hasScope } from '@impz/api';
-import { formatCaller, isCallerAllowed } from '../../identity/auth/caller';
-import type { Caller } from '../../identity/auth/caller';
 import { toCallerError } from '../../identity/auth/caller-view';
 import type { ExecBackend } from '../../imps/exec/exec-session';
 import { buildForbiddenError } from '../../platform/errors/impd-errors';
+import { formatCaller, isCallerAllowed } from '../../platform/principal/caller';
+import type { Caller } from '../../platform/principal/caller';
 
 // Each start checks the scope, so a client reads FORBIDDEN on the socket
 // instead of a refused upgrade it cannot read.

@@ -4,9 +4,9 @@ import type { LeaseRecord } from '../../platform/db/leases';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { buildForbiddenError } from '../../platform/errors/impd-errors';
 import { LeasedError } from '../../platform/errors/leased-error';
+import { formatCaller, isCallerAllowed } from '../../platform/principal/caller';
+import type { Caller } from '../../platform/principal/caller';
 import { RamBudgetError } from '../../vm/governor/ram-budget-error';
-import { formatCaller, isCallerAllowed } from './caller';
-import type { Caller } from './caller';
 
 function canSeeEveryOwner(caller: Readonly<Caller>): boolean {
   return caller.imps === null && hasScope(caller.scope, 'manage');

@@ -1,8 +1,8 @@
 import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
+import { readSession, readSessionCookies } from '../../platform/http/session-cookie';
+import type { Caller } from '../../platform/principal/caller';
 import { isAllowedAmbientRequest } from './ambient-request';
 import type { KnownHosts } from './ambient-request';
-import type { Caller } from './caller';
-import { readSession, readSessionCookies } from './session-cookie';
 import type { TailnetIdentities } from './tailnet-identity';
 import { findBearer } from './token-store';
 import type { TokenStore } from './token-store';

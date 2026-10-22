@@ -4,16 +4,16 @@ import { RPCHandler } from '@orpc/server/fetch';
 import { setCookie } from '@orpc/server/helpers';
 import { ResponseHeadersPlugin, StrictGetMethodPlugin } from '@orpc/server/plugins';
 import invariant from 'tiny-invariant';
+import type { TokenStore } from '../../identity/auth/token-store';
+import { buildForbiddenError } from '../../platform/errors/impd-errors';
+import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
 import {
   SESSION_MAX_AGE_S,
   buildClearedSessionCookies,
   buildSessionCookie,
   buildSessionValue,
-} from '../../identity/auth/session-cookie';
-import type { SessionCookie } from '../../identity/auth/session-cookie';
-import type { TokenStore } from '../../identity/auth/token-store';
-import { buildForbiddenError } from '../../platform/errors/impd-errors';
-import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
+} from '../../platform/http/session-cookie';
+import type { SessionCookie } from '../../platform/http/session-cookie';
 import { toORPCError } from '../to-orpc-error';
 
 export interface SessionHandlerDeps {

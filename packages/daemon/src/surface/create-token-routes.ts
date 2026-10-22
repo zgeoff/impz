@@ -1,4 +1,4 @@
-import { toIdentity } from '../identity/auth/caller';
+import { toIdentity } from '../platform/principal/caller';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 

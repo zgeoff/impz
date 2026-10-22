@@ -1,7 +1,7 @@
 import { SecretNameSchema } from '@impz/api';
+import { formatCaller } from '../../platform/principal/caller';
+import type { Caller } from '../../platform/principal/caller';
 import type { ReadSecretGeneration, Refusal } from './access-policy';
-import { formatCaller } from './caller';
-import type { Caller } from './caller';
 
 export async function checkGrantable(
   caller: Readonly<Caller>,

@@ -2,8 +2,6 @@ import { createServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { Server } from 'ssh2';
 import type { AuthContext, ClientInfo, Connection } from 'ssh2';
-import { isCallerAllowed } from '../../identity/auth/caller';
-import type { Caller } from '../../identity/auth/caller';
 import { createAgentForwarding } from '../../imps/ssh/agent-forwarding';
 import { formatFailure } from '../../imps/ssh/channel-io';
 import {
@@ -16,6 +14,8 @@ import type { RemoteForwardRequest } from '../../imps/ssh/remote-forwarding';
 import { handleSession } from '../../imps/ssh/session-channel';
 import type { SshBackend, SshConnectionContext } from '../../imps/ssh/ssh-connection-context';
 import type { ImpRecord } from '../../platform/db/imps';
+import { isCallerAllowed } from '../../platform/principal/caller';
+import type { Caller } from '../../platform/principal/caller';
 import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { LoginKeys } from './login-keys';

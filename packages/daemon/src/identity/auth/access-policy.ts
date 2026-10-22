@@ -2,8 +2,8 @@ import { hasScope, isImpAllowed } from '@impz/api';
 import type { CallerContract, ForbiddenReason, Scope } from '@impz/api';
 import type { ForkAuthority } from '../../platform/db/create-fork-grants';
 import type { GrantAuthority } from '../../platform/db/secrets';
-import { formatCaller } from './caller';
-import type { Caller } from './caller';
+import { formatCaller } from '../../platform/principal/caller';
+import type { Caller } from '../../platform/principal/caller';
 import { checkGrantable } from './check-grantable';
 import { checkImageAdd } from './check-image-add';
 

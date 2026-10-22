@@ -1,10 +1,10 @@
 import { ImpPatternSchema, ScopeSchema } from '@impz/api';
 import * as z from 'zod';
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
+import type { Caller } from '../../platform/principal/caller';
 import { runCommand } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';
 import { createTtlCache } from '../../platform/process/ttl-cache';
-import type { Caller } from './caller';
 
 const TailnetRuleSchema = z
   .object({

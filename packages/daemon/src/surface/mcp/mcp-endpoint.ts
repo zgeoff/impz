@@ -3,8 +3,8 @@ import type { ExecSocket } from '@impz/client';
 import { createHttpTransport, createPatternGuard } from '@impz/mcp';
 import type { HttpTransport } from '@impz/mcp';
 import packageJson from '../../../package.json' with { type: 'json' };
-import type { Caller } from '../../identity/auth/caller';
 import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
+import type { Caller } from '../../platform/principal/caller';
 
 const IN_PROCESS_URL = 'http://impd.internal';
 

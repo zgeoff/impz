@@ -8,12 +8,12 @@ import {
   isRefusalAudited,
 } from '../identity/auth/access-policy';
 import { readChangedImps } from '../identity/auth/builder-calls';
-import type { Caller } from '../identity/auth/caller';
 import { toCallerError } from '../identity/auth/caller-view';
 import { findImpName } from '../platform/audit/api-audit';
 import { readImpByName } from '../platform/db/imps';
 import { readSecret } from '../platform/db/secrets';
 import { buildBuilderError, buildForbiddenError } from '../platform/errors/impd-errors';
+import type { Caller } from '../platform/principal/caller';
 import type { RouterDeps } from './create-router';
 import { toORPCError } from './to-orpc-error';
 

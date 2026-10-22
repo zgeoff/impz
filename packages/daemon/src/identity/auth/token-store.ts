@@ -17,11 +17,11 @@ import {
 import type { GrantableSecret, TokenRecord, TokenSshKeyRecord } from '../../platform/db/tokens';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
+import type { Caller } from '../../platform/principal/caller';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { isSameDigest } from '../../platform/secrets/is-same-digest';
 import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
 import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
-import type { Caller } from './caller';
 
 // A made token's id is 16 characters, so this one never clashes with it.
 export const ROOT_TOKEN_ID = 'root';
