@@ -67,7 +67,7 @@ const TUNING_VARIABLES = [
 
 export type TailscaleArg = 'off' | 'key' | 'none';
 
-export interface HostRunOptions {
+interface HostRunOptions {
   readonly layout: DevLayout;
   readonly checkout: DevCheckout;
   readonly env: DevEnv;

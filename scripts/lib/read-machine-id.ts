@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { DevEnv } from './build-dev-layout.ts';
 
-export interface MachineID {
+interface MachineID {
   readonly file: string;
   readonly id: string;
 }

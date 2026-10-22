@@ -1,6 +1,6 @@
 import type { DevEnv } from './build-dev-layout.ts';
 
-export type OpRef =
+type OpRef =
   | { readonly kind: 'ref'; readonly ref: string }
   | { readonly kind: 'missing'; readonly message: string };
 
