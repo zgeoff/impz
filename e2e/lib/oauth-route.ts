@@ -100,7 +100,7 @@ export async function sendMcp(options: SendMcpOptions): Promise<McpAnswer> {
       jsonrpc: '2.0',
       id: 1,
       method: options.method,
-      params: options.params ?? {},
+      params: options.params === undefined ? {} : options.params,
     }),
   });
 
