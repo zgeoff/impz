@@ -27,7 +27,7 @@ async function setupTest(options: Pick<TestImpdOptions, 'cgroups'> = {}) {
   onTestFinished(() => stack.disposeAsync());
 
   const cgroups = buildStubCpuCgroups();
-  const clock = buildStubClock({ startMs: Date.now() });
+  const clock = buildStubClock({ startMs: Date.UTC(2026, 0, 1) });
 
   const harness = await startTestImpd(stack, {
     env: readImpEnv(),

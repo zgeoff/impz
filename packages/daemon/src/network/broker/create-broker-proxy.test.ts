@@ -92,7 +92,7 @@ async function setupTest() {
 
   const tunnelPorts = new Map([[443, realHost.port]]);
 
-  const clock = { nowMs: Date.now() };
+  const clock = { nowMs: Date.UTC(2026, 0, 1) };
   const log = mock<(message: string) => void>(() => {});
 
   const harness = await startTestImpd(stack, {

@@ -22,7 +22,7 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, {
     rootToken,
-    frozenClockMs: Date.now(),
+    frozenClockMs: Date.UTC(2026, 0, 1),
     env: {
       IMP_MCP_PUBLIC_URL: 'http://127.0.0.1:7171',
       IMP_MCP_PUBLIC_PORT: String(publicPort),
@@ -46,8 +46,7 @@ async function setupTest() {
 
   return {
     rootToken,
-    now: harness.now,
-    advance: harness.advance,
+    setClock: harness.setClock,
     calls,
     handleRoute: async (request: Request) => {
       const answered = await impd.oauth.handle(request);
@@ -87,6 +86,8 @@ test('it refuses without a terminal or --yes before it calls impd', () => {
 test('it shows the sign-in and approves nothing when the answer at a terminal is no', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 0, 1));
+
   const root = ctx.connect(ctx.rootToken);
 
   const added = await root.oauth.clients.add({
@@ -95,8 +96,6 @@ test('it shows the sign-in and approves nothing when the answer at a terminal is
   });
 
   const made = await root.tokens.create({ name: 'approver', scope: 'manage' });
-
-  ctx.advance(Date.UTC(2026, 0, 1) - ctx.now());
 
   const started = await createPendingSignIn({
     respond: ctx.handleRoute,

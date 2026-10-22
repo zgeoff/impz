@@ -25,15 +25,12 @@ async function setupTest() {
   onTestFinished(() => stack.disposeAsync());
 
   const tailscale = buildStubTailscaleServe();
-
-  const tailscaleStatus: { current: TailscaleStatus } = {
-    current: { state: null, hostname: null, dnsName: null, ip: null, ips: [] },
-  };
+  const tailscaleStatus = Promise.withResolvers<TailscaleStatus>();
 
   const harness = await startTestImpd(stack, {
     env: readImpEnv(),
     boundaries: {
-      readTailscale: () => Promise.resolve(tailscaleStatus.current),
+      readTailscale: () => tailscaleStatus.promise,
 
       runCommand: tailscale.run,
     },
@@ -657,13 +654,13 @@ test('it shows an imp’s service URL once its name is live', async () => {
 
   await ctx.createTestImage('base');
 
-  ctx.tailscaleStatus.current = {
+  ctx.tailscaleStatus.resolve({
     state: 'Running',
     hostname: 'imp-host',
     dnsName: 'imp-host.tail1234.ts.net',
     ip: null,
     ips: [],
-  };
+  });
 
   const oauthFile = ctx.config.tailnetNames?.oauthFile;
 
@@ -693,6 +690,8 @@ test('it shows no service URL before the name is live', async () => {
   updateEnv('IMP_TAILSCALE_NODE', '1');
 
   const ctx = await setupTest();
+
+  ctx.tailscaleStatus.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] });
 
   await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });

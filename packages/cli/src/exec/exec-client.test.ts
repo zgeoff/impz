@@ -47,10 +47,6 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, { rootToken });
 
-  // impd checks the agent's version before it runs sessions, tools and outer
-  // execs
-  harness.fake.agent.version = '0.18.0';
-
   const port = harness.config.apiPort;
   const url = harness.url;
 
@@ -76,6 +72,7 @@ async function setupTest() {
     dataDir: harness.dataDir,
     db: harness.db,
     impd: harness.impd,
+    fake: harness.fake,
     client: createImpClient({ url, token: rootToken }),
     url,
     port,
@@ -130,6 +127,8 @@ test('it streams output and stdin and exits with the command’s code', async ()
 
 test('it runs an exec in the agent, outside the container, when asked for outer', async () => {
   const ctx = await setupTest();
+
+  ctx.fake.agent.version = '0.18.0';
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
@@ -846,6 +845,8 @@ test('it resumes stdin once the socket buffer drains', async () => {
 test('it starts a named session and detaches on the detach key without a signal', async () => {
   const ctx = await setupTest();
 
+  ctx.fake.agent.version = '0.18.0';
+
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
@@ -917,6 +918,8 @@ test('it starts a named session and detaches on the detach key without a signal'
 
 test('it detaches on the detach key in its kitty form', async () => {
   const ctx = await setupTest();
+
+  ctx.fake.agent.version = '0.18.0';
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
@@ -1020,6 +1023,8 @@ test('it clears the screen before the replay of a session it attaches to', async
 test('it attaches again by itself when impd loses the agent connection of a session', async () => {
   const ctx = await setupTest();
 
+  ctx.fake.agent.version = '0.18.0';
+
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
@@ -1095,6 +1100,8 @@ test('it attaches again by itself when impd loses the agent connection of a sess
 test('it attaches again by itself when the terminal fell behind', async () => {
   const ctx = await setupTest();
 
+  ctx.fake.agent.version = '0.18.0';
+
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
@@ -1164,6 +1171,8 @@ test('it attaches again by itself when the terminal fell behind', async () => {
 
 test('it attaches again by itself when impd restarts under a session', async () => {
   const ctx = await setupTest();
+
+  ctx.fake.agent.version = '0.18.0';
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
@@ -1254,6 +1263,8 @@ test('it attaches again by itself when impd restarts under a session', async () 
 test('it sends keys typed while it attaches again to the new session', async () => {
   const ctx = await setupTest();
 
+  ctx.fake.agent.version = '0.18.0';
+
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
@@ -1337,6 +1348,8 @@ test.each([['\u001D'], ['\u001B[93;5u'], ['\u001B[27;5;93~']])(
   async (key) => {
     const ctx = await setupTest();
 
+    ctx.fake.agent.version = '0.18.0';
+
     const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
     await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
@@ -1384,6 +1397,8 @@ test.each([['\u001D'], ['\u001B[93;5u'], ['\u001B[27;5;93~']])(
 test('it gives up with 130 on ctrl-c while it attaches again', async () => {
   const ctx = await setupTest();
 
+  ctx.fake.agent.version = '0.18.0';
+
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
@@ -1428,6 +1443,8 @@ test('it gives up with 130 on ctrl-c while it attaches again', async () => {
 
 test('it exits 254 without attaching again once another client attached', async () => {
   const ctx = await setupTest();
+
+  ctx.fake.agent.version = '0.18.0';
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
@@ -1503,6 +1520,8 @@ test('it exits 254 without attaching again once another client attached', async 
 test('it exits 254 without attaching again when another client takes the session over', async () => {
   const ctx = await setupTest();
 
+  ctx.fake.agent.version = '0.18.0';
+
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
@@ -1548,6 +1567,8 @@ test('it exits 254 without attaching again when another client takes the session
 
 test('it doubles the pause before each try, up to 8 s, while impd stays down under a session', async () => {
   const ctx = await setupTest();
+
+  ctx.fake.agent.version = '0.18.0';
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
@@ -1614,6 +1635,8 @@ test('it doubles the pause before each try, up to 8 s, while impd stays down und
 
 test('it fails with the last reason once the window to attach again is over, while impd stays down under a session', async () => {
   const ctx = await setupTest();
+
+  ctx.fake.agent.version = '0.18.0';
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
