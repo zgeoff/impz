@@ -548,6 +548,63 @@ test('it cancels the first call after refusing a second with its id', async () =
   ]);
 });
 
+test('it runs a call that reuses the id of a call cancelled while its arguments were refused', async () => {
+  const ctx = await setupTest();
+
+  const server = createMcpServer({ version: '1.2.3' });
+
+  const context = {
+    reply: ctx.reply,
+    client: ctx.client,
+    guard: buildImpGuard({ all: true }),
+    scope: 'manage',
+  } as const;
+
+  await server.receive('{"jsonrpc":"2.0","id":0,"method":"ping"}', {
+    ...context,
+    reply: () => {},
+  });
+
+  // The SDK sends a cancelled call no answer, and a refused call never
+  // starts, so nothing resolves this receive.
+  void server.receive(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'imp_list', arguments: { outer: true } },
+    }),
+    context,
+  );
+
+  await server.receive(
+    JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 7 } }),
+    context,
+  );
+
+  await server.receive(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'imp_list', arguments: {} },
+    }),
+    context,
+  );
+
+  expect(ctx.sent).toStrictEqual([
+    {
+      jsonrpc: '2.0',
+      id: 7,
+      result: {
+        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        structuredContent: { imps: [] },
+        isError: false,
+      },
+    },
+  ]);
+});
+
 test.each([
   ['{"jsonrpc":"2.0","method":"notifications/initialized"}'],
   ['{"jsonrpc":"2.0","id":5,"result":{}}'],
