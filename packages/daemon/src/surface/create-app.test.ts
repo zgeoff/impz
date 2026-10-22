@@ -46,7 +46,7 @@ async function setupTest(options: SetupOptions) {
   const harness = await startTestImpd(stack, {
     env: readImpEnv(),
     rootToken: 'root-token',
-    frozenClockMs: Date.now(),
+    frozenClockMs: Date.UTC(2026, 0, 1),
     cgroups: options.cgroups,
     ...(options.createStorage !== undefined && { createStorage: options.createStorage }),
     kernelFiles: {
@@ -960,6 +960,8 @@ test('it wakes a sleeping imp from its snapshot', async () => {
 test('it wakes a sleeping imp it holds, until the hold ends', async () => {
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
 
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
+
   await Bun.write(join(ctx.dataDir, 'images', 'ubuntu', 'rootfs.ext4'), 'rootfs');
 
   await createImage(
@@ -1027,6 +1029,8 @@ test('it sleeps the least recently active imp to fit a new one in the budget', a
   const ctx = await setupTest({
     cgroups: buildStubCpuCgroups().cgroups,
   });
+
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
 
   await Bun.write(join(ctx.dataDir, 'images', 'ubuntu', 'rootfs.ext4'), 'rootfs');
 
@@ -1424,6 +1428,8 @@ test('it lets a bearer exec socket start any imp', async () => {
 
 test('it refuses an expired exec ticket', async () => {
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
+
+  ctx.setClock(Date.UTC(2026, 9, 1, 12));
 
   await Bun.write(join(ctx.dataDir, 'images', 'ubuntu', 'rootfs.ext4'), 'rootfs');
 
