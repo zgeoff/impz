@@ -366,6 +366,11 @@
       "rules": { "zgeoff/test-beside-module": "off" }
     },
     {
+      // host/entrypoint has no extension, which the rule needs to match a module
+      "files": ["host/entrypoint.test.ts"],
+      "rules": { "zgeoff/test-beside-module": "off" }
+    },
+    {
       // the cli keeps every error that main.ts maps to an exit code in one module
       "files": ["packages/cli/src/cli/errors.ts"],
       "rules": { "max-classes-per-file": "off" }
@@ -376,7 +381,9 @@
   "ignorePatterns": [
     ".claude/**",
     ".cache/**",
-    "kernel/**",
+    // the unpacked kernel source and its build output
+    "kernel/.build/**",
+    "kernel/out/**",
     "agent/**",
     // protoc-gen-es output (bun run gen:proto)
     "packages/agent-protocol/src/gen/**"

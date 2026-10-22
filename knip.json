@@ -25,7 +25,14 @@
         // a protoc plugin buf.gen.yaml runs
         "scripts/proto/protoc-gen-protocol-reference.ts"
       ],
-      "project": ["e2e/**/*.ts", "scripts/**/*.ts", "deploy/**/*.ts", "host/**/*.ts", "*.test.ts"]
+      "project": [
+        "e2e/**/*.ts",
+        "scripts/**/*.ts",
+        "deploy/**/*.ts",
+        "host/**/*.ts",
+        "kernel/**/*.ts",
+        "*.test.ts"
+      ]
     },
     "packages/*": {
       "project": ["src/**/*.ts!", "!src/test-utils/**!"]

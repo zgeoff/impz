@@ -19,7 +19,8 @@
 #      IMP_STORAGE_FILE (default /data/imp.xfs) is where it lives.
 set -euo pipefail
 
-root=/var/lib/imp
+# a test points it at its own files
+root=${IMP_STORAGE_ROOT:-/var/lib/imp}
 backend=${IMP_STORAGE_BACKEND:-xfs}
 loop=${IMP_STORAGE_LOOP:-1}
 file=${IMP_STORAGE_FILE:-/data/imp.xfs}
