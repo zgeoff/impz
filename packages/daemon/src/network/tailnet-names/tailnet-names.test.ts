@@ -691,7 +691,13 @@ test('it shows no service URL before the name is live', async () => {
 
   const ctx = await setupTest();
 
-  ctx.tailscaleStatus.resolve({ state: null, hostname: null, dnsName: null, ip: null, ips: [] });
+  ctx.tailscaleStatus.resolve({
+    state: 'Running',
+    hostname: 'imp-host',
+    dnsName: 'imp-host.tail1234.ts.net',
+    ip: null,
+    ips: [],
+  });
 
   await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
