@@ -266,19 +266,23 @@ func (m *Manager) find(req *proto.Request) (*session, bool, *proto.Error) {
 	return s, true, nil
 }
 
-// removeIfOver frees the name of a session whose EXIT a viewer got.
+// removeIfOver frees the name of a session whose EXIT a viewer got. The
+// name frees and its previous is set in one step, so a viewer that finds
+// the name free gets the run as previous.
 func (m *Manager) removeIfOver(s *session) {
 	if !s.over() {
 		return
 	}
+	e := ended{seq: s.seq, previous: s.ended()}
 	m.mu.Lock()
 	current := m.sessions[s.name] == s
 	if current {
 		delete(m.sessions, s.name)
+		m.keepLocked(s.name, e)
 	}
 	m.mu.Unlock()
-	if current {
-		m.retire(s)
+	if current && m.recorded != nil {
+		m.recorded(e.previous)
 	}
 }
 
@@ -310,6 +314,11 @@ func (m *Manager) record(s *session) {
 func (m *Manager) keep(name string, e ended) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.keepLocked(name, e)
+}
+
+// keepLocked is keep for a caller that holds mu.
+func (m *Manager) keepLocked(name string, e ended) {
 	if cur, ok := m.previous[name]; ok && cur.seq > e.seq {
 		return
 	}

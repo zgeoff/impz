@@ -360,6 +360,27 @@ func TestNoSessionCarriesTheBootAndThePreviousGeneration(t *testing.T) {
 	assert.Check(t, cmp.Equal(resp.Error.Data.GetPrevious().ExecutionGeneration, out.ExecutionGeneration))
 }
 
+// a viewer can get the EXIT before the run closes done: the name frees
+// with its previous already set, never in between.
+func TestTheNameFreesWithItsPreviousBeforeDoneCloses(t *testing.T) {
+	m := newTestManager(t, "b2a7e1d4-0c55-4f8e-9a61-3d2f7c4e8b90")
+	s := newSession("job", &proto.Request{}, run{generation: "7c1e4a9f0b3d48e2a6f5c8d1e0b9a7f3", seq: 1})
+	s.onDelivered = func() { m.removeIfOver(s) }
+	m.mu.Lock()
+	m.sessions["job"] = s
+	m.mu.Unlock()
+	s.mu.Lock()
+	s.exit = &proto.Exit{Code: 0}
+	s.phase = phaseExited
+	s.mu.Unlock()
+
+	s.markDelivered()
+
+	_, ok := find(m, "job")
+	assert.Check(t, !ok, "the name is free")
+	assert.Check(t, cmp.DeepEqual(m.noSession("job").Data.Previous, &proto.Previous{ExecutionGeneration: "7c1e4a9f0b3d48e2a6f5c8d1e0b9a7f3", End: 0, Exit: &proto.Exit{Code: 0}}, protocmp.Transform()))
+}
+
 func TestNoSessionForANameThatNeverRanHasNoPrevious(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 
