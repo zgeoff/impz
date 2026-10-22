@@ -7,9 +7,12 @@ import type { ImageBuildProgress } from '@impz/api';
 import { createImpClient } from '@impz/client';
 import { buildStubImpdBeforeBuildStream } from '@impz/client/test-utils/build-stub-impd-before-build-stream';
 import { startStubDockerEngine } from '@impz/client/test-utils/start-stub-docker-engine';
-import { DOCKERFILE_FRONTEND } from '@impz/daemon/src/imps/docker-proxy/dockerfile-frontend';
-import { BUILD_KEEPALIVE_MS } from '@impz/daemon/src/imps/images/build-event-stream';
-import { createStubDockerCli, startTestImpd } from '@impz/daemon/testing';
+import {
+  BUILD_KEEPALIVE_MS,
+  DOCKERFILE_FRONTEND,
+  createStubDockerCli,
+  startTestImpd,
+} from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';

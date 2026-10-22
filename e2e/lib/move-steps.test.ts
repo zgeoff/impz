@@ -3,10 +3,14 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
+import { createImpClient } from '@impz/client';
+import {
+  buildImagePaths,
+  buildMockNewImage,
+  createImage,
+  startTestImpd,
+} from '@impz/daemon/testing';
 import { updateEnv } from '@impz/test-utils/update-env';
-import { createImpClient } from '../../packages/client/src/index';
-import { createImage } from '../../packages/daemon/src/platform/db/images';
-import { buildImagePaths, buildMockNewImage, startTestImpd } from '../../packages/daemon/testing';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
 import { createInstance } from './instance';
 import {

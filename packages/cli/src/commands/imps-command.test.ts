@@ -2,15 +2,17 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createImage } from '@impz/daemon/src/platform/db/images';
-import { createImp, readImpByName, updateImpMove } from '@impz/daemon/src/platform/db/imps';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
   buildMockNewImp,
+  createImage,
+  createImp,
+  readImpByName,
   startStubImpdRelease,
   startStubInnerAgent,
+  updateImpMove,
 } from '@impz/daemon/testing';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';

@@ -2,9 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openDialStream } from '@impz/daemon/src/vm/agent-client/dial-stream';
-import { openAccept, openListener } from '@impz/daemon/src/vm/agent-client/listener-stream';
-import { startStubAgent } from '@impz/daemon/testing';
+import { openAccept, openDialStream, openListener, startStubAgent } from '@impz/daemon/testing';
 import invariant from 'tiny-invariant';
 import { buildStubListenAgent } from './build-stub-listen-agent';
 

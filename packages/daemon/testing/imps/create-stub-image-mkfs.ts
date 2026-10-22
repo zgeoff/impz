@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 
@@ -37,7 +37,9 @@ export function createStubImageMkfs(directory: string) {
       writeFileSync(released, '');
     },
     fail: (stderr: string) => {
-      writeFileSync(released, `${stderr}\n`);
+      // the script polls for the file, so it must never see it empty before the text lands
+      writeFileSync(`${released}.tmp`, `${stderr}\n`);
+      renameSync(`${released}.tmp`, released);
     },
   };
 }

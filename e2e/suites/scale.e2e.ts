@@ -1,7 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { ENFORCE_INTERVAL_MS, loadConfig } from '@impz/daemon/testing';
 import invariant from 'tiny-invariant';
-import { loadConfig } from '../../packages/daemon/src/config';
-import { ENFORCE_INTERVAL_MS } from '../../packages/daemon/src/vm/governor/ram-governor';
 import { collectOvershoots } from '../lib/budget-overshoot';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';

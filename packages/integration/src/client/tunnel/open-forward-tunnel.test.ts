@@ -9,16 +9,17 @@ import {
 import { TUNNEL_MAX_FRAME_BYTES, TUNNEL_WINDOW_BYTES } from '@impz/api';
 import { createImpClient, openForwardTunnel } from '@impz/client';
 import type { ForwardTunnelEnd } from '@impz/client';
-import { createImage } from '@impz/daemon/src/platform/db/images';
-import { readVmIdentity, writeVmIdentity } from '@impz/daemon/src/vm/sleep/vm-identity';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
   claimFreePorts,
+  createImage,
+  readVmIdentity,
   startStubAgent,
   startStubDialAgent,
   startTestImpd,
+  writeVmIdentity,
 } from '@impz/daemon/testing';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';

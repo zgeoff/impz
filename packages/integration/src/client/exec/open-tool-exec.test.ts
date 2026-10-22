@@ -14,15 +14,16 @@ import {
 import { EXEC_MAX_STDIN_FRAME_BYTES, EXEC_STDIN_WINDOW_BYTES } from '@impz/api';
 import { createImpClient, openToolExec } from '@impz/client';
 import { buildStubExecPeer } from '@impz/client/test-utils/build-stub-exec-peer';
-import { createImage } from '@impz/daemon/src/platform/db/images';
-import { readVmIdentity, writeVmIdentity } from '@impz/daemon/src/vm/sleep/vm-identity';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
   buildStubExecReplies,
+  createImage,
+  readVmIdentity,
   startStubAgent,
   startTestImpd,
+  writeVmIdentity,
 } from '@impz/daemon/testing';
 import { listLocalEntries, writeLocalEntries } from '@impz/local-tar';
 import { waitFor } from '@impz/test-utils/wait-for';

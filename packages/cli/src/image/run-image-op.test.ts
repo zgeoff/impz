@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
-import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildMockNewImage,
   buildStubImpdReleaseFetch,
+  createImage,
   startTestImpd,
 } from '@impz/daemon/testing';
 import { checkDockerBuildx } from '../test-utils/run-docker-build';

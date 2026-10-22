@@ -48,7 +48,7 @@ export interface ImageSpace {
   readonly isShared: boolean;
 }
 
-export interface ImageSpaceReport {
+interface ImageSpaceReport {
   readonly images: ReadonlyMap<string, ImageSpace>;
   readonly freeingBytes: number;
 }

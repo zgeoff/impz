@@ -1,7 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { createImage } from '@impz/daemon/src/platform/db/images';
-import { buildImagePaths, buildMockNewImage, startTestImpd } from '@impz/daemon/testing';
+import {
+  buildImagePaths,
+  buildMockNewImage,
+  createImage,
+  startTestImpd,
+} from '@impz/daemon/testing';
 import { buildImpGuard } from '@impz/mcp';
 import { createMcpServer } from '@impz/mcp/test-utils/create-mcp-server';
 import * as z from 'zod';

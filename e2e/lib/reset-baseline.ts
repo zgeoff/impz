@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { ImpClient } from '../../packages/client/src/index';
+import type { ImpClient } from '@impz/client';
 
 export interface ResetBaselineOptions {
   readonly client: ImpClient;

@@ -42,7 +42,7 @@ export interface ImpdStopOptions {
   readonly stepMaxMs?: number;
 }
 
-export type ImpdStopOutcome = 'stopped' | 'timed-out' | 'failed';
+type ImpdStopOutcome = 'stopped' | 'timed-out' | 'failed';
 
 export interface ImpdStopStep {
   readonly step: string;

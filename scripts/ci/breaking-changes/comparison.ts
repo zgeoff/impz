@@ -1,4 +1,4 @@
-import type { MessageDirection } from '../../../packages/api/src/protocols/build-protocol-schema';
+import type { MessageDirection } from '@impz/api';
 import type { Schema } from './schema';
 
 export interface Comparison {

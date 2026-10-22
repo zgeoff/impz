@@ -18,12 +18,12 @@ import {
   TUNNEL_MAX_FRAME_BYTES,
   TUNNEL_WINDOW_BYTES,
 } from '@impz/api';
-import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
   claimFreePorts,
+  createImage,
   startStubAgent,
   startStubDialAgent,
   startTestImpd,

@@ -33,6 +33,17 @@
     "import/no-namespace": "off",
     // off until GEO-1199 trims the functions that take more than 4 parameters
     "max-params": "off",
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@impz/*/src", "@impz/*/src/**", "**/packages/*/**"],
+            "message": "import a package by its name and an entry its package.json exports, never its files by path"
+          }
+        ]
+      }
+    ],
     // the package boundaries: a package imports only the packages below it, by name, and
     // production code imports no test support
     "zgeoff/import-zones": [
@@ -77,8 +88,6 @@
             "name": "package-by-name",
             "from": ["packages"],
             "to": ["packages"],
-            // a test may reach another package's helpers, which no package exports, by path
-            "allow": ["tests"],
             "allowWithin": "packages/*",
             "reason": "import another package by its package name, never by a relative path"
           },

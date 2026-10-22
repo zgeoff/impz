@@ -3,15 +3,17 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
-import { DOCKERFILE_FRONTEND } from '@impz/daemon/src/imps/docker-proxy/dockerfile-frontend';
-import { createImage, readImageByName, updateImagePin } from '@impz/daemon/src/platform/db/images';
 import {
+  DOCKERFILE_FRONTEND,
   buildImagePaths,
   buildMockNewImage,
   buildStubTracedBuild,
+  createImage,
   createStubDockerCli,
+  readImageByName,
   startStubDockerEngine,
   startTestImpd,
+  updateImagePin,
 } from '@impz/daemon/testing';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';

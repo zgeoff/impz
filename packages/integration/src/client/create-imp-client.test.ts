@@ -5,12 +5,12 @@ import { join } from 'node:path';
 import { CLIENT_VERSION, createImpClient } from '@impz/client';
 import { makeStubImpdWithNewReason } from '@impz/client/test-utils/make-stub-impd-with-new-reason';
 import { startStubDockerEngine } from '@impz/client/test-utils/start-stub-docker-engine';
-import { DOCKERFILE_FRONTEND } from '@impz/daemon/src/imps/docker-proxy/dockerfile-frontend';
-import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
+  DOCKERFILE_FRONTEND,
   buildImagePaths,
   buildMockNewImage,
   claimFreePorts,
+  createImage,
   createStubDockerCli,
   startTestImpd,
 } from '@impz/daemon/testing';

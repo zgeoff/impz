@@ -7,6 +7,9 @@
     "impz": "src/main.ts"
   },
   "type": "module",
+  "exports": {
+    "./output-schema": "./src/output/build-json-output-schema.ts"
+  },
   "dependencies": {
     "@impz/api": "workspace:*",
     "@impz/client": "workspace:*",

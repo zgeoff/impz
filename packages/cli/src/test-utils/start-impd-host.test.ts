@@ -1,8 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { stat } from 'node:fs/promises';
 import { createImpClient } from '@impz/client';
-import { createImage } from '@impz/daemon/src/platform/db/images';
-import { buildImagePaths, buildMockNewImage } from '@impz/daemon/testing';
+import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/testing';
 import invariant from 'tiny-invariant';
 import { startImpdHost } from './start-impd-host';
 

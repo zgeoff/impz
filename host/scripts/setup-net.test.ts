@@ -1,8 +1,6 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { buildSetupNetGates } from '../../packages/daemon/testing/host-net/build-setup-net-gates';
-import { readHostNetfilter } from '../../packages/daemon/testing/host-net/read-host-netfilter';
-import { runInNetns } from '../../packages/daemon/testing/host-net/run-in-netns';
+import { buildSetupNetGates, readHostNetfilter, runInNetns } from '@impz/daemon/testing';
 
 // setup-net.sh runs as root in a fresh network namespace, through a user
 // namespace when not root, with a dummy uplink. Each test skips where that or

@@ -4,15 +4,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
-import { createImage } from '@impz/daemon/src/platform/db/images';
-import { readVmIdentity, writeVmIdentity } from '@impz/daemon/src/vm/sleep/vm-identity';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
   buildStubExecGuest,
+  createImage,
+  readVmIdentity,
   startStubExecAgent,
   startTestImpd,
+  writeVmIdentity,
 } from '@impz/daemon/testing';
 import { probeUpdateReadOnly } from '@impz/test-utils/probe-update-read-only';
 import { updateReadOnly } from '@impz/test-utils/update-read-only';

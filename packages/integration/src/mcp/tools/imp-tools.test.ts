@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { createImage } from '@impz/daemon/src/platform/db/images';
-import { readImpByName } from '@impz/daemon/src/platform/db/imps';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
   buildStubExecGuest,
   buildStubImpdReleaseFetch,
+  createImage,
+  readImpByName,
   startStubExecAgent,
   startTestImpd,
 } from '@impz/daemon/testing';

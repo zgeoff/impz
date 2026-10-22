@@ -4,13 +4,13 @@ import type { ExecSession, ExecStarted } from '@impz/client';
 import { createStubUndiciWebSocket } from '@impz/client/test-utils/create-stub-undici-web-socket';
 import { makeStubImpdWithoutFeature } from '@impz/client/test-utils/make-stub-impd-without-feature';
 import { startStubImpdSocket } from '@impz/client/test-utils/start-stub-impd-socket';
-import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
   buildStubExecAgent,
   claimFreePorts,
+  createImage,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';

@@ -1,4 +1,4 @@
-import type { MessageDirection } from '../../../packages/api/src/protocols/build-protocol-schema';
+import type { MessageDirection } from '@impz/api';
 import { ANNOTATIONS } from './annotations';
 import { buildWithout } from './build-without';
 import { collectBoundChange } from './collect-bound-change';
