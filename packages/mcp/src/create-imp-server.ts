@@ -87,6 +87,12 @@ export function createImpServer(
         abort.abort(ctx.mcpReq.signal.reason);
       };
 
+      // The SDK checks the arguments before this runs, and a cancel can land
+      // during that check.
+      if (ctx.mcpReq.signal.aborted) {
+        stopCall();
+      }
+
       ctx.mcpReq.signal.addEventListener('abort', stopCall, { once: true });
       calls.add(id, { abort, cancellable: tool.cancellable, done: done.promise });
 
