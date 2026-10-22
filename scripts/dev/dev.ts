@@ -8,6 +8,7 @@ import { createHostImage } from '../lib/create-host-image.ts';
 import { DevError } from '../lib/dev-error.ts';
 import { makeOpReader } from '../lib/make-op-reader.ts';
 import type { OpReader } from '../lib/make-op-reader.ts';
+import { pickSetting } from '../lib/pick-setting.ts';
 import { readDevCheckout } from '../lib/read-dev-checkout.ts';
 import { readHostPrivileges } from '../lib/read-host-privileges.ts';
 import { readMachineID } from '../lib/read-machine-id.ts';
@@ -305,14 +306,14 @@ async function downDev(dev: Dev): Promise<void> {
   await $`docker volume rm ${volumes}`.quiet().nothrow();
 }
 
-async function runAttached(argv: readonly string[]): Promise<number> {
+function runAttached(argv: readonly string[]): Promise<number> {
   const subprocess = Bun.spawn([...argv], {
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',
   });
 
-  return await subprocess.exited;
+  return subprocess.exited;
 }
 
 // SIGHUP: impd exits without sleeping the VMs, and the entrypoint restarts it. The wait for the old
@@ -344,7 +345,7 @@ async function restartDev(dev: Dev): Promise<void> {
 }
 
 async function waitForExit(dev: Dev, pids: readonly string[]): Promise<void> {
-  const stopSeconds = Number(dev.env['IMP_DEV_STOP_TIMEOUT_S'] || '30');
+  const stopSeconds = Number(pickSetting(dev.env, 'IMP_DEV_STOP_TIMEOUT_S') ?? '30');
   const deadline = Date.now() + stopSeconds * 1000;
 
   for (;;) {

@@ -1,5 +1,6 @@
 import { join, resolve } from 'node:path';
 import { DevError } from './dev-error.ts';
+import { pickSetting } from './pick-setting.ts';
 
 export type DevEnv = Readonly<Record<string, string | undefined>>;
 
@@ -65,10 +66,4 @@ export function buildDevLayout(options: DevLayoutOptions): DevLayout {
     sshPort: SSH_PORT + offset,
     mcpPort: MCP_PORT + offset,
   };
-}
-
-function pickSetting(env: DevEnv, key: string): string | undefined {
-  const value = env[key];
-
-  return value === undefined || value === '' ? undefined : value;
 }

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { $ } from 'bun';
 import type { DevEnv } from '../lib/build-dev-layout.ts';
 import { DevError } from '../lib/dev-error.ts';
+import { pickSetting } from '../lib/pick-setting.ts';
 import { readProxyPrivileges } from '../lib/read-proxy-privileges.ts';
 import { probeContainerRunning } from './probe-container-running.ts';
 import { readLogTail } from './read-log-tail.ts';
@@ -80,7 +81,9 @@ function readProxyContext(env: DevEnv, root: string): string[] {
 
   return CONTEXT_VARIABLES.flatMap((variable) => {
     const fromFile = lines.findLast((line) => line.startsWith(`${variable}=`));
-    const value = env[variable] || fromFile?.slice(variable.length + 1).replaceAll('\r', '') || '';
+
+    const value =
+      pickSetting(env, variable) ?? fromFile?.slice(variable.length + 1).replaceAll('\r', '') ?? '';
 
     return value === '' ? [] : ['-e', `${variable}=${value}`];
   });

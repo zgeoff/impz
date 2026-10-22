@@ -2,6 +2,7 @@ import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildDevImageTag } from './build-dev-image-tag.ts';
 import type { DevEnv } from './build-dev-layout.ts';
+import { pickSetting } from './pick-setting.ts';
 
 export interface DevCheckout {
   readonly root: string;
@@ -18,7 +19,7 @@ export function readDevCheckout(env: DevEnv, root: string): DevCheckout {
   return {
     root,
     rootPhysical,
-    hostImage: env['IMP_HOST_IMAGE'] || buildDevImageTag(rootPhysical),
-    buildDir: env['IMP_BUILD'] || join(root, 'build'),
+    hostImage: pickSetting(env, 'IMP_HOST_IMAGE') ?? buildDevImageTag(rootPhysical),
+    buildDir: pickSetting(env, 'IMP_BUILD') ?? join(root, 'build'),
   };
 }

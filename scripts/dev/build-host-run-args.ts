@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { match } from 'ts-pattern';
 import type { DevEnv, DevLayout } from '../lib/build-dev-layout.ts';
+import { pickSetting } from '../lib/pick-setting.ts';
 import type { DevCheckout } from '../lib/read-dev-checkout.ts';
 
 // An allowlist: IMP_URL, IMP_TOKEN and IMP_DEV_* belong to this machine, not to impd.
@@ -124,7 +125,7 @@ export function buildHostRunArgs(options: HostRunOptions): string[] {
     'DOCKER_HOST=unix:///run/imp-docker/docker.sock',
     ...buildPortArgs(layout, env),
     '-e',
-    `IMP_STORAGE_GIB=${env['IMP_STORAGE_GIB'] || '200'}`,
+    `IMP_STORAGE_GIB=${pickSetting(env, 'IMP_STORAGE_GIB') ?? '200'}`,
     '-e',
     `IMP_UPLINK_MTU=${options.uplinkMTU}`,
     '-e',
@@ -181,7 +182,7 @@ function buildPortArgs(layout: DevLayout, env: DevEnv): string[] {
     : [
         ...ports,
         '-p',
-        `127.0.0.1:${String(layout.mcpPort)}:${env['IMP_MCP_PUBLIC_PORT'] || '7071'}`,
+        `127.0.0.1:${String(layout.mcpPort)}:${pickSetting(env, 'IMP_MCP_PUBLIC_PORT') ?? '7071'}`,
       ];
 }
 

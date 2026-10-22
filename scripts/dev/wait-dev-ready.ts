@@ -1,5 +1,6 @@
 import { $ } from 'bun';
 import { DevError } from '../lib/dev-error.ts';
+import { pickSetting } from '../lib/pick-setting.ts';
 import { probeContainerRunning } from './probe-container-running.ts';
 import { readLogTail } from './read-log-tail.ts';
 import type { Dev } from './types.ts';
@@ -8,7 +9,7 @@ const POLL_MS = 500;
 
 // Ready means /health reports the default image seeded.
 export async function waitDevReady(dev: Dev, defaultSeconds: number): Promise<void> {
-  const seconds = Number(dev.env['IMP_DEV_READY_TIMEOUT_S'] || defaultSeconds);
+  const seconds = Number(pickSetting(dev.env, 'IMP_DEV_READY_TIMEOUT_S') ?? defaultSeconds);
   const deadline = Date.now() + seconds * 1000;
 
   for (;;) {
