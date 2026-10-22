@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createTestCertificates } from '@impz/test-utils/create-test-certificates';
 import * as z from 'zod';
 import { createGitFreeEnv, runGitChecked } from './git-env';
-import { runChecked } from './instance';
 
 const OAUTH_CLIENT_ID = 'e2e-client';
 
@@ -52,7 +52,7 @@ export async function startStubUpstream(address: string, token: string): Promise
 
   mkdirSync(repos);
 
-  await createCertificates(directory, address);
+  const certificates = await createTestCertificates({ ipAddresses: [address] });
 
   const oauthState = {
     refreshTokens: [`e2e-refresh-${randomUUID()}`],
@@ -164,8 +164,8 @@ export async function startStubUpstream(address: string, token: string): Promise
     hostname: '0.0.0.0',
     port: 0,
     tls: {
-      cert: readFileSync(join(directory, 'leaf.pem')),
-      key: readFileSync(join(directory, 'leaf.key')),
+      cert: certificates.certPem,
+      key: certificates.keyPem,
     },
     maxRequestBodySize: 256 * 1024 ** 2,
     idleTimeout: 60,
@@ -184,7 +184,7 @@ export async function startStubUpstream(address: string, token: string): Promise
       exchange: (refreshToken) => runTokenExchange(refreshToken).status,
     },
     origin: `https://${address}:${String(server.port)}`,
-    caPem: readFileSync(join(directory, 'ca.pem'), 'utf8'),
+    caPem: certificates.caPem,
     plainOrigin: `http://${address}:${String(plainServer.port)}`,
     seen,
     createRepo: async (path) => {
@@ -202,82 +202,6 @@ export async function startStubUpstream(address: string, token: string): Promise
       rmSync(directory, { recursive: true, force: true });
     },
   };
-}
-
-async function createCertificates(directory: string, address: string): Promise<void> {
-  const ca = join(directory, 'ca');
-  const leaf = join(directory, 'leaf');
-  const ext = join(directory, 'leaf.ext');
-
-  writeFileSync(
-    ext,
-    [
-      'basicConstraints=critical,CA:FALSE',
-      'keyUsage=critical,digitalSignature',
-      'extendedKeyUsage=serverAuth',
-      `subjectAltName=IP:${address}`,
-      'authorityKeyIdentifier=keyid',
-    ].join('\n'),
-  );
-
-  await runOpenssl([
-    'req',
-    '-x509',
-    '-newkey',
-    'ec',
-    '-pkeyopt',
-    'ec_paramgen_curve:P-256',
-    '-nodes',
-    '-keyout',
-    `${ca}.key`,
-    '-out',
-    `${ca}.pem`,
-    '-days',
-    '2',
-    '-subj',
-    '/CN=imp e2e upstream CA',
-    '-addext',
-    'basicConstraints=critical,CA:TRUE',
-    '-addext',
-    'keyUsage=critical,keyCertSign',
-  ]);
-
-  await runOpenssl([
-    'req',
-    '-newkey',
-    'ec',
-    '-pkeyopt',
-    'ec_paramgen_curve:P-256',
-    '-nodes',
-    '-keyout',
-    `${leaf}.key`,
-    '-out',
-    `${leaf}.csr`,
-    '-subj',
-    `/CN=${address}`,
-  ]);
-
-  await runOpenssl([
-    'x509',
-    '-req',
-    '-in',
-    `${leaf}.csr`,
-    '-CA',
-    `${ca}.pem`,
-    '-CAkey',
-    `${ca}.key`,
-    '-CAcreateserial',
-    '-out',
-    `${leaf}.pem`,
-    '-days',
-    '2',
-    '-extfile',
-    ext,
-  ]);
-}
-
-function runOpenssl(argv: readonly string[]): Promise<string> {
-  return runChecked(['openssl', ...argv]);
 }
 
 const CGI_HEADER_END = /\r?\n\r?\n/u;
