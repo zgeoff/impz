@@ -1,17 +1,16 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { TUNNEL_CLOSE_RESTARTING } from '@impz/api';
+import { createImpClient, openReverseForward } from '@impz/client';
 import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
+  buildStubForwardAgent,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createImpClient } from '../create-imp-client';
-import { buildStubForwardAgent } from '../test-utils/build-stub-forward-agent';
-import { openReverseForward } from './open-reverse-forward';
 
 // impd listens on a loopback port, as /tunnel needs a real socket.
 async function setupTest() {

@@ -10,12 +10,12 @@ import {
   startStubExecAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
+import { buildImpGuard } from '@impz/mcp';
+import { buildStubAfter } from '@impz/mcp/test-utils/build-stub-after';
+import { buildStubRepeat } from '@impz/mcp/test-utils/build-stub-repeat';
+import { createMcpServer } from '@impz/mcp/test-utils/create-mcp-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildImpGuard } from '../imp-guard';
-import { buildStubAfter } from '../test-utils/build-stub-after';
-import { buildStubRepeat } from '../test-utils/build-stub-repeat';
-import { createMcpServer } from '../test-utils/create-mcp-server';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

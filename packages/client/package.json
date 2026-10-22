@@ -11,7 +11,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./test-utils/*": "./src/test-utils/*.ts"
+    "./test-utils/*": "./src/test-utils/*.ts",
+    "./internal": "./src/internal.ts"
   },
   "scripts": {
     "build": "tsdown"
@@ -24,15 +25,10 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@bufbuild/protobuf": "catalog:",
-    "@impz/agent-protocol": "workspace:*",
     "@impz/api": "workspace:*",
-    "@impz/daemon": "workspace:*",
-    "@impz/local-tar": "workspace:*",
     "@impz/shared": "workspace:*",
     "@impz/test-utils": "workspace:*",
     "msw": "catalog:",
-    "tar-stream": "catalog:",
     "tiny-invariant": "catalog:",
     "tsdown": "catalog:"
   },

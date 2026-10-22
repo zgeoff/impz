@@ -2,6 +2,9 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { CLIENT_VERSION, createImpClient } from '@impz/client';
+import { makeStubImpdWithNewReason } from '@impz/client/test-utils/make-stub-impd-with-new-reason';
+import { startStubDockerEngine } from '@impz/client/test-utils/start-stub-docker-engine';
 import { DOCKERFILE_FRONTEND } from '@impz/daemon/src/imps/docker-proxy/dockerfile-frontend';
 import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
@@ -16,10 +19,6 @@ import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import { HttpResponse, http } from 'msw';
-import { CLIENT_VERSION } from './check-server';
-import { createImpClient } from './create-imp-client';
-import { makeStubImpdWithNewReason } from './test-utils/make-stub-impd-with-new-reason';
-import { startStubDockerEngine } from './test-utils/start-stub-docker-engine';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

@@ -21,8 +21,17 @@ export { startStubSilentOrigin } from './network/start-stub-silent-origin';
 export { buildQueryGate } from './platform/build-query-gate';
 export { buildStubClock } from './platform/build-stub-clock';
 export { claimFreePorts } from './platform/claim-free-ports';
+
+export {
+  STUB_BOOT_ID,
+  STUB_FLOOD_BYTES,
+  STUB_GENERATION,
+  buildStubExecAgent,
+} from './vm/build-stub-exec-agent';
+
 export { buildStubExecGuest } from './vm/build-stub-exec-guest';
 export { buildStubExecReplies } from './vm/build-stub-exec-replies';
+export { buildStubForwardAgent } from './vm/build-stub-forward-agent';
 export { startStubAgent } from './vm/start-stub-agent';
 export type { StubAgentHandler } from './vm/start-stub-agent';
 export { startStubDialAgent } from './vm/start-stub-dial-agent';

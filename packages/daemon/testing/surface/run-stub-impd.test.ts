@@ -2,10 +2,10 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createImpClient } from '@impz/client';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
-import { createImpClient } from '../src/create-imp-client';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

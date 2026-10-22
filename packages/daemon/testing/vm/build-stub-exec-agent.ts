@@ -14,7 +14,7 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import type { AgentFrame, ErrorSchema, Request } from '@impz/agent-protocol';
-import type { StubAgentHandler } from '@impz/daemon/testing';
+import type { StubAgentHandler } from './start-stub-agent';
 
 interface Run {
   readonly command: string;

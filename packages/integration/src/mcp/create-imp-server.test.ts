@@ -11,15 +11,15 @@ import {
   startStubExecAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
+import { buildImpGuard } from '@impz/mcp';
+import { PROTOCOL_VERSIONS } from '@impz/mcp/internal';
+import { buildStubAfter } from '@impz/mcp/test-utils/build-stub-after';
+import { buildStubRepeat } from '@impz/mcp/test-utils/build-stub-repeat';
+import { createMcpServer } from '@impz/mcp/test-utils/create-mcp-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { INVALID_PARAMS, METHOD_NOT_FOUND } from '@modelcontextprotocol/server';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
-import { PROTOCOL_VERSIONS } from './create-imp-server';
-import { buildImpGuard } from './imp-guard';
-import { buildStubAfter } from './test-utils/build-stub-after';
-import { buildStubRepeat } from './test-utils/build-stub-repeat';
-import { createMcpServer } from './test-utils/create-mcp-server';
 
 async function setupTest() {
   const gate = buildQueryGate('imps');

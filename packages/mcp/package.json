@@ -5,7 +5,9 @@
   "description": "MCP server for impd: imps, exec, files and checkpoints as tools for coding agents",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./internal": "./src/internal.ts",
+    "./test-utils/*": "./src/test-utils/*.ts"
   },
   "dependencies": {
     "@impz/api": "workspace:*",
@@ -16,9 +18,6 @@
   },
   "devDependencies": {
     "@faker-js/faker": "catalog:",
-    "@impz/daemon": "workspace:*",
-    "@impz/test-utils": "workspace:*",
-    "@modelcontextprotocol/client": "catalog:",
-    "tiny-invariant": "catalog:"
+    "@impz/test-utils": "workspace:*"
   }
 }

@@ -1,9 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { checkImpdAccess, createRpcClient } from '@impz/client/internal';
 import { claimFreePorts, startTestImpd } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
-import { createRpcClient } from '../create-rpc-client';
-import { checkImpdAccess } from './check-impd-access';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

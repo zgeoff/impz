@@ -33,6 +33,8 @@ packages/
   client/          the typed client for impd
   daemon/          impd, the host daemon
   dashboard/       the web dashboard that impd serves at /ui/
+  integration/     the client's and the MCP server's tests against a real impd, which sit
+                   downstream of the daemon because the daemon depends on both packages
   local-tar/       local files as a tar, for impz cp and image build contexts
   mcp/             the MCP server: imps, exec, files and checkpoints as tools
   shared/          pure helpers that know nothing about imp

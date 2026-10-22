@@ -11,7 +11,7 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import type { Request } from '@impz/agent-protocol';
-import type { StubAgentHandler } from '@impz/daemon/testing';
+import type { StubAgentHandler } from './start-stub-agent';
 
 interface AgentRefusal {
   readonly code: string;

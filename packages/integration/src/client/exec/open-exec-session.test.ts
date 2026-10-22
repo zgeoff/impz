@@ -1,22 +1,21 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
+import { createImpClient, openExecSession } from '@impz/client';
+import type { ExecSession, ExecStarted } from '@impz/client';
+import { createStubUndiciWebSocket } from '@impz/client/test-utils/create-stub-undici-web-socket';
+import { makeStubImpdWithoutFeature } from '@impz/client/test-utils/make-stub-impd-without-feature';
+import { startStubImpdSocket } from '@impz/client/test-utils/start-stub-impd-socket';
 import { createImage } from '@impz/daemon/src/platform/db/images';
 import {
   buildImagePaths,
   buildImpPaths,
   buildMockNewImage,
+  buildStubExecAgent,
   claimFreePorts,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { http } from 'msw';
-import { createImpClient } from '../create-imp-client';
-import { buildStubExecAgent } from '../test-utils/build-stub-exec-agent';
-import { createStubUndiciWebSocket } from '../test-utils/create-stub-undici-web-socket';
-import { makeStubImpdWithoutFeature } from '../test-utils/make-stub-impd-without-feature';
-import { startStubImpdSocket } from '../test-utils/start-stub-impd-socket';
-import { openExecSession } from './open-exec-session';
-import type { ExecSession, ExecStarted } from './open-exec-session';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

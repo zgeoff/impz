@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { ApprovalCodeSchema } from '@impz/api';
+import { readMcpAnswer } from '@impz/mcp/test-utils/read-mcp-answer';
 import { waitFor } from '@impz/test-utils/wait-for';
 import {
   Client,
@@ -14,7 +15,6 @@ import type {
 } from '@modelcontextprotocol/client';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
-import { readMcpAnswer } from '../../../../mcp/src/test-utils/read-mcp-answer';
 import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
 import { runOAuthSignIn } from '../../../testing/identity/run-oauth-sign-in';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';

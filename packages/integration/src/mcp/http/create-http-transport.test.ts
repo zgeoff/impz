@@ -1,14 +1,14 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import { buildQueryGate, startTestImpd } from '@impz/daemon/testing';
+import { createHttpTransport } from '@impz/mcp';
+import type { McpPrincipal } from '@impz/mcp';
+import { buildMockMcpPrincipal } from '@impz/mcp/test-utils/build-mock-mcp-principal';
+import { buildStubRepeat } from '@impz/mcp/test-utils/build-stub-repeat';
+import { readMcpAnswer } from '@impz/mcp/test-utils/read-mcp-answer';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
-import { buildMockMcpPrincipal } from '../test-utils/build-mock-mcp-principal';
-import { buildStubRepeat } from '../test-utils/build-stub-repeat';
-import { readMcpAnswer } from '../test-utils/read-mcp-answer';
-import { createHttpTransport } from './create-http-transport';
-import type { McpPrincipal } from './create-http-transport';
 
 async function setupTest() {
   const gate = buildQueryGate('imps');
