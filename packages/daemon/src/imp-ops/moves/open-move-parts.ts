@@ -26,20 +26,26 @@ export interface OpenedParts {
   readonly close: () => Promise<void>;
 }
 
+interface OpenMovePartsOptions {
+  readonly imp: ImpRecord;
+  readonly mode: MoveMode;
+  readonly isImageIncluded: boolean;
+  readonly warm: WarmParts | null;
+}
+
 export async function openMoveParts(
   deps: MovePartsDeps,
-  imp: ImpRecord,
-  mode: MoveMode,
-  isImageIncluded: boolean,
-  warm: WarmParts | null,
+  options: OpenMovePartsOptions,
 ): Promise<OpenedParts> {
-  const opened = await openDiskParts(deps, imp, mode, isImageIncluded);
+  const warm = options.warm;
+
+  const opened = await openDiskParts(deps, options.imp, options.mode, options.isImageIncluded);
 
   if (warm === null) {
     return opened;
   }
 
-  const paths = deps.storage.resolveImpPaths(imp.id);
+  const paths = deps.storage.resolveImpPaths(options.imp.id);
 
   const memory: StreamPart[] = [
     ...(warm.isDriveIncluded && warm.meta.systemDrivePath !== undefined

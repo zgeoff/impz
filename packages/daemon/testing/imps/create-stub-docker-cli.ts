@@ -71,7 +71,7 @@ export function createStubDockerCli(options: Readonly<StubDockerCliOptions>) {
         const argv =
           format === '' ? `image inspect ${ref}` : `image inspect --format ${format} ${ref}`;
 
-        arms.push(buildInspectArm(index, image, argv, format, state));
+        arms.push(buildInspectArm({ index, image, argv, format, state }));
       }
 
       arms.push(buildPullArm(index, ref, image.pull ?? 'ok', state));
@@ -122,20 +122,24 @@ export function createStubDockerCli(options: Readonly<StubDockerCliOptions>) {
   };
 }
 
+interface BuildInspectArmOptions {
+  readonly index: number;
+  readonly image: StubDockerImage;
+  readonly argv: string;
+  readonly format: string;
+  readonly state: string;
+}
+
 // Each call appends a line to the count, because a count rewritten in place reads empty to
 // a parallel call.
-function buildInspectArm(
-  index: number,
-  image: StubDockerImage,
-  argv: string,
-  format: string,
-  state: string,
-): string {
-  const tag = String(index);
+function buildInspectArm(options: BuildInspectArmOptions): string {
+  const image = options.image;
+  const state = options.state;
+  const tag = String(options.index);
   const count = formatShellWord(join(state, `inspected-${tag}`));
   const last = String(image.inspects.length - 1);
   const output = formatShellWord(join(state, `inspect-${tag}-`));
-  const formatKey = String([...FORMATS.keys()].indexOf(format));
+  const formatKey = String([...FORMATS.keys()].indexOf(options.format));
 
   const present =
     image.isOnHost === false
@@ -143,7 +147,7 @@ function buildInspectArm(
       : '';
 
   return [
-    `  ${formatShellWord(argv)}) ${present}echo >>${count}; n=$(($(wc -l <${count}) - 1))`,
+    `  ${formatShellWord(options.argv)}) ${present}echo >>${count}; n=$(($(wc -l <${count}) - 1))`,
     `    [ "$n" -gt ${last} ] && n=${last}; cat ${output}"$n"-${formatKey} ;;`,
   ].join('\n');
 }

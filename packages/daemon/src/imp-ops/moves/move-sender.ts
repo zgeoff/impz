@@ -107,7 +107,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       deps.log(`impd: move: ${imp.name}: tailnet name not released yet: ${getErrorMessage(error)}`);
     });
 
-    const response = await sendToPeer(deps, peer, MOVE_PATHS.commit, ticket);
+    const response = await sendToPeer(deps, { peer, path: MOVE_PATHS.commit, ticket });
     const answer = await requireOk(response, 'commit');
 
     const reply = MoveCommitReplySchema.parse(answer);

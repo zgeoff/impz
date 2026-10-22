@@ -10,13 +10,21 @@ export type TickerTimer = (
   durationMs: number,
 ) => () => void;
 
-export function startTicker(
-  label: string,
-  intervalMs: number,
-  task: () => Promise<void>,
-  log: (message: string) => void,
-  timer: TickerTimer = startRuntimeTimer,
-): Ticker {
+export interface StartTickerOptions {
+  readonly label: string;
+  readonly intervalMs: number;
+  readonly task: () => Promise<void>;
+  readonly log: (message: string) => void;
+  readonly timer?: TickerTimer | undefined;
+}
+
+export function startTicker(options: StartTickerOptions): Ticker {
+  const label = options.label;
+  const intervalMs = options.intervalMs;
+  const task = options.task;
+  const log = options.log;
+  const timer = options.timer ?? startRuntimeTimer;
+
   const state: { cancel: (() => void) | null; running: Promise<void> | null } = {
     cancel: null,
     running: null,

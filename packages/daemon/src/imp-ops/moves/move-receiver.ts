@@ -185,7 +185,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     secret: string,
   ): Promise<Reply> => {
     try {
-      return await readMoveStream(deps, tempDir, pipe.stream, row, secret);
+      return await readMoveStream(deps, { tempDir, stream: pipe.stream, row, secret });
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(String(error));
 

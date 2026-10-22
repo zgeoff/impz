@@ -184,13 +184,20 @@ interface PinnedInstruction {
   readonly words: readonly string[];
 }
 
-function pickInstruction(
-  instruction: Readonly<Instruction>,
-  earlierStages: ReadonlySet<string>,
-  stages: Readonly<Stages>,
-  pickImage: PickImage,
-  platform: string | null,
-): PinnedInstruction {
+interface PickInstructionOptions {
+  readonly instruction: Readonly<Instruction>;
+  readonly earlierStages: ReadonlySet<string>;
+  readonly stages: Readonly<Stages>;
+  readonly pickImage: PickImage;
+  readonly platform: string | null;
+}
+
+function pickInstruction(options: PickInstructionOptions): PinnedInstruction {
+  const instruction = options.instruction;
+  const earlierStages = options.earlierStages;
+  const stages = options.stages;
+  const pickImage = options.pickImage;
+  const platform = options.platform;
   const line = instruction.line;
 
   if (instruction.keyword === 'from') {
@@ -289,7 +296,7 @@ function resolveInstructions(
       checkWords(instruction, parsed.escape);
     }
 
-    const pinned = pickInstruction(instruction, earlierStages, stages, pickImage, platform);
+    const pinned = pickInstruction({ instruction, earlierStages, stages, pickImage, platform });
     const [, as, stage] = instruction.words;
 
     if (instruction.keyword === 'from' && as?.toLowerCase() === 'as' && stage !== undefined) {

@@ -30,24 +30,29 @@ import { mergeIntersection } from './merge-intersection';
 import { resolveRef } from './resolve-ref';
 import type { Schema, SchemaObject } from './schema';
 
-export function collectSchemaChanges(
-  label: string,
-  direction: MessageDirection,
-  before: Schema,
-  after: Schema,
-  hasStableFields = false,
-): string[] {
-  const [narrow, wide] = direction === 'toServer' ? [before, after] : [after, before];
+interface CollectSchemaChangesOptions {
+  readonly label: string;
+  readonly direction: MessageDirection;
+  readonly before: Schema;
+  readonly after: Schema;
+  readonly hasStableFields?: boolean;
+}
+
+export function collectSchemaChanges(options: CollectSchemaChangesOptions): string[] {
+  const direction = options.direction;
+
+  const [narrow, wide] =
+    direction === 'toServer' ? [options.before, options.after] : [options.after, options.before];
 
   const comparison = {
     direction,
     narrowRoot: narrow,
     wideRoot: wide,
     seen: new Set<string>(),
-    hasStableFields,
+    hasStableFields: options.hasStableFields ?? false,
   };
 
-  return collectChanges(narrow, wide, '', comparison).map((change) => `${label}${change}`);
+  return collectChanges(narrow, wide, '', comparison).map((change) => `${options.label}${change}`);
 }
 
 function collectChanges(
@@ -123,7 +128,13 @@ function collectObjectChanges(
 
     const dropped =
       comparison.direction === 'toClient' && wideBranches !== undefined
-        ? collectDroppedVariants(narrowBranches, wideBranches, keys, path, comparison)
+        ? collectDroppedVariants({
+            narrowBranches,
+            wideBranches,
+            tagKeys: keys,
+            path,
+            comparison,
+          })
         : [];
 
     const inner = { ...comparison, unionTags: { path, keys } };
@@ -155,7 +166,7 @@ function collectObjectChanges(
   }
 
   if (wideBranches !== undefined) {
-    return collectUnionChanges(narrow, wide, wideBranches, path, comparison);
+    return collectUnionChanges({ narrow, wide, branches: wideBranches, path, comparison });
   }
 
   const wideParts = findSchemaList(wide, 'allOf');
@@ -182,23 +193,28 @@ function resolveBranches(branches: readonly Schema[], root: Schema): readonly Sc
     .filter((branch) => isSchemaObject(branch));
 }
 
-function collectDroppedVariants(
-  narrowBranches: readonly Schema[],
-  wideBranches: readonly Schema[],
-  tagKeys: readonly string[],
-  path: string,
-  comparison: Comparison,
-): string[] {
+interface CollectDroppedVariantsOptions {
+  readonly narrowBranches: readonly Schema[];
+  readonly wideBranches: readonly Schema[];
+  readonly tagKeys: readonly string[];
+  readonly path: string;
+  readonly comparison: Comparison;
+}
+
+function collectDroppedVariants(options: CollectDroppedVariantsOptions): string[] {
+  const tagKeys = options.tagKeys;
+  const comparison = options.comparison;
+
   if (tagKeys.length === 0) {
     return [];
   }
 
-  const narrowObjects = resolveBranches(narrowBranches, comparison.narrowRoot);
+  const narrowObjects = resolveBranches(options.narrowBranches, comparison.narrowRoot);
 
-  return resolveBranches(wideBranches, comparison.wideRoot)
+  return resolveBranches(options.wideBranches, comparison.wideRoot)
     .filter((branch) => narrowObjects.every((other) => hasOtherTag(other, branch, tagKeys)))
     .map((branch) =>
-      formatChange(path, `no longer sends the variant ${formatTag(branch, tagKeys)}`),
+      formatChange(options.path, `no longer sends the variant ${formatTag(branch, tagKeys)}`),
     );
 }
 
@@ -260,13 +276,20 @@ function isClosedSet(schemaRef: Schema, root: Schema): boolean {
   );
 }
 
-function collectUnionChanges(
-  narrow: SchemaObject,
-  wide: SchemaObject,
-  branches: readonly Schema[],
-  path: string,
-  comparison: Comparison,
-): string[] {
+interface CollectUnionChangesOptions {
+  readonly narrow: SchemaObject;
+  readonly wide: SchemaObject;
+  readonly branches: readonly Schema[];
+  readonly path: string;
+  readonly comparison: Comparison;
+}
+
+function collectUnionChanges(options: CollectUnionChangesOptions): string[] {
+  const narrow = options.narrow;
+  const wide = options.wide;
+  const branches = options.branches;
+  const path = options.path;
+  const comparison = options.comparison;
   const siblings = buildWithout(wide, ['anyOf', 'oneOf']);
 
   const siblingChanges = isAnything(siblings)
@@ -356,7 +379,7 @@ function collectStringChanges(
 
   return [
     ...lengths.flatMap(([name, narrowBound, wideBound, side]) =>
-      collectBoundChange(name, narrowBound, wideBound, side, path, comparison),
+      collectBoundChange({ name, narrow: narrowBound, wide: wideBound, side, path, comparison }),
     ),
     ...changes,
   ];

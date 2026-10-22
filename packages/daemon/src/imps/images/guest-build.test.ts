@@ -44,12 +44,12 @@ test('#writeGuestTree unpacks the builder export into the root', async () => {
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  await writeGuestTree(
-    createGuestExec(builder.guest.open),
-    ctx.root,
-    { maxBytes: 1024 ** 3, maxFiles: 100 },
-    new AbortController().signal,
-  );
+  await writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+  });
 
   expect(readFileSync(join(ctx.root, 'etc', 'hello'), 'utf8')).toBe('hi\n'.repeat(100_000));
 });
@@ -66,12 +66,12 @@ test('#writeGuestTree gives the image config the builder inspected', async () =>
     config: '{"Cmd":["sh"],"Env":["A=1"]}\n',
   });
 
-  const image = await writeGuestTree(
-    createGuestExec(builder.guest.open),
-    ctx.root,
-    { maxBytes: 1024 ** 3, maxFiles: 100 },
-    new AbortController().signal,
-  );
+  const image = await writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+  });
 
   expect(image.config).toStrictEqual({ Cmd: ['sh'], Env: ['A=1'] });
 });
@@ -87,12 +87,12 @@ test('#writeGuestTree gives a build digest of 64 hex characters', async () => {
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  const image = await writeGuestTree(
-    createGuestExec(builder.guest.open),
-    ctx.root,
-    { maxBytes: 1024 ** 3, maxFiles: 100 },
-    new AbortController().signal,
-  );
+  const image = await writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+  });
 
   expect(image.digest).toMatch(/^imp-build-[0-9a-f]{64}$/v);
 });
@@ -113,14 +113,19 @@ test('#writeGuestTree gives the same digest for the same config and export', asy
 
   const signal = new AbortController().signal;
 
-  const first = await writeGuestTree(createGuestExec(builder.guest.open), ctx.root, limits, signal);
-
-  const second = await writeGuestTree(
-    createGuestExec(builder.guest.open),
-    join(ctx.directoryPath, 'again'),
+  const first = await writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
     limits,
     signal,
-  );
+  });
+
+  const second = await writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: join(ctx.directoryPath, 'again'),
+    limits,
+    signal,
+  });
 
   expect(second.digest).toBe(first.digest);
 });
@@ -150,14 +155,19 @@ test('#writeGuestTree gives another digest for another config of the same export
 
   const signal = new AbortController().signal;
 
-  const first = await writeGuestTree(createGuestExec(shell.guest.open), ctx.root, limits, signal);
-
-  const second = await writeGuestTree(
-    createGuestExec(bash.guest.open),
-    join(ctx.directoryPath, 'again'),
+  const first = await writeGuestTree({
+    exec: createGuestExec(shell.guest.open),
+    root: ctx.root,
     limits,
     signal,
-  );
+  });
+
+  const second = await writeGuestTree({
+    exec: createGuestExec(bash.guest.open),
+    root: join(ctx.directoryPath, 'again'),
+    limits,
+    signal,
+  });
 
   expect(second.digest).not.toBe(first.digest);
 });
@@ -185,14 +195,19 @@ test('#writeGuestTree gives another digest for another export of the same config
 
   const signal = new AbortController().signal;
 
-  const first = await writeGuestTree(createGuestExec(hello.guest.open), ctx.root, limits, signal);
-
-  const second = await writeGuestTree(
-    createGuestExec(bye.guest.open),
-    join(ctx.directoryPath, 'again'),
+  const first = await writeGuestTree({
+    exec: createGuestExec(hello.guest.open),
+    root: ctx.root,
     limits,
     signal,
-  );
+  });
+
+  const second = await writeGuestTree({
+    exec: createGuestExec(bye.guest.open),
+    root: join(ctx.directoryPath, 'again'),
+    limits,
+    signal,
+  });
 
   expect(second.digest).not.toBe(first.digest);
 });
@@ -207,12 +222,12 @@ test('#writeGuestTree inspects, creates and exports the built image in the build
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  await writeGuestTree(
-    createGuestExec(builder.guest.open),
-    ctx.root,
-    { maxBytes: 1024 ** 3, maxFiles: 100 },
-    new AbortController().signal,
-  );
+  await writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+  });
 
   expect(builder.guest.runs.map((run) => run.argv.join(' '))).toStrictEqual([
     'docker image inspect --format {{json .Config}} imp-build:latest',
@@ -234,17 +249,17 @@ test('#writeGuestTree holds disk ahead of the export in 256 MiB steps', async ()
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  await writeGuestTree(
-    createGuestExec(builder.guest.open),
-    ctx.root,
-    { maxBytes: 1024 ** 3, maxFiles: 100 },
-    new AbortController().signal,
-    (totalBytes) => {
+  await writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+    grow: (totalBytes) => {
       holds.push(totalBytes);
 
       return Promise.resolve();
     },
-  );
+  });
 
   expect(holds).toStrictEqual([256 * 1024 ** 2]);
 });
@@ -265,12 +280,12 @@ test('#writeGuestTree refuses an export past the byte cap', async () => {
   });
 
   expect(
-    writeGuestTree(
-      createGuestExec(builder.guest.open),
-      ctx.root,
-      { maxBytes: 2 * 65_536, maxFiles: 100 },
-      new AbortController().signal,
-    ),
+    writeGuestTree({
+      exec: createGuestExec(builder.guest.open),
+      root: ctx.root,
+      limits: { maxBytes: 2 * 65_536, maxFiles: 100 },
+      signal: new AbortController().signal,
+    }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
     "the built image's filesystem is over 0 MiB (IMP_BUILD_IMAGE_MAX_MIB)",
@@ -292,12 +307,12 @@ test('#writeGuestTree ends the export exec at the byte cap', async () => {
     repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  const writing = writeGuestTree(
-    createGuestExec(builder.guest.open),
-    ctx.root,
-    { maxBytes: 2 * 65_536, maxFiles: 100 },
-    new AbortController().signal,
-  );
+  const writing = writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 2 * 65_536, maxFiles: 100 },
+    signal: new AbortController().signal,
+  });
 
   expect(writing).rejects.toBeInstanceOf(ImageLimitError);
   expect(builder.guest.runs.at(-1)?.closed).toBeTrue();
@@ -320,12 +335,12 @@ test('#writeGuestTree refuses an export of more entries than the file cap', asyn
   });
 
   expect(
-    writeGuestTree(
-      createGuestExec(builder.guest.open),
-      ctx.root,
-      { maxBytes: 1024 ** 3, maxFiles: 10 },
-      new AbortController().signal,
-    ),
+    writeGuestTree({
+      exec: createGuestExec(builder.guest.open),
+      root: ctx.root,
+      limits: { maxBytes: 1024 ** 3, maxFiles: 10 },
+      signal: new AbortController().signal,
+    }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
     "the built image's filesystem is over 10 files (IMP_BUILD_IMAGE_MAX_FILES)",
@@ -347,12 +362,12 @@ test('#writeGuestTree counts a sparse file at its full size against the cap', as
   });
 
   expect(
-    writeGuestTree(
-      createGuestExec(builder.guest.open),
-      ctx.root,
-      { maxBytes: 1024 ** 2, maxFiles: 1000 },
-      new AbortController().signal,
-    ),
+    writeGuestTree({
+      exec: createGuestExec(builder.guest.open),
+      root: ctx.root,
+      limits: { maxBytes: 1024 ** 2, maxFiles: 1000 },
+      signal: new AbortController().signal,
+    }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
     "the built image's filesystem is over 1 MiB (IMP_BUILD_IMAGE_MAX_MIB)",
@@ -376,12 +391,12 @@ test('#writeGuestTree counts a block for each small file against the cap', async
   });
 
   expect(
-    writeGuestTree(
-      createGuestExec(builder.guest.open),
-      ctx.root,
-      { maxBytes: 1024 ** 2, maxFiles: 1000 },
-      new AbortController().signal,
-    ),
+    writeGuestTree({
+      exec: createGuestExec(builder.guest.open),
+      root: ctx.root,
+      limits: { maxBytes: 1024 ** 2, maxFiles: 1000 },
+      signal: new AbortController().signal,
+    }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
     "the built image's filesystem is over 1 MiB (IMP_BUILD_IMAGE_MAX_MIB)",
@@ -411,12 +426,12 @@ test('#writeGuestTree counts the directories tar makes for a member as entries',
   });
 
   expect(
-    writeGuestTree(
-      createGuestExec(builder.guest.open),
-      ctx.root,
-      { maxBytes: 1024 ** 3, maxFiles: 1 },
-      new AbortController().signal,
-    ),
+    writeGuestTree({
+      exec: createGuestExec(builder.guest.open),
+      root: ctx.root,
+      limits: { maxBytes: 1024 ** 3, maxFiles: 1 },
+      signal: new AbortController().signal,
+    }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
     "the built image's filesystem is over 1 files (IMP_BUILD_IMAGE_MAX_FILES)",
@@ -446,12 +461,12 @@ test('#writeGuestTree counts the directories tar makes for a member as blocks', 
   });
 
   expect(
-    writeGuestTree(
-      createGuestExec(builder.guest.open),
-      ctx.root,
-      { maxBytes: 64 * 1024, maxFiles: 1000 },
-      new AbortController().signal,
-    ),
+    writeGuestTree({
+      exec: createGuestExec(builder.guest.open),
+      root: ctx.root,
+      limits: { maxBytes: 64 * 1024, maxFiles: 1000 },
+      signal: new AbortController().signal,
+    }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
     "the built image's filesystem is over 0 MiB (IMP_BUILD_IMAGE_MAX_MIB)",
@@ -481,12 +496,12 @@ test('#writeGuestTree ends an export that stalls past a limit', async () => {
     isExportStalled: true,
   });
 
-  const writing = writeGuestTree(
-    createGuestExec(builder.guest.open),
-    ctx.root,
-    { maxBytes: 1024 ** 3, maxFiles: 1 },
-    new AbortController().signal,
-  );
+  const writing = writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 1 },
+    signal: new AbortController().signal,
+  });
 
   expect(writing).rejects.toThrowWithMessage(
     ImageLimitError,
@@ -507,14 +522,14 @@ test('#writeGuestTree ends an export that sends nothing for its idle limit', asy
 
   const timers = buildStubClock();
 
-  const writing = writeGuestTree(
-    createGuestExec(builder.guest.open),
-    ctx.root,
-    { maxBytes: 1024 ** 3, maxFiles: 1000 },
-    new AbortController().signal,
-    () => Promise.resolve(),
-    timers.startTimer,
-  );
+  const writing = writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 1000 },
+    signal: new AbortController().signal,
+    grow: () => Promise.resolve(),
+    startTimer: timers.startTimer,
+  });
 
   await waitFor(() => {
     expect(timers.readPendingMs()).toStrictEqual([120_000]);
@@ -539,12 +554,12 @@ test("#writeGuestTree refuses a builder's config that is not one JSON object", a
     config: '["not", "a", "config"]\n',
   });
 
-  const writing = writeGuestTree(
-    createGuestExec(builder.guest.open),
-    ctx.root,
-    { maxBytes: 1024, maxFiles: 100 },
-    new AbortController().signal,
-  );
+  const writing = writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024, maxFiles: 100 },
+    signal: new AbortController().signal,
+  });
 
   expect(writing).rejects.toThrowWithMessage(Error, /expected record/v);
   expect(builder.guest.runs).toHaveLength(1);
@@ -560,12 +575,12 @@ test('#writeGuestTree fails when the inspect in the builder exits non-zero', asy
   });
 
   expect(
-    writeGuestTree(
-      createGuestExec(builder.guest.open),
-      ctx.root,
-      { maxBytes: 1024, maxFiles: 100 },
-      new AbortController().signal,
-    ),
+    writeGuestTree({
+      exec: createGuestExec(builder.guest.open),
+      root: ctx.root,
+      limits: { maxBytes: 1024, maxFiles: 100 },
+      signal: new AbortController().signal,
+    }),
   ).rejects.toThrowWithMessage(
     Error,
     'docker image inspect in the builder: No such image: imp-build:latest',
@@ -582,12 +597,12 @@ test('#writeGuestTree fails when the create in the builder exits non-zero', asyn
   });
 
   expect(
-    writeGuestTree(
-      createGuestExec(builder.guest.open),
-      ctx.root,
-      { maxBytes: 1024, maxFiles: 100 },
-      new AbortController().signal,
-    ),
+    writeGuestTree({
+      exec: createGuestExec(builder.guest.open),
+      root: ctx.root,
+      limits: { maxBytes: 1024, maxFiles: 100 },
+      signal: new AbortController().signal,
+    }),
   ).rejects.toThrowWithMessage(Error, 'docker create in the builder: no space left on device');
 });
 
@@ -601,12 +616,12 @@ test('#writeGuestTree fails when the export in the builder exits non-zero', asyn
   });
 
   expect(
-    writeGuestTree(
-      createGuestExec(builder.guest.open),
-      ctx.root,
-      { maxBytes: 1024 ** 3, maxFiles: 100 },
-      new AbortController().signal,
-    ),
+    writeGuestTree({
+      exec: createGuestExec(builder.guest.open),
+      root: ctx.root,
+      limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+      signal: new AbortController().signal,
+    }),
   ).rejects.toThrowWithMessage(Error, 'docker export in the builder: container gone');
 });
 

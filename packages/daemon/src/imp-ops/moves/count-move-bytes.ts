@@ -26,7 +26,7 @@ export async function countMoveBytes(
 ): Promise<number> {
   const warm = meta === null ? null : { meta, isDriveIncluded: true };
 
-  const opened = await openMoveParts(deps, imp, mode, true, warm);
+  const opened = await openMoveParts(deps, { imp, mode, isImageIncluded: true, warm });
 
   try {
     let bytes = 0;

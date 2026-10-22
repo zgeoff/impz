@@ -6,23 +6,27 @@ import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import { removeUnusedSystemDrives } from '../../vm/storage/remove-unused-system-drives';
 
+interface RemoveUnusedDrivesOptions {
+  readonly dataDir: string;
+  readonly findPaths: (impId: string) => ImpPaths;
+  readonly currentDrivePath: string;
+  readonly templateDrivePaths?: readonly string[];
+}
+
 export async function removeUnusedDrives(
   db: ImpDatabase,
-  dataDir: string,
-  findPaths: (impId: string) => ImpPaths,
-  currentDrivePath: string,
-  templateDrivePaths: readonly string[] = [],
+  options: RemoveUnusedDrivesOptions,
 ): Promise<string[]> {
-  const keep = await listDrivesInUse(db, findPaths);
+  const keep = await listDrivesInUse(db, options.findPaths);
 
-  keep.add(basename(currentDrivePath));
+  keep.add(basename(options.currentDrivePath));
 
   // A boot template reopens its drive on every restore.
-  for (const path of templateDrivePaths) {
+  for (const path of options.templateDrivePaths ?? []) {
     keep.add(basename(path));
   }
 
-  return removeUnusedSystemDrives(dataDir, keep);
+  return removeUnusedSystemDrives(options.dataDir, keep);
 }
 
 async function listDrivesInUse(

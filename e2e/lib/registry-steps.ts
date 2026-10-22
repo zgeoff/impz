@@ -310,24 +310,30 @@ export async function createMovedTag(
   return { tag, kept, pinned };
 }
 
+interface RunBuildAndListRequestsOptions {
+  readonly registry: Readonly<Registry>;
+  readonly directory: string;
+  readonly repository: string;
+  readonly dockerfile: string;
+  readonly name: string;
+}
+
 export async function runBuildAndListRequests(
-  registry: Readonly<Registry>,
-  directory: string,
-  repository: string,
-  dockerfile: string,
-  name: string,
+  options: RunBuildAndListRequestsOptions,
 ): Promise<string[]> {
-  const before = await listManifestRequests(registry, repository);
+  const name = options.name;
+
+  const before = await listManifestRequests(options.registry, options.repository);
 
   await runImp(
     'image',
     'build',
-    writeContext(directory, `build-${name}`, dockerfile, ''),
+    writeContext(options.directory, `build-${name}`, options.dockerfile, ''),
     '--name',
     name,
   );
 
-  const after = await listManifestRequests(registry, repository);
+  const after = await listManifestRequests(options.registry, options.repository);
 
   const seen = after.slice(before.length);
 

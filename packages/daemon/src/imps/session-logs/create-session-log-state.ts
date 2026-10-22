@@ -20,6 +20,14 @@ export type SessionLogState = ReturnType<typeof createSessionLogState>;
 const SEGMENTS_PER_LOG = 2;
 const LIMIT_CHECKS_PER_SEGMENT = 16;
 
+interface SetLiveOptions {
+  readonly imp: SessionLogImp;
+  readonly generation: string;
+  readonly session: string;
+  readonly log: GenerationLog;
+  readonly isStopped?: boolean;
+}
+
 export function createSessionLogState(deps: SessionLogStateDeps) {
   const segmentBytes = Math.max(1, Math.floor(deps.limits.generationMaxBytes / SEGMENTS_PER_LOG));
   const limitCheckBytes = Math.max(1, Math.floor(segmentBytes / LIMIT_CHECKS_PER_SEGMENT));
@@ -72,22 +80,16 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
     deps.log(`impd: session logs of imp ${imp.id}: ${getErrorMessage(error)}`);
   };
 
-  const setLive = (
-    imp: SessionLogImp,
-    generation: string,
-    session: string,
-    log: GenerationLog,
-    isStopped = false,
-  ) => {
+  const setLive = (options: SetLiveOptions) => {
     const entry: LiveLog = {
-      key: buildLogKey(imp.id, generation),
-      impId: imp.id,
-      session,
-      generation,
-      log,
+      key: buildLogKey(options.imp.id, options.generation),
+      impId: options.imp.id,
+      session: options.session,
+      generation: options.generation,
+      log: options.log,
     };
 
-    send({ type: 'log.add', entry, isStopped });
+    send({ type: 'log.add', entry, isStopped: options.isStopped ?? false });
 
     return entry;
   };

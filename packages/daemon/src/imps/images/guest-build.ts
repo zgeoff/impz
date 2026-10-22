@@ -125,7 +125,7 @@ export interface ExportedImage {
   readonly config: z.infer<typeof OciConfigSchema>;
 }
 
-export interface ExportLimits {
+interface ExportLimits {
   readonly maxBytes: number;
 
   // Counted from tar's own listing, so an archive cannot hide entries from a second parser.
@@ -201,14 +201,22 @@ async function countUnpacked(
   }
 }
 
-export async function writeGuestTree(
-  exec: GuestExec,
-  root: string,
-  limits: Readonly<ExportLimits>,
-  signal: AbortSignal,
-  grow: (totalBytes: number, writtenBytes: number) => Promise<void> = () => Promise.resolve(),
-  startTimer: StartTimer = startRealTimer,
-): Promise<ExportedImage> {
+interface WriteGuestTreeOptions {
+  readonly exec: GuestExec;
+  readonly root: string;
+  readonly limits: Readonly<ExportLimits>;
+  readonly signal: AbortSignal;
+  readonly grow?: (totalBytes: number, writtenBytes: number) => Promise<void>;
+  readonly startTimer?: StartTimer;
+}
+
+export async function writeGuestTree(options: WriteGuestTreeOptions): Promise<ExportedImage> {
+  const exec = options.exec;
+  const root = options.root;
+  const limits = options.limits;
+  const signal = options.signal;
+  const grow = options.grow ?? (() => Promise.resolve());
+  const startTimer = options.startTimer ?? startRealTimer;
   const maxBytes = limits.maxBytes;
 
   const inspected = await exec(

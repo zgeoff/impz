@@ -1737,17 +1737,49 @@ test('#runSuites starts and stops a suite’s fixture with --keep, and resets no
   ]);
 });
 
-test.each([
-  ['passes a run whose every section passed', [true, true], null, false, true],
-  ['fails a run with a failed section', [true, false], null, false, false],
-  [
-    'fails a run that stopped',
-    [true],
-    'the instance could not be made anew after sleep: down',
-    false,
-    false,
-  ],
-  ['fails a run that a signal reached after every section passed', [true, true], null, true, false],
-])('#hasRunPassed %s', (_, passed, stoppedBecause, interrupted, expected) => {
-  expect(hasRunPassed({ passed, stoppedBecause, interrupted })).toBe(expected);
+interface HasRunPassedRow {
+  readonly label: string;
+  readonly passed: readonly boolean[];
+  readonly stoppedBecause: string | null;
+  readonly interrupted: boolean;
+  readonly expected: boolean;
+}
+
+test.each<HasRunPassedRow>([
+  {
+    label: 'passes a run whose every section passed',
+    passed: [true, true],
+    stoppedBecause: null,
+    interrupted: false,
+    expected: true,
+  },
+  {
+    label: 'fails a run with a failed section',
+    passed: [true, false],
+    stoppedBecause: null,
+    interrupted: false,
+    expected: false,
+  },
+  {
+    label: 'fails a run that stopped',
+    passed: [true],
+    stoppedBecause: 'the instance could not be made anew after sleep: down',
+    interrupted: false,
+    expected: false,
+  },
+  {
+    label: 'fails a run that a signal reached after every section passed',
+    passed: [true, true],
+    stoppedBecause: null,
+    interrupted: true,
+    expected: false,
+  },
+])('#hasRunPassed $label', (row) => {
+  expect(
+    hasRunPassed({
+      passed: row.passed,
+      stoppedBecause: row.stoppedBecause,
+      interrupted: row.interrupted,
+    }),
+  ).toBe(row.expected);
 });

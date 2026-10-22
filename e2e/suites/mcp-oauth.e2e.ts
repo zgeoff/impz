@@ -207,11 +207,23 @@ test('it signs a client in on an approval from the CLI, and the grant lists the 
   expect(tokens.scope).toBe('read exec offline_access');
 
   const session = await openRouteMcp(ctx.origin, tokens.access_token);
-  const listed = await sendMcp(ctx.origin, tokens.access_token, session, 'tools/list');
 
-  const ran = await sendMcp(ctx.origin, tokens.access_token, session, 'tools/call', {
-    name: 'imp_exec',
-    arguments: { name: box, command: 'echo from-the-route' },
+  const listed = await sendMcp({
+    origin: ctx.origin,
+    bearer: tokens.access_token,
+    session,
+    method: 'tools/list',
+  });
+
+  const ran = await sendMcp({
+    origin: ctx.origin,
+    bearer: tokens.access_token,
+    session,
+    method: 'tools/call',
+    params: {
+      name: 'imp_exec',
+      arguments: { name: box, command: 'echo from-the-route' },
+    },
   });
 
   const grants = await runImp('oauth', 'grant', 'ls');
@@ -357,10 +369,16 @@ test('it rotates a refresh, and ends the grant when a spent refresh token comes 
 
   const second = RouteTokensSchema.parse(rotatedBody);
 
-  const after = await sendMcp(ctx.origin, second.access_token, '', 'initialize', {
-    protocolVersion: '2025-06-18',
-    capabilities: {},
-    clientInfo: { name: 'e2e', version: '1.0.0' },
+  const after = await sendMcp({
+    origin: ctx.origin,
+    bearer: second.access_token,
+    session: '',
+    method: 'initialize',
+    params: {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: { name: 'e2e', version: '1.0.0' },
+    },
   });
 
   expect(second.scope).toBe('read offline_access');
@@ -406,9 +424,15 @@ test('it stops the command a grant runs when the approving token goes, then answ
 
   const session = await openRouteMcp(ctx.origin, tokens.access_token);
 
-  const call = sendMcp(ctx.origin, tokens.access_token, session, 'tools/call', {
-    name: 'imp_exec',
-    arguments: { name: box, command: 'sleep 120', timeoutSeconds: 180 },
+  const call = sendMcp({
+    origin: ctx.origin,
+    bearer: tokens.access_token,
+    session,
+    method: 'tools/call',
+    params: {
+      name: 'imp_exec',
+      arguments: { name: box, command: 'sleep 120', timeoutSeconds: 180 },
+    },
   });
 
   await waitFor('the command to start', async () => {
@@ -430,7 +454,13 @@ test('it stops the command a grant runs when the approving token goes, then answ
 
   const elapsedMs = Date.now() - started;
 
-  const after = await sendMcp(ctx.origin, tokens.access_token, session, 'ping');
+  const after = await sendMcp({
+    origin: ctx.origin,
+    bearer: tokens.access_token,
+    session,
+    method: 'ping',
+  });
+
   const processes = await runImp('exec', box, '--', 'ps');
 
   expect(answered).toBeFalse();

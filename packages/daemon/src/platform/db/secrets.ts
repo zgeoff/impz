@@ -222,16 +222,22 @@ export async function removeFileRemoval(db: ImpDatabase, valueFile: string): Pro
   await db.deleteFrom('secret_file_removals').where('value_file', '=', valueFile).execute();
 }
 
+export interface CreateCheckedGrantOptions {
+  readonly impId: string;
+  readonly secretName: string;
+  readonly authority: Readonly<GrantAuthority> | null;
+  readonly filter?: GrantFilter | undefined;
+}
+
 export function createCheckedGrant(
   db: ImpDatabase,
-  impId: string,
-  secretName: string,
-  authority: Readonly<GrantAuthority> | null,
-  filter?: GrantFilter,
+  options: CreateCheckedGrantOptions,
 ): Promise<GrantOutcome> {
+  const impId = options.impId;
+
   return db.transaction().execute(async (trx) => {
-    const secret = await readSecret(trx, secretName);
-    const refusal = await checkAuthority(trx, authority, secret);
+    const secret = await readSecret(trx, options.secretName);
+    const refusal = await checkAuthority(trx, options.authority, secret);
 
     if (refusal !== null) {
       return { kind: refusal };
@@ -247,7 +253,7 @@ export function createCheckedGrant(
       return { kind: 'clash', clash };
     }
 
-    await writeGrant(trx, impId, secret, filter);
+    await writeGrant(trx, impId, secret, options.filter);
 
     return { kind: 'granted' };
   });

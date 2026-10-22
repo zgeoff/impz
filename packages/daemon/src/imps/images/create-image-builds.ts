@@ -81,6 +81,14 @@ interface ImageBuildsDeps {
   readonly now?: () => number;
 }
 
+interface RunHostBuildOptions {
+  readonly tarPath: string;
+  readonly tag: string;
+  readonly dockerfile: string;
+  readonly signal: AbortSignal;
+  readonly output: BuildOutput | undefined;
+}
+
 export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): ImageBuilds {
   const buildRuns = createBuildRuns(deps.now ?? Date.now);
   const buildSlots = createBuildSlots();
@@ -148,21 +156,15 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
     }
   };
 
-  const runHostBuild = (
-    tarPath: string,
-    tag: string,
-    dockerfile: string,
-    signal: AbortSignal,
-    output: BuildOutput | undefined,
-  ) =>
-    deps.diskBudget.withRoom(statSync(tarPath).size, () =>
+  const runHostBuild = (options: RunHostBuildOptions) =>
+    deps.diskBudget.withRoom(statSync(options.tarPath).size, () =>
       runDockerBuild({
         dockerHost: deps.config.dockerHost,
-        tarPath,
-        tag,
-        dockerfile,
-        signal,
-        output,
+        tarPath: options.tarPath,
+        tag: options.tag,
+        dockerfile: options.dockerfile,
+        signal: options.signal,
+        output: options.output,
       }),
     );
 
@@ -217,14 +219,14 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
           signal.throwIfAborted();
 
-          await writeBuildContext(
-            tarPath,
-            rewrittenPath,
-            context,
-            pinned.dockerfile,
-            DOCKERFILE_MAX_BYTES,
+          await writeBuildContext({
+            inputPath: tarPath,
+            outputPath: rewrittenPath,
+            checked: context,
+            dockerfile: pinned.dockerfile,
+            maxDockerfileBytes: DOCKERFILE_MAX_BYTES,
             signal,
-          );
+          });
 
           signal.throwIfAborted();
 
@@ -235,7 +237,14 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
           deps.log(HOST_BUILD_WARNING);
 
           await writePinnedContext(createBuildEngine(runOnHost));
-          await runHostBuild(rewrittenPath, tag, dockerfile, signal, options.output);
+
+          await runHostBuild({
+            tarPath: rewrittenPath,
+            tag,
+            dockerfile,
+            signal,
+            output: options.output,
+          });
 
           return null;
         }

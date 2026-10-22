@@ -149,8 +149,8 @@ test('it copies the grants by secret name', async () => {
 
   await createSecret(ctx.db, { name: 'npm', kind: 'github', rules: [], valueFile: 'npm' });
   await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
-  await createCheckedGrant(ctx.db, imp.id, 'npm', null);
-  await createCheckedGrant(ctx.db, imp.id, 'gh', null);
+  await createCheckedGrant(ctx.db, { impId: imp.id, secretName: 'npm', authority: null });
+  await createCheckedGrant(ctx.db, { impId: imp.id, secretName: 'gh', authority: null });
 
   const copy = await readDatabaseCopy(ctx.db, join(ctx.directoryPath, 'copy.sqlite'));
 

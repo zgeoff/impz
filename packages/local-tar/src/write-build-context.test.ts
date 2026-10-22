@@ -365,7 +365,13 @@ test('#writeBuildContext writes the files, directories, symlinks and long names 
 
   const checked = await readBuildContext(input, 'Dockerfile', 1024);
 
-  await writeBuildContext(input, output, checked, checked.dockerfile, 1024);
+  await writeBuildContext({
+    inputPath: input,
+    outputPath: output,
+    checked,
+    dockerfile: checked.dockerfile,
+    maxDockerfileBytes: 1024,
+  });
 
   const writtenBytes = await readFile(output);
   const written = await readTarEntries(writtenBytes);
@@ -405,7 +411,13 @@ test('#writeBuildContext keeps the permission bits and cuts the mtime to whole s
 
   const checked = await readBuildContext(input, 'Dockerfile', 1024);
 
-  await writeBuildContext(input, output, checked, checked.dockerfile, 1024);
+  await writeBuildContext({
+    inputPath: input,
+    outputPath: output,
+    checked,
+    dockerfile: checked.dockerfile,
+    maxDockerfileBytes: 1024,
+  });
 
   const writtenBytes = await readFile(output);
   const written = await readTarEntries(writtenBytes);
@@ -431,7 +443,13 @@ test('#writeBuildContext puts the given text in place of the Dockerfile the chec
 
   const checked = await readBuildContext(input, 'Dockerfile', 1024);
 
-  await writeBuildContext(input, output, checked, 'FROM busybox@sha256:aaaa\n', 1024);
+  await writeBuildContext({
+    inputPath: input,
+    outputPath: output,
+    checked,
+    dockerfile: 'FROM busybox@sha256:aaaa\n',
+    maxDockerfileBytes: 1024,
+  });
 
   const writtenBytes = await readFile(output);
   const written = await readTarEntries(writtenBytes);
@@ -457,7 +475,13 @@ test('#writeBuildContext drops a user xattr', async () => {
 
   const checked = await readBuildContext(input, 'Dockerfile', 1024);
 
-  await writeBuildContext(input, output, checked, checked.dockerfile, 1024);
+  await writeBuildContext({
+    inputPath: input,
+    outputPath: output,
+    checked,
+    dockerfile: checked.dockerfile,
+    maxDockerfileBytes: 1024,
+  });
 
   const writtenBytes = await readFile(output);
   const written = await readTarEntries(writtenBytes);
@@ -477,13 +501,13 @@ test('#writeBuildContext rejects a context whose Dockerfile differs from the one
   await Bun.write(input, bytes);
 
   expect(
-    writeBuildContext(
-      input,
-      join(ctx.directoryPath, 'out.tar'),
-      { dockerfilePath: 'Dockerfile', dockerfile: 'FROM busybox:1.36\n' },
-      'FROM busybox:1.36\n',
-      1024,
-    ),
+    writeBuildContext({
+      inputPath: input,
+      outputPath: join(ctx.directoryPath, 'out.tar'),
+      checked: { dockerfilePath: 'Dockerfile', dockerfile: 'FROM busybox:1.36\n' },
+      dockerfile: 'FROM busybox:1.36\n',
+      maxDockerfileBytes: 1024,
+    }),
   ).rejects.toThrowWithMessage(
     Error,
     'the build context changed between its check and its rewrite',
@@ -503,14 +527,14 @@ test('#writeBuildContext rejects with the reason of a signal aborted during its 
 
   await $`mkfifo ${input}`;
 
-  const writing = writeBuildContext(
-    input,
-    output,
-    { dockerfilePath: 'Dockerfile', dockerfile: 'FROM busybox:1.37\n' },
-    'FROM busybox:1.37\n',
-    1024,
-    controller.signal,
-  );
+  const writing = writeBuildContext({
+    inputPath: input,
+    outputPath: output,
+    checked: { dockerfilePath: 'Dockerfile', dockerfile: 'FROM busybox:1.37\n' },
+    dockerfile: 'FROM busybox:1.37\n',
+    maxDockerfileBytes: 1024,
+    signal: controller.signal,
+  });
 
   ctx.stack.defer(async () => {
     await Promise.allSettled([writing]);
@@ -550,14 +574,14 @@ test('#writeBuildContext rejects with an error of the text of a reason that is n
 
   await $`mkfifo ${input}`;
 
-  const writing = writeBuildContext(
-    input,
-    output,
-    { dockerfilePath: 'Dockerfile', dockerfile: 'FROM busybox:1.37\n' },
-    'FROM busybox:1.37\n',
-    1024,
-    controller.signal,
-  );
+  const writing = writeBuildContext({
+    inputPath: input,
+    outputPath: output,
+    checked: { dockerfilePath: 'Dockerfile', dockerfile: 'FROM busybox:1.37\n' },
+    dockerfile: 'FROM busybox:1.37\n',
+    maxDockerfileBytes: 1024,
+    signal: controller.signal,
+  });
 
   ctx.stack.defer(async () => {
     await Promise.allSettled([writing]);
@@ -608,7 +632,7 @@ test('#writeBuildContext rejects with the write failure as it is', async () => {
       process.execPath,
       '-e',
       `const { writeBuildContext } = await import(${JSON.stringify(join(import.meta.dir, 'write-build-context.ts'))});
-      const failure = await writeBuildContext(${JSON.stringify(input)}, ${JSON.stringify(output)}, { dockerfilePath: 'Dockerfile', dockerfile: 'FROM busybox:1.37\\n' }, 'FROM busybox:1.37\\n', 1024).then(() => null, (error) => error);
+      const failure = await writeBuildContext({ inputPath: ${JSON.stringify(input)}, outputPath: ${JSON.stringify(output)}, checked: { dockerfilePath: 'Dockerfile', dockerfile: 'FROM busybox:1.37\\n' }, dockerfile: 'FROM busybox:1.37\\n', maxDockerfileBytes: 1024 }).then(() => null, (error) => error);
       console.log(JSON.stringify({ name: failure?.name, code: failure?.code }));`,
     ],
     { stdout: 'pipe', stderr: 'inherit' },

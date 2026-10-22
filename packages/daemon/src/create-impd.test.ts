@@ -738,6 +738,8 @@ test('it sends a streamed build its progress at the keepalive gap it is given', 
   ]);
 });
 
+// a fresh Bun loads impd from source, which took up to 9 s on a 2 GiB host
+// straight after a type check, past the 5 s default
 test('it logs to stdout when no log is given', async () => {
   const ctx = await setupTest();
 
@@ -775,4 +777,4 @@ test('it logs to stdout when no log is given', async () => {
   const stdout = await new Response(child.stdout).text();
 
   expect(stdout).toStartWith(`${HOST_BUILD_WARNING}\n${HOST_ADD_WARNING}\n`);
-});
+}, 30_000);

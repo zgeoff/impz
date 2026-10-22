@@ -107,10 +107,19 @@ export async function startSshGateway(
         client.end();
       });
 
-      handleClient(client, info, entry.socket, deps, limits.maxAuthFailures, () => {
-        entry.cancelTimer();
-        pending.delete(key);
-      });
+      handleClient(
+        {
+          client,
+          info,
+          socket: entry.socket,
+          maxAuthFailures: limits.maxAuthFailures,
+          onAuthenticated: () => {
+            entry.cancelTimer();
+            pending.delete(key);
+          },
+        },
+        deps,
+      );
     },
   );
 
@@ -176,14 +185,17 @@ function buildRemoteKey(ip: string, port: number): string {
   return `${ip} ${String(port)}`;
 }
 
-function handleClient(
-  client: Connection,
-  info: ClientInfo,
-  socket: Socket,
-  deps: SshGatewayDeps,
-  maxAuthFailures: number,
-  onAuthenticated: () => void,
-): void {
+interface HandleClientOptions {
+  readonly client: Connection;
+  readonly info: ClientInfo;
+  readonly socket: Socket;
+  readonly maxAuthFailures: number;
+  readonly onAuthenticated: () => void;
+}
+
+function handleClient(options: HandleClientOptions, deps: SshGatewayDeps): void {
+  const client = options.client;
+  const info = options.info;
   const login: { granted: Login | null; failures: number } = { granted: null, failures: 0 };
 
   const handleAuthentication = async (ctx: AuthContext): Promise<void> => {
@@ -203,7 +215,7 @@ function handleClient(
 
       login.failures += 1;
 
-      if (login.failures >= maxAuthFailures) {
+      if (login.failures >= options.maxAuthFailures) {
         client.end();
       }
 
@@ -231,11 +243,10 @@ function handleClient(
       return;
     }
 
-    onAuthenticated();
-
+    options.onAuthenticated();
     deps.log(`impd: ssh: ${granted.imp.name}: login from ${info.ip} as ${granted.caller.name}`);
 
-    handleLogin(client, granted, buildSshEnv(info, socket), deps);
+    handleLogin(client, granted, buildSshEnv(info, options.socket), deps);
   });
 }
 

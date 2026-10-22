@@ -29,20 +29,32 @@ export function readBuildContext(
   maxDockerfileBytes: number,
   signal?: AbortSignal,
 ): Promise<CheckedContext> {
-  return runContextPass(inputPath, dockerfilePath, maxDockerfileBytes, null, signal);
+  return runContextPass({ inputPath, dockerfilePath, maxDockerfileBytes, target: null, signal });
 }
 
-export async function writeBuildContext(
-  inputPath: string,
-  outputPath: string,
-  checked: CheckedContext,
-  dockerfile: string,
-  maxDockerfileBytes: number,
-  signal?: AbortSignal,
-): Promise<void> {
-  const target = { outputPath, checked, dockerfile: new TextEncoder().encode(dockerfile) };
+interface WriteBuildContextOptions {
+  readonly inputPath: string;
+  readonly outputPath: string;
+  readonly checked: CheckedContext;
+  readonly dockerfile: string;
+  readonly maxDockerfileBytes: number;
+  readonly signal?: AbortSignal;
+}
 
-  await runContextPass(inputPath, checked.dockerfilePath, maxDockerfileBytes, target, signal);
+export async function writeBuildContext(options: WriteBuildContextOptions): Promise<void> {
+  const target = {
+    outputPath: options.outputPath,
+    checked: options.checked,
+    dockerfile: new TextEncoder().encode(options.dockerfile),
+  };
+
+  await runContextPass({
+    inputPath: options.inputPath,
+    dockerfilePath: options.checked.dockerfilePath,
+    maxDockerfileBytes: options.maxDockerfileBytes,
+    target,
+    signal: options.signal,
+  });
 }
 
 interface WriteFailure {
@@ -57,15 +69,21 @@ interface CopyTarget {
   readonly dockerfile: Uint8Array;
 }
 
-async function runContextPass(
-  inputPath: string,
-  dockerfilePath: string,
-  maxDockerfileBytes: number,
-  target: CopyTarget | null,
-  signal: AbortSignal | undefined,
-): Promise<CheckedContext> {
+interface RunContextPassOptions {
+  readonly inputPath: string;
+  readonly dockerfilePath: string;
+  readonly maxDockerfileBytes: number;
+  readonly target: CopyTarget | null;
+  readonly signal: AbortSignal | undefined;
+}
+
+async function runContextPass(options: RunContextPassOptions): Promise<CheckedContext> {
+  const maxDockerfileBytes = options.maxDockerfileBytes;
+  const target = options.target;
+  const signal = options.signal;
+
   signal?.throwIfAborted();
-  const candidates = listDockerfileCandidates(dockerfilePath);
+  const candidates = listDockerfileCandidates(options.dockerfilePath);
 
   const types = new Map<string, EntryType>();
   const texts = new Map<string, string | null>();
@@ -90,7 +108,7 @@ async function runContextPass(
     }
   })();
 
-  const input = createReadStream(inputPath);
+  const input = createReadStream(options.inputPath);
 
   input.on('error', (error) => {
     extract.destroy(error);

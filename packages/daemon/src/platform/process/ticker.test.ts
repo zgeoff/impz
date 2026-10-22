@@ -5,7 +5,14 @@ import { startTicker } from './ticker';
 test('it waits one interval before the first run', () => {
   const stub = buildStubTickerTimer();
   const task = mock(() => Promise.resolve());
-  const ticker = startTicker('sweep', 30_000, task, () => {}, stub.timer);
+
+  const ticker = startTicker({
+    label: 'sweep',
+    intervalMs: 30_000,
+    task,
+    log: () => {},
+    timer: stub.timer,
+  });
 
   onTestFinished(() => ticker.stop());
 
@@ -16,7 +23,14 @@ test('it waits one interval before the first run', () => {
 test('it runs the task when the interval passes', async () => {
   const stub = buildStubTickerTimer();
   const task = mock(() => Promise.resolve());
-  const ticker = startTicker('sweep', 30_000, task, () => {}, stub.timer);
+
+  const ticker = startTicker({
+    label: 'sweep',
+    intervalMs: 30_000,
+    task,
+    log: () => {},
+    timer: stub.timer,
+  });
 
   onTestFinished(() => ticker.stop());
 
@@ -28,13 +42,13 @@ test('it runs the task when the interval passes', async () => {
 test('it schedules the next run once a run ends', async () => {
   const stub = buildStubTickerTimer();
 
-  const ticker = startTicker(
-    'sweep',
-    30_000,
-    () => Promise.resolve(),
-    () => {},
-    stub.timer,
-  );
+  const ticker = startTicker({
+    label: 'sweep',
+    intervalMs: 30_000,
+    task: () => Promise.resolve(),
+    log: () => {},
+    timer: stub.timer,
+  });
 
   onTestFinished(() => ticker.stop());
 
@@ -47,15 +61,15 @@ test('it logs a failed run with its label', async () => {
   const stub = buildStubTickerTimer();
   const logs: string[] = [];
 
-  const ticker = startTicker(
-    'sweep',
-    30_000,
-    () => Promise.reject(new Error('disk full')),
-    (message) => {
+  const ticker = startTicker({
+    label: 'sweep',
+    intervalMs: 30_000,
+    task: () => Promise.reject(new Error('disk full')),
+    log: (message) => {
       logs.push(message);
     },
-    stub.timer,
-  );
+    timer: stub.timer,
+  });
 
   onTestFinished(() => ticker.stop());
 
@@ -67,7 +81,14 @@ test('it logs a failed run with its label', async () => {
 test('it runs again after a failed run', async () => {
   const stub = buildStubTickerTimer();
   const task = mock(() => Promise.reject(new Error('disk full')));
-  const ticker = startTicker('sweep', 30_000, task, () => {}, stub.timer);
+
+  const ticker = startTicker({
+    label: 'sweep',
+    intervalMs: 30_000,
+    task,
+    log: () => {},
+    timer: stub.timer,
+  });
 
   onTestFinished(() => ticker.stop());
 
@@ -80,13 +101,13 @@ test('it runs again after a failed run', async () => {
 test('it schedules nothing more once stopped', async () => {
   const stub = buildStubTickerTimer();
 
-  const ticker = startTicker(
-    'sweep',
-    30_000,
-    () => Promise.resolve(),
-    () => {},
-    stub.timer,
-  );
+  const ticker = startTicker({
+    label: 'sweep',
+    intervalMs: 30_000,
+    task: () => Promise.resolve(),
+    log: () => {},
+    timer: stub.timer,
+  });
 
   await ticker.stop();
 
@@ -98,19 +119,19 @@ test('it waits for a running task when stopped', async () => {
   const release = Promise.withResolvers<void>();
   const steps: string[] = [];
 
-  const ticker = startTicker(
-    'sweep',
-    30_000,
-    async () => {
+  const ticker = startTicker({
+    label: 'sweep',
+    intervalMs: 30_000,
+    task: async () => {
       steps.push('started');
 
       await release.promise;
 
       steps.push('finished');
     },
-    () => {},
-    stub.timer,
-  );
+    log: () => {},
+    timer: stub.timer,
+  });
 
   const fired = stub.fire('sweep');
   const stopping = ticker.stop();
@@ -135,13 +156,13 @@ test('it schedules no next run for a task that ends after the stop', async () =>
   const stub = buildStubTickerTimer();
   const release = Promise.withResolvers<void>();
 
-  const ticker = startTicker(
-    'sweep',
-    30_000,
-    () => release.promise,
-    () => {},
-    stub.timer,
-  );
+  const ticker = startTicker({
+    label: 'sweep',
+    intervalMs: 30_000,
+    task: () => release.promise,
+    log: () => {},
+    timer: stub.timer,
+  });
 
   const fired = stub.fire('sweep');
   const stopping = ticker.stop();
@@ -162,7 +183,7 @@ test('it runs on the runtime timers by default', async () => {
     return Promise.resolve();
   });
 
-  const ticker = startTicker('sweep', 1, task, () => {});
+  const ticker = startTicker({ label: 'sweep', intervalMs: 1, task, log: () => {} });
 
   onTestFinished(() => ticker.stop());
 

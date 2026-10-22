@@ -533,12 +533,12 @@ test('it ends an export over its file limit and removes its builder, with no cli
   });
 
   const exporting = builders.withBuilder(new AbortController().signal, (exec) =>
-    writeGuestTree(
+    writeGuestTree({
       exec,
-      join(tree, 'root'),
-      { maxBytes: 1024 ** 3, maxFiles: 1 },
-      new AbortController().signal,
-    ),
+      root: join(tree, 'root'),
+      limits: { maxBytes: 1024 ** 3, maxFiles: 1 },
+      signal: new AbortController().signal,
+    }),
   );
 
   expect(exporting).rejects.toThrowWithMessage(
@@ -591,14 +591,14 @@ test('it ends an export stopped while its exec opens, closes the exec and remove
   });
 
   const exporting = builders.withBuilder(new AbortController().signal, (exec) =>
-    writeGuestTree(
+    writeGuestTree({
       exec,
-      join(tree, 'root'),
-      { maxBytes: 1024 ** 3, maxFiles: 1000 },
-      new AbortController().signal,
-      () => Promise.resolve(),
-      timers.startTimer,
-    ),
+      root: join(tree, 'root'),
+      limits: { maxBytes: 1024 ** 3, maxFiles: 1000 },
+      signal: new AbortController().signal,
+      grow: () => Promise.resolve(),
+      startTimer: timers.startTimer,
+    }),
   );
 
   await waitFor(() => {

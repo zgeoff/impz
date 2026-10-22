@@ -52,6 +52,14 @@ interface UsageTotals {
 
 type WhenShort = 'giveUp' | 'sleepAll';
 
+interface MakeRoomOptions {
+  readonly excludeId: string | null;
+  readonly reason: string;
+  readonly whenShort: WhenShort;
+  readonly findMissing: (usage: UsageTotals) => number;
+  readonly protectedId?: string | null;
+}
+
 interface GovernorDecision {
   readonly decision: 'admitted' | 'refused' | 'slept';
   readonly name: string;
@@ -221,13 +229,10 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     };
   };
 
-  const makeRoom = async (
-    excludeId: string | null,
-    reason: string,
-    whenShort: WhenShort,
-    findMissing: (usage: UsageTotals) => number,
-    protectedId: string | null = null,
-  ): Promise<RoomOutcome> => {
+  const makeRoom = async (options: MakeRoomOptions): Promise<RoomOutcome> => {
+    const excludeId = options.excludeId;
+    const reason = options.reason;
+    const protectedId = options.protectedId ?? null;
     const pinned = protectedId === null ? [] : [protectedId];
 
     const passed = new Set<string>(pinned);
@@ -239,7 +244,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     for (;;) {
       const usage = await readEffectiveUsage(excludeId);
 
-      const missingMib = findMissing(usage);
+      const missingMib = options.findMissing(usage);
 
       if (missingMib <= 0) {
         return {
@@ -278,7 +283,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       const picked = pickSleepVictims(candidates, missingMib);
       const [victim] = picked.victims;
 
-      if (victim === undefined || (!picked.enough && whenShort === 'giveUp')) {
+      if (victim === undefined || (!picked.enough && options.whenShort === 'giveUp')) {
         return {
           fits: false,
           slept,
@@ -338,12 +343,12 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         const room =
           request.maySleepImps === false
             ? await readFreeRoom(request.id, findMissing)
-            : await makeRoom(
-                request.id,
-                `to make room for ${request.name ?? request.id}`,
-                'giveUp',
+            : await makeRoom({
+                excludeId: request.id,
+                reason: `to make room for ${request.name ?? request.id}`,
+                whenShort: 'giveUp',
                 findMissing,
-              );
+              });
 
         const diskFull = room.diskFull ? (deps.readDiskFullError?.() ?? null) : null;
 
@@ -387,13 +392,13 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           return false;
         }
 
-        const room = await makeRoom(
-          null,
-          `to grow ${request.name}`,
-          'giveUp',
-          (usage) => usage.effectiveMib + request.mib - deps.budgetMib,
-          request.id,
-        );
+        const room = await makeRoom({
+          excludeId: null,
+          reason: `to grow ${request.name}`,
+          whenShort: 'giveUp',
+          findMissing: (usage) => usage.effectiveMib + request.mib - deps.budgetMib,
+          protectedId: request.id,
+        });
 
         const usage = await readEffectiveUsage(null);
 
@@ -452,12 +457,12 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
     enforce: () =>
       admission.run(async () => {
-        const room = await makeRoom(
-          null,
-          ENFORCE_TRIGGER,
-          'sleepAll',
-          (usage) => usage.usedMib - deps.budgetMib,
-        );
+        const room = await makeRoom({
+          excludeId: null,
+          reason: ENFORCE_TRIGGER,
+          whenShort: 'sleepAll',
+          findMissing: (usage) => usage.usedMib - deps.budgetMib,
+        });
 
         const over = `over budget by ${String(room.missingMib)} MiB`;
 

@@ -22,17 +22,21 @@ interface ExecParts {
   readonly ops: ImpVmOps;
 }
 
-export function openImpExec(
-  parts: ExecParts,
-  name: string,
-  request: AgentExecRequest,
-  feature: AgentFeature | undefined,
-  paths: ImpPaths,
-  imp: ImpRecord,
-): Promise<ExecStream> {
+interface OpenImpExecOptions {
+  readonly name: string;
+  readonly request: AgentExecRequest;
+  readonly feature: AgentFeature | undefined;
+  readonly paths: ImpPaths;
+  readonly imp: ImpRecord;
+}
+
+export function openImpExec(parts: ExecParts, options: OpenImpExecOptions): Promise<ExecStream> {
   const context = parts.context;
   const lock = parts.lock;
   const ops = parts.ops;
+  const request = options.request;
+  const feature = options.feature;
+  const paths = options.paths;
   const requiresBroker = isBrokerRequired(request.require);
 
   if (requiresBroker && request.outer === true) {
@@ -81,13 +85,12 @@ export function openImpExec(
 
       listed.push(...activity.sessions);
 
-      const refused = await checkBrokerAttach(
-        context.db,
-        target.id,
-        session,
-        request.resumeFrom?.executionGeneration,
-        listed,
-      );
+      const refused = await checkBrokerAttach(context.db, {
+        impId: target.id,
+        name: session,
+        resumeGeneration: request.resumeFrom?.executionGeneration,
+        sessions: listed,
+      });
 
       if (refused !== null) {
         throw refused;
@@ -110,7 +113,12 @@ export function openImpExec(
         return stream;
       }
 
-      const refused = await checkOpenedSession(context.db, target.id, session, stream, listed);
+      const refused = await checkOpenedSession(context.db, {
+        impId: target.id,
+        name: session,
+        stream,
+        sessions: listed,
+      });
 
       if (refused !== null) {
         stream.close();
@@ -128,10 +136,10 @@ export function openImpExec(
   };
 
   if (!requiresBroker) {
-    return startWithBroker(imp);
+    return startWithBroker(options.imp);
   }
 
-  return lock.withImp(name, async (locked) => {
+  return lock.withImp(options.name, async (locked) => {
     const running = locked.state === 'running' ? locked : await ops.requireRunningImp(locked);
 
     return startWithBroker(running);

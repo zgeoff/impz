@@ -27,13 +27,12 @@ export function createSystemRoutes(os: RpcImplementer, deps: RouterDeps) {
       }),
     ),
     copyDatabase: os.system.copyDatabase.handler(async (context) => {
-      const copy = await writeDatabaseCopy(
-        deps.db,
-        deps.diskBudget,
-        deps.config.dataDir,
-        context.input.name ?? buildCopyName(deps.now()),
-        deps.now,
-      );
+      const copy = await writeDatabaseCopy(deps.db, {
+        diskBudget: deps.diskBudget,
+        dataDir: deps.config.dataDir,
+        name: context.input.name ?? buildCopyName(deps.now()),
+        now: deps.now,
+      });
 
       // A restore script prints these fields in this order.
       return {

@@ -31,8 +31,12 @@ export async function writeChangedBlocks(source: string, target: string): Promis
     const targetStats = await output.stat();
 
     const blocks = new Set([
-      ...readDataBlocks(input.fd, size, READ_BYTES),
-      ...readDataBlocks(output.fd, Math.min(targetStats.size, size), READ_BYTES),
+      ...readDataBlocks({ fd: input.fd, size, blockBytes: READ_BYTES }),
+      ...readDataBlocks({
+        fd: output.fd,
+        size: Math.min(targetStats.size, size),
+        blockBytes: READ_BYTES,
+      }),
     ]);
 
     for (const block of [...blocks].toSorted((left, right) => left - right)) {

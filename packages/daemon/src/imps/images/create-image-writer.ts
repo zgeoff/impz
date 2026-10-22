@@ -382,13 +382,13 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
         const root = workDir.root;
 
         try {
-          const exported = await writeGuestTree(
+          const exported = await writeGuestTree({
             exec,
             root,
-            { maxBytes, maxFiles: deps.config.build.imageMaxFiles },
+            limits: { maxBytes, maxFiles: deps.config.build.imageMaxFiles },
             signal,
             grow,
-          );
+          });
 
           return await writeGuestRootfsAndRow({
             root,

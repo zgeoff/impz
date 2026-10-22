@@ -1,10 +1,11 @@
-import { expect, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import {
   buildPkceChallenge,
   buildRouteOrigin,
   parseApprovalPage,
   parseMcpBody,
   readCookies,
+  sendMcp,
 } from './oauth-route';
 
 test('#buildRouteOrigin publishes the route at the instance’s port offset', () => {
@@ -68,4 +69,77 @@ test('#parseMcpBody reads a JSON body', () => {
 
 test('#parseMcpBody reads a body that is not JSON as its text', () => {
   expect(parseMcpBody('Unauthorized')).toBe('Unauthorized');
+});
+
+test('#sendMcp sends explicit null params as null', async () => {
+  const received = mock();
+
+  const mcp = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    routes: {
+      '/mcp': {
+        POST: async (request) => {
+          const body: unknown = await request.json();
+
+          received(body);
+
+          return Response.json({ jsonrpc: '2.0', id: 1, result: {} });
+        },
+      },
+    },
+  });
+
+  onTestFinished(() => mcp.stop(true));
+
+  await sendMcp({
+    origin: `http://127.0.0.1:${mcp.port}`,
+    bearer: 'route-token',
+    session: '',
+    method: 'tools/list',
+    params: null,
+  });
+
+  expect(received).toHaveBeenCalledExactlyOnceWith({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/list',
+    params: null,
+  });
+});
+
+test('#sendMcp sends empty params when none are given', async () => {
+  const received = mock();
+
+  const mcp = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    routes: {
+      '/mcp': {
+        POST: async (request) => {
+          const body: unknown = await request.json();
+
+          received(body);
+
+          return Response.json({ jsonrpc: '2.0', id: 1, result: {} });
+        },
+      },
+    },
+  });
+
+  onTestFinished(() => mcp.stop(true));
+
+  await sendMcp({
+    origin: `http://127.0.0.1:${mcp.port}`,
+    bearer: 'route-token',
+    session: '',
+    method: 'tools/list',
+  });
+
+  expect(received).toHaveBeenCalledExactlyOnceWith({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/list',
+    params: {},
+  });
 });

@@ -21,7 +21,13 @@ export function collectJsonOutputChanges(base: JsonOutputSchema, head: JsonOutpu
       return [`${label}: removed`];
     }
 
-    return collectSchemaChanges(label, 'toClient', before.schema, after.schema, true);
+    return collectSchemaChanges({
+      label,
+      direction: 'toClient',
+      before: before.schema,
+      after: after.schema,
+      hasStableFields: true,
+    });
   });
 }
 
@@ -36,8 +42,18 @@ function collectProcedureChanges(base: ProtocolSchema, head: ProtocolSchema): st
       changes.push(`${label}: removed`);
     } else if (before.stream === after.stream) {
       changes.push(
-        ...collectSchemaChanges(`${label} input`, 'toServer', before.input, after.input),
-        ...collectSchemaChanges(`${label} output`, 'toClient', before.output, after.output),
+        ...collectSchemaChanges({
+          label: `${label} input`,
+          direction: 'toServer',
+          before: before.input,
+          after: after.input,
+        }),
+        ...collectSchemaChanges({
+          label: `${label} output`,
+          direction: 'toClient',
+          before: before.output,
+          after: after.output,
+        }),
       );
     } else {
       changes.push(`${label}: ${formatStream(before.stream)} → ${formatStream(after.stream)}`);
@@ -64,7 +80,12 @@ function collectMessageChanges(base: ProtocolSchema, head: ProtocolSchema): stri
       return [`${label}: ${before.direction} → ${after.direction}`];
     }
 
-    return collectSchemaChanges(label, before.direction, before.schema, after.schema);
+    return collectSchemaChanges({
+      label,
+      direction: before.direction,
+      before: before.schema,
+      after: after.schema,
+    });
   });
 }
 
@@ -84,7 +105,14 @@ function collectErrorChanges(base: ProtocolSchema, head: ProtocolSchema): string
       changes.push(`${label}: status ${formatValue(before.status)} → ${formatValue(after.status)}`);
     }
 
-    changes.push(...collectSchemaChanges(`${label} data`, 'toClient', before.data, after.data));
+    changes.push(
+      ...collectSchemaChanges({
+        label: `${label} data`,
+        direction: 'toClient',
+        before: before.data,
+        after: after.data,
+      }),
+    );
   }
 
   return changes;

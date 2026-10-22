@@ -129,7 +129,12 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
   try {
     const database =
       input.all === true && manifest.database !== null
-        ? await createRestoredDatabase(deps, point, base, manifest.database, workDir)
+        ? await createRestoredDatabase(deps, {
+            point,
+            base,
+            database: manifest.database,
+            workDir,
+          })
         : undefined;
 
     const imageNames = new Map<string, string>();
@@ -148,7 +153,7 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
         throw new Error(`the backup holds no image ${digest}`);
       }
 
-      const imageName = await createRestoredImage(deps, point, base, image, workDir);
+      const imageName = await createRestoredImage(deps, { point, base, image, workDir });
 
       imageNames.set(digest, imageName);
     }
@@ -156,7 +161,7 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
     for (const imp of chosen) {
       const target = { name: input.as ?? imp.name, image: imageNames.get(imp.imageDigest) ?? '' };
 
-      const created = await createRestoredImp(deps, point, base, imp, target, workDir);
+      const created = await createRestoredImp(deps, { point, base, imp, target, workDir });
 
       restored.push(created);
 
@@ -202,13 +207,18 @@ async function readPoint(
   return point;
 }
 
-async function createRestoredDatabase(
-  deps: RestoreDeps,
-  point: ResticSnapshot,
-  base: string,
-  database: NonNullable<BackupManifest['database']>,
-  workDir: string,
-) {
+interface CreateRestoredDatabaseOptions {
+  readonly point: ResticSnapshot;
+  readonly base: string;
+  readonly database: NonNullable<BackupManifest['database']>;
+  readonly workDir: string;
+}
+
+async function createRestoredDatabase(deps: RestoreDeps, options: CreateRestoredDatabaseOptions) {
+  const point = options.point;
+  const base = options.base;
+  const database = options.database;
+  const workDir = options.workDir;
   const file = requireTreeDatabase(database.file);
   const directory = join(workDir, dirname(file));
 
@@ -237,27 +247,31 @@ function requireTreeDatabase(database: string): string {
   return database;
 }
 
+interface CreateRestoredImageOptions {
+  readonly point: ResticSnapshot;
+  readonly base: string;
+  readonly image: ManifestImage;
+  readonly workDir: string;
+}
+
 function createRestoredImage(
   deps: RestoreDeps,
-  point: ResticSnapshot,
-  base: string,
-  image: ManifestImage,
-  workDir: string,
+  options: CreateRestoredImageOptions,
 ): Promise<string> {
   return deps.storageGate.join(() =>
-    deps.diskBudget.withRoom(2 * image.sizeBytes, () =>
-      createJoinedImage(deps, point, base, image, workDir),
-    ),
+    deps.diskBudget.withRoom(2 * options.image.sizeBytes, () => createJoinedImage(deps, options)),
   );
 }
 
 async function createJoinedImage(
   deps: RestoreDeps,
-  point: ResticSnapshot,
-  base: string,
-  image: ManifestImage,
-  workDir: string,
+  options: CreateRestoredImageOptions,
 ): Promise<string> {
+  const point = options.point;
+  const base = options.base;
+  const image = options.image;
+  const workDir = options.workDir;
+
   // The use goes in before the read, so an image eviction keeps the image this restore picks.
   await updateImageUse(deps.db, 'digest', [image.digest], deps.now().getTime());
 
@@ -333,14 +347,23 @@ interface RestoredSizes {
   readonly usedBytes?: number | undefined;
 }
 
+interface CreateRestoredImpOptions {
+  readonly point: ResticSnapshot;
+  readonly base: string;
+  readonly imp: ManifestImp;
+  readonly target: RestoreTarget;
+  readonly workDir: string;
+}
+
 async function createRestoredImp(
   deps: RestoreDeps,
-  point: ResticSnapshot,
-  base: string,
-  imp: ManifestImp,
-  target: RestoreTarget,
-  workDir: string,
+  options: CreateRestoredImpOptions,
 ): Promise<Imp> {
+  const point = options.point;
+  const base = options.base;
+  const imp = options.imp;
+  const target = options.target;
+  const workDir = options.workDir;
   const created = { id: null as string | null };
 
   const writeRestoredFile = (file: string, disk: string, sizes: RestoredSizes) => {

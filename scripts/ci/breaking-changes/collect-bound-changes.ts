@@ -31,7 +31,7 @@ export function collectBoundChanges(
 
   return [
     ...pairs.flatMap(([name, narrowBound, wideBound, side]) =>
-      collectBoundChange(name, narrowBound, wideBound, side, path, comparison),
+      collectBoundChange({ name, narrow: narrowBound, wide: wideBound, side, path, comparison }),
     ),
     ...(fitsStep ? [] : [formatChange(path, `multipleOf ${stepChange}`)]),
   ];

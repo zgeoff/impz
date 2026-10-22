@@ -1,31 +1,88 @@
 import { expect, test } from 'bun:test';
+import type { Scope } from '@impz/api';
 import { buildMockCaller } from '../../testing/identity/build-mock-caller';
 import { requireNamedImp } from './require-named-imp';
 
-test.each([
-  ['no imp named', ['dev-*'], 'read', undefined, 'read'],
-  ['an imp its pattern covers', ['dev-*'], 'read', 'dev-a', 'read'],
-  ['any imp for a host-wide caller', null, 'read', 'prod', 'read'],
-  ['an exec on an imp it may run in', ['dev-*'], 'exec', 'dev-a', 'exec'],
-] as const)('#requireNamedImp passes %s', (_kind, imps, scope, name, needed) => {
-  const caller = buildMockCaller({ name: 'agent', imps, scope });
+interface RequireNamedImpRow {
+  readonly kind: string;
+  readonly imps: readonly string[] | null;
+  readonly scope: Scope;
+  readonly name: string | undefined;
+  readonly needed: Scope;
+}
+
+test.each<RequireNamedImpRow>([
+  { kind: 'no imp named', imps: ['dev-*'], scope: 'read', name: undefined, needed: 'read' },
+  {
+    kind: 'an imp its pattern covers',
+    imps: ['dev-*'],
+    scope: 'read',
+    name: 'dev-a',
+    needed: 'read',
+  },
+  {
+    kind: 'any imp for a host-wide caller',
+    imps: null,
+    scope: 'read',
+    name: 'prod',
+    needed: 'read',
+  },
+  {
+    kind: 'an exec on an imp it may run in',
+    imps: ['dev-*'],
+    scope: 'exec',
+    name: 'dev-a',
+    needed: 'exec',
+  },
+])('#requireNamedImp passes $kind', (row) => {
+  const caller = buildMockCaller({ name: 'agent', imps: row.imps, scope: row.scope });
 
   expect(() => {
-    requireNamedImp(caller, name, needed);
+    requireNamedImp(caller, row.name, row.needed);
   }).not.toThrow();
 });
 
-test.each([
-  ['an imp outside its pattern', ['dev-*'], 'read', 'prod', 'read'],
-  ['a case variant of a covered name', ['dev-*'], 'read', 'DEV-a', 'read'],
-  ['a covered name with whitespace', ['dev-a'], 'read', 'dev-a ', 'read'],
-  ['an empty name', ['dev-*'], 'read', '', 'read'],
-  ['an exec with a read scope', ['dev-*'], 'read', 'dev-a', 'exec'],
-  ['a unicode look-alike of a covered name', ['dev-a'], 'read', 'd\u0435v-a', 'read'],
-] as const)('#requireNamedImp refuses %s', (_kind, imps, scope, name, needed) => {
-  const caller = buildMockCaller({ name: 'agent', imps, scope });
+test.each<RequireNamedImpRow>([
+  {
+    kind: 'an imp outside its pattern',
+    imps: ['dev-*'],
+    scope: 'read',
+    name: 'prod',
+    needed: 'read',
+  },
+  {
+    kind: 'a case variant of a covered name',
+    imps: ['dev-*'],
+    scope: 'read',
+    name: 'DEV-a',
+    needed: 'read',
+  },
+  {
+    kind: 'a covered name with whitespace',
+    imps: ['dev-a'],
+    scope: 'read',
+    name: 'dev-a ',
+    needed: 'read',
+  },
+  { kind: 'an empty name', imps: ['dev-*'], scope: 'read', name: '', needed: 'read' },
+  {
+    kind: 'an exec with a read scope',
+    imps: ['dev-*'],
+    scope: 'read',
+    name: 'dev-a',
+    needed: 'exec',
+  },
+  {
+    kind: 'a unicode look-alike of a covered name',
+    imps: ['dev-a'],
+    scope: 'read',
+    name: 'd\u0435v-a',
+    needed: 'read',
+  },
+])('#requireNamedImp refuses $kind', (row) => {
+  const caller = buildMockCaller({ name: 'agent', imps: row.imps, scope: row.scope });
 
   expect(() => {
-    requireNamedImp(caller, name, needed);
-  }).toThrow(`may not touch imp ${name}`);
+    requireNamedImp(caller, row.name, row.needed);
+  }).toThrow(`may not touch imp ${String(row.name)}`);
 });
