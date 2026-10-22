@@ -3,13 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
-import {
-  buildImagePaths,
-  buildMockNewImage,
-  buildStubImpdReleaseFetch,
-  createImage,
-  startTestImpd,
-} from '@impz/daemon/testing';
+import { buildStubImpdReleaseFetch, createUbuntuImage, startTestImpd } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import { UsageError } from '../cli/errors';
@@ -39,15 +33,6 @@ async function setupTest() {
 
     const impd = harness.impd;
 
-    await Bun.write(join(harness.dataDir, 'images', 'ubuntu', 'rootfs.ext4'), 'rootfs');
-
-    await createImage(
-      harness.db,
-      buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
-    );
-
-    await Bun.write(buildImagePaths(harness.dataDir, 'sha256:ubuntu').config, '{}');
-
     const sendClientRequest = (request: Request) => {
       calls.push(`${host} ${new URL(request.url).pathname.slice('/rpc/'.length)}`);
 
@@ -61,6 +46,7 @@ async function setupTest() {
     });
 
     return {
+      harness,
       client,
       advance: harness.advance,
       moves: impd.moves,
@@ -73,6 +59,8 @@ async function setupTest() {
 
   return {
     calls,
+    sourceHost: source.harness,
+    targetHost: target.harness,
     from: source.client,
     to: target.client,
     handleOnTarget: target.respond,
@@ -85,6 +73,8 @@ async function setupTest() {
 
 test('it prepares on the source, takes a ticket from the target, then sends', async () => {
   const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.sourceHost);
 
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
@@ -123,6 +113,8 @@ test('it prepares on the source, takes a ticket from the target, then sends', as
 
 test('it draws the send’s progress on a terminal and ends the line', async () => {
   const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.sourceHost);
 
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
@@ -176,6 +168,8 @@ test('it draws the send’s progress on a terminal and ends the line', async () 
 test('it moves an imp that holds leases for --stop, which ends them as impz stop does', async () => {
   const ctx = await setupTest();
 
+  await createUbuntuImage(ctx.sourceHost);
+
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.leases.acquire({ name: 'dev', label: 'ci', ttlSeconds: 600 });
 
@@ -213,6 +207,8 @@ test('it moves an imp that holds leases for --stop, which ends them as impz stop
 test('it refuses to move a sleeping imp with its memory when the target’s data dir differs', async () => {
   const ctx = await setupTest();
 
+  await createUbuntuImage(ctx.sourceHost);
+
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.sleep({ name: 'dev' });
 
@@ -243,6 +239,8 @@ test('it refuses to move a sleeping imp with its memory when the target’s data
 
 test('it prepares a sleeping imp without facts when the target is an older impd with none to give', async () => {
   const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.sourceHost);
 
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.sleep({ name: 'dev' });
@@ -310,6 +308,9 @@ test('it moves a sleeping imp with its memory and says it moved asleep', async (
 test('it takes the source’s mark off when the target refuses the ticket', async () => {
   const ctx = await setupTest();
 
+  await createUbuntuImage(ctx.sourceHost);
+  await createUbuntuImage(ctx.targetHost);
+
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
   await ctx.to.imps.create({ name: 'dev' });
@@ -341,6 +342,8 @@ test('it takes the source’s mark off when the target refuses the ticket', asyn
 
 test('it points at --resume when the target’s commit window ended before the commit', async () => {
   const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.sourceHost);
 
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
@@ -383,6 +386,8 @@ test('it points at --resume when the target’s commit window ended before the c
 test('it points at --abort when the network to the target is down', async () => {
   const ctx = await setupTest();
 
+  await createUbuntuImage(ctx.sourceHost);
+
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
 
@@ -414,6 +419,8 @@ test('it points at --abort when the network to the target is down', async () => 
 
 test('it commits a verified move with a fresh ticket from the target on --resume after the commit window ended', async () => {
   const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.sourceHost);
 
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
@@ -480,6 +487,8 @@ test('it commits a verified move with a fresh ticket from the target on --resume
 test('it says the move is complete when an abort finds the target committed it', async () => {
   const ctx = await setupTest();
 
+  await createUbuntuImage(ctx.sourceHost);
+
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
 
@@ -542,6 +551,8 @@ test('it says the move is complete when an abort finds the target committed it',
 test('it says an abort leaves the imp here when no move is underway', async () => {
   const ctx = await setupTest();
 
+  await createUbuntuImage(ctx.sourceHost);
+
   await ctx.from.imps.create({ name: 'dev' });
 
   const print = mock<(line: string) => void>();
@@ -567,6 +578,8 @@ test('it says an abort leaves the imp here when no move is underway', async () =
 
 test('it refuses --resume of an imp with no verified move', async () => {
   const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.sourceHost);
 
   await ctx.from.imps.create({ name: 'dev' });
 

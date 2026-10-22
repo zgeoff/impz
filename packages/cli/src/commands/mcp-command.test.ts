@@ -4,11 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
 import {
-  buildImagePaths,
   buildImpPaths,
-  buildMockNewImage,
   buildStubExecGuest,
-  createImage,
   readImpByName,
   startStubExecAgent,
   startTestImpd,
@@ -28,15 +25,10 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, { rootToken: 'root-token' });
 
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   const url = harness.url;
 
   return {
+    createTestImage: harness.createTestImage,
     db: harness.db,
     dataDir: harness.dataDir,
     home,
@@ -199,6 +191,8 @@ test('it answers an unknown method over stdio with method not found', async () =
 test('it creates an imp through impd over stdio', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const subprocess = Bun.spawn(['bun', ctx.main, 'mcp', '--prefix', 'agent-'], {
     env: {
       PATH: process.env['PATH'] ?? '',
@@ -257,6 +251,8 @@ test('it creates an imp through impd over stdio', async () => {
 
 test('it runs a command in the guest over stdio', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -326,6 +322,8 @@ test('it runs a command in the guest over stdio', async () => {
 
 test('it stops a command still running in the guest when the client goes away', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 

@@ -3,10 +3,7 @@ import { faker } from '@faker-js/faker';
 import { RequestSchema, encodeAgentMessage } from '@impz/agent-protocol';
 import { createImpClient } from '@impz/client';
 import {
-  buildImagePaths,
   buildImpPaths,
-  buildMockNewImage,
-  createImage,
   sendServicesAdd,
   startStubServiceAgent,
   startTestImpd,
@@ -26,10 +23,6 @@ async function setupTest() {
   const harness = await startTestImpd(stack, { rootToken });
 
   const dataDir = harness.dataDir;
-
-  // impd needs an agent at 0.10.0 or later for the services API
-  harness.fake.agent.version = '0.10.0';
-
   const sendClientRequest = (request: Request) => harness.impd.api.app.handle(request);
 
   const client = createImpClient({
@@ -38,13 +31,9 @@ async function setupTest() {
     fetch: sendClientRequest,
   });
 
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   return {
+    createTestImage: harness.createTestImage,
+    fake: harness.fake,
     stack,
     rootToken,
     dataDir,
@@ -153,6 +142,11 @@ test.each([
 
 test('#serviceCommand sends the definition to the guest with --env given more than once', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.10.0';
+
   const imp = await ctx.client.imps.create({ name: 'box' });
 
   const agent = await startStubServiceAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -191,6 +185,11 @@ test('#serviceCommand sends the definition to the guest with --env given more th
 
 test('#serviceCommand adds the service and then sets the imp’s HTTP port for --http-port', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.10.0';
+
   const imp = await ctx.client.imps.create({ name: 'box' });
 
   const agent = await startStubServiceAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -234,6 +233,11 @@ test('#serviceCommand adds the service and then sets the imp’s HTTP port for -
 
 test('#serviceCommand sets no HTTP port when the guest refuses the add', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.10.0';
+
   const imp = await ctx.client.imps.create({ name: 'box' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;
@@ -268,6 +272,11 @@ test('#serviceCommand sets no HTTP port when the guest refuses the add', async (
 
 test('#serviceCommand says the service runs and how to set the port when an exec token may not set it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.10.0';
+
   const imp = await ctx.client.imps.create({ name: 'box' });
   const made = await ctx.client.tokens.create({ name: 'runner', scope: 'exec' });
 
@@ -330,6 +339,7 @@ test('#serviceCommand refuses an unknown --restart before it calls impd', async 
 test('#serviceCommand says when a sleeping imp’s last sleep recorded no list', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'box' });
   await ctx.client.imps.sleep({ name: 'box' });
 
