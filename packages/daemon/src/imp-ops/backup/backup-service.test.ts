@@ -13,6 +13,8 @@ import {
 import { copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { readImpEnv } from '@impz/test-utils/read-imp-env';
+import { updateEnv } from '@impz/test-utils/update-env';
 import invariant from 'tiny-invariant';
 import { buildMockBackupConfig } from '../../../testing/imp-ops/build-mock-backup-config';
 import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-checkpoint';
@@ -57,7 +59,7 @@ async function setupTest() {
           createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
         ),
       ),
-    env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
+    env: readImpEnv(),
   });
 
   const restic = buildStubRestic({ repoDir, now: () => new Date(host.now()) });
@@ -330,7 +332,12 @@ test('#restoreBackup restores an imp stopped, with its disk and its checkpoints 
 });
 
 test('#restoreBackup keeps an old image it reuses when an eviction reaches the restore as it picks the image', async () => {
+  updateEnv('IMP_IMAGE_EVICT_HIGH_PERCENT', '80');
+  updateEnv('IMP_IMAGE_EVICT_LOW_PERCENT', '60');
+
   const ctx = await setupTest();
+
+  ctx.setClock(Date.UTC(2026, 9, 2));
 
   const gate = buildQueryGate('sha256:web-1111111');
 
@@ -496,6 +503,8 @@ test('#restoreBackup restores the newest backup without --at', async () => {
 test('#restoreBackup rejects a restore --at before every backup as NOT_FOUND', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 9, 2));
+
   const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
 
   await ctx.createTestImage('base');
@@ -630,8 +639,9 @@ test('#restoreBackup restores every imp and its image on a fresh host, renaming 
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
-    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
+    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     log: () => {},
+    now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
@@ -677,8 +687,9 @@ test('#restoreBackup rejects a restored image as CONFLICT when its name and its 
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
-    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
+    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     log: () => {},
+    now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
@@ -794,8 +805,9 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
-    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
+    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     log: () => {},
+    now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
@@ -958,6 +970,8 @@ test('#runScheduled backs up without a prune or a check once the interval has pa
 
 test('#runScheduled logs a failed weekly check loudly and reports it in the status', async () => {
   const ctx = await setupTest();
+
+  ctx.setClock(Date.UTC(2026, 9, 2));
 
   const backups = createBackupService({
     ...ctx.deps,
@@ -1707,7 +1721,7 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
 
   const fresh = await startTestImpd(ctx.stack);
 
-  const freshRestic = buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() });
+  const freshRestic = buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) });
 
   const freshBackups = createBackupService({
     dataDir: fresh.dataDir,
@@ -1723,6 +1737,7 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
     diskBudget: fresh.diskBudget,
     restic: freshRestic.restic,
     log: () => {},
+    now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
@@ -1971,6 +1986,8 @@ test('#runBackup names an imp created with backup off in the run, the tags and t
 test('#restoreBackup rejects a restore of an imp created with backup off as PRECONDITION_FAILED, with why', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 9, 2));
+
   const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
 
   await ctx.createTestImage('base');
@@ -2197,8 +2214,9 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
-    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
+    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     log: () => {},
+    now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
@@ -2234,7 +2252,7 @@ test('#restoreBackup holds the database copy’s size from the disk budget while
   const run = await backups.runBackup();
   const fresh = await startTestImpd(ctx.stack);
 
-  const freshRestic = buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() });
+  const freshRestic = buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) });
 
   const freshBackups = createBackupService({
     dataDir: fresh.dataDir,
@@ -2250,6 +2268,7 @@ test('#restoreBackup holds the database copy’s size from the disk budget while
     diskBudget: fresh.diskBudget,
     restic: freshRestic.restic,
     log: () => {},
+    now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
@@ -2337,8 +2356,9 @@ test('#restoreBackup restores a token’s grantable list on a fresh host, so the
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
-    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
+    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     log: () => {},
+    now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
@@ -2393,8 +2413,9 @@ test('#restoreBackup brings back no token or secret in a restore of one imp from
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
-    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date() }).restic,
+    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     log: () => {},
+    now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 

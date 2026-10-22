@@ -13,13 +13,14 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack);
 
-  await harness.createTestImage('base');
-
   return Object.assign(harness, { stack });
 }
 
 test('it refuses to start a session that requires the broker without a grant', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -46,6 +47,9 @@ test('it refuses to start a session that requires the broker without a grant', a
 
 test('it passes an attach that requires the broker to a session started with it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -84,6 +88,9 @@ test('it passes an attach that requires the broker to a session started with it'
 
 test('it refuses an attach that requires the broker to a session started without it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -119,6 +126,9 @@ test('it refuses an attach that requires the broker to a session started without
 
 test('it leaves the viewer of a session its output after a refused attach', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -152,6 +162,9 @@ test('it leaves the viewer of a session its output after a refused attach', asyn
 
 test('it passes an attach that requires the broker after an impd restart', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -192,6 +205,9 @@ test('it passes an attach that requires the broker after an impd restart', async
 
 test('it refuses an attach that requires the broker to a session a cold boot started without it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -252,6 +268,9 @@ test('it refuses an attach that requires the broker to a session a cold boot sta
 
 test('it keeps the record of an exited run while it is listed, so a resume of it passes', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -310,6 +329,9 @@ test('it keeps the record of an exited run while it is listed, so a resume of it
 
 test('it refuses a resume of an exited run started without the requirement before the agent', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);

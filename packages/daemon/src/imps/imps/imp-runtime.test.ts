@@ -57,13 +57,14 @@ async function setupTest(
 
   const harness = await startTestImpd(stack, { ...options, jails });
 
-  await harness.createTestImage('ubuntu');
-
   return Object.assign(harness, { stack, chrootBase, processes });
 }
 
 test('it skips an idle sleep of an imp held after the idle loop looked', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const until = new Date(ctx.now() + 60_000);
@@ -83,6 +84,9 @@ test('it skips an idle sleep of an imp held after the idle loop looked', async (
 
 test('it skips a governor sleep of an imp held after the governor looked', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const until = new Date(ctx.now() + 60_000);
@@ -99,6 +103,9 @@ test('it skips a governor sleep of an imp held after the governor looked', async
 
 test('it skips an idle sleep of an imp active since the idle loop looked', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const seenActiveAt = imp.lastActiveAt.getTime();
@@ -112,6 +119,9 @@ test('it skips an idle sleep of an imp active since the idle loop looked', async
 
 test('it sleeps an imp for the governor however recently it was active', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await updateImpActivity(ctx.db, imp.id, new Date(imp.lastActiveAt.getTime() + 1000));
@@ -123,6 +133,9 @@ test('it sleeps an imp for the governor however recently it was active', async (
 
 test('it skips a background sleep of an imp with an open connection', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const release = ctx.imps.tracker.open(imp.id, 'proxy');
@@ -136,6 +149,9 @@ test('it skips a background sleep of an imp with an open connection', async () =
 
 test('it skips a background sleep of an imp whose lock is taken', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const gate = Promise.withResolvers<void>();
@@ -165,6 +181,7 @@ test('it waits for a young guest to reach the minimum uptime before it sleeps it
     frozenClockMs: Date.parse('2026-10-09T12:00:00Z'),
   });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'dev' });
 
   ctx.fake.setGuestUptime(100);
@@ -181,6 +198,9 @@ test('it waits for a young guest to reach the minimum uptime before it sleeps it
 
 test('it gives way to a request while an idle sleep waits for a young guest', async () => {
   const ctx = await setupTest({ env: { IMP_SLEEP_MIN_GUEST_UPTIME_MS: '600000' } });
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   ctx.fake.setGuestUptime(0);
@@ -217,6 +237,9 @@ test('it gives way to a request while an idle sleep waits for a young guest', as
 
 test('it gives way to a hold while an idle sleep waits for a young guest', async () => {
   const ctx = await setupTest({ env: { IMP_SLEEP_MIN_GUEST_UPTIME_MS: '600000' } });
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   ctx.fake.setGuestUptime(0);
@@ -257,6 +280,7 @@ test('it sleeps young guests at once when the governor makes room for a boot', a
     },
   });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'a' });
   await ctx.imps.createImp({ name: 'b' });
   await ctx.imps.createImp({ name: 'c' });
@@ -280,6 +304,9 @@ test('it sleeps young guests at once when the governor makes room for a boot', a
 
 test('it sleeps held and connected imps when impd stops', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const until = new Date(ctx.now() + 60_000);
@@ -302,6 +329,9 @@ test('it sleeps held and connected imps when impd stops', async () => {
 
 test('it counts an exec before its wake and drops it when the wake fails', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -325,6 +355,9 @@ test('it counts an exec before its wake and drops it when the wake fails', async
 
 test('it counts a tunnel as a tunnel, not an exec, from before its wake', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -350,6 +383,9 @@ test('it counts a tunnel as a tunnel, not an exec, from before its wake', async 
 
 test('it waits for a boot under way and sleeps that imp when impd stops', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -377,6 +413,7 @@ test('it waits for a boot under way and sleeps that imp when impd stops', async 
 test('it refuses a boot once impd is stopping', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'dev' });
   await ctx.imps.stopImp('dev');
   await ctx.imps.sleepAllImps();
@@ -392,6 +429,7 @@ test('it neither hangs nor wakes anything when a governor pass meets impd stoppi
     env: { IMP_RAM_BUDGET_MIB: '500', IMP_DEFAULT_MEMORY_MIB: '256' },
   });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'a' });
   await ctx.imps.createImp({ name: 'b' });
 
@@ -415,6 +453,7 @@ test('it neither hangs nor wakes anything when a governor pass meets impd stoppi
 test('it refuses a create that impd stopping cuts short, and records it as an error', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.sleepAllImps();
 
   expect(ctx.imps.createImp({ name: 'late' })).rejects.toMatchObject({
@@ -428,6 +467,8 @@ test('it refuses a create that impd stopping cuts short, and records it as an er
 
 test('it removes the imp once a create under way when its destroy was issued has booted', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const gate = ctx.fake.hold('boot');
   const creating = ctx.imps.createImp({ name: 'dev' });
@@ -459,6 +500,9 @@ test('it removes the imp once a create under way when its destroy was issued has
 
 test('it removes a running imp whose VM takes long to exit on the first call', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   ctx.processes.ownRoot(join(ctx.chrootBase, 'firecracker', imp.id, 'root'), 900_001);
@@ -477,6 +521,9 @@ test('it removes a running imp whose VM takes long to exit on the first call', a
 
 test('it lists the imps while a removal waits for its VM to exit', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   ctx.processes.ownRoot(join(ctx.chrootBase, 'firecracker', imp.id, 'root'), 900_001);
@@ -499,6 +546,9 @@ test('it lists the imps while a removal waits for its VM to exit', async () => {
 
 test('it refuses a session exec on an agent from before sessions before it connects', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const agent = await startStubAgent(
@@ -519,6 +569,9 @@ test('it refuses a session exec on an agent from before sessions before it conne
 
 test('it refuses a unix socket dial on an agent from before 0.6.0', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -534,6 +587,9 @@ test('it refuses a unix socket dial on an agent from before 0.6.0', async () => 
 
 test('it sends a tcp dial to an agent from before 0.6.0', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -561,6 +617,9 @@ test('it sends a tcp dial to an agent from before 0.6.0', async () => {
 
 test('it refuses an outer exec to an imp with no agent version on record', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -587,6 +646,9 @@ test.each([
   ['a version from before outer exec', '0.15.0'],
 ])('it refuses an outer exec to an agent with %s', async (_label, agentVersion) => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -612,6 +674,9 @@ test.each([
 
 test('it sends an outer exec to an agent from 0.16.0', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -643,6 +708,9 @@ test('it sends an outer exec to an agent from 0.16.0', async () => {
 
 test('it refuses an exec without CAP_SYS_ADMIN to an agent from before 0.20.0', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -668,6 +736,9 @@ test('it refuses an exec without CAP_SYS_ADMIN to an agent from before 0.20.0', 
 
 test('it refuses an exec without CAP_SYS_ADMIN to an imp with no agent version on record', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -691,6 +762,9 @@ test('it refuses an exec without CAP_SYS_ADMIN to an imp with no agent version o
 
 test('it sends an exec without CAP_SYS_ADMIN to an agent from 0.20.0', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -718,6 +792,9 @@ test('it sends an exec without CAP_SYS_ADMIN to an agent from 0.20.0', async () 
 
 test('it never idle-sleeps an image builder', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const builder = await ctx.imps.createImp({ name: 'imp-build-x', kind: 'builder' });
 
   const outcome = await ctx.imps.trySleepImp(builder.id, 'idle', {
@@ -730,6 +807,9 @@ test('it never idle-sleeps an image builder', async () => {
 
 test('it never sleeps an image builder for the governor', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const builder = await ctx.imps.createImp({ name: 'imp-build-x', kind: 'builder' });
   const outcome = await ctx.imps.trySleepImp(builder.id, 'budget', { by: 'governor' });
 
@@ -739,6 +819,7 @@ test('it never sleeps an image builder for the governor', async () => {
 test('it refuses a dial into an image builder', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'imp-build-x', kind: 'builder' });
 
   expect(
@@ -752,6 +833,7 @@ test('it refuses a dial into an image builder', async () => {
 test('it refuses an attach without a wake to an image builder', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'imp-build-x', kind: 'builder' });
 
   expect(
@@ -765,6 +847,7 @@ test('it refuses an attach without a wake to an image builder', async () => {
 test('it refuses to find the agent of an image builder', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'imp-build-x', kind: 'builder' });
 
   expect(ctx.imps.readAgent('imp-build-x')).rejects.toMatchObject({
@@ -775,6 +858,9 @@ test('it refuses to find the agent of an image builder', async () => {
 
 test("it removes an imp's session logs when the imp is destroyed", async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -831,6 +917,9 @@ test("it removes an imp's session logs when the imp is destroyed", async () => {
 
 test('it logs again for an imp made again under the id of one destroyed, as on a move home', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const first = await ctx.imps.createImp({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, first.id);
@@ -933,6 +1022,9 @@ test('it logs again for an imp made again under the id of one destroyed, as on a
 
 test('it shows the inner container of an awake imp as its agent last reported it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await startStubInnerAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -957,6 +1049,9 @@ test('it shows the inner container of an awake imp as its agent last reported it
 
 test('it shows no inner container once the agent stops answering', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const agent = await startStubInnerAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -981,6 +1076,9 @@ test('it shows no inner container once the agent stops answering', async () => {
 
 test('it shows no inner container from before a sleep once the imp wakes', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const agent = await startStubInnerAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -1006,6 +1104,9 @@ test('it shows no inner container from before a sleep once the imp wakes', async
 
 test('it shows no inner container for an agent from before 0.14.0', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await startStubAgent(
@@ -1036,6 +1137,9 @@ test('it shows no inner container for an agent from before 0.14.0', async () => 
 
 test('it refuses an exec that requires the broker without a grant', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const agent = await startStubSessionAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -1057,6 +1161,9 @@ test('it refuses an exec that requires the broker without a grant', async () => 
 
 test('it runs an exec without the requirement on an imp with no grant', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const agent = await startStubSessionAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -1072,6 +1179,9 @@ test('it runs an exec without the requirement on an imp with no grant', async ()
 
 test('it refuses the exec when the CA bundle step fails', async () => {
   const ctx = await setupTest({ installBundle: () => Promise.reject(new Error('no /bin/sh')) });
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const agent = await startStubSessionAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -1101,6 +1211,8 @@ test('it tries the CA bundle step again at the next exec after one failed', asyn
     installBundle: () =>
       install.fail ? Promise.reject(new Error('no /bin/sh')) : Promise.resolve(),
   });
+
+  await ctx.createTestImage('ubuntu');
 
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
@@ -1145,6 +1257,9 @@ test('it tries the CA bundle step again at the next exec after one failed', asyn
 
 test('it never sends the requirement to the agent', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const agent = await startStubSessionAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -1181,6 +1296,8 @@ test('it runs the CA bundle step before the first exec of a boot, with the broke
     },
   });
 
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const agent = await startStubSessionAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -1210,6 +1327,9 @@ test('it runs the CA bundle step before the first exec of a boot, with the broke
 
 test('it runs the CA bundle step again after a reboot', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await startStubSessionAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -1242,6 +1362,9 @@ test('it runs the CA bundle step again after a reboot', async () => {
 
 test('it installs the broker CA within the wake a warm move left it to', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_EXAMPLE' });
@@ -1255,6 +1378,9 @@ test('it installs the broker CA within the wake a warm move left it to', async (
 
 test('it clears the pending CA install in the wake that does it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.sleepImp('dev');
@@ -1269,6 +1395,7 @@ test('it clears the pending CA install in the wake that does it', async () => {
 test('it installs no broker CA in a wake with no install pending', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'dev' });
   await ctx.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_EXAMPLE' });
   await ctx.broker.addGrant('dev', 'gh');
@@ -1280,6 +1407,9 @@ test('it installs no broker CA in a wake with no install pending', async () => {
 
 test('it refuses an env that replaces a broker variable, and names it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const agent = await startStubSessionAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -1309,6 +1439,9 @@ test('it refuses an env that replaces a broker variable, and names it', async ()
 
 test('it passes an env variable the broker does not set', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const agent = await startStubSessionAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -1332,6 +1465,9 @@ test('it passes an env variable the broker does not set', async () => {
 
 test('it refuses the broker requirement for an outer exec', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   const agent = await startStubSessionAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -1370,6 +1506,8 @@ test('it runs no lifecycle operation between the CA bundle step and the start', 
         install.reached();
       }),
   });
+
+  await ctx.createTestImage('ubuntu');
 
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
@@ -1425,6 +1563,8 @@ test('it boots the imp again and checks again when a stop takes the lock before 
       return Promise.resolve();
     },
   });
+
+  await ctx.createTestImage('ubuntu');
 
   const imp = await ctx.imps.createImp({ name: 'dev' });
 

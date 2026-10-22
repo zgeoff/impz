@@ -62,8 +62,10 @@ which kind of util a test calls:
 
 ## What a setupTest returns
 
-A daemon test file's `setupTest()` seeds the image that every imp create boots. A test that asserts
-on that image reads it from `setupTest()` as `ctx.image` instead of naming it again.
+A daemon test file's `setupTest()` returns the harness's `createTestImage` closure and seeds no
+image. Each test that creates an imp calls that closure in its arrange phase, and a test that
+asserts on the image keeps the record the closure returns. A test that asserts a time sets the
+harness's frozen clock with `setClock` in its arrange phase.
 
 To test behaviour that spans a whole test process, such as a preload, run the test file in a child
 `bun test` through [`runChildTests`](../../../../packages/test-utils/src/run-child-tests.ts). The

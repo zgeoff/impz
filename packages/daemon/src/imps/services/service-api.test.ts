@@ -9,17 +9,15 @@ import {
 } from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { readInBackground } from '../../../testing/platform/read-in-background';
 import { readQueuedText } from '../../../testing/platform/read-queued-text';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { TEST_TOKEN } from '../../../testing/test-token';
 import { startStubServiceAgent } from '../../../testing/vm/start-stub-service-agent';
-import { createImage } from '../../platform/db/images';
 import { updateImpActivity } from '../../platform/db/imps';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
-import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/data-layout';
 import { createServiceApi } from './service-api';
 
 async function setupTest() {
@@ -29,17 +27,13 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack);
 
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   return Object.assign(harness, { stack });
 }
 
 test('it sends the agent the service an add names, its env values included', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -70,6 +64,8 @@ test('it sends the agent the service an add names, its env values included', asy
 
 test('it lists an added service with its command, its source, and only its env keys', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -117,6 +113,8 @@ test('it lists an added service with its command, its source, and only its env k
 test('it refuses an add of a service that exists as CONFLICT', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -135,6 +133,8 @@ test('it refuses an add of a service that exists as CONFLICT', async () => {
 
 test('it replaces a service that exists when the add replaces', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -159,6 +159,8 @@ test('it replaces a service that exists when the add replaces', async () => {
 test('it returns the agent’s refusal of a command as BAD_REQUEST', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -175,6 +177,8 @@ test('it returns the agent’s refusal of a command as BAD_REQUEST', async () =>
 
 test('it refuses a remove of a service the agent lacks as NOT_FOUND', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -193,6 +197,8 @@ test('it refuses a remove of a service the agent lacks as NOT_FOUND', async () =
 
 test('it refuses a restart of a service the agent lacks as NOT_FOUND', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -218,6 +224,8 @@ test.each([
 ])('it refuses the service name %s, with %s, before the agent', async (service) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -236,6 +244,8 @@ test.each([
 test('it refuses a remove of a service name with a slash before the agent', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -253,6 +263,8 @@ test('it refuses a remove of a service name with a slash before the agent', asyn
 
 test('it refuses an exec-scope add of a service that runs as root as FORBIDDEN', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -276,6 +288,8 @@ test('it refuses an exec-scope add of a service that runs as root as FORBIDDEN',
 
 test('it adds, restarts and removes an exec-scope service that runs as the image user', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -312,6 +326,8 @@ test('it adds, restarts and removes an exec-scope service that runs as the image
 test('it refuses an exec-scope remove of a service that runs as root as FORBIDDEN', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -339,6 +355,8 @@ test('it refuses an exec-scope remove of a service that runs as root as FORBIDDE
 
 test('it refuses an exec-scope restart of a service that runs as root as FORBIDDEN', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -368,6 +386,8 @@ test('it refuses an exec-scope restart of a service that runs as root as FORBIDD
 test('it refuses an exec-scope replace of a service that runs as root as FORBIDDEN', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -396,6 +416,8 @@ test('it refuses an exec-scope replace of a service that runs as root as FORBIDD
 test('it refuses an exec-scope restart of a service not started yet as FORBIDDEN', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -417,6 +439,8 @@ test('it refuses an exec-scope restart of a service not started yet as FORBIDDEN
 test('it refuses an add on an agent from before the services API as AGENT_OUTDATED', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.9.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -433,6 +457,8 @@ test('it refuses an add on an agent from before the services API as AGENT_OUTDAT
 
 test('it lists the image’s services as root on an agent from before the services API', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.9.0';
 
@@ -470,6 +496,8 @@ test('it lists the image’s services as root on an agent from before the servic
 test('it sends one service’s log, 100 lines by default', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -498,6 +526,8 @@ test('it sends one service’s log, 100 lines by default', async () => {
 test('it shares 10 000 lines among every service’s log', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -521,6 +551,8 @@ test('it shares 10 000 lines among every service’s log', async () => {
 
 test('it merges a follow of every service, and closes each when the reader stops', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -558,6 +590,8 @@ test('it merges a follow of every service, and closes each when the reader stops
 
 test('it waits out a sleep in a follow without a wake, and goes on from its cursor', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -616,6 +650,8 @@ test('it waits out a sleep in a follow without a wake, and goes on from its curs
 test('it sends a keepalive comment every 5 s through a silent follow', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -670,6 +706,8 @@ test('it sends a keepalive comment every 5 s through a silent follow', async () 
 test('it leaves a sleeping imp asleep through a follow', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -700,6 +738,8 @@ test('it leaves a sleeping imp asleep through a follow', async () => {
 test('it lists a sleeping imp’s services as its sleep recorded them, and wakes nothing', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -727,6 +767,8 @@ test('it lists a sleeping imp’s services as its sleep recorded them, and wakes
 test('it refuses a list of a stopped imp’s services as INVALID_STATE', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -745,6 +787,8 @@ test('it refuses a list of a stopped imp’s services as INVALID_STATE', async (
 
 test('it lists no services, and says it recorded none, for a sleep the agent gave no list', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -768,6 +812,8 @@ test('it lists no services, and says it recorded none, for a sleep the agent gav
 
 test('it keeps a character that a sleep splits whole in a follow', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -810,6 +856,8 @@ test('it keeps a character that a sleep splits whole in a follow', async () => {
 
 test('it looks again after the short retry, not the long recheck, while a lifecycle step holds a running imp', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -877,6 +925,8 @@ test('it looks again after the short retry, not the long recheck, while a lifecy
 test('it says the imp sleeps when it goes to sleep after a step held it running', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -941,6 +991,8 @@ test('it says the imp sleeps when it goes to sleep after a step held it running'
 
 test('it says the imp stopped when it stops after a step held it running', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 
@@ -1007,6 +1059,8 @@ test('it says the imp stopped when it stops after a step held it running', async
 test('it goes on with a follow when the wake’s event comes before the wake lets go', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -1072,6 +1126,8 @@ test('it goes on with a follow when the wake’s event comes before the wake let
 test('it ends a follow with the error once its log fails to open five times in a row', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -1123,6 +1179,8 @@ test('it ends a follow with the error once its log fails to open five times in a
 test('it lets a list wait out a step that holds a running imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -1169,6 +1227,7 @@ test('it lets a list wait out a step that holds a running imp', async () => {
 test('it refuses a list as INVALID_STATE once a step holds a running imp past 10 s', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
   const timers = buildStubClock();
@@ -1208,6 +1267,8 @@ test('it refuses a list as INVALID_STATE once a step holds a running imp past 10
 test('it ends a follow when the imp is destroyed', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.10.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -1238,6 +1299,8 @@ test('it ends a follow when the imp is destroyed', async () => {
 
 test('it ends a follow with restarting when impd restarts', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.10.0';
 

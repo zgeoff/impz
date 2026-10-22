@@ -34,8 +34,6 @@ async function setupTest(
     growFilesystem: disk.growFilesystem,
   });
 
-  await harness.createTestImage('ubuntu');
-
   const templates = harness.imps.bootTemplates;
 
   invariant(templates, 'IMP_BOOT_TEMPLATES is on, but impd has no templates');
@@ -46,6 +44,7 @@ async function setupTest(
 test('it boots the kernel for the first boot of a shape and builds no template', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
 
   expect(ctx.fake.boots.map((boot) => boot.hostname)).toStrictEqual(['once']);
@@ -55,6 +54,7 @@ test('it boots the kernel for the first boot of a shape and builds no template',
 test('it builds the template on the second boot of a shape, and the next restores it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.stop();
@@ -86,6 +86,7 @@ test('it builds the template on the second boot of a shape, and the next restore
 test('it logs the guest steps after the host steps of a restore', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.stop();
@@ -104,6 +105,8 @@ test('it logs the guest steps after the host steps of a restore', async () => {
 test('it logs the guest steps after the host steps of a kernel boot', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   ctx.fake.setGuestBootSteps({ world: 9, mount: 35, ready: 1 });
 
   await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
@@ -117,6 +120,7 @@ test('it logs the guest steps after the host steps of a kernel boot', async () =
 test('it leaves no broken record behind once a restored imp settles', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.stop();
@@ -133,6 +137,7 @@ test('it leaves no broken record behind once a restored imp settles', async () =
 test('it boots the kernel for an elastic imp even when its memory has a template', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
   await ctx.client.imps.create({ name: 'elastic', vcpus: 1, memoryMib: 256, maxMemoryMib: 1024 });
@@ -146,6 +151,7 @@ test('it boots the kernel for an elastic imp even when its memory has a template
 test('it removes a template whose restore fails in it, and boots the kernel', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
 
@@ -169,6 +175,7 @@ test('it removes a template whose restore fails in it, and boots the kernel', as
 test('it keeps the template for the next imp after a restore fails past the claim', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
 
@@ -185,6 +192,7 @@ test('it keeps the template for the next imp after a restore fails past the clai
 test('it fails a create whose clone fails before any restore', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
 
@@ -199,6 +207,7 @@ test('it fails a create whose clone fails before any restore', async () => {
 test('it keeps the template through more failed clones than turn a key off', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
 
@@ -264,6 +273,7 @@ test('it keeps the template through more failed clones than turn a key off', asy
 test('it ends the restored VM when the grow after the clone fails, and keeps the template', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
 
@@ -346,6 +356,7 @@ test('it ends the restored VM when the grow after the clone fails, and keeps the
 test('it claims the identity reset an imp owes with a restore, and clears it once done', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
   await ctx.client.imps.stop({ name: 'first' });
@@ -360,6 +371,8 @@ test('it claims the identity reset an imp owes with a restore, and clears it onc
 
 test('it never waits for the template build of a shape with no template yet', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const held = ctx.fake.hold('template');
 
@@ -379,6 +392,7 @@ test('it never waits for the template build of a shape with no template yet', as
 test('it runs a jailed restore as the imp, with the template and its drive bound in', async () => {
   const ctx = await setupTest({ isJailed: true });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.stop();
@@ -408,6 +422,7 @@ test('it runs a jailed restore as the imp, with the template and its drive bound
 test('it starts a jailed restore only once the clone is in place', async () => {
   const ctx = await setupTest({ isJailed: true });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
 
@@ -435,6 +450,7 @@ test('it starts a jailed restore only once the clone is in place', async () => {
 test('it overlaps a jailed restore with the grow of its disk', async () => {
   const ctx = await setupTest({ isJailed: true });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
 

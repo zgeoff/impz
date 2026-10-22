@@ -3,12 +3,10 @@ import { existsSync, statSync } from 'node:fs';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { listColdBoots } from '../../platform/db/cold-boots';
-import { createImage } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
-import { buildImagePaths, buildImpPaths, buildWatchdogSlot } from '../../vm/storage/data-layout';
+import { buildImpPaths, buildWatchdogSlot } from '../../vm/storage/data-layout';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -20,12 +18,6 @@ async function setupTest() {
     frozenClockMs: Date.UTC(2026, 0, 1),
   });
 
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   return harness;
 }
 
@@ -35,6 +27,7 @@ test('it marks since when the agent is silent and keeps the imp running under re
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   const created = await readImpByName(ctx.db, 'dev');
@@ -61,6 +54,7 @@ test('it kills the VM and boots the imp cold under restart, saying why', async (
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   const created = await readImpByName(ctx.db, 'dev');
@@ -89,6 +83,7 @@ test('it records a watchdog restart as the cause of a cold boot', async () => {
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.impd.imps.createImp({ name: 'dev' });
 
   const created = await readImpByName(ctx.db, 'dev');
@@ -113,6 +108,7 @@ test('it writes the memory to the owner-only watchdog slot under snapshot, then 
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.impd.imps.createImp({ name: 'dev' });
 
   const created = await readImpByName(ctx.db, 'dev');
@@ -145,6 +141,7 @@ test('it removes the watchdog slot with a destroyed imp', async () => {
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.impd.imps.createImp({ name: 'dev' });
 
   const created = await readImpByName(ctx.db, 'dev');
@@ -170,6 +167,7 @@ test('it boots the imp cold with no slot under snapshot when the disk has no roo
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.impd.imps.createImp({ name: 'dev' });
 
   const created = await readImpByName(ctx.db, 'dev');
@@ -200,6 +198,7 @@ test('it keeps the VM under restart when the agent answers again under the lock'
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.impd.imps.createImp({ name: 'dev' });
 
   const created = await readImpByName(ctx.db, 'dev');
@@ -226,6 +225,7 @@ test('it leaves alone under restart a VM that a sleep and a wake replaced during
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.impd.imps.createImp({ name: 'dev' });
 
   const created = await readImpByName(ctx.db, 'dev');

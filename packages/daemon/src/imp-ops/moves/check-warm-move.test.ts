@@ -27,22 +27,19 @@ import {
   MoveOfferReplySchema,
 } from './move-header';
 
-async function setupTest(
+function setupTest(
   config: Pick<
     MoveHostsOptions,
     'hook' | 'isShared' | 'partBytes' | 'readTapMac' | 'source' | 'target'
   > = {},
 ) {
-  const hosts = await setupMoveHosts(config);
-
-  await createUbuntuImage(hosts.source);
-  await createUbuntuImage(hosts.target);
-
-  return hosts;
+  return setupMoveHosts(config);
 }
 
 test('it moves a sleeping imp with its memory into its own slot', async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
 
   await ctx.sourceApp.client.imps.create({ name: 'first', image: 'ubuntu' });
 
@@ -62,6 +59,8 @@ test('it moves a sleeping imp with its memory into its own slot', async () => {
 
 test('it wakes a warm-moved imp from its memory on the target', async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
 
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -89,6 +88,8 @@ test('it sends the sessions and services of a warm move in the form an older imp
       return frames;
     }),
   });
+
+  await createUbuntuImage(ctx.source);
 
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
@@ -177,6 +178,9 @@ test('it sends the sessions and services of a warm move in the form an older imp
 
 test("it keeps each session's observed time through a warm move", async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -202,6 +206,9 @@ test("it keeps each session's observed time through a warm move", async () => {
 
 test('it moves an elastic imp warm with its max memory', async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -221,6 +228,9 @@ test('it moves an elastic imp warm with its max memory', async () => {
 
 test('it lets the first wake on the target hold the memory an elastic imp had plugged', async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -260,6 +270,8 @@ test("it gives a jailed imp moved warm the target's own jail uid", async () => {
     },
   });
 
+  await createUbuntuImage(ctx.source);
+
   await ctx.sourceApp.client.imps.create({ name: 'first', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -288,6 +300,8 @@ test('it wakes a jailed imp moved warm as its jail uid, with its files in place'
     },
   });
 
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -306,6 +320,8 @@ test('it wakes a jailed imp moved warm as its jail uid, with its files in place'
 
 test('it refuses a warm move naming each fact the target lacks, and leaves the imp asleep', async () => {
   const ctx = await setupTest({ isShared: false });
+
+  await createUbuntuImage(ctx.source);
 
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -335,6 +351,8 @@ test('it refuses a warm move naming each fact the target lacks, and leaves the i
 test('it refuses a warm receive whose snapshot facts the target does not share', async () => {
   const ctx = await setupTest({ isShared: true });
 
+  await createUbuntuImage(ctx.source);
+
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
@@ -360,6 +378,8 @@ test('it refuses a warm receive whose snapshot facts the target does not share',
 test('it refuses a second warm receive for the slot a ticket holds', async () => {
   const ctx = await setupTest({ isShared: true });
 
+  await createUbuntuImage(ctx.source);
+
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
@@ -379,6 +399,9 @@ test('it refuses a second warm receive for the slot a ticket holds', async () =>
 
 test('it keeps the slot a warm ticket holds from a new imp on the target', async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
 
   await ctx.sourceApp.client.imps.create({ name: 'first', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
@@ -414,6 +437,8 @@ test('it refuses a commit with the memory snapshot incomplete, and the source ke
       return forward();
     },
   });
+
+  await createUbuntuImage(ctx.source);
 
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
@@ -453,6 +478,8 @@ test('it refuses a warm stream whose header names another slot than its ticket k
     ),
   });
 
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -480,6 +507,8 @@ test('it refuses a cold stream on the ticket of a warm move', async () => {
       }),
     ),
   });
+
+  await createUbuntuImage(ctx.source);
 
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -518,6 +547,8 @@ test('it refuses a warm stream whose header names facts the target does not shar
     ),
   });
 
+  await createUbuntuImage(ctx.source);
+
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
@@ -550,6 +581,8 @@ test('it refuses a warm stream whose snapshot record the target cannot load', as
     ),
   });
 
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -569,6 +602,9 @@ test('it refuses a warm stream whose snapshot record the target cannot load', as
 
 test('it fails a warm send whose snapshot record went missing after the prepare', async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -597,6 +633,9 @@ test('it fails a warm send whose snapshot record went missing after the prepare'
 
 test("it installs the target's broker CA once at the first wake after a warm move", async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -639,6 +678,8 @@ test('it refuses a system drive the target lacks whose sum is not its name', asy
     },
   });
 
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -677,6 +718,8 @@ test("it refuses a snapshot that opens a drive off the target's own path, and fr
     },
   });
 
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -713,6 +756,8 @@ test('it commits a warm move whose commit was lost on resume, with a reissued ti
     },
   });
 
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -748,6 +793,8 @@ test('it commits a verified warm move warm when the source restarts', async () =
     },
   });
 
+  await createUbuntuImage(ctx.source);
+
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
   await ctx.runMove('dev');
@@ -774,6 +821,8 @@ test('it frees the slot and removes the memory on the target on an abort after t
         : forward(),
   });
 
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -797,6 +846,8 @@ test('it leaves the imp asleep on the source to wake there after an abort after 
         ? Promise.reject(new Error('the network dropped the commit'))
         : forward(),
   });
+
+  await createUbuntuImage(ctx.source);
 
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -826,6 +877,8 @@ test('it removes the memory and frees the slot of a warm stream cut short with n
     },
   });
 
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -844,6 +897,9 @@ test('it removes the memory and frees the slot of a warm stream cut short with n
 
 test('it carries a pending disk grow with a warm move', async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -866,6 +922,9 @@ test('it carries a pending disk grow with a warm move', async () => {
 
 test('it grows the guest at the first wake on the target after a warm move with a pending grow', async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -895,6 +954,8 @@ test('it grows the guest at the first wake on the target after a warm move with 
 test('it refuses a warm move of an imp whose tap has a MAC from before slot MACs', async () => {
   const ctx = await setupTest({ isShared: true, readTapMac: () => '02:aa:bb:cc:dd:ee' });
 
+  await createUbuntuImage(ctx.source);
+
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
@@ -909,6 +970,8 @@ test('it refuses a warm move of an imp whose tap has a MAC from before slot MACs
 test('it refuses a warm move of an imp whose tap a host restart took', async () => {
   const ctx = await setupTest({ isShared: true, readTapMac: () => null });
 
+  await createUbuntuImage(ctx.source);
+
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
 
@@ -922,6 +985,9 @@ test('it refuses a warm move of an imp whose tap a host restart took', async () 
 
 test("it removes the target's tap for the slot a warm move lands in", async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -932,6 +998,9 @@ test("it removes the target's tap for the slot a warm move lands in", async () =
 
 test('it refuses a warm move of an imp on a private network', async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -952,6 +1021,9 @@ test('it refuses a warm move of an imp on a private network', async () => {
 
 test('it carries the cold boots with a warm move', async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -968,6 +1040,9 @@ test('it carries the cold boots with a warm move', async () => {
 
 test("it adds no cold boot when the target records the carried boot as a memory wake's report of it", async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
@@ -990,6 +1065,8 @@ test("it adds no cold boot when the target records the carried boot as a memory 
 test('it boots a warm-moved imp cold with the cause wake_fallback when its memory cannot load', async () => {
   const ctx = await setupTest({ isShared: true });
 
+  await createUbuntuImage(ctx.source);
+
   await ctx.sourceApp.client.imps.create({ name: 'first', image: 'ubuntu' });
 
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
@@ -1008,6 +1085,9 @@ test('it boots a warm-moved imp cold with the cause wake_fallback when its memor
 
 test('it clamps a carried boot whose time is ahead of the target to its now', async () => {
   const ctx = await setupTest({ isShared: true });
+
+  await createUbuntuImage(ctx.source);
+
   const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
 
   await ctx.sourceApp.client.imps.sleep({ name: 'dev' });

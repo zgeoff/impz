@@ -6,15 +6,12 @@ import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import { utils } from 'ssh2';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { listApiCalls } from '../../platform/db/api-audit';
 import { createForkGrants } from '../../platform/db/create-fork-grants';
-import { createImage } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
 import { listTokenRecords } from '../../platform/db/tokens';
 import { generateEd25519Key } from '../../surface/ssh/host-key';
-import { buildImagePaths } from '../../vm/storage/data-layout';
 import { checkAccess, findAccess } from './access-policy';
 
 async function setupTest() {
@@ -38,12 +35,6 @@ async function setupTest() {
     },
   });
 
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
 
   return Object.assign(harness, { stack, sendToImpd, gap });
@@ -52,6 +43,7 @@ async function setupTest() {
 test('it lets a token grant a listed secret on its imps', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -84,6 +76,7 @@ test.each([
 ])('it refuses a token’s grant of %s', async (_label, name, secret, reason) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.imps.create({ name: 'prod' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
@@ -117,6 +110,7 @@ test.each([
 test('it lets a token revoke a listed secret on its imps', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
@@ -152,6 +146,7 @@ test.each([
   async (_label, name, secret, reason) => {
     const ctx = await setupTest();
 
+    await ctx.createTestImage('base');
     await ctx.client.imps.create({ name: 'dev-a' });
     await ctx.client.imps.create({ name: 'prod' });
     await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
@@ -187,6 +182,7 @@ test.each([
 test('it lets a token list every grant on its imp, listed or not', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -241,6 +237,7 @@ test.each([
 ])('it refuses a grant by %s', async (_label, options, secret, refusal) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -260,6 +257,7 @@ test.each([
 test('it refuses a token’s revoke of a secret that does not exist', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -312,6 +310,7 @@ test('it answers NOT_FOUND to a token’s grant on an imp of its patterns that d
 test('it answers NOT_FOUND to a token’s revoke of a grant that does not exist', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -431,6 +430,7 @@ test('it names the list to the token that holds it', async () => {
 test('it lets the token’s dashboard session grant a listed secret on its imps', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -476,6 +476,7 @@ test.each([
   async (_label, name, secret, reason) => {
     const ctx = await setupTest();
 
+    await ctx.createTestImage('base');
     await ctx.client.imps.create({ name: 'dev-a' });
     await ctx.client.imps.create({ name: 'prod' });
     await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
@@ -518,6 +519,7 @@ test.each([
 test('it refuses the token’s dashboard session a fork', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -594,6 +596,7 @@ test('it names the token’s list to its dashboard session', async () => {
 test('it refuses a fork by a token that may grant and makes no imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -625,6 +628,7 @@ test('it refuses a fork by a token that may grant and makes no imp', async () =>
 test('it refuses a move prepare by a token that may grant and makes no ticket', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -656,6 +660,7 @@ test('it refuses a move prepare by a token that may grant and makes no ticket', 
 test('it refuses a move send by a token that may grant', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -686,6 +691,7 @@ test('it refuses a move send by a token that may grant', async () => {
 test('it refuses a move resume by a token that may grant', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -713,6 +719,7 @@ test('it refuses a move resume by a token that may grant', async () => {
 test('it forks for the same patterns without a list, copying no grant it could not make', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'npm' });
@@ -739,6 +746,7 @@ test('it forks for the same patterns without a list, copying no grant it could n
 test('it refuses a grant of a listed secret that was deleted', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -768,6 +776,7 @@ test('it refuses a grant of a listed secret that was deleted', async () => {
 test('it refuses a grant of a listed secret that was deleted and made again', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -798,6 +807,7 @@ test('it refuses a grant of a listed secret that was deleted and made again', as
 test('it refuses the dashboard session a grant of a listed secret deleted and made again', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -840,6 +850,7 @@ test('it refuses the dashboard session a grant of a listed secret deleted and ma
 test('it refuses a revoke of a listed secret deleted and made again', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -875,6 +886,7 @@ test('it refuses a revoke of a listed secret deleted and made again', async () =
 test('it refuses a grant of a deleted listed secret after a restart', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -900,6 +912,7 @@ test('it refuses a grant of a deleted listed secret after a restart', async () =
 test('it refuses a fork by a token whose listed secret was deleted, after a restart', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -946,6 +959,7 @@ test('it still names a deleted listed secret in the list after a restart', async
 test('it keeps a token’s grants through a sleep', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -977,6 +991,7 @@ test('it keeps a token’s grants through a sleep', async () => {
 test('it keeps a token’s grants through a wake', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -1009,6 +1024,7 @@ test('it keeps a token’s grants through a wake', async () => {
 test('it keeps a token’s grants as they are now through a checkpoint restore', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -1044,6 +1060,7 @@ test('it keeps a token’s grants as they are now through a checkpoint restore',
 test('it keeps a token’s grants through a restart', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -1077,6 +1094,7 @@ test('it keeps a token’s grants through a restart', async () => {
 test('it gives an imp made from a template no grants', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -1107,6 +1125,7 @@ test('it gives an imp made from a template no grants', async () => {
 test('it takes a destroyed imp’s grants with it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -1137,6 +1156,7 @@ test('it takes a destroyed imp’s grants with it', async () => {
 test('it puts no secret value in an answer, error, log line or audit row', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.imps.create({ name: 'prod' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
@@ -1210,6 +1230,7 @@ test('it puts no secret value in an answer, error, log line or audit row', async
 test('it refuses in the transaction a grant whose secret was deleted and made again after the check', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -1246,6 +1267,7 @@ test('it refuses in the transaction a grant whose secret was deleted and made ag
 test('it makes no grant for a token removed after the access check', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -1282,6 +1304,7 @@ test('it makes no grant for a token removed after the access check', async () =>
 test('it revokes no grant for a token removed after the access check', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
@@ -1317,6 +1340,7 @@ test('it revokes no grant for a token removed after the access check', async () 
 test('it drops the grant a rebind left stale', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
@@ -1336,6 +1360,7 @@ test('it drops the grant a rebind left stale', async () => {
 test('it refuses a grant by a list entry from before a rebind', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -1372,6 +1397,7 @@ test('it refuses a grant by a list entry from before a rebind', async () => {
 test('it refuses a revoke by a list entry from before a rebind', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -1410,6 +1436,7 @@ test('it refuses a revoke by a list entry from before a rebind', async () => {
 test('it keeps an unchanged grant usable through sleep, wake and a checkpoint restore', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'npm' });
@@ -1432,6 +1459,7 @@ test('it keeps an unchanged grant usable through sleep, wake and a checkpoint re
 test('it keeps a revoke made after the checkpoint through its restore', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
@@ -1453,6 +1481,7 @@ test('it keeps a revoke made after the checkpoint through its restore', async ()
 test('it keeps a rebind made after the checkpoint through its restore', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'npm' });
@@ -1482,6 +1511,7 @@ test('it keeps a rebind made after the checkpoint through its restore', async ()
 test('it refuses a backup restore by a token that may grant, before anything happens', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -1553,6 +1583,7 @@ test.each([['imps.fork'], ['moves.prepare'], ['moves.send'], ['moves.resume']])(
 test('it refuses a move prepare to the dashboard session of a token whose entries are all stale', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -1594,6 +1625,7 @@ test('it refuses a move prepare to the dashboard session of a token whose entrie
 test('it refuses a fork to the dashboard session of a token whose entries are all stale', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
@@ -1638,6 +1670,7 @@ test.each([
 ])('it copies every grant to a root token’s fork, %s', async (_label, input) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -1661,6 +1694,7 @@ test.each([
 ])('it copies every grant to a host-wide manage token’s fork, %s', async (_label, input) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -1694,6 +1728,7 @@ test.each([
 ])('it copies no grant to a scoped token’s fork and names each, %s', async (_label, input) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -1728,6 +1763,7 @@ test.each([
 test('it names a grant made on the fork before the copy as a clash', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -1762,6 +1798,7 @@ test('it names a grant made on the fork before the copy as a clash', async () =>
 test('it copies the grants a rebind between the fork and the copy left', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -1791,6 +1828,7 @@ test('it copies the grants a rebind between the fork and the copy left', async (
 test('it lends the fork nothing from a source destroyed and made again before the copy', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -1819,6 +1857,7 @@ test('it lends the fork nothing from a source destroyed and made again before th
 test('it keeps the fork’s grant when the source’s is revoked after the fork', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
@@ -1837,6 +1876,7 @@ test('it keeps the fork’s grant when the source’s is revoked after the fork'
 test('it returns a fork whose copy fails as a whole, with the error and no grant', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
@@ -1867,6 +1907,7 @@ test('it returns a fork whose copy fails as a whole, with the error and no grant
 test('it lets an older client read a fork answer with the new fields', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
@@ -1892,6 +1933,7 @@ test('it lets an older client read a fork answer with the new fields', async () 
 test('it copies to a listed caller’s fork the secrets on its list, and names the rest', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.imps.create({ name: 'dev-b' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
@@ -1932,6 +1974,7 @@ test('it copies to a listed caller’s fork the secrets on its list, and names t
 test('it copies nothing of a secret whose list entry is from before a rebind', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.imps.create({ name: 'dev-b' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
@@ -1988,6 +2031,7 @@ test('it copies nothing of a secret whose list entry is from before a rebind', a
 test('it copies no grant for a token removed after the access check', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.imps.create({ name: 'dev-b' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
@@ -2027,6 +2071,7 @@ test('it copies no grant for a token removed after the access check', async () =
 test('it copies nothing of a secret taken off the list after the access check', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.imps.create({ name: 'dev-b' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
@@ -2090,6 +2135,7 @@ test.each([
   async (_kind, name, generationSuffix, notCopied, granted) => {
     const ctx = await setupTest();
 
+    await ctx.createTestImage('base');
     await ctx.client.imps.create({ name: 'dev-a' });
     await ctx.client.imps.create({ name: 'dev-b' });
     await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-127-0' });

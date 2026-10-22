@@ -13,7 +13,6 @@ async function setupTest() {
   onTestFinished(() => stack.disposeAsync());
 
   const harness = await startTestImpd(stack, {});
-  const image = await harness.createTestImage('ubuntu');
 
   const context = createImpContext({
     config: harness.config,
@@ -41,12 +40,17 @@ async function setupTest() {
     readNetBytes: () => null,
   });
 
-  return { db: harness.db, image, lock: createImpLock(context) };
+  return {
+    db: harness.db,
+    createTestImage: harness.createTestImage,
+    lock: createImpLock(context),
+  };
 }
 
 test('#withImp refuses an imp whose move is in flight', async () => {
   const ctx = await setupTest();
-  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: ctx.image.id }));
+  const image = await ctx.createTestImage('ubuntu');
+  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: image.id }));
 
   await updateImpMove(ctx.db, imp.id, 'sending');
 
@@ -57,7 +61,8 @@ test('#withImp refuses an imp whose move is in flight', async () => {
 
 test('#withImpId refuses an imp whose move is in flight', async () => {
   const ctx = await setupTest();
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: ctx.image.id }));
+  const image = await ctx.createTestImage('ubuntu');
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
   await updateImpMove(ctx.db, imp.id, 'sending');
 
@@ -70,7 +75,8 @@ test('#withImpId refuses an imp whose move is in flight', async () => {
 
 test("#withImpId runs the move's own call on a moving imp", async () => {
   const ctx = await setupTest();
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: ctx.image.id }));
+  const image = await ctx.createTestImage('ubuntu');
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
   await updateImpMove(ctx.db, imp.id, 'sending');
 
@@ -83,7 +89,8 @@ test("#withImpId runs the move's own call on a moving imp", async () => {
 
 test('#withImpId runs on an imp that is not moving', async () => {
   const ctx = await setupTest();
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: ctx.image.id }));
+  const image = await ctx.createTestImage('ubuntu');
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
   const seen = await ctx.lock.withImpId(imp.id, (locked) => Promise.resolve(locked?.id));
 
   expect(seen).toBe(imp.id);
@@ -91,7 +98,8 @@ test('#withImpId runs on an imp that is not moving', async () => {
 
 test('#tryWithImpId refuses an imp whose move is in flight', async () => {
   const ctx = await setupTest();
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: ctx.image.id }));
+  const image = await ctx.createTestImage('ubuntu');
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
   await updateImpMove(ctx.db, imp.id, 'receiving');
 
@@ -105,7 +113,8 @@ test('#tryWithImpId refuses an imp whose move is in flight', async () => {
 
 test("#tryWithImpId runs the move's own call on a moving imp", async () => {
   const ctx = await setupTest();
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: ctx.image.id }));
+  const image = await ctx.createTestImage('ubuntu');
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
   await updateImpMove(ctx.db, imp.id, 'receiving');
 
@@ -120,7 +129,8 @@ test("#tryWithImpId runs the move's own call on a moving imp", async () => {
 
 test('#tryWithImpId runs on an imp that is not moving', async () => {
   const ctx = await setupTest();
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: ctx.image.id }));
+  const image = await ctx.createTestImage('ubuntu');
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
   const result = await ctx.lock.tryWithImpId(imp.id, (locked) => Promise.resolve(locked?.id));
 
   expect(result).toStrictEqual({ ran: true, value: imp.id });

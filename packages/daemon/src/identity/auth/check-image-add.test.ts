@@ -16,7 +16,6 @@ async function setupTest() {
   const tree = join(harness.dataDir, 'tree');
 
   await mkdir(tree);
-  await writeFile(join(tree, 'hello'), 'hi');
 
   return {
     dataDir: harness.dataDir,
@@ -30,6 +29,8 @@ test('it lets a nixie-* token add nixie-x from a pinned ref under its prefix', a
   updateEnv('IMP_BUILD_ISOLATION', 'host');
 
   const ctx = await setupTest();
+
+  await writeFile(join(ctx.tree, 'hello'), 'hi');
 
   const ref = `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`;
 
@@ -73,6 +74,8 @@ test('it lets a nixie-* token stream the add of nixie-x from a pinned ref under 
   updateEnv('IMP_BUILD_ISOLATION', 'host');
 
   const ctx = await setupTest();
+
+  await writeFile(join(ctx.tree, 'hello'), 'hi');
 
   const ref = `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`;
 
@@ -313,6 +316,8 @@ test('it lets a token add an image once an update gives it a prefix', async () =
   updateEnv('IMP_BUILD_ISOLATION', 'host');
 
   const ctx = await setupTest();
+
+  await writeFile(join(ctx.tree, 'hello'), 'hi');
 
   const ref = `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`;
 

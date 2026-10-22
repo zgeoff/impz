@@ -1,15 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { startStubSessionAgent } from '../../../testing/vm/start-stub-session-agent';
-import { createImage } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
 import { sendActivity } from '../../vm/agent-client/agent-requests';
 import { openExecStream } from '../../vm/agent-client/exec-stream';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
-import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/data-layout';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -18,17 +16,14 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack);
 
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   return Object.assign(harness, { stack });
 }
 
 test('it lists a running imp’s sessions from an agent from before output offsets', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;
@@ -97,6 +92,9 @@ test('it lists a running imp’s sessions from an agent from before output offse
 
 test('it counts no sessions for an imp whose agent impd has not asked yet', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;
@@ -116,6 +114,9 @@ test('it counts no sessions for an imp whose agent impd has not asked yet', asyn
 
 test('it counts an imp’s sessions on the imp and the host once it lists them', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;
@@ -145,6 +146,9 @@ test('it counts an imp’s sessions on the imp and the host once it lists them',
 
 test('it records the sessions that the idle loop’s activity read finds', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;
@@ -170,6 +174,9 @@ test('it records the sessions that the idle loop’s activity read finds', async
 
 test('it records a sleeping imp’s sessions as detached in its snapshot', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;
@@ -201,6 +208,9 @@ test('it records a sleeping imp’s sessions as detached in its snapshot', async
 
 test('it lists a sleeping imp’s sessions without a wake', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;
@@ -229,6 +239,9 @@ test('it lists a sleeping imp’s sessions without a wake', async () => {
 
 test('it lists no sessions for a stopped imp', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;
@@ -253,6 +266,9 @@ test('it lists no sessions for a stopped imp', async () => {
 
 test('it wakes a sleeping imp for a kill, and ends the session', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;
@@ -283,6 +299,9 @@ test('it wakes a sleeping imp for a kill, and ends the session', async () => {
 
 test('it drops a killed session from the sessions impd keeps', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;
@@ -311,6 +330,9 @@ test('it drops a killed session from the sessions impd keeps', async () => {
 
 test('it refuses a kill of a session the agent lacks as NOT_FOUND', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   await startStubSessionAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -325,6 +347,9 @@ test('it refuses a kill of a session the agent lacks as NOT_FOUND', async () => 
 
 test('it refuses a kill on an agent from before sessions as AGENT_OUTDATED', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   await startStubSessionAgent(buildImpPaths(ctx.dataDir, imp.id).vsockSocket, {
@@ -349,6 +374,9 @@ test('it refuses a list of an unknown imp as NOT_FOUND', async () => {
 
 test('it lists a session’s generation, and its end as last seen, from an agent with offsets', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;
@@ -385,6 +413,9 @@ test('it lists a session’s generation, and its end as last seen, from an agent
 
 test('it keeps a session’s generation and when impd saw its end across a sleep', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const imp = await ctx.client.imps.create({ name: 'dev' });
 
   const vsockPath = buildImpPaths(ctx.dataDir, imp.id).vsockSocket;

@@ -1,5 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, rmSync } from 'node:fs';
+import { readImpEnv } from '@impz/test-utils/read-imp-env';
+import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import fc from 'fast-check';
 import invariant from 'tiny-invariant';
@@ -18,26 +20,22 @@ import { updateImpState } from '../../platform/db/update-imp-state';
 import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 
-async function setupTest(options: Readonly<{ env?: Readonly<Record<string, string>> }> = {}) {
+function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await startTestImpd(stack, { env: options.env ?? {} });
-
-  await harness.createTestImage('ubuntu');
-
-  return harness;
+  return startTestImpd(stack, { env: readImpEnv() });
 }
 
 test('it lets a restore waiting for admission past the governor sleeping its imp', async () => {
-  const ctx = await setupTest({
-    env: {
-      IMP_RAM_BUDGET_MIB: '1000',
-      IMP_DEFAULT_MEMORY_MIB: '256',
-      IMP_BOOT_RESERVE_PERCENT: '100',
-    },
-  });
+  updateEnv('IMP_RAM_BUDGET_MIB', '1000');
+  updateEnv('IMP_DEFAULT_MEMORY_MIB', '256');
+  updateEnv('IMP_BOOT_RESERVE_PERCENT', '100');
+
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const x = await ctx.client.imps.create({ name: 'x' });
   const first = await ctx.client.imps.create({ name: 'a' });
@@ -80,6 +78,8 @@ test('it lets a restore waiting for admission past the governor sleeping its imp
 test('it leaves an imp whose boot fails in error with no VM and no reservation', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   ctx.fake.queue('boot', 'fail');
 
   const creating = ctx.client.imps.create({ name: 'dev' });
@@ -98,6 +98,8 @@ test('it leaves an imp whose boot fails in error with no VM and no reservation',
 test('it finds a VM that died right after its boot stopped on the next read', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   ctx.fake.queue('boot', 'die');
 
   const created = await ctx.client.imps.create({ name: 'dev' });
@@ -114,6 +116,7 @@ test('it finds a VM that died right after its boot stopped on the next read', as
 test('it boots an imp cold when its wake fails', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.sleep({ name: 'dev' });
 
@@ -129,6 +132,7 @@ test('it boots an imp cold when its wake fails', async () => {
 test('it leaves an imp in error when its wake and the cold boot after it fail', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.sleep({ name: 'dev' });
 
@@ -147,13 +151,13 @@ test('it leaves an imp in error when its wake and the cold boot after it fail', 
 });
 
 test('it drops the used snapshot when the budget refuses the cold boot after a failed wake', async () => {
-  const ctx = await setupTest({
-    env: {
-      IMP_RAM_BUDGET_MIB: '900',
-      IMP_DEFAULT_MEMORY_MIB: '512',
-      IMP_BOOT_RESERVE_PERCENT: '100',
-    },
-  });
+  updateEnv('IMP_RAM_BUDGET_MIB', '900');
+  updateEnv('IMP_DEFAULT_MEMORY_MIB', '512');
+  updateEnv('IMP_BOOT_RESERVE_PERCENT', '100');
+
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const first = await ctx.client.imps.create({ name: 'a' });
 
@@ -181,13 +185,13 @@ test('it drops the used snapshot when the budget refuses the cold boot after a f
 });
 
 test('it keeps the snapshot when the budget refuses a cold boot before anything loaded', async () => {
-  const ctx = await setupTest({
-    env: {
-      IMP_RAM_BUDGET_MIB: '900',
-      IMP_DEFAULT_MEMORY_MIB: '512',
-      IMP_BOOT_RESERVE_PERCENT: '100',
-    },
-  });
+  updateEnv('IMP_RAM_BUDGET_MIB', '900');
+  updateEnv('IMP_DEFAULT_MEMORY_MIB', '512');
+  updateEnv('IMP_BOOT_RESERVE_PERCENT', '100');
+
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const first = await ctx.client.imps.create({ name: 'a' });
 
@@ -217,6 +221,9 @@ test('it keeps the snapshot when the budget refuses a cold boot before anything 
 
 test('it releases the reservation of a cold boot that fails after its admit', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -243,6 +250,7 @@ test('it releases the reservation of a cold boot that fails after its admit', as
 test('it keeps the VM running when its snapshot fails', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   ctx.fake.queue('sleep', 'fail');
@@ -260,6 +268,9 @@ test('it keeps the VM running when its snapshot fails', async () => {
 
 test('it stops the imp when its snapshot is lost after the kill', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   ctx.fake.queue('sleep', 'die');
@@ -280,6 +291,8 @@ test('it stops the imp when its snapshot is lost after the kill', async () => {
 
 test('it settles imps a restarted impd finds in every state', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   for (const name of [
     'alive',
@@ -384,6 +397,9 @@ test('it settles imps a restarted impd finds in every state', async () => {
 
 test('it starts the next impd past a creating imp whose VM will not stop', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const image = await ctx.images.resolveImage('ubuntu');
 
   const pid = ctx.fake.spawnOrphan();
@@ -409,6 +425,9 @@ test('it starts the next impd past a creating imp whose VM will not stop', async
 
 test('it kills the VM of a creating imp that would not stop once a destroy lets go', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const image = await ctx.images.resolveImage('ubuntu');
 
   const pid = ctx.fake.spawnOrphan();
@@ -430,6 +449,9 @@ test('it kills the VM of a creating imp that would not stop once a destroy lets 
 
 test('it refuses a stop of an imp that is still being made', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const image = await ctx.images.resolveImage('ubuntu');
 
   await createImp(ctx.db, buildMockNewImp({ name: 'stuck', imageId: image.id }));
@@ -443,6 +465,7 @@ test('it refuses a stop of an imp that is still being made', async () => {
 test('it leaves every imp asleep for the next impd when impd stops with a wake under way', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'waking' });
   await ctx.client.imps.create({ name: 'running' });
   await ctx.client.imps.sleep({ name: 'waking' });
@@ -474,6 +497,7 @@ test('it leaves every imp asleep for the next impd when impd stops with a wake u
 test('it wakes an imp that impd stopping left asleep on the next impd', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'waking' });
   await ctx.client.imps.sleep({ name: 'waking' });
 
@@ -497,6 +521,7 @@ test('it wakes an imp that impd stopping left asleep on the next impd', async ()
 test('it re-adopts the VM of a boot under way once impd restarting in place waited for it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.stop({ name: 'dev' });
 
@@ -530,6 +555,8 @@ test('it re-adopts the VM of a boot under way once impd restarting in place wait
 
 test('it leaves the next impd an error record when impd dies mid-create', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const bootGate = ctx.fake.hold('boot');
   const creating = ctx.client.imps.create({ name: 'dev' });

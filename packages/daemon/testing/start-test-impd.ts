@@ -6,6 +6,7 @@ import type { ImpContract } from '@impz/api';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
+import invariant from 'tiny-invariant';
 import { loadConfig } from '../src/config';
 import type { Config } from '../src/config';
 import { createImpd } from '../src/create-impd';
@@ -141,9 +142,13 @@ export async function startTestImpd(
   const removedTaps: string[] = [];
   const logs: string[] = [];
   const filesystemGrows: string[] = [];
-  const clock = { offsetMs: 0 };
-  const frozenAt = options.frozenClockMs;
-  const readClock = () => (frozenAt ?? Date.now()) + clock.offsetMs;
+
+  const clock: { frozenAt: number | undefined; offsetMs: number } = {
+    frozenAt: options.frozenClockMs,
+    offsetMs: 0,
+  };
+
+  const readClock = () => (clock.frozenAt ?? Date.now()) + clock.offsetMs;
 
   const cloneDisk =
     options.cloneDisk ??
@@ -331,7 +336,7 @@ export async function startTestImpd(
         ...(options.readKsmProfitMib !== undefined && {
           readKsmProfitMib: options.readKsmProfitMib,
         }),
-        ...(frozenAt !== undefined && {
+        ...(options.frozenClockMs !== undefined && {
           sleepTiming: {
             now: readClock,
             sleep: (durationMs: number) => {
@@ -418,6 +423,12 @@ export async function startTestImpd(
     now: readClock,
     advance: (durationMs: number) => {
       clock.offsetMs += durationMs;
+    },
+    setClock: (nowMs: number) => {
+      invariant(options.frozenClockMs !== undefined, 'setClock needs a frozen clock');
+
+      clock.frozenAt = nowMs;
+      clock.offsetMs = 0;
     },
     createSystemDrive,
     createTestImage,
