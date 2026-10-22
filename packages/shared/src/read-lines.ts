@@ -2,15 +2,27 @@ import { splitLines } from './split-lines';
 
 export async function* readLines(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
   const reader = stream.pipeThrough(decodeText()).pipeThrough(splitLines()).getReader();
+  const read = { isDone: false };
 
-  for (;;) {
-    const next = await reader.read();
+  try {
+    for (;;) {
+      const next = await reader.read();
 
-    if (next.done) {
-      return;
+      if (next.done) {
+        read.isDone = true;
+
+        return;
+      }
+
+      yield next.value;
+    }
+  } finally {
+    // A consumer that stops early, or throws, cancels the stream so its source closes too.
+    if (!read.isDone) {
+      await reader.cancel();
     }
 
-    yield next.value;
+    reader.releaseLock();
   }
 }
 
