@@ -1,11 +1,11 @@
 # Preloads, shared test utils and cleanup
 
-Two preloads own the shared state of a test process: the
-[root preload](../../../../packages/test-utils/src/preload.ts) serves every package but the
-dashboard, and the dashboard has [its own](../../../../packages/dashboard/test-setup.ts). Helpers
-that every package uses live in [the shared test utils](../../../../packages/test-utils/src/), and
-each package keeps its own stand-ins in its `test-utils` folder. Read a helper's own test before you
-rely on it, because that test pins what the helper does.
+The [root preload](../../../../packages/test-utils/src/preload.ts) owns the shared state of every
+test process, and the dashboard adds
+[a setup of its own](../../../../packages/dashboard/test-setup.ts) after it. Helpers that every
+package uses live in [the shared test utils](../../../../packages/test-utils/src/), and each package
+keeps its own stand-ins in its `test-utils` folder. Read a helper's own test before you rely on it,
+because that test pins what the helper does.
 
 ## The root preload
 
@@ -27,25 +27,23 @@ expects three calls fails on a fourth.
 
 ## The dashboard's preload
 
-Dashboard component tests run the real SDK against a mock impd that MSW serves at a fake origin. The
-mock router reuses impd's own access checks, API errors and lifecycle rules from the daemon package,
-so a dashboard test sees the answers that impd gives. Where a daemon module would pull Bun-only
-types into the dashboard's DOM typecheck, the mock holds a copy of the function with a comment that
-explains why.
+Dashboard component tests run the real SDK against a real impd. The dashboard loads the DOM, then
+the root preload, then its own setup, which points the page at impd's fake origin and adds the
+`Sec-Fetch-Site` header that a browser sends to its own origin, because impd's same-origin check
+reads it.
 
-The mock keeps its rows in in-memory collections, which the preload empties after each test. One row
-stands for the browser's session cookie, because Bun's fetch keeps no cookies, and each call reads
-the session's token again. A changed token therefore takes effect at once, and a deleted one logs
-nobody in. A procedure that the mock router leaves out returns impd's `not found`, so add the
-procedure to the router when the dashboard starts to call it.
+[`startDashboardImpd`](../../../../packages/dashboard/src/test-utils/start-dashboard-impd.ts) boots
+impd through `startTestImpd` and routes the fake origin to it through MSW. Bun's fetch keeps no
+cookies, so the route keeps the session cookie that impd sets and sends it back, as a browser does.
 
-To write a test, log in through
-[`createDashboardSession`](../../../../packages/dashboard/src/test-utils/create-dashboard-session.ts),
-mount the whole app through
-[`renderApp`](../../../../packages/dashboard/src/test-utils/render-app.tsx), and add a per-test MSW
-handler when the test reads a call's input.
-[The dashboard's test utils](../../../../packages/dashboard/src/test-utils/) and
-[mocks](../../../../packages/dashboard/src/mocks/) hold them.
+The dashboard's typecheck reads impd's source under lib.dom, where bun-types give way to the DOM's
+types. A daemon module that calls a Bun-only signature therefore types the call so that it checks
+under both.
+
+To write a test, boot impd with `startDashboardImpd`, arrange state through the harness's root
+client or its stand-ins, log in with its `logIn`, and mount the whole app through
+[`renderApp`](../../../../packages/dashboard/src/test-utils/render-app.tsx). Assert what the page
+did through impd's own state, never through a call's input.
 
 ## Cleanup order
 

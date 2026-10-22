@@ -3,6 +3,7 @@ import type { Config } from './config';
 import type { ImpdStorage } from './create-impd-storage';
 import type { Ipv6Plan } from './host-net/net/ipv6-plan';
 import type { TailscaleStatus } from './host-net/net/tailscale-status';
+import { readGuestNetBytes } from './host-net/net/tap-bytes';
 import { createTapDevices } from './host-net/net/tap-devices';
 import type { ImpBoundaries, ImpdDeps } from './impd-deps';
 import { growFilesystem } from './imps/imps/imp-disk';
@@ -271,6 +272,7 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
     sleepTiming: boundaries.sleepTiming ?? { now: () => performance.now(), sleep: Bun.sleep },
     kernelOops: boundaries.kernelOops ?? createKernelOopsWatch(),
     readThreadIds: boundaries.readThreadIds ?? ((pid: number) => readThreadIds(pid)),
+    readNetBytes: boundaries.readNetBytes ?? ((tap: string) => readGuestNetBytes(tap)),
     ...(boundaries.openTap !== undefined && { openTap: boundaries.openTap }),
     ...(boundaries.now !== undefined && { now: boundaries.now }),
   };

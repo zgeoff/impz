@@ -1,17 +1,29 @@
-import { expect, mock, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
+import { server } from '@impz/test-utils/mock-server';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse, http } from 'msw';
-import { impCollection } from '../mocks/db/imp-collection';
-import { tokenCollection } from '../mocks/db/token-collection';
-import { LOGIN_URL, LOGOUT_URL, resolveLogin } from '../mocks/handlers';
-import { server } from '../mocks/node';
-import { createDashboardSession } from '../test-utils/create-dashboard-session';
+import { IMPD_ORIGIN } from '../test-utils/impd-origin';
 import { renderApp } from '../test-utils/render-app';
+import { startDashboardImpd } from '../test-utils/start-dashboard-impd';
+
+async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const dashboardImpd = await startDashboardImpd(stack);
+
+  return {
+    harness: dashboardImpd.harness,
+    client: dashboardImpd.harness.client,
+    logIn: dashboardImpd.logIn,
+  };
+}
 
 test('it stays on the login page with a message for a token impd does not know', async () => {
   const user = userEvent.setup();
 
-  await tokenCollection.create({ secret: 'imp_ci.secret' });
+  await setupTest();
 
   const rendered = renderApp('/login');
 
@@ -26,41 +38,17 @@ test('it stays on the login page with a message for a token impd does not know',
   expect(rendered.router.state.location.pathname).toBe('/login');
 });
 
-test('it sends the typed token to the session route of impd', async () => {
-  const user = userEvent.setup();
-  const received = mock<(body: unknown) => void>();
-
-  server.use(
-    http.post(LOGIN_URL, async (info) => {
-      const body: unknown = await info.request.clone().json();
-
-      received(body);
-
-      return resolveLogin(info);
-    }),
-  );
-
-  const rendered = renderApp('/login');
-
-  const field = await rendered.findByLabelText('API token');
-
-  await user.type(field, 'nope');
-  await user.click(rendered.getByRole('button', { name: 'Log in' }));
-  await rendered.findByRole('alert');
-
-  expect(received).toHaveBeenCalledExactlyOnceWith({ token: 'nope' });
-});
-
 test('it opens the imps list for a token impd knows', async () => {
   const user = userEvent.setup();
 
-  await tokenCollection.create({ secret: 'imp_ci.secret' });
+  const ctx = await setupTest();
+  const ci = await ctx.client.tokens.create({ name: 'ci', scope: 'read' });
 
   const rendered = renderApp('/login');
 
   const field = await rendered.findByLabelText('API token');
 
-  await user.type(field, 'imp_ci.secret');
+  await user.type(field, ci.secret);
   await user.click(rendered.getByRole('button', { name: 'Log in' }));
   await rendered.findByRole('heading', { name: 'Imps' });
 
@@ -70,9 +58,11 @@ test('it opens the imps list for a token impd knows', async () => {
 test('it clears what the dashboard knew and opens the login page on log out', async () => {
   const user = userEvent.setup();
 
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  await impCollection.create({ name: 'web' });
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
 
   const rendered = renderApp();
 
@@ -87,9 +77,13 @@ test('it clears what the dashboard knew and opens the login page on log out', as
 test('it says so and stays when the log out fails', async () => {
   const user = userEvent.setup();
 
-  await createDashboardSession();
+  const ctx = await setupTest();
 
-  server.use(http.post(LOGOUT_URL, () => new HttpResponse(null, { status: 502 })));
+  await ctx.logIn();
+
+  server.use(
+    http.post(`${IMPD_ORIGIN}/auth/logout`, () => new HttpResponse(null, { status: 502 })),
+  );
 
   const rendered = renderApp();
 

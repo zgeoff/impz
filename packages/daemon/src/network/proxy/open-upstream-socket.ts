@@ -1,3 +1,4 @@
+import invariant from 'tiny-invariant';
 import type { StartTimer } from '../../platform/process/clock';
 
 interface OpenDeadline {
@@ -12,10 +13,17 @@ export function openUpstreamSocket(
   deadline: Readonly<OpenDeadline>,
 ): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const socket = new WebSocket(target, {
+    const options: Bun.WebSocketOptions = {
       protocols: [...protocols],
       headers: Object.fromEntries(headers),
-    });
+    };
+
+    // Bun's WebSocket takes headers in an options object. bun-types defer to
+    // lib.dom's constructor, which takes none, when lib.dom is loaded, as it is
+    // in the dashboard's type check, which reads this module.
+    const socket: unknown = Reflect.construct(WebSocket, [target, options]);
+
+    invariant(socket instanceof WebSocket);
 
     socket.binaryType = 'arraybuffer';
 

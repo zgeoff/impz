@@ -1,22 +1,29 @@
-import { expect, mock, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
+import { buildMockTokenSshKeyRecord } from '@impz/daemon/testing';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http } from 'msw';
 import invariant from 'tiny-invariant';
-import { tokenCollection } from '../mocks/db/token-collection';
-import { RPC_URL } from '../mocks/handlers';
-import { server } from '../mocks/node';
-import { createDashboardSession } from '../test-utils/create-dashboard-session';
-import { readRpcInput } from '../test-utils/read-rpc-input';
 import { renderApp } from '../test-utils/render-app';
+import { startDashboardImpd } from '../test-utils/start-dashboard-impd';
+
+async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const dashboardImpd = await startDashboardImpd(stack);
+
+  return { client: dashboardImpd.harness.client, logIn: dashboardImpd.logIn };
+}
 
 test('it makes a token limited to some imps and shows its secret', async () => {
   const user = userEvent.setup();
 
-  const admin = await tokenCollection.create({ name: 'admin' });
+  const ctx = await setupTest();
+  const admin = await ctx.client.tokens.create({ name: 'admin', scope: 'manage' });
 
-  await createDashboardSession({ token: admin });
+  await ctx.logIn(admin.secret);
 
   const rendered = renderApp('/tokens');
 
@@ -29,25 +36,25 @@ test('it makes a token limited to some imps and shows its secret', async () => {
 
   const card = await rendered.findByRole('region', { name: 'Secret of ci' });
   const row = await rendered.findByRole('row', { name: /ci/u });
+  const tokens = await ctx.client.tokens.list();
 
-  const token = tokenCollection.findFirst((query) => query.where({ name: 'ci' }));
+  const token = tokens.find((listed) => listed.name === 'ci');
 
   invariant(token);
 
-  expect(within(card).getByText(token.secret)).toBeInTheDocument();
+  expect(within(card).getByText(/^imp_/u)).toBeInTheDocument();
   expect(within(row).getByText('dev-*, ci-*')).toBeInTheDocument();
-  expect(token.scope).toBe('exec');
-  expect(token.imps).toStrictEqual(['dev-*', 'ci-*']);
+  expect(token).toMatchObject({ scope: 'exec', imps: ['dev-*', 'ci-*'], grantable: [] });
 });
 
 test('it deletes a token after a confirm', async () => {
   const user = userEvent.setup();
 
-  const admin = await tokenCollection.create({ name: 'admin' });
+  const ctx = await setupTest();
+  const admin = await ctx.client.tokens.create({ name: 'admin', scope: 'manage' });
 
-  await createDashboardSession({ token: admin });
-
-  await tokenCollection.create({ name: 'old' });
+  await ctx.client.tokens.create({ name: 'old', scope: 'read' });
+  await ctx.logIn(admin.secret);
 
   const rendered = renderApp('/tokens');
 
@@ -63,46 +70,16 @@ test('it deletes a token after a confirm', async () => {
     expect(rendered.queryByRole('row', { name: /old/u })).toBeNull();
   });
 
-  expect(tokenCollection.findFirst((query) => query.where({ name: 'old' }))).toBeUndefined();
-});
+  const tokens = await ctx.client.tokens.list();
 
-test('it sends no grantable list for a token made without one', async () => {
-  const user = userEvent.setup();
-  const received = mock<(input: unknown) => void>();
-
-  const admin = await tokenCollection.create({ name: 'admin' });
-
-  await createDashboardSession({ token: admin });
-
-  server.use(
-    http.post(`${RPC_URL}/tokens/create`, async (info) => {
-      const input = await readRpcInput(info.request);
-
-      received(input);
-    }),
-  );
-
-  const rendered = renderApp('/tokens');
-
-  const field = await rendered.findByLabelText('Name');
-
-  await user.type(field, 'ci');
-  await user.selectOptions(rendered.getByLabelText('Scope'), 'exec');
-  await user.type(rendered.getByLabelText('Imps'), 'dev-*, ci-*');
-  await user.click(rendered.getByRole('button', { name: 'Make token' }));
-  await rendered.findByRole('region', { name: 'Secret of ci' });
-
-  expect(received).toHaveBeenCalledExactlyOnceWith({
-    name: 'ci',
-    scope: 'exec',
-    imps: ['dev-*', 'ci-*'],
-  });
+  expect(tokens.map((token) => token.name)).not.toContain('old');
 });
 
 test('it hides the tokens link from a caller limited to some imps', async () => {
-  const token = await tokenCollection.create({ name: 'dev', imps: ['dev-*'] });
+  const ctx = await setupTest();
+  const dev = await ctx.client.tokens.create({ name: 'dev', scope: 'manage', imps: ['dev-*'] });
 
-  await createDashboardSession({ token });
+  await ctx.logIn(dev.secret);
 
   const rendered = renderApp('/');
 
@@ -112,9 +89,10 @@ test('it hides the tokens link from a caller limited to some imps', async () => 
 });
 
 test('it links to tokens for a caller that manages the whole host', async () => {
-  const token = await tokenCollection.create({ name: 'admin' });
+  const ctx = await setupTest();
+  const admin = await ctx.client.tokens.create({ name: 'admin', scope: 'manage' });
 
-  await createDashboardSession({ token });
+  await ctx.logIn(admin.secret);
 
   const rendered = renderApp('/');
 
@@ -124,18 +102,23 @@ test('it links to tokens for a caller that manages the whole host', async () => 
 });
 
 test('it lists the SSH keys bound to each token', async () => {
-  const admin = await tokenCollection.create({ name: 'admin' });
+  const ctx = await setupTest();
 
-  await createDashboardSession({ token: admin });
+  const key = buildMockTokenSshKeyRecord();
 
-  await tokenCollection.create({
+  const admin = await ctx.client.tokens.create({ name: 'admin', scope: 'manage' });
+
+  await ctx.client.tokens.create({
     name: 'laptop',
-    sshKeys: [{ fingerprint: 'SHA256:abc', type: 'ssh-ed25519', comment: 'me@laptop' }],
+    scope: 'exec',
+    sshKeys: [`${key.publicKey} me@laptop`],
   });
+
+  await ctx.logIn(admin.secret);
 
   const rendered = renderApp('/tokens');
 
   const row = await rendered.findByRole('row', { name: /laptop/u });
 
-  expect(within(row).getByText('me@laptop SHA256:abc')).toBeInTheDocument();
+  expect(within(row).getByText(`me@laptop ${key.fingerprint}`)).toBeInTheDocument();
 });

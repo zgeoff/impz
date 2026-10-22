@@ -10,6 +10,7 @@ export { startStubDockerEngine } from './imps/start-stub-docker-engine';
 export type { StubDockerEngineOptions, StubEngineAnswer } from './imps/start-stub-docker-engine';
 export { createMoveHosts, createUbuntuImage } from './imp-ops/create-move-hosts';
 export type { MoveHostsOptions } from './imp-ops/create-move-hosts';
+export { buildMockTokenSshKeyRecord } from './identity/build-mock-token-ssh-key-record';
 export { createPendingSignIn } from './identity/create-pending-sign-in';
 export { buildMockImageUse } from './imps/build-mock-image-use';
 export { buildMockNewImage } from './imps/build-mock-new-image';
@@ -21,6 +22,7 @@ export { startStubSilentOrigin } from './network/start-stub-silent-origin';
 export { buildQueryGate } from './platform/build-query-gate';
 export { buildStubClock } from './platform/build-stub-clock';
 export { claimFreePorts } from './platform/claim-free-ports';
+export { readInBackground } from './platform/read-in-background';
 
 export {
   STUB_BOOT_ID,
@@ -39,3 +41,5 @@ export { startStubExecAgent } from './vm/start-stub-exec-agent';
 export { startStubInnerAgent } from './vm/start-stub-inner-agent';
 export { startStubServiceAgent } from './vm/start-stub-service-agent';
 export { buildImagePaths, buildImpPaths } from '../src/vm/storage/data-layout';
+export { createImage } from '../src/platform/db/images';
+export { readImpByName } from '../src/platform/db/imps';

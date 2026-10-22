@@ -3,7 +3,7 @@ import type { Config } from '../../config';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
 import type { SlotAddress } from '../../host-net/net/addressing';
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
-import { readGuestNetBytes } from '../../host-net/net/tap-bytes';
+import type { GuestNetBytes } from '../../host-net/net/tap-bytes';
 import type { TapDevices } from '../../host-net/net/tap-devices';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
 import type { BrokerExecEnv } from '../../network/broker/guest-trust';
@@ -131,6 +131,8 @@ export interface ImpServiceDeps {
   readonly kernelOops: KernelOopsWatch;
 
   readonly readThreadIds: (pid: number) => readonly number[] | null;
+
+  readonly readNetBytes: (tap: string) => GuestNetBytes | null;
 }
 
 export interface ImpHost {
@@ -266,7 +268,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
       now,
       readCpuStat: cgroups.readCpuStat,
       readCpuTicks,
-      readNetBytes: (tap) => readGuestNetBytes(tap),
+      readNetBytes: deps.readNetBytes,
       readMemory: deps.readVmMemory,
       readThreadIds: deps.readThreadIds,
     }),

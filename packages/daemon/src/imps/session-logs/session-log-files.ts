@@ -147,7 +147,11 @@ function readMeta(
   return meta;
 }
 
-async function readSegmentBytes(path: string, skip: number, length: number): Promise<Uint8Array> {
+async function readSegmentBytes(
+  path: string,
+  skip: number,
+  length: number,
+): Promise<Uint8Array<ArrayBuffer>> {
   const data = new Uint8Array(length);
 
   const file = await open(path, 'r');
