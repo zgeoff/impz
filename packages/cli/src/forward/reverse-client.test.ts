@@ -24,13 +24,11 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, { rootToken });
 
-  // impd checks the agent's version before each dial and listen
-  harness.fake.agent.version = '0.18.0';
-
   const url = harness.url;
 
   return {
     createTestImage: harness.createTestImage,
+    fake: harness.fake,
     stack,
     rootToken,
     dataDir: harness.dataDir,
@@ -44,6 +42,8 @@ test('it relays a client in the imp to the local unix socket, both ways', async 
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.18.0';
 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
@@ -113,6 +113,8 @@ test('it rejects a listen the agent refuses, with the agent’s code', async () 
 
   await ctx.createTestImage('ubuntu');
 
+  ctx.fake.agent.version = '0.18.0';
+
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const agent = buildStubListenAgent({ listening: { port: 9000 } });
@@ -157,6 +159,8 @@ test('it fails the forward when the imp is destroyed while it waits for a wake',
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.18.0';
 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
@@ -205,6 +209,8 @@ test('it fails the forward with impd’s refusal of the state watch once its tok
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.18.0';
 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
   const made = await ctx.client.tokens.create({ name: 'runner', scope: 'exec' });
@@ -256,6 +262,8 @@ test('it waits for an imp that slept to wake before it listens again after a los
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.18.0';
 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
@@ -319,6 +327,8 @@ test('it listens again once the grace passes on an imp that stayed running', asy
 
   await ctx.createTestImage('ubuntu');
 
+  ctx.fake.agent.version = '0.18.0';
+
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const agent = buildStubListenAgent({ listening: { port: 9000 } });
@@ -372,6 +382,8 @@ test('it fails the forward for good when the agent refuses the listen after a lo
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.18.0';
 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
@@ -427,6 +439,8 @@ test('it ends the wait for a wake when the forward stops', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.18.0';
 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
@@ -508,6 +522,8 @@ test('it fails the forward when the imp’s state watch ends while it waits', as
 
   await ctx.createTestImage('ubuntu');
 
+  ctx.fake.agent.version = '0.18.0';
+
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const agent = buildStubListenAgent({ listening: { port: 9000 } });
@@ -549,6 +565,8 @@ test('it listens again after the retry time when impd closes the tunnel to resta
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.18.0';
 
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
