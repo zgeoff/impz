@@ -8,7 +8,7 @@ interface PeerDeps {
   readonly fetch?: (request: Request) => Promise<Response>;
 }
 
-export interface PeerRequest {
+interface PeerRequest {
   readonly body?: string | ReadableStream<Uint8Array>;
   readonly duplex?: 'half';
   readonly signal?: AbortSignal;

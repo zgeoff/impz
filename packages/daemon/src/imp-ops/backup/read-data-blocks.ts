@@ -8,11 +8,11 @@ const ENXIO = 6;
 
 type SeekResult = { readonly offset: number } | { readonly errno: number };
 
-export type SeekFile = (fd: number, offset: number, whence: number) => SeekResult;
+type SeekFile = (fd: number, offset: number, whence: number) => SeekResult;
 
-export type ReadAllocated = (fd: number) => number;
+type ReadAllocated = (fd: number) => number;
 
-interface ReadDataBlocksOptions {
+export interface ReadDataBlocksOptions {
   readonly fd: number;
   readonly size: number;
   readonly blockBytes: number;

@@ -1,4 +1,4 @@
-import type { ReadAllocated, SeekFile } from '../../src/imp-ops/backup/read-data-blocks';
+import type { ReadDataBlocksOptions } from '../../src/imp-ops/backup/read-data-blocks';
 
 const SEEK_DATA = 3;
 const SEEK_HOLE = 4;
@@ -15,23 +15,25 @@ interface StubLseekOptions {
   readonly metadataBytes?: number;
 }
 
-export function buildStubLseek(options: Readonly<StubLseekOptions>) {
-  const runSeek: SeekFile = (_fd, offset, whence) => {
-    if (whence === SEEK_DATA) {
-      return findData(options, offset);
-    }
+type StubLseek = Required<Pick<ReadDataBlocksOptions, 'seek' | 'readAllocated'>>;
 
-    if (whence === SEEK_HOLE) {
-      return findHole(options, offset);
-    }
-
-    return { errno: 22 };
-  };
-
+export function buildStubLseek(options: Readonly<StubLseekOptions>): StubLseek {
   const allocated = options.extents.reduce((total, [start, end]) => total + end - start, 0);
-  const readAllocated: ReadAllocated = () => allocated + (options.metadataBytes ?? 0);
 
-  return { seek: runSeek, readAllocated };
+  return {
+    seek: (_fd, offset, whence) => {
+      if (whence === SEEK_DATA) {
+        return findData(options, offset);
+      }
+
+      if (whence === SEEK_HOLE) {
+        return findHole(options, offset);
+      }
+
+      return { errno: 22 };
+    },
+    readAllocated: () => allocated + (options.metadataBytes ?? 0),
+  };
 }
 
 const ENXIO = 6;

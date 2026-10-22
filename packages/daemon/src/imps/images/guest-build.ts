@@ -125,7 +125,7 @@ export interface ExportedImage {
   readonly config: z.infer<typeof OciConfigSchema>;
 }
 
-export interface ExportLimits {
+interface ExportLimits {
   readonly maxBytes: number;
 
   // Counted from tar's own listing, so an archive cannot hide entries from a second parser.
