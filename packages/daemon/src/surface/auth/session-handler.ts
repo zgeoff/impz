@@ -12,8 +12,9 @@ import {
 } from '../../identity/auth/session-cookie';
 import type { SessionCookie } from '../../identity/auth/session-cookie';
 import type { TokenStore } from '../../identity/auth/token-store';
+import { buildForbiddenError } from '../../platform/errors/impd-errors';
 import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
-import { buildForbiddenError } from '../api-errors';
+import { toORPCError } from '../to-orpc-error';
 
 export interface SessionHandlerDeps {
   readonly tokens: TokenStore;
@@ -33,7 +34,7 @@ export function createSessionHandler(deps: Readonly<SessionHandlerDeps>) {
     .$context<SessionContext>()
     .use((options) => {
       if (!isAllowedOrigin(options.context.request, { kind: 'same-origin' })) {
-        throw buildForbiddenError('cross-origin');
+        throw toORPCError(buildForbiddenError('cross-origin'));
       }
 
       return options.next();

@@ -4,8 +4,7 @@ import type { ImageRecord } from '../../platform/db/images';
 import { ImpClashError } from '../../platform/db/imp-clash-error';
 import { createImpInFreeSlot, readImpByName } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildConflictError } from '../../surface/api-errors';
+import { buildConflictError } from '../../platform/errors/impd-errors';
 import { resolveCpuSettings } from './cpu-limit';
 import type { ImpClock, ImpHost, ImpVms } from './imp-context';
 

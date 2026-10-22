@@ -4,11 +4,10 @@ import type { LockedImp } from '../../imps/imps/imp-lock';
 import type { ImpVmOps } from '../../imps/imps/imp-vm-ops';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { IMPD_USER } from '../../platform/process/impd-user';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { isDiskFullError } from '../../surface/api-errors';
 import { buildSnapshotIdentity, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildWatchdogSlot } from '../../vm/storage/data-layout';
+import { isDiskFullError } from '../../vm/storage/disk-full-error';
 
 export async function writeWatchdogSnapshot(
   context: ImpHost & ImpVms & ImpDisk,

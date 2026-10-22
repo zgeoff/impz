@@ -3,7 +3,7 @@ import { formatCaller, isCallerAllowed } from '../../identity/auth/caller';
 import type { Caller } from '../../identity/auth/caller';
 import { toCallerError } from '../../identity/auth/caller-view';
 import type { ExecBackend } from '../../imps/exec/exec-session';
-import { buildForbiddenError } from '../api-errors';
+import { buildForbiddenError } from '../../platform/errors/impd-errors';
 
 // Each start checks the scope, so a client reads FORBIDDEN on the socket
 // instead of a refused upgrade it cannot read.

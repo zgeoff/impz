@@ -1,6 +1,4 @@
 import type { BrokerRule, OAuthConfig, Secret, SecretAdded, SecretKind } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import {
   createSecret,
@@ -11,9 +9,9 @@ import {
   upsertSecret,
 } from '../../platform/db/secrets';
 import type { NewSecret, SecretRecord } from '../../platform/db/secrets';
+import { ImpdError } from '../../platform/errors/impd-error';
+import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
 import { SecretRulesError, resolveRules } from './connector-kinds';
 import type { OAuthRefresher } from './oauth-refresher';
 import { buildPendingState, findIdClaims, formatOAuthState, parseOAuthState } from './oauth-state';
@@ -141,20 +139,20 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
         rules = resolveRules(input.kind, input.rules);
       } catch (error) {
         if (error instanceof SecretRulesError) {
-          throw new ORPCError('BAD_REQUEST', { message: error.message });
+          throw new ImpdError('BAD_REQUEST', { message: error.message });
         }
 
         throw error;
       }
 
       if (input.kind === 'oauth' && input.oauth === undefined) {
-        throw new ORPCError('BAD_REQUEST', {
+        throw new ImpdError('BAD_REQUEST', {
           message: 'kind oauth needs a token URL and a client id',
         });
       }
 
       if (input.kind !== 'oauth' && input.oauth !== undefined) {
-        throw new ORPCError('BAD_REQUEST', {
+        throw new ImpdError('BAD_REQUEST', {
           message: `kind ${input.kind} has no token URL or client id; they are for kind oauth`,
         });
       }
@@ -207,7 +205,7 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
       }
 
       if (secret.kind !== 'oauth') {
-        throw new ORPCError('BAD_REQUEST', { message: `secret ${name} is not an oauth secret` });
+        throw new ImpdError('BAD_REQUEST', { message: `secret ${name} is not an oauth secret` });
       }
 
       await refresher.refresh(name, true);
@@ -242,7 +240,7 @@ function toDate(durationMs: number | null | undefined): Date | null {
 }
 
 function buildBindingChangedError(name: string) {
-  return new ORPCError('CONFLICT', {
+  return new ImpdError('CONFLICT', {
     message: `secret ${name} would get other hosts or headers; a rebind (--rebind) drops its grants`,
     data: { kind: 'secret', name, reason: 'binding_changed' },
   });

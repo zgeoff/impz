@@ -4,7 +4,6 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve as resolvePath } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { ORPCError } from '@orpc/server';
 import invariant from 'tiny-invariant';
 import { buildStubTapOpener } from '../../../testing/host-net/build-stub-tap-opener';
 import { buildMockAgentSession } from '../../../testing/imps/build-mock-agent-session';
@@ -12,6 +11,7 @@ import { buildMockSessionOutput } from '../../../testing/imps/build-mock-session
 import { buildStubGenerationLogGate } from '../../../testing/imps/build-stub-generation-log-gate';
 import { buildStubTapStream } from '../../../testing/imps/build-stub-tap-stream';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { AgentError } from '../../vm/agent-client/agent-connection';
 import type { ExecStream } from '../../vm/agent-client/exec-stream';
 import { createGenerationLog, readGenerationMeta } from './generation-log';
@@ -1418,7 +1418,7 @@ test('it stops the log for a full disk and closes its tap', async () => {
 
   const logs = createSessionLogs({
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
-    requireRoom: () => Promise.reject(new ORPCError('DISK_FULL', { message: 'full' })),
+    requireRoom: () => Promise.reject(new ImpdError('DISK_FULL', { message: 'full' })),
     now: () => 10_000,
     log: () => {},
     startTimer: ctx.timers.startTimer,
@@ -1477,7 +1477,7 @@ test('it never taps a log that stopped for a full disk again', async () => {
 
   const logs = createSessionLogs({
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
-    requireRoom: () => Promise.reject(new ORPCError('DISK_FULL', { message: 'full' })),
+    requireRoom: () => Promise.reject(new ImpdError('DISK_FULL', { message: 'full' })),
     now: () => 10_000,
     log: () => {},
     startTimer: ctx.timers.startTimer,

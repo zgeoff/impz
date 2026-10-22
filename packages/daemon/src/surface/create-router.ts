@@ -1,6 +1,5 @@
 import { EVENT_VERSION, hasScope, isImpAllowed } from '@impz/api';
 import type { Imp, ImpEvent } from '@impz/api';
-import type { Config } from '../config';
 import type { TailscaleStatus } from '../host-net/net/tailscale-status';
 import { findForkAuthority } from '../identity/auth/access-policy';
 import { formatCaller, isCallerAllowed } from '../identity/auth/caller';
@@ -31,6 +30,7 @@ import type { NetworkService } from '../network/networks/network-service';
 import type { TailnetNamesStatus } from '../network/tailnet-names/tailnet-names';
 import type { ApiAudit } from '../platform/audit/api-audit';
 import type { ImpDatabase } from '../platform/db/open-database';
+import { buildForbiddenError } from '../platform/errors/impd-errors';
 import { createEventCheck } from '../platform/events/event-check';
 import { openEventStream } from '../platform/events/event-stream';
 import { mergeSignals } from '../platform/process/merge-signals';
@@ -40,7 +40,6 @@ import type { StorageBackend } from '../vm/storage/storage-backend';
 import type { StorageGcService } from '../vm/storage/storage-gc';
 import type { SystemFileInfo } from '../vm/storage/system-file-info';
 import type { KsmHostStats } from '../vm/vmm/ksm';
-import { buildForbiddenError } from './api-errors';
 import { buildAuditRoutes } from './build-audit-routes';
 import { createGrantRoutes } from './create-grant-routes';
 import { createImageRoutes } from './create-image-routes';
@@ -52,11 +51,12 @@ import { createSystemRoutes } from './create-system-routes';
 import { createTokenRoutes } from './create-token-routes';
 import type { ExecTickets } from './exec/exec-tickets';
 import { requireNamedImp } from './require-named-imp';
+import type { SurfaceConfig } from './surface-config';
 
 const DEFAULT_LOG_LINES = 100;
 
 export interface RouterDeps {
-  readonly config: Config;
+  readonly config: SurfaceConfig;
   readonly db: ImpDatabase;
   readonly imps: ImpService;
   readonly images: ImageService;

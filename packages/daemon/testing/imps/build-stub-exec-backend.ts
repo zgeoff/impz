@@ -1,6 +1,6 @@
-import { ORPCError } from '@orpc/server';
 import type { ExecBackend } from '../../src/imps/exec/exec-session';
-import { buildInvalidStateError } from '../../src/surface/api-errors';
+import { ImpdError } from '../../src/platform/errors/impd-error';
+import { buildInvalidStateError } from '../../src/platform/errors/impd-errors';
 import type { AgentFeature } from '../../src/vm/agent-client/agent-outdated';
 import type {
   AgentAttachRequest,
@@ -54,10 +54,10 @@ function openOutcome(outcome: ExecStream | Error | undefined): Promise<ExecStrea
     const refused = buildInvalidStateError('stopped', ['running'], 'attach without a wake to');
 
     return Promise.reject(
-      new ORPCError('INVALID_STATE', {
+      new ImpdError('INVALID_STATE', {
         status: refused.status,
         message: refused.message,
-        data: { ...refused.data, coldBoots: [] },
+        data: { state: 'stopped', allowed: ['running'], coldBoots: [] },
       }),
     );
   }

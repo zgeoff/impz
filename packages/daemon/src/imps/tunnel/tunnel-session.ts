@@ -7,8 +7,7 @@ import {
   TunnelClientMessageSchema,
 } from '@impz/api';
 import type { TunnelClientMessage, TunnelServerMessage } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { createCountedLimit } from '../../platform/process/counted-limit';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { AgentError } from '../../vm/agent-client/agent-connection';
@@ -53,7 +52,7 @@ export function createTunnelLimits(max = MAX_TUNNELS_PER_IMP): TunnelLimits {
 }
 
 function buildErrorMessage(error: unknown): TunnelServerMessage {
-  if (error instanceof ORPCError) {
+  if (error instanceof ImpdError) {
     return { type: 'error', code: String(error.code), message: error.message };
   }
 
@@ -198,8 +197,8 @@ export function createTunnelSession(
     }
   };
 
-  const buildLimitError = (name: string): ORPCError<'TUNNEL_LIMIT', unknown> =>
-    new ORPCError('TUNNEL_LIMIT', {
+  const buildLimitError = (name: string): ImpdError<'TUNNEL_LIMIT'> =>
+    new ImpdError('TUNNEL_LIMIT', {
       message: `${name} has ${String(limits.max)} ${limits.max === 1 ? 'tunnel' : 'tunnels'} open already`,
     });
 
@@ -254,10 +253,10 @@ export function createTunnelSession(
 
     if ('refused' in relay) {
       throw relay.refused === 'full'
-        ? new ORPCError('TUNNEL_LIMIT', {
+        ? new ImpdError('TUNNEL_LIMIT', {
             message: `the reverse forward has its most relays open already`,
           })
-        : new ORPCError('NOT_FOUND', {
+        : new ImpdError('NOT_FOUND', {
             message: `no reverse forward ${listener} of yours on ${name}`,
           });
     }

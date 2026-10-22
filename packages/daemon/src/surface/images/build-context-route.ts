@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { IMAGE_BUILD_STREAM_TYPE, ImageBuildQuerySchema } from '@impz/api';
 import type { Image, ImageBuildQuery } from '@impz/api';
 import { ORPCError } from '@orpc/server';
-import type { Config } from '../../config';
 import { checkAccess, findAccess } from '../../identity/auth/access-policy';
 import type { Caller } from '../../identity/auth/caller';
 import { createBuildEventStream } from '../../imps/images/build-event-stream';
@@ -17,6 +16,8 @@ import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildUploadsDir } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
+import type { SurfaceConfig } from '../surface-config';
+import { toORPCError } from '../to-orpc-error';
 
 const PROCEDURE = 'images.build';
 
@@ -29,7 +30,7 @@ export interface BuildContextRoute {
 }
 
 export interface BuildContextDeps {
-  readonly config: Pick<Config, 'dataDir' | 'buildContextMaxBytes'>;
+  readonly config: Pick<SurfaceConfig, 'dataDir' | 'buildContextMaxBytes'>;
   readonly images: Pick<ImageService, 'buildImageFromContext' | 'claimBuildSlot' | 'startBuildRun'>;
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
   readonly audit: ApiAudit;
@@ -104,9 +105,11 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
       const writeFailure = (error: unknown): BuildFailure => {
         deps.audit.record({ procedure: PROCEDURE, actor: caller, impName: null, startedAt }, error);
 
+        const mapped = toORPCError(error);
+
         const known =
-          error instanceof ORPCError
-            ? error
+          mapped instanceof ORPCError
+            ? mapped
             : new ORPCError('INTERNAL_SERVER_ERROR', { message: getErrorMessage(error) });
 
         return { code: String(known.code), message: known.message, status: known.status };
@@ -186,7 +189,7 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
 
           return { ok: true, image: toApi(image) };
         } catch (error) {
-          if (!(error instanceof ORPCError) && !signal.aborted) {
+          if (!(toORPCError(error) instanceof ORPCError) && !signal.aborted) {
             getImpdLogger('image').error('image build from an upload failed: {error}', { error });
           }
 

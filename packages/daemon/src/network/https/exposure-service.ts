@@ -1,12 +1,10 @@
 import type { ExposeResult, PublicAuth } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import { readImpByName, updateImpExposure } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { ImpdError } from '../../platform/errors/impd-error';
+import { buildMovingError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import { mintSecret } from '../../platform/secrets/mint-secret';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildMovingError, buildNotFoundError } from '../../surface/api-errors';
 import type { HttpsConfig } from './https-config';
 import type { RecordsStatus } from './https-service';
 import { buildCredentialHash } from './public-auth';
@@ -51,7 +49,7 @@ export function createExposureService(deps: ExposureDeps): ExposureService {
       const https = deps.https;
 
       if (https === null || https.public === null) {
-        throw new ORPCError('PRECONDITION_FAILED', {
+        throw new ImpdError('PRECONDITION_FAILED', {
           message: 'public imps need IMP_DOMAIN and IMP_PUBLIC_IP on the host',
         });
       }

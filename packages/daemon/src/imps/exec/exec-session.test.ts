@@ -7,11 +7,11 @@ import {
   encodeExecFrame,
 } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { ORPCError } from '@orpc/server';
 import { buildMockSessionOutput } from '../../../testing/imps/build-mock-session-output';
 import { buildStubExecBackend } from '../../../testing/imps/build-stub-exec-backend';
 import { buildStubAgentExecStream } from '../../../testing/vm/build-stub-agent-exec-stream';
 import { buildStubExecSocket } from '../../../testing/vm/build-stub-exec-socket';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { AgentError } from '../../vm/agent-client/agent-connection';
 import { createExecSession } from './exec-session';
 
@@ -150,7 +150,7 @@ test('it passes a contract error on with its data', async () => {
   const data = { budgetMib: 1024, usedMib: 900, requestedMib: 512 };
 
   const stub = buildStubExecBackend({
-    exec: new ORPCError('RAM_BUDGET_EXCEEDED', { message: 'no room', data }),
+    exec: new ImpdError('RAM_BUDGET_EXCEEDED', { message: 'no room', data }),
   });
 
   const socket = buildStubExecSocket();
@@ -1020,7 +1020,7 @@ test("it passes the backend's refusal of a requirement on with its data", async 
   const data = { reason: 'broker_not_ready', detail: 'the imp has no grant' };
 
   const stub = buildStubExecBackend({
-    exec: new ORPCError('PRECONDITION_FAILED', { message: 'not ready', data }),
+    exec: new ImpdError('PRECONDITION_FAILED', { message: 'not ready', data }),
   });
 
   const socket = buildStubExecSocket();

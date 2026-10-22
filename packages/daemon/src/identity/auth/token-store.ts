@@ -1,8 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { MAX_SSH_KEYS } from '@impz/api';
 import type { Scope, SshKey, Token } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import { formatKeyFingerprint, parsePublicKey } from '../../imps/ssh/authorized-keys';
 import type { AuthorizedKey } from '../../imps/ssh/authorized-keys';
 import type { ImpDatabase, ImpQueries } from '../../platform/db/open-database';
@@ -17,12 +15,12 @@ import {
   writeTokenSshKeyRecord,
 } from '../../platform/db/tokens';
 import type { GrantableSecret, TokenRecord, TokenSshKeyRecord } from '../../platform/db/tokens';
+import { ImpdError } from '../../platform/errors/impd-error';
+import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { isSameDigest } from '../../platform/secrets/is-same-digest';
 import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
 import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
 import type { Caller } from './caller';
 
 // A made token's id is 16 characters, so this one never clashes with it.
@@ -180,7 +178,7 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
     const key = parsePublicKey(line);
 
     if (typeof key === 'string') {
-      throw new ORPCError('BAD_REQUEST', { message: `not an SSH public key: ${key}` });
+      throw new ImpdError('BAD_REQUEST', { message: `not an SSH public key: ${key}` });
     }
 
     const fingerprint = formatKeyFingerprint(key.blob);
@@ -304,7 +302,7 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
       const record = requireByName(name);
 
       if (listKeys(record.id).length >= MAX_SSH_KEYS) {
-        throw new ORPCError('BAD_REQUEST', {
+        throw new ImpdError('BAD_REQUEST', {
           message: `token ${name} holds ${String(MAX_SSH_KEYS)} keys, the most it may`,
         });
       }
@@ -433,7 +431,7 @@ async function readGrantable(
   }
 
   if (token.imps === null || token.scope !== 'manage') {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: 'a token that may grant secrets needs scope manage and imp patterns',
     });
   }
@@ -458,7 +456,7 @@ function requireImageScope(
   token: Readonly<Pick<NewToken, 'scope' | 'imps'>>,
 ): void {
   if (imageRefPrefix !== null && (token.imps === null || token.scope !== 'manage')) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: 'a token that may add images needs scope manage and imp patterns',
     });
   }

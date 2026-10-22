@@ -1,5 +1,4 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 
 // Movable memory cannot hold the kernel's own allocations, so a guest that is mostly hot-plugged
 // memory runs out of kernel memory first.
@@ -50,7 +49,7 @@ export function resolveMaxMemoryMib(memoryMib: number, requested: number | undef
   }
 
   if (requested < memoryMib) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `the max memory (${String(requested)} MiB) is less than the memory (${String(memoryMib)} MiB)`,
     });
   }
@@ -58,7 +57,7 @@ export function resolveMaxMemoryMib(memoryMib: number, requested: number | undef
   const ceiling = memoryMib * MAX_GROWTH_FACTOR;
 
   if (requested > ceiling) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `the max memory (${String(requested)} MiB) is more than ${String(MAX_GROWTH_FACTOR)} × the memory (${String(ceiling)} MiB): memory the guest grows into cannot hold its kernel's own allocations, so raise the memory too`,
     });
   }

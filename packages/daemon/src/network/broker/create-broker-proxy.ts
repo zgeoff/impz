@@ -2,7 +2,6 @@ import type { Socket } from 'node:net';
 import { join } from 'node:path';
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressMode } from '@impz/api';
-import type { Config } from '../../config';
 import { readRouteDevice } from '../../host-net/net/host-routes';
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
 import { createReachPolicy } from '../../host-net/net/reach-policy';
@@ -14,6 +13,7 @@ import { readBrokerPeer } from '../../platform/db/read-broker-peer';
 import { listGrantedRules } from '../../platform/db/secrets';
 import type { GrantedRule } from '../../platform/db/secrets';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import type { NetworkConfig } from '../network-config';
 import type { BrokerCa } from './broker-ca';
 import { startBrokerFront } from './broker-front';
 import type { BrokerFront } from './broker-front';
@@ -42,7 +42,7 @@ interface BrokerProxy {
 }
 
 interface BrokerProxyDeps {
-  readonly config: Config;
+  readonly config: NetworkConfig;
   readonly db: ImpDatabase;
   readonly files: Pick<SecretFiles, 'read'>;
   readonly log: (message: string) => void;

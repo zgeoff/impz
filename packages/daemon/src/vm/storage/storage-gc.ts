@@ -1,9 +1,8 @@
 import type { DroppedStorage, OrphanStorage, StorageGc } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
 import type { SecretFiles } from '../../network/broker/secret-files';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { printSweep } from './print-sweep';
 import type { OrphanLogging } from './print-sweep';
 import { readLiveStorage } from './read-live-storage';
@@ -69,7 +68,7 @@ export function createStorageGc(deps: StorageGcDeps): StorageGcService {
       const result = await runAlone(options, deps.manualWaitMs ?? MANUAL_WAIT_MS, false);
 
       if (!result.ran) {
-        throw new ORPCError('PRECONDITION_FAILED', {
+        throw new ImpdError('PRECONDITION_FAILED', {
           message: `storage is busy (${String(deps.storageGate.countInFlight())} operations in flight, a backup run among them perhaps); try again`,
         });
       }

@@ -1,8 +1,6 @@
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { MoveTicket, WarmHost, WarmMove } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
@@ -25,6 +23,7 @@ import {
 import type { MoveTicketRow, NewMoveTicketRow } from '../../platform/db/move-tickets';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { SlotTakenError } from '../../platform/db/slot-taken-error';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
@@ -400,7 +399,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       const taken = await readImpByName(deps.db, name);
 
       if (taken !== undefined) {
-        throw new ORPCError('CONFLICT', {
+        throw new ImpdError('CONFLICT', {
           message: `this host has an imp named ${name}`,
           data: { kind: 'imp' as const, name },
         });
@@ -415,7 +414,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       const mismatches = collectWarmMismatches(warm, deps.readWarmHost());
 
       if (mismatches.length > 0) {
-        throw new ORPCError('PRECONDITION_FAILED', {
+        throw new ImpdError('PRECONDITION_FAILED', {
           message: `this host cannot load ${name}'s memory: ${mismatches.join('; ')}`,
         });
       }
@@ -428,7 +427,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
         );
 
         if (!isKept) {
-          throw new ORPCError('CONFLICT', {
+          throw new ImpdError('CONFLICT', {
             message: `slot ${String(warm.slot)}, which ${name}'s memory needs, is taken here`,
           });
         }
@@ -442,7 +441,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
         imp?.moveState === 'receiving' ? await readStagedMoveTicket(deps.db, imp.id) : undefined;
 
       if (imp === undefined || staged === undefined) {
-        throw new ORPCError('NOT_FOUND', {
+        throw new ImpdError('NOT_FOUND', {
           message: `no imp named ${name} waits for a commit here`,
           data: { kind: 'imp' as const, name },
         });
@@ -467,7 +466,10 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
 
       const response = await handleRoute(request, peer);
 
-      const failure = response.ok ? null : new ORPCError(readStatusCode(response.status));
+      const failureCode = response.ok ? null : readStatusCode(response.status);
+
+      const failure =
+        failureCode === null ? null : new ImpdError(failureCode, { message: failureCode });
 
       deps.audit.record(
         {

@@ -1,6 +1,5 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { WarmHost } from '@impz/api';
-import type { Config } from '../../config';
 import type { Broker } from '../../network/broker/broker-service';
 import type { EgressService } from '../../network/egress/egress-service';
 import { listCheckpoints } from '../../platform/db/checkpoints';
@@ -14,6 +13,7 @@ import type { StartTimer } from '../../platform/process/clock';
 import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
 import { encodeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
+import type { ImpOpsConfig } from '../imp-ops-config';
 import { readWarmHeader, requireSnapshotMeta } from './check-warm-move';
 import type { WarmParts } from './check-warm-move';
 import { MOVE_FRAMES, encodeCommand, encodeFile, encodeJsonFrame } from './move-frames';
@@ -36,7 +36,7 @@ import { requireOk } from './require-ok';
 import { sendToPeer } from './send-to-peer';
 
 interface MoveSendDeps {
-  readonly config: Pick<Config, 'subnet'>;
+  readonly config: Pick<ImpOpsConfig, 'subnet'>;
   readonly db: ImpDatabase;
   readonly dataDir: string;
   readonly storage: Pick<StorageBackend, 'openMoveSource' | 'resolveImpPaths'>;

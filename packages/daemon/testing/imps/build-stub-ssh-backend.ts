@@ -4,7 +4,7 @@ import type { ConnectionKind } from '../../src/imps/imps/activity-tracker';
 import type { ImpRuntime } from '../../src/imps/imps/imp-runtime';
 import type { SshBackend } from '../../src/imps/ssh/ssh-connection-context';
 import type { ImpRecord } from '../../src/platform/db/imps';
-import { buildNotFoundError } from '../../src/surface/api-errors';
+import { buildNotFoundError } from '../../src/platform/errors/impd-errors';
 import type { DialEvent, DialStream, DialTarget } from '../../src/vm/agent-client/dial-stream';
 import type {
   AgentExecRequest,

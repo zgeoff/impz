@@ -1,15 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import { hasScope } from '@impz/api';
 import type { OAuthApproval, Scope } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
-import { createTokenBuckets } from '../../platform/process/token-buckets';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
+import { ImpdError } from '../../platform/errors/impd-error';
 import {
   buildConflictError,
   buildForbiddenError,
   buildNotFoundError,
-} from '../../surface/api-errors';
+} from '../../platform/errors/impd-errors';
+import { createTokenBuckets } from '../../platform/process/token-buckets';
 import type { Caller } from '../auth/caller';
 import { ROOT_TOKEN_ID } from '../auth/token-store';
 import { isGrantPattern, isPatternsWithin } from './grant-limits';
@@ -110,7 +108,7 @@ export function createSignIns(deps: Readonly<SignInsDeps>): SignIns {
 
     if (entry === undefined) {
       if (!tryApproveFailure(tokenID)) {
-        throw new ORPCError('TOO_MANY_REQUESTS', {
+        throw new ImpdError('TOO_MANY_REQUESTS', {
           message: 'too many codes that match no sign-in; wait a few seconds',
         });
       }
@@ -207,7 +205,7 @@ export function createSignIns(deps: Readonly<SignInsDeps>): SignIns {
       }
 
       if (!hasScope(entry.requestedScope, scope)) {
-        throw new ORPCError('BAD_REQUEST', {
+        throw new ImpdError('BAD_REQUEST', {
           message: `the client asked for ${entry.requestedScope}; approve that or less`,
         });
       }
@@ -221,7 +219,7 @@ export function createSignIns(deps: Readonly<SignInsDeps>): SignIns {
       const patterns = imps ?? approver.imps;
 
       if (patterns !== null && !patterns.every((pattern) => isGrantPattern(pattern))) {
-        throw new ORPCError('BAD_REQUEST', {
+        throw new ImpdError('BAD_REQUEST', {
           message: `token ${approver.name}'s patterns are not all an imp name or a prefix and *; name the imps with --imps`,
         });
       }

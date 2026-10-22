@@ -1,4 +1,4 @@
-import type { ImageEvictionConfig } from '../../config';
+import type { ImageEvictionConfig } from '../imps-config';
 
 export function isOverHighMark(
   usage: Readonly<{ usedBytes: number; availableBytes: number }>,

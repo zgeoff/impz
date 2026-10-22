@@ -105,8 +105,6 @@
               "**/test-setup.ts"
             ],
             "allow": ["daemon-platform"],
-            // the Config type until each layer owns its config slice (GEO-364)
-            "allowTypeOnly": ["packages/daemon/src/config.ts"],
             "reason": "a daemon layer imports only itself and the layers below it: platform, host-net, vm, imps, network, identity, imp-ops, surface"
           },
           {
@@ -118,8 +116,6 @@
               "**/test-setup.ts"
             ],
             "allow": ["daemon-platform", "daemon-host-net"],
-            // the Config type until each layer owns its config slice (GEO-364)
-            "allowTypeOnly": ["packages/daemon/src/config.ts"],
             "reason": "a daemon layer imports only itself and the layers below it: platform, host-net, vm, imps, network, identity, imp-ops, surface"
           },
           {
@@ -131,8 +127,6 @@
               "**/test-setup.ts"
             ],
             "allow": ["daemon-platform", "daemon-host-net", "daemon-vm"],
-            // the Config type until each layer owns its config slice (GEO-364)
-            "allowTypeOnly": ["packages/daemon/src/config.ts"],
             "reason": "a daemon layer imports only itself and the layers below it: platform, host-net, vm, imps, network, identity, imp-ops, surface"
           },
           {
@@ -146,8 +140,6 @@
               "**/test-setup.ts"
             ],
             "allow": ["daemon-platform", "daemon-host-net", "daemon-vm", "daemon-imps"],
-            // the Config type until each layer owns its config slice (GEO-364)
-            "allowTypeOnly": ["packages/daemon/src/config.ts"],
             "reason": "a daemon layer imports only itself and the layers below it: platform, host-net, vm, imps, network, identity, imp-ops, surface"
           },
           {
@@ -165,8 +157,6 @@
               "daemon-imps",
               "daemon-network"
             ],
-            // the Config type until each layer owns its config slice (GEO-364)
-            "allowTypeOnly": ["packages/daemon/src/config.ts"],
             "reason": "a daemon layer imports only itself and the layers below it: platform, host-net, vm, imps, network, identity, imp-ops, surface"
           },
           {
@@ -185,8 +175,6 @@
               "daemon-network",
               "daemon-identity"
             ],
-            // the Config type until each layer owns its config slice (GEO-364)
-            "allowTypeOnly": ["packages/daemon/src/config.ts"],
             "reason": "a daemon layer imports only itself and the layers below it: platform, host-net, vm, imps, network, identity, imp-ops, surface"
           },
           {
@@ -206,8 +194,6 @@
               "daemon-identity",
               "daemon-imp-ops"
             ],
-            // the Config type until each layer owns its config slice (GEO-364)
-            "allowTypeOnly": ["packages/daemon/src/config.ts"],
             "reason": "a daemon layer imports only itself and the layers below it: platform, host-net, vm, imps, network, identity, imp-ops, surface"
           },
           {
@@ -229,8 +215,6 @@
               "daemon-surface",
               "daemon-manifest"
             ],
-            // the Config type until each layer owns its config slice (GEO-364)
-            "allowTypeOnly": ["packages/daemon/src/config.ts"],
             "reason": "a daemon layer imports only itself and the layers below it: platform, host-net, vm, imps, network, identity, imp-ops, surface"
           }
         ],

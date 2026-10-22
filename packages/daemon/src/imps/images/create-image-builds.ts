@@ -10,14 +10,13 @@ import {
   readBuildContext,
   writeBuildContext,
 } from '@impz/local-tar';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
-import type { Config } from '../../config';
 import type { ImageRecord } from '../../platform/db/images';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { runCommand } from '../../platform/process/run-command';
 import { buildUploadsDir } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { checkReferenceRegistry, parseImageReference } from '../docker-proxy/rules';
+import type { ImpsConfig } from '../imps-config';
 import { createBuildEngine, toEngineRun } from './build-engine';
 import type { BuildEngine, EngineRun } from './build-engine';
 import { createBuildSlots } from './build-slots';
@@ -71,7 +70,7 @@ export interface ImageBuilds {
 }
 
 interface ImageBuildsDeps {
-  readonly config: Config;
+  readonly config: ImpsConfig;
 
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
 
@@ -113,7 +112,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
     for (const image of images) {
       if (!ImageRefSchema.safeParse(image.ref).success) {
-        throw new ORPCError('BAD_REQUEST', {
+        throw new ImpdError('BAD_REQUEST', {
           message: `${image.use} ${JSON.stringify(image.ref)} is not an image reference`,
         });
       }
@@ -123,7 +122,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
       const registryProblem = checkReferenceRegistry(image.ref);
 
       if (registryProblem !== null) {
-        throw new ORPCError('BAD_REQUEST', {
+        throw new ImpdError('BAD_REQUEST', {
           message: `${image.use} ${image.ref}: ${registryProblem}`,
         });
       }
@@ -192,7 +191,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
           signal,
         ).catch((error: unknown) => {
           throw error instanceof BuildContextError
-            ? new ORPCError('BAD_REQUEST', { message: error.message })
+            ? new ImpdError('BAD_REQUEST', { message: error.message })
             : error;
         });
 
@@ -252,7 +251,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
         const builders = deps.readBuilders();
 
         if (builders === null) {
-          throw new ORPCError('SERVICE_UNAVAILABLE', { message: 'impd is starting; try again' });
+          throw new ImpdError('SERVICE_UNAVAILABLE', { message: 'impd is starting; try again' });
         }
 
         return builders.withBuilder(signal, async (exec, builderName) => {
@@ -301,7 +300,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
       signal.throwIfAborted();
 
       if (error instanceof DockerBuildError) {
-        throw new ORPCError('BAD_REQUEST', { message: formatPinFailure(error.message, pins) });
+        throw new ImpdError('BAD_REQUEST', { message: formatPinFailure(error.message, pins) });
       }
 
       throw error;
@@ -317,7 +316,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
     options: Readonly<ImageOpOptions>,
   ): Promise<ImageRecord> => {
     if (!contextDir.startsWith('/')) {
-      throw new ORPCError('BAD_REQUEST', {
+      throw new ImpdError('BAD_REQUEST', {
         message: `build context ${JSON.stringify(contextDir)} is not an absolute path`,
       });
     }
@@ -325,7 +324,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
     // The CLI sends a path on its own machine, which impd sees only when the two share a
     // filesystem, as in the dev container.
     if (!existsSync(contextDir)) {
-      throw new ORPCError('BAD_REQUEST', {
+      throw new ImpdError('BAD_REQUEST', {
         message: `build context ${contextDir} does not exist on the impd host; build the image there and use \`impz image add\``,
       });
     }
@@ -335,7 +334,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
     const entries = await listContextEntries(contextDir, normalizeDockerfilePath(dockerfile)).catch(
       (error: unknown) => {
         throw error instanceof MissingDockerfileError
-          ? new ORPCError('BAD_REQUEST', { message: error.message })
+          ? new ImpdError('BAD_REQUEST', { message: error.message })
           : error;
       },
     );
@@ -345,7 +344,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
     const maxBytes = deps.config.buildContextMaxBytes;
 
     if (tarBytes > maxBytes) {
-      throw new ORPCError('BAD_REQUEST', {
+      throw new ImpdError('BAD_REQUEST', {
         message: `the build context is ${String(tarBytes)} bytes, over the limit of ${String(Math.floor(maxBytes / 1024 ** 2))} MiB (IMP_BUILD_CONTEXT_MAX_MIB)`,
       });
     }
@@ -429,7 +428,7 @@ function pickPin(
   const imagePlatform = formatPlatform(inspect.Os, inspect.Architecture);
 
   if (imagePlatform !== platform) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `${image.use} ${ref}: the host has this image for ${imagePlatform}, and builds for ${platform}`,
     });
   }
@@ -437,7 +436,7 @@ function pickPin(
   // The Dockerfile frontend runs the ONBUILD triggers of every image the build reaches,
   // including a COPY --from or a mount's, where impd cannot check them.
   if ((inspect.OnBuild ?? []).length > 0) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `${image.use} ${ref} has ONBUILD triggers, which impd refuses`,
     });
   }
@@ -449,7 +448,7 @@ function pickPin(
   const pin = pickRepoDigest(ref, allowed);
 
   if (pin === null && repoDigests.length > 0) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `${image.use} ${ref}: its registry digests name only registries impd refuses: ${repoDigests.join(', ')}`,
     });
   }
@@ -457,7 +456,7 @@ function pickPin(
   if (pin === null) {
     const advice = image.use === 'FROM' ? 'build FROM' : 'name';
 
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `${image.use} ${ref}: this image exists only on this host and has no registry digest, so impd cannot bind the build to it; ${advice} a registry image by tag or digest. Local base images are not supported yet (#156).`,
     });
   }
@@ -467,7 +466,7 @@ function pickPin(
 
 function toBadRequest(error: unknown): unknown {
   return error instanceof DockerfileError
-    ? new ORPCError('BAD_REQUEST', { message: `the Dockerfile: ${error.message}` })
+    ? new ImpdError('BAD_REQUEST', { message: `the Dockerfile: ${error.message}` })
     : error;
 }
 
@@ -488,7 +487,7 @@ export function normalizeDockerfilePath(path: string | undefined): string {
     normalized === '.' ||
     normalized.endsWith('/')
   ) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `the Dockerfile path ${JSON.stringify(path)} is not a file inside the build context`,
     });
   }

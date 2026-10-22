@@ -2,7 +2,7 @@ import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { parseSnapshots } from '../../src/imp-ops/backup/restic';
 import type { Restic, ResticSnapshot } from '../../src/imp-ops/backup/restic';
-import { buildNotFoundError } from '../../src/surface/api-errors';
+import { buildNotFoundError } from '../../src/platform/errors/impd-errors';
 
 interface StubResticOptions {
   readonly repoDir: string;

@@ -1,5 +1,4 @@
 import { formatBytes } from '@impz/shared';
-import type { Config } from '../../config';
 import {
   listImageRemovals,
   listImageUses,
@@ -12,6 +11,7 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
+import type { ImpsConfig } from '../imps-config';
 import { FALLBACK_DEFAULT_IMAGE } from './create-image-adds';
 import type { ImageWriter } from './create-image-writer';
 import { isOverHighMark } from './is-over-high-mark';
@@ -22,7 +22,7 @@ export interface ImageEviction {
 }
 
 export interface ImageEvictionDeps {
-  readonly config: Pick<Config, 'imageEviction' | 'defaultImage'>;
+  readonly config: Pick<ImpsConfig, 'imageEviction' | 'defaultImage'>;
   readonly db: ImpDatabase;
   readonly storage: Pick<StorageBackend, 'readUsage' | 'measureImages'>;
   readonly storageGate: Pick<StorageGate, 'join'>;

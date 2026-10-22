@@ -1,6 +1,5 @@
 import { copyFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Config } from '../../config';
 import {
   countImageDigestUses,
   createImage,
@@ -11,19 +10,19 @@ import {
 } from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { printLog } from '../../platform/process/print-log';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
 import {
   buildConflictError,
   buildInvalidStateError,
   buildNotBackedUpError,
-} from '../../surface/api-errors';
+} from '../../platform/errors/impd-errors';
+import { printLog } from '../../platform/process/print-log';
 import type { DiskFreezer } from '../../vm/checkpoints/consistent-disk';
 import { createConsistentDisk } from '../../vm/checkpoints/consistent-disk';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
+import type { ImpsConfig } from '../imps-config';
 import type { ImpCheckpointHooks } from '../imps/imp-service';
 import { BUILDER_IMAGE } from './builder-imps';
 
@@ -35,7 +34,7 @@ export interface TemplateService {
 }
 
 interface TemplateServiceDeps {
-  readonly config: Config;
+  readonly config: ImpsConfig;
   readonly db: ImpDatabase;
   readonly imps: Pick<ImpCheckpointHooks, 'lockImp' | 'requireRunningImp'>;
   readonly storage: StorageBackend;

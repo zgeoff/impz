@@ -1,6 +1,6 @@
-import type { ImageEvictionConfig } from '../../config';
 import type { ImageUse } from '../../platform/db/images';
 import type { ImageSpace } from '../../vm/storage/storage-backend';
+import type { ImageEvictionConfig } from '../imps-config';
 import { isOverHighMark } from './is-over-high-mark';
 
 export interface EvictionState {

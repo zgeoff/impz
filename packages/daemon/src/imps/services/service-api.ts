@@ -1,20 +1,18 @@
 import type { LogCursor, ServiceStatus, ServicesList } from '@impz/agent-protocol';
 import { ServiceRestartSchema, ServiceStateSchema } from '@impz/api';
 import type { Service, ServiceDef, ServiceList, ServiceLog } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import type { ImpRecord } from '../../platform/db/imps';
-import type { EventBus } from '../../platform/events/event-bus';
-import type { StartTimer } from '../../platform/process/clock';
-import { startRealTimer } from '../../platform/process/start-real-timer';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
+import { ImpdError, isImpdError } from '../../platform/errors/impd-error';
 import {
   buildAgentOutdatedApiError,
   buildConflictError,
   buildForbiddenError,
   buildInvalidStateError,
   buildNotFoundError,
-} from '../../surface/api-errors';
+} from '../../platform/errors/impd-errors';
+import type { EventBus } from '../../platform/events/event-bus';
+import type { StartTimer } from '../../platform/process/clock';
+import { startRealTimer } from '../../platform/process/start-real-timer';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
 import {
   openServiceLogStream,
@@ -302,7 +300,7 @@ function handleAgentError(service: string): (error: unknown) => never {
     }
 
     if (isAgentError(error, 'BAD_REQUEST')) {
-      throw new ORPCError('BAD_REQUEST', { message: error.detail });
+      throw new ImpdError('BAD_REQUEST', { message: error.detail });
     }
 
     if (isAgentError(error, 'AGENT_OUTDATED')) {
@@ -374,7 +372,7 @@ async function* readFollowedLogs(
   for (;;) {
     if (control.readStreams().length === 0) {
       const found = await context.runtime.readAgent(name, 'services').catch((error: unknown) => {
-        if (error instanceof ORPCError && error.code === 'NOT_FOUND') {
+        if (isImpdError(error, 'NOT_FOUND')) {
           return null;
         }
 

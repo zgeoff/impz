@@ -3,15 +3,9 @@ import { EVENT_VERSION } from '@impz/api';
 import type { LockFreeSleep } from '../../imps/imps/lock-free-sleep';
 import type { EventBus } from '../../platform/events/event-bus';
 import { createSemaphore } from '../../platform/process/semaphore';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import {
-  buildImpOverBudgetError,
-  buildNeededMib,
-  buildRamBudgetError,
-} from '../../surface/api-errors';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import type { ProtectedImp } from '../../surface/api-errors';
 import { pickSleepVictims } from './pick-sleep-victims';
+import { buildImpOverBudgetError, buildNeededMib, buildRamBudgetError } from './ram-budget-error';
+import type { ProtectedImp } from './ram-budget-error';
 
 // A Firecracker VM that just booted or woke shows a small RSS for some seconds, so its reservation
 // counts until the measurement catches up.

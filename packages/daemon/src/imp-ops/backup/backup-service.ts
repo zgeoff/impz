@@ -9,8 +9,6 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { BackupRestore, BackupRun, BackupStatus, ImpState } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import * as z from 'zod';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImageService } from '../../imps/images/image-service';
@@ -20,13 +18,13 @@ import type { Broker } from '../../network/broker/broker-service';
 import type { NetworkService } from '../../network/networks/network-service';
 import { parseStoredPolicy } from '../../platform/db/egress';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { ImpdError } from '../../platform/errors/impd-error';
+import { NOT_BACKED_UP_REASON } from '../../platform/errors/impd-errors';
 import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { printLog } from '../../platform/process/print-log';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { NOT_BACKED_UP_REASON } from '../../surface/api-errors';
 import { sendFreeze, sendThaw } from '../../vm/agent-client/agent-requests';
 import { FREEZE_TIMEOUT_MS } from '../../vm/checkpoints/consistent-disk';
 import type { DiskFreezer } from '../../vm/checkpoints/consistent-disk';
@@ -96,8 +94,8 @@ export interface BackupServiceDeps {
   readonly diskBudget: Pick<DiskBudget, 'requireRoom' | 'withRoom'>;
 }
 
-export function buildBackupsOffError(): ORPCError<'PRECONDITION_FAILED', undefined> {
-  return new ORPCError('PRECONDITION_FAILED', {
+export function buildBackupsOffError(): ImpdError<'PRECONDITION_FAILED'> {
+  return new ImpdError('PRECONDITION_FAILED', {
     message: 'backups are off: set IMP_BACKUP_REPOSITORY (docs/guides/configuration.md)',
   });
 }

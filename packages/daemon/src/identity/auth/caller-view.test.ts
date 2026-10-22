@@ -1,8 +1,9 @@
 import { expect, test } from 'bun:test';
-import { ORPCError } from '@orpc/server';
 import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
 import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
-import { buildLeasedError, buildRamBudgetError } from '../../surface/api-errors';
+import { ImpdError } from '../../platform/errors/impd-error';
+import { LeasedError } from '../../platform/errors/leased-error';
+import { buildRamBudgetError } from '../../vm/governor/ram-budget-error';
 import {
   isLeaseVisible,
   requireLeaseHolder,
@@ -203,7 +204,7 @@ test('#toLeaseSummary shows every owner’s lease to a host-wide manage caller',
 });
 
 test('#toCallerError gives an event’s reader a LEASED error with counts only', () => {
-  const error = buildLeasedError('dev', [
+  const error = new LeasedError('dev', [
     buildMockLeaseRecord({
       principal: 'token:a',
       label: 'job',
@@ -221,7 +222,7 @@ test('#toCallerError gives an event’s reader a LEASED error with counts only',
 test('#toCallerError adds the caller’s own leases to a LEASED error that left impd as counts', () => {
   const caller = buildMockCaller({ scope: 'exec' });
 
-  const error = buildLeasedError('dev', [
+  const error = new LeasedError('dev', [
     buildMockLeaseRecord({
       principal: String(caller.principal),
       label: 'job',
@@ -237,7 +238,7 @@ test('#toCallerError adds the caller’s own leases to a LEASED error that left 
   const shown = toCallerError(error, caller);
 
   expect(error.data).toStrictEqual({ leases: [], otherCount: 2 });
-  expect(shown).toBeInstanceOf(ORPCError);
+  expect(shown).toBeInstanceOf(ImpdError);
 
   expect(shown).toMatchObject({
     code: 'LEASED',

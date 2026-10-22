@@ -1,5 +1,3 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-364 moves the caller into platform
 import type { AuditActor } from '../../identity/auth/caller';
 import { writeApiCall } from '../db/api-audit';
@@ -32,6 +30,7 @@ interface ApiAuditDeps {
   readonly db: ImpDatabase;
   readonly now: () => number;
   readonly log: (message: string) => void;
+  readonly readErrorCode: (failure: unknown) => string;
 }
 
 export function createApiAudit(deps: ApiAuditDeps): ApiAudit {
@@ -67,14 +66,6 @@ function findField(value: unknown, key: string): string | null {
   return typeof field === 'string' ? field : null;
 }
 
-function readOutcome(failure: unknown): string {
-  if (failure === null) {
-    return 'ok';
-  }
-
-  return failure instanceof ORPCError ? String(failure.code) : 'INTERNAL_SERVER_ERROR';
-}
-
 export async function withAuditedOpen<T>(
   audit: ApiAudit,
   call: AuditedCall,
@@ -102,7 +93,7 @@ async function writeCall(deps: ApiAuditDeps, call: AuditedCall, failure: unknown
       actor: call.actor.kind,
       actorName: call.actor.name,
       impName: call.impName,
-      outcome: readOutcome(failure),
+      outcome: failure === null ? 'ok' : deps.readErrorCode(failure),
       durationMs: Math.max(0, Math.round(now - call.startedAt)),
       detail: call.detail ?? null,
     });

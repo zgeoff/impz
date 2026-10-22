@@ -1,14 +1,13 @@
 import { ImageRefSchema, NameSchema } from '@impz/api';
 import type { ImageBuildPhase } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
-import type { Config } from '../../config';
 import { listImages, readImageByName } from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSingleFlight } from '../../platform/process/single-flight';
 import { checkReferenceRegistry } from '../docker-proxy/rules';
+import type { ImpsConfig } from '../imps-config';
 import { createBuildEngine, toEngineRun } from './build-engine';
 import { BUILDER_IMAGE } from './builder-imps';
 import type { Builders } from './builder-imps';
@@ -48,7 +47,7 @@ export interface ImageAdds {
 }
 
 interface ImageAddsDeps {
-  readonly config: Config;
+  readonly config: ImpsConfig;
   readonly db: ImpDatabase;
 
   readonly readBuilders: () => Builders | null;
@@ -73,7 +72,7 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
     const builders = deps.readBuilders();
 
     if (builders === null) {
-      throw new ORPCError('SERVICE_UNAVAILABLE', { message: 'impd is starting; try again' });
+      throw new ImpdError('SERVICE_UNAVAILABLE', { message: 'impd is starting; try again' });
     }
 
     const explicitRef = formatExplicitRef(ref);
@@ -117,7 +116,7 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
     const registryProblem = checkReferenceRegistry(ref);
 
     if (registryProblem !== null) {
-      throw new ORPCError('BAD_REQUEST', { message: `image ${ref}: ${registryProblem}` });
+      throw new ImpdError('BAD_REQUEST', { message: `image ${ref}: ${registryProblem}` });
     }
 
     const givenName = name ?? deriveImageName(ref);
@@ -156,7 +155,7 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
           ? `the pull did not finish in ${formatPullLimit(pullMs)}; on a slow link, pull ${ref} on the host engine first (docker pull ${ref}), and impd takes it from there`
           : getErrorMessage(error);
 
-      throw new ORPCError('SERVICE_UNAVAILABLE', {
+      throw new ImpdError('SERVICE_UNAVAILABLE', {
         message: `impd cannot add its builder image ${ref} (IMP_BUILD_IMAGE) from the host engine, so no image add or build can run: ${reason}`,
       });
     }
@@ -211,7 +210,7 @@ function formatExplicitRef(ref: string): string {
 // checked, not only the API's.
 function assertImageRef(ref: string): void {
   if (!ImageRefSchema.safeParse(ref).success) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `invalid image reference ${JSON.stringify(ref)}`,
     });
   }

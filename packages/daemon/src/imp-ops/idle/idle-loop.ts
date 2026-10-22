@@ -1,16 +1,16 @@
-import type { Config } from '../../config';
 import type { Imps } from '../../imps/imps/imp-service';
 import { listImps, updateImpActivity } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { readCpuTicks } from '../../vm/vmm/vm-stats';
+import type { ImpOpsConfig } from '../imp-ops-config';
 import { checkIdle } from './check-idle';
 
 // USER_HZ: /proc/<pid>/stat counts CPU time in 1/100 s on Linux
 const TICKS_PER_SECOND = 100;
 
 interface IdleLoopDeps {
-  readonly config: Config;
+  readonly config: Pick<ImpOpsConfig, 'idleTimeoutS' | 'idleCpuPercent'>;
   readonly db: ImpDatabase;
   readonly imps: Pick<Imps, 'isImpBusy' | 'readActivity' | 'tracker' | 'trySleepImp' | 'watchdog'>;
   readonly log: (message: string) => void;

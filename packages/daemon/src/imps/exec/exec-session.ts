@@ -10,8 +10,7 @@ import {
   encodeExecFrame,
 } from '@impz/api';
 import type { DetachReason, ExecChannel, ExecServerMessage, SessionOutput } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { AgentError } from '../../vm/agent-client/agent-connection';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
@@ -451,7 +450,7 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
 }
 
 function buildErrorMessage(error: unknown): ExecServerMessage {
-  if (error instanceof ORPCError) {
+  if (error instanceof ImpdError) {
     const data: unknown = error.data;
 
     return {

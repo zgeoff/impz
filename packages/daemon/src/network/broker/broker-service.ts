@@ -10,10 +10,7 @@ import type {
   Secret,
   SecretAdded,
 } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import { match } from 'ts-pattern';
-import type { Config } from '../../config';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
 import type { ReachPolicy } from '../../host-net/net/reach-policy';
@@ -32,14 +29,15 @@ import {
   removeCheckedGrant,
 } from '../../platform/db/secrets';
 import type { GrantAuthority, GrantClash } from '../../platform/db/secrets';
-import { getErrorMessage } from '../../platform/process/get-error-message';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
+import { ImpdError } from '../../platform/errors/impd-error';
 import {
   buildConflictError,
   buildForbiddenError,
   buildMovingError,
   buildNotFoundError,
-} from '../../surface/api-errors';
+} from '../../platform/errors/impd-errors';
+import { getErrorMessage } from '../../platform/process/get-error-message';
+import type { NetworkConfig } from '../network-config';
 import { loadOrCreateBrokerCa } from './broker-ca';
 import { PLACEHOLDER, listPlaceholderEnv } from './connector-kinds';
 import { createBrokerProxy } from './create-broker-proxy';
@@ -123,7 +121,7 @@ export interface Broker {
 }
 
 export interface BrokerDeps {
-  readonly config: Config;
+  readonly config: NetworkConfig;
   readonly db: ImpDatabase;
   readonly log: (message: string) => void;
 
@@ -406,7 +404,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
 }
 
 function buildTokenGoneError() {
-  return new ORPCError('UNAUTHORIZED', { message: 'the token behind this call was removed' });
+  return new ImpdError('UNAUTHORIZED', { message: 'the token behind this call was removed' });
 }
 
 function buildStaleError(secretName: string) {

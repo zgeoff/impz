@@ -3,15 +3,13 @@ import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { WarmHost, WarmMove } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
-import type { Config } from '../../config';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
 import { readTapMac } from '../../host-net/net/tap-devices';
 import type { EgressService } from '../../network/egress/egress-service';
 import type { ImpRecord } from '../../platform/db/imps';
 import { listNetworkMembers } from '../../platform/db/networks';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { ImpdError } from '../../platform/errors/impd-error';
 import {
   readColdBootReason,
   readSnapshotMeta,
@@ -22,6 +20,7 @@ import { readVmIdentity, writeVmIdentity } from '../../vm/sleep/vm-identity';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
 import { buildSystemDrivePath } from '../../vm/storage/data-layout';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
+import type { ImpOpsConfig } from '../imp-ops-config';
 import type { MoveHeader } from './move-header';
 import { MoveRequestError } from './move-request-error';
 import { isSameHash } from './move-tickets';
@@ -29,7 +28,7 @@ import type { ReceiptBody } from './move-tickets';
 import { buildWarmMove, collectWarmMismatches } from './warm-facts';
 
 interface WarmSendDeps {
-  readonly config: Pick<Config, 'subnet'>;
+  readonly config: Pick<ImpOpsConfig, 'subnet'>;
   readonly db: ImpDatabase;
   readonly storage: Pick<StorageBackend, 'resolveImpPaths'>;
   readonly egress: Pick<EgressService, 'readPolicy' | 'readAnswers'>;
@@ -74,7 +73,7 @@ export async function checkWarmMove(
   }
 
   if (mismatches.length > 0) {
-    throw new ORPCError('PRECONDITION_FAILED', {
+    throw new ImpdError('PRECONDITION_FAILED', {
       message: `${imp.name} cannot move with its memory: ${mismatches.join('; ')}. impz move --stop moves it cold`,
     });
   }

@@ -1,5 +1,4 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildRebootNeededError } from '../../surface/api-errors';
+import { buildRebootNeededError } from '../../platform/errors/impd-errors';
 import type { ImpVms } from './imp-context';
 import type { LockedImp } from './imp-lock';
 

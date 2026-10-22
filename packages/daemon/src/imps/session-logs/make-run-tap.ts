@@ -1,6 +1,5 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { isDiskFullError } from '../../surface/api-errors';
 import type { ExecStream } from '../../vm/agent-client/exec-stream';
+import { isDiskFullError } from '../../vm/storage/disk-full-error';
 import type { SessionLogState } from './create-session-log-state';
 import { getGenerationBounds } from './generation-log';
 import type { LiveLog } from './session-log-machine';

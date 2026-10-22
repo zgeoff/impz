@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Config } from '../../config';
+import type { VmConfig } from '../vm-config';
 import { buildImpsDir } from './data-layout';
 import type { StorageBackend, StorageBackendKind } from './storage-backend';
 import { createXfsBackend } from './xfs-backend';
@@ -14,8 +14,13 @@ interface StorageBoundaries {
   readonly zfs?: Omit<ZfsBackendDeps, 'dataDir' | 'root' | 'isUiomoveBugAllowed'>;
 }
 
+type StorageConfig = Pick<
+  VmConfig,
+  'dataDir' | 'storageBackend' | 'zfsRoot' | 'isUiomoveBugAllowed'
+>;
+
 export function createStorageBackend(
-  config: Config,
+  config: StorageConfig,
   boundaries: Readonly<StorageBoundaries> = {},
 ): StorageBackend {
   checkStorageMarker(config.dataDir, config.storageBackend);
@@ -36,7 +41,10 @@ export function createStorageBackend(
 // removing the reserve frees room for a destroy to run on a full filesystem
 const XFS_RESERVE_FILE_BYTES = 1024 ** 3;
 
-function createBackend(config: Config, boundaries: Readonly<StorageBoundaries>): StorageBackend {
+function createBackend(
+  config: StorageConfig,
+  boundaries: Readonly<StorageBoundaries>,
+): StorageBackend {
   if (config.storageBackend === 'xfs') {
     return createXfsBackend({
       dataDir: config.dataDir,

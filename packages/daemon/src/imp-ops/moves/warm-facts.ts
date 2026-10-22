@@ -1,13 +1,13 @@
 import { EGRESS_MODE_TRAITS, EgressModeSchema } from '@impz/api';
 import type { WarmHost, WarmMove } from '@impz/api';
-import type { Config } from '../../config';
 import { countSlots, formatSubnet } from '../../host-net/net/addressing';
 import { UNKNOWN_CPU } from '../../vm/sleep/cpu-identity';
 import type { SnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
+import type { ImpOpsConfig } from '../imp-ops-config';
 
 export function readWarmHost(
-  config: Pick<Config, 'dataDir' | 'subnet' | 'brokerPort' | 'dns'>,
+  config: Pick<ImpOpsConfig, 'dataDir' | 'subnet' | 'brokerPort' | 'dns'>,
   identity: Readonly<HostIdentity>,
   storage: 'xfs' | 'zfs',
 ): WarmHost {

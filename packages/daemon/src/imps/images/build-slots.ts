@@ -1,5 +1,4 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 
 const MAX_BUILDS = 4;
 
@@ -13,7 +12,7 @@ export function createBuildSlots(max = MAX_BUILDS): BuildSlots {
   return {
     claim: () => {
       if (running.count >= max) {
-        throw new ORPCError('TOO_MANY_REQUESTS', {
+        throw new ImpdError('TOO_MANY_REQUESTS', {
           message: `${String(max)} image builds are already uploading or running; try again`,
         });
       }

@@ -1,7 +1,7 @@
 import type { Scope } from '@impz/api';
 import { formatCaller, isCallerAllowed } from '../identity/auth/caller';
 import type { Caller } from '../identity/auth/caller';
-import { buildForbiddenError } from './api-errors';
+import { buildForbiddenError } from '../platform/errors/impd-errors';
 
 export function requireNamedImp(
   caller: Readonly<Caller>,

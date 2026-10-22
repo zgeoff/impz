@@ -1,6 +1,5 @@
 import type { ImpState } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildInvalidStateError } from '../../surface/api-errors';
+import { buildInvalidStateError } from '../../platform/errors/impd-errors';
 
 type TransitionVia = 'any' | 'warm move';
 

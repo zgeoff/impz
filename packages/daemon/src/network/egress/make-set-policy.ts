@@ -3,9 +3,8 @@ import type { EgressPolicy } from '@impz/api';
 import { readEgressPolicy, writeEgressPolicy } from '../../platform/db/egress';
 import { readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { buildMovingError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import type { KeyedMutex } from '../../platform/process/keyed-mutex';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildMovingError, buildNotFoundError } from '../../surface/api-errors';
 import { buildAllowRules, isNameAllowed, isTunnelAllowed } from './egress-rules';
 import type { EgressSets } from './egress-sets';
 

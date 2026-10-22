@@ -1,8 +1,5 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
-import type { Config } from '../../config';
 import { formatSubnet, parseIpv4 } from '../../host-net/net/addressing';
 import { deriveGuestIp6 } from '../../host-net/net/addressing6';
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
@@ -15,12 +12,13 @@ import { readImpByName } from '../../platform/db/imps';
 import { listNetworkMembers, listNetworkNames } from '../../platform/db/networks';
 import type { NetworkMember } from '../../platform/db/networks';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { ImpdError } from '../../platform/errors/impd-error';
+import { buildNotFoundError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { startInterval } from '../../platform/process/start-interval';
 import type { BucketSpec } from '../../platform/process/token-buckets';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildNotFoundError } from '../../surface/api-errors';
+import type { NetworkConfig } from '../network-config';
 import { checkPeerAccept } from './check-peer-accept';
 import { createExactResolver } from './create-exact-resolver';
 import { createDnsForward } from './dns-upstream';
@@ -51,7 +49,7 @@ const OPEN_RATE: BucketSpec = { size: 2000, refillMs: 1 };
 
 export interface EgressDeps {
   readonly config: Pick<
-    Config,
+    NetworkConfig,
     'subnet' | 'dns' | 'egressDnsPort' | 'egressDeny' | 'hostAddresses'
   >;
   readonly db: ImpDatabase;
@@ -370,7 +368,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
 
   const requireFirewall = (policy: EgressPolicy): void => {
     if (EGRESS_MODE_TRAITS[policy.mode].needsRuleset && state.unenforced !== null) {
-      throw new ORPCError('PRECONDITION_FAILED', {
+      throw new ImpdError('PRECONDITION_FAILED', {
         message: `impd cannot enforce a ${policy.mode} egress policy here: ${state.unenforced}`,
       });
     }
@@ -380,7 +378,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
     requireFirewall(policy);
 
     if (EGRESS_MODE_TRAITS[policy.mode].isPublic && state.publicUnenforced !== null) {
-      throw new ORPCError('PRECONDITION_FAILED', {
+      throw new ImpdError('PRECONDITION_FAILED', {
         message: `impd cannot read the routes a public egress policy needs: ${state.publicUnenforced}`,
       });
     }

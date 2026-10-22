@@ -1,7 +1,6 @@
 import { SYSTEM_FEATURES } from '@impz/api';
 import type { SystemInfo } from '@impz/api';
 import packageJson from '../../package.json' with { type: 'json' };
-import type { Config } from '../config';
 import { countBootStatuses } from '../imps/imps/boot-status';
 import type { RecordsStatus } from '../network/https/https-service';
 import { writeDatabaseCopy } from '../platform/db/database-copy';
@@ -10,6 +9,7 @@ import type { ImpRecord } from '../platform/db/imps';
 import { readKsmHostStats } from '../vm/vmm/ksm';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
+import type { SurfaceConfig } from './surface-config';
 
 export function createSystemRoutes(os: RpcImplementer, deps: RouterDeps) {
   return {
@@ -118,7 +118,7 @@ function readKsmInfo(
 }
 
 function readPublicInfo(
-  config: Config,
+  config: SurfaceConfig,
   imps: readonly ImpRecord[],
   records: RecordsStatus | null,
 ): SystemInfo['public'] {

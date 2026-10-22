@@ -1,13 +1,12 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
-import type { Config } from '../../config';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
 import type { Imps } from '../../imps/imps/imp-service';
 import { readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { isImpdError } from '../../platform/errors/impd-error';
 import { runChecked, runCommand } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';
+import type { NetworkConfig } from '../network-config';
 import { loadOrCreateHostId } from './host-id';
 import { readOAuthCredential } from './oauth-credential';
 import { createServiceServe } from './service-serve';
@@ -18,7 +17,7 @@ import type { TailnetNamesConfig } from './tailnet-names-config';
 
 interface BuildTailnetNamesOptions {
   readonly names: TailnetNamesConfig;
-  readonly config: Config;
+  readonly config: Pick<NetworkConfig, 'dataDir' | 'subnet' | 'portBase'>;
   readonly db: ImpDatabase;
   readonly imps: Pick<Imps, 'lockImp'>;
   readonly readTailscale: () => Promise<TailscaleStatus>;
@@ -59,11 +58,11 @@ export function createPresenceCheck(
     try {
       return await imps.lockImp(name, () => Promise.resolve(true));
     } catch (error) {
-      if (error instanceof ORPCError && error.code === 'NOT_FOUND') {
+      if (isImpdError(error, 'NOT_FOUND')) {
         return false;
       }
 
-      if (error instanceof ORPCError && error.code === 'MOVING') {
+      if (isImpdError(error, 'MOVING')) {
         const imp = await readImpByName(db, name);
 
         return imp !== undefined && imp.moveState !== 'moved';

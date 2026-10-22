@@ -1,7 +1,4 @@
 import type { MovePlan, MoveStatus, WarmHost } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
-import type { Config } from '../../config';
 import type { LockedImp } from '../../imps/imps/imp-lock';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
@@ -16,11 +13,12 @@ import {
   writeMoveSend,
 } from '../../platform/db/move-sends';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { ImpdError, isImpdError } from '../../platform/errors/impd-error';
+import { buildInvalidStateError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildInvalidStateError, buildNotFoundError } from '../../surface/api-errors';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
+import type { ImpOpsConfig } from '../imp-ops-config';
 import { checkWarmMove, requireSnapshotMeta } from './check-warm-move';
 import { countMoveBytes } from './count-move-bytes';
 import { MOVE_PATHS, MoveCommitReplySchema } from './move-header';
@@ -51,7 +49,7 @@ export interface MoveSender {
 }
 
 export interface MoveSenderDeps {
-  readonly config: Pick<Config, 'subnet'>;
+  readonly config: Pick<ImpOpsConfig, 'subnet'>;
   readonly db: ImpDatabase;
   readonly dataDir: string;
   readonly storage: Pick<StorageBackend, 'kind' | 'openMoveSource' | 'resolveImpPaths'>;
@@ -119,7 +117,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     try {
       await deps.imps.destroyImp(imp.name, { isMove: true });
     } catch (error) {
-      if (!(error instanceof ORPCError && error.code === 'NOT_FOUND')) {
+      if (!isImpdError(error, 'NOT_FOUND')) {
         throw error;
       }
     }
@@ -325,7 +323,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     const address = readPeerUrlAddress(to);
 
     if (address === null || !deps.ranges.isAllowed(address)) {
-      throw new ORPCError('BAD_REQUEST', {
+      throw new ImpdError('BAD_REQUEST', {
         message: `${to}: a move goes only to a literal tailnet address`,
       });
     }
@@ -401,7 +399,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       const row = await readMoveSend(deps.db, imp.id);
 
       if (imp.moveState !== 'sending' || row === undefined || tasks.has(imp.id)) {
-        throw new ORPCError('CONFLICT', {
+        throw new ImpdError('CONFLICT', {
           message: `${name} is not prepared for a send: run moves.prepare first`,
           data: { kind: 'imp' as const, name },
         });
@@ -431,7 +429,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       const useTicket = ticket ?? row?.ticket ?? null;
 
       if (row === undefined || row.peer_url === null || useTicket === null) {
-        throw new ORPCError('CONFLICT', {
+        throw new ImpdError('CONFLICT', {
           message: `${name} has no move to resume`,
           data: { kind: 'imp' as const, name },
         });
@@ -517,7 +515,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 }
 
 function buildPublicError(name: string) {
-  return new ORPCError('PRECONDITION_FAILED', {
+  return new ImpdError('PRECONDITION_FAILED', {
     message: `${name} is public: run impz unexpose ${name} first, and impz expose on the target after the move`,
   });
 }
@@ -526,10 +524,10 @@ async function withPeerError<T>(call: () => Promise<T>): Promise<T> {
   try {
     return await call();
   } catch (error) {
-    if (error instanceof ORPCError) {
+    if (error instanceof ImpdError) {
       throw error;
     }
 
-    throw new ORPCError('BAD_GATEWAY', { message: getErrorMessage(error), cause: error });
+    throw new ImpdError('BAD_GATEWAY', { message: getErrorMessage(error), cause: error });
   }
 }

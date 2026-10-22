@@ -4,10 +4,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { ORPCError } from '@orpc/server';
 import invariant from 'tiny-invariant';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { buildStubRoomCheck } from '../../../testing/vm/build-stub-room-check';
+import { ImpdError } from '../../platform/errors/impd-error';
 import {
   createGenerationLog,
   getGenerationBounds,
@@ -288,7 +288,7 @@ test('it keeps no output that comes after the log finished', async () => {
 test('it rejects an append whose new segment would reach the disk reserve', async () => {
   const ctx = await setupTest();
 
-  const full = new ORPCError('DISK_FULL', { message: 'full' });
+  const full = new ImpdError('DISK_FULL', { message: 'full' });
 
   const room = buildStubRoomCheck({ passes: 1, error: full });
 
