@@ -11,6 +11,7 @@ import { watchEvents } from './watch-events';
 
 test('it passes each event of the stream in order, then resolves once impd closes it', async () => {
   const added: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpAdded',
@@ -19,6 +20,7 @@ test('it passes each event of the stream in order, then resolves once impd close
   };
 
   const changed: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpChanged',
@@ -38,6 +40,7 @@ test('it passes each event of the stream in order, then resolves once impd close
 
 test('it passes only the events of the named imp', async () => {
   const other: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpAdded',
@@ -46,6 +49,7 @@ test('it passes only the events of the named imp', async () => {
   };
 
   const checkpoint: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'CheckpointAdded',
@@ -146,6 +150,7 @@ test('it ends with a failure the caller’s retry rule refuses', () => {
 
 test('it ends with what an event callback throws, even with a reconnect', () => {
   const removed: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpRemoved',

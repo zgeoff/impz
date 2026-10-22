@@ -6,6 +6,7 @@ test('it builds a default oauth state file', () => {
   const received: unknown = state;
 
   expect(received).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: expect.stringMatching(/^fake-refresh-[A-Za-z0-9]{12}$/u) as unknown,
     accessToken: expect.stringMatching(/^fake-access-[A-Za-z0-9]{12}$/u) as unknown,
@@ -26,6 +27,7 @@ test('it applies overrides on top of the defaults', () => {
   });
 
   expect(state).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: 'fake-refresh-0',
     accessToken: expect.stringMatching(/^fake-access-/u) as unknown,

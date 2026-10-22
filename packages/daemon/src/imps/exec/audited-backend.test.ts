@@ -160,6 +160,7 @@ test('it publishes an exec in the agent once the agent took it, naming only the 
 
   expect(events).toStrictEqual([
     {
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
       v: 1,
       at: new Date(5),
       ev: 'AgentExec',

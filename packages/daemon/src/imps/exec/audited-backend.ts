@@ -32,6 +32,7 @@ export function buildAuditedBackend(
 
       if (request.outer === true) {
         events.publish({
+          // oxlint-disable-next-line id-length -- `v` is the event format's version field
           v: EVENT_VERSION,
           at: new Date(now()),
           ev: 'AgentExec',

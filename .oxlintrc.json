@@ -6,12 +6,6 @@
     "es2024": true
   },
   "rules": {
-    // the shared options, plus `v`: the version field of the event envelope's
-    // wire format and of the broker's OAuth state file
-    "id-length": [
-      "error",
-      { "min": 2, "exceptions": ["x", "y", "z", "$", "_", "v"], "checkGeneric": false }
-    ],
     "zgeoff/function-verb": [
       "error",
       {

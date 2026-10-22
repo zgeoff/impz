@@ -102,6 +102,7 @@ export function createRouter(deps: RouterDeps) {
 
     const at = new Date(deps.now());
 
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     return imps.map((imp) => ({ v: EVENT_VERSION, at, ev: 'ImpAdded', reason: 'snapshot', imp }));
   };
 

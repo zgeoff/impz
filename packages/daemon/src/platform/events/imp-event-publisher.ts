@@ -49,6 +49,7 @@ export function startImpEventPublisher(deps: PublisherDeps): () => void {
 }
 
 function readEvent(deps: PublisherDeps, write: Readonly<ImpWrite>): Promise<ImpEvent | null> {
+  // oxlint-disable-next-line id-length -- `v` is the event format's version field
   const envelope = { v: EVENT_VERSION, at: new Date(deps.now()) } as const;
 
   return match(write)

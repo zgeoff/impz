@@ -191,6 +191,7 @@ test('it stores the rotated tokens in the value file', async () => {
   const stored: unknown = JSON.parse(text);
 
   expect(stored).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: 'fake-refresh-1',
     accessToken: 'fake-access-1',
@@ -544,6 +545,7 @@ test('it refreshes on request with the rotated token and answers after it', asyn
   ]);
 
   expect(stored).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: 'fake-refresh-2',
     accessToken: 'fake-access-2',
@@ -680,6 +682,7 @@ test('it holds a replace behind a refresh under way, which never overwrites it',
   ]);
 
   expect(stored).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: 'fake-refresh-3',
     accessToken: 'fake-access-3',

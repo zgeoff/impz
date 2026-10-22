@@ -123,6 +123,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
   const emitDecision = (decision: GovernorDecision): void => {
     deps.events?.publish({
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
       v: EVENT_VERSION,
       at: new Date(now()),
       ev: 'GovernorDecision',

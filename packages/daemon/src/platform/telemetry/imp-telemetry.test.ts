@@ -22,6 +22,7 @@ test('it records imp.lifecycle.transitions per reason', async () => {
   onTestFinished(stop);
 
   bus.publish({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpAdded',
@@ -30,6 +31,7 @@ test('it records imp.lifecycle.transitions per reason', async () => {
   });
 
   bus.publish({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpChanged',
@@ -38,6 +40,7 @@ test('it records imp.lifecycle.transitions per reason', async () => {
   });
 
   bus.publish({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpChanged',
@@ -45,6 +48,7 @@ test('it records imp.lifecycle.transitions per reason', async () => {
     imp: buildMockImp(),
   });
 
+  // oxlint-disable-next-line id-length -- `v` is the event format's version field
   bus.publish({ v: EVENT_VERSION, at: new Date(), ev: 'ImpRemoved', imp: buildMockImp() });
 
   stop();
@@ -71,6 +75,7 @@ test('it records imp.lifecycle.duration per timed reason', async () => {
   onTestFinished(stop);
 
   bus.publish({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpChanged',
@@ -80,6 +85,7 @@ test('it records imp.lifecycle.duration per timed reason', async () => {
   });
 
   bus.publish({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpChanged',
@@ -89,6 +95,7 @@ test('it records imp.lifecycle.duration per timed reason', async () => {
   });
 
   bus.publish({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpChanged',
@@ -145,6 +152,7 @@ test('it records a span per timed transition, with each step a child in turn', (
   onTestFinished(stop);
 
   bus.publish({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date('2026-10-02T12:00:00.900Z'),
     ev: 'ImpChanged',
@@ -202,6 +210,7 @@ test('it puts the trigger and the cold boot reason on the span', () => {
   onTestFinished(stop);
 
   bus.publish({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpChanged',
@@ -231,6 +240,7 @@ test('it records no span for a transition without a duration', () => {
   onTestFinished(stop);
 
   bus.publish({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
     ev: 'ImpChanged',
@@ -440,6 +450,7 @@ test('it stays inert without a registered meter provider', () => {
 
   expect(() => {
     bus.publish({
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
       v: EVENT_VERSION,
       at: new Date(),
       ev: 'ImpChanged',

@@ -50,6 +50,7 @@ export const ImpEventDetailSchema = z
 
 export type ImpEventDetail = z.infer<typeof ImpEventDetailSchema>;
 
+// oxlint-disable-next-line id-length -- `v` is the event format's version field
 const envelope = { v: z.literal(EVENT_VERSION), at: z.date() };
 
 export const ImpEventSchema = z.discriminatedUnion('ev', [

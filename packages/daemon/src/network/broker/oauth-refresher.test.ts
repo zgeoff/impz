@@ -260,6 +260,7 @@ test('it stores the rotated tokens with the expiry expires_in gives', async () =
   expect(outcome).toStrictEqual({ kind: 'refreshed', rotated: true });
 
   expect(parseOAuthState(ctx.files.read(valueFile) ?? '')).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: 'fake-refresh-1',
     accessToken: 'fake-access-1',
@@ -360,6 +361,7 @@ test('it keeps the old value of a field the answer leaves out', async () => {
   expect(outcome).toStrictEqual({ kind: 'refreshed', rotated: false });
 
   expect(parseOAuthState(ctx.files.read(valueFile) ?? '')).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: 'fake-refresh-0',
     accessToken: 'fake-access-1',
@@ -563,6 +565,7 @@ test('it stores no expiry for an expires_in no date can hold, and keeps the rota
   await refresher.refresh('codex', true);
 
   expect(parseOAuthState(ctx.files.read(valueFile) ?? '')).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: 'fake-refresh-1',
     accessToken: 'fake-access-1',
@@ -654,6 +657,7 @@ test('it keeps the access token and its expiry when the answer has only a rotate
   await refresher.refresh('codex', true);
 
   expect(parseOAuthState(ctx.files.read(valueFile) ?? '')).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: 'fake-refresh-1',
     accessToken: 'fake-access-0',
@@ -698,6 +702,7 @@ test('it keeps a rotated refresh token alone on a pending secret and stays pendi
   expect(outcome).toStrictEqual({ kind: 'transient', error: 'no access token in the response' });
 
   expect(parseOAuthState(ctx.files.read(valueFile) ?? '')).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: 'fake-refresh-1',
     accessToken: null,

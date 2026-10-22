@@ -253,6 +253,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     }
 
     const next: OAuthStateFile = {
+      // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
       v: 1,
       refreshToken,
       accessToken,
