@@ -15,11 +15,8 @@ import { EXEC_MAX_STDIN_FRAME_BYTES, EXEC_STDIN_WINDOW_BYTES } from '@impz/api';
 import { createImpClient, openToolExec } from '@impz/client';
 import { buildStubExecPeer } from '@impz/client/test-utils/build-stub-exec-peer';
 import {
-  buildImagePaths,
   buildImpPaths,
-  buildMockNewImage,
   buildStubExecReplies,
-  createImage,
   readVmIdentity,
   startStubAgent,
   startTestImpd,
@@ -40,13 +37,9 @@ async function setupTest() {
   const harness = await startTestImpd(stack, { rootToken });
 
   const url = harness.url;
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
 
   return {
+    createTestImage: harness.createTestImage,
     dataDir: harness.dataDir,
     client: createImpClient({ url, token: rootToken }),
     baseUrl: url,
@@ -56,6 +49,9 @@ async function setupTest() {
 
 test('it sends an archive whole through impd to the imp’s tool and returns its exit code', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -147,6 +143,7 @@ test('it sends an archive whole through impd to the imp’s tool and returns its
 test('it rejects with impd’s code and message when impd refuses the exec', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const opening = openToolExec({
@@ -246,6 +243,9 @@ test('it holds its stdout ack while the caller is still writing the output', asy
 
 test('it acks a tool’s stdout to impd so a download past the window completes', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -336,6 +336,9 @@ test('it rejects and names impd when impd faults by closing the connection unans
 
 test('it rejects with impd’s message when the imp’s agent drops the exec after the start', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);

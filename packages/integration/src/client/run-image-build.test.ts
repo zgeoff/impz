@@ -7,19 +7,14 @@ import type { ImageBuildProgress } from '@impz/api';
 import { createImpClient } from '@impz/client';
 import { buildStubImpdBeforeBuildStream } from '@impz/client/test-utils/build-stub-impd-before-build-stream';
 import { startStubDockerEngine } from '@impz/client/test-utils/start-stub-docker-engine';
-import {
-  BUILD_KEEPALIVE_MS,
-  DOCKERFILE_FRONTEND,
-  createStubDockerCli,
-  startTestImpd,
-} from '@impz/daemon/testing';
+import { DOCKERFILE_FRONTEND, createStubDockerCli, startTestImpd } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import { http } from 'msw';
 
-async function setupTest(options: { readonly keepaliveMs?: number } = {}) {
+async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -32,16 +27,19 @@ async function setupTest(options: { readonly keepaliveMs?: number } = {}) {
 
   const dockerSocket = join(workDir, 'docker.sock');
 
-  const harness = await startTestImpd(stack, {
-    rootToken,
-    env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: `unix://${dockerSocket}` },
-    frozenClockMs: Date.UTC(2026, 0, 1),
-    boundaries: { keepaliveMs: options.keepaliveMs ?? BUILD_KEEPALIVE_MS },
-  });
+  const startImpd = async (boundaries: Readonly<{ keepaliveMs?: number }> = {}) => {
+    const harness = await startTestImpd(stack, {
+      rootToken,
+      env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: `unix://${dockerSocket}` },
+      frozenClockMs: Date.UTC(2026, 0, 1),
+      boundaries,
+    });
+
+    return { impd: harness.impd, url: `${harness.url}/` };
+  };
 
   return {
-    impd: harness.impd,
-    url: `${harness.url}/`,
+    startImpd,
     dockerSocket,
     workDir,
     rootToken,
@@ -50,8 +48,9 @@ async function setupTest(options: { readonly keepaliveMs?: number } = {}) {
 
 test('it throws PAYLOAD_TOO_LARGE for a context over the limit impd keeps', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
-  const client = createImpClient({ url: ctx.url, token: ctx.rootToken });
+  const client = createImpClient({ url: host.url, token: ctx.rootToken });
 
   // fetch keeps the declared size only for a stream the caller made.
   const context = new ReadableStream<Uint8Array>({
@@ -69,8 +68,9 @@ test('it throws PAYLOAD_TOO_LARGE for a context over the limit impd keeps', asyn
 
 test('it throws BAD_REQUEST for a Dockerfile outside the context', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
-  const client = createImpClient({ url: ctx.url, token: ctx.rootToken });
+  const client = createImpClient({ url: host.url, token: ctx.rootToken });
 
   expect(
     client.buildImage('web', new Blob(['tar']), { dockerfile: '../Dockerfile' }),
@@ -79,8 +79,9 @@ test('it throws BAD_REQUEST for a Dockerfile outside the context', async () => {
 
 test('it throws UNAUTHORIZED for a wrong token', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
-  const client = createImpClient({ url: ctx.url, token: 'wrong' });
+  const client = createImpClient({ url: host.url, token: 'wrong' });
 
   expect(client.buildImage('web', new Blob(['tar']))).rejects.toMatchObject({
     code: 'UNAUTHORIZED',
@@ -90,6 +91,7 @@ test('it throws UNAUTHORIZED for a wrong token', async () => {
 
 test('it uploads a Blob as the build context and answers the image', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
@@ -118,7 +120,7 @@ test('it uploads a Blob as the build context and answers the image', async () =>
   await writeFile(join(ctx.workDir, 'context', 'note'), 'as a blob');
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
-  const client = createImpClient({ url: ctx.url, token: ctx.rootToken });
+  const client = createImpClient({ url: host.url, token: ctx.rootToken });
 
   const built = await client.buildImage('web', new Blob([tar]));
 
@@ -143,6 +145,7 @@ test('it uploads a Blob as the build context and answers the image', async () =>
 
 test('it uploads bytes as the build context', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
@@ -171,7 +174,7 @@ test('it uploads bytes as the build context', async () => {
   await writeFile(join(ctx.workDir, 'context', 'note'), 'as bytes');
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
-  const client = createImpClient({ url: ctx.url, token: ctx.rootToken });
+  const client = createImpClient({ url: host.url, token: ctx.rootToken });
 
   const built = await client.buildImage('web', new Uint8Array(tar));
 
@@ -196,6 +199,7 @@ test('it uploads bytes as the build context', async () => {
 
 test('it uploads a stream as the build context', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
@@ -224,7 +228,7 @@ test('it uploads a stream as the build context', async () => {
   await writeFile(join(ctx.workDir, 'context', 'note'), 'as a stream');
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
-  const client = createImpClient({ url: ctx.url, token: ctx.rootToken });
+  const client = createImpClient({ url: host.url, token: ctx.rootToken });
 
   const built = await client.buildImage('web', new Blob([tar]).stream());
 
@@ -249,6 +253,7 @@ test('it uploads a stream as the build context', async () => {
 
 test('it sends the name, the Dockerfile, the token and what it accepts', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
@@ -282,7 +287,7 @@ test('it sends the name, the Dockerfile, the token and what it accepts', async (
     http.post('http://impd.test/images/build', (info) => {
       received(info.request.url, Object.fromEntries(info.request.headers));
 
-      return ctx.impd.api.app.handle(info.request);
+      return host.impd.api.app.handle(info.request);
     }),
   );
 
@@ -306,6 +311,7 @@ test('it sends the name, the Dockerfile, the token and what it accepts', async (
 
 test('it sends the size of a stream as its Content-Length, which impd builds to', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
@@ -334,7 +340,7 @@ test('it sends the size of a stream as its Content-Length, which impd builds to'
   await writeFile(join(ctx.workDir, 'context', 'note'), 'with its size');
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
-  const client = createImpClient({ url: ctx.url, token: ctx.rootToken });
+  const client = createImpClient({ url: host.url, token: ctx.rootToken });
 
   // fetch keeps the declared size only for a stream the caller made.
   const context = new ReadableStream<Uint8Array>({
@@ -369,7 +375,8 @@ test('it sends the size of a stream as its Content-Length, which impd builds to'
 test(
   'it outlasts the idle deadline of a client fetch on progress lines while the engine is silent',
   async () => {
-    const ctx = await setupTest({ keepaliveMs: 500 });
+    const ctx = await setupTest();
+    const host = await ctx.startImpd({ keepaliveMs: 500 });
 
     const imageId = `sha256:${'b'.repeat(64)}`;
     const release = Promise.withResolvers<void>();
@@ -431,7 +438,7 @@ test(
       [
         process.execPath,
         join(ctx.workDir, 'build.ts'),
-        ctx.url,
+        host.url,
         ctx.rootToken,
         join(ctx.workDir, 'context.tar'),
       ],
@@ -477,7 +484,8 @@ test(
 test(
   'it gives up at the idle deadline of a client fetch on an impd from before the stream, which stops the build',
   async () => {
-    const ctx = await setupTest({ keepaliveMs: 500 });
+    const ctx = await setupTest();
+    const host = await ctx.startImpd({ keepaliveMs: 500 });
 
     const imageId = `sha256:${'b'.repeat(64)}`;
     const release = Promise.withResolvers<void>();
@@ -539,7 +547,7 @@ test(
       [
         process.execPath,
         join(ctx.workDir, 'build.ts'),
-        ctx.url,
+        host.url,
         ctx.rootToken,
         join(ctx.workDir, 'context.tar'),
       ],
@@ -570,7 +578,7 @@ test(
       expect(engine.signals.at(0)?.aborted).toBeTrue();
     });
 
-    const images = await createImpClient({ url: ctx.url, token: ctx.rootToken }).images.list();
+    const images = await createImpClient({ url: host.url, token: ctx.rootToken }).images.list();
     const said = await output;
 
     expect(said).toBe('{"type":"error","name":"TimeoutError"}\n');
@@ -584,6 +592,7 @@ test(
 
 test('it reports each progress line as it arrives, before the image', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
   const imageId = `sha256:${'b'.repeat(64)}`;
   const release = Promise.withResolvers<void>();
@@ -617,7 +626,7 @@ test('it reports each progress line as it arrives, before the image', async () =
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
   const progress = mock<(event: ImageBuildProgress) => void>();
-  const client = createImpClient({ url: ctx.url, token: ctx.rootToken });
+  const client = createImpClient({ url: host.url, token: ctx.rootToken });
   const building = client.buildImage('web', new Blob([tar]), { onProgress: progress });
 
   await waitFor(() => {
@@ -654,6 +663,7 @@ test('it reports each progress line as it arrives, before the image', async () =
 
 test('it throws the ORPCError of the error line that ends the stream', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
   const docker = createStubDockerCli({
     directory: ctx.workDir,
@@ -672,7 +682,7 @@ test('it throws the ORPCError of the error line that ends the stream', async () 
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\nCOPY note /\n');
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
-  const client = createImpClient({ url: ctx.url, token: ctx.rootToken });
+  const client = createImpClient({ url: host.url, token: ctx.rootToken });
   const building = client.buildImage('web', new Blob([tar]));
 
   expect(building).rejects.toBeInstanceOf(ORPCError);
@@ -688,6 +698,7 @@ test('it throws the ORPCError of the error line that ends the stream', async () 
 
 test('it answers the image from an impd that answers JSON, from before the stream', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
   const imageId = `sha256:${'b'.repeat(64)}`;
 
@@ -715,7 +726,7 @@ test('it answers the image from an impd that answers JSON, from before the strea
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\n');
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
-  const older = buildStubImpdBeforeBuildStream((request) => ctx.impd.api.app.handle(request));
+  const older = buildStubImpdBeforeBuildStream((request) => host.impd.api.app.handle(request));
 
   server.use(http.all('http://impd.test/*', (info) => older(info.request)));
 
@@ -741,6 +752,7 @@ test('it answers the image from an impd that answers JSON, from before the strea
 
 test('it throws the ORPCError that an impd from before the stream answers', async () => {
   const ctx = await setupTest();
+  const host = await ctx.startImpd();
 
   const docker = createStubDockerCli({
     directory: ctx.workDir,
@@ -759,7 +771,7 @@ test('it throws the ORPCError that an impd from before the stream answers', asyn
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\nCOPY note /\n');
 
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
-  const older = buildStubImpdBeforeBuildStream((request) => ctx.impd.api.app.handle(request));
+  const older = buildStubImpdBeforeBuildStream((request) => host.impd.api.app.handle(request));
 
   server.use(http.all('http://impd.test/*', (info) => older(info.request)));
 

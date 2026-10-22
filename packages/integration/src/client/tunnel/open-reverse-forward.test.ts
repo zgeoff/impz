@@ -2,11 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { TUNNEL_CLOSE_RESTARTING } from '@impz/api';
 import { createImpClient, openReverseForward } from '@impz/client';
 import {
-  buildImagePaths,
   buildImpPaths,
-  buildMockNewImage,
   buildStubForwardAgent,
-  createImage,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
@@ -23,35 +20,35 @@ async function setupTest() {
   const harness = await startTestImpd(stack, { rootToken });
 
   const impd = harness.impd;
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
 
   harness.fake.agent.version = '0.18.0';
 
   const url = harness.url;
   const client = createImpClient({ url, token: rootToken });
-
-  const box = await client.imps.create({ name: 'box' });
-
   const agent = buildStubForwardAgent();
 
-  const agentServer = await startStubAgent(
-    buildImpPaths(harness.dataDir, box.id).vsockSocket,
-    agent.readFrame,
-  );
-
-  stack.defer(() => {
-    agentServer.close();
-  });
-
-  return { impd, url, agent, rootToken };
+  return {
+    stack,
+    dataDir: harness.dataDir,
+    createTestImage: harness.createTestImage,
+    impd,
+    url,
+    client,
+    agent,
+    rootToken,
+  };
 }
 
 test('it listens where impd answers', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const box = await ctx.client.imps.create({ name: 'box' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, box.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   const forward = openReverseForward({
     baseUrl: ctx.url,
@@ -71,6 +68,14 @@ test('it listens where impd answers', async () => {
 
 test('it relays a client in the imp that it accepts', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const box = await ctx.client.imps.create({ name: 'box' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, box.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   const replies: string[] = [];
 
@@ -115,6 +120,14 @@ test('it relays a client in the imp that it accepts', async () => {
 test('it ends as lost when its listener in the imp ends', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
+  const box = await ctx.client.imps.create({ name: 'box' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, box.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const forward = openReverseForward({
     baseUrl: ctx.url,
     token: ctx.rootToken,
@@ -138,6 +151,14 @@ test('it ends as lost when its listener in the imp ends', async () => {
 test('it ends as failed with the refusal of a listen impd refused', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
+  const box = await ctx.client.imps.create({ name: 'box' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, box.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   ctx.agent.refuseListens({ code: 'LISTEN_FAILED', message: 'address in use' });
 
   const forward = openReverseForward({
@@ -160,6 +181,14 @@ test('it ends as failed with the refusal of a listen impd refused', async () => 
 test('it ends as stopped on stop', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
+  const box = await ctx.client.imps.create({ name: 'box' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, box.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const forward = openReverseForward({
     baseUrl: ctx.url,
     token: ctx.rootToken,
@@ -180,6 +209,14 @@ test('it ends as stopped on stop', async () => {
 
 test('it ends as closed with the code and reason of a tunnel impd closes as it restarts', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const box = await ctx.client.imps.create({ name: 'box' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, box.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   const forward = openReverseForward({
     baseUrl: ctx.url,

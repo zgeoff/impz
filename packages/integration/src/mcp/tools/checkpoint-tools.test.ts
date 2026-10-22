@@ -1,11 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import {
-  buildImagePaths,
-  buildMockNewImage,
-  createImage,
-  startTestImpd,
-} from '@impz/daemon/testing';
+import { startTestImpd } from '@impz/daemon/testing';
 import { buildImpGuard } from '@impz/mcp';
 import { createMcpServer } from '@impz/mcp/test-utils/create-mcp-server';
 import * as z from 'zod';
@@ -20,12 +15,6 @@ async function setupTest() {
     frozenClockMs: Date.UTC(2026, 0, 1),
   });
 
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
   const mcp = createMcpServer({ version: '1.2.3' });
 
@@ -34,6 +23,7 @@ async function setupTest() {
   const sent: unknown[] = [];
 
   return {
+    createTestImage: harness.createTestImage,
     rootClient: createImpClient({
       url: 'http://impd.test',
       token: 'root-token',
@@ -55,6 +45,7 @@ test.each([
 ] as const)('it takes a checkpoint of %s imp', async (_state, transitions) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'dev' });
 
   for (const transition of transitions) {
@@ -107,6 +98,7 @@ test.each([
 ] as const)('it lists the checkpoints of %s imp', async (_state, transitions) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'dev' });
   await ctx.rootClient.checkpoints.create({ name: 'dev', label: 'cp1' });
 
@@ -160,6 +152,7 @@ test.each([
 ] as const)('it restores %s imp to a checkpoint', async (_state, transitions) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'dev' });
   await ctx.rootClient.checkpoints.create({ name: 'dev', label: 'cp1' });
 
@@ -219,6 +212,7 @@ test.each([
 ] as const)('it deletes a checkpoint of %s imp', async (_state, transitions) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'dev' });
   await ctx.rootClient.checkpoints.create({ name: 'dev', label: 'cp1' });
 
@@ -265,6 +259,7 @@ test.each([
 test('it answers a restore to a checkpoint that does not exist with an isError result', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'dev' });
 
   await ctx.mcp.receive(

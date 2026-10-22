@@ -10,11 +10,8 @@ import { TUNNEL_MAX_FRAME_BYTES, TUNNEL_WINDOW_BYTES } from '@impz/api';
 import { createImpClient, openForwardTunnel } from '@impz/client';
 import type { ForwardTunnelEnd } from '@impz/client';
 import {
-  buildImagePaths,
   buildImpPaths,
-  buildMockNewImage,
   claimFreePorts,
-  createImage,
   readVmIdentity,
   startStubAgent,
   startStubDialAgent,
@@ -34,13 +31,9 @@ async function setupTest() {
   const harness = await startTestImpd(stack, { rootToken });
 
   const url = harness.url;
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
 
   return {
+    createTestImage: harness.createTestImage,
     dataDir: harness.dataDir,
     client: createImpClient({ url, token: rootToken }),
     baseUrl: url,
@@ -50,6 +43,9 @@ async function setupTest() {
 
 test('it relays bytes and the eof both ways to the port in the imp', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -98,6 +94,9 @@ test('it relays bytes and the eof both ways to the port in the imp', async () =>
 
 test('it holds bytes past the window until impd acks them', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);
@@ -150,6 +149,9 @@ test('it holds bytes past the window until impd acks them', async () => {
 
 test('it ends as failed with impd’s code when the dial in the imp fails', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.client.imps.create({ name: 'box', image: 'ubuntu' });
 
   const paths = buildImpPaths(ctx.dataDir, imp.id);

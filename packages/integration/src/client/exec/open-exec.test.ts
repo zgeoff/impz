@@ -13,11 +13,8 @@ import {
   STUB_BOOT_ID,
   STUB_FLOOD_BYTES,
   STUB_GENERATION,
-  buildImagePaths,
   buildImpPaths,
-  buildMockNewImage,
   buildStubExecAgent,
-  createImage,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
@@ -36,11 +33,6 @@ async function setupTest() {
   const harness = await startTestImpd(stack, { rootToken });
 
   const impd = harness.impd;
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
 
   harness.fake.agent.version = '0.18.0';
 
@@ -48,25 +40,31 @@ async function setupTest() {
 
   const url = harness.url;
   const client = createImpClient({ url, token: rootToken });
-
-  const dev = await client.imps.create({ name: 'dev' });
-
   const agent = buildStubExecAgent();
 
-  const agentServer = await startStubAgent(
-    buildImpPaths(harness.dataDir, dev.id).vsockSocket,
-    agent.readFrame,
-  );
-
-  stack.defer(() => {
-    agentServer.close();
-  });
-
-  return { impd, url, client, agent, rootToken };
+  return {
+    stack,
+    dataDir: harness.dataDir,
+    createTestImage: harness.createTestImage,
+    impd,
+    url,
+    client,
+    agent,
+    rootToken,
+  };
 }
 
 test('#runCommand collects both streams and the exit code', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const result = await ctx.client.run('dev', ['fail']);
 
   expect(result).toStrictEqual({
@@ -79,6 +77,15 @@ test('#runCommand collects both streams and the exit code', async () => {
 
 test('#runCommand sends its stdin and closes it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const result = await ctx.client.run('dev', ['cat'], { stdin: 'hello', cwd: '/srv' });
 
   expect(new TextDecoder().decode(result.stdout)).toBe('hello');
@@ -88,6 +95,15 @@ test('#runCommand sends its stdin and closes it', async () => {
 
 test('#runCommand drains both streams at once', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const result = await ctx.client.run('dev', ['big']);
 
   expect(result.stdout).toStrictEqual(new Uint8Array(STUB_FLOOD_BYTES).fill(111));
@@ -96,6 +112,14 @@ test('#runCommand drains both streams at once', async () => {
 
 test('#runCommand sends a stdin over 16 MiB in frames impd takes', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   // impd, as Bun serves it, closes a socket that sends one frame over 16 MiB.
   const stdin = 'a'.repeat(17 * 1024 ** 2);
@@ -108,6 +132,15 @@ test('#runCommand sends a stdin over 16 MiB in frames impd takes', async () => {
 
 test('#runCommand returns the exit and output of a command that exits as it starts', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const result = await ctx.client.run('dev', ['fail'], { stdin: 'unread' });
 
   expect(result).toStrictEqual({
@@ -120,6 +153,14 @@ test('#runCommand returns the exit and output of a command that exits as it star
 
 test('#runCommand rejects with the agent code of a command that cannot start', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   const running = ctx.client.run('dev', ['nope']);
 
@@ -138,6 +179,15 @@ test('#runCommand rejects with NOT_FOUND for an imp that does not exist', async 
 
 test('#openExec streams stdout as the command writes it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['cat']);
 
   const reader = handle.stdout.getReader();
@@ -161,6 +211,15 @@ test('#openExec streams stdout as the command writes it', async () => {
 
 test('#openExec sends a signal as a signal without a tty', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['wait']);
 
   await handle.started;
@@ -175,6 +234,15 @@ test('#openExec sends a signal as a signal without a tty', async () => {
 
 test('#openExec rejects with RESTARTING when impd closes the session for a restart', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['wait']);
 
   await handle.started;
@@ -186,6 +254,15 @@ test('#openExec rejects with RESTARTING when impd closes the session for a resta
 
 test('#openExec ends the session and its streams on close', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['wait']);
 
   await handle.started;
@@ -201,6 +278,14 @@ test('#openExec ends the session and its streams on close', async () => {
 test('#openExec ends the session on an abort once the command runs', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const abort = new AbortController();
 
   const handle = await ctx.client.openExec('dev', ['wait'], { signal: abort.signal });
@@ -214,6 +299,14 @@ test('#openExec ends the session on an abort once the command runs', async () =>
 
 test('#openExec rejects with an AbortError for an abort during the connect', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   const abort = new AbortController();
 
@@ -231,6 +324,14 @@ test('#openExec rejects with an AbortError for an abort during the connect', asy
 test('#openExec rejects with the reason of an abort during the connect', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const abort = new AbortController();
   const reason = new Error('gave up');
 
@@ -243,6 +344,15 @@ test('#openExec rejects with the reason of an abort during the connect', async (
 
 test('#openExec ends a session whose unread output passes maxUnreadBytes', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['big'], { maxUnreadBytes: 64 * 1024 });
 
   expect(handle.exit).rejects.toBeInstanceOf(ExecError);
@@ -251,6 +361,15 @@ test('#openExec ends a session whose unread output passes maxUnreadBytes', async
 
 test('#openExec stops the command after a break out of the output loop and a cancelled stderr', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['tick']);
 
   const chunks: Uint8Array[] = [];
@@ -272,6 +391,15 @@ test('#openExec stops the command after a break out of the output loop and a can
 
 test('#openExec answers started and exit with the same promise on every read', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['fail']);
 
   const reads = [handle.started, handle.started, handle.exit, handle.exit];
@@ -284,6 +412,15 @@ test('#openExec answers started and exit with the same promise on every read', a
 
 test('#openExec rejects a write after the exit with CLOSED', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['fail']);
 
   await handle.exit;
@@ -293,6 +430,15 @@ test('#openExec rejects a write after the exit with CLOSED', async () => {
 
 test('#openExec does nothing when closing the stdin of a command that already exited', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['fail']);
 
   await handle.exit;
@@ -302,6 +448,15 @@ test('#openExec does nothing when closing the stdin of a command that already ex
 
 test('#openExec rejects a write after the session failed with why it failed', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['wait']);
 
   await handle.started;
@@ -315,6 +470,15 @@ test('#openExec rejects a write after the session failed with why it failed', as
 
 test('#openExec resolves a close of the stdin after the session failed', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['wait']);
 
   await handle.started;
@@ -328,6 +492,15 @@ test('#openExec resolves a close of the stdin after the session failed', async (
 
 test('#openExec passes a kill grace to the agent and reports that it kills the group', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['wait'], { killGraceMs: 2000 });
   const started = await handle.started;
 
@@ -341,6 +514,15 @@ test('#openExec passes a kill grace to the agent and reports that it kills the g
 
 test('#openExec reports no group kill from an agent from before it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['old'], { killGraceMs: 2000 });
   const started = await handle.started;
 
@@ -353,6 +535,15 @@ test('#openExec reports no group kill from an agent from before it', async () =>
 
 test('#openExec reports no group kill without a kill grace', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['wait']);
   const started = await handle.started;
 
@@ -365,6 +556,14 @@ test('#openExec reports no group kill without a kill grace', async () => {
 
 test("#openExec starts a command that requires the broker with the broker's variables", async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRET' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
@@ -383,6 +582,14 @@ test("#openExec starts a command that requires the broker with the broker's vari
 
 test('#openExec starts nothing that requires anything on an impd without execRequire', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   const older = makeStubImpdWithoutFeature(
     (request) => ctx.impd.api.app.handle(request),
@@ -412,6 +619,14 @@ test('#openExec starts nothing that requires anything on an impd without execReq
 test('#openExec starts nothing that drops CAP_SYS_ADMIN on an impd without execDropSysAdmin', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const older = makeStubImpdWithoutFeature(
     (request) => ctx.impd.api.app.handle(request),
     'execDropSysAdmin',
@@ -437,6 +652,15 @@ test('#openExec starts nothing that drops CAP_SYS_ADMIN on an impd without execD
 
 test('#openExec hands a start that drops CAP_SYS_ADMIN to impd, which refuses an older agent', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openExec('dev', ['tick'], { dropSysAdmin: true });
 
   expect(handle.exit).rejects.toMatchObject({ code: 'AGENT_OUTDATED' });
@@ -445,6 +669,15 @@ test('#openExec hands a start that drops CAP_SYS_ADMIN to impd, which refuses an
 
 test('#openConsole opens a login shell with a tty, and sends ^C as a key', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const shell = await ctx.client.openConsole('dev', { cols: 100, rows: 30 });
 
   await shell.started;
@@ -470,6 +703,15 @@ test('#openConsole opens a login shell with a tty, and sends ^C as a key', async
 
 test('#openConsole starts the session it names and reports it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openConsole('dev', { session: 'main', cols: 100, rows: 30 });
   const started = await handle.started;
 
@@ -490,6 +732,15 @@ test('#openConsole starts the session it names and reports it', async () => {
 
 test('#openConsole asks impd for a log of the session it starts', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openConsole('dev', { session: 'main', log: true });
 
   await handle.started;
@@ -503,6 +754,15 @@ test('#openConsole asks impd for a log of the session it starts', async () => {
 
 test('#openAttach streams the replay and rejects with DETACHED on a takeover', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openAttach('dev', 'main', { cols: 80, rows: 24 });
   const first = await handle.stdout.getReader().read();
 
@@ -520,6 +780,14 @@ test('#openAttach streams the replay and rejects with DETACHED on a takeover', a
 
 test('#openAttach resumes at its place in the output and gives the offset at the exit', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   const resumeFrom = { executionGeneration: STUB_GENERATION, offset: 95 };
 
@@ -558,6 +826,15 @@ test('#openAttach resumes at its place in the output and gives the offset at the
 
 test('#openAttach rejects a session that is not there as a NoSessionError without data', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openAttach('dev', 'gone');
 
   expect(handle.exit).rejects.toBeInstanceOf(NoSessionError);
@@ -566,6 +843,15 @@ test('#openAttach rejects a session that is not there as a NoSessionError withou
 
 test('#openAttach rejects a session that ended as a NoSessionError with its data', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   const handle = await ctx.client.openAttach('dev', 'ended');
 
   expect(handle.exit).rejects.toBeInstanceOf(NoSessionError);
@@ -582,6 +868,14 @@ test('#openAttach rejects a session that ended as a NoSessionError with its data
 test('#openAttach rejects an attach without a wake to a sleeping imp as an InvalidStateError', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   await ctx.client.imps.sleep({ name: 'dev' });
 
   const handle = await ctx.client.openAttach('dev', 'main', { wake: false });
@@ -595,6 +889,14 @@ test('#openAttach rejects an attach without a wake to a sleeping imp as an Inval
 
 test('#openAttach rejects a resume past the end as an InvalidResumeError with its data', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   const resumeFrom = { executionGeneration: STUB_GENERATION, offset: 101 };
 
