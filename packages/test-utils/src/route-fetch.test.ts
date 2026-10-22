@@ -2,8 +2,8 @@ import { expect, mock, test } from 'bun:test';
 import { buildRoutedFetch } from './route-fetch';
 
 function setupTest() {
-  const nativeFetch = mock(() => Promise.resolve(new Response('native')));
-  const mockedFetch = mock(() => Promise.resolve(new Response('mocked')));
+  const nativeFetch = mock();
+  const mockedFetch = mock();
 
   return {
     nativeFetch,
@@ -51,6 +51,8 @@ test('it sends a request to a remote host to the mocked fetch with its options',
 test('it sends a request to a remote host with its own TLS options to the mocked fetch', async () => {
   const ctx = setupTest();
 
+  ctx.mockedFetch.mockImplementation(() => Promise.resolve(new Response('mocked')));
+
   const response = await ctx.routed('https://upstream.example.test/', {
     tls: { rejectUnauthorized: false },
   });
@@ -62,6 +64,8 @@ test('it sends a request to a remote host with its own TLS options to the mocked
 
 test('it sends a Request object to a remote host to the mocked fetch', async () => {
   const ctx = setupTest();
+
+  ctx.mockedFetch.mockImplementation(() => Promise.resolve(new Response('mocked')));
 
   const response = await ctx.routed(new Request('https://api.cloudflare.com/client/v4/zones'));
   const body = await response.text();
