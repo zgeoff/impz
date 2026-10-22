@@ -611,12 +611,7 @@ test('it answers arguments that fail the schema with an isError result naming ea
         content: [
           {
             type: 'text',
-            text: expect.toSatisfy(
-              (text: string) =>
-                text.startsWith('invalid arguments: ') &&
-                text.includes('→ at name') &&
-                text.includes('extra'),
-            ) as unknown,
+            text: 'Input validation error: Invalid arguments for tool imp_create: name: must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens, Unrecognized key: "extra"',
           },
         ],
         isError: true,

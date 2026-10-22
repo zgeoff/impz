@@ -220,6 +220,38 @@ test('it lists every tool to a manage caller', async () => {
   ]);
 });
 
+test('it lists only the read tools to a read caller on a server a manage caller opened', async () => {
+  const ctx = await setupTest();
+
+  const server = createMcpServer({ version: '1.2.3' });
+
+  await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }), {
+    reply: ctx.reply,
+    client: ctx.client,
+    guard: buildImpGuard({ all: true }),
+    scope: 'manage',
+  });
+
+  await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }), {
+    reply: ctx.reply,
+    client: ctx.client,
+    guard: buildImpGuard({ all: true }),
+    scope: 'read',
+  });
+
+  const Tool = z.object({ name: z.string() });
+
+  const tools = z.object({ result: z.object({ tools: z.array(Tool) }) }).parse(ctx.sent[1])
+    .result.tools;
+
+  expect(tools.map((tool) => tool.name)).toStrictEqual([
+    'imp_list',
+    'imp_url',
+    'imp_image_list',
+    'imp_checkpoint_list',
+  ]);
+});
+
 test('it marks the destructive tools with a destructive hint', async () => {
   const ctx = await setupTest();
 
@@ -352,7 +384,7 @@ test('it answers a call of an unknown tool with an invalid-params error', async 
     {
       jsonrpc: '2.0',
       id: 1,
-      error: { code: INVALID_PARAMS, message: 'unknown tool: imp_teleport' },
+      error: { code: INVALID_PARAMS, message: 'Tool imp_teleport not found' },
     },
   ]);
 });

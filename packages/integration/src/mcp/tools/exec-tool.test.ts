@@ -392,7 +392,7 @@ test('it refuses an unknown requirement before anything runs', async () => {
         content: [
           {
             type: 'text',
-            text: expect.stringMatching(/^invalid arguments: .*require/su) as unknown,
+            text: 'Input validation error: Invalid arguments for tool imp_exec: require.0: Invalid input: expected "broker"',
           },
         ],
         isError: true,
@@ -513,7 +513,10 @@ test('it refuses an outer exec in the agent, and nothing runs', async () => {
       id: 1,
       result: {
         content: [
-          { type: 'text', text: expect.stringMatching(/^invalid arguments: .*outer/su) as unknown },
+          {
+            type: 'text',
+            text: 'Input validation error: Invalid arguments for tool imp_exec: Unrecognized key: "outer"',
+          },
         ],
         isError: true,
       },

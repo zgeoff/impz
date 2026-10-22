@@ -1,5 +1,5 @@
 import { deserializeMessage, isJSONRPCRequest } from '@modelcontextprotocol/server';
-import type { RequestId, Server, Transport } from '@modelcontextprotocol/server';
+import type { McpServer, RequestId, Transport } from '@modelcontextprotocol/server';
 import { createCallRegistry } from '../create-call-registry';
 import { createCallerAuth } from '../create-caller-auth';
 import type { McpCaller } from '../create-caller-auth';
@@ -17,9 +17,7 @@ interface TestMcpServer {
 
 export function createMcpServer(options: Readonly<ImpServerOptions>): TestMcpServer {
   const calls = createCallRegistry();
-
-  // oxlint-disable-next-line no-deprecated -- create-imp-server.ts says why it is the low-level Server
-  const state: { server: Server | null } = { server: null };
+  const state: { server: McpServer | null } = { server: null };
 
   const replies = new Map<RequestId, MessageContext['reply']>();
   const waiting = new Map<RequestId, (() => void)[]>();
