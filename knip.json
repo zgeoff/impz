@@ -19,6 +19,8 @@
         "e2e/main.ts",
         "e2e/suites/*.e2e.ts",
         "scripts/ci/run-related-tests.ts",
+        // the dev CLI that scripts/dev/dev.sh runs
+        "scripts/dev/dev.ts",
         // a protoc plugin buf.gen.yaml runs
         "scripts/proto/protoc-gen-protocol-reference.ts"
       ],
