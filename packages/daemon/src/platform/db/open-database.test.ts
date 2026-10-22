@@ -52,7 +52,7 @@ test("it leaves the handle open when the shared dialect's driver is destroyed", 
 
   const builder = new Kysely<Record<string, never>>({ dialect: buildSQLiteDialect(sqlite) });
 
-  await builder.selectNoFrom((eb) => eb.lit(1).as('one')).execute();
+  await builder.selectNoFrom((expressionBuilder) => expressionBuilder.lit(1).as('one')).execute();
   await builder.destroy();
 
   expect(sqlite.query('select 1 as one').get()).toStrictEqual({ one: 1 });
