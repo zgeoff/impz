@@ -149,9 +149,10 @@ made_mnt=1
 (set -o noclobber && : >"$img")
 made_img=1
 truncate -s "${gib}G" "$img"
-# the properties deploy/bootstrap.sh gives the imp root dataset
-zpool create -O mountpoint=none -O compression=lz4 -O atime=off -O xattr=sa \
-  "$pool" "$img"
+# the pool properties deploy/bootstrap.sh gives a pool
+mapfile -t pool_properties < <(jq -r '.create[]' "$repo/deploy/zfs-pool.json")
+[ "${#pool_properties[@]}" -gt 0 ] || fail "deploy/zfs-pool.json gives zpool create no properties"
+zpool create "${pool_properties[@]}" "$pool" "$img"
 zfs create -o mountpoint=legacy "$pool/imp"
 mount -t zfs "$pool/imp" "$mnt"
 

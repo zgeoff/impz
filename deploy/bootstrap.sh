@@ -726,7 +726,9 @@ ensure_service() {
 
 # The storage phase: an XFS with reflink on /var/lib/imp, or a ZFS dataset.
 
-# Storage backends: xfs now; ZFS (#11) adds storage_zfs and a flag.
+# zpool create's properties: from deploy/zfs-pool.json (bun run render:deploy)
+readonly ZPOOL_CREATE_PROPERTIES="-o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none"
+
 ensure_storage() {
   phase storage
   case $storage in
@@ -844,8 +846,9 @@ storage_zfs() {
         if blkid -p "$data_device" >/dev/null 2>&1; then
           die "$data_device carries a signature (a partition table?); wipe it by hand if it is free"
         fi
-        change "zpool create $zfs_pool on $data_device" zpool create -o ashift=12 \
-          -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none "$zfs_pool" "$data_device"
+        # shellcheck disable=SC2086 # plain words (render-imp-host.ts checks)
+        change "zpool create $zfs_pool on $data_device" zpool create $ZPOOL_CREATE_PROPERTIES \
+          "$zfs_pool" "$data_device"
         ;;
       *) die "$data_device holds $fstype; give an empty disk or partition" ;;
     esac

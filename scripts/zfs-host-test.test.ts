@@ -28,13 +28,20 @@ function setupTest() {
 
   const scripts = join(directory, 'root', 'scripts');
   const e2e = join(directory, 'root', 'e2e');
+  const deploy = join(directory, 'root', 'deploy');
 
   mkdirSync(join(scripts, 'dev'), { recursive: true });
   mkdirSync(e2e);
+  mkdirSync(deploy);
 
   copyFileSync(
     new URL('zfs-host-test.sh', import.meta.url).pathname,
     join(scripts, 'zfs-host-test.sh'),
+  );
+
+  copyFileSync(
+    new URL('../deploy/zfs-pool.json', import.meta.url).pathname,
+    join(deploy, 'zfs-pool.json'),
   );
 
   const stubs = join(directory, 'stubs');
@@ -88,8 +95,8 @@ test('it runs the unit tests and suites on a bench pool, then releases all it ma
     'docker network inspect imp-zfs-mv',
     `sudo env PATH=${ctx.path} IMP_ZFS_TEST_DIR=${work}/unit ${ctx.directoryPath}/root/scripts/test-zfs.sh`,
     'test-zfs.sh ',
-    `sudo zpool create -O mountpoint=none -O compression=lz4 -O atime=off -O xattr=sa impbenchPID ${work}/bench.img`,
-    `zpool create -O mountpoint=none -O compression=lz4 -O atime=off -O xattr=sa impbenchPID ${work}/bench.img`,
+    `sudo zpool create -o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none impbenchPID ${work}/bench.img`,
+    `zpool create -o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none impbenchPID ${work}/bench.img`,
     'sudo zfs create -o mountpoint=legacy impbenchPID/imp',
     'zfs create -o mountpoint=legacy impbenchPID/imp',
     'sudo zfs create -o mountpoint=legacy impbenchPID/imp-mv-b',
@@ -267,8 +274,8 @@ test('it never destroys a pool or stops an instance when its own pool create fai
     'docker container inspect imp-zfs',
     'docker container inspect imp-zfs-mv-b',
     'docker network inspect imp-zfs-mv',
-    `sudo zpool create -O mountpoint=none -O compression=lz4 -O atime=off -O xattr=sa impbenchPID ${work}/bench.img`,
-    `zpool create -O mountpoint=none -O compression=lz4 -O atime=off -O xattr=sa impbenchPID ${work}/bench.img`,
+    `sudo zpool create -o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none impbenchPID ${work}/bench.img`,
+    `zpool create -o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none impbenchPID ${work}/bench.img`,
     'sudo zpool list -H -o name',
     'zpool list -H -o name',
     'sudo zpool list -H -o name',
