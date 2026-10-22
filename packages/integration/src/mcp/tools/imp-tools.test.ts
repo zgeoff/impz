@@ -1,12 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import {
-  buildImagePaths,
   buildImpPaths,
-  buildMockNewImage,
   buildStubExecGuest,
   buildStubImpdReleaseFetch,
-  createImage,
   readImpByName,
   startStubExecAgent,
   startTestImpd,
@@ -29,12 +26,6 @@ async function setupTest() {
   const db = harness.db;
   const dataDir = harness.dataDir;
   const impd = harness.impd;
-  const newImage = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(dataDir, newImage.digest).rootfs, 'rootfs');
-
-  const image = await createImage(db, newImage);
-
   const url = harness.url;
   const mcp = createMcpServer({ version: '1.2.3' });
 
@@ -47,7 +38,7 @@ async function setupTest() {
     dataDir,
     stack,
     url,
-    image,
+    createTestImage: harness.createTestImage,
     rootClient: createImpClient({ url, token: 'root-token' }),
     sendToImpd: (request: Request) => impd.api.app.handle(request),
     mcp,
@@ -60,6 +51,8 @@ async function setupTest() {
 
 test('it creates an imp and answers with it as impd stores it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   await ctx.mcp.receive(
     JSON.stringify({
@@ -107,6 +100,7 @@ test('it creates an imp and answers with it as impd stores it', async () => {
 test('it lists the imps with their state', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'dev' });
   await ctx.rootClient.imps.create({ name: 'off' });
   await ctx.rootClient.imps.stop({ name: 'off' });
@@ -171,6 +165,7 @@ test('it lists the imps with their state', async () => {
 test('it gives the list as JSON text, dates as ISO strings, that parses to its structured content', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'dev' });
 
   await ctx.mcp.receive(
@@ -198,6 +193,7 @@ test('it gives the list as JSON text, dates as ISO strings, that parses to its s
 test('it hides the imps the guard does not allow from the list', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'prod' });
   await ctx.rootClient.imps.create({ name: 'agent-one' });
 
@@ -255,6 +251,8 @@ test.each([
 ] as const)('it refuses %s with %o past the guard before impd acts', async (tool, args) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'prod' });
@@ -304,6 +302,8 @@ test.each([
 
 test('it names a nameless create under the prefix', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   await ctx.mcp.receive(
     JSON.stringify({
@@ -385,6 +385,8 @@ test('it refuses a nameless create under an allow-list alone', async () => {
 test('it creates an imp the allow-list names', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   await ctx.mcp.receive(
     JSON.stringify({
       jsonrpc: '2.0',
@@ -429,6 +431,7 @@ test('it creates an imp the allow-list names', async () => {
 test('it puts an imp to sleep', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'dev' });
 
   await ctx.mcp.receive(
@@ -477,6 +480,7 @@ test('it puts an imp to sleep', async () => {
 test("it answers with an imp's URLs", async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'dev' });
 
   await ctx.mcp.receive(
@@ -516,6 +520,7 @@ test("it answers with an imp's URLs", async () => {
 test('it destroys an imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'dev' });
 
   await ctx.mcp.receive(
@@ -622,6 +627,7 @@ test('it answers arguments that fail the schema with an isError result naming ea
 
 test('it lists the images', async () => {
   const ctx = await setupTest();
+  const image = await ctx.createTestImage('ubuntu');
 
   await ctx.mcp.receive(
     JSON.stringify({
@@ -643,7 +649,7 @@ test('it lists the images', async () => {
   // oxlint-disable-next-line prefer-structured-clone -- the JSON round trip is the point
   const stored: unknown = JSON.parse(JSON.stringify(images));
 
-  expect(images).toPartiallyContain({ name: ctx.image.name });
+  expect(images).toPartiallyContain({ name: image.name });
 
   expect(ctx.sent).toStrictEqual([
     {
@@ -661,6 +667,7 @@ test('it lists the images', async () => {
 test('it forks a sleeping imp from a checkpoint', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'asleep' });
   await ctx.rootClient.checkpoints.create({ name: 'asleep', label: 'before' });
   await ctx.rootClient.imps.sleep({ name: 'asleep' });
@@ -713,6 +720,7 @@ test('it forks a sleeping imp from a checkpoint', async () => {
 test('it forks a stopped imp as it is now', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'off' });
   await ctx.rootClient.imps.stop({ name: 'off' });
 
@@ -761,6 +769,7 @@ test('it forks a stopped imp as it is now', async () => {
 test('it names beside the fork the grants a scoped token could not copy', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.rootClient.imps.create({ name: 'dev-a' });
   await ctx.rootClient.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-168' });
   await ctx.rootClient.grants.add({ name: 'dev-a', secret: 'gh' });
@@ -815,6 +824,8 @@ test('it names beside the fork the grants a scoped token could not copy', async 
 
 test('it reports beside the fork each grant it did not get', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const mcp = createMcpServer({ version: '1.2.3' });
   const sent: unknown[] = [];
@@ -881,6 +892,8 @@ test('it reports beside the fork each grant it did not get', async () => {
 test('it reports an empty grant report beside a fork that got every grant', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const mcp = createMcpServer({ version: '1.2.3' });
   const sent: unknown[] = [];
 
@@ -937,6 +950,8 @@ test('it reports an empty grant report beside a fork that got every grant', asyn
 
 test('it reports beside the fork why it got none of the grants', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const mcp = createMcpServer({ version: '1.2.3' });
   const sent: unknown[] = [];
@@ -998,6 +1013,8 @@ test('it reports beside the fork why it got none of the grants', async () => {
 test('it leaves the grant report out of a fork from an impd that sends none', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const mcp = createMcpServer({ version: '1.2.3' });
   const sent: unknown[] = [];
 
@@ -1054,6 +1071,8 @@ test('it leaves the grant report out of a fork from an impd that sends none', as
 
 test('it gives the fork as indented JSON text beside its structured content', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const mcp = createMcpServer({ version: '1.2.3' });
   const sent: unknown[] = [];

@@ -8,11 +8,7 @@ function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const origin = startStubSilentOrigin(stack, {
-    controlPath: '/rpc/imps/list',
-    answer: () => Response.json({ json: { ok: true } }),
-  });
-
+  const origin = startStubSilentOrigin(stack, { controlPath: '/rpc/imps/list' });
   const clock = buildStubClock();
 
   const client = createImpClient({
@@ -173,17 +169,28 @@ test('#moves.resume ends at its one hour deadline when impd sends no answer', as
 test('#backups.run hands on the answer that comes before its deadline, and stops the deadline', async () => {
   const ctx = setupTest();
 
+  const origin = startStubSilentOrigin(ctx.stack, {
+    controlPath: '/rpc/imps/list',
+    answer: () => Response.json({ json: { ok: true } }),
+  });
+
+  const client = createImpClient({
+    url: origin.origin,
+    token: 'root-token',
+    startTimer: ctx.clock.startTimer,
+  });
+
   const control = new AbortController();
 
-  const controlCall = fetch(`${ctx.origin.origin}/rpc/imps/list`, {
+  const controlCall = fetch(`${origin.origin}/rpc/imps/list`, {
     method: 'POST',
     body: '{}',
     signal: control.signal,
   });
 
-  const call = ctx.client.backups.run();
+  const call = client.backups.run();
 
-  await Promise.all([ctx.origin.controlHeld, ctx.origin.longHeld]);
+  await Promise.all([origin.controlHeld, origin.longHeld]);
 
   control.abort();
 
@@ -301,11 +308,16 @@ test('#imps.list starts no deadline of its own', async () => {
 test('#backups.run gets an answer that stays silent past Bun’s idle limit, where imps.list gives up', async () => {
   const ctx = setupTest();
 
+  const origin = startStubSilentOrigin(ctx.stack, {
+    controlPath: '/rpc/imps/list',
+    answer: () => Response.json({ json: { ok: true } }),
+  });
+
   const child = Bun.spawn(
     [
       process.execPath,
       Bun.resolveSync('@impz/client/test-utils/run-idle-limited-calls', import.meta.dir),
-      JSON.stringify({ url: ctx.origin.origin }),
+      JSON.stringify({ url: origin.origin }),
     ],
     {
       env: { ...process.env, BUN_CONFIG_HTTP_IDLE_TIMEOUT: '1' },

@@ -5,12 +5,9 @@ import { createStubUndiciWebSocket } from '@impz/client/test-utils/create-stub-u
 import { makeStubImpdWithoutFeature } from '@impz/client/test-utils/make-stub-impd-without-feature';
 import { startStubImpdSocket } from '@impz/client/test-utils/start-stub-impd-socket';
 import {
-  buildImagePaths,
   buildImpPaths,
-  buildMockNewImage,
   buildStubExecAgent,
   claimFreePorts,
-  createImage,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
@@ -27,33 +24,24 @@ async function setupTest() {
   const harness = await startTestImpd(stack, { rootToken });
 
   const impd = harness.impd;
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
-  harness.fake.agent.version = '0.18.0';
 
   server.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
 
   const url = harness.url;
   const client = createImpClient({ url, token: rootToken });
-
-  const dev = await client.imps.create({ name: 'dev' });
-
   const agent = buildStubExecAgent();
 
-  const agentServer = await startStubAgent(
-    buildImpPaths(harness.dataDir, dev.id).vsockSocket,
-    agent.readFrame,
-  );
-
-  stack.defer(() => {
-    agentServer.close();
-  });
-
-  return { impd, url, client, agent, rootToken };
+  return {
+    stack,
+    dataDir: harness.dataDir,
+    createTestImage: harness.createTestImage,
+    fake: harness.fake,
+    impd,
+    url,
+    client,
+    agent,
+    rootToken,
+  };
 }
 
 test('it reports a refused ticket with a good token as unauthorized, naming the ticket', async () => {
@@ -94,6 +82,14 @@ test('it reports a refused upgrade that only an error event tells of as unauthor
 
 test('it reads a start that impd answers without output as continuity none', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   const started = mock<(info: ExecStarted) => void>();
 
@@ -165,6 +161,14 @@ test('it asks impd before it sends a start that requires anything', async () => 
 test('it sends a resize made while the start waits on impd after the start', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
+
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRET' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
 
@@ -203,6 +207,14 @@ test('it sends a resize made while the start waits on impd after the start', asy
 
 test('it counts stdin held while the start waits on impd toward backpressure', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRET' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
@@ -265,6 +277,14 @@ test('it reports an impd it cannot reach as unreachable', async () => {
 
 test('it reports an output handler that throws as a local error with what it threw', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
+    stack: ctx.stack,
+  });
 
   const thrown = new Error('EPIPE');
 

@@ -7,10 +7,7 @@ import { makeStubImpdWithNewReason } from '@impz/client/test-utils/make-stub-imp
 import { startStubDockerEngine } from '@impz/client/test-utils/start-stub-docker-engine';
 import {
   DOCKERFILE_FRONTEND,
-  buildImagePaths,
-  buildMockNewImage,
   claimFreePorts,
-  createImage,
   createStubDockerCli,
   startTestImpd,
 } from '@impz/daemon/testing';
@@ -36,12 +33,6 @@ async function setupTest() {
   const startImpd = async (env: Readonly<Record<string, string>> = {}) => {
     const harness = await startTestImpd(stack, { rootToken, env });
 
-    const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-    await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-    await createImage(harness.db, image);
-
     server.use(http.all('http://impd.test/*', (info) => harness.impd.api.app.handle(info.request)));
 
     return harness;
@@ -53,6 +44,8 @@ async function setupTest() {
 test('#createImpClient calls the contract under the base url with the bearer token', async () => {
   const ctx = await setupTest();
   const harness = await ctx.startImpd();
+
+  await harness.createTestImage('ubuntu');
 
   const paths = mock<(path: string) => void>();
 
@@ -117,8 +110,9 @@ test('#createImpClient keeps impd’s NOT_FOUND for an imp it does not have', as
 
 test('#requireAwake wakes a sleeping imp', async () => {
   const ctx = await setupTest();
+  const harness = await ctx.startImpd();
 
-  await ctx.startImpd();
+  await harness.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'asleep' });
   await ctx.client.imps.sleep({ name: 'asleep' });
 
@@ -129,8 +123,9 @@ test('#requireAwake wakes a sleeping imp', async () => {
 
 test('#requireAwake boots a stopped imp', async () => {
   const ctx = await setupTest();
+  const harness = await ctx.startImpd();
 
-  await ctx.startImpd();
+  await harness.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'off' });
   await ctx.client.imps.stop({ name: 'off' });
 
@@ -141,8 +136,9 @@ test('#requireAwake boots a stopped imp', async () => {
 
 test('#requireAwake answers a running imp as it is', async () => {
   const ctx = await setupTest();
+  const harness = await ctx.startImpd();
 
-  await ctx.startImpd();
+  await harness.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   const awake = await ctx.client.requireAwake('dev');
@@ -153,6 +149,8 @@ test('#requireAwake answers a running imp as it is', async () => {
 test('#requireAwake refuses an imp in error with INVALID_STATE', async () => {
   const ctx = await setupTest();
   const harness = await ctx.startImpd();
+
+  await harness.createTestImage('ubuntu');
 
   harness.fake.queue('boot', 'fail');
 
@@ -167,6 +165,8 @@ test('#requireAwake refuses an imp in error with INVALID_STATE', async () => {
 test('#requireAwake restarts an imp in error when told to', async () => {
   const ctx = await setupTest();
   const harness = await ctx.startImpd();
+
+  await harness.createTestImage('ubuntu');
 
   harness.fake.queue('boot', 'fail');
 
@@ -186,6 +186,7 @@ test('#requireAwake passes RAM_BUDGET_EXCEEDED on after one wake', async () => {
     IMP_BOOT_RESERVE_PERCENT: '100',
   });
 
+  await harness.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'a' });
   await ctx.client.imps.stop({ name: 'a' });
   await ctx.client.imps.create({ name: 'b' });
@@ -215,6 +216,7 @@ test('#requireAwake rejects with SERVICE_UNAVAILABLE while impd stops', async ()
   const ctx = await setupTest();
   const harness = await ctx.startImpd();
 
+  await harness.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await harness.imps.sleepAllImps();
 
@@ -224,6 +226,8 @@ test('#requireAwake rejects with SERVICE_UNAVAILABLE while impd stops', async ()
 test('#requireAwake waits out a stopping impd for the one that replaces it when asked to', async () => {
   const ctx = await setupTest();
   const harness = await ctx.startImpd();
+
+  await harness.createTestImage('ubuntu');
 
   const stopping = harness.impd;
 
@@ -278,8 +282,9 @@ test('#requireAwake rejects with the TypeError of an impd it cannot reach', () =
 
 test('#requireAwake retries an impd it cannot reach when asked to', async () => {
   const ctx = await setupTest();
+  const harness = await ctx.startImpd();
 
-  await ctx.startImpd();
+  await harness.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.sleep({ name: 'dev' });
 
@@ -297,8 +302,9 @@ test('#requireAwake retries an impd it cannot reach when asked to', async () => 
 
 test('#requireAwake rejects with the abort reason when aborted while it waits to retry', async () => {
   const ctx = await setupTest();
+  const harness = await ctx.startImpd();
 
-  await ctx.startImpd();
+  await harness.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.sleep({ name: 'dev' });
 
@@ -332,8 +338,9 @@ test('#requireAwake rejects with the abort reason when aborted while it waits to
 
 test('#requireAwake rejects with the reason of a signal that already aborted', async () => {
   const ctx = await setupTest();
+  const harness = await ctx.startImpd();
 
-  await ctx.startImpd();
+  await harness.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   const reason = new Error('gave up');
@@ -539,6 +546,8 @@ test('#images.buildStream hands on each progress event as it comes, then the ima
 test('#events.stream passes on an event whose reason this client does not know', async () => {
   const ctx = await setupTest();
   const harness = await ctx.startImpd();
+
+  await harness.createTestImage('ubuntu');
 
   const newer = makeStubImpdWithNewReason(
     (request) => harness.impd.api.app.handle(request),

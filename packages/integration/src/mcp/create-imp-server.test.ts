@@ -1,12 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import {
-  buildImagePaths,
   buildImpPaths,
-  buildMockNewImage,
   buildQueryGate,
   buildStubExecGuest,
-  createImage,
   readImpByName,
   startStubExecAgent,
   startTestImpd,
@@ -36,12 +33,6 @@ async function setupTest() {
 
   const db = harness.db;
   const dataDir = harness.dataDir;
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(db, image);
-
   const url = harness.url;
   const repeat = buildStubRepeat();
   const after = buildStubAfter();
@@ -59,6 +50,7 @@ async function setupTest() {
   const sent: unknown[] = [];
 
   return {
+    createTestImage: harness.createTestImage,
     db,
     dataDir,
     stack,
@@ -419,6 +411,8 @@ test('it refuses a call whose id a running call holds with an invalid-params err
 test('it still answers a create whose cancel arrives before the create starts', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const server = createMcpServer({ version: '1.2.3' });
 
   const context = {
@@ -543,6 +537,8 @@ test.each([
 test('it still answers a cancelled create, so the agent learns the name of what it made', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const context = {
     reply: ctx.reply,
     client: createImpClient({ url: ctx.url, token: 'root-token' }),
@@ -609,6 +605,7 @@ test('it still answers a cancelled create, so the agent learns the name of what 
 test('it still answers a cancelled fork, so the agent learns the name of what it made', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'agent-src' });
 
   const context = {
@@ -680,6 +677,7 @@ test('it still answers a cancelled fork, so the agent learns the name of what it
 test('it still answers a cancelled restore, so the agent learns the state of the imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'agent-src' });
   await ctx.client.checkpoints.create({ name: 'agent-src', label: 'cp' });
 
@@ -745,6 +743,8 @@ test('it still answers a cancelled restore, so the agent learns the state of the
 
 test('it stops reporting progress for a cancelled call', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 

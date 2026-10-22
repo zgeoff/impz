@@ -1,11 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import {
-  buildImagePaths,
   buildImpPaths,
-  buildMockNewImage,
   buildStubExecGuest,
-  createImage,
   readImpByName,
   startStubExecAgent,
   startTestImpd,
@@ -26,12 +23,6 @@ async function setupTest() {
 
   const db = harness.db;
   const dataDir = harness.dataDir;
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(db, image);
-
   const url = harness.url;
   const repeat = buildStubRepeat();
   const after = buildStubAfter();
@@ -49,6 +40,7 @@ async function setupTest() {
   const sent: unknown[] = [];
 
   return {
+    createTestImage: harness.createTestImage,
     db,
     dataDir,
     stack,
@@ -66,6 +58,8 @@ async function setupTest() {
 
 test('it runs a command line through /bin/sh -c and returns its output', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -127,6 +121,8 @@ test('it runs a command line through /bin/sh -c and returns its output', async (
 test('it runs argv as it is, with stdin', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -182,6 +178,8 @@ test('it runs argv as it is, with stdin', async () => {
 test('it answers a non-zero exit as a result, not a tool error', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -235,6 +233,8 @@ test('it answers a non-zero exit as a result, not a tool error', async () => {
 test("it passes a requirement to impd, whose refusal comes back as the tool's error", async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -285,6 +285,8 @@ test("it passes a requirement to impd, whose refusal comes back as the tool's er
 
 test('it runs a command whose broker requirement impd meets, with the broker variables', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -350,6 +352,8 @@ test('it runs a command whose broker requirement impd meets, with the broker var
 
 test('it refuses an unknown requirement before anything runs', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -472,6 +476,8 @@ test('it refuses a call with both command and argv', async () => {
 test('it refuses an outer exec in the agent, and nothing runs', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -519,6 +525,8 @@ test('it refuses an outer exec in the agent, and nothing runs', async () => {
 
 test('it keeps the head and the tail of a large output and counts what it dropped', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -581,6 +589,8 @@ test('it keeps the head and the tail of a large output and counts what it droppe
 
 test('it sends SIGTERM to a command at its timeout and reports timedOut', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -650,6 +660,8 @@ test('it sends SIGTERM to a command at its timeout and reports timedOut', async 
 test('it opens no second exec to stop a command on an agent from before the group kill', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest({ oldAgent: true });
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -715,6 +727,8 @@ test('it opens no second exec to stop a command on an agent from before the grou
 
 test('it sends SIGKILL after the grace to a command that ignores SIGTERM', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -789,6 +803,8 @@ test('it sends SIGKILL after the grace to a command that ignores SIGTERM', async
 test('it stops a cancelled exec and sends no response', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -848,6 +864,8 @@ test('it stops a cancelled exec and sends no response', async () => {
 test('it stops every call in flight on close, as when the client goes away', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -891,6 +909,8 @@ test('it stops every call in flight on close, as when the client goes away', asy
 
 test('it sends a progress notification on each tick while a call with a progress token runs', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -966,6 +986,8 @@ test('it sends a progress notification on each tick while a call with a progress
 test('it boots a stopped imp for an exec', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -1020,6 +1042,8 @@ test('it boots a stopped imp for an exec', async () => {
 
 test('it leaves a stopped imp running after an exec', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 

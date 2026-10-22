@@ -1,11 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import {
-  buildImagePaths,
   buildImpPaths,
-  buildMockNewImage,
   buildStubExecGuest,
-  createImage,
   readImpByName,
   startStubExecAgent,
   startTestImpd,
@@ -23,12 +20,6 @@ async function setupTest() {
 
   const db = harness.db;
   const dataDir = harness.dataDir;
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(db, image);
-
   const url = harness.url;
   const mcp = createMcpServer({ version: '1.2.3', killGraceMs: 50 });
 
@@ -37,6 +28,7 @@ async function setupTest() {
   const sent: unknown[] = [];
 
   return {
+    createTestImage: harness.createTestImage,
     db,
     dataDir,
     stack,
@@ -52,6 +44,8 @@ async function setupTest() {
 
 test('it writes a file with the path as one argument of the write script', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -115,6 +109,8 @@ test('it writes a file with the path as one argument of the write script', async
 test('it reads a file with head, asking for one byte past maxBytes', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -174,6 +170,8 @@ test('it reads a file with head, asking for one byte past maxBytes', async () =>
 test('it writes bytes given as base64', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -223,6 +221,8 @@ test('it writes bytes given as base64', async () => {
 
 test('it refuses to read bytes that are not UTF-8 as utf8', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -276,6 +276,8 @@ test('it refuses to read bytes that are not UTF-8 as utf8', async () => {
 test('it reads bytes that are not UTF-8 as base64', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -326,6 +328,8 @@ test('it reads bytes that are not UTF-8 as base64', async () => {
 test('it refuses base64 content that does not decode, before anything runs', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -375,6 +379,8 @@ test('it refuses base64 content that does not decode, before anything runs', asy
 test('it reads a file exactly maxBytes long', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -421,6 +427,8 @@ test('it reads a file exactly maxBytes long', async () => {
 
 test('it fails a file larger than maxBytes instead of cutting it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -474,6 +482,8 @@ test('it fails a file larger than maxBytes instead of cutting it', async () => {
 test("it answers a read that fails in the guest with an isError result holding the command's stderr", async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -523,6 +533,8 @@ test("it answers a read that fails in the guest with an isError result holding t
 
 test("it answers a write that fails in the guest with an isError result holding the command's stderr", async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -576,6 +588,8 @@ test("it answers a write that fails in the guest with an isError result holding 
 
 test('it refuses a relative path before anything runs', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -631,6 +645,8 @@ test.each([
 ] as const)('it reads a file of %s imp', async (_state, transition) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.rootClient.imps.create({ name: 'dev' });
@@ -682,6 +698,8 @@ test.each([
   ['a stopped', 'stop'],
 ] as const)('it leaves %s imp running after a read', async (_state, transition) => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
