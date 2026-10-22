@@ -538,8 +538,8 @@ func (s *session) info() *proto.SessionInfo {
 	return info
 }
 
-// ended returns the generation as previous: called once done closed, so
-// its end and exit are final.
+// ended returns the generation as previous: called once the process
+// exited, when its output drained and its exit is set, so both are final.
 func (s *session) ended() *proto.Previous {
 	s.mu.Lock()
 	defer s.mu.Unlock()
