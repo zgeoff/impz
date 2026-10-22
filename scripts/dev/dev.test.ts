@@ -2,10 +2,10 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildDevImageTag } from '../lib/build-dev-image-tag.ts';
 import { buildStubDevDocker } from '../test-utils/build-stub-dev-docker';
 import { buildStubDevHostDocker } from '../test-utils/build-stub-dev-host-docker';
 import { createStubBin } from '../test-utils/create-stub-bin';
-import { runSourcedFunction } from '../test-utils/run-sourced-function';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-dev-'));
@@ -55,7 +55,7 @@ test('it refuses an unknown command with its usage and exit 2', () => {
   }).toStrictEqual({
     exitCode: 2,
     stdout: '',
-    stderr: `usage: ${new URL('dev.sh', import.meta.url).pathname} up|down|reboot|logs|restart|shell|token|prune\n`,
+    stderr: 'usage: scripts/dev/dev.sh up|down|reboot|logs|restart|shell|token|prune\n',
   });
 });
 
@@ -404,7 +404,7 @@ test('it refuses up with IMP_TAILNET_NAMES=1 when 1Password has no OAuth client'
   expect(readFileSync(docker.calls, 'utf8')).not.toInclude('docker run -d --name imp-dev ');
 });
 
-test('it passes the Tailscale key to docker by name only in up, and never traces it', () => {
+test('it passes the Tailscale key to docker in its environment, never in its arguments', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
@@ -413,12 +413,16 @@ test('it passes the Tailscale key to docker by name only in up, and never traces
     [
       'case "$*" in *imp-docker-proxy.new) : > "$IMP_DEV_DATA/imp-docker-proxy.new"; exit 0 ;; esac',
       'case "$*" in *bin/imp-docker-proxy) exit 0 ;; esac',
+      `case "$*" in "run -d --name imp-dev-trace-check "*) printf '%s' "$TAILSCALE_AUTHKEY" > '${join(ctx.directoryPath, 'docker-env-key')}'; exit 1 ;; esac`,
       'case "$1" in run|inspect) exit 1 ;; esac',
       'exit 0',
     ].join('\n'),
   );
 
-  const result = Bun.spawnSync(['bash', '-x', new URL('dev.sh', import.meta.url).pathname, 'up'], {
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
+  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
     env: {
       PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
       HOME: ctx.directoryPath,
@@ -433,12 +437,17 @@ test('it passes the Tailscale key to docker by name only in up, and never traces
     },
   });
 
-  const trace = result.stderr.toString();
+  const calls = readFileSync(docker.calls, 'utf8');
 
-  expect(result.exitCode).not.toBe(0);
-  expect(trace).toContain('-e TAILSCALE_AUTHKEY ');
-  expect(trace).toContain('-e IMP_TAILSCALE_TAGS=tag:imp-e2e');
-  expect(trace).not.toContain('fake-tskey-for-the-trace-check');
+  expect(result.exitCode).toBe(1);
+  expect(calls).toContain('-e TAILSCALE_AUTHKEY ');
+  expect(calls).toContain('-e IMP_TAILSCALE_TAGS=tag:imp-e2e');
+  expect(calls).not.toContain('fake-tskey-for-the-trace-check');
+  expect(result.stderr.toString()).not.toContain('fake-tskey-for-the-trace-check');
+
+  expect(readFileSync(join(ctx.directoryPath, 'docker-env-key'), 'utf8')).toBe(
+    'fake-tskey-for-the-trace-check',
+  );
 });
 
 test('it refuses up with an IMP_ACME_CA_FILE outside the repo', () => {
@@ -550,16 +559,7 @@ test('it stops before it asks docker anything when there is no machine id', () =
 
 test('it removes the own tag of a gone checkout on this machine, then the leftovers', () => {
   const ctx = setupTest();
-
-  const lib = new URL('../lib.sh', import.meta.url).pathname;
-
-  const gone = runSourcedFunction({
-    script: lib,
-    fn: 'dev_image_tag',
-    args: [join(ctx.directoryPath, 'gone')],
-  });
-
-  const tag = gone.stdout.trim();
+  const tag = buildDevImageTag(join(ctx.directoryPath, 'gone'));
 
   writeFileSync(join(ctx.directoryPath, 'machine-id'), 'fake-machine-id\n');
 
@@ -600,22 +600,8 @@ test('it removes the own tag of a gone checkout on this machine, then the leftov
 
 test("it never removes a live checkout's image, another machine's, or an unmarked one", () => {
   const ctx = setupTest();
-
-  const lib = new URL('../lib.sh', import.meta.url).pathname;
-
-  const live = runSourcedFunction({ script: lib, fn: 'dev_image_tag', args: [ctx.directoryPath] });
-
-  const other = runSourcedFunction({
-    script: lib,
-    fn: 'dev_image_tag',
-    args: [join(ctx.directoryPath, 'other')],
-  });
-
-  const bare = runSourcedFunction({
-    script: lib,
-    fn: 'dev_image_tag',
-    args: [join(ctx.directoryPath, 'unmarked')],
-  });
+  const other = join(ctx.directoryPath, 'other');
+  const unmarked = join(ctx.directoryPath, 'unmarked');
 
   writeFileSync(join(ctx.directoryPath, 'machine-id'), 'fake-machine-id\n');
 
@@ -624,17 +610,17 @@ test("it never removes a live checkout's image, another machine's, or an unmarke
     'docker',
     buildStubDevDocker([
       {
-        tag: live.stdout.trim(),
+        tag: buildDevImageTag(ctx.directoryPath),
         id: 'id-live',
         labels: { worktree: ctx.directoryPath, machine: 'fake-machine-id' },
       },
       {
-        tag: other.stdout.trim(),
+        tag: buildDevImageTag(other),
         id: 'id-other',
         labels: { worktree: join(ctx.directoryPath, 'other'), machine: 'another-machine' },
       },
       {
-        tag: bare.stdout.trim(),
+        tag: buildDevImageTag(unmarked),
         id: 'id-unmarked',
         labels: { worktree: join(ctx.directoryPath, 'unmarked'), machine: '' },
       },
@@ -666,20 +652,8 @@ test("it never removes a live checkout's image, another machine's, or an unmarke
 
 test('it keeps a gone checkout image it cannot remove, and says why', () => {
   const ctx = setupTest();
-
-  const lib = new URL('../lib.sh', import.meta.url).pathname;
-
-  const stuck = runSourcedFunction({
-    script: lib,
-    fn: 'dev_image_tag',
-    args: [join(ctx.directoryPath, 'stuck')],
-  });
-
-  const used = runSourcedFunction({
-    script: lib,
-    fn: 'dev_image_tag',
-    args: [join(ctx.directoryPath, 'used')],
-  });
+  const stuck = buildDevImageTag(join(ctx.directoryPath, 'stuck'));
+  const used = buildDevImageTag(join(ctx.directoryPath, 'used'));
 
   writeFileSync(join(ctx.directoryPath, 'machine-id'), 'fake-machine-id\n');
 
@@ -688,7 +662,7 @@ test('it keeps a gone checkout image it cannot remove, and says why', () => {
     'docker',
     buildStubDevDocker([
       {
-        tag: stuck.stdout.trim(),
+        tag: stuck,
         id: 'id-stuck',
         labels: { worktree: join(ctx.directoryPath, 'stuck'), machine: 'fake-machine-id' },
         isStuck: true,
@@ -699,7 +673,7 @@ test('it keeps a gone checkout image it cannot remove, and says why', () => {
         labels: { worktree: join(ctx.directoryPath, 'stuck'), machine: 'fake-machine-id' },
       },
       {
-        tag: used.stdout.trim(),
+        tag: used,
         id: 'id-used',
         labels: { worktree: join(ctx.directoryPath, 'used'), machine: 'fake-machine-id' },
         container: 'c0ffee',
@@ -718,9 +692,9 @@ test('it keeps a gone checkout image it cannot remove, and says why', () => {
   expect(result.exitCode).toBe(0);
 
   expect(result.stdout.toString().split('\n')).toStrictEqual([
-    `dev.sh: keeping ${stuck.stdout.trim()}: docker image rm failed`,
+    `dev.sh: keeping ${stuck}: docker image rm failed`,
     `dev.sh: keeping imp-host:pinned: not the tag of ${join(ctx.directoryPath, 'stuck')}`,
-    `dev.sh: keeping ${used.stdout.trim()}: a container uses it`,
+    `dev.sh: keeping ${used}: a container uses it`,
     'dev.sh: keeping imp-host:dev-broken-5: docker image inspect failed',
     '',
   ]);

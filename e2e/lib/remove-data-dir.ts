@@ -1,4 +1,7 @@
-import { LIB_SCRIPT, readHostImageFromEnv, runChecked } from './instance';
+import { ensureHostImage } from '../../scripts/lib/ensure-host-image.ts';
+import { readDevCheckout } from '../../scripts/lib/read-dev-checkout.ts';
+import { readMachineID } from '../../scripts/lib/read-machine-id.ts';
+import { REPO_ROOT, readHostImageFromEnv, runChecked } from './instance';
 import { runHostZfs } from './run-host-zfs';
 import type { WipeTarget } from './wipe-target';
 import { ZFS_OWNER_FILE, resetZfsRoot } from './zfs-owner';
@@ -6,7 +9,7 @@ import { ZFS_OWNER_FILE, resetZfsRoot } from './zfs-owner';
 export async function removeDataDir(target: Readonly<WipeTarget>): Promise<void> {
   const hostImage = readHostImageFromEnv();
 
-  await runChecked(['bash', '-c', 'source "$1" && ensure_host_image', 'bash', LIB_SCRIPT]);
+  await ensureHostImage(readDevCheckout(process.env, REPO_ROOT), readMachineID(process.env).id);
 
   // imp.xfs is root-owned, and a stale loop device can outlive the container.
   await runChecked([

@@ -3,7 +3,7 @@
 # scripts/, host/, kernel/, deploy/, e2e/ and packages/.
 # A file counts as shell when it ends in .sh, starts with a shell shebang
 # (scripts/impz, host/entrypoint), or carries a `# shellcheck shell=` directive
-# (sourced libraries such as scripts/lib.sh).
+# (sourced libraries such as deploy/lib/host-env.sh).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -41,7 +41,7 @@ while IFS= read -r file; do
   is_excluded "$file" || files+=("$file")
 done < <(git ls-files install.sh scripts host kernel e2e deploy packages)
 
-# -x follows `source` lines, so lib.sh functions resolve in their callers
+# -x follows `source` lines, so a sourced library's functions resolve in their callers
 shellcheck -x "${files[@]}"
 
 # the parts of deploy/bootstrap.sh are formatted too, so the whole renders

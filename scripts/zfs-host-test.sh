@@ -44,8 +44,7 @@
 # retry releases it before a reboot. The run then keeps the pool and its file,
 # prints the oops, and exits with the suites' status.
 set -euo pipefail
-# shellcheck source=scripts/lib.sh
-source "$(dirname "$0")/lib.sh"
+IMP_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 fail() {
   echo "zfs-host-test: $1" >&2

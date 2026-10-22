@@ -1,17 +1,18 @@
 import { join } from 'node:path';
 import * as z from 'zod';
+import { buildDevLayout } from '../../scripts/lib/build-dev-layout.ts';
+import { readDevCheckout } from '../../scripts/lib/read-dev-checkout.ts';
 import { config } from './config';
 import { buildFirecrackerPgrepArgv, readFirecrackerPids } from './firecracker-pids';
 
 export const REPO_ROOT = join(import.meta.dir, '..', '..');
 export const FIXTURES_DIR = join(REPO_ROOT, 'e2e', 'fixtures');
-export const LIB_SCRIPT = join(REPO_ROOT, 'scripts', 'lib.sh');
 const DEV_SCRIPT = join(REPO_ROOT, 'scripts', 'dev', 'dev.sh');
-const offset = Number(process.env['IMP_DEV_PORT_OFFSET'] ?? '0');
+const layout = buildDevLayout({ env: process.env, root: REPO_ROOT, cwd: process.cwd() });
 
 // With the default name, an offset run would drive and wipe imp-dev, not its
 // own instance.
-if (offset !== 0 && (process.env['IMP_DEV_NAME'] ?? '') === '') {
+if (layout.offset !== 0 && (process.env['IMP_DEV_NAME'] ?? '') === '') {
   throw new Error('IMP_DEV_PORT_OFFSET needs IMP_DEV_NAME: name the instance it belongs to');
 }
 
@@ -31,14 +32,14 @@ export interface DevInstance {
 }
 
 export const instance: DevInstance = {
-  container: process.env['IMP_DEV_NAME'] ?? 'imp-dev',
-  dataDir: process.env['IMP_DEV_DATA'] ?? join(REPO_ROOT, '.data', 'dev'),
-  apiUrl: process.env['IMP_URL'] ?? `http://localhost:${String(7070 + offset)}`,
-  proxyPort: 7080 + offset,
-  impPortBase: 20_000 + offset,
-  sshPort: 2222 + offset,
+  container: layout.name,
+  dataDir: layout.dataDir,
+  apiUrl: process.env['IMP_URL'] ?? layout.apiURL,
+  proxyPort: layout.proxyPort,
+  impPortBase: layout.impPortBase,
+  sshPort: layout.sshPort,
 
-  portOffset: offset,
+  portOffset: layout.offset,
   env: {},
 };
 
@@ -113,16 +114,8 @@ export async function runChecked(argv: readonly string[]): Promise<string> {
   return result.stdout;
 }
 
-export async function readHostImage(): Promise<string> {
-  const stdout = await runChecked([
-    'bash',
-    '-c',
-    'source "$1" && printf "%s" "$IMP_HOST_IMAGE"',
-    'bash',
-    LIB_SCRIPT,
-  ]);
-
-  return stdout.trim();
+export function readHostImage(): string {
+  return readDevCheckout(process.env, REPO_ROOT).hostImage;
 }
 
 export function readHostImageFromEnv(): string {

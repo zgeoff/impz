@@ -33,8 +33,8 @@ host.
 
 `bun run deadcode` runs knip twice: over the whole tree, then in production mode, which leaves out
 every test file. The production run fails on an export that only a test imports. Un-export it when
-no test needs it, or tag it `/* @internal */` when a test reaches it as a seam. The tag takes one
-star, because the shared lint config bans JSDoc blocks and knip reads a tag from any block comment.
+no test needs it, or tag it `/* @internal */` when a test calls it directly. The tag takes one star,
+because the shared lint config bans JSDoc blocks and knip reads a tag from any block comment.
 
 ## End-to-end tests
 
@@ -152,10 +152,11 @@ timeout, so the RAM governor, not idleness, decides which imps sleep; the suites
 timeout. On a smaller machine, lower the budget and the count, for example
 `E2E_RAM_BUDGET_MIB=2560 E2E_SCALE_COUNT=12`. The count must pass the number of imps that fit, or
 the governor sleeps none and the suite fails at once: an imp restored from a warm boot template owns
-about 280 MiB at the default sizes, so 9 fit in 2560 MiB, and a cold-booted one about 320 MiB. The
-suite holds what the Firecrackers own (`Pss_Anon` + `Pss_Shmem`, read from `smaps_rollup` without
-impd) to the budget, and reports their full PSS, which also has clean file pages the governor does
-not count
+about 280 MiB at the default sizes, so 9 fit in 2560 MiB, and a cold-booted one about 320 MiB.
+
+The scale suite holds what the Firecrackers own (`Pss_Anon` + `Pss_Shmem`, read from `smaps_rollup`
+without impd) to the budget, and reports their full PSS, which also has clean file pages the
+governor does not count
 ([what the governor measures](../architecture/lifecycle/ram-governor.md#what-it-measures)). A guest
 grows past its boot reserve after admission, so use may pass the budget until a governor sleep ends.
 The suite follows every imp's sleep in the event stream (`ImpChanged slept`, which started
@@ -201,9 +202,9 @@ should be fast; record the host's `uname -r` with the result.
 Each checkout of the repo, the main one or a git worktree, runs a dev instance of its own: give it
 an `IMP_DEV_NAME` and an `IMP_DEV_PORT_OFFSET`. Its host image is its own too. `scripts/dev/dev.sh`
 tags it `imp-host:dev-<dir>-<hash>`, where `<dir>` is the checkout's directory name and `<hash>` the
-first 8 hex characters of the sha256 of its path without symlinks (`dev_image_tag` in
-`scripts/lib.sh`). One worktree's build never replaces the image under another's running instance or
-e2e run. `IMP_HOST_IMAGE` overrides the tag, as CI does.
+first 8 hex characters of the sha256 of its path without symlinks. One worktree's build never
+replaces the image under another's running instance or e2e run. `IMP_HOST_IMAGE` overrides the tag,
+as CI does.
 
 `dev.sh down` keeps the image, so the next `up` starts at once. Once a worktree is gone, its image
 stays behind. `scripts/dev/dev.sh prune` removes the images whose checkout directory is gone and

@@ -32,9 +32,10 @@ function setupTest() {
   mkdirSync(join(scripts, 'dev'), { recursive: true });
   mkdirSync(e2e);
 
-  for (const name of ['zfs-host-test.sh', 'lib.sh']) {
-    copyFileSync(new URL(name, import.meta.url).pathname, join(scripts, name));
-  }
+  copyFileSync(
+    new URL('zfs-host-test.sh', import.meta.url).pathname,
+    join(scripts, 'zfs-host-test.sh'),
+  );
 
   const stubs = join(directory, 'stubs');
   const sudo = createStubBin(stubs, 'sudo', 'exec "$@"');
