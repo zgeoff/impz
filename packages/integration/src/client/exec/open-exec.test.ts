@@ -34,8 +34,6 @@ async function setupTest() {
 
   const impd = harness.impd;
 
-  harness.fake.agent.version = '0.18.0';
-
   server.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
 
   const url = harness.url;
@@ -46,6 +44,7 @@ async function setupTest() {
     stack,
     dataDir: harness.dataDir,
     createTestImage: harness.createTestImage,
+    fake: harness.fake,
     impd,
     url,
     client,
@@ -655,6 +654,8 @@ test('#openExec hands a start that drops CAP_SYS_ADMIN to impd, which refuses an
 
   await ctx.createTestImage('ubuntu');
 
+  ctx.fake.agent.version = '0.18.0';
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
@@ -706,6 +707,8 @@ test('#openConsole starts the session it names and reports it', async () => {
 
   await ctx.createTestImage('ubuntu');
 
+  ctx.fake.agent.version = '0.18.0';
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, dev.id).vsockSocket, ctx.agent.readFrame, {
@@ -734,6 +737,8 @@ test('#openConsole asks impd for a log of the session it starts', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.18.0';
 
   const dev = await ctx.client.imps.create({ name: 'dev' });
 

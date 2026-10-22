@@ -20,9 +20,6 @@ async function setupTest() {
   const harness = await startTestImpd(stack, { rootToken });
 
   const impd = harness.impd;
-
-  harness.fake.agent.version = '0.18.0';
-
   const url = harness.url;
   const client = createImpClient({ url, token: rootToken });
   const agent = buildStubForwardAgent();
@@ -31,6 +28,7 @@ async function setupTest() {
     stack,
     dataDir: harness.dataDir,
     createTestImage: harness.createTestImage,
+    fake: harness.fake,
     impd,
     url,
     client,
@@ -43,6 +41,8 @@ test('it listens where impd answers', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.18.0';
 
   const box = await ctx.client.imps.create({ name: 'box' });
 
@@ -70,6 +70,8 @@ test('it relays a client in the imp that it accepts', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.18.0';
 
   const box = await ctx.client.imps.create({ name: 'box' });
 
@@ -122,6 +124,8 @@ test('it ends as lost when its listener in the imp ends', async () => {
 
   await ctx.createTestImage('ubuntu');
 
+  ctx.fake.agent.version = '0.18.0';
+
   const box = await ctx.client.imps.create({ name: 'box' });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, box.id).vsockSocket, ctx.agent.readFrame, {
@@ -153,6 +157,8 @@ test('it ends as failed with the refusal of a listen impd refused', async () => 
 
   await ctx.createTestImage('ubuntu');
 
+  ctx.fake.agent.version = '0.18.0';
+
   const box = await ctx.client.imps.create({ name: 'box' });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, box.id).vsockSocket, ctx.agent.readFrame, {
@@ -183,6 +189,8 @@ test('it ends as stopped on stop', async () => {
 
   await ctx.createTestImage('ubuntu');
 
+  ctx.fake.agent.version = '0.18.0';
+
   const box = await ctx.client.imps.create({ name: 'box' });
 
   await startStubAgent(buildImpPaths(ctx.dataDir, box.id).vsockSocket, ctx.agent.readFrame, {
@@ -211,6 +219,8 @@ test('it ends as closed with the code and reason of a tunnel impd closes as it r
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
+
+  ctx.fake.agent.version = '0.18.0';
 
   const box = await ctx.client.imps.create({ name: 'box' });
 
