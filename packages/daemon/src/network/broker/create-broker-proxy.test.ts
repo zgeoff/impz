@@ -9,7 +9,6 @@ import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubBrokerGuest } from '../../../testing/network/build-stub-broker-guest';
 import { createStubBrokerTokenEndpoint } from '../../../testing/network/create-stub-broker-token-endpoint';
 import { startStubBrokerGuestSocket } from '../../../testing/network/start-stub-broker-guest-socket';
@@ -21,10 +20,8 @@ import { startStubBrokerTunnel } from '../../../testing/network/start-stub-broke
 import { buildStubHeldAnswer } from '../../../testing/platform/build-stub-held-answer';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { listAuditEntries } from '../../platform/db/broker-audit';
-import { createImage } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
 import { listGrantNames, readSecret, removeCheckedGrant } from '../../platform/db/secrets';
-import { buildImagePaths } from '../../vm/storage/data-layout';
 import { loadOrCreateBrokerCa } from './broker-ca';
 
 async function setupTest() {
@@ -109,12 +106,6 @@ async function setupTest() {
     afterRuleRead: () => ruleRead.hook(),
   });
 
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   const proxyPort = harness.config.brokerPort;
   const caFile = join(dataDir, 'broker', 'ca', 'ca.pem');
 
@@ -136,6 +127,7 @@ async function setupTest() {
     upstreamCaPem: upstream.caPem,
     proxyPort,
     caFile,
+    createTestImage: harness.createTestImage,
 
     guest: buildStubBrokerGuest({ proxyPort, caFile, address: '127.0.0.2' }),
   };
@@ -143,6 +135,8 @@ async function setupTest() {
 
 test('it sends the real credential in place of the placeholder to a granted host', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -169,6 +163,8 @@ test('it sends the real credential in place of the placeholder to a granted host
 
 test('it records an audit row for a forwarded request', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -209,6 +205,8 @@ test('it records an audit row for a forwarded request', async () => {
 
 test('it records the audit row of a request that ends after its imp is destroyed', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -269,6 +267,8 @@ test('it records the audit row of a request that ends after its imp is destroyed
 test('it streams a large upload through and counts its bytes', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   await writeFile(
     ctx.upstreamsFile,
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.github.com': ctx.upstreamOrigin } }),
@@ -301,6 +301,8 @@ test('it streams a large upload through and counts its bytes', async () => {
 test('it tunnels an ungranted host, whose real certificate the guest does not trust', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   await writeFile(
     ctx.upstreamsFile,
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.github.com': ctx.upstreamOrigin } }),
@@ -317,6 +319,8 @@ test('it tunnels an ungranted host, whose real certificate the guest does not tr
 
 test('it adds no credential to an ungranted host the guest reaches past the certificate', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -344,6 +348,9 @@ test('it adds no credential to an ungranted host the guest reaches past the cert
 
 test('it dials the checked address for a plain tunnel under an open policy', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const target = await startStubBrokerReplyTarget(ctx.stack, 'tunnel');
 
   await ctx.client.imps.create({ name: 'dev' });
@@ -357,6 +364,9 @@ test('it dials the checked address for a plain tunnel under an open policy', asy
 
 test('it relays the guest’s bytes to the tunnel target', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const target = await startStubBrokerReplyTarget(ctx.stack, 'tunnel');
 
   await ctx.client.imps.create({ name: 'dev' });
@@ -370,6 +380,9 @@ test('it relays the guest’s bytes to the tunnel target', async () => {
 
 test('it tunnels to a host a box policy lists', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const target = await startStubBrokerReplyTarget(ctx.stack, 'tunnel');
 
   await ctx.client.imps.create({ name: 'dev' });
@@ -384,6 +397,9 @@ test('it tunnels to a host a box policy lists', async () => {
 
 test('it refuses a tunnel to a host a box policy does not list', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const target = await startStubBrokerReplyTarget(ctx.stack, 'tunnel');
 
   await ctx.client.imps.create({ name: 'dev' });
@@ -408,6 +424,9 @@ test('it refuses a tunnel to a host a box policy does not list', async () => {
 
 test('it audits a tunnel the egress policy refuses, with the imp, the host and the reason', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const target = await startStubBrokerReplyTarget(ctx.stack, 'tunnel');
 
   await ctx.client.imps.create({ name: 'dev' });
@@ -446,6 +465,8 @@ test('it audits a tunnel the egress policy refuses, with the imp, the host and t
 
 test('it keeps no credential, header, query or body in the audit row of a refused request', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -506,6 +527,9 @@ test('it keeps no credential, header, query or body in the audit row of a refuse
 
 test('it refuses every tunnel under a closed egress policy', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const target = await startStubBrokerReplyTarget(ctx.stack, 'tunnel');
 
   await ctx.client.imps.create({ name: 'dev' });
@@ -530,6 +554,9 @@ test('it refuses every tunnel under a closed egress policy', async () => {
 
 test('it ends the open tunnels a tighter policy denies, and keeps the rest', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const target = await startStubBrokerHoldTarget(ctx.stack);
 
   await ctx.client.imps.create({ name: 'dev' });
@@ -561,6 +588,7 @@ test('it ends the open tunnels a tighter policy denies, and keeps the rest', asy
 test('it gives no tunnel to a connection opened under an open policy once a tighter one is set', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
   const early = await startStubBrokerTunnel(ctx.stack, {
@@ -579,6 +607,7 @@ test('it gives no tunnel to a connection opened under an open policy once a tigh
 test('it closes the connection of a guest on another imp’s gateway without a reply', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.impd.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_real' });
   await ctx.impd.broker.addGrant('dev', 'gh');
@@ -598,6 +627,8 @@ test('it closes the connection of a guest on another imp’s gateway without a r
 test('it refuses a proxy request that is not a CONNECT', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   await writeFile(
     ctx.upstreamsFile,
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.github.com': ctx.upstreamOrigin } }),
@@ -615,6 +646,8 @@ test('it refuses a proxy request that is not a CONNECT', async () => {
 
 test('it stops sending the credential as soon as the grant is revoked', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -639,6 +672,8 @@ test('it stops sending the credential as soon as the grant is revoked', async ()
 test('it passes a 204 through without a body', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   await writeFile(
     ctx.upstreamsFile,
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.github.com': ctx.upstreamOrigin } }),
@@ -661,6 +696,8 @@ test('it passes a 204 through without a body', async () => {
 test('it passes a 304 through without a body', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   await writeFile(
     ctx.upstreamsFile,
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.github.com': ctx.upstreamOrigin } }),
@@ -682,6 +719,8 @@ test('it passes a 304 through without a body', async () => {
 
 test('it passes a redirect through without following it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -714,6 +753,8 @@ test('it passes a redirect through without following it', async () => {
 
 test('it gives no credential to the next request on a connection whose grant is gone', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -748,6 +789,8 @@ test('it gives no credential to the next request on a connection whose grant is 
 
 test('it lets the request under way finish on a revoke, and the next gets no credential', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -794,6 +837,8 @@ test('it lets the request under way finish on a revoke, and the next gets no cre
 
 test('it never sends a rebound value to the host the secret had before', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -857,6 +902,8 @@ test('it never sends a rebound value to the host the secret had before', async (
 test('it sends the rotated value on the next request, with the grant kept', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   await writeFile(
     ctx.upstreamsFile,
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.github.com': ctx.upstreamOrigin } }),
@@ -889,6 +936,8 @@ test('it sends the rotated value on the next request, with the grant kept', asyn
 
 test('it sends the request of a host with no public name to its rule’s upstream', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   const received: { authorization: string | null; url: string }[] = [];
 
@@ -933,6 +982,8 @@ test('it sends the request of a host with no public name to its rule’s upstrea
 test('it gives a rule’s upstream its own authority as the Host', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   const hosts: (string | null)[] = [];
 
   const upstream = startStubBrokerPlainUpstream(ctx.stack, (request) => {
@@ -958,6 +1009,8 @@ test('it gives a rule’s upstream its own authority as the Host', async () => {
 
 test('it audits a request sent to a rule’s upstream under the guest’s host', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   server.use(
     http.get('http://svc-upstream.test:18081/v1/ping', () =>
@@ -994,6 +1047,8 @@ test('it audits a request sent to a rule’s upstream under the guest’s host',
 
 test('it sends the next request to the host’s own origin once a rebind drops the upstream', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   const received: string[] = [];
 
@@ -1041,6 +1096,9 @@ test('it sends the next request to the host’s own origin once a rebind drops t
 
 test('it refuses a test upstream whose certificate the file’s CA did not sign', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const otherCa = await loadOrCreateBrokerCa(join(ctx.dataDir, 'other-ca'));
 
   await writeFile(
@@ -1060,6 +1118,8 @@ test('it refuses a test upstream whose certificate the file’s CA did not sign'
 
 test('it sends the real credential with a request inside the grant’s filter', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -1091,6 +1151,8 @@ test('it sends the real credential with a request inside the grant’s filter', 
 
 test('it refuses a method outside the grant’s filter and audits it with the reason', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -1148,6 +1210,8 @@ test('it refuses a method outside the grant’s filter and audits it with the re
 test('it refuses a path outside the grant’s filter and audits it with the reason', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   await writeFile(
     ctx.upstreamsFile,
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.github.com': ctx.upstreamOrigin } }),
@@ -1200,6 +1264,8 @@ test('it refuses a path outside the grant’s filter and audits it with the reas
 test('it applies a filter given to an existing grant from the next request on', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   await writeFile(
     ctx.upstreamsFile,
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.github.com': ctx.upstreamOrigin } }),
@@ -1224,6 +1290,8 @@ test('it applies a filter given to an existing grant from the next request on', 
 
 test('it sends the current access token to the granted host', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -1268,6 +1336,8 @@ test('it sends the current access token to the granted host', async () => {
 
 test('it sends the new access token after a refresh that used the rotated refresh token', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -1318,6 +1388,8 @@ test('it sends the new access token after a refresh that used the rotated refres
 
 test('it refreshes an access token the granted host revoked and sends the request again with the new one', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -1371,6 +1443,8 @@ test('it refreshes an access token the granted host revoked and sends the reques
 test('it gives no credential for a secret with no access token', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   await writeFile(
     ctx.upstreamsFile,
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.example.com': ctx.upstreamOrigin } }),
@@ -1403,6 +1477,8 @@ test('it gives no credential for a secret with no access token', async () => {
 
 test('it keeps sending the valid access token of a secret that needs a new sign-in', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
@@ -1446,6 +1522,8 @@ test('it keeps sending the valid access token of a secret that needs a new sign-
 
 test('it answers a websocket upgrade 426 and never reaches the upstream', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,

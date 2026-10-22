@@ -24,8 +24,6 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack);
 
-  await harness.createTestImage('ubuntu');
-
   // assigned, not spread: the harness's parts follow a restarted impd
   return Object.assign(harness, { stack });
 }
@@ -47,6 +45,9 @@ test('it lists two boots of the same millisecond in the order they were written,
 
 test('it records a create and a start after a stop as start', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.stop({ name: 'dev' });
@@ -59,6 +60,9 @@ test('it records a create and a start after a stop as start', async () => {
 
 test('it records no cold boot for a wake from memory', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -71,6 +75,9 @@ test('it records no cold boot for a wake from memory', async () => {
 
 test('it records a wake that falls back to a cold boot as wake_fallback, with a new boot', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -91,6 +98,9 @@ test('it records a wake that falls back to a cold boot as wake_fallback, with a 
 
 test('it keeps the last 4 cold boots, newest first', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   for (let restart = 0; restart < 5; restart += 1) {
@@ -116,6 +126,9 @@ test('it keeps the last 4 cold boots, newest first', async () => {
 
 test('it records the boot of a restore of a running imp as restore', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
   const checkpoint = await ctx.client.checkpoints.create({ name: 'dev' });
 
@@ -128,6 +141,9 @@ test('it records the boot of a restore of a running imp as restore', async () =>
 
 test('it records the next boot of a stopped imp a restore reset as restore', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
   const checkpoint = await ctx.client.checkpoints.create({ name: 'dev' });
 
@@ -142,6 +158,9 @@ test('it records the next boot of a stopped imp a restore reset as restore', asy
 
 test('it records the boot after impd found the VM gone as recovery, and only that boot', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
   const running = await readImpByName(ctx.db, 'dev');
 
@@ -163,6 +182,9 @@ test('it records the boot after impd found the VM gone as recovery, and only tha
 
 test('it answers an attach that boots a crashed imp with NO_SESSION and its cold boots', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
   const running = await readImpByName(ctx.db, 'dev');
 
@@ -209,6 +231,7 @@ test('it answers an attach that boots a crashed imp with NO_SESSION and its cold
 test('it refuses an attach without wake to a stopped imp, with its cold boots', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.stop({ name: 'dev' });
 
@@ -221,6 +244,7 @@ test('it refuses an attach without wake to a stopped imp, with its cold boots', 
 test('it boots nothing for an attach without wake to a stopped imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.stop({ name: 'dev' });
 
@@ -231,6 +255,7 @@ test('it boots nothing for an attach without wake to a stopped imp', async () =>
 test('it refuses an attach without wake to a sleeping imp, and wakes nothing', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.sleep({ name: 'dev' });
 
@@ -244,6 +269,8 @@ test('it refuses an attach without wake to a sleeping imp, and wakes nothing', a
 
 test('it names the cold boots in a session’s started output', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const createdAfter = new Date(Date.now());
 
@@ -316,6 +343,9 @@ test('it names the cold boots in a session’s started output', async () => {
 
 test('it keeps the data of a resume error the agent sends', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await startStubAttachAgent(buildImpPaths(ctx.dataDir, created.id).vsockSocket, {
@@ -345,6 +375,9 @@ test('it keeps the data of a resume error the agent sends', async () => {
 
 test('it records a VM impd adopts with a boot it has no record of as unknown', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await startStubAttachAgent(buildImpPaths(ctx.dataDir, created.id).vsockSocket, {
@@ -362,6 +395,9 @@ test('it records a VM impd adopts with a boot it has no record of as unknown', a
 
 test('it records a memory wake into a boot impd has no record of as unknown', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
   const [booted] = await listColdBoots(ctx.db, created.id);
 
@@ -379,6 +415,9 @@ test('it records a memory wake into a boot impd has no record of as unknown', as
 
 test('it records the next boot of a sleeping imp whose snapshot is gone as wake_fallback', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -397,6 +436,9 @@ test('it records the next boot of a sleeping imp whose snapshot is gone as wake_
 
 test('it spends the pending cause on a boot without a boot_id, so a later boot does not inherit it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
   const running = await readImpByName(ctx.db, 'dev');
 

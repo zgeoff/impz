@@ -1,22 +1,19 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
+import { readImpEnv } from '@impz/test-utils/read-imp-env';
+import { updateEnv } from '@impz/test-utils/update-env';
 import invariant from 'tiny-invariant';
 import { startTestImpd } from '../../../testing/start-test-impd';
-import type { TestImpdOptions } from '../../../testing/start-test-impd';
 import { readImpByName } from '../../platform/db/imps';
 import { buildImpPaths } from './data-layout';
 import { createDiskBudget } from './disk-budget';
 
-async function setupTest(options: TestImpdOptions = {}) {
+function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await startTestImpd(stack, options);
-
-  await harness.createTestImage('ubuntu');
-
-  return harness;
+  return startTestImpd(stack, { env: readImpEnv() });
 }
 
 test('it allows a write that leaves the reserve free', async () => {
@@ -568,6 +565,9 @@ test('it logs nothing more while free space hovers at twice the reserve', async 
 
 test('it refuses a sleep the disk cannot take with DISK_FULL and leaves the imp awake', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   ctx.diskUsage.availableBytes = 6 * 1024 ** 3;
@@ -583,10 +583,12 @@ test('it refuses a sleep the disk cannot take with DISK_FULL and leaves the imp 
 });
 
 test('it refuses an admission the disk keeps from making room with DISK_FULL', async () => {
-  const ctx = await setupTest({
-    env: { IMP_RAM_BUDGET_MIB: '1000', IMP_DEFAULT_MEMORY_MIB: '512' },
-  });
+  updateEnv('IMP_RAM_BUDGET_MIB', '1000');
+  updateEnv('IMP_DEFAULT_MEMORY_MIB', '512');
 
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'a' });
 
   ctx.diskUsage.availableBytes = 5.25 * 1024 ** 3;

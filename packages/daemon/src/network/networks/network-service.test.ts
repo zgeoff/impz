@@ -1,11 +1,8 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubNft } from '../../../testing/network/build-stub-nft';
 import { startTestImpd } from '../../../testing/start-test-impd';
-import { createImage } from '../../platform/db/images';
 import { listImps, readImpByName, updateImpMove } from '../../platform/db/imps';
-import { buildImagePaths } from '../../vm/storage/data-layout';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -20,12 +17,6 @@ async function setupTest() {
     boundaries: { egress: { flushPair } },
   });
 
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, { nft, flushPair });
 }
@@ -33,6 +24,7 @@ async function setupTest() {
 test('it puts the imps on a network into its set', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db' });
@@ -44,6 +36,7 @@ test('it puts the imps on a network into its set', async () => {
 test('it answers a second join with the network as it stands', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db' });
@@ -62,6 +55,7 @@ test('it answers a second join with the network as it stands', async () => {
 test('it lists each network with its imps', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db' });
@@ -87,6 +81,7 @@ test('it refuses a network whose name is taken with CONFLICT', async () => {
 test('it refuses a join to a network that does not exist with NOT_FOUND', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'web' });
 
   expect(ctx.client.networks.join({ network: 'nope', name: 'web' })).rejects.toMatchObject({
@@ -129,6 +124,7 @@ test('it refuses a delete of a network that does not exist with NOT_FOUND', asyn
 test('it takes a leaving imp out of the set', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db' });
@@ -143,6 +139,7 @@ test('it takes a leaving imp out of the set', async () => {
 test('it drops the flows of a pair that a leave parts', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db' });
@@ -155,6 +152,7 @@ test('it drops the flows of a pair that a leave parts', async () => {
 test('it drops no flows for a leave by an imp that is not on the network', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db' });
@@ -166,6 +164,7 @@ test('it drops no flows for a leave by an imp that is not on the network', async
 test('it keeps the flows of a pair that still shares another network', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.networks.create({ name: 'ops' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab', 'ops'] });
@@ -178,6 +177,7 @@ test('it keeps the flows of a pair that still shares another network', async () 
 test('it drops the flows of a pair once no network joins them', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.networks.create({ name: 'ops' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab', 'ops'] });
@@ -191,6 +191,7 @@ test('it drops the flows of a pair once no network joins them', async () => {
 test('it takes a deleted network’s set out of the table', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.networks.delete({ name: 'lab' });
@@ -205,6 +206,7 @@ test('it takes a deleted network’s set out of the table', async () => {
 test('it leaves no imp when a create names a network that does not exist', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'web' });
 
   const refused = ctx.client.imps.create({ name: 'api', networks: ['nope'] });
@@ -240,6 +242,7 @@ test('it refuses a create on a network to a token limited to some imps, even for
 test('it refuses a join to a token limited to some imps, even for an imp it may touch', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
 
   const created = await ctx.client.tokens.create({ name: 'dev', scope: 'manage', imps: ['dev-*'] });
@@ -260,6 +263,7 @@ test('it refuses a join to a token limited to some imps, even for an imp it may 
 test('it lets a root token put an imp on a network', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'dev-a' });
 
@@ -271,6 +275,7 @@ test('it lets a root token put an imp on a network', async () => {
 test('it puts the membership back when nft refuses a leave’s table', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db', networks: ['lab'] });
@@ -290,6 +295,7 @@ test('it puts the membership back when nft refuses a leave’s table', async () 
 test('it puts back every member, the latest join included, when nft refuses a delete', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db' });
@@ -311,6 +317,7 @@ test('it puts back every member, the latest join included, when nft refuses a de
 test('it takes a destroyed imp out of its networks’ sets', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db', networks: ['lab'] });
@@ -322,6 +329,7 @@ test('it takes a destroyed imp out of its networks’ sets', async () => {
 test('it takes a destroyed imp off its networks', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db', networks: ['lab'] });
@@ -335,6 +343,7 @@ test('it takes a destroyed imp off its networks', async () => {
 test('it puts a fork on no network', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.fork({ source: 'web', name: 'copy' });
@@ -347,6 +356,7 @@ test('it puts a fork on no network', async () => {
 test('it warns a box imp that joins next to an open one', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db' });
@@ -362,6 +372,7 @@ test('it warns a box imp that joins next to an open one', async () => {
 test('it warns an open imp that joins next to a box one', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'db', networks: ['lab'] });
   await ctx.client.imps.setPolicy({ name: 'db', policy: { mode: 'box', allow: [] } });
@@ -377,6 +388,7 @@ test('it warns an open imp that joins next to a box one', async () => {
 test('it says “are open” when several open imps can relay for a box imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'api', networks: ['lab'] });
@@ -393,6 +405,7 @@ test('it says “are open” when several open imps can relay for a box imp', as
 test('it says “are public” when several public imps can relay for a none imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'api', networks: ['lab'] });
@@ -411,6 +424,7 @@ test('it says “are public” when several public imps can relay for a none imp
 test('it gives no warning to a join of imps of one policy', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db' });
@@ -423,6 +437,7 @@ test('it gives no warning to a join of imps of one policy', async () => {
 test('it warns a public imp next to an open one that the open one can relay for it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db', networks: ['lab'] });
@@ -438,6 +453,7 @@ test('it warns a public imp next to an open one that the open one can relay for 
 test('it warns a none imp next to a public one that the public one can relay for it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db', networks: ['lab'] });
@@ -454,6 +470,7 @@ test('it warns a none imp next to a public one that the public one can relay for
 test('it warns a public imp next to a none one that the none one can reach the internet through it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db', networks: ['lab'] });
@@ -470,6 +487,7 @@ test('it warns a public imp next to a none one that the none one can reach the i
 test('it has no warnings for an imp on a network of one policy', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db', networks: ['lab'] });
@@ -482,6 +500,7 @@ test('it has no warnings for an imp on a network of one policy', async () => {
 test('it warns an imp whose policy change mixes its network with an open one', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.client.imps.create({ name: 'db', networks: ['lab'] });
@@ -497,6 +516,7 @@ test('it warns an imp whose policy change mixes its network with an open one', a
 test('it warns once for each of the networks a policy change mixes', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.networks.create({ name: 'ops' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab', 'ops'] });
@@ -547,6 +567,7 @@ test('it removes the networks a failed restore made once they are empty', async 
 test('it keeps a network with members that a failed restore names', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web', networks: ['lab'] });
   await ctx.impd.networks.removeEmptyNetworks(['lab']);
@@ -559,6 +580,7 @@ test('it keeps a network with members that a failed restore names', async () => 
 test('it refuses a join of an imp a move marked with MOVING', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.networks.create({ name: 'lab' });
   await ctx.client.imps.create({ name: 'web' });
 

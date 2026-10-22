@@ -12,9 +12,8 @@ import { buildCredentialHash } from './public-auth';
 
 async function setupTest() {
   const database = await createTestDatabase();
-  const image = await createImage(database.db, buildMockNewImage({ name: 'ubuntu' }));
 
-  return { db: database.db, imageId: image.id };
+  return { db: database.db };
 }
 
 test('#expose refuses when the host has no domain', async () => {
@@ -26,7 +25,9 @@ test('#expose refuses when the host has no domain', async () => {
     updateRecords: () => Promise.resolve(null),
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   expect(exposure.expose({ name: 'web', auth: 'none' })).rejects.toMatchObject({
     code: 'PRECONDITION_FAILED',
@@ -47,7 +48,9 @@ test('#expose refuses when the host has a domain but no public IP', async () => 
     updateRecords: () => Promise.resolve(null),
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   expect(exposure.expose({ name: 'web', auth: 'none' })).rejects.toMatchObject({
     code: 'PRECONDITION_FAILED',
@@ -88,7 +91,8 @@ test('#expose refuses an imp that is moving', async () => {
     updateRecords: () => Promise.resolve(null),
   });
 
-  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   await updateImpMove(ctx.db, imp.id, 'sending');
 
@@ -114,7 +118,8 @@ test('#expose refuses an imp a move marks between its read and its write', async
     updateRecords: () => Promise.resolve(null),
   });
 
-  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   gate.arm();
 
@@ -142,7 +147,9 @@ test('#expose makes a token imp public with a fresh credential shown once', asyn
     updateRecords: () => Promise.resolve({ isOk: true, error: null, at: 0 }),
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   const result = await exposure.expose({ name: 'web', auth: 'token' });
 
@@ -168,7 +175,9 @@ test('#expose stores only the hash of the credential it shows', async () => {
     updateRecords: () => Promise.resolve({ isOk: true, error: null, at: 0 }),
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   const result = await exposure.expose({ name: 'web', auth: 'token' });
   const found = await readPublicImp(ctx.db, 'web');
@@ -194,7 +203,9 @@ test('#expose gives basic auth the user imp when the request names none', async 
     updateRecords: () => Promise.resolve({ isOk: true, error: null, at: 0 }),
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   const result = await exposure.expose({ name: 'web', auth: 'basic' });
 
@@ -215,7 +226,9 @@ test('#expose gives basic auth the user the request names', async () => {
     updateRecords: () => Promise.resolve({ isOk: true, error: null, at: 0 }),
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   const result = await exposure.expose({ name: 'web', auth: 'basic', user: 'ann' });
 
@@ -236,7 +249,9 @@ test('#expose makes an imp public with no credential for no auth', async () => {
     updateRecords: () => Promise.resolve({ isOk: true, error: null, at: 0 }),
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   const result = await exposure.expose({ name: 'web', auth: 'none' });
 
@@ -264,7 +279,9 @@ test('#expose updates the records once', async () => {
     updateRecords,
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   await exposure.expose({ name: 'web', auth: 'none' });
 
@@ -285,7 +302,9 @@ test('#expose warns when the record write fails', async () => {
     updateRecords: () => Promise.resolve({ isOk: false, error: 'Cloudflare 403', at: 0 }),
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   const result = await exposure.expose({ name: 'web', auth: 'token' });
 
@@ -308,7 +327,9 @@ test('#expose still makes the imp public when the record write fails', async () 
     updateRecords: () => Promise.resolve({ isOk: false, error: 'Cloudflare 403', at: 0 }),
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   await exposure.expose({ name: 'web', auth: 'none' });
 
@@ -331,7 +352,9 @@ test('#expose names an unknown error when the failed record write gives none', a
     updateRecords: () => Promise.resolve({ isOk: false, error: null, at: 0 }),
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   const result = await exposure.expose({ name: 'web', auth: 'none' });
 
@@ -354,7 +377,9 @@ test('#expose gives no warning when there is no HTTPS service to write records',
     updateRecords: () => Promise.resolve(null),
   });
 
-  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   const result = await exposure.expose({ name: 'web', auth: 'none' });
 
@@ -370,7 +395,8 @@ test('#unexpose takes the imp off the internet', async () => {
     updateRecords: () => Promise.resolve(null),
   });
 
-  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   await updateImpExposure(ctx.db, imp.id, { auth: 'none', user: null, hash: null });
 
@@ -390,7 +416,8 @@ test('#unexpose updates the records once', async () => {
     updateRecords,
   });
 
-  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   await updateImpExposure(ctx.db, imp.id, { auth: 'none', user: null, hash: null });
 
@@ -420,7 +447,8 @@ test('#unexpose refuses an imp that is moving', async () => {
     updateRecords: () => Promise.resolve(null),
   });
 
-  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   await updateImpMove(ctx.db, imp.id, 'sending');
 
@@ -438,7 +466,8 @@ test('#unexpose refuses an imp a move marks between its read and its write', asy
     updateRecords: () => Promise.resolve(null),
   });
 
-  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: ctx.imageId }));
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+  const imp = await createImp(ctx.db, buildMockNewImp({ name: 'web', imageId: image.id }));
 
   gate.arm();
 

@@ -5,14 +5,12 @@ import { join } from 'node:path';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import type { TestImpdOptions } from '../../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
-import { createImage } from '../../platform/db/images';
 import { readSnapshotMeta } from '../sleep/snapshot-meta';
-import { buildImagePaths, buildImpPaths } from '../storage/data-layout';
+import { buildImpPaths } from '../storage/data-layout';
 import { buildMemoryMax, createCpuCgroups } from '../vmm/cpu-cgroups';
 import {
   getLowMib,
@@ -36,12 +34,6 @@ async function setupTest(options: Pick<TestImpdOptions, 'cgroups'> = {}) {
     cgroups: options.cgroups ?? cgroups.cgroups,
     boundaries: { imps: { now: clock.now, sleep: clock.sleep } },
   });
-
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
 
   // Object.assign keeps the harness's getters live, where a spread reads each of them once.
   return Object.assign(harness, { cgroups });
@@ -108,6 +100,8 @@ test('#resolveMaxMemoryMib says to raise the memory with a max past 4 times it',
 test('it refuses a max above 4 × the memory at create', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const creating = ctx.client.imps.create({ name: 'big', memoryMib: 256, maxMemoryMib: 1025 });
 
   expect(creating).rejects.toMatchObject({ code: 'BAD_REQUEST' });
@@ -117,6 +111,8 @@ test('it refuses a max above 4 × the memory at create', async () => {
 test('it refuses a max below the memory at create', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   expect(
     ctx.client.imps.create({ name: 'small', memoryMib: 512, maxMemoryMib: 256 }),
   ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
@@ -124,6 +120,9 @@ test('it refuses a max below the memory at create', async () => {
 
 test('it creates an imp with a max of 4 × its memory', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 1024 });
 
   expect(created).toMatchObject({ memoryMib: 256, maxMemoryMib: 1024 });
@@ -131,6 +130,9 @@ test('it creates an imp with a max of 4 × its memory', async () => {
 
 test('it creates an imp with no max when the create asks for none', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'plain', memoryMib: 256 });
 
   expect(created).not.toHaveProperty('maxMemoryMib');
@@ -139,6 +141,7 @@ test('it creates an imp with no max when the create asks for none', async () => 
 test('it forks an imp with the max of its source', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 1024 });
 
   const fork = await ctx.client.imps.fork({ source: 'dev', name: 'twin' });
@@ -151,6 +154,8 @@ test('it never boots an imp whose max is larger than the whole RAM budget', asyn
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const creating = ctx.impd.imps.createImp({ name: 'big', memoryMib: 512, maxMemoryMib: 2048 });
 
   expect(creating).rejects.toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
@@ -159,6 +164,9 @@ test('it never boots an imp whose max is larger than the whole RAM budget', asyn
 
 test('it unplugs on a sleep what the guest can spare', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 1024 });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -180,6 +188,9 @@ test('it unplugs on a sleep what the guest can spare', async () => {
 
 test('it allows on a wake what the guest kept plugged at its sleep', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 1024 });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -202,6 +213,9 @@ test('it allows on a wake what the guest kept plugged at its sleep', async () =>
 
 test('it records what a plug under way asked for at a sleep', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 1024 });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -221,6 +235,9 @@ test('it records what a plug under way asked for at a sleep', async () => {
 
 test('it allows on a wake what a plug under way at the sleep asked for', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 1024 });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -243,6 +260,9 @@ test('it allows on a wake what a plug under way at the sleep asked for', async (
 
 test('it sleeps an imp that does not grow without asking its guest', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'plain', memoryMib: 256 });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -264,6 +284,8 @@ test('it raises memory.max with a grow of the guest', async () => {
   await writeFile(join(root, 'imps', 'cgroup.subtree_control'), 'cpu memory\n');
 
   const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
+
+  await ctx.createTestImage('ubuntu');
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
@@ -302,6 +324,8 @@ test('it sets memory.max to the memory at the first boot', async () => {
 
   const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
 
+  await ctx.createTestImage('ubuntu');
+
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
   const created = await ctx.impd.imps.createImp({
@@ -317,6 +341,9 @@ test('it sets memory.max to the memory at the first boot', async () => {
 
 test('it consumes the snapshot meta of an elastic imp on a wake', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 1024 });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -342,6 +369,8 @@ test('it keeps memory.max at the plugged size across a sleep and a wake', async 
   await writeFile(join(root, 'imps', 'cgroup.subtree_control'), 'cpu memory\n');
 
   const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
+
+  await ctx.createTestImage('ubuntu');
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
@@ -380,6 +409,8 @@ test('it sets memory.max back to the memory on a cold boot after a stop', async 
 
   const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
 
+  await ctx.createTestImage('ubuntu');
+
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
   ctx.fake.agent.version = '0.17.0';
@@ -417,6 +448,8 @@ test('it allows on adopt after a restart what the guest holds', async () => {
 
   const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
 
+  await ctx.createTestImage('ubuntu');
+
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
   const created = await ctx.impd.imps.createImp({
@@ -450,6 +483,8 @@ test('it keeps the adopted memory.max through a sleep before any tick after a re
 
   const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
 
+  await ctx.createTestImage('ubuntu');
+
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
   const created = await ctx.impd.imps.createImp({
@@ -480,6 +515,9 @@ test('it keeps the adopted memory.max through a sleep before any tick after a re
 
 test('it never grows an elastic imp whose agent predates elastic memory, and logs why', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 1024 });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);

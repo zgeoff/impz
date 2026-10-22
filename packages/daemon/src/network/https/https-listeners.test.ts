@@ -2,14 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:tls';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { createMockCertificate } from '../../../testing/network/create-mock-certificate';
 import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { readPublicImp } from '../../platform/db/exposure';
-import { createImage } from '../../platform/db/images';
 import { readImpByName, updateImpExposure } from '../../platform/db/imps';
-import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createForwardedPeers } from '../proxy/forwarded-peers';
 import { startWakeProxy } from '../proxy/wake-proxy';
 import { createHttpsListeners } from './https-listeners';
@@ -38,13 +35,7 @@ async function setupTest() {
 
   stack.defer(() => proxy.stop());
 
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(db, image);
-
-  return { db, impd, stack, echo, proxy };
+  return { db, impd, stack, echo, proxy, createTestImage: harness.createTestImage };
 }
 
 test('it listens on nothing before the first certificate', async () => {
@@ -238,6 +229,8 @@ test('it hands the dashboard session to the API on the bare domain', async () =>
 test('it never hands the dashboard session to an imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
     domain: 'imp.test',
@@ -344,6 +337,8 @@ test('it answers plain http for another domain with a 404', async () => {
 
 test('it wakes no imp for plain http on the domain', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
@@ -634,6 +629,8 @@ test.each([['web.imp.test'], ['WEB.imp.test.'], ['web.imp.test:443']])(
   async (host) => {
     const ctx = await setupTest();
 
+    await ctx.createTestImage('ubuntu');
+
     const listeners = createHttpsListeners({
       proxy: ctx.proxy,
       domain: 'imp.test',
@@ -731,6 +728,8 @@ test('it answers the bare domain on the public listener with the 404 for no imp'
 test('it answers plain http for a tailnet-only imp on the public listener with a 404', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
     domain: 'imp.test',
@@ -760,6 +759,8 @@ test('it answers plain http for a tailnet-only imp on the public listener with a
 
 test('it wakes no tailnet-only imp for a request on the public listener', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
@@ -795,6 +796,8 @@ test('it wakes no tailnet-only imp for a request on the public listener', async 
 
 test('it serves a public imp without auth on the public listener', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
@@ -842,6 +845,8 @@ test('it serves a public imp without auth on the public listener', async () => {
 test('it redirects plain http for a public imp to port 443', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
     domain: 'imp.test',
@@ -885,6 +890,8 @@ test.each([
 ])('it asks a token imp’s caller for the token, given %s', async (_label, headers) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
     domain: 'imp.test',
@@ -921,6 +928,8 @@ test.each([
 
 test('it wakes no token imp for a request without its token', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
@@ -963,6 +972,8 @@ test('it wakes no token imp for a request without its token', async () => {
 
 test('it serves a token imp given its token, without passing the token on', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
@@ -1019,6 +1030,8 @@ test.each([
 ])('it asks a basic auth imp’s caller again, given %s', async (_label, credentials) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
     domain: 'imp.test',
@@ -1058,6 +1071,8 @@ test.each([
 
 test('it serves a basic auth imp given its user and password, without passing them on', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
@@ -1112,6 +1127,8 @@ test('it serves a basic auth imp given its user and password, without passing th
 test('it takes no open slot and no wake for plain http on the public listener', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const limits = createPublicLimits(() => 0);
 
   const listeners = createHttpsListeners({
@@ -1158,6 +1175,8 @@ test('it takes no open slot and no wake for plain http on the public listener', 
 
 test('it answers a WebSocket upgrade without the token with a 401', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
@@ -1209,6 +1228,8 @@ test('it answers a WebSocket upgrade without the token with a 401', async () => 
 
 test('it replaces a public client’s forwarding headers with its own', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
@@ -1262,6 +1283,8 @@ test('it replaces a public client’s forwarding headers with its own', async ()
 
 test('it names neither the imp’s port nor the error on the public listener when the imp does not answer', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,

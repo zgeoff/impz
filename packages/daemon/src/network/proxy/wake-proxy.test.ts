@@ -2,16 +2,13 @@ import { expect, jest, mock, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
 import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
 import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { startTestImpd } from '../../../testing/start-test-impd';
-import { createImage } from '../../platform/db/images';
 import { removeImp, updateImpMove } from '../../platform/db/imps';
-import { buildImagePaths } from '../../vm/storage/data-layout';
 import { PEER_HEADER, createForwardedPeers } from './forwarded-peers';
 import { startWakeProxy } from './wake-proxy';
 
@@ -22,18 +19,14 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack);
 
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, { stack });
 }
 
 test('it ends overlapping listener syncs with no listener for an imp the database lost', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const proxy = startWakeProxy({
     config: ctx.config,
@@ -68,6 +61,8 @@ test('it ends overlapping listener syncs with no listener for an imp the databas
 test('it listens on the proxy port and on the port base plus each imp’s slot by default', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const free = claimFreePorts(2);
   const proxyPort = free.take();
   const portBase = free.take();
@@ -100,6 +95,8 @@ test('it listens on the proxy port and on the port base plus each imp’s slot b
 test('it stops the listener of an imp the database lost', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const proxy = startWakeProxy({
     config: ctx.config,
     db: ctx.db,
@@ -128,6 +125,8 @@ test('it stops the listener of an imp the database lost', async () => {
 
 test('it keeps the dashboard session cookie from an imp over HTTP', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const cookies: (string | null)[] = [];
 
@@ -172,6 +171,8 @@ test('it keeps the dashboard session cookie from an imp over HTTP', async () => 
 
 test('it keeps the dashboard session cookie from an imp over a WebSocket', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const cookies: (string | null)[] = [];
 
@@ -230,6 +231,8 @@ test('it keeps the dashboard session cookie from an imp over a WebSocket', async
 
 test('it relays WebSocket messages both ways', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const upstream = startStubHeaderEcho(ctx.stack);
 
@@ -614,6 +617,8 @@ test.each([['box.tail1234.ts.net'], ['imp.example.com'], ['imp.tail1234.ts.net']
   async (host) => {
     const ctx = await setupTest();
 
+    await ctx.createTestImage('ubuntu');
+
     const toApi = mock();
 
     const upstream = Bun.serve({
@@ -670,6 +675,8 @@ test.each([['box.tail1234.ts.net'], ['imp.example.com'], ['imp.tail1234.ts.net']
 
 test('it passes tailscale serve’s headers on to the imp, with the session and peer handle stripped', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const received: Headers[] = [];
 
@@ -733,6 +740,8 @@ test('it passes tailscale serve’s headers on to the imp, with the session and 
 
 test('it routes the Host-named imp on the proxy port', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const upstream = Bun.serve({
     port: 0,
@@ -819,6 +828,8 @@ test('it answers an imp that does not exist with a 404 that names it', async () 
 test('it answers an imp that cannot wake with a 503 that names the reason', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const proxy = startWakeProxy({
     config: ctx.config,
     db: ctx.db,
@@ -847,6 +858,8 @@ test('it answers an imp that cannot wake with a 503 that names the reason', asyn
 
 test('it answers a public request for an imp that cannot wake with a 503 that names nothing', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const proxy = startWakeProxy({
     config: ctx.config,
@@ -942,6 +955,8 @@ test('it answers a limited route with a 429 and its Retry-After', async () => {
 test('it wakes a sleeping imp and says how long the wake took', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const upstream = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
@@ -984,6 +999,8 @@ test('it wakes a sleeping imp and says how long the wake took', async () => {
 
 test('it stops the request to the imp when the client goes away', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const reached = Promise.withResolvers<AbortSignal>();
   const aborted = Promise.withResolvers<void>();
@@ -1082,6 +1099,8 @@ test('it logs one impd.proxy line that names the imp, and nothing unhandled, whe
 test('it warns through its logger, naming the imp, when the imp’s server closes a stream', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const upstream = startStubCutStream(ctx.stack, 'data: first\n\n');
   const warning = mock();
 
@@ -1129,6 +1148,8 @@ test('it warns through its logger, naming the imp, when the imp’s server close
 
 test('it keeps serving an imp after the imp’s server closes a stream', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const upstream = startStubCutStream(ctx.stack, 'data: first\n\n');
 
@@ -1179,6 +1200,8 @@ test('it keeps serving an imp after the imp’s server closes a stream', async (
 test('it answers a 502 that names the port when nothing answers on the imp’s HTTP port', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const proxy = startWakeProxy({
     config: ctx.config,
     db: ctx.db,
@@ -1206,6 +1229,8 @@ test('it answers a 502 that names the port when nothing answers on the imp’s H
 
 test('it answers a 502 when the imp’s WebSocket cannot be reached', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const proxy = startWakeProxy({
     config: ctx.config,
@@ -1243,6 +1268,8 @@ test('it answers a 502 when the imp’s WebSocket cannot be reached', async () =
 
 test('it answers a 502 when the imp’s WebSocket does not open in time', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const silent = Bun.listen({
     hostname: '127.0.0.1',
@@ -1303,6 +1330,8 @@ test('it answers a 502 when the imp’s WebSocket does not open in time', async 
 test('it warns once about a slot whose port another process holds', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   const squatter = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
@@ -1337,6 +1366,8 @@ test('it warns once about a slot whose port another process holds', async () => 
 
 test('it warns again about a slot that could not listen once a new imp holds it', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const squatter = Bun.serve({
     port: 0,
@@ -1381,6 +1412,8 @@ test('it warns again about a slot that could not listen once a new imp holds it'
 
 test('it answers a request to a moving imp with a 503 and Retry-After', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const proxy = startWakeProxy({
     config: ctx.config,
