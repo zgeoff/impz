@@ -17,9 +17,7 @@ function setupTest() {
 }
 
 test('#readTailscaleE2EAuthKey reads the e2e client as an ephemeral, preauthorized key with its tag', async () => {
-  updateEnv('IMP_E2E_TAILSCALE_AUTHKEY', 'fake-client-secret');
-
-  const found = await readTailscaleE2EAuthKey();
+  const found = await readTailscaleE2EAuthKey({ IMP_E2E_TAILSCALE_AUTHKEY: 'fake-client-secret' });
 
   expect(found).toStrictEqual({
     key: 'fake-client-secret?ephemeral=true&preauthorized=true',
@@ -31,10 +29,7 @@ test('#readTailscaleE2EAuthKey reads no key when neither the env nor op has the 
   const ctx = setupTest();
   const op = createStubBin(ctx.directoryPath, 'op', 'exit 1');
 
-  updateEnv('PATH', `${op.bin}:${process.env['PATH'] ?? ''}`);
-  updateEnv('IMP_E2E_TAILSCALE_AUTHKEY', undefined);
-
-  const found = await readTailscaleE2EAuthKey();
+  const found = await readTailscaleE2EAuthKey({ PATH: `${op.bin}:${process.env['PATH'] ?? ''}` });
 
   expect(found).toBeNull();
 });

@@ -86,10 +86,8 @@ const tokens = new Map<string, Promise<string>>();
 // Read from the dev container when the runner passed no token, so a suite
 // file also runs on its own.
 function readImpToken(target: DevInstance): Promise<string> {
-  const fromEnv = process.env['IMP_TOKEN'] ?? '';
-
-  if (target === instance && fromEnv !== '') {
-    return Promise.resolve(fromEnv);
+  if (target.token !== null) {
+    return Promise.resolve(target.token);
   }
 
   let token = tokens.get(target.container);
@@ -265,8 +263,8 @@ export function parseImp(stdout: string): ImpRow {
   return ImpRowSchema.parse(JSON.parse(stdout));
 }
 
-export async function listImageNames(): Promise<readonly string[]> {
-  const stdout = await runImp('image', 'ls', '--json');
+export async function listImageNames(target: DevInstance = instance): Promise<readonly string[]> {
+  const stdout = await runImpWith({ target }, 'image', 'ls', '--json');
 
   const images = z.array(ImageRowSchema).parse(JSON.parse(stdout));
 

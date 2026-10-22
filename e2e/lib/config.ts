@@ -1,33 +1,39 @@
-export const config = {
-  ramBudgetMib: readNumber('E2E_RAM_BUDGET_MIB', 6144),
-  idleTimeoutS: readNumber('E2E_IDLE_TIMEOUT_S', 10),
+export type HarnessEnv = Readonly<Record<string, string | undefined>>;
 
-  scaleCount: readNumber('E2E_SCALE_COUNT', 30),
-  scaleMemoryMib: readNumber('E2E_SCALE_MEMORY_MIB', 512),
-  scaleFillMib: readNumber('E2E_SCALE_FILL_MIB', 256),
+export type E2EConfig = ReturnType<typeof buildConfig>;
 
-  chaosRounds: readNumber('E2E_CHAOS_ROUNDS', 8),
-  chaosSeed: readNumber('E2E_CHAOS_SEED', Date.now() % 1_000_000_007),
+export function buildConfig(env: HarnessEnv) {
+  return {
+    ramBudgetMib: parseCount(env, 'E2E_RAM_BUDGET_MIB', 6144),
+    idleTimeoutS: parseCount(env, 'E2E_IDLE_TIMEOUT_S', 10),
 
-  maxNewMs: readNumber('E2E_MAX_NEW_MS', 3000),
-  maxCheckpointMs: readNumber('E2E_MAX_CHECKPOINT_MS', 500),
+    scaleCount: parseCount(env, 'E2E_SCALE_COUNT', 30),
+    scaleMemoryMib: parseCount(env, 'E2E_SCALE_MEMORY_MIB', 512),
+    scaleFillMib: parseCount(env, 'E2E_SCALE_FILL_MIB', 256),
 
-  keep: process.env['E2E_KEEP'] === '1',
+    chaosRounds: parseCount(env, 'E2E_CHAOS_ROUNDS', 8),
+    chaosSeed: parseCount(env, 'E2E_CHAOS_SEED', Date.now() % 1_000_000_007),
 
-  keptPrefixes: (process.env['E2E_KEPT_PREFIXES'] ?? '')
-    .split(',')
-    .filter((prefix) => prefix !== ''),
+    maxNewMs: parseCount(env, 'E2E_MAX_NEW_MS', 3000),
+    maxCheckpointMs: parseCount(env, 'E2E_MAX_CHECKPOINT_MS', 500),
 
-  acceptance: process.env['E2E_ACCEPTANCE'] === '1',
+    keep: env['E2E_KEEP'] === '1',
 
-  metricsFile: process.env['E2E_METRICS_FILE'] ?? null,
+    keptPrefixes: (env['E2E_KEPT_PREFIXES'] ?? '').split(',').filter((prefix) => prefix !== ''),
 
-  // The name must resolve to 127.0.0.1 on this machine.
-  registryName: process.env['E2E_REGISTRY_NAME'] ?? 'imp-e2e-registry.test',
-} as const;
+    acceptance: env['E2E_ACCEPTANCE'] === '1',
 
-function readNumber(name: string, fallback: number): number {
-  const raw = process.env[name];
+    metricsFile: env['E2E_METRICS_FILE'] ?? null,
+
+    // The name must resolve to 127.0.0.1 on this machine.
+    registryName: env['E2E_REGISTRY_NAME'] ?? 'imp-e2e-registry.test',
+  } as const;
+}
+
+export const config = buildConfig(process.env);
+
+function parseCount(env: HarnessEnv, name: string, fallback: number): number {
+  const raw = env[name];
 
   if (raw === undefined || raw === '') {
     return fallback;
