@@ -15,9 +15,6 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  mkdirSync(join(directory, 'tree', 'images', 'base'), { recursive: true });
-  mkdirSync(join(directory, 'tree', 'host'));
-  mkdirSync(join(directory, 'tree', 'scripts', 'release'), { recursive: true });
   writeFileSync(join(directory, 'outputs'), '');
 
   return {
@@ -99,6 +96,8 @@ test('it pushes a tag the registry does not have', () => {
   );
 
   invariant(plan !== undefined);
+  mkdirSync(join(ctx.tree, 'images', 'base'), { recursive: true });
+  mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
   writeFileSync(join(ctx.tree, 'scripts/release/check-base-image.sh'), '');
 
   writeFileSync(
@@ -135,6 +134,8 @@ test('it pushes a missing tag of a tree that keeps its check script in host/', (
   );
 
   invariant(plan !== undefined);
+  mkdirSync(join(ctx.tree, 'images', 'base'), { recursive: true });
+  mkdirSync(join(ctx.tree, 'host'));
   writeFileSync(join(ctx.tree, 'host/check-base-image.sh'), '');
 
   writeFileSync(
@@ -175,6 +176,8 @@ test('it leaves an attested existing tag alone, with a notice', () => {
   const gh = createStubBin(ctx.directoryPath, 'gh', 'exit 0');
 
   invariant(plan !== undefined);
+  mkdirSync(join(ctx.tree, 'images', 'base'), { recursive: true });
+  mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
   writeFileSync(join(ctx.tree, 'scripts/release/check-base-image.sh'), '');
 
   writeFileSync(
@@ -222,6 +225,8 @@ test('it fails the job on an existing tag without an attestation, and plans noth
 
   createStubBin(ctx.directoryPath, 'gh', 'exit 1');
   invariant(plan !== undefined);
+  mkdirSync(join(ctx.tree, 'images', 'base'), { recursive: true });
+  mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
   writeFileSync(join(ctx.tree, 'scripts/release/check-base-image.sh'), '');
 
   writeFileSync(
@@ -263,6 +268,8 @@ test('it fails the job on an existing tag whose digest is not a sha256', () => {
 
   createStubBin(ctx.directoryPath, 'gh', 'exit 0');
   invariant(plan !== undefined);
+  mkdirSync(join(ctx.tree, 'images', 'base'), { recursive: true });
+  mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
   writeFileSync(join(ctx.tree, 'scripts/release/check-base-image.sh'), '');
 
   writeFileSync(
@@ -303,6 +310,8 @@ test.each([
   );
 
   invariant(plan !== undefined);
+  mkdirSync(join(ctx.tree, 'images', 'base'), { recursive: true });
+  mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
   writeFileSync(join(ctx.tree, 'scripts/release/check-base-image.sh'), '');
 
   writeFileSync(
@@ -343,6 +352,7 @@ test('it skips a release from before imp-base without asking the registry', () =
   );
 
   invariant(plan !== undefined);
+  mkdirSync(join(ctx.tree, 'images', 'base'), { recursive: true });
   writeFileSync(join(ctx.tree, 'images/base/Dockerfile'), 'FROM ubuntu:24.04\n');
 
   const result = Bun.spawnSync(['bash', '--noprofile', '--norc', '-eo', 'pipefail', '-c', plan], {
@@ -718,7 +728,6 @@ test('it leaves the formula of a tag from before the rename, class Imp, out of t
 
   mkdirSync(join(ctx.tree, 'dist'));
   writeFileSync(join(ctx.tree, 'dist', 'SHA256SUMS'), '');
-  rmSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
 
   const gh = createStubBin(
     ctx.directoryPath,
@@ -805,6 +814,8 @@ test('it writes the formula of a tag after the rename to impz.rb with the genera
     join(ctx.directoryPath, 'tap.git'),
   );
 
+  mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
+
   writeFileSync(
     join(ctx.tree, 'scripts', 'release', 'build-formula.sh'),
     readFileSync(new URL('../../scripts/release/build-formula.sh', import.meta.url)),
@@ -868,6 +879,7 @@ test('it fails the job, moving no formula, when the generator prints no formula 
   ).tap.steps.find((candidate) => candidate.name === 'Update the formula')?.run;
 
   invariant(step !== undefined);
+  mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
 
   writeFileSync(
     join(ctx.tree, 'scripts', 'release', 'build-formula.sh'),

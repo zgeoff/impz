@@ -15,8 +15,6 @@ async function setupTest() {
   await runGitChecked(['git', '-C', directory, 'config', 'user.name', 'test']);
   await runGitChecked(['git', '-C', directory, 'config', 'user.email', 'test@example.com']);
   await runGitChecked(['git', '-C', directory, 'config', 'commit.gpgsign', 'false']);
-  await mkdir(join(directory, 'packages/api'), { recursive: true });
-  await mkdir(join(directory, 'packages/cli'), { recursive: true });
 
   return {
     directoryPath: directory,
@@ -27,6 +25,8 @@ async function setupTest() {
 
 test('it fails a pull request that breaks the protocol without a mark', async () => {
   const ctx = await setupTest();
+
+  await mkdir(join(ctx.directoryPath, 'packages/api'), { recursive: true });
 
   await writeFile(
     ctx.schemaPath,
@@ -121,6 +121,8 @@ test('it fails a pull request that breaks the protocol without a mark', async ()
 test('it passes a breaking change whose lone commit has a ! subject', async () => {
   const ctx = await setupTest();
 
+  await mkdir(join(ctx.directoryPath, 'packages/api'), { recursive: true });
+
   await writeFile(
     ctx.schemaPath,
     JSON.stringify({
@@ -202,6 +204,8 @@ test('it passes a breaking change whose lone commit has a ! subject', async () =
 
 test('it passes a breaking change with a BREAKING CHANGE footer in one of several commits', async () => {
   const ctx = await setupTest();
+
+  await mkdir(join(ctx.directoryPath, 'packages/api'), { recursive: true });
 
   await writeFile(
     ctx.schemaPath,
@@ -288,6 +292,8 @@ test('it passes a breaking change with a BREAKING CHANGE footer in one of severa
 test('it fails a breaking change whose ! sits on a later commit of several', async () => {
   const ctx = await setupTest();
 
+  await mkdir(join(ctx.directoryPath, 'packages/api'), { recursive: true });
+
   await writeFile(
     ctx.schemaPath,
     JSON.stringify({
@@ -373,6 +379,8 @@ test('it fails a breaking change whose ! sits on a later commit of several', asy
 test('it passes a compatible change without a mark', async () => {
   const ctx = await setupTest();
 
+  await mkdir(join(ctx.directoryPath, 'packages/api'), { recursive: true });
+
   await writeFile(
     ctx.schemaPath,
     JSON.stringify({ procedures: {}, messages: {}, errors: {}, constants: {} }),
@@ -441,6 +449,8 @@ test('it passes a compatible change without a mark', async () => {
 
 test('it compares from the merge base, so what main adds later is no removal', async () => {
   const ctx = await setupTest();
+
+  await mkdir(join(ctx.directoryPath, 'packages/api'), { recursive: true });
 
   await writeFile(
     ctx.schemaPath,
@@ -523,6 +533,8 @@ test('it compares from the merge base, so what main adds later is no removal', a
 test('it passes when the base has no protocol schema yet', async () => {
   const ctx = await setupTest();
 
+  await mkdir(join(ctx.directoryPath, 'packages/api'), { recursive: true });
+
   await runGitChecked([
     'git',
     '-C',
@@ -592,6 +604,8 @@ test('it passes when the base has no protocol schema yet', async () => {
 
 test('it fails a pull request that removes the protocol schema', async () => {
   const ctx = await setupTest();
+
+  await mkdir(join(ctx.directoryPath, 'packages/api'), { recursive: true });
 
   await writeFile(
     ctx.schemaPath,
@@ -670,6 +684,9 @@ test('it fails a pull request that removes the protocol schema', async () => {
 
 test('it fails a pull request that renames a field of a --json output without a mark', async () => {
   const ctx = await setupTest();
+
+  await mkdir(join(ctx.directoryPath, 'packages/api'), { recursive: true });
+  await mkdir(join(ctx.directoryPath, 'packages/cli'), { recursive: true });
 
   await writeFile(
     ctx.schemaPath,
@@ -777,6 +794,9 @@ test('it fails a pull request that renames a field of a --json output without a 
 
 test('it fails a pull request that removes the --json output schema', async () => {
   const ctx = await setupTest();
+
+  await mkdir(join(ctx.directoryPath, 'packages/api'), { recursive: true });
+  await mkdir(join(ctx.directoryPath, 'packages/cli'), { recursive: true });
 
   await writeFile(
     ctx.schemaPath,

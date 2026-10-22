@@ -10,26 +10,19 @@ async function setupTest() {
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const work = join(directory, 'work');
-
-  const gitEnv = {
-    GIT_AUTHOR_NAME: 'e2e',
-    GIT_AUTHOR_EMAIL: 'e2e@imp.test',
-    GIT_COMMITTER_NAME: 'e2e',
-    GIT_COMMITTER_EMAIL: 'e2e@imp.test',
-    GIT_CONFIG_GLOBAL: '/dev/null',
-    GIT_CONFIG_NOSYSTEM: '1',
-    GIT_TERMINAL_PROMPT: '0',
+  return {
+    directoryPath: directory,
+    work: join(directory, 'work'),
+    gitEnv: {
+      GIT_AUTHOR_NAME: 'e2e',
+      GIT_AUTHOR_EMAIL: 'e2e@imp.test',
+      GIT_COMMITTER_NAME: 'e2e',
+      GIT_COMMITTER_EMAIL: 'e2e@imp.test',
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_TERMINAL_PROMPT: '0',
+    },
   };
-
-  await runGitCommand(['git', 'init', '-q', '-b', 'main', work], { env: gitEnv });
-  await writeFile(join(work, 'README'), 'pushed\n');
-  await runGitCommand(['git', '-C', work, 'add', 'README'], { env: gitEnv });
-  await runGitCommand(['git', '-C', work, 'commit', '-q', '-m', 'first'], { env: gitEnv });
-
-  const head = await runGitCommand(['git', '-C', work, 'rev-parse', 'main'], { env: gitEnv });
-
-  return { directoryPath: directory, work, gitEnv, head: head.stdout.trim() };
 }
 
 test('it serves https that verifies against its own CA', async () => {
@@ -102,6 +95,16 @@ test('it records each request it sees with its authorization header', async () =
 
 test('it lands a git push over smart http with its Basic credential', async () => {
   const ctx = await setupTest();
+
+  await runGitCommand(['git', 'init', '-q', '-b', 'main', ctx.work], { env: ctx.gitEnv });
+  await writeFile(join(ctx.work, 'README'), 'pushed\n');
+  await runGitCommand(['git', '-C', ctx.work, 'add', 'README'], { env: ctx.gitEnv });
+  await runGitCommand(['git', '-C', ctx.work, 'commit', '-q', '-m', 'first'], { env: ctx.gitEnv });
+
+  const head = await runGitCommand(['git', '-C', ctx.work, 'rev-parse', 'main'], {
+    env: ctx.gitEnv,
+  });
+
   const upstream = await startStubUpstream('127.0.0.1', 'token-a');
 
   onTestFinished(() => upstream.stop());
@@ -124,11 +127,17 @@ test('it lands a git push over smart http with its Basic credential', async () =
   const landed = await runGitCommand(['git', '-C', repo, 'rev-parse', 'main']);
 
   expect(push.exitCode).toBe(0);
-  expect(landed.stdout.trim()).toBe(ctx.head);
+  expect(landed.stdout.trim()).toBe(head.stdout.trim());
 });
 
 test('it refuses a git push with another Basic credential', async () => {
   const ctx = await setupTest();
+
+  await runGitCommand(['git', 'init', '-q', '-b', 'main', ctx.work], { env: ctx.gitEnv });
+  await writeFile(join(ctx.work, 'README'), 'pushed\n');
+  await runGitCommand(['git', '-C', ctx.work, 'add', 'README'], { env: ctx.gitEnv });
+  await runGitCommand(['git', '-C', ctx.work, 'commit', '-q', '-m', 'first'], { env: ctx.gitEnv });
+
   const upstream = await startStubUpstream('127.0.0.1', 'token-a');
 
   onTestFinished(() => upstream.stop());

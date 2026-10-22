@@ -11,29 +11,31 @@ async function setupTest() {
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const work = join(directory, 'work');
-
-  const gitEnv = {
-    GIT_AUTHOR_NAME: 'e2e',
-    GIT_AUTHOR_EMAIL: 'e2e@imp.test',
-    GIT_COMMITTER_NAME: 'e2e',
-    GIT_COMMITTER_EMAIL: 'e2e@imp.test',
-    GIT_CONFIG_GLOBAL: '/dev/null',
-    GIT_CONFIG_NOSYSTEM: '1',
+  return {
+    directoryPath: directory,
+    work: join(directory, 'work'),
+    gitEnv: {
+      GIT_AUTHOR_NAME: 'e2e',
+      GIT_AUTHOR_EMAIL: 'e2e@imp.test',
+      GIT_COMMITTER_NAME: 'e2e',
+      GIT_COMMITTER_EMAIL: 'e2e@imp.test',
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_CONFIG_NOSYSTEM: '1',
+    },
   };
-
-  await runGitCommand(['git', 'init', '-q', '-b', 'main', work], { env: gitEnv });
-  await writeFile(join(work, 'README'), 'pushed\n');
-  await runGitCommand(['git', '-C', work, 'add', 'README'], { env: gitEnv });
-  await runGitCommand(['git', '-C', work, 'commit', '-q', '-m', 'first'], { env: gitEnv });
-
-  const head = await runGitCommand(['git', '-C', work, 'rev-parse', 'main'], { env: gitEnv });
-
-  return { directoryPath: directory, work, gitEnv, head: head.stdout.trim() };
 }
 
 test('it lands a push signed by the key it allows, from a client that checks its host key', async () => {
   const ctx = await setupTest();
+
+  await runGitCommand(['git', 'init', '-q', '-b', 'main', ctx.work], { env: ctx.gitEnv });
+  await writeFile(join(ctx.work, 'README'), 'pushed\n');
+  await runGitCommand(['git', '-C', ctx.work, 'add', 'README'], { env: ctx.gitEnv });
+  await runGitCommand(['git', '-C', ctx.work, 'commit', '-q', '-m', 'first'], { env: ctx.gitEnv });
+
+  const head = await runGitCommand(['git', '-C', ctx.work, 'rev-parse', 'main'], {
+    env: ctx.gitEnv,
+  });
 
   await runCommand([
     'ssh-keygen',
@@ -77,12 +79,17 @@ test('it lands a push signed by the key it allows, from a client that checks its
   const landed = await runGitCommand(['git', '-C', server.repo, 'rev-parse', 'main']);
 
   expect(push.exitCode).toBe(0);
-  expect(landed.stdout.trim()).toBe(ctx.head);
+  expect(landed.stdout.trim()).toBe(head.stdout.trim());
   expect(server.logins()).toBe(1);
 });
 
 test('it refuses a key other than the one it allows', async () => {
   const ctx = await setupTest();
+
+  await runGitCommand(['git', 'init', '-q', '-b', 'main', ctx.work], { env: ctx.gitEnv });
+  await writeFile(join(ctx.work, 'README'), 'pushed\n');
+  await runGitCommand(['git', '-C', ctx.work, 'add', 'README'], { env: ctx.gitEnv });
+  await runGitCommand(['git', '-C', ctx.work, 'commit', '-q', '-m', 'first'], { env: ctx.gitEnv });
 
   await runCommand([
     'ssh-keygen',
