@@ -6,7 +6,6 @@ import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubTailscale } from '../../../testing/network/build-stub-tailscale';
 import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { startTestImpd } from '../../../testing/start-test-impd';
@@ -17,9 +16,8 @@ import { runWhois } from '../../identity/auth/tailnet-identity';
 import { PEER_HEADER } from '../../network/proxy/forwarded-peers';
 import { startWakeProxy } from '../../network/proxy/wake-proxy';
 import { listApiCalls } from '../../platform/db/api-audit';
-import { createImage } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
-import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/data-layout';
 
 interface SetupOptions {
   readonly tailscale: Pick<ReturnType<typeof buildStubTailscale>, 'run'>;
@@ -39,12 +37,6 @@ async function setupTest(options: SetupOptions) {
     },
   });
 
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   return Object.assign(harness, {
     client: createImpClient({ url: harness.url, token: TEST_TOKEN }),
     stack,
@@ -53,6 +45,8 @@ async function setupTest(options: SetupOptions) {
 
 test('it names a nameless create under the one prefix its token may touch', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
+
+  await ctx.createTestImage('ubuntu');
 
   const made = await ctx.client.tokens.create({
     name: 'agent',
@@ -115,6 +109,8 @@ test('it names a nameless create under the one prefix its token may touch', asyn
 test('it audits a tool call as the token that made it', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
 
+  await ctx.createTestImage('ubuntu');
+
   const made = await ctx.client.tokens.create({
     name: 'agent',
     scope: 'manage',
@@ -167,6 +163,8 @@ test('it audits a tool call as the token that made it', async () => {
 
 test('it runs a command in an imp its token may touch', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -350,6 +348,7 @@ test('it lists only the read tools to a read token', async () => {
 test('it lists the imps to a read token', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'box' });
 
   const made = await ctx.client.tokens.create({ name: 'reader', scope: 'read' });
@@ -407,6 +406,8 @@ test.each([
   ['imp_destroy', { name: 'box' }],
 ])('it refuses %s to a read token before it reaches the guest', async (tool, args) => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 
@@ -479,6 +480,7 @@ test.each([
 test('it refuses a fork to a token that may grant secrets', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'agent-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126' });
 
@@ -652,6 +654,8 @@ test('it refuses a session to a caller other than the one that opened it', async
 test('it ends the streamed call and running command of a token that is removed', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
 
+  await ctx.createTestImage('ubuntu');
+
   const guest = buildStubExecGuest();
 
   await ctx.client.imps.create({ name: 'box' });
@@ -818,6 +822,7 @@ test('it serves a tailnet identity the wake proxy hands over the imps its rule a
     tailscale,
   });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.imps.create({ name: 'prod' });
 
@@ -903,6 +908,7 @@ test.each([
 test('it answers a tool call through the wake proxy’s API route', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'box' });
 
   const proxy = startWakeProxy({
@@ -978,6 +984,8 @@ test('it answers a tool call through the wake proxy’s API route', async () => 
 
 test('it answers a long JSON tool call through the wake proxy', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale() });
+
+  await ctx.createTestImage('ubuntu');
 
   const done = Promise.withResolvers<void>();
   const guest = buildStubExecGuest({ wait: () => done.promise });
@@ -1069,6 +1077,8 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
 
 test('it keeps a call answered as server-sent events open through the wake proxy past the idle timeout that ends an unprotected stream', async () => {
   const ctx = await setupTest({ tailscale: buildStubTailscale(), idleTimeoutS: 1 });
+
+  await ctx.createTestImage('ubuntu');
 
   const done = Promise.withResolvers<void>();
   const guest = buildStubExecGuest({ wait: () => done.promise });

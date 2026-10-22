@@ -7,13 +7,10 @@ import { createImpClient } from '@impz/client';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import packageJson from '../../package.json' with { type: 'json' };
-import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../testing/start-test-impd';
 import { TEST_TOKEN } from '../../testing/test-token';
 import { listApiCalls } from '../platform/db/api-audit';
-import { createImage } from '../platform/db/images';
 import { MIGRATIONS } from '../platform/db/run-migrations';
-import { buildImagePaths } from '../vm/storage/data-layout';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -35,12 +32,6 @@ async function setupTest() {
     },
   });
 
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
 
   return {
@@ -48,6 +39,8 @@ async function setupTest() {
     dataDir: harness.dataDir,
     sendToImpd,
     ramReads,
+    setClock: harness.setClock,
+    createTestImage: harness.createTestImage,
     client: createImpClient({ url: 'http://impd.test', token: TEST_TOKEN, fetch: sendToImpd }),
   };
 }
@@ -65,6 +58,7 @@ test('it answers the features with the impd version and every feature on', async
 test('it answers the features without measuring an awake imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   ctx.ramReads.length = 0;
@@ -105,6 +99,9 @@ test('it answers a copy with its fields in the order a restore script reads them
 
 test('it answers a copy with its path, size, schema version, impd version and time', async () => {
   const ctx = await setupTest();
+
+  ctx.setClock(Date.UTC(2026, 4, 6, 7, 8, 9));
+
   const copy = await ctx.client.system.copyDatabase({ name: 'before-upgrade' });
 
   const path = join(ctx.dataDir, 'db-copies', 'before-upgrade.sqlite');
@@ -117,7 +114,7 @@ test('it answers a copy with its path, size, schema version, impd version and ti
     sizeBytes: statSync(path).size,
     lastMigration,
     impVersion: packageJson.version,
-    createdAt: new Date(Date.UTC(2026, 0, 2, 3, 4, 5)),
+    createdAt: new Date(Date.UTC(2026, 4, 6, 7, 8, 9)),
     integrity: 'ok',
   });
 });
@@ -137,6 +134,7 @@ test('it writes the copy owner-only in an owner-only directory', async () => {
 test('it copies the rows the database holds', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.system.copyDatabase({ name: 'before-upgrade' });
 
@@ -154,6 +152,8 @@ test('it copies the rows the database holds', async () => {
 test('it records the copy in the API audit log', async () => {
   const ctx = await setupTest();
 
+  ctx.setClock(Date.UTC(2026, 4, 6, 7, 8, 9));
+
   await ctx.client.system.copyDatabase({ name: 'before-upgrade' });
 
   const audit = await waitFor(async () => {
@@ -168,7 +168,7 @@ test('it records the copy in the API audit log', async () => {
 
   expect(audit).toStrictEqual([
     {
-      at: new Date(Date.UTC(2026, 0, 2, 3, 4, 5)),
+      at: new Date(Date.UTC(2026, 4, 6, 7, 8, 9)),
       procedure: 'system.copyDatabase',
       actor: 'token',
       actorName: 'root',
@@ -180,9 +180,12 @@ test('it records the copy in the API audit log', async () => {
 
 test('it names a copy without a name for the time it was taken', async () => {
   const ctx = await setupTest();
+
+  ctx.setClock(Date.UTC(2026, 4, 6, 7, 8, 9));
+
   const copy = await ctx.client.system.copyDatabase({});
 
-  expect(copy.path).toBe(join(ctx.dataDir, 'db-copies', 'imp-20260102-030405.sqlite'));
+  expect(copy.path).toBe(join(ctx.dataDir, 'db-copies', 'imp-20260506-070809.sqlite'));
 });
 
 test('it refuses a name a copy already has with a conflict', async () => {

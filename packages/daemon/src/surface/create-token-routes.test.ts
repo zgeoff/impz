@@ -30,8 +30,6 @@ async function setupTest() {
     },
   });
 
-  await harness.createTestImage('base');
-
   const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
 
   return Object.assign(harness, { sendToImpd, gap });
@@ -112,6 +110,7 @@ test.each([
 test('it lets a host-wide manage token grant on any imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'prod' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-119-1' });
 
@@ -151,6 +150,7 @@ test.each([
 ])('it refuses a grant on prod from %s', async (_label, options, refusal) => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'prod' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-119-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-119-1' });
@@ -200,6 +200,7 @@ test('it leaves the list as it was after a refused change', async () => {
 test('it revokes a secret taken off the list on the token’s imps only', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.imps.create({ name: 'dev-b' });
   await ctx.client.imps.create({ name: 'prod' });
@@ -254,6 +255,7 @@ test('it revokes a secret taken off the list on the token’s imps only', async 
 test('it refuses a grant of a secret taken off the list', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-119-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-119-1' });
@@ -284,6 +286,7 @@ test('it refuses a grant of a secret taken off the list', async () => {
 test('it refuses a list entry a rebind left stale', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-119-0' });
 
@@ -398,6 +401,7 @@ test('it binds the same generations as a token made after the update', async () 
 test('it lets the token grant each secret on its updated list', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.imps.create({ name: 'dev-b' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-119-0' });
@@ -593,6 +597,7 @@ test('it keeps the updated list for the old bearer after a restart', async () =>
 test('it refuses in the transaction a grant checked before an update took its secret off', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-119-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-119-1' });

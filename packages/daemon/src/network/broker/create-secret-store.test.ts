@@ -7,16 +7,13 @@ import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubBrokerJwt } from '../../../testing/network/build-stub-broker-jwt';
 import { createStubBrokerTokenEndpoint } from '../../../testing/network/create-stub-broker-token-endpoint';
 import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
-import { createImage } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
 import { readSecret, removeSecret, upsertSecret } from '../../platform/db/secrets';
 import type { SecretRecord } from '../../platform/db/secrets';
-import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createBroker } from './broker-service';
 import { buildValueFile, createSecretFiles } from './secret-files';
 
@@ -26,12 +23,6 @@ async function setupTest() {
   onTestFinished(() => stack.disposeAsync());
 
   const harness = await startTestImpd(stack);
-
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
 
   return Object.assign(harness, { stack });
 }
@@ -385,6 +376,8 @@ test('it sends nothing to the token endpoint for a refused oauth secret', async 
 test('it keeps the grant through a new refresh token for the same endpoint', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
   server.use(tokens.handler);
@@ -463,6 +456,8 @@ test.each([
 
 test('it takes another client and drops the grants on a rebind', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
@@ -864,6 +859,8 @@ test('it refreshes a pending secret when the broker starts', async () => {
 test('it keeps the generation and the grants through a rotation that reorders the hosts', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   const ruleA = buildMockBrokerRule({ host: 'a.example.com' });
   const ruleB = buildMockBrokerRule({ host: 'b.example.com' });
 
@@ -905,6 +902,8 @@ test('it keeps the generation and the grants through a rotation that reorders th
 test('it refuses a changed binding without rebind and changes nothing', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   const rules = [
     buildMockBrokerRule({ host: 'a.example.com' }),
     buildMockBrokerRule({ host: 'b.example.com' }),
@@ -943,6 +942,7 @@ test('it refuses a changed binding without rebind and changes nothing', async ()
 test('it takes an upstream written another way as the same binding', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.secrets.add({
@@ -1023,6 +1023,7 @@ test('it refuses dropping the upstream without rebind', async () => {
 test('it moves the upstream and drops the grant on a rebind', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.secrets.add({
@@ -1060,6 +1061,7 @@ test('it moves the upstream and drops the grant on a rebind', async () => {
 test('it takes a new generation and drops every grant of the secret on a rebind', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.create({ name: 'dev-2' });
 
@@ -1102,6 +1104,7 @@ test('it takes a new generation and drops every grant of the secret on a rebind'
 test('it gives no credential for a grant of another generation', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.secrets.add({

@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ImpContract } from '@impz/api';
@@ -7,11 +7,8 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../testing/start-test-impd';
 import { tryExecSocket } from '../../testing/surface/try-impd-sockets';
-import { createImage } from '../platform/db/images';
-import { buildImagePaths } from '../vm/storage/data-layout';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -22,18 +19,10 @@ async function setupTest() {
 
   stack.defer(() => rm(dashboardDir, { recursive: true, force: true }));
 
-  await mkdir(join(dashboardDir, 'assets'), { recursive: true });
-
   const harness = await startTestImpd(stack, {
     env: { IMP_DASHBOARD_DIR: dashboardDir },
     rootToken: 'root-token',
   });
-
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
 
   return {
     dashboardDir,

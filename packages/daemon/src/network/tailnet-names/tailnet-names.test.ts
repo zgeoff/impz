@@ -2,60 +2,39 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { server } from '@impz/test-utils/mock-server';
+import { readImpEnv } from '@impz/test-utils/read-imp-env';
+import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubTailscaleServe } from '../../../testing/network/build-stub-tailscale-serve';
 import { createStubTailscaleApi } from '../../../testing/network/create-stub-tailscale-api';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
-import { createImage } from '../../platform/db/images';
+import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
 import { readImpByName, updateImpMove } from '../../platform/db/imps';
-import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createServiceServe } from './service-serve';
 import { createServicesApi } from './services-api';
 import { SERVICE_TAG, createTailnetNames } from './tailnet-names';
 import type { TailnetNamesDeps } from './tailnet-names';
 import { createPresenceCheck } from './wire-tailnet-names';
 
-interface SetupOptions {
-  readonly tailnetNames?: '1';
-}
-
-async function setupTest(options: SetupOptions = {}) {
+async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
   const tailscale = buildStubTailscaleServe();
+  const tailscaleStatus = Promise.withResolvers<TailscaleStatus>();
 
   const harness = await startTestImpd(stack, {
-    env: {
-      ...(options.tailnetNames !== undefined && {
-        IMP_TAILNET_NAMES: options.tailnetNames,
-        IMP_TAILSCALE_NODE: options.tailnetNames,
-      }),
-    },
+    env: readImpEnv(),
     boundaries: {
-      readTailscale: () =>
-        Promise.resolve({
-          state: 'Running',
-          hostname: 'imp-host',
-          dnsName: 'imp-host.tail1234.ts.net',
-          ip: null,
-          ips: [],
-        }),
+      readTailscale: () => tailscaleStatus.promise,
 
       runCommand: tailscale.run,
     },
   });
-
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
 
   const tailscaleApi = createStubTailscaleApi({
     client: { clientId: 'kExample', clientSecret: 'secret' },
@@ -85,6 +64,7 @@ async function setupTest(options: SetupOptions = {}) {
   return Object.assign(harness, {
     tailscaleApi,
     tailscale,
+    tailscaleStatus,
     logs,
     impdLogs: harness.logs,
     namesDeps,
@@ -94,6 +74,7 @@ async function setupTest(options: SetupOptions = {}) {
 test('it claims a service of this host’s for each imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const names = createTailnetNames({ ...ctx.namesDeps, hostId: 'host-a' });
@@ -115,6 +96,7 @@ test('it claims a service of this host’s for each imp', async () => {
 test('it reads the service again before it writes it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const names = createTailnetNames({ ...ctx.namesDeps, hostId: 'host-a' });
@@ -134,6 +116,7 @@ test('it reads the service again before it writes it', async () => {
 test('it serves each imp’s service to the imp’s own port', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const imp = await readImpByName(ctx.db, 'box');
@@ -155,6 +138,7 @@ test('it serves each imp’s service to the imp’s own port', async () => {
 test('it writes the service before it serves it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const servedAtWrite = mock<(calls: readonly (readonly string[])[]) => void>();
@@ -177,6 +161,7 @@ test('it writes the service before it serves it', async () => {
 test('it gives a live name its https URL on the tailnet', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const names = createTailnetNames({
@@ -193,6 +178,7 @@ test('it gives a live name its https URL on the tailnet', async () => {
 test('it gives no URL while the tailnet suffix is unknown', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const names = createTailnetNames({
@@ -209,6 +195,7 @@ test('it gives no URL while the tailnet suffix is unknown', async () => {
 test('it counts each live name in its status', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const names = createTailnetNames({ ...ctx.namesDeps, hostId: 'host-a' });
@@ -221,6 +208,7 @@ test('it counts each live name in its status', async () => {
 test('it logs a name once when it goes live', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const names = createTailnetNames({ ...ctx.namesDeps, hostId: 'host-a' });
@@ -234,6 +222,7 @@ test('it logs a name once when it goes live', async () => {
 test('it only lists the services on a pass that finds everything in place', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const names = createTailnetNames({ ...ctx.namesDeps, hostId: 'host-a' });
@@ -257,6 +246,7 @@ test('it only lists the services on a pass that finds everything in place', asyn
 test('it never writes over a service by that name that another owner holds', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.tailscaleApi.services.create({ name: 'svc:box', comment: 'the web team', tags: [] });
   await ctx.client.imps.create({ name: 'box' });
 
@@ -276,6 +266,7 @@ test('it never writes over a service by that name that another owner holds', asy
 test('it fails a name another owner holds, and gives it no URL', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.tailscaleApi.services.create({ name: 'svc:box', comment: 'the web team', tags: [] });
 
   await ctx.tailscaleApi.services.create({
@@ -305,6 +296,7 @@ test('it fails a name another owner holds, and gives it no URL', async () => {
 test('it fails a name whose service appears after the list, and never writes it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.tailscaleApi.services.create({ name: 'svc:box', comment: 'someone else', tags: [] });
   await ctx.client.imps.create({ name: 'box' });
 
@@ -330,6 +322,7 @@ test('it fails a name whose service appears after the list, and never writes it'
 test('it clears a destroyed imp’s serve config, then deletes its service', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const names = createTailnetNames({ ...ctx.namesDeps, hostId: 'host-a' });
@@ -360,6 +353,7 @@ test('it clears a destroyed imp’s serve config, then deletes its service', asy
 test('it counts no live name once its imp is destroyed', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const names = createTailnetNames({ ...ctx.namesDeps, hostId: 'host-a' });
@@ -374,6 +368,7 @@ test('it counts no live name once its imp is destroyed', async () => {
 test('it logs the removal of a service no imp has', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const names = createTailnetNames({ ...ctx.namesDeps, hostId: 'host-a' });
@@ -416,6 +411,7 @@ test('it never removes another host’s, another owner’s or an untagged servic
 test('it keeps a moving imp’s service while the move sends', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const imp = await readImpByName(ctx.db, 'box');
@@ -436,6 +432,7 @@ test('it keeps a moving imp’s service while the move sends', async () => {
 test('it neither writes nor clears a moving imp’s service while the move sends', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const imp = await readImpByName(ctx.db, 'box');
@@ -467,6 +464,7 @@ test('it neither writes nor clears a moving imp’s service while the move sends
 test('it removes a moved imp’s service once the target holds a verified copy', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const imp = await readImpByName(ctx.db, 'box');
@@ -488,6 +486,7 @@ test('it removes a moved imp’s service once the target holds a verified copy',
 test('it never removes a service another host claimed for an imp it no longer has', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const first = createTailnetNames({ ...ctx.namesDeps, hostId: 'host-a' });
@@ -505,6 +504,7 @@ test('it never removes a service another host claimed for an imp it no longer ha
 test('it fails every name with the error while the API is down', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   server.use(
@@ -526,6 +526,7 @@ test('it fails every name with the error while the API is down', async () => {
 test('it logs a failure once while it stays the same', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   server.use(
@@ -547,6 +548,7 @@ test('it logs a failure once while it stays the same', async () => {
 test('it brings a name back on the pass after an outage ends', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   server.use(
@@ -571,6 +573,8 @@ test('it brings a name back on the pass after an outage ends', async () => {
 
 test('it fails only the imp whose name a device holds, and keeps that imp running', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   server.use(
     http.put('https://api.tailscale.com/api/v2/tailnet/-/services/svc%3Alaptop', () =>
@@ -621,6 +625,7 @@ test('it clears serve config for a service gone from the tailnet', async () => {
 test('it logs a removal that fails, and goes on with the pass', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const names = createTailnetNames({ ...ctx.namesDeps, hostId: 'host-a' });
@@ -642,7 +647,20 @@ test('it logs a removal that fails, and goes on with the pass', async () => {
 });
 
 test('it shows an imp’s service URL once its name is live', async () => {
-  const ctx = await setupTest({ tailnetNames: '1' });
+  updateEnv('IMP_TAILNET_NAMES', '1');
+  updateEnv('IMP_TAILSCALE_NODE', '1');
+
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  ctx.tailscaleStatus.resolve({
+    state: 'Running',
+    hostname: 'imp-host',
+    dnsName: 'imp-host.tail1234.ts.net',
+    ip: null,
+    ips: [],
+  });
 
   const oauthFile = ctx.config.tailnetNames?.oauthFile;
 
@@ -668,8 +686,20 @@ test('it shows an imp’s service URL once its name is live', async () => {
 });
 
 test('it shows no service URL before the name is live', async () => {
-  const ctx = await setupTest({ tailnetNames: '1' });
+  updateEnv('IMP_TAILNET_NAMES', '1');
+  updateEnv('IMP_TAILSCALE_NODE', '1');
 
+  const ctx = await setupTest();
+
+  ctx.tailscaleStatus.resolve({
+    state: 'Running',
+    hostname: 'imp-host',
+    dnsName: 'imp-host.tail1234.ts.net',
+    ip: null,
+    ips: [],
+  });
+
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
   const failure = await waitFor(() => {

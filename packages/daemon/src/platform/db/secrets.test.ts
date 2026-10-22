@@ -1,10 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../../testing/start-test-impd';
-import { buildImagePaths } from '../../vm/storage/data-layout';
-import { createImage } from './images';
 import { readImpByName } from './imps';
 import { listGrantNames, listGrantedRules } from './secrets';
 
@@ -15,18 +12,13 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack);
 
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   return harness;
 }
 
 test('it makes exactly one of two clashing grants made at once, and refuses the other', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-race' });
 
@@ -64,6 +56,7 @@ test('it makes exactly one of two clashing grants made at once, and refuses the 
 test('it ends a grant and a revoke made at once as one of the two orders', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-race' });
 
@@ -99,6 +92,9 @@ test('it ends a grant and a revoke made at once as one of the two orders', async
 
 test('it skips the clashing copy when a fork gets a grant while its source’s are copied', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
   const copy = await ctx.client.imps.create({ name: 'copy' });
 
@@ -182,6 +178,7 @@ test('it skips the clashing copy when a fork gets a grant while its source’s a
 test('it drops the old grant of a rebind onto a host granted before it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-race' });
 
@@ -212,6 +209,7 @@ test('it drops the old grant of a rebind onto a host granted before it', async (
 test('it grants a host after a rebind onto it dropped the old grant', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-race' });
 
@@ -243,6 +241,7 @@ test('it grants a host after a rebind onto it dropped the old grant', async () =
 test('it ends a rebind and a revoke made at once with no grant left', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.secrets.add({
@@ -307,6 +306,7 @@ test('it ends a rebind and a revoke made at once with no grant left', async () =
 test('it keeps the grant that was there when a clashing one is refused', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-race' });
 
@@ -330,6 +330,9 @@ test('it keeps the grant that was there when a clashing one is refused', async (
 
 test('it makes one row for the same grant made twice at once', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.secrets.add({

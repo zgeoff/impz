@@ -13,7 +13,7 @@ function setupTest() {
 
   const directory = join(parent, 'dist');
 
-  mkdirSync(join(directory, 'assets'), { recursive: true });
+  mkdirSync(directory);
 
   return { parent, directoryPath: directory };
 }
@@ -21,6 +21,7 @@ function setupTest() {
 test('it serves a hashed asset as immutable', async () => {
   const ctx = setupTest();
 
+  mkdirSync(join(ctx.directoryPath, 'assets'));
   writeFileSync(join(ctx.directoryPath, 'index.html'), '<!doctype html><title>imp</title>');
   writeFileSync(join(ctx.directoryPath, 'assets', 'index-abc123.js'), 'console.log(1)');
 

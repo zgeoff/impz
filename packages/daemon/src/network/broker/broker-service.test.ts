@@ -9,7 +9,6 @@ import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { startStubBrokerGuestSocket } from '../../../testing/network/start-stub-broker-guest-socket';
 import { startStubBrokerReplyTarget } from '../../../testing/network/start-stub-broker-reply-target';
 import { buildMockNewAuditEntry } from '../../../testing/platform/build-mock-new-audit-entry';
@@ -22,10 +21,8 @@ import {
   listRefusedRequests,
   writeAuditEntry,
 } from '../../platform/db/broker-audit';
-import { createImage } from '../../platform/db/images';
 import { readImpByName, updateImpMove } from '../../platform/db/imps';
 import { readSecret } from '../../platform/db/secrets';
-import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createBroker } from './broker-service';
 
 async function setupTest() {
@@ -44,12 +41,6 @@ async function setupTest() {
       return access(vsockPath);
     },
   });
-
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
 
   return Object.assign(harness, { stack, installs });
 }
@@ -98,6 +89,7 @@ test('it answers an added secret with its hosts and no value', async () => {
 test('it never shows a granted value through the API', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
@@ -116,6 +108,7 @@ test('it never shows a granted value through the API', async () => {
 test('it lists a secret with the imps it is granted to', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
@@ -298,6 +291,7 @@ test('it rejects a grant to an imp that does not exist', async () => {
 test('it rejects a grant of a secret that does not exist', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
   expect(ctx.client.grants.add({ name: 'dev', secret: 'nope' })).rejects.toMatchObject({
@@ -309,6 +303,7 @@ test('it rejects a grant of a secret that does not exist', async () => {
 test('it rejects a second credential for a host the imp already has one for', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
 
@@ -330,6 +325,7 @@ test('it rejects a second credential for a host the imp already has one for', as
 test('it rejects a revoke of a grant that is not there', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
 
@@ -341,6 +337,9 @@ test('it rejects a revoke of a grant that is not there', async () => {
 
 test('it refuses a revoke on an imp that is moving', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
@@ -354,6 +353,7 @@ test('it refuses a revoke on an imp that is moving', async () => {
 test('it copies the grants of the source to a fork', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
 
@@ -375,6 +375,7 @@ test('it copies the grants of the source to a fork', async () => {
 test('it copies each grant’s filter to a fork', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'npm_SECRETVALUE0123456789' });
@@ -393,6 +394,7 @@ test('it copies each grant’s filter to a fork', async () => {
 test('it lists each grant with its filter, and null for a grant of the whole host', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'npm_SECRETVALUE0123456789' });
@@ -416,6 +418,7 @@ test('it lists each grant with its filter, and null for a grant of the whole hos
 test('it lists a filtered grant by name alone, as an older client reads grants', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh', filter: { methods: ['GET'] } });
@@ -428,6 +431,7 @@ test('it lists a filtered grant by name alone, as an older client reads grants',
 test('it keeps a grant’s filter when the grant is made again without one', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh', filter: { methods: ['GET'] } });
@@ -441,6 +445,7 @@ test('it keeps a grant’s filter when the grant is made again without one', asy
 test('it replaces a grant’s filter with the one a new grant call gives', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh', filter: { methods: ['GET'] } });
@@ -454,6 +459,7 @@ test('it replaces a grant’s filter with the one a new grant call gives', async
 test('it refuses a grant whose filter names neither methods nor paths', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
 
@@ -465,6 +471,7 @@ test('it refuses a grant whose filter names neither methods nor paths', async ()
 test('it takes the grants and the value file of a deleted secret along', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
 
@@ -488,6 +495,7 @@ test('it takes the grants and the value file of a deleted secret along', async (
 test('it takes the grants of a destroyed imp along', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
@@ -501,6 +509,7 @@ test('it takes the grants of a destroyed imp along', async () => {
 test('it gives an imp without a grant no broker variables and installs nothing', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
   const imp = await readImpByName(ctx.db, 'dev');
@@ -520,6 +529,7 @@ test('it gives an imp without a grant no broker variables and installs nothing',
 test('it gives a granted imp the broker variables once the CA is in its boot', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
@@ -556,6 +566,7 @@ test('it gives a granted imp the broker variables once the CA is in its boot', a
 test('it points an imp in another slot at that slot’s gateway', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.create({ name: 'dev-2' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
@@ -593,6 +604,7 @@ test('it points an imp in another slot at that slot’s gateway', async () => {
 test('it installs the CA once per boot however many execs ask', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
@@ -614,6 +626,7 @@ test('it installs the CA once per boot however many execs ask', async () => {
 test('it gives a new boot whose install fails no broker variables, and logs why', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
@@ -645,6 +658,7 @@ test('it gives a new boot whose install fails no broker variables, and logs why'
 test('it installs again for the same pid after the imp stops', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
@@ -666,6 +680,9 @@ test('it installs again for the same pid after the imp stops', async () => {
 
 test('it keeps the newest audit rows of each imp', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
   for (let index = 0; index < AUDIT_ROWS_PER_IMP + 5; index += 1) {
@@ -683,6 +700,9 @@ test('it keeps the newest audit rows of each imp', async () => {
 
 test('it keeps the sent rows of an imp whose refused rows pass the cap', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
   await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId: dev.id, path: '/sent' }));
@@ -708,6 +728,9 @@ test('it keeps the sent rows of an imp whose refused rows pass the cap', async (
 
 test('it keeps the newest refused rows of each imp', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
   for (let index = 0; index < AUDIT_ROWS_PER_IMP + 1; index += 1) {
@@ -733,6 +756,9 @@ test('it keeps the newest refused rows of each imp', async () => {
 
 test('it lists only the sent requests in the audit, and only the refused ones as refused', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
   await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impId: dev.id, path: '/sent' }));
@@ -773,6 +799,9 @@ test('it lists only the sent requests in the audit, and only the refused ones as
 
 test('it lists the audit rows of an imp newest first, up to the limit', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
   for (const path of ['/a', '/b', '/c']) {
@@ -786,6 +815,9 @@ test('it lists the audit rows of an imp newest first, up to the limit', async ()
 
 test('it caps an audit listing at 1000 rows whatever the limit asked', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
   const other = await ctx.client.imps.create({ name: 'other' });
 
@@ -802,6 +834,9 @@ test('it caps an audit listing at 1000 rows whatever the limit asked', async () 
 
 test('it lists only the audit rows of imps within the patterns', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
   const other = await ctx.client.imps.create({ name: 'other' });
 
@@ -815,6 +850,9 @@ test('it lists only the audit rows of imps within the patterns', async () => {
 
 test('it keeps the audit rows of a destroyed imp under its name', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
   await writeAuditEntry(
@@ -831,6 +869,9 @@ test('it keeps the audit rows of a destroyed imp under its name', async () => {
 
 test('it reports a fork whose grants cannot be copied, and logs the cause', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
@@ -851,6 +892,9 @@ test('it reports a fork whose grants cannot be copied, and logs the cause', asyn
 
 test('it copies no grant to a fork whose token was removed, and says so', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
   const copy = await ctx.client.imps.create({ name: 'copy' });
 
@@ -879,6 +923,9 @@ test('it copies no grant to a fork whose token was removed, and says so', async 
 
 test('it skips a grant the caller may not make on a fork, and logs why', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
   const copy = await ctx.client.imps.create({ name: 'copy' });
 
@@ -902,6 +949,9 @@ test('it skips a grant the caller may not make on a fork, and logs why', async (
 
 test('it skips a grant that clashes on a fork, and logs why', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
   const dev = await ctx.client.imps.create({ name: 'dev' });
   const copy = await ctx.client.imps.create({ name: 'copy' });
 
@@ -929,6 +979,7 @@ test('it skips a grant that clashes on a fork, and logs why', async () => {
 test('it keeps the old value and makes no new file when a replace clashes', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
 
@@ -977,6 +1028,7 @@ test('it logs a grant change it could not apply rather than throw', async () => 
 test('it logs an audit row it could not write and still answers the request', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
@@ -1039,6 +1091,7 @@ test('it logs an audit row it could not write and still answers the request', as
 test('it refuses a tunnel into the imps’ IPv6 prefix', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
   const prefix = parsePrefix64('fd12:3456:789a:1::/64');
@@ -1071,6 +1124,7 @@ test('it refuses a tunnel into the imps’ IPv6 prefix', async () => {
 test('it dials a public IPv6 address when impd has IPv6', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
   const prefix = parsePrefix64('fd12:3456:789a:1::/64');
@@ -1117,6 +1171,7 @@ test('it dials a public IPv6 address when impd has IPv6', async () => {
 test('it refuses every IPv6 tunnel when impd has no IPv6', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
   const broker = await createBroker({

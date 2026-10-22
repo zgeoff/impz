@@ -3,10 +3,8 @@ import { createImpClient } from '@impz/client';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { listApiCalls } from '../../src/platform/db/api-audit';
-import { createImage } from '../../src/platform/db/images';
 import { readImpByName } from '../../src/platform/db/imps';
-import { buildImagePaths, buildImpPaths } from '../../src/vm/storage/data-layout';
-import { buildMockNewImage } from '../imps/build-mock-new-image';
+import { buildImpPaths } from '../../src/vm/storage/data-layout';
 import { buildQueryGate } from '../platform/build-query-gate';
 import { startTestImpd } from '../start-test-impd';
 import { TEST_TOKEN } from '../test-token';
@@ -23,13 +21,6 @@ async function setupTest() {
   onTestFinished(() => stack.disposeAsync());
 
   const harness = await startTestImpd(stack, { wrapDatabase: gate.wrap });
-
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  // the image every imps.create boots when it names none
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
 
   // assigned, not spread: a spread reads the harness's parts once
   return Object.assign(harness, {
@@ -67,6 +58,7 @@ test('#tryExecSocket starts dev when no name is given', async () => {
 test('#tryExecSocket opens /exec with the query', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   const issued = await ctx.client.exec.ticket({ name: 'dev' });
@@ -87,6 +79,7 @@ test('#tryExecSocket returns rejected when the upgrade is refused', async () => 
 test('#tryExecSocket returns closed when the server closes without a message', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   const made = await ctx.client.tokens.create({ name: 'agent', scope: 'exec', imps: ['dev'] });
@@ -120,6 +113,7 @@ test('#tryTunnelSocket sends an open for the name and returns the first message'
 test('#tryTunnelSocket opens the tunnel on port 5432', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   await tryTunnelSocket(ctx.port, '', { authorization: `Bearer ${TEST_TOKEN}` }, 'dev');
@@ -151,6 +145,7 @@ test('#tryTunnelSocket returns rejected when the upgrade is refused', async () =
 test('#tryTunnelSocket returns closed when the server closes without a message', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   const made = await ctx.client.tokens.create({ name: 'agent', scope: 'exec', imps: ['dev'] });
@@ -170,6 +165,8 @@ test('#tryTunnelSocket returns closed when the server closes without a message',
 
 test('#tryExecSocket starts true without a terminal', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   const guest = buildStubExecGuest();
 

@@ -4,24 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PROXY_LABEL } from '../../src/imps/docker-proxy/proxy';
 
-function setupTest() {
-  const server = Bun.serve({
-    port: 0,
-    hostname: '127.0.0.1',
-    routes: {
-      '/*': async (request: Request) => {
-        await request.text();
-
-        return new Response(`answered ${new URL(request.url).pathname}`);
-      },
-    },
-  });
-
-  onTestFinished(() => server.stop(true));
-
-  return { origin: `http://127.0.0.1:${String(server.port)}` };
-}
-
 test('it prints the outcome of imp-docker-proxy’s pull and export as JSON lines', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'idle-limited-engine-'));
 
@@ -86,13 +68,25 @@ test('it prints the outcome of imp-docker-proxy’s pull and export as JSON line
 test.each(['long-request', 'wake-proxy'])(
   'it prints each outcome as a JSON line through %s',
   async (via) => {
-    const ctx = setupTest();
+    const origin = Bun.serve({
+      port: 0,
+      hostname: '127.0.0.1',
+      routes: {
+        '/*': async (request: Request) => {
+          await request.text();
+
+          return new Response(`answered ${new URL(request.url).pathname}`);
+        },
+      },
+    });
+
+    onTestFinished(() => origin.stop(true));
 
     const child = Bun.spawn(
       [
         process.execPath,
         join(import.meta.dir, 'run-idle-limited-requests.ts'),
-        JSON.stringify({ origin: ctx.origin, via }),
+        JSON.stringify({ origin: `http://127.0.0.1:${String(origin.port)}`, via }),
       ],
       { stdout: 'pipe', stderr: 'inherit' },
     );
