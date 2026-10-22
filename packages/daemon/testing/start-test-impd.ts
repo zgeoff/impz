@@ -35,6 +35,7 @@ import { readThreadIds } from '../src/vm/vmm/vm-stats';
 import { readNoTailscale } from './network/read-no-tailscale';
 import { buildStubTickerTimer } from './platform/build-stub-ticker-timer';
 import { claimFreePorts } from './platform/claim-free-ports';
+import { pickImpdPort } from './platform/pick-impd-port';
 import { TEST_TOKEN } from './test-token';
 import { buildStubVmm } from './vm/build-stub-vmm';
 
@@ -113,9 +114,8 @@ export async function startTestImpd(
     options.onLog?.('test harness: database closed');
   });
 
-  // below the imps' port range, where the config refuses impd's own ports
   const ports = claimFreePorts(3, {
-    pick: () => 10_000 + Math.floor(Math.random() * 10_000),
+    pick: () => pickImpdPort(Math.random()),
     onRelease: stack.defer.bind(stack),
   });
 

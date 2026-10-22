@@ -88,9 +88,12 @@ export { ImageBuildRunSchema, ImageBuildSourceSchema } from './schemas/image-bui
 export type { ImageBuildRun, ImageBuildSource } from './schemas/image-build-run-schema';
 export { ImageSchema, ImageSourceSchema } from './schemas/image-schema';
 export type { Image, ImageSource } from './schemas/image-schema';
-export { CheckpointCreateInputSchema, impContract } from './contract/imp-contract';
-export { ImpCreateInputSchema } from './schemas/imp-create-input-schema';
+export { CheckpointCreateInputSchema, callerContract } from './contract/caller-contract';
+export type { CallerContract } from './contract/caller-contract';
+export { impContract } from './contract/imp-contract';
 export type { ImpContract } from './contract/imp-contract';
+export { sessionContract } from './contract/session-contract';
+export { ImpCreateInputSchema } from './schemas/imp-create-input-schema';
 export { IMP_ERRORS } from './contract/imp-errors';
 export type { ForbiddenReason } from './contract/imp-errors';
 export { isImpAllowed } from './rules/is-imp-allowed';

@@ -234,7 +234,11 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   };
 
   const readStatusOf = async (imp: ImpRecord): Promise<MoveStatus> => {
-    const task = tasks.get(imp.id);
+    // A failed send sets its error and leaves the map in one tick, after the abort
+    // wrote the row's; a copy taken after the await could show the task's error
+    // while a later read shows the row's.
+    const running = tasks.get(imp.id);
+    const task = running === undefined ? undefined : { ...running };
 
     const row = await readMoveSend(deps.db, imp.id);
 

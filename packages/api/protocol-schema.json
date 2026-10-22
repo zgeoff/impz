@@ -13749,6 +13749,34 @@
         "additionalProperties": false
       },
       "stream": false
+    },
+    "auth.login": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "output": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "stream": false
+    },
+    "auth.logout": {
+      "input": {},
+      "output": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "stream": false
     }
   },
   "messages": {

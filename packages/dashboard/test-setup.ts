@@ -13,7 +13,7 @@ globalThis.happyDOM.setURL(`${IMPD_ORIGIN}/ui/`);
 // impd's same-origin check reads the Sec-Fetch-Site header a browser sends;
 // the stand-in wraps MSW's fetch, so MSW sees the header
 beforeAll(() => {
-  globalThis.fetch = buildStubBrowserFetch(globalThis.fetch, `${IMPD_ORIGIN}/ui/`);
+  globalThis.fetch = buildStubBrowserFetch(globalThis.fetch, IMPD_ORIGIN);
 });
 
 afterEach(() => {

@@ -21,7 +21,7 @@ export function AppLayout() {
 
   // the next person at this browser must not see the last one's imps
   const logout = useMutation({
-    mutationFn: sendLogout,
+    mutationFn: () => sendLogout(impd.client),
     onSuccess: async () => {
       await navigate({ to: '/login' });
 

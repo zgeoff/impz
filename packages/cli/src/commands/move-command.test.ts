@@ -408,7 +408,7 @@ test('it points at --abort when the network to the target is down', async () => 
     }),
   ).rejects.toThrowWithMessage(
     Error,
-    'dev: the move failed: Failed to fetch; the imp stays marked here: run impz move dev b --abort once b answers',
+    'dev: the move failed: the target did not confirm the abort (Failed to fetch); run impz move dev <host> --abort; the imp stays marked here: run impz move dev b --abort once b answers',
   );
 });
 

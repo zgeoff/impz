@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { impContract } from '@impz/api';
+import { callerContract } from '@impz/api';
 import { traverseContractProcedures } from '@orpc/server';
 import * as z from 'zod';
 import { findAccess } from './access-policy';
@@ -34,7 +34,7 @@ test('it reports the imp of every call that changes an imp it names', () => {
 
   const procedures: { readonly procedure: string; readonly schema: unknown }[] = [];
 
-  traverseContractProcedures({ router: impContract, path: [] }, (found) => {
+  traverseContractProcedures({ router: callerContract, path: [] }, (found) => {
     procedures.push({
       procedure: found.path.join('.'),
       schema: found.contract['~orpc'].inputSchema,

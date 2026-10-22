@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { impContract } from '@impz/api';
+import { callerContract } from '@impz/api';
 import { traverseContractProcedures } from '@orpc/server';
 import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
 import {
@@ -13,10 +13,10 @@ import {
   isRefusalAudited,
 } from './access-policy';
 
-test('#PROCEDURE_ACCESS has a rule for every procedure in the contract, and no stale rule', () => {
+test('#PROCEDURE_ACCESS has a rule for every procedure a caller reaches, and no stale rule', () => {
   const paths: string[] = [];
 
-  traverseContractProcedures({ router: impContract, path: [] }, (procedure) => {
+  traverseContractProcedures({ router: callerContract, path: [] }, (procedure) => {
     paths.push(procedure.path.join('.'));
   });
 

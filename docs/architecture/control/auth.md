@@ -58,6 +58,10 @@ can set it. Its value names the token and an expiry, signed with a key derived f
 so it survives an impd restart, a new root token ends every session, and impd checks on each request
 that the token still exists.
 
+The login and the logout are the contract's two procedures that need no caller. impd answers them
+before it looks for one, and both refuse a request that does not come from the dashboard's own
+origin. A logout clears both cookie names and ends the dashboard's open event streams.
+
 SameSite alone is not enough here. Imps serve pages on other ports of impd's own host, and a browser
 counts those as the same site, so an imp's page could call the API with the owner's session. So the
 API takes the cookie only from the dashboard's own origin, by `Sec-Fetch-Site` or else by an

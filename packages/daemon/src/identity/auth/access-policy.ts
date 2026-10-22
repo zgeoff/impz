@@ -1,5 +1,5 @@
 import { hasScope, isImpAllowed } from '@impz/api';
-import type { ForbiddenReason, ImpContract, Scope } from '@impz/api';
+import type { CallerContract, ForbiddenReason, Scope } from '@impz/api';
 import type { ForkAuthority } from '../../platform/db/create-fork-grants';
 import type { GrantAuthority } from '../../platform/db/secrets';
 import { formatCaller } from './caller';
@@ -58,7 +58,7 @@ type ProcedurePath<T, Prefix extends string = ''> = {
     : ProcedurePath<T[K], `${Prefix}${K}.`>;
 }[keyof T & string];
 
-export type ImpProcedurePath = ProcedurePath<ImpContract>;
+export type ImpProcedurePath = ProcedurePath<CallerContract>;
 
 const IMP = ['name'] as const;
 const readAny: Access = { scope: 'read', on: 'any' };

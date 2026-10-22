@@ -126,24 +126,28 @@ test('it serves the authorization server metadata, with public clients only and 
   ).toStrictEqual([]);
 });
 
-test.each([['/rpc/system/info'], ['/health'], ['/auth/login'], ['/exec'], ['/'], ['/index.html']])(
-  'it answers the private path %s with the same 404, even with the root token',
-  async (path) => {
-    const ctx = await setupTest();
+test.each([
+  ['/rpc/system/info'],
+  ['/health'],
+  ['/rpc/auth/login'],
+  ['/exec'],
+  ['/'],
+  ['/index.html'],
+])('it answers the private path %s with the same 404, even with the root token', async (path) => {
+  const ctx = await setupTest();
 
-    const response = await ctx.handle(
-      new Request(`http://127.0.0.1:7171${path}`, {
-        headers: { host: '127.0.0.1:7171', authorization: `Bearer ${ctx.rootToken}` },
-      }),
-      null,
-    );
+  const response = await ctx.handle(
+    new Request(`http://127.0.0.1:7171${path}`, {
+      headers: { host: '127.0.0.1:7171', authorization: `Bearer ${ctx.rootToken}` },
+    }),
+    null,
+  );
 
-    expect({ status: response.status, body: await response.text() }).toStrictEqual({
-      status: 404,
-      body: 'not found',
-    });
-  },
-);
+  expect({ status: response.status, body: await response.text() }).toStrictEqual({
+    status: 404,
+    body: 'not found',
+  });
+});
 
 test.each([['evil.example'], ['127.0.0.1:7070'], ['localhost:7171']])(
   'it answers the host %s, which the front did not route here, with a 404',

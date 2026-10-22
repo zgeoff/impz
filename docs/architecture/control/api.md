@@ -4,8 +4,8 @@ impd's API is one typed contract, `packages/api`, which the daemon implements an
 calls: the `impz` CLI, the `@impz/client` library on npm, the MCP server and the dashboard. Elysia
 serves the HTTP app, and oRPC serves the contract's procedures under `/rpc`. A few routes sit beside
 it, because they need a shape a procedure call does not have: two-way streams, an upload, the
-dashboard's files, the MCP endpoint, the login, and the routes a move's two hosts speak.
-[Auth](./auth.md) covers who may call what.
+dashboard's files, the MCP endpoint, and the routes a move's two hosts speak. [Auth](./auth.md)
+covers who may call what.
 
 The contract package splits by role: the contract itself, the schemas its procedures are built from,
 the wire protocols of the routes beside it, and the rules that impd and its clients both apply, such
