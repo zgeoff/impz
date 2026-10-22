@@ -5,12 +5,8 @@ import { join } from 'node:path';
 import { CLIENT_VERSION, createImpClient } from '@impz/client';
 import { makeStubImpdWithNewReason } from '@impz/client/test-utils/make-stub-impd-with-new-reason';
 import { startStubDockerEngine } from '@impz/client/test-utils/start-stub-docker-engine';
-import {
-  DOCKERFILE_FRONTEND,
-  claimFreePorts,
-  createStubDockerCli,
-  startTestImpd,
-} from '@impz/daemon/testing';
+import { DOCKERFILE_FRONTEND, createStubDockerCli, startTestImpd } from '@impz/daemon/testing';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { server } from '@impz/test-utils/mock-server';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';

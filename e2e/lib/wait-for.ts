@@ -1,37 +1,12 @@
-export interface WaitForOptions {
-  readonly intervalMs?: number;
+import { waitFor as waitForAttempt } from '@impz/test-utils/wait-for';
+import type { WaitForOptions } from '@impz/test-utils/wait-for';
 
-  readonly timeoutMs?: number;
-
-  readonly now?: () => number;
-
-  readonly wait?: (durationMs: number) => Promise<void>;
-}
-
-export async function waitFor<T>(
+// A guest boots and a dev instance restarts in seconds, not the unit tests' milliseconds, so a
+// journey polls slower and longer, and names what it waited for when it gives up.
+export function waitFor<T>(
   what: string,
   attempt: () => Promise<T> | T,
-  options: Readonly<WaitForOptions> = {},
+  options: Readonly<Omit<WaitForOptions, 'label'>> = {},
 ): Promise<T> {
-  const intervalMs = options.intervalMs ?? 500;
-  const timeoutMs = options.timeoutMs ?? 60_000;
-  const now = options.now ?? Date.now;
-  const wait = options.wait ?? Bun.sleep;
-  const deadline = now() + timeoutMs;
-
-  for (;;) {
-    try {
-      return await attempt();
-    } catch (error) {
-      if (now() >= deadline) {
-        const reason = error instanceof Error ? error.message : String(error);
-
-        throw new Error(`timed out after ${String(timeoutMs)} ms waiting for ${what}: ${reason}`, {
-          cause: error,
-        });
-      }
-    }
-
-    await wait(intervalMs);
-  }
+  return waitForAttempt(attempt, { intervalMs: 500, timeoutMs: 60_000, ...options, label: what });
 }

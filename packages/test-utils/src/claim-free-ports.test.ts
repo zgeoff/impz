@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { claimFreePorts } from './claim-free-ports';
+import { waitFor } from './wait-for';
 
 test('it hands out distinct ports', () => {
   const free = claimFreePorts(5);
