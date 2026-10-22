@@ -319,7 +319,7 @@
     "@zgeoff/bun-test-react": "0.2.1",
     "@zgeoff/format-codemod": "0.3.1",
     "@zgeoff/oxlint-config": "0.5.2",
-    "@zgeoff/skill-gate": "0.2.5",
+    "@zgeoff/skill-gate": "0.2.6",
     "acme-client": "5.4.0",
     "better-auth": "1.7.7",
     "dns-packet": "5.6.1",
@@ -1191,7 +1191,7 @@
 
     "@zgeoff/oxlint-config": ["@zgeoff/oxlint-config@0.5.2", "", { "dependencies": { "@stylistic/eslint-plugin": "5.10.0" }, "peerDependencies": { "oxlint": ">=1.78.0" } }, "sha512-cUW6nPI6b2+iDBiRnqJb0edKpZ7nBlNpKNV3UpwRtuthkTNQkecsBEC9nH3rwM7S1nUUAFoV2wkiHJZwoBUHSw=="],
 
-    "@zgeoff/skill-gate": ["@zgeoff/skill-gate@0.2.5", "", {}, "sha512-bmc3z/J5moMVyBO0yHb16NSrR8dp8hb/0m8mXfh/9k5k0oRZKNJ/gClixwbz8cH5RO8qjrMyGUsifwMvDfFMVg=="],
+    "@zgeoff/skill-gate": ["@zgeoff/skill-gate@0.2.6", "", {}, "sha512-9ccggI/DFRZaSO1LBM4kOB1vk1AoutU65x79tBk7j15f+bNxCNxyMG+JPIVtpVHDx7EPlJiMrCX5NuMJBG+6SQ=="],
 
     "acme-client": ["acme-client@5.4.0", "", { "dependencies": { "@peculiar/x509": "^1.11.0", "asn1js": "^3.0.5", "axios": "^1.7.2", "debug": "^4.3.5", "node-forge": "^1.3.1" } }, "sha512-mORqg60S8iML6XSmVjqjGHJkINrCGLMj2QvDmFzI9vIlv1RGlyjmw3nrzaINJjkNsYXC41XhhD5pfy7CtuGcbA=="],
 
