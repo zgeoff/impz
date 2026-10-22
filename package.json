@@ -115,7 +115,7 @@
     "test:related": "bun scripts/ci/run-branch-tests.ts"
   },
   "devDependencies": {
-    "@bufbuild/buf": "1.73.0",
+    "@bufbuild/buf": "1.74.0",
     "@bufbuild/protobuf": "catalog:",
     "@bufbuild/protoc-gen-es": "2.16.0",
     "@commitlint/cli": "catalog:",
