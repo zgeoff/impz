@@ -653,6 +653,8 @@ jobs:
       IMP_HOST_IMAGE_READY: 1
       IMP_ZFS_E2E_SUITES: ${{ matrix.suites }}
       IMP_ZFS_TEST_UNIT: 0
+      # each shard has its runner to itself
+      E2E_OWNS_ZFS_HOST: 1
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
