@@ -18,6 +18,7 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/cgroup"
 	"github.com/zgeoff/impz/agent/internal/host/disk"
 	"github.com/zgeoff/impz/agent/internal/host/sysutil"
+	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
 const (
@@ -63,6 +64,18 @@ func setupAgentWorld() error {
 		return err
 	}
 	return nil
+}
+
+// parkTemplate caches the agent binary, then parks a boot template with
+// park until its claim.
+func parkTemplate(agentBinary string, park func() (*proto.Claim, error)) (*proto.Claim, error) {
+	// The code the agent and the inner init first run after a claim would
+	// page in from the squashfs system drive, one block at a time behind its
+	// one decompressor; cached here, the snapshot holds it.
+	if err := cacheFile(agentBinary); err != nil {
+		log.Printf("boot: cache %s: %v", agentBinary, err)
+	}
+	return park()
 }
 
 // cacheFile reads the file at path through once, which leaves its pages in

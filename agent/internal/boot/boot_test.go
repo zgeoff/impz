@@ -9,41 +9,74 @@ import (
 	"golang.org/x/sys/unix"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
+
+	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-func TestCacheFileLeavesEveryPageOfTheFileInThePageCache(t *testing.T) {
-	// tmpfs keeps every page resident, so the file lives on a disk
+// uncachedFile writes a file of pages pages on a disk and drops it from the
+// page cache. tmpfs keeps every page resident, so the file lives in /var/tmp.
+func uncachedFile(t *testing.T, pages int) string {
+	t.Helper()
 	dir, err := os.MkdirTemp("/var/tmp", "imp-cache-")
 	assert.NilError(t, err)
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	path := filepath.Join(dir, "agent")
-	assert.NilError(t, os.WriteFile(path, make([]byte, 64*os.Getpagesize()), 0o644))
+	path := filepath.Join(dir, "imp-agent")
+	assert.NilError(t, os.WriteFile(path, make([]byte, pages*os.Getpagesize()), 0o644))
 	f, err := os.Open(path)
 	assert.NilError(t, err)
 	defer f.Close()
 	assert.NilError(t, f.Sync())
 	assert.NilError(t, unix.Fadvise(int(f.Fd()), 0, 0, unix.FADV_DONTNEED))
+	return path
+}
 
-	err = cacheFile(path)
-
+// uncachedPages counts the pages of the file at path that are not in the
+// page cache.
+func uncachedPages(t *testing.T, path string, pages int) int {
+	t.Helper()
+	f, err := os.Open(path)
 	assert.NilError(t, err)
-	mapped, err := unix.Mmap(int(f.Fd()), 0, 64*os.Getpagesize(), unix.PROT_READ, unix.MAP_SHARED)
+	defer f.Close()
+	mapped, err := unix.Mmap(int(f.Fd()), 0, pages*os.Getpagesize(), unix.PROT_READ, unix.MAP_SHARED)
 	assert.NilError(t, err)
 	defer unix.Munmap(mapped)
-	resident := make([]byte, 64)
+	resident := make([]byte, pages)
 	_, _, errno := unix.Syscall(unix.SYS_MINCORE, uintptr(unsafe.Pointer(&mapped[0])), uintptr(len(mapped)), uintptr(unsafe.Pointer(&resident[0])))
-	assert.Check(t, errno == 0, "mincore: %v", errno)
+	assert.Assert(t, errno == 0, "mincore: %v", errno)
 	missing := 0
 	for _, page := range resident {
 		if page&1 == 0 {
 			missing++
 		}
 	}
-	assert.Check(t, cmp.Equal(missing, 0))
+	return missing
 }
 
-func TestCacheFileReportsAFileThatIsMissing(t *testing.T) {
-	err := cacheFile(filepath.Join(t.TempDir(), "gone"))
+func TestParkTemplateCachesTheAgentBinaryBeforeItParks(t *testing.T) {
+	agentBinary := uncachedFile(t, 64)
+	before := uncachedPages(t, agentBinary, 64)
+	atPark := -1
+	want := &proto.Claim{UnixMs: 1_700_000_000_000}
 
-	assert.Check(t, os.IsNotExist(err))
+	got, err := parkTemplate(agentBinary, func() (*proto.Claim, error) {
+		atPark = uncachedPages(t, agentBinary, 64)
+		return want, nil
+	})
+
+	assert.NilError(t, err)
+	assert.Check(t, got == want)
+	assert.Check(t, cmp.Equal(before, 64), "the file was cached before the park")
+	assert.Check(t, cmp.Equal(atPark, 0))
+}
+
+func TestParkTemplateParksWhenTheAgentBinaryIsMissing(t *testing.T) {
+	parked := false
+
+	_, err := parkTemplate(filepath.Join(t.TempDir(), "gone"), func() (*proto.Claim, error) {
+		parked = true
+		return &proto.Claim{}, nil
+	})
+
+	assert.NilError(t, err)
+	assert.Check(t, parked)
 }

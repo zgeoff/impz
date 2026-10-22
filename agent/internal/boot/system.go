@@ -67,15 +67,11 @@ func Run() error {
 	// cmdline
 	claimed := params.Template
 	if params.Template {
-		// The code the agent and the inner init first run after a claim
-		// would page in from the squashfs system drive, one block at a time
-		// behind its one decompressor; cached here, the snapshot holds it.
-		if err := cacheFile(inner.AgentBinary); err != nil {
-			log.Printf("boot: cache %s: %v", inner.AgentBinary, err)
-		}
-		c, err := claim.Park(listenVsock, buildPing, func(c *proto.Claim) error {
-			steps.restart()
-			return claim.Apply(c, inner.UserDisk)
+		c, err := parkTemplate(inner.AgentBinary, func() (*proto.Claim, error) {
+			return claim.Park(listenVsock, buildPing, func(c *proto.Claim) error {
+				steps.restart()
+				return claim.Apply(c, inner.UserDisk)
+			})
 		})
 		if err != nil {
 			return err
