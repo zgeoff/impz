@@ -10,11 +10,7 @@ async function setupTest() {
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
-  const repoRoot = join(root, 'repo');
-
-  await mkdir(join(repoRoot, '.data'), { recursive: true });
-
-  return { root, repoRoot };
+  return { root, repoRoot: join(root, 'repo') };
 }
 
 test('it gives nothing to wipe for a data dir that does not exist', async () => {
@@ -36,7 +32,7 @@ test('it wipes a data dir under the repo’s .data', async () => {
 
   const directory = join(ctx.repoRoot, '.data', 'dev');
 
-  await mkdir(directory);
+  await mkdir(directory, { recursive: true });
 
   const target = await resolveWipeTarget({
     path: directory,

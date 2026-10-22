@@ -23,14 +23,9 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  // The script reads the loaded module's version before it does anything else.
-  const moduleVersion = join(directory, 'zfs-version');
-
-  writeFileSync(moduleVersion, '2.3.4-1\n');
-
   return {
     directoryPath: directory,
-    moduleVersion,
+    moduleVersion: join(directory, 'zfs-version'),
     stubs: join(directory, 'stubs'),
     script: new URL('test-zfs.sh', import.meta.url).pathname,
   };
@@ -38,6 +33,9 @@ function setupTest() {
 
 test('it creates the pool, runs the tests on it, then releases all it made', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
@@ -93,6 +91,9 @@ test('it creates the pool, runs the tests on it, then releases all it made', () 
 
 test('it removes a work dir it created itself', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
   const zpool = createStubZpool(ctx.stubs);
 
@@ -117,6 +118,9 @@ test('it removes a work dir it created itself', () => {
 
 test('it refuses a pool name that is taken and touches nothing', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
@@ -153,6 +157,9 @@ test('it refuses a pool name that is taken and touches nothing', () => {
 
 test('it refuses a work dir that already holds a pool.img and leaves the file as it was', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
@@ -190,6 +197,9 @@ test('it refuses a work dir that already holds a pool.img and leaves the file as
 
 test('it refuses a work dir that already holds a mnt and leaves it in place', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(join(work, 'mnt'), { recursive: true });
@@ -227,6 +237,9 @@ test('it refuses a work dir that already holds a mnt and leaves it in place', ()
 
 test('it destroys the pool it created and removes its file when the dataset cannot be made', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
@@ -273,6 +286,9 @@ test('it destroys the pool it created and removes its file when the dataset cann
 
 test('it never destroys a pool when its own create fails', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
@@ -316,6 +332,9 @@ test('it never destroys a pool when its own create fails', () => {
 
 test('it keeps the pool file and says so when the pool will not go', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
@@ -348,6 +367,9 @@ test('it keeps the pool file and says so when the pool will not go', () => {
 
 test('it refuses a pool.img that is a symlink and leaves the link and its target as they were', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
   const target = join(ctx.directoryPath, 'another-pool.img');
 
@@ -385,6 +407,9 @@ test('it refuses a pool.img that is a symlink and leaves the link and its target
 
 test('it stops the test run and releases all it made when it gets SIGTERM', async () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
   const started = join(ctx.directoryPath, 'tests-started');
 
@@ -439,6 +464,9 @@ test('it stops the test run and releases all it made when it gets SIGTERM', asyn
 
 test('it destroys the pool and removes its file when SIGTERM comes during the pool create', async () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
   const startedMarker = join(ctx.directoryPath, 'create-started');
   const release = join(ctx.directoryPath, 'create-release');
@@ -497,6 +525,9 @@ test('it destroys the pool and removes its file when SIGTERM comes during the po
 
 test('it keeps the pool file and fails while a pool still uses it', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
@@ -525,6 +556,9 @@ test('it keeps the pool file and fails while a pool still uses it', () => {
 
 test('it removes its pool file while another pool uses a vdev path that only starts with it', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
@@ -558,6 +592,9 @@ test('it removes its pool file while another pool uses a vdev path that only sta
 
 test('it keeps the pool file and fails while another pool uses a vdev path equal to it', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
@@ -588,6 +625,9 @@ test('it keeps the pool file and fails while another pool uses a vdev path equal
 
 test('it makes a work dir that does not exist yet, parents included', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'not', 'yet', 'work');
   const zpool = createStubZpool(ctx.stubs);
 
@@ -613,6 +653,9 @@ test('it makes a work dir that does not exist yet, parents included', () => {
 
 test('it destroys its pool and removes the file when the work dir path holds spaces', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work dir');
 
   mkdirSync(work);
@@ -641,6 +684,9 @@ test('it destroys its pool and removes the file when the work dir path holds spa
 
 test('it destroys its pool and removes the file when the work dir path holds a state word', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work  ONLINE dir');
 
   mkdirSync(work);
@@ -669,6 +715,9 @@ test('it destroys its pool and removes the file when the work dir path holds a s
 
 test('it keeps the pool file and fails when zpool cannot say what uses it', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
@@ -753,6 +802,9 @@ test('it refuses to run when the zfs module is not loaded and touches nothing', 
 
 test('it refuses to run when zpool is missing and touches nothing', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+
   const work = join(ctx.directoryPath, 'work');
   const id = createStubBin(ctx.stubs, 'id', 'echo 0');
 

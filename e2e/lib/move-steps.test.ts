@@ -4,12 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
-import {
-  buildImagePaths,
-  buildMockNewImage,
-  createImage,
-  startTestImpd,
-} from '@impz/daemon/testing';
+import { createUbuntuImage, startTestImpd } from '@impz/daemon/testing';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
 import { createInstance } from './instance';
@@ -45,16 +40,7 @@ async function setupTest() {
     fetch: sendClientRequest,
   });
 
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(dataDir, image.digest).rootfs, 'rootfs');
-
-  // A move's plan counts the image's config beside its rootfs.
-  await Bun.write(buildImagePaths(dataDir, image.digest).config, '{}');
-
-  await createImage(harness.db, image);
-
-  return { directoryPath: directory, client, rootToken, apiUrl: harness.url };
+  return { directoryPath: directory, client, rootToken, apiUrl: harness.url, harness };
 }
 
 test('#buildUpstreamsPath names the upstreams file in the host’s data dir', () => {
@@ -130,6 +116,8 @@ test('#parseNftSetAddresses reads a set without elements as none', () => {
 
 test('#startMoveSend marks the imp sending on the source host', async () => {
   const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.harness);
 
   // dev.sh's token command reads the host's token through docker exec.
   const docker = createStubBin(ctx.directoryPath, 'docker', `echo ${ctx.rootToken}`);

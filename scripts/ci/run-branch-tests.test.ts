@@ -8,15 +8,14 @@ async function setupTest() {
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  await mkdir(join(directory, 'src'));
-  await mkdir(join(directory, 'packages/dashboard/src'), { recursive: true });
-
   return { directoryPath: directory };
 }
 
 test('it runs a dashboard test from the dashboard package and every other test from the root', async () => {
   const ctx = await setupTest();
 
+  await mkdir(join(ctx.directoryPath, 'src'));
+  await mkdir(join(ctx.directoryPath, 'packages/dashboard/src'), { recursive: true });
   await writeFile(join(ctx.directoryPath, 'package.json'), '{"scripts":{"test":"echo root"}}');
 
   await writeFile(
@@ -53,6 +52,8 @@ test('it runs a dashboard test from the dashboard package and every other test f
 test('it fails and still runs the dashboard tests when the root tests fail', async () => {
   const ctx = await setupTest();
 
+  await mkdir(join(ctx.directoryPath, 'src'));
+  await mkdir(join(ctx.directoryPath, 'packages/dashboard/src'), { recursive: true });
   await writeFile(join(ctx.directoryPath, 'package.json'), '{"scripts":{"test":"exit 1"}}');
 
   await writeFile(
@@ -87,6 +88,7 @@ test('it fails and still runs the dashboard tests when the root tests fail', asy
 test('it fails when only the dashboard tests fail', async () => {
   const ctx = await setupTest();
 
+  await mkdir(join(ctx.directoryPath, 'packages/dashboard/src'), { recursive: true });
   await writeFile(join(ctx.directoryPath, 'package.json'), '{"scripts":{"test":"echo root"}}');
 
   await writeFile(
