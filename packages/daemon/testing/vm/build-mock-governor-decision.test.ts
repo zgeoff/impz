@@ -6,6 +6,7 @@ test('it builds a default governor decision', () => {
   const event = buildMockGovernorDecision();
 
   expect(event).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: expect.toBeValidDate(),
     ev: 'GovernorDecision',
@@ -31,6 +32,7 @@ test('it applies overrides on top of the defaults', () => {
   });
 
   expect(event).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date('2026-10-02T12:00:00Z'),
     ev: 'GovernorDecision',

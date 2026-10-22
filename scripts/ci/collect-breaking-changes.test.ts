@@ -1284,6 +1284,7 @@ test('#collectBreakingChanges reports a changed field of an output variant when 
             {
               type: 'object',
               properties: {
+                // oxlint-disable-next-line id-length -- `v` is the event format's version field
                 v: { type: 'number', const: 1 },
                 ev: { type: 'string', const: 'ImpAdded' },
                 name: { type: 'string' },
@@ -1293,6 +1294,7 @@ test('#collectBreakingChanges reports a changed field of an output variant when 
             {
               type: 'object',
               properties: {
+                // oxlint-disable-next-line id-length -- `v` is the event format's version field
                 v: { type: 'number', const: 1 },
                 ev: { type: 'string', const: 'ImpRemoved' },
               },
@@ -1316,6 +1318,7 @@ test('#collectBreakingChanges reports a changed field of an output variant when 
             {
               type: 'object',
               properties: {
+                // oxlint-disable-next-line id-length -- `v` is the event format's version field
                 v: { type: 'number', const: 2 },
                 ev: { type: 'string', const: 'ImpAdded' },
                 name: { type: 'string' },
@@ -1325,6 +1328,7 @@ test('#collectBreakingChanges reports a changed field of an output variant when 
             {
               type: 'object',
               properties: {
+                // oxlint-disable-next-line id-length -- `v` is the event format's version field
                 v: { type: 'number', const: 2 },
                 ev: { type: 'string', const: 'ImpRemoved' },
               },

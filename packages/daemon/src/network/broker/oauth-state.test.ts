@@ -11,6 +11,7 @@ import {
 
 test('it builds a pending state that holds only the refresh token', () => {
   expect(buildPendingState('fake-refresh-0')).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: 'fake-refresh-0',
     accessToken: null,
@@ -24,6 +25,7 @@ test('it builds a pending state that holds only the refresh token', () => {
 
 test('it reads back a state file it formatted', () => {
   const state = {
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: 'fake-refresh-0',
     accessToken: 'fake-access-0',
@@ -45,6 +47,7 @@ test('it reads a state file of another version as no state file', () => {
   expect(
     parseOAuthState(
       JSON.stringify({
+        // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
         v: 2,
         refreshToken: 'fake-refresh-0',
         accessToken: null,
@@ -62,6 +65,7 @@ test('it reads a state file with an empty refresh token as no state file', () =>
   expect(
     parseOAuthState(
       JSON.stringify({
+        // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
         v: 1,
         refreshToken: '',
         accessToken: null,

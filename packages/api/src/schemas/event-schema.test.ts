@@ -82,6 +82,7 @@ test('#ImpChangeReasonSchema rejects an unknown reason', () => {
 
 test('#ImpEventSchema accepts an imp added as the stream opens', () => {
   const payload = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'ImpAdded',
@@ -111,6 +112,7 @@ test('#ImpEventSchema accepts an imp added as the stream opens', () => {
 
 test('#ImpEventSchema accepts an imp that changed, with its detail', () => {
   const payload = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'ImpChanged',
@@ -141,6 +143,7 @@ test('#ImpEventSchema accepts an imp that changed, with its detail', () => {
 
 test('#ImpEventSchema accepts an imp removed', () => {
   const payload = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'ImpRemoved',
@@ -169,6 +172,7 @@ test('#ImpEventSchema accepts an imp removed', () => {
 
 test('#ImpEventSchema accepts a checkpoint added', () => {
   const payload = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'CheckpointAdded',
@@ -183,6 +187,7 @@ test('#ImpEventSchema accepts a checkpoint added', () => {
 
 test('#ImpEventSchema accepts a checkpoint removed', () => {
   const payload = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'CheckpointRemoved',
@@ -197,6 +202,7 @@ test('#ImpEventSchema accepts a checkpoint removed', () => {
 
 test('#ImpEventSchema accepts a refused boot with what it lacked', () => {
   const payload = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'GovernorDecision',
@@ -217,6 +223,7 @@ test('#ImpEventSchema accepts a refused boot with what it lacked', () => {
 
 test('#ImpEventSchema accepts an agent exec', () => {
   const payload = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'AgentExec',
@@ -234,6 +241,7 @@ test('#ImpEventSchema accepts an agent exec', () => {
 
 test('#ImpEventSchema rejects an event of an unknown kind', () => {
   const result = ImpEventSchema.safeParse({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'ImpMoved',
@@ -249,6 +257,7 @@ test('#ImpEventSchema rejects an event of an unknown kind', () => {
 
 test('#ImpEventSchema rejects an event of another version', () => {
   const result = ImpEventSchema.safeParse({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 2,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'ImpAdded',
@@ -276,6 +285,7 @@ test('#ImpEventSchema rejects an event of another version', () => {
 
 test('#ImpEventSchema rejects an imp added for an unknown reason', () => {
   const result = ImpEventSchema.safeParse({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'ImpAdded',
@@ -303,6 +313,7 @@ test('#ImpEventSchema rejects an imp added for an unknown reason', () => {
 
 test('#ImpEventSchema rejects an imp that changed for an unknown reason', () => {
   const result = ImpEventSchema.safeParse({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'ImpChanged',
@@ -330,6 +341,7 @@ test('#ImpEventSchema rejects an imp that changed for an unknown reason', () => 
 
 test('#ImpEventSchema rejects a governor decision of an unknown kind', () => {
   const result = ImpEventSchema.safeParse({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'GovernorDecision',
@@ -345,6 +357,7 @@ test('#ImpEventSchema rejects a governor decision of an unknown kind', () => {
 
 test('#ImpEventSchema rejects a governor decision with negative used memory', () => {
   const result = ImpEventSchema.safeParse({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'GovernorDecision',
@@ -360,6 +373,7 @@ test('#ImpEventSchema rejects a governor decision with negative used memory', ()
 
 test('#ImpEventSchema rejects a governor decision with no budget', () => {
   const result = ImpEventSchema.safeParse({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'GovernorDecision',
@@ -375,6 +389,7 @@ test('#ImpEventSchema rejects a governor decision with no budget', () => {
 
 test('#ImpEventSchema rejects an agent exec by an unknown actor', () => {
   const result = ImpEventSchema.safeParse({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
     ev: 'AgentExec',

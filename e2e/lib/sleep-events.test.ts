@@ -3,6 +3,7 @@ import { parseSleepSpan } from './sleep-events';
 
 test('it reads a slept event as a sleep from its time less its duration and its prepare', () => {
   const line = JSON.stringify({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: '2026-10-03T00:02:54.584Z',
     ev: 'ImpChanged',
@@ -20,6 +21,7 @@ test('it reads a slept event as a sleep from its time less its duration and its 
 
 test('it counts prepareMs as 0 for a slept event from an impd without it', () => {
   const line = JSON.stringify({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: '2026-10-03T00:02:54.584Z',
     ev: 'ImpChanged',
@@ -32,6 +34,7 @@ test('it counts prepareMs as 0 for a slept event from an impd without it', () =>
 
 test('it marks a sleep by the enforce pass', () => {
   const line = JSON.stringify({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: '2026-10-03T00:02:54.584Z',
     ev: 'ImpChanged',

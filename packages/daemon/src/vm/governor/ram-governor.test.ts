@@ -58,6 +58,7 @@ test('it publishes the sleep it made room with and the admission', async () => {
 
   expect(published).toStrictEqual([
     {
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
       v: 1,
       at: new Date(1_000_000),
       ev: 'GovernorDecision',
@@ -68,6 +69,7 @@ test('it publishes the sleep it made room with and the admission', async () => {
       usedMib: 900,
     },
     {
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
       v: 1,
       at: new Date(1_000_000),
       ev: 'GovernorDecision',
@@ -112,6 +114,7 @@ test('it refuses an admit that sleeping the other idle imps cannot make room for
   expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
 
   expect(published.at(-1)).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date(1_000_000),
     ev: 'GovernorDecision',
@@ -735,6 +738,7 @@ test('it refuses a grow when only busy imps could make room, and publishes why',
 
   expect(published).toStrictEqual([
     {
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
       v: 1,
       at: new Date(1_000_000),
       ev: 'GovernorDecision',

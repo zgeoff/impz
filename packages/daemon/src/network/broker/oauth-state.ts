@@ -3,6 +3,7 @@ import * as z from 'zod';
 const TokenSchema = z.string().min(1).max(16_384);
 
 const StateSchema = z.object({
+  // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
   v: z.literal(1),
   refreshToken: TokenSchema,
   accessToken: TokenSchema.nullable(),
@@ -19,6 +20,7 @@ export type OAuthStateFile = z.infer<typeof StateSchema>;
 
 export function buildPendingState(refreshToken: string): OAuthStateFile {
   return {
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken,
     accessToken: null,

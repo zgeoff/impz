@@ -78,6 +78,7 @@ test('it keeps a log interval for each event type', async () => {
   ctx.isValid(buildMockGovernorDecision({ name: 'Bad' }));
 
   ctx.isValid({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date('2026-10-02T12:00:00Z'),
     ev: 'CheckpointAdded',

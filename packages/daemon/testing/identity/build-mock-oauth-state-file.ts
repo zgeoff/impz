@@ -7,6 +7,7 @@ export function buildMockOAuthStateFile(overrides: Partial<OAuthStateFile> = {})
   const refreshedAt = faker.date.past().getTime();
 
   return {
+    // oxlint-disable-next-line id-length -- `v` is the OAuth state file's version field
     v: 1,
     refreshToken: `fake-refresh-${faker.string.alphanumeric(12)}`,
     accessToken: `fake-access-${faker.string.alphanumeric(12)}`,

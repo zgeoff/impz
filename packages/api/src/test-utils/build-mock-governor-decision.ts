@@ -10,6 +10,7 @@ export function buildMockGovernorDecision(
   const budgetMib = faker.number.int({ min: 1024, max: 65_536 });
 
   return {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: faker.date.past(),
     ev: 'GovernorDecision',
