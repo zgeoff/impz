@@ -26,23 +26,20 @@ async function setupTest(
     ...(config.growFilesystem !== undefined && { growFilesystem: config.growFilesystem }),
   });
 
-  await harness.createTestImage('ubuntu');
-
   const directory = mkdtempSync(join(tmpdir(), 'impd-grow-test-'));
 
   onTestFinished(() => {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  const disk = join(directory, 'disk.ext4');
-
-  writeFileSync(disk, '');
-
-  return Object.assign(harness, { disk });
+  return Object.assign(harness, { directory });
 }
 
 test('it makes a new disk the size asked for', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'sized', diskMib: 2048 });
   const imp = await readImpByName(ctx.db, 'sized');
 
@@ -53,6 +50,9 @@ test('it makes a new disk the size asked for', async () => {
 
 test('it grows the filesystem of a new disk on the host before the first boot', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'sized', diskMib: 2048 });
 
   expect(ctx.filesystemGrows).toStrictEqual([buildImpPaths(ctx.dataDir, created.id).disk]);
@@ -64,6 +64,9 @@ test('it leaves an unclean filesystem of a new disk for its boot to grow, and sa
   disk.setUnclean(true);
 
   const ctx = await setupTest({ growFilesystem: disk.growFilesystem });
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'sized', diskMib: 2048 });
 
   expect(created.state).toBe('running');
@@ -104,6 +107,9 @@ test('it sizes a disk asked for no size to its image filesystem, with no grow', 
 
 test('it grows a stopped disk and its filesystem on the host at a resize', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
 
   await ctx.client.imps.stop({ name: 'dev' });
@@ -124,6 +130,7 @@ test('it grows a stopped disk and its filesystem on the host at a resize', async
 test('it refuses to shrink a disk', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', diskMib: 4096 });
   await ctx.client.imps.stop({ name: 'dev' });
 
@@ -146,6 +153,9 @@ test('it refuses to resize the disk of an imp still being created', async () => 
 
 test('it grows the filesystem of a running guest at once', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
 
   await ctx.client.imps.resizeDisk({ name: 'dev', diskMib: 3072 });
@@ -158,6 +168,9 @@ test('it grows the filesystem of a running guest at once', async () => {
 
 test('it marks the grow pending when a running guest fails to grow', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
 
   ctx.fake.queue('grow', 'fail');
@@ -178,6 +191,9 @@ test('it marks the grow pending when a running guest fails to grow', async () =>
 
 test('it retries a failed guest grow at the next wake', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
 
   ctx.fake.queue('grow', 'fail');
@@ -205,6 +221,7 @@ test('it retries a failed guest grow at the next wake', async () => {
 test('it leaves the grow to the next boot for an agent from before grow', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
 
   ctx.fake.queue('grow', 'die');
@@ -218,6 +235,9 @@ test('it leaves the grow to the next boot for an agent from before grow', async 
 
 test('it marks the grow of a sleeping guest pending, with no grow call', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -233,6 +253,7 @@ test('it marks the grow of a sleeping guest pending, with no grow call', async (
 test('it grows a sleeping guest when it wakes', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
   await ctx.client.imps.sleep({ name: 'dev' });
   await ctx.client.imps.resizeDisk({ name: 'dev', diskMib: 3072 });
@@ -247,6 +268,7 @@ test('it grows a sleeping guest when it wakes', async () => {
 test('it clears a pending grow at a cold boot, with no grow call', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
   await ctx.client.imps.sleep({ name: 'dev' });
   await ctx.client.imps.resizeDisk({ name: 'dev', diskMib: 3072 });
@@ -262,6 +284,7 @@ test('it clears a pending grow at a cold boot, with no grow call', async () => {
 test('it keeps the disk size in a checkpoint', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
 
   const checkpoint = await ctx.client.checkpoints.create({ name: 'dev', label: 'small' });
@@ -272,6 +295,7 @@ test('it keeps the disk size in a checkpoint', async () => {
 test('it gives a fork from a checkpoint the disk size of the checkpoint', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
   await ctx.client.checkpoints.create({ name: 'dev', label: 'small' });
   await ctx.client.imps.resizeDisk({ name: 'dev', diskMib: 5120 });
@@ -284,6 +308,7 @@ test('it gives a fork from a checkpoint the disk size of the checkpoint', async 
 test('it gives a live fork the disk size of its source now', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
   await ctx.client.checkpoints.create({ name: 'dev', label: 'small' });
   await ctx.client.imps.resizeDisk({ name: 'dev', diskMib: 5120 });
@@ -295,6 +320,9 @@ test('it gives a live fork the disk size of its source now', async () => {
 
 test('it gives a restored imp the disk size of the checkpoint', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
 
   await ctx.client.checkpoints.create({ name: 'dev', label: 'small' });
@@ -311,6 +339,7 @@ test('it gives a restored imp the disk size of the checkpoint', async () => {
 test('it refuses a sleep the disk has no room for, and keeps the VM running', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', diskMib: 2048, memoryMib: 1024 });
 
   ctx.diskUsage.usedBytes = 94.5 * 1024 ** 3;
@@ -326,6 +355,8 @@ test('it refuses a sleep the disk has no room for, and keeps the VM running', as
 test('it refuses a create past the disk reserve', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   ctx.diskUsage.usedBytes = 96 * 1024 ** 3;
   ctx.diskUsage.availableBytes = 4 * 1024 ** 3;
 
@@ -335,6 +366,7 @@ test('it refuses a create past the disk reserve', async () => {
 test('it refuses a resize past the disk reserve', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
 
   ctx.diskUsage.usedBytes = 96 * 1024 ** 3;
@@ -348,6 +380,7 @@ test('it refuses a resize past the disk reserve', async () => {
 test('it refuses a checkpoint past the disk reserve', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
 
   ctx.diskUsage.usedBytes = 96 * 1024 ** 3;
@@ -361,6 +394,7 @@ test('it refuses a checkpoint past the disk reserve', async () => {
 test('it wakes a sleeping imp past the disk reserve', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'idle', diskMib: 2048 });
   await ctx.client.imps.sleep({ name: 'idle' });
 
@@ -375,6 +409,7 @@ test('it wakes a sleeping imp past the disk reserve', async () => {
 test('it reports the reserve, the low disk and the imp disks in system info', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
   await ctx.client.imps.create({ name: 'idle', diskMib: 2048 });
 
@@ -393,14 +428,17 @@ test.skipIf(Bun.which('mkfs.ext4') === null || Bun.which('resize2fs') === null)(
   async () => {
     const ctx = await setupTest();
 
-    truncateSync(ctx.disk, 64 * 1024 * 1024);
+    const disk = join(ctx.directory, 'disk.ext4');
 
-    await runChecked(['mkfs.ext4', '-q', '-F', '-b', '4096', ctx.disk]);
+    writeFileSync(disk, '');
+    truncateSync(disk, 64 * 1024 * 1024);
 
-    truncateSync(ctx.disk, 256 * 1024 * 1024);
+    await runChecked(['mkfs.ext4', '-q', '-F', '-b', '4096', disk]);
 
-    const isGrown = await growFilesystem(ctx.disk);
-    const header = await runChecked(['dumpe2fs', '-h', ctx.disk]);
+    truncateSync(disk, 256 * 1024 * 1024);
+
+    const isGrown = await growFilesystem(disk);
+    const header = await runChecked(['dumpe2fs', '-h', disk]);
 
     expect(isGrown).toBeTrue();
     expect(header).toMatch(/^Block count:\s+65536$/mu);
@@ -412,25 +450,28 @@ test.skipIf(Bun.which('mkfs.ext4') === null || Bun.which('resize2fs') === null)(
   async () => {
     const ctx = await setupTest();
 
-    truncateSync(ctx.disk, 64 * 1024 * 1024);
+    const disk = join(ctx.directory, 'disk.ext4');
 
-    await runChecked(['mkfs.ext4', '-q', '-F', '-b', '4096', ctx.disk]);
+    writeFileSync(disk, '');
+    truncateSync(disk, 64 * 1024 * 1024);
 
-    truncateSync(ctx.disk, 256 * 1024 * 1024);
+    await runChecked(['mkfs.ext4', '-q', '-F', '-b', '4096', disk]);
 
-    const allocatedBefore = statSync(ctx.disk).blocks * 512;
+    truncateSync(disk, 256 * 1024 * 1024);
 
-    const isGrown = await growFilesystem(ctx.disk);
+    const allocatedBefore = statSync(disk).blocks * 512;
 
-    const allocatedAfter = statSync(ctx.disk).blocks * 512;
+    const isGrown = await growFilesystem(disk);
 
-    const header = await runChecked(['dumpe2fs', '-h', ctx.disk]);
+    const allocatedAfter = statSync(disk).blocks * 512;
+
+    const header = await runChecked(['dumpe2fs', '-h', disk]);
 
     expect(isGrown).toBeTrue();
     expect(header).toMatch(/^Block count:\s+65536$/mu);
     expect(allocatedAfter - allocatedBefore).toBeLessThan(1024 * 1024);
 
-    await expect(runChecked(['e2fsck', '-fn', ctx.disk])).toResolve();
+    await expect(runChecked(['e2fsck', '-fn', disk])).toResolve();
   },
 );
 
@@ -439,17 +480,20 @@ test.skipIf(Bun.which('mkfs.ext4') === null || Bun.which('resize2fs') === null)(
   async () => {
     const ctx = await setupTest();
 
-    truncateSync(ctx.disk, 64 * 1024 * 1024);
+    const disk = join(ctx.directory, 'disk.ext4');
 
-    await runChecked(['mkfs.ext4', '-q', '-F', '-b', '4096', ctx.disk]);
+    writeFileSync(disk, '');
+    truncateSync(disk, 64 * 1024 * 1024);
+
+    await runChecked(['mkfs.ext4', '-q', '-F', '-b', '4096', disk]);
 
     // A VM killed with its filesystem mounted leaves this state.
-    await runChecked(['debugfs', '-w', '-R', 'ssv state 0', ctx.disk]);
+    await runChecked(['debugfs', '-w', '-R', 'ssv state 0', disk]);
 
-    truncateSync(ctx.disk, 256 * 1024 * 1024);
+    truncateSync(disk, 256 * 1024 * 1024);
 
-    const isGrown = await growFilesystem(ctx.disk);
-    const header = await runChecked(['dumpe2fs', '-h', ctx.disk]);
+    const isGrown = await growFilesystem(disk);
+    const header = await runChecked(['dumpe2fs', '-h', disk]);
 
     expect(isGrown).toBeFalse();
     expect(header).toMatch(/^Block count:\s+16384$/mu);

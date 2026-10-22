@@ -16,7 +16,6 @@ async function setupTest() {
   onTestFinished(() => stack.disposeAsync());
 
   const harness = await startTestImpd(stack, {});
-  const image = await harness.createTestImage('ubuntu');
 
   const context = createImpContext({
     config: harness.config,
@@ -44,12 +43,17 @@ async function setupTest() {
     readNetBytes: () => null,
   });
 
-  return { db: harness.db, image, lock: createImpLock(context) };
+  return {
+    db: harness.db,
+    createTestImage: harness.createTestImage,
+    lock: createImpLock(context),
+  };
 }
 
 test('it moves a creating imp to stopped', async () => {
   const ctx = await setupTest();
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: ctx.image.id }));
+  const image = await ctx.createTestImage('ubuntu');
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
   const stopped = await ctx.lock.withImpId(imp.id, (locked) => {
     invariant(locked);
@@ -62,7 +66,8 @@ test('it moves a creating imp to stopped', async () => {
 
 test('it refuses a move the lifecycle table does not list', async () => {
   const ctx = await setupTest();
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: ctx.image.id }));
+  const image = await ctx.createTestImage('ubuntu');
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
   await updateImpState(ctx.db, imp.id, { reason: 'stopped', state: 'stopped' });
 
@@ -80,7 +85,8 @@ test('it refuses a move the lifecycle table does not list', async () => {
 
 test('it refuses a record kept past the callback that held its lock', async () => {
   const ctx = await setupTest();
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: ctx.image.id }));
+  const image = await ctx.createTestImage('ubuntu');
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
   const kept = await ctx.lock.withImpId(imp.id, (locked) => Promise.resolve(locked));
 
   invariant(kept);
@@ -92,7 +98,8 @@ test('it refuses a record kept past the callback that held its lock', async () =
 
 test("it refuses a record read without the imp's lock", async () => {
   const ctx = await setupTest();
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: ctx.image.id }));
+  const image = await ctx.createTestImage('ubuntu');
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
   // @ts-expect-error a plain record is no LockedImp: the type refuses it too
   const refusal = updateLockedImpState(ctx.db, imp, { reason: 'stopped', state: 'stopped' });

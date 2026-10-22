@@ -15,20 +15,19 @@ import {
 } from '../../vm/sleep/snapshot-meta';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 
-async function setupTest(options: TestImpdOptions = {}) {
+function setupTest(options: TestImpdOptions = {}) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await startTestImpd(stack, options);
-
-  await harness.createTestImage('ubuntu');
-
-  return harness;
+  return startTestImpd(stack, options);
 }
 
 test('it leaves the imp stopped when impd died after a sleep renamed its files, before meta.json', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -63,6 +62,9 @@ test('it leaves the imp stopped when impd died after a sleep renamed its files, 
 
 test('it drops meta.json on a good wake, so a VM that dies later does not count as asleep', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -88,6 +90,9 @@ test('it drops meta.json on a good wake, so a VM that dies later does not count 
 
 test('it resumes a VM a cut sleep left paused, and removes the half-written files', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -119,6 +124,9 @@ test('it resumes a VM a cut sleep left paused, and removes the half-written file
 
 test('it adopts a VM a cut wake left running with its memory', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -139,6 +147,9 @@ test('it adopts a VM a cut wake left running with its memory', async () => {
 
 test('it kills a VM a cut wake left before its load, and keeps the snapshot', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -161,6 +172,9 @@ test('it kills a VM a cut wake left before its load, and keeps the snapshot', as
 
 test('it kills a VM a cut wake left whose agent does not answer, so the imp boots cold', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -184,6 +198,9 @@ test('it kills a VM a cut wake left whose agent does not answer, so the imp boot
 
 test('it kills a VM a cut wake left with another agent than the snapshot recorded', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -207,6 +224,9 @@ test('it kills a VM a cut wake left with another agent than the snapshot recorde
 
 test('it kills a second VM on a running imp socket, and keeps the one on the record', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -228,6 +248,9 @@ test('it kills a second VM on a running imp socket, and keeps the one on the rec
 
 test('it kills a VM only /proc shows after a start cut before its pid file', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -266,6 +289,9 @@ test('it never kills a VM on a socket outside the data dir', async () => {
 
 test('it leaves the imp stopped, never on the old snapshot, after a wake cut during its load with no VM left', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -295,6 +321,9 @@ test('it leaves the imp stopped, never on the old snapshot, after a wake cut dur
 
 test('it adopts the VM of a wake cut during its load that runs on, and drops its record', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -318,6 +347,9 @@ test('it adopts the VM of a wake cut during its load that runs on, and drops its
 
 test('it ignores a VM forged on a sleeping imp socket from another jail, and keeps the snapshot', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const evil = await ctx.client.imps.create({ name: 'evil' });
   const created = await ctx.client.imps.create({ name: 'dev' });
 
@@ -346,6 +378,9 @@ test('it ignores a VM forged on a sleeping imp socket from another jail, and kee
 
 test('it does not kill a VM forged on a running imp socket from another jail as its orphan', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const evil = await ctx.client.imps.create({ name: 'evil' });
   const created = await ctx.client.imps.create({ name: 'dev' });
 
@@ -374,6 +409,9 @@ test('it does not kill a VM forged on a running imp socket from another jail as 
 
 test('it adopts a jailed VM a cut wake left by its own uid', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -395,6 +433,9 @@ test('it adopts a jailed VM a cut wake left by its own uid', async () => {
 
 test('it adopts a jailed VM a cut wake left by its own cgroup', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'box' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -415,6 +456,9 @@ test('it adopts a jailed VM a cut wake left by its own cgroup', async () => {
 
 test('it does not kill a VM forged from another jail on the socket of an imp with no record', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const evil = await ctx.client.imps.create({ name: 'evil' });
   const attacker = await readImpByName(ctx.db, 'evil');
 
@@ -445,6 +489,9 @@ test('it kills a VM in the cgroup of an imp with no record', async () => {
 
 test('it stops an imp whose recycled pid another jail forged, and leaves that process alone', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const evil = await ctx.client.imps.create({ name: 'evil' });
 
   await ctx.client.imps.create({ name: 'dev' });

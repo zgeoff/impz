@@ -36,13 +36,14 @@ async function setupTest(options: TestImpdOptions = {}) {
     ...options,
   });
 
-  await harness.createTestImage('ubuntu');
-
   return Object.assign(harness, { taintPath, bootIdPath, kmsgPath, procRoot });
 }
 
 test('it finds a VM that died after its sleep wrote the snapshot asleep, not stopped', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   writeTestSnapshot(
@@ -60,6 +61,9 @@ test('it finds a VM that died after its sleep wrote the snapshot asleep, not sto
 
 test('it wakes an imp found asleep after its VM died from the snapshot', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   writeTestSnapshot(
@@ -80,6 +84,9 @@ test('it wakes an imp found asleep after its VM died from the snapshot', async (
 
 test('it finds a dead VM with a snapshot from before its last activity stopped', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   writeTestSnapshot(
@@ -98,6 +105,7 @@ test('it finds a dead VM with a snapshot from before its last activity stopped',
 test('it finds a dead VM stopped after a real sleep and wake left the snapshot behind it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'dev' });
   await ctx.imps.sleepImp('dev');
   await ctx.imps.wakeImp('dev');
@@ -113,6 +121,9 @@ test('it finds a VM that its memory limit killed stopped, and says so', async ()
   const stub = buildStubCpuCgroups({ isMemoryEnforced: true });
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   stub.oomKills.set(imp.id, 1);
@@ -126,6 +137,8 @@ test('it finds a VM that its memory limit killed stopped, and says so', async ()
 
 test('it finds a VM lost after a kernel oops stopped, and says so', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   writeFileSync(ctx.taintPath, '0\n');
 
@@ -146,6 +159,8 @@ test('it finds a VM lost after a kernel oops stopped, and says so', async () => 
 
 test('it gives the kernel oops as the trigger of the state change', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   writeFileSync(ctx.taintPath, '0\n');
 
@@ -172,6 +187,8 @@ test('it gives the kernel oops as the trigger of the state change', async () => 
 test('it logs that an imp a kernel oops killed stays off its disk until the host reboots', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   writeFileSync(ctx.taintPath, '0\n');
 
   await ctx.imps.reconcileImps();
@@ -190,6 +207,8 @@ test('it logs that an imp a kernel oops killed stays off its disk until the host
 
 test('it refuses to start an imp a kernel oops killed until the host reboots', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   writeFileSync(ctx.taintPath, '0\n');
 
@@ -212,6 +231,8 @@ test('it refuses to start an imp a kernel oops killed until the host reboots', a
 test('it boots no VM on the disk of an imp a kernel oops killed', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   writeFileSync(ctx.taintPath, '0\n');
 
   await ctx.imps.reconcileImps();
@@ -232,6 +253,8 @@ test('it boots no VM on the disk of an imp a kernel oops killed', async () => {
 
 test('it refuses to wake an imp whose VM a kernel oops killed after its sleep wrote the snapshot', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   writeFileSync(ctx.taintPath, '0\n');
 
@@ -261,6 +284,8 @@ test('it refuses to wake an imp whose VM a kernel oops killed after its sleep wr
 test('it gives no kernel oops trigger to a VM that booted after impd saw the oops', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   writeFileSync(ctx.taintPath, '0\n');
 
   await ctx.imps.reconcileImps();
@@ -283,6 +308,8 @@ test('it gives no kernel oops trigger to a VM that booted after impd saw the oop
 test('it gives no kernel oops trigger to a VM lost while the flag stays as impd found it at start', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   writeFileSync(ctx.taintPath, '128\n');
 
   await ctx.imps.reconcileImps();
@@ -298,6 +325,8 @@ test('it gives no kernel oops trigger to a VM lost while the flag stays as impd 
 
 test('it holds only the imp whose Firecracker owned the thread a kernel oops killed', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   writeFileSync(ctx.taintPath, '0\n');
 
@@ -342,6 +371,8 @@ test('it holds only the imp whose Firecracker owned the thread a kernel oops kil
 test('it starts an imp whose VM died after a kernel oops killed a thread of another VM', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   writeFileSync(ctx.taintPath, '0\n');
 
   await ctx.imps.reconcileImps();
@@ -385,6 +416,8 @@ test('it starts an imp whose VM died after a kernel oops killed a thread of anot
 
 test('it holds every imp lost after a kernel oops killed a thread that no VM owned', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   writeFileSync(ctx.taintPath, '0\n');
 
@@ -436,6 +469,9 @@ test('it logs at start that the host needs a reboot when the kernel has oopsed',
 
 test('it starts an imp a kernel oops killed once the host has rebooted', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -459,6 +495,9 @@ test('it starts an imp a kernel oops killed once the host has rebooted', async (
 
 test('it starts an imp held by an oops of an earlier boot after a new oops in another task', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -484,6 +523,9 @@ test('it starts an imp held by an oops of an earlier boot after a new oops in an
 
 test('it keeps the hold of an imp a kernel oops killed when impd starts with the flag still set', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -505,6 +547,9 @@ test('it keeps the hold of an imp a kernel oops killed when impd starts with the
 
 test('it clears the hold of an imp a kernel oops killed when impd starts with flag D clear', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -530,6 +575,8 @@ test('it clears the hold of an imp a kernel oops killed when impd starts with fl
 test('it records the boot a kernel oops held the disk of an imp in', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
+
   writeFileSync(ctx.taintPath, '0\n');
   writeFileSync(ctx.bootIdPath, '0e7c5a91-3d2b-4f86-b1a4-9c8e7d6f5a43\n');
 
@@ -549,6 +596,9 @@ test('it records the boot a kernel oops held the disk of an imp in', async () =>
 
 test('it clears the hold of an earlier boot when an oops set flag D before impd started', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -575,6 +625,9 @@ test('it clears the hold of an earlier boot when an oops set flag D before impd 
 
 test('it starts an imp held in an earlier boot when an oops set flag D before impd started', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -600,6 +653,9 @@ test('it starts an imp held in an earlier boot when an oops set flag D before im
 
 test('it clears the hold of an earlier boot when impd cannot read the taint flag', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -625,6 +681,9 @@ test('it clears the hold of an earlier boot when impd cannot read the taint flag
 
 test('it keeps the record of a hold of this boot when impd starts again with flag D set', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -650,6 +709,9 @@ test('it keeps the record of a hold of this boot when impd starts again with fla
 
 test('it refuses to start an imp held in this boot until the host reboots', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -673,6 +735,9 @@ test('it refuses to start an imp held in this boot until the host reboots', asyn
 
 test('it keeps the hold of an earlier boot when impd cannot read the boot id', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -697,6 +762,9 @@ test('it keeps the hold of an earlier boot when impd cannot read the boot id', a
 
 test('it keeps the record of a hold when impd starts with flag D set', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -720,6 +788,9 @@ test('it keeps the record of a hold when impd starts with flag D set', async () 
 
 test('it keeps every hold when impd starts without the taint file', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const first = await ctx.imps.createImp({ name: 'dev' });
   const second = await ctx.imps.createImp({ name: 'build' });
 
@@ -751,6 +822,9 @@ test('it keeps every hold when impd starts without the taint file', async () => 
 
 test('it keeps the hold when impd starts with a taint file it cannot read', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');
@@ -775,6 +849,9 @@ test('it keeps the hold when impd starts with a taint file it cannot read', asyn
 
 test('it keeps the hold when impd starts with a malformed taint file', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.stopImp('dev');

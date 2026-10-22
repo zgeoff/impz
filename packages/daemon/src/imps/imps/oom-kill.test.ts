@@ -4,16 +4,12 @@ import type { TestImpdOptions } from '../../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
 import { OOM_KILL_TRIGGER, startOomWatch } from './oom-kill';
 
-async function setupTest(options: TestImpdOptions = {}) {
+function setupTest(options: TestImpdOptions = {}) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await startTestImpd(stack, options);
-
-  await harness.createTestImage('ubuntu');
-
-  return harness;
+  return startTestImpd(stack, options);
 }
 
 test('#startOomWatch sees an OOM kill counted after it started', () => {
@@ -53,6 +49,9 @@ test('#sleepImp says a sleep the memory limit cut short failed for that reason',
   const stub = buildStubCpuCgroups({ isMemoryEnforced: true });
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   stub.oomKills.set(imp.id, 3);
@@ -82,6 +81,9 @@ test('#wakeImp boots cold after a wake the memory limit cut short, and says why'
   const stub = buildStubCpuCgroups({ isMemoryEnforced: true });
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.sleepImp('dev');
@@ -109,6 +111,9 @@ test('#wakeImp does not blame a failed wake on an OOM kill from before it', asyn
   const stub = buildStubCpuCgroups({ isMemoryEnforced: true });
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   await ctx.imps.sleepImp('dev');
@@ -126,6 +131,9 @@ test('#sleepImp does not blame a lost sleep on an OOM kill from before it', asyn
   const stub = buildStubCpuCgroups({ isMemoryEnforced: true });
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
+
+  await ctx.createTestImage('ubuntu');
+
   const imp = await ctx.imps.createImp({ name: 'dev' });
 
   stub.oomKills.set(imp.id, 1);

@@ -16,8 +16,6 @@ async function setupTest() {
     frozenClockMs: Date.UTC(2026, 0, 1),
   });
 
-  await harness.createTestImage('ubuntu');
-
   return harness;
 }
 
@@ -27,6 +25,7 @@ test('it skips a victim whose lock another boot holds instead of waiting for it'
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'a' });
 
   ctx.advance(1000);
@@ -62,6 +61,7 @@ test('it stops sleeping imps for a rejected admit once a sleep fails', async () 
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'a' });
 
   ctx.advance(1000);
@@ -95,6 +95,7 @@ test('it stops sleeping imps for a rejected admit once the lock of a victim is t
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'a' });
 
   ctx.advance(1000);
@@ -150,6 +151,7 @@ test('it picks again past a failed sleep and fits an admit when the rest is enou
 
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.imps.createImp({ name: 'a' });
 
   ctx.advance(1000);

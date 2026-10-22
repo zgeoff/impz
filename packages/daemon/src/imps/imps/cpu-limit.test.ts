@@ -11,24 +11,23 @@ import { probeSnapshot } from '../../vm/sleep/snapshot-meta';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 import { createCpuCgroups } from '../../vm/vmm/cpu-cgroups';
 
-async function setupTest(
+function setupTest(
   options: Pick<TestImpdOptions, 'env' | 'cgroups' | 'hostCpus' | 'frozenClockMs'> = {},
 ) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await startTestImpd(stack, options);
-
-  await harness.createTestImage('ubuntu');
-
-  return harness;
+  return startTestImpd(stack, options);
 }
 
 test('it boots a new imp with the limit and weight it was given', async () => {
   const stub = buildStubCpuCgroups();
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', cpuLimit: 1.5, cpuWeight: 200 });
 
   expect(created.cpu).toStrictEqual({ limit: 1.5, weight: 200 });
@@ -40,6 +39,7 @@ test('it boots a fork with the limit and weight of its source', async () => {
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', cpuLimit: 1.5, cpuWeight: 200 });
 
   const forked = await ctx.client.imps.fork({ source: 'dev', name: 'copy' });
@@ -52,6 +52,9 @@ test('it applies a new limit to a running imp at once', async () => {
   const stub = buildStubCpuCgroups();
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
   const running = await ctx.client.imps.update({ name: 'dev', cpuLimit: 0.5 });
 
@@ -68,6 +71,9 @@ test('it applies new settings to a sleeping imp at its wake', async () => {
   const stub = buildStubCpuCgroups();
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev', cpuLimit: 0.5 });
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -87,6 +93,9 @@ test('it removes the cgroup of an imp that stops', async () => {
   const stub = buildStubCpuCgroups();
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.stop({ name: 'dev' });
@@ -97,6 +106,7 @@ test('it removes the cgroup of an imp that stops', async () => {
 test('it sets the HTTP port and leaves the CPU settings as they were', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev', cpuLimit: 1.5 });
 
   const updated = await ctx.client.imps.update({ name: 'dev', httpPort: 3000 });
@@ -110,6 +120,7 @@ test('it sets the HTTP port and leaves the CPU settings as they were', async () 
 test('it refuses a vCPU count change on a running imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   expect(ctx.client.imps.update({ name: 'dev', vcpus: 4 })).rejects.toMatchObject({
@@ -120,6 +131,7 @@ test('it refuses a vCPU count change on a running imp', async () => {
 test('it changes the vCPU count of a stopped imp', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.stop({ name: 'dev' });
 
@@ -131,6 +143,7 @@ test('it changes the vCPU count of a stopped imp', async () => {
 test('it refuses a limit above the host cores', async () => {
   const ctx = await setupTest({ hostCpus: 4 });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   expect(ctx.client.imps.update({ name: 'dev', cpuLimit: 5 })).rejects.toMatchObject({
@@ -141,6 +154,7 @@ test('it refuses a limit above the host cores', async () => {
 test('it refuses a limit below a tenth of a core', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   expect(ctx.client.imps.update({ name: 'dev', cpuLimit: 0.05 })).rejects.toMatchObject({
@@ -151,6 +165,7 @@ test('it refuses a limit below a tenth of a core', async () => {
 test('it refuses a weight of zero', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   expect(ctx.client.imps.update({ name: 'dev', cpuWeight: 0 })).rejects.toMatchObject({
@@ -161,6 +176,7 @@ test('it refuses a weight of zero', async () => {
 test('it counts a wake and opens an awake span', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.sleep({ name: 'dev' });
   await ctx.client.imps.wake({ name: 'dev' });
@@ -175,6 +191,9 @@ test('it ends the awake span of a VM found dead at its last activity', async () 
   const stub = buildStubCpuCgroups();
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -202,6 +221,7 @@ test('it ends the awake span of a VM found dead at its last activity', async () 
 test('it counts a cold boot for a wake as a wake', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.sleep({ name: 'dev' });
 
@@ -218,6 +238,7 @@ test('it shows RAM but no CPU share from the first sampler pass', async () => {
 
   const ctx = await setupTest({ cgroups: stub.cgroups });
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
 
   const first = await ctx.client.imps.get({ name: 'dev' });
@@ -236,6 +257,8 @@ test('it shows the CPU share and the throttled time after a second sampler pass'
     frozenClockMs: Date.parse('2026-10-02T12:00:00Z'),
   });
 
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.get({ name: 'dev' });
@@ -253,6 +276,8 @@ test('it shows the CPU share and the throttled time after a second sampler pass'
 
 test('it refuses to start a jailed VM without its cgroup, and says why', async () => {
   const ctx = await setupTest({ env: { IMP_JAILER: 'true' } });
+
+  await ctx.createTestImage('ubuntu');
 
   expect(ctx.imps.createImp({ name: 'dev' })).rejects.toStrictEqual(
     new Error(
@@ -281,6 +306,8 @@ test('it leaves a jailed imp asleep, with its memory, when its cgroup cannot be 
     cgroups: createCpuCgroups({ root: cgroupRoot, log: () => {} }),
     env: { IMP_JAILER: 'true' },
   });
+
+  await ctx.createTestImage('ubuntu');
 
   const created = await ctx.imps.createImp({ name: 'dev' });
 
@@ -318,6 +345,8 @@ test('it wakes a jailed imp once its cgroup can be made again', async () => {
     cgroups: createCpuCgroups({ root: cgroupRoot, log: () => {} }),
     env: { IMP_JAILER: 'true' },
   });
+
+  await ctx.createTestImage('ubuntu');
 
   const created = await ctx.imps.createImp({ name: 'dev' });
 

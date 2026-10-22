@@ -22,8 +22,6 @@ function setupTest() {
 
   const systemDrivePath = join(directory, 'system-drive.squashfs');
 
-  writeFileSync(systemDrivePath, 'drive');
-
   return { paths, systemDrivePath };
 }
 
@@ -75,6 +73,8 @@ test('#readBootStatus says a sleeping imp boots cold on a newer firecracker, and
 test('#readBootStatus lists the parts a sleeping imp whose snapshot still loads predates', () => {
   const ctx = setupTest();
 
+  writeFileSync(ctx.systemDrivePath, 'drive');
+
   writeTestSnapshot(ctx.paths, 1000, {
     firecrackerVersion: 'v1.17.0',
     snapshotVersion: 'v12.0.0',
@@ -100,6 +100,8 @@ test('#readBootStatus lists the parts a sleeping imp whose snapshot still loads 
 
 test('#readBootStatus says nothing of a sleeping imp whose snapshot matches the host', () => {
   const ctx = setupTest();
+
+  writeFileSync(ctx.systemDrivePath, 'drive');
 
   writeTestSnapshot(ctx.paths, 1000, {
     firecrackerVersion: 'v1.17.0',

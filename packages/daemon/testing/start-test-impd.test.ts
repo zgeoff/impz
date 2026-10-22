@@ -428,6 +428,19 @@ test('it moves a frozen clock when the test advances it', async () => {
   expect(harness.now()).toBe(1_000_500);
 });
 
+test('it freezes the clock at the time the test sets', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const harness = await startTestImpd(stack, { frozenClockMs: 1_000_000 });
+
+  harness.advance(500);
+  harness.setClock(2_000_000);
+
+  expect(harness.now()).toBe(2_000_000);
+});
+
 test('it moves a frozen clock by the pauses of a young guest wait', async () => {
   const stack = new AsyncDisposableStack();
 

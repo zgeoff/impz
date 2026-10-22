@@ -1,6 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { Imp } from '@impz/api';
+import { readImpEnv } from '@impz/test-utils/read-imp-env';
+import { updateEnv } from '@impz/test-utils/update-env';
 import invariant from 'tiny-invariant';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { readBrokenInvariants } from '../../../testing/imps/read-broken-invariants';
@@ -15,14 +17,12 @@ import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-met
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths, buildSystemDrivePath } from '../../vm/storage/data-layout';
 
-async function setupTest(options: Pick<TestImpdOptions, 'env' | 'cgroups'> = {}) {
+async function setupTest(options: Pick<TestImpdOptions, 'cgroups'> = {}) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await startTestImpd(stack, options);
-
-  await harness.createTestImage('ubuntu');
+  const harness = await startTestImpd(stack, { ...options, env: readImpEnv() });
 
   return Object.assign(harness, {
     oldDrive: harness.readIdentity().systemDrive,
@@ -31,6 +31,8 @@ async function setupTest(options: Pick<TestImpdOptions, 'env' | 'cgroups'> = {})
 
 test('it keeps every imp through an agent upgrade, and asleep on the kept drive', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
 
   for (const name of ['awake', 'held', 'asleep', 'off']) {
     await ctx.client.imps.create({ name });
@@ -86,6 +88,9 @@ test('it keeps every imp through an agent upgrade, and asleep on the kept drive'
 
 test('it wakes a kept imp on the old agent after an agent upgrade', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const awake = await ctx.client.imps.create({ name: 'awake' });
   const asleep = await ctx.client.imps.create({ name: 'asleep' });
 
@@ -114,6 +119,9 @@ test('it wakes a kept imp on the old agent after an agent upgrade', async () => 
 
 test('it starts a stopped imp on the new agent after an agent upgrade', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const off = await ctx.client.imps.create({ name: 'off' });
 
   writeFileSync(buildImpPaths(ctx.dataDir, off.id).disk, 'disk of off');
@@ -138,6 +146,7 @@ test('it starts a stopped imp on the new agent after an agent upgrade', async ()
 test('it says why a sleeping imp whose drive is gone boots cold', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.imps.sleepAllImps();
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
@@ -154,6 +163,9 @@ test('it says why a sleeping imp whose drive is gone boots cold', async () => {
 
 test('it boots cold a sleeping imp whose drive is gone, and keeps its disk', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -177,10 +189,13 @@ test('it boots cold a sleeping imp whose drive is gone, and keeps its disk', asy
 });
 
 test('it wakes a jailed imp with its memory on the old drive after an agent upgrade', async () => {
+  updateEnv('IMP_JAILER', 'true');
+
   const ctx = await setupTest({
     cgroups: buildStubCpuCgroups({ isMemoryEnforced: true }).cgroups,
-    env: { IMP_JAILER: 'true' },
   });
+
+  await ctx.createTestImage('ubuntu');
 
   const created = await ctx.client.imps.create({ name: 'dev' });
 
@@ -199,6 +214,7 @@ test('it wakes a jailed imp with its memory on the old drive after an agent upgr
 test('it marks a VM re-adopted after a drive change as on the old agent', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
@@ -212,6 +228,9 @@ test('it marks a VM re-adopted after a drive change as on the old agent', async 
 
 test('it records in the snapshot the drive a re-adopted VM booted from', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const oldDrivePath = ctx.readIdentity().systemDrivePath;
@@ -228,6 +247,7 @@ test('it records in the snapshot the drive a re-adopted VM booted from', async (
 test('it wakes a re-adopted VM from the old drive its snapshot names', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
@@ -244,6 +264,7 @@ test('it wakes a re-adopted VM from the old drive its snapshot names', async () 
 test('it keeps the newer drive on a downgrade while a snapshot names it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.imps.sleepAllImps();
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
@@ -259,6 +280,9 @@ test('it keeps the newer drive on a downgrade while a snapshot names it', async 
 
 test('it wakes on a downgrade the snapshot the newer drive wrote', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.imps.sleepAllImps();
@@ -279,6 +303,7 @@ test('it wakes on a downgrade the snapshot the newer drive wrote', async () => {
 test('it prunes the newer drive once nothing names it', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.imps.sleepAllImps();
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
@@ -299,6 +324,9 @@ test('it prunes the newer drive once nothing names it', async () => {
 
 test('it says a snapshot from an older impd boots cold', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -324,6 +352,9 @@ test('it says a snapshot from an older impd boots cold', async () => {
 
 test('it boots cold once a snapshot from an older impd, and keeps the disk', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
@@ -351,6 +382,9 @@ test('it boots cold once a snapshot from an older impd, and keeps the disk', asy
 
 test('it boots cold when the woken agent is not the one the snapshot recorded', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -374,6 +408,9 @@ test('it boots cold when the woken agent is not the one the snapshot recorded', 
 
 test('it keeps the disk to a woken VM with the wrong agent that will not stop', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -408,6 +445,9 @@ test('it keeps the disk to a woken VM with the wrong agent that will not stop', 
 
 test('it runs a boot whose vm.json cannot be written, and logs why', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.stop({ name: 'dev' });
@@ -428,6 +468,9 @@ test('it runs a boot whose vm.json cannot be written, and logs why', async () =>
 
 test('it marks a VM booted by an impd that kept no identity as from an older impd', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   rmSync(buildImpPaths(ctx.dataDir, created.id).vmIdentity);
@@ -441,6 +484,9 @@ test('it marks a VM booted by an impd that kept no identity as from an older imp
 
 test('it says the next wake of a VM booted by an impd that kept no identity boots cold', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   rmSync(buildImpPaths(ctx.dataDir, created.id).vmIdentity);
@@ -459,6 +505,7 @@ test('it says the next wake of a VM booted by an impd that kept no identity boot
 test('it clears on a sleep the reason the last boot was cold', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.imps.sleepAllImps();
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
@@ -478,6 +525,9 @@ test('it clears on a sleep the reason the last boot was cold', async () => {
 
 test('it never removes a drive in use when the data dir moved, by its file name', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const created = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.client.imps.sleep({ name: 'dev' });
@@ -503,6 +553,7 @@ test('it never removes a drive in use when the data dir moved, by its file name'
 test('it counts in system.info the imps an agent upgrade left outdated or without a snapshot', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'kept' });
 
   const lost = await ctx.client.imps.create({ name: 'lost' });
@@ -524,6 +575,9 @@ test('it counts in system.info the imps an agent upgrade left outdated or withou
 
 test('it boots cold a sleeping imp whose snapshot is gone after an agent upgrade', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
   const lost = await ctx.client.imps.create({ name: 'lost' });
 
   await ctx.imps.sleepAllImps();
@@ -542,6 +596,7 @@ test('it boots cold a sleeping imp whose snapshot is gone after an agent upgrade
 test('it counts in system.info a running imp on an older firecracker as a cold boot to come', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.restartImpd({ ...ctx.readIdentity(), firecrackerVersion: 'v1.18.0' });
 
@@ -556,6 +611,7 @@ test('it counts in system.info a running imp on an older firecracker as a cold b
 test('it says a running imp on an older firecracker boots cold after its sleep', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.restartImpd({ ...ctx.readIdentity(), firecrackerVersion: 'v1.18.0' });
 

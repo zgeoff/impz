@@ -3,6 +3,8 @@ import { existsSync, readdirSync } from 'node:fs';
 import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readImpEnv } from '@impz/test-utils/read-imp-env';
+import { updateEnv } from '@impz/test-utils/update-env';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { runSql } from '../../../testing/platform/run-sql';
@@ -41,7 +43,7 @@ async function setupTest() {
   const harness = await startTestImpd(stack, {
     dataDir,
     cloneDisk,
-    env: { IMP_IMAGE_EVICT_HIGH_PERCENT: '80', IMP_IMAGE_EVICT_LOW_PERCENT: '60' },
+    env: readImpEnv(),
     createStorage: (directory: string) =>
       pressure.wrap(createXfsBackend({ dataDir: directory, cloneFile: cloneDisk })),
     boundaries: {
@@ -383,6 +385,9 @@ test('it moves a template made again to a new disk under the same image and drop
 });
 
 test('it makes an old template again when an eviction runs during the clone', async () => {
+  updateEnv('IMP_IMAGE_EVICT_HIGH_PERCENT', '80');
+  updateEnv('IMP_IMAGE_EVICT_LOW_PERCENT', '60');
+
   const ctx = await setupTest();
 
   const baseImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
@@ -437,6 +442,9 @@ test('it records impd clock as the last use of a template it makes', async () =>
 });
 
 test('it evicts an old unused image after it makes a template while storage is full', async () => {
+  updateEnv('IMP_IMAGE_EVICT_HIGH_PERCENT', '80');
+  updateEnv('IMP_IMAGE_EVICT_LOW_PERCENT', '60');
+
   const ctx = await setupTest();
 
   const baseImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });

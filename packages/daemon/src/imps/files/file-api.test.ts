@@ -1,9 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { startStubFilesAgent } from '../../../testing/vm/start-stub-files-agent';
-import { createImage } from '../../platform/db/images';
-import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/data-layout';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -12,17 +10,13 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack);
 
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(harness.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(harness.db, image);
-
   return Object.assign(harness, { stack });
 }
 
 test('it writes a file through the agent and answers its guest path', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.19.0';
 
@@ -46,6 +40,8 @@ test('it writes a file through the agent and answers its guest path', async () =
 test('it removes a file through the agent and reports that it was there', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.19.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -66,6 +62,8 @@ test('it removes a file through the agent and reports that it was there', async 
 test('it reports a remove of a missing file as not removed', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.19.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -82,6 +80,8 @@ test('it reports a remove of a missing file as not removed', async () => {
 
 test('it refuses a path outside the rule before it reaches the agent', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.19.0';
 
@@ -102,6 +102,8 @@ test('it refuses a path outside the rule before it reaches the agent', async () 
 test('it refuses a write to a full tree as BAD_REQUEST with the agent’s reason', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.19.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -121,6 +123,8 @@ test('it refuses a write to a full tree as BAD_REQUEST with the agent’s reason
 test('it refuses a write on an agent from before the read-only files as AGENT_OUTDATED', async () => {
   const ctx = await setupTest();
 
+  await ctx.createTestImage('base');
+
   ctx.fake.agent.version = '0.18.0';
 
   const imp = await ctx.client.imps.create({ name: 'dev' });
@@ -139,6 +143,8 @@ test('it refuses a write on an agent from before the read-only files as AGENT_OU
 
 test('it lets an exec-scope token write a file', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.19.0';
 
@@ -160,6 +166,8 @@ test('it lets an exec-scope token write a file', async () => {
 
 test('it refuses a read-scope token’s write as FORBIDDEN', async () => {
   const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
 
   ctx.fake.agent.version = '0.19.0';
 
