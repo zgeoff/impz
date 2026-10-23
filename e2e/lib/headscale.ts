@@ -33,7 +33,13 @@ export async function startHeadscale(
   const names = buildHeadscaleNames(container);
 
   await stopHeadscale(container);
-  await runChecked(['docker', 'network', 'create', names.network]);
+
+  // The dev instance outlives the run on this network, which then stays.
+  const network = await runCommand(['docker', 'network', 'inspect', names.network]);
+
+  if (network.exitCode !== 0) {
+    await runChecked(['docker', 'network', 'create', names.network]);
+  }
 
   await runChecked([
     'docker',
