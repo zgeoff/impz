@@ -6,7 +6,7 @@ interface CreateDirectoryOptions {
   readonly parents: boolean;
 }
 
-export interface ZfsFiles {
+interface ZfsFiles {
   // A symlink counts, whether or not its target exists.
   readonly probePath: (path: string) => boolean;
   readonly probeDirectory: (path: string) => boolean;
