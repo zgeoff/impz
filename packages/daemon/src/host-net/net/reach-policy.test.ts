@@ -221,12 +221,12 @@ test('it reads the host again for a public imp after a read for imps that are no
     deny: [],
     ipv6: null,
     now: () => 0,
-    ...buildStubHostRoutes({ connected4: ['172.17.0.0/16'] }).deps,
+    ...buildStubHostRoutes({ connected4: ['44.0.0.0/24'] }).deps,
   });
 
   await reach.read(false);
 
   const host = await reach.readCached(true);
 
-  expect(host.isRefused('172.17.0.9', true)).toBeTrue();
+  expect(host.isRefused('44.0.0.9', true)).toBeTrue();
 });
