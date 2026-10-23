@@ -26,8 +26,9 @@ holds the logic:
   real-pool script, then runs end-to-end suites on a ZFS-backed dev instance over a second throwaway
   pool, and writes a summary of impd's ZFS timings into the work dir, which it keeps.
 
-Both take the pool properties from [`parseZfsPool`](../../../../scripts/lib/parse-zfs-pool.ts), and
-read these settings:
+Both take the pool properties from
+[`readZfsPoolProperties`](../../../../scripts/lib/read-zfs-pool-properties.ts), and read these
+settings:
 
 | Setting                       | Script    | What it does                                                                     |
 | ----------------------------- | --------- | -------------------------------------------------------------------------------- |

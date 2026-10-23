@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Document, Scalar, YAMLMap } from 'yaml';
 import * as z from 'zod';
-import { ZFS_POOL_FILE, parseZfsPool } from '../lib/parse-zfs-pool.ts';
+import { ZFS_POOL_FILE, parseZfsPoolProperties } from '../lib/parse-zfs-pool-properties.ts';
 import { PLAIN_WORD } from '../lib/plain-word.ts';
 
 const ARGS_FILE = 'deploy/imp-host.args.json';
@@ -425,7 +425,7 @@ export function render(argsJson: string, current: Rendered, sources: BootstrapSo
   const unit = renderUnit(current.unit, args);
   const proxyUnit = renderProxyUnit(current.proxyUnit, args.proxy);
   const hostEnv = renderHostEnv(current.hostEnv, args);
-  const storage = renderStorage(current.storage, parseZfsPool(sources.zfsPoolJson));
+  const storage = renderStorage(current.storage, parseZfsPoolProperties(sources.zfsPoolJson));
 
   const compose = renderCompose(renderComposeNetworks(current.compose, args.network), [
     ...args.privileges,

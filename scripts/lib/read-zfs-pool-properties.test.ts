@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DevError } from '../lib/dev-error.ts';
+import { wireZfsIO } from '../zfs/wire-zfs-io.ts';
+import { DevError } from './dev-error.ts';
 import { readZfsPoolProperties } from './read-zfs-pool-properties.ts';
-import { wireZfsIO } from './wire-zfs-io.ts';
 
 function setupTest() {
   const root = mkdtempSync(join(tmpdir(), 'imp-zfs-pool-'));

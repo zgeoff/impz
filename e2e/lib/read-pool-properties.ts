@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { parseZfsPool } from '../../scripts/lib/parse-zfs-pool.ts';
+import { parseZfsPoolProperties } from '../../scripts/lib/parse-zfs-pool-properties.ts';
 
 // -o words are pool properties, which zpool reads back, and -O words the pool's root dataset's,
 // which zfs reads back.
@@ -25,7 +25,7 @@ export function readPoolProperties(path: string): PoolPropertiesRead {
   let words: readonly string[];
 
   try {
-    words = parseZfsPool(text);
+    words = parseZfsPoolProperties(text);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
 

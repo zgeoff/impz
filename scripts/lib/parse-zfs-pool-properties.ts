@@ -10,7 +10,7 @@ const ZfsPoolSchema = z.object({
     .nonempty({ error: 'gives zpool create no properties' }),
 });
 
-export function parseZfsPool(json: string): readonly string[] {
+export function parseZfsPoolProperties(json: string): readonly string[] {
   const parsed = ZfsPoolSchema.safeParse(parseJSON(json));
 
   if (!parsed.success) {
