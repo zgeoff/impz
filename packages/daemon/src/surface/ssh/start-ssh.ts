@@ -1,11 +1,10 @@
 import type { Revocations } from '../../identity/auth/revocations';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImpRuntime } from '../../imps/imps/imp-runtime';
+import type { ImpService } from '../../imps/imps/imp-service';
 import type { AuthorizedKeys } from '../../imps/ssh/authorized-keys';
 import { withAuditedOpen } from '../../platform/audit/api-audit';
 import type { ApiAudit } from '../../platform/audit/api-audit';
-import { readImpByName } from '../../platform/db/imps';
-import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import type { SurfaceConfig } from '../surface-config';
 import { loadOrCreateHostKey, readFingerprint, setupSshDir } from './host-key';
@@ -15,7 +14,6 @@ import type { SshGateway } from './ssh-gateway';
 
 interface StartSshDeps {
   readonly config: Pick<SurfaceConfig, 'dataDir' | 'sshPort' | 'sshAuthorizedKeys'>;
-  readonly db: ImpDatabase;
   readonly authorizedKeys: AuthorizedKeys;
   readonly tokens: Pick<TokenStore, 'findSshKey'>;
   readonly revocations: Pick<Revocations, 'readSignal'>;
@@ -28,9 +26,10 @@ interface StartSshDeps {
     | 'openListener'
     | 'openAccept'
     | 'recordActivity'
-  >;
+  > &
+    Pick<ImpService, 'readImpRecord'>;
   readonly log: (message: string) => void;
-  readonly audit: ApiAudit;
+  readonly audit: Pick<ApiAudit, 'record'>;
   readonly now: () => number;
 }
 
@@ -77,7 +76,7 @@ export async function startSsh(deps: StartSshDeps): Promise<SshGateway | null> {
           openListener: imps.openListener,
           openAccept: imps.openAccept,
           recordActivity: imps.recordActivity,
-          readImp: (name) => readImpByName(deps.db, name),
+          readImp: imps.readImpRecord,
         },
         log: deps.log,
       },

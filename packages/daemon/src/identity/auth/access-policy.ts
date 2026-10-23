@@ -27,6 +27,7 @@ export const PROCEDURE_ACCESS: Readonly<Record<string, Access>> = Object.fromEnt
 
 const ACCESS_BY_PATH: ReadonlyMap<string, Access> = new Map(Object.entries(PROCEDURE_ACCESS));
 
+/* @internal */
 export function findAccess(procedure: string): Access | null {
   return ACCESS_BY_PATH.get(procedure) ?? null;
 }

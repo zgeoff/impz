@@ -1,7 +1,6 @@
 import { EXEC_CLOSE_RESTARTING, EXEC_PATH, EXEC_TICKET_PARAM } from '@impz/api';
 import type { ExecSocket } from '@impz/client';
 import { Elysia } from 'elysia';
-import { buildAuditedBackend } from '../imps/exec/audited-backend';
 import { createExecSession } from '../imps/exec/exec-session';
 import type { ExecSession } from '../imps/exec/exec-session';
 import { createInProcessSocket } from '../imps/exec/in-process-socket';
@@ -9,6 +8,7 @@ import type { ImpService } from '../imps/imps/imp-service';
 import type { ApiAudit } from '../platform/audit/api-audit';
 import type { Caller } from '../platform/principal/caller';
 import { createSocketRegistry } from './create-socket-registry';
+import { buildAuditedBackend } from './exec/audited-backend';
 import { buildGrantedBackend } from './exec/exec-grant';
 import type { ExecGrant } from './exec/exec-grant';
 import type { ExecTickets } from './exec/exec-tickets';

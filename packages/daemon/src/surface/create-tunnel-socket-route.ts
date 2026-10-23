@@ -6,11 +6,10 @@ import { createTunnelLimits, createTunnelSession } from '../imps/tunnel/tunnel-s
 import type { TunnelSession } from '../imps/tunnel/tunnel-session';
 import { withAuditedOpen } from '../platform/audit/api-audit';
 import type { ApiAudit } from '../platform/audit/api-audit';
-import { buildForbiddenError } from '../platform/errors/impd-errors';
-import { formatCaller, isCallerAllowed } from '../platform/principal/caller';
 import type { Caller } from '../platform/principal/caller';
 import type { ListenSpec } from '../vm/agent-client/listener-stream';
 import { createSocketRegistry } from './create-socket-registry';
+import { findImpRefusal } from './find-imp-refusal';
 
 // WebSocket's close code for a policy violation.
 const CLOSE_REVOKED = 1008;
@@ -70,10 +69,10 @@ export function createTunnelSocketRoute(deps: TunnelSocketDeps) {
         },
         {
           readImpId: async (name) => {
-            if (caller === undefined || !isCallerAllowed(caller, 'exec', name)) {
-              const who = caller === undefined ? 'nobody' : formatCaller(caller);
+            const refusal = findImpRefusal(caller, 'exec', name, 'open a tunnel into');
 
-              throw buildForbiddenError(`${who} may not open a tunnel into imp ${name}`);
+            if (refusal !== null) {
+              throw refusal;
             }
 
             const imp = await deps.imps.readImp(name);
