@@ -123,7 +123,7 @@ test('it logs the template it adds, with its imp and its time on the impd clock'
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
 
   ctx.clones.after = () => {
-    ctx.advance(1500);
+    ctx.advance(3_600_000);
 
     return Promise.resolve();
   };
@@ -131,7 +131,7 @@ test('it logs the template it adds, with its imp and its time on the impd clock'
   await ctx.impd.templates.createTemplate('dev', 'tools');
 
   expect(lines).toContainEqual(
-    expect.stringMatching(/^INFO impd\.image imp=dev template tools in 1[5-9]\d\dms$/v),
+    expect.stringMatching(/^INFO impd\.image imp=dev template tools in 36\d{5}ms$/v),
   );
 });
 
