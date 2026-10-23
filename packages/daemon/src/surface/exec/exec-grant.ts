@@ -4,6 +4,7 @@ import type { ExecBackend } from '../../imps/exec/exec-session';
 import { buildForbiddenError } from '../../platform/errors/impd-errors';
 import { formatCaller, isCallerAllowed } from '../../platform/principal/caller';
 import type { Caller } from '../../platform/principal/caller';
+import { findImpRefusal } from '../find-imp-refusal';
 
 // Each start checks the scope, so a client reads FORBIDDEN on the socket
 // instead of a refused upgrade it cannot read.
@@ -25,11 +26,7 @@ export function buildGrantedBackend(
       return buildForbiddenError(`the exec ticket is for imp ${grant.name}`);
     }
 
-    if (!isCallerAllowed(grant.caller, 'exec', name)) {
-      return buildForbiddenError(`${formatCaller(grant.caller)} may not exec in imp ${name}`);
-    }
-
-    return null;
+    return findImpRefusal(grant.caller, 'exec', name, 'exec in');
   };
 
   const checkOuter = (): Error | null => {

@@ -1,4 +1,6 @@
 import type { Scope } from '@impz/api';
+import { renderHTML } from '../../platform/http/render-html';
+import type { Markup } from '../../platform/http/render-html';
 
 export type SignInErrorPage =
   | 'expired'
@@ -45,9 +47,9 @@ export function renderPendingPage(view: Readonly<PendingView>, issuerHost: strin
 
   return renderPage(
     'Approve this sign-in',
-    `<p><strong>${encodeHTML(view.clientName)}</strong> asks to use the imps on <strong>${encodeHTML(issuerHost)}</strong>, with up to <strong>${encodeHTML(view.requestedScope)}</strong> scope. It returns to <strong>${encodeHTML(returnsTo)}</strong>.</p>
+    renderHTML`<p><strong>${view.clientName}</strong> asks to use the imps on <strong>${issuerHost}</strong>, with up to <strong>${view.requestedScope}</strong> scope. It returns to <strong>${returnsTo}</strong>.</p>
 <p>If you started this sign-in, approve it with a named imp token:</p>
-<pre>impz oauth approve ${encodeHTML(view.approvalCode)}</pre>
+<pre>impz oauth approve ${view.approvalCode}</pre>
 <p>Then press Continue. Approve only a sign-in you started: anyone can open this page for a client this host knows. The code ends in 10 minutes.</p>
 <form method="post" action="/login">${renderHiddenQuery(view.oauthQuery)}<button name="action" value="continue">Continue</button> <button name="action" value="deny">Deny</button></form>`,
   );
@@ -66,34 +68,25 @@ export function renderAllowPage(view: Readonly<AllowView>): string {
 
   return renderPage(
     'Allow this sign-in',
-    `<p><strong>${encodeHTML(view.clientName)}</strong> gets <strong>${encodeHTML(view.scope)}</strong> scope on <strong>${encodeHTML(imps)}</strong>, and returns to <strong>${encodeHTML(view.redirectURI)}</strong>.</p>
+    renderHTML`<p><strong>${view.clientName}</strong> gets <strong>${view.scope}</strong> scope on <strong>${imps}</strong>, and returns to <strong>${view.redirectURI}</strong>.</p>
 <form method="post" action="/consent">${renderHiddenQuery(view.oauthQuery)}<button name="action" value="allow">Allow</button> <button name="action" value="deny">Deny</button></form>`,
   );
 }
 
 export function renderErrorPage(error: SignInErrorPage): string {
-  return renderPage('Sign-in refused', `<p>${encodeHTML(ERROR_TEXT[error])}</p>`);
+  return renderPage('Sign-in refused', renderHTML`<p>${ERROR_TEXT[error]}</p>`);
 }
 
-function renderHiddenQuery(oauthQuery: string): string {
-  return `<input type="hidden" name="oauth_query" value="${encodeHTML(oauthQuery)}">`;
+function renderHiddenQuery(oauthQuery: string): Markup {
+  return renderHTML`<input type="hidden" name="oauth_query" value="${oauthQuery}">`;
 }
 
-function renderPage(title: string, body: string): string {
-  return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${encodeHTML(title)}</title>
+function renderPage(title: string, body: Markup): string {
+  return renderHTML`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem}pre{padding:.75rem;background:#eee;font-size:1.25rem}button{font:inherit;padding:.4rem 1rem}</style>
-</head><body><h1>${encodeHTML(title)}</h1>
+</head><body><h1>${title}</h1>
 ${body}
 </body></html>
-`;
-}
-
-function encodeHTML(text: string): string {
-  return text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+`.html;
 }

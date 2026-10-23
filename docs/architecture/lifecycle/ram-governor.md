@@ -20,6 +20,13 @@ To answer for one VM, the kernel walks every page that VM maps, which takes long
 the guest uses. The governor therefore reads every awake VM's summary at once, off impd's event
 loop. One read after another would hold every other request until the last read ended.
 
+An admission skips that walk while the budget is far. The kernel keeps a count of each process's
+resident anonymous and shared pages, and the governor reads that count without a page walk. A page
+counts in full there and at most in full in the summary, so the counts never fall below what the
+summaries would hold at the same moment, with KSM or without it. The governor sums the counts as it
+sums the summaries, and when that sum and the new reservation fit the budget, it admits with no
+walk. When they do not fit, it reads every summary and makes room as below.
+
 A VM that just booted or woke measures small for some seconds while it faults its pages in. So each
 admission also leaves a reservation: a share of the memory for a cold boot, and for a wake the
 larger of what the VM owned at its sleep and a floor. A reservation counts until the measurement

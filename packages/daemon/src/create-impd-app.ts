@@ -8,6 +8,8 @@ import type { Imps } from './imps/imps/imp-service';
 import type { ImpdAccess } from './load-impd-access';
 import type { Broker } from './network/broker/broker-service';
 import type { EgressService } from './network/egress/egress-service';
+import { createExposureService } from './network/https/exposure-service';
+import { writeDatabaseCopy } from './platform/db/database-copy';
 import { printLog } from './platform/process/print-log';
 import { createApp } from './surface/create-app';
 import type { AppDeps } from './surface/create-app';
@@ -47,7 +49,18 @@ export function createImpdApp(
 
   return createApp({
     config,
-    db: deps.db,
+    exposure: createExposureService({
+      db: deps.db,
+      https: config.https,
+      updateRecords: parts.publicRecords.update,
+    }),
+    writeDatabaseCopy: (name) =>
+      writeDatabaseCopy(deps.db, {
+        diskBudget: parts.storage.diskBudget,
+        dataDir: config.dataDir,
+        name,
+        now,
+      }),
     rootToken: deps.rootToken,
     tokens: parts.access.tokens,
     revocations: parts.access.revocations,

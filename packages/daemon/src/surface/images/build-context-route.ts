@@ -1,10 +1,10 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { join } from 'node:path';
-import { IMAGE_BUILD_STREAM_TYPE, ImageBuildQuerySchema } from '@impz/api';
+import { IMAGE_BUILD_STREAM_TYPE, ImageBuildQuerySchema, callerContract } from '@impz/api';
 import type { Image, ImageBuildQuery } from '@impz/api';
 import { ORPCError } from '@orpc/server';
-import { checkAccess, findAccess } from '../../identity/auth/access-policy';
+import { checkAccess, findDeclaredAccess } from '../../identity/auth/access-policy';
 import { createBuildEventStream } from '../../imps/images/build-event-stream';
 import type { BuildReport, Repeat } from '../../imps/images/build-event-stream';
 import type { BuildRun } from '../../imps/images/create-build-runs';
@@ -20,6 +20,7 @@ import type { SurfaceConfig } from '../surface-config';
 import { toORPCError } from '../to-orpc-error';
 
 const PROCEDURE = 'images.build';
+const BUILD_ACCESS = findDeclaredAccess(callerContract.images.build['~orpc'].meta);
 
 export interface BuildContextRoute {
   readonly respond: (
@@ -100,7 +101,7 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
       const params = Object.fromEntries(new URL(request.url).searchParams);
       const parsed = ImageBuildQuerySchema.safeParse(params);
 
-      const denial = await checkAccess(findAccess(PROCEDURE), caller, params, readNoSecret);
+      const denial = await checkAccess(BUILD_ACCESS, caller, params, readNoSecret);
 
       const writeFailure = (error: unknown): BuildFailure => {
         deps.audit.record({ procedure: PROCEDURE, actor: caller, impName: null, startedAt }, error);
