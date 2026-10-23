@@ -360,7 +360,7 @@ func connect(p *initProc, timeout time.Duration) (*client, error) {
 	if !read {
 		// the read must end before the fd number can go to another socket
 		_ = unix.Shutdown(p.sock, unix.SHUT_RDWR)
-		<-ready
+		_ = <-ready
 	}
 	unix.Close(p.sock)
 	return nil, err
