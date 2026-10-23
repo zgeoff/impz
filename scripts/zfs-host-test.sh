@@ -228,11 +228,11 @@ mkdir "$work/data-mv-b"
 (set -o noclobber && : >"$img")
 made_img=1
 truncate -s "${gib}G" "$img"
-# what deploy/bootstrap.sh gives the root dataset; impd sets recordsize=16K
-# on the datasets that hold disks
+# the pool properties deploy/bootstrap.sh gives a pool
+mapfile -t pool_properties < <(jq -r '.create[]' "$IMP_ROOT/deploy/zfs-pool.json")
+[ "${#pool_properties[@]}" -gt 0 ] || fail "deploy/zfs-pool.json gives zpool create no properties"
 created_at=$(date '+%Y-%m-%d %H:%M:%S')
-sudo zpool create -O mountpoint=none -O compression=lz4 -O atime=off -O xattr=sa \
-  "$pool" "$img"
+sudo zpool create "${pool_properties[@]}" "$pool" "$img"
 sudo zfs create -o mountpoint=legacy "$IMP_ZFS_ROOT"
 # the moves suites' B, on a root dataset of its own (e2e/lib/move-hosts.ts)
 sudo zfs create -o mountpoint=legacy "$IMP_ZFS_ROOT-mv-b"

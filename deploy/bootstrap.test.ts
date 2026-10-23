@@ -1767,6 +1767,41 @@ test('#storage_zfs refuses a device that holds a filesystem, naming it', () => {
   });
 });
 
+test('#storage_zfs creates the pool on an empty device with the properties deploy/zfs-pool.json gives', () => {
+  const ctx = setupTest();
+
+  const scripts = buildStubBlockDevices({
+    root: { source: '/dev/imp-test-sda2', disk: '/dev/imp-test-sda' },
+    devices: { '/dev/imp-test-vdb': {} },
+  });
+
+  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
+  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
+  createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
+  createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
+  createStubBin(ctx.directoryPath, 'zfs', 'case "$1" in list) exit 1 ;; esac');
+
+  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'case "$1" in list) exit 1 ;; esac');
+
+  // The data directory is a path the host owns, so the run makes no directory there.
+  const result = runSourcedFunction({
+    script: new URL('bootstrap.sh', import.meta.url).pathname,
+    fn: 'eval',
+    args: ['mkdir() { :; }; mode=yes zfs_pool=tank data_device=/dev/imp-test-vdb; storage_zfs'],
+    env: { PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result.exitCode).toBe(0);
+
+  expect(
+    readFileSync(zpool.calls, 'utf8')
+      .split('\n')
+      .filter((call) => call.startsWith('zpool create ')),
+  ).toStrictEqual([
+    'zpool create -o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none tank /dev/imp-test-vdb',
+  ]);
+});
+
 test('#storage_zfs refuses a pool that is not there without a device to create it on', () => {
   const ctx = setupTest();
   const zpool = createStubBin(ctx.directoryPath, 'zpool', 'exit 1');

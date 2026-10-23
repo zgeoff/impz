@@ -211,9 +211,10 @@ bash bootstrap.sh --yes --storage zfs --data-device /dev/nvme1n1   # pool tank, 
 bash bootstrap.sh --yes --storage zfs --zfs-pool fast              # an existing pool: fast/imp
 ```
 
-- With `--data-device`, the script creates the pool on it (`ashift=12`, `compression=lz4`,
-  `atime=off`, `xattr=sa`, `mountpoint=none`), or imports it when the device already holds that
-  pool. Without it, the pool must be imported already; make a mirror that way.
+- With `--data-device`, the script creates the pool on it with the properties in
+  [`deploy/zfs-pool.json`](../../deploy/zfs-pool.json), or imports it when the device already holds
+  that pool. Without it, the pool must be imported already; make a mirror that way, with the same
+  properties.
 - It creates `<pool>/imp` with `mountpoint=legacy` and sets `IMP_STORAGE_BACKEND=zfs` and
   `IMP_ZFS_ROOT=<pool>/imp` in the env file. The host never mounts the dataset; the container mounts
   it on `/var/lib/imp`, and impd creates the children.
