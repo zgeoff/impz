@@ -1,4 +1,4 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { ApprovalCodeSchema } from '@impz/api';
 import { readMcpAnswer } from '@impz/mcp/test-utils/read-mcp-answer';
@@ -1682,6 +1682,46 @@ test('it answers a request that throws with a bare 500, and logs the reason', as
   expect(response.status).toBe(500);
   expect(body).toBe('internal error');
   expect(logs).toContain('impd: public mcp: the transport broke');
+});
+
+test('it lifts the idle timeout from a tool call on /mcp', async () => {
+  const ctx = await setupTest();
+
+  const timeout = mock((): void => {});
+
+  const handle = createPublicHandler(
+    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: buildStubMcpTransport() },
+    () => {},
+  );
+
+  const request = new Request('http://127.0.0.1:7171/mcp', {
+    method: 'POST',
+    headers: { host: '127.0.0.1:7171' },
+  });
+
+  const response = await handle(request, { timeout });
+
+  await response.body?.cancel();
+
+  expect(timeout).toHaveBeenCalledExactlyOnceWith(request, 0);
+});
+
+test('it keeps the idle timeout on a sign-in page', async () => {
+  const ctx = await setupTest();
+
+  const timeout = mock((): void => {});
+
+  const handle = createPublicHandler(
+    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: buildStubMcpTransport() },
+    () => {},
+  );
+
+  await handle(
+    new Request('http://127.0.0.1:7171/login', { headers: { host: '127.0.0.1:7171' } }),
+    { timeout },
+  );
+
+  expect(timeout).not.toHaveBeenCalled();
 });
 
 test('it takes 64 open tool calls at once', async () => {
