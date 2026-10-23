@@ -18,7 +18,7 @@ import { createAuthorizedKeys } from '../../imps/ssh/authorized-keys';
 import { createApiAudit } from '../../platform/audit/api-audit';
 import { listApiCalls } from '../../platform/db/api-audit';
 import { createImage } from '../../platform/db/images';
-import { createImp } from '../../platform/db/imps';
+import { createImp, readImpByName } from '../../platform/db/imps';
 import { readErrorCode } from '../read-error-code';
 import { generateEd25519Key, readFingerprint } from './host-key';
 import { startSsh } from './start-ssh';
@@ -45,11 +45,10 @@ async function setupTest() {
     ssh,
     deps: {
       audit: createApiAudit({ db: database.db, now: Date.now, log: () => {}, readErrorCode }),
-      db: database.db,
       authorizedKeys: createAuthorizedKeys(join(sshDir, 'authorized_keys'), () => {}),
       tokens: { findSshKey: () => null },
       revocations: createRevocations(),
-      imps: ssh.backend,
+      imps: { ...ssh.backend, readImpRecord: (name: string) => readImpByName(database.db, name) },
       log: (message: string) => {
         logs.push(message);
       },

@@ -1,11 +1,11 @@
 import { EVENT_VERSION } from '@impz/api';
+import type { ExecBackend } from '../../imps/exec/exec-session';
 import { withAuditedOpen } from '../../platform/audit/api-audit';
 import type { ApiAudit } from '../../platform/audit/api-audit';
 import type { EventBus } from '../../platform/events/event-bus';
 import type { AuditActor } from '../../platform/principal/caller';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import type { AgentExecRequest } from '../../vm/agent-client/exec-stream';
-import type { ExecBackend } from './exec-session';
 
 interface BuildAuditedBackendOptions {
   readonly backend: ExecBackend;
