@@ -20,6 +20,14 @@ To answer for one VM, the kernel walks every page that VM maps, which takes long
 the guest uses. The governor therefore reads every awake VM's summary at once, off impd's event
 loop. One read after another would hold every other request until the last read ended.
 
+An admission skips that walk while the budget is far. The kernel keeps a count of each process's
+resident anonymous and shared pages, which it gives without walking any page, and each full reading
+records that count beside the summary. A page that a guest faults in after a reading raises the
+count by as much as it raises what the VM owns, so the last summary plus the growth of the count
+bounds what the VM owns now. When those bounds and the new reservation fit the budget, the governor
+admits with no walk. When they do not fit, or a VM has woken since the last full reading, the
+governor reads every summary again. The enforcement tick makes a full reading on each pass.
+
 A VM that just booted or woke measures small for some seconds while it faults its pages in. So each
 admission also leaves a reservation: a share of the memory for a cold boot, and for a wake the
 larger of what the VM owned at its sleep and a floor. A reservation counts until the measurement
@@ -82,5 +90,7 @@ A merged page's share splits across the VMs that map it, so measured use falls b
 with no change to the governor. A write splits a merged page again at write speed, faster than an
 enforcement tick, so the governor keeps a headroom of what KSM saves free beside the budget. At the
 full headroom, a split of every merged page at once still fits, and KSM lowers the host's real RAM
-use without fitting more imps; a smaller headroom fits more imps and takes the risk. A sleep then
-records a VM's unshared size, not its shared one, for the next wake's reservation.
+use without fitting more imps; a smaller headroom fits more imps and takes the risk. A split raises
+a VM's share with no change to its resident count, so the bound an admission builds from the counts
+leans on the same headroom, and a full reading older than a late enforcement tick is read again. A
+sleep then records a VM's unshared size, not its shared one, for the next wake's reservation.

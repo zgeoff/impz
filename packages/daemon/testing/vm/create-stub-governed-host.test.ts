@@ -57,6 +57,30 @@ test('it measures nothing for an asleep imp', async () => {
   expect(ramMib).toBeNull();
 });
 
+test('it counts every page an awake imp holds as resident', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a', 'b'],
+    awake: [{ id: 'a', rssMib: 100 }],
+  });
+
+  const residentMib = await host.deps.readResidentMib(1, 'a');
+
+  expect(residentMib).toBe(100);
+});
+
+test('it counts nothing resident for an asleep imp', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a', 'b'],
+    awake: [{ id: 'a', rssMib: 100 }],
+  });
+
+  const residentMib = await host.deps.readResidentMib(2, 'b');
+
+  expect(residentMib).toBeNull();
+});
+
 test('it sleeps an awake imp the governor asks for', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,

@@ -115,6 +115,13 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
     },
   );
 
+  // The stub has no KSM, so a VM owns every page it holds resident.
+  const readRssMib = (_pid: number, id: string): Promise<number | null> => {
+    const rssMib = imps.get(id)?.awake === true ? getImp(id).rssMib : null;
+
+    return Promise.resolve(rssMib);
+  };
+
   const deps = {
     budgetMib: options.budgetMib,
     listAwake: async (): ReturnType<RamGovernorDeps['listAwake']> => {
@@ -132,11 +139,8 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
           holdUntil: imp.held ? HELD_FOREVER : null,
         }));
     },
-    readRamMib: (_pid: number, id: string): Promise<number | null> => {
-      const ramMib = imps.get(id)?.awake === true ? getImp(id).rssMib : null;
-
-      return Promise.resolve(ramMib);
-    },
+    readRamMib: readRssMib,
+    readResidentMib: readRssMib,
     isBusy: (id: string): boolean => getImp(id).busy,
     trySleepImp,
 

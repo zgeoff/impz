@@ -14,6 +14,10 @@ const RESERVATION_TTL_MS = 20_000;
 export const ENFORCE_INTERVAL_MS = 5000;
 export const ENFORCE_TRIGGER = 'RAM over budget';
 
+// KSM can split merged pages after a reading, which no resident counter shows. The KSM headroom
+// covers what splits within a tick add, so a reading older than one late tick is read again.
+export const READING_MAX_AGE_MS = 2 * ENFORCE_INTERVAL_MS;
+
 interface AwakeImp {
   readonly id: string;
   readonly name: string;
@@ -96,6 +100,9 @@ export interface RamGovernorDeps {
   readonly listAwake: () => Promise<AwakeImp[]>;
   readonly readRamMib: (pid: number, apiSocket: string) => Promise<number | null>;
 
+  // Kept per process by the kernel, so a read is cheap where readRamMib walks every mapped page.
+  readonly readResidentMib: (pid: number, apiSocket: string) => Promise<number | null>;
+
   // Writes split pages that KSM merged faster than a tick, so a share of what KSM saves stays free.
   readonly readHeadroomMib?: (pids: readonly number[]) => Promise<number>;
   readonly isBusy: (id: string) => boolean;
@@ -105,6 +112,18 @@ export interface RamGovernorDeps {
   readonly now?: () => number;
   readonly events?: EventBus;
   readonly reclaim?: (excludeId: string | null) => Promise<number>;
+}
+
+interface VmReading {
+  readonly pid: number;
+  readonly ownedMib: number;
+  readonly residentMib: number;
+}
+
+interface VmReadings {
+  readonly at: number;
+  readonly byImp: ReadonlyMap<string, VmReading>;
+  readonly headroomMib: number;
 }
 
 interface Reservation {
@@ -122,6 +141,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
   const now = deps.now ?? Date.now;
   let stuckOver = false;
+  let lastReadings: VmReadings | null = null;
 
   const emitDecision = (decision: GovernorDecision): void => {
     deps.events?.publish({
@@ -152,6 +172,15 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     }
   };
 
+  const recordAdmission = (request: AdmissionRequest, usedMib: number): void => {
+    reservations.set(request.id, {
+      mib: request.reserveMib,
+      until: now() + RESERVATION_TTL_MS,
+    });
+
+    emitAdmission(request, 'admitted', usedMib);
+  };
+
   const readReservation = (id: string): number => {
     const reservation = reservations.get(id);
 
@@ -168,17 +197,16 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     return reservation.mib;
   };
 
-  const readEffectiveUsage = async (excludeId: string | null) => {
-    const listed = await deps.listAwake();
-
-    const awake = listed.filter((imp) => imp.id !== excludeId);
-
+  const sumEffectiveUsage = (
+    awake: readonly AwakeImp[],
+    readings: readonly (number | null)[],
+    headroomMib: number,
+    excludeId: string | null,
+  ) => {
     const byImp = new Map<string, number>();
 
     let usedMib = 0;
-    let effectiveMib = 0;
-
-    const readings = await Promise.all(awake.map((imp) => deps.readRamMib(imp.pid, imp.apiSocket)));
+    let effectiveMib = headroomMib;
 
     for (const [index, imp] of awake.entries()) {
       const measured = readings[index] ?? 0;
@@ -196,13 +224,61 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       }
     }
 
+    return { awake, byImp, usedMib, effectiveMib, headroomMib };
+  };
+
+  const readVmRam = async (imp: AwakeImp) => {
+    // A page faulted in between the two reads counts in both, so the bound built on them stays
+    // above what the VM owns.
+    const residentMib = await deps.readResidentMib(imp.pid, imp.apiSocket);
+    const ownedMib = await deps.readRamMib(imp.pid, imp.apiSocket);
+
+    return { ownedMib, residentMib };
+  };
+
+  const readEffectiveUsage = async (excludeId: string | null) => {
+    const at = now();
+
+    const listed = await deps.listAwake();
+
+    const awake = listed.filter((imp) => imp.id !== excludeId);
+
+    const readings = await Promise.all(awake.map((imp) => readVmRam(imp)));
+
     const headroom = deps.readHeadroomMib?.(awake.map((imp) => imp.pid)) ?? Promise.resolve(0);
 
     const headroomMib = await headroom;
 
-    effectiveMib += headroomMib;
+    lastReadings = { at, byImp: collectVmReadings(awake, readings), headroomMib };
 
-    return { awake, byImp, usedMib, effectiveMib, headroomMib };
+    return sumEffectiveUsage(
+      awake,
+      readings.map((reading) => reading.ownedMib),
+      headroomMib,
+      excludeId,
+    );
+  };
+
+  const readBoundedEffectiveMib = async (excludeId: string): Promise<number | null> => {
+    const recent = lastReadings;
+
+    if (recent === null || now() - recent.at > READING_MAX_AGE_MS) {
+      return null;
+    }
+
+    const listed = await deps.listAwake();
+
+    const awake = listed.filter((imp) => imp.id !== excludeId);
+
+    const residents = await Promise.all(
+      awake.map((imp) => deps.readResidentMib(imp.pid, imp.apiSocket)),
+    );
+
+    const bounds = buildRamBounds(recent, awake, residents);
+
+    return bounds === null
+      ? null
+      : sumEffectiveUsage(awake, bounds, recent.headroomMib, excludeId).effectiveMib;
   };
 
   const readFreeRoom = async (
@@ -331,6 +407,14 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           throw buildImpOverBudgetError(deps.budgetMib, usage.effectiveMib, request.memoryMib);
         }
 
+        const boundMib = await readBoundedEffectiveMib(request.id);
+
+        if (boundMib !== null && boundMib + request.reserveMib <= deps.budgetMib) {
+          recordAdmission(request, boundMib);
+
+          return;
+        }
+
         const findMissing = (usage: UsageTotals) =>
           usage.effectiveMib + request.reserveMib - deps.budgetMib;
 
@@ -366,12 +450,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           });
         }
 
-        reservations.set(request.id, {
-          mib: request.reserveMib,
-          until: now() + RESERVATION_TTL_MS,
-        });
-
-        emitAdmission(request, 'admitted', room.effectiveMib);
+        recordAdmission(request, room.effectiveMib);
       }),
 
     release: (id) => {
@@ -473,4 +552,46 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         }
       }),
   };
+}
+
+function collectVmReadings(
+  awake: readonly AwakeImp[],
+  readings: readonly { ownedMib: number | null; residentMib: number | null }[],
+): Map<string, VmReading> {
+  const byImp = new Map<string, VmReading>();
+
+  for (const [index, imp] of awake.entries()) {
+    const reading = readings[index];
+
+    if (reading !== undefined && reading.ownedMib !== null && reading.residentMib !== null) {
+      byImp.set(imp.id, {
+        pid: imp.pid,
+        ownedMib: reading.ownedMib,
+        residentMib: reading.residentMib,
+      });
+    }
+  }
+
+  return byImp;
+}
+
+function buildRamBounds(
+  recent: VmReadings,
+  awake: readonly AwakeImp[],
+  residents: readonly (number | null)[],
+): number[] | null {
+  const bounds: number[] = [];
+
+  for (const [index, imp] of awake.entries()) {
+    const reading = recent.byImp.get(imp.id);
+    const residentMib = residents[index] ?? null;
+
+    if (reading?.pid !== imp.pid || residentMib === null) {
+      return null;
+    }
+
+    bounds.push(reading.ownedMib + Math.max(0, residentMib - reading.residentMib));
+  }
+
+  return bounds;
 }
