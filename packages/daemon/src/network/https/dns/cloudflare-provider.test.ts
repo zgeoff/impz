@@ -661,9 +661,10 @@ test('it keeps the token out of a fetch error', () => {
     readToken: () => Promise.resolve('cf-token-secret\u0000'),
   });
 
+  // Bun before 1.4.3 puts the refused value after the header's name
   expect(provider.setA('imp.example.com', '100.64.0.7')).rejects.toThrowWithMessage(
     Error,
-    /^(?!.*cf-token-secret).*<token>/v,
+    /^(?!.*cf-token-secret)Header 'Authorization' has invalid value(?:: 'Bearer <token>')?$/v,
   );
 });
 

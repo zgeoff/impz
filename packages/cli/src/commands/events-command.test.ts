@@ -88,9 +88,10 @@ test('it prints only the named imp’s events, and reconnects after impd’s con
     print,
   );
 
+  // Bun before 1.4.3 leaves the error's code out of a fetch error's message
   expect(printing).rejects.toThrowWithMessage(
     Error,
-    'the event stream ended 5 times in a row: Unable to connect. Is the computer able to access the url?',
+    /^the event stream ended 5 times in a row: (?:ECONNREFUSED: )?Unable to connect\. Is the computer able to access the url\?$/v,
   );
 
   expect(print.mock.calls.map(([line]) => JSON.parse(line) as unknown)).toStrictEqual([
@@ -110,16 +111,24 @@ test('it prints only the named imp’s events, and reconnects after impd’s con
 
   expect(warn.mock.calls).toStrictEqual([
     [
-      'impz: the event stream ended (The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()); reconnecting in 1000ms',
+      expect.stringMatching(
+        /^impz: the event stream ended \((?:ECONNRESET: )?The socket connection was closed unexpectedly\. For more information, pass `verbose: true` in the second argument to fetch\(\)\); reconnecting in 1000ms$/v,
+      ),
     ],
     [
-      'impz: the event stream ended (The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()); reconnecting in 2000ms',
+      expect.stringMatching(
+        /^impz: the event stream ended \((?:ECONNRESET: )?The socket connection was closed unexpectedly\. For more information, pass `verbose: true` in the second argument to fetch\(\)\); reconnecting in 2000ms$/v,
+      ),
     ],
     [
-      'impz: the event stream ended (Unable to connect. Is the computer able to access the url?); reconnecting in 4000ms',
+      expect.stringMatching(
+        /^impz: the event stream ended \((?:ECONNREFUSED: )?Unable to connect\. Is the computer able to access the url\?\); reconnecting in 4000ms$/v,
+      ),
     ],
     [
-      'impz: the event stream ended (Unable to connect. Is the computer able to access the url?); reconnecting in 8000ms',
+      expect.stringMatching(
+        /^impz: the event stream ended \((?:ECONNREFUSED: )?Unable to connect\. Is the computer able to access the url\?\); reconnecting in 8000ms$/v,
+      ),
     ],
   ]);
 });
@@ -206,9 +215,10 @@ test('it starts the count and the backoff again after a stream that lasted', asy
     () => {},
   );
 
+  // Bun before 1.4.3 leaves the error's code out of a fetch error's message
   expect(printing).rejects.toThrowWithMessage(
     Error,
-    'the event stream ended 5 times in a row: Unable to connect. Is the computer able to access the url?',
+    /^the event stream ended 5 times in a row: (?:ECONNREFUSED: )?Unable to connect\. Is the computer able to access the url\?$/v,
   );
 
   expect(backoff.delays).toStrictEqual([1000, 2000, 1000, 2000, 4000, 8000]);

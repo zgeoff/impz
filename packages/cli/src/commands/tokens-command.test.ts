@@ -250,10 +250,12 @@ test('it creates no token when the feature check’s connection drops', async ()
 
   const tokens = await ctx.client.tokens.list();
 
+  // Bun before 1.4.3 leaves the error's code out of a fetch error's message
   expect(result).toStrictEqual({
     stdout: '',
-    stderr:
-      'impz: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()\n',
+    stderr: expect.stringMatching(
+      /^impz: (?:ECONNRESET: )?The socket connection was closed unexpectedly\. For more information, pass `verbose: true` in the second argument to fetch\(\)\n$/v,
+    ),
     code: 1,
   });
 

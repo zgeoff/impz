@@ -276,13 +276,12 @@ test('#new places on a reachable host under --place when another saved host does
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const sent: unknown = JSON.parse(JSON.stringify({ host: 'box', imp: created }));
 
+  // Bun before 1.4.3 leaves the error's code out of a fetch error's message
   expect({ ...placed, stdout: JSON.parse(placed.stdout) as unknown }).toStrictEqual({
     stdout: sent,
-    stderr: [
-      'impz: gone: skipped: Unable to connect. Is the computer able to access the url?',
-      'impz: placing on box',
-      '',
-    ].join('\n'),
+    stderr: expect.stringMatching(
+      /^impz: gone: skipped: (?:ECONNREFUSED: )?Unable to connect\. Is the computer able to access the url\?\nimpz: placing on box\n$/v,
+    ),
     code: 0,
   });
 });
