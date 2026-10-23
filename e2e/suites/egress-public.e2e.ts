@@ -1,9 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import invariant from 'tiny-invariant';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { tryGetFromImp } from '../lib/guest-probe';
-import { createInstanceClient, readInfo, runImp, runShellInImp } from '../lib/imp-cli';
+import { createInstanceClient, runImp, runShellInImp } from '../lib/imp-cli';
 import { holdImp, waitForExec } from '../lib/imps';
 import { readContainerGateway } from '../lib/instance';
 import {
@@ -17,12 +16,8 @@ import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { startStubPrivateService } from '../lib/start-stub-private-service';
 import { getSuitePrefix } from '../lib/suites';
+import { waitForTailnetIp } from '../lib/tailnet';
 import { writeMetric } from '../lib/write-metric';
-
-// collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
-const startInfo = await readInfo();
-
-const hostTailnetMissing = startInfo.tailscale.ip === null;
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -113,11 +108,9 @@ test('it lets an open imp reach each private listener, before and after a public
   expect(againGateway.isConnected).toBeTrue();
 });
 
-test.skipIf(hostTailnetMissing)('it refuses a public imp the host’s tailnet address', async () => {
+test('it refuses a public imp the host’s tailnet address', async () => {
   const ctx = await setupTest();
-  const info = await readInfo();
-
-  invariant(info.tailscale.ip !== null);
+  const ip = await waitForTailnetIp();
 
   const pub = `${ctx.prefix}tail-pub`;
 
@@ -136,7 +129,7 @@ test.skipIf(hostTailnetMissing)('it refuses a public imp the host’s tailnet ad
 
   await waitForExec(pub);
 
-  const dial = await runTimedDial(pub, info.tailscale.ip, 7070);
+  const dial = await runTimedDial(pub, ip, 7070);
 
   expect(dial.isConnected).toBeFalse();
 });

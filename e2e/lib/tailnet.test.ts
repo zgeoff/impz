@@ -5,6 +5,7 @@ import {
   isTailnetReady,
   parseSelfTags,
   parseTailscaleStatus,
+  readTailnetMember,
   requireTailnetReady,
 } from './tailnet';
 
@@ -101,6 +102,12 @@ test('#parseTailscaleStatus reads a status without peers as none', () => {
   });
 });
 
+test('#parseTailscaleStatus reads a node alone on its tailnet as one without peers', () => {
+  expect(
+    parseTailscaleStatus(JSON.stringify({ BackendState: 'Running', Peer: null })),
+  ).toStrictEqual({ BackendState: 'Running', Peer: {} });
+});
+
 test('#parseTailscaleStatus gives null for output that is not JSON', () => {
   expect(parseTailscaleStatus('tailscale: command not found')).toBeNull();
 });
@@ -153,4 +160,17 @@ test('#findTailnetNode gives null for a peer without a MagicDNS name', () => {
   const peers = [{ DNSName: '', TailscaleIPs: ['100.64.0.7'], Online: true }];
 
   expect(findTailnetNode(peers, '100.64.0.7')).toBeNull();
+});
+
+test('#readTailnetMember names the member container the harness started', () => {
+  expect(readTailnetMember({ E2E_TAILNET_MEMBER: 'imp-e2e-a-ts-member' })).toBe(
+    'imp-e2e-a-ts-member',
+  );
+});
+
+test('#readTailnetMember fails outside a harness run that started the tailnet', () => {
+  expect(() => readTailnetMember({})).toThrowWithMessage(
+    Error,
+    'no E2E_TAILNET_MEMBER: the e2e harness starts the tailnet for this suite',
+  );
 });

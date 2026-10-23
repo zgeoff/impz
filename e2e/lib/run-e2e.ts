@@ -1,12 +1,15 @@
 import { join } from 'node:path';
 import { collectBootFallbacks } from './boot-fallbacks';
 import { buildHarnessEnv } from './build-harness-env';
+import type { HarnessTailnet } from './build-harness-env';
 import { buildConfig } from './config';
 import type { E2EConfig, HarnessEnv } from './config';
+import type { HeadscaleTailnet } from './headscale';
 import type { DevInstance } from './instance';
 import type { HostBFixture } from './move-hosts';
 import type { HarnessArgs } from './parse-args';
 import { parseArgs } from './parse-args';
+import { pickRunTailnet } from './pick-run-tailnet';
 import { hasRunPassed, runSuites } from './run-suites';
 import {
   FAST_GROUPS,
@@ -34,6 +37,8 @@ interface JourneyRequest {
 export interface HarnessDeps {
   readonly readHostImage: (env: HarnessEnv) => string;
   readonly readTailscaleKey: (env: HarnessEnv) => Promise<TailscaleE2EKey | null>;
+  readonly startHeadscale: () => Promise<HeadscaleTailnet>;
+  readonly stopHeadscale: () => Promise<void>;
 
   readonly setUpInstance: (run: Readonly<HarnessRun>) => Promise<DevInstance>;
   readonly recreateInstance: (run: Readonly<HarnessRun>) => Promise<DevInstance>;
@@ -84,7 +89,7 @@ const USAGE = `imp end-to-end harness: every case drives impd through the CLI.
 
   --only    comma-separated suites or sets (default: acceptance)
             suites: ${SUITES.map((suite) => suite.name).join(' ')}
-            sets:   acceptance (all, tailscale required), fast (the CI subset)
+            sets:   acceptance (all, timing limits enforced), fast (the CI subset)
   --group   one of the fast set's ${String(FAST_GROUPS.length)} CI groups, 1 to ${String(FAST_GROUPS.length)}
   --clean   full reset first: tailnet logout, remove the dev container, wipe
             its data dir (XFS file, db, images, imps, checkpoints), and the
@@ -127,11 +132,25 @@ export async function runE2E(options: Readonly<RunE2EOptions>): Promise<number> 
 
   const config = buildConfig(options.env);
   const hostImage = deps.readHostImage(options.env);
-  const isTailnetRun = args.suites.includes('tailscale') || args.suites.includes('moves-tailnet');
-  const tailnet = isTailnetRun ? await deps.readTailscaleKey(options.env) : null;
+  let tailnet: HarnessTailnet;
+
+  try {
+    tailnet = await startTailnet(deps, args.suites, options.env);
+  } catch (error) {
+    deps.warn(`test-e2e: ${formatReason(error)}`);
+
+    return 1;
+  }
+
+  // A kept instance is on the last run's Headscale, which is gone.
+  const isReused = args.reuse && tailnet.kind !== 'headscale';
+
+  if (args.reuse && !isReused) {
+    deps.warn('test-e2e: --reuse ignored: the instance joins this run’s new Headscale tailnet');
+  }
 
   const run: HarnessRun = {
-    args,
+    args: { ...args, reuse: isReused },
     config,
     env: buildHarnessEnv({ env: options.env, hostImage, config, tailnet }),
   };
@@ -163,121 +182,131 @@ export async function runE2E(options: Readonly<RunE2EOptions>): Promise<number> 
     stopRun('SIGTERM');
   });
 
-  deps.createDirectory(options.resultsDir);
-  deps.removeFile(metricsFile);
-
-  const setup = await runTimed(deps, 'setup', async () => {
-    started.instance = await deps.setUpInstance(run);
-
-    return true;
-  });
-
-  const sections: Section[] = [setup];
+  const sections: Section[] = [];
   let stoppedBecause: string | null = null;
 
-  if (started.instance !== null) {
-    const ready: { current: DevInstance } = { current: started.instance };
+  try {
+    deps.createDirectory(options.resultsDir);
+    deps.removeFile(metricsFile);
 
-    const startedAt = new Map<string, Date>();
+    const setup = await runTimed(deps, 'setup', async () => {
+      started.instance = await deps.setUpInstance(run);
 
-    const runJourneyProcess = async (
-      journey: string,
-      kept: readonly string[],
-      settings: Readonly<Record<string, string>> | null,
-    ): Promise<number> => {
-      startedAt.set(journey, new Date(deps.now()));
-
-      const exitCode = await deps.runJourney({
-        argv: buildJourneyArgv(options.bunPath, journey),
-        env: {
-          ...run.env,
-          IMP_TOKEN: ready.current.token ?? '',
-          E2E_KEEP: args.keep ? '1' : '0',
-          E2E_KEPT_PREFIXES: kept.join(','),
-          E2E_ACCEPTANCE: args.acceptance ? '1' : '0',
-          E2E_METRICS_FILE: metricsFile,
-          ...buildJourneyEnv(settings),
-        },
-        onStart: (pid) => {
-          state.running = pid;
-        },
-      });
-
-      state.running = null;
-
-      if (exitCode !== 0 && !state.interrupted) {
-        const tail = await deps.readImpdLogTail(ready.current);
-
-        deps.log(`== impd log tail\n${tail}`);
-      }
-
-      return exitCode;
-    };
-
-    const result = await runSuites({
-      names: args.suites,
-      prefixOf: (name) =>
-        SUITES.find((suite) => suite.name === name)?.prefix ?? `${PREFIX}${name}-`,
-      journeysOf: (name) => {
-        const suite = SUITES.find((candidate) => candidate.name === name);
-
-        return suite === undefined ? [name] : listJourneys(suite);
-      },
-      keep: args.keep,
-      runJourney: runJourneyProcess,
-      checkJourney: (suite, journey) =>
-        checkNoBootFallbacks({
-          deps,
-          name: suite,
-          since: startedAt.get(journey) ?? new Date(deps.now()),
-          target: ready.current,
-        }),
-      reset: (prefixes) => deps.resetSuites(prefixes, ready.current),
-      settingsOf: (name) => readSuiteSettings(name, ready.current),
-      rebootOnto: (settings) => deps.rebootInstance(ready.current, settings, run.env),
-      reboot: () => deps.rebootInstance(ready.current, {}, run.env),
-      fixturesOf: (name) => SUITES.find((suite) => suite.name === name)?.fixtures ?? [],
-      startFixture: (fixture) => deps.readHostBFixture(fixture, run).start(),
-      resetFixture: (fixture) => deps.readHostBFixture(fixture, run).reset(),
-      stopFixture: (fixture) => deps.readHostBFixture(fixture, run).stop(),
-
-      recreate: async () => {
-        ready.current = await deps.recreateInstance(run);
-      },
-      isInterrupted: () => state.interrupted,
-      now: deps.now,
-      onSuiteStart: (name) => {
-        deps.log(`== [${String(getSuiteIndex(name))}] ${name}`);
-      },
-      onSuiteEnd: (suiteResult) => {
-        const section: Section = {
-          index: getSuiteIndex(suiteResult.name),
-          name: suiteResult.name,
-          verdict: suiteResult.passed ? 'PASS' : 'FAIL',
-          durationMs: suiteResult.durationMs,
-        };
-
-        sections.push(section);
-        deps.log(`== ${formatSection(section)}`);
-      },
-      log: deps.warn,
+      return true;
     });
 
-    stoppedBecause = result.stoppedBecause;
+    sections.push(setup);
 
-    if (stoppedBecause !== null && stoppedBecause !== 'interrupted') {
-      deps.warn(`== the run stopped: ${stoppedBecause}`);
+    if (started.instance !== null) {
+      const ready: { current: DevInstance } = { current: started.instance };
+
+      const startedAt = new Map<string, Date>();
+
+      const runJourneyProcess = async (
+        journey: string,
+        kept: readonly string[],
+        settings: Readonly<Record<string, string>> | null,
+      ): Promise<number> => {
+        startedAt.set(journey, new Date(deps.now()));
+
+        const exitCode = await deps.runJourney({
+          argv: buildJourneyArgv(options.bunPath, journey),
+          env: {
+            ...run.env,
+            IMP_TOKEN: ready.current.token ?? '',
+            E2E_KEEP: args.keep ? '1' : '0',
+            E2E_KEPT_PREFIXES: kept.join(','),
+            E2E_ACCEPTANCE: args.acceptance ? '1' : '0',
+            E2E_METRICS_FILE: metricsFile,
+            ...buildJourneyEnv(settings),
+          },
+          onStart: (pid) => {
+            state.running = pid;
+          },
+        });
+
+        state.running = null;
+
+        if (exitCode !== 0 && !state.interrupted) {
+          const tail = await deps.readImpdLogTail(ready.current);
+
+          deps.log(`== impd log tail\n${tail}`);
+        }
+
+        return exitCode;
+      };
+
+      const result = await runSuites({
+        names: args.suites,
+        prefixOf: (name) =>
+          SUITES.find((suite) => suite.name === name)?.prefix ?? `${PREFIX}${name}-`,
+        journeysOf: (name) => {
+          const suite = SUITES.find((candidate) => candidate.name === name);
+
+          return suite === undefined ? [name] : listJourneys(suite);
+        },
+        keep: args.keep,
+        runJourney: runJourneyProcess,
+        checkJourney: (suite, journey) =>
+          checkNoBootFallbacks({
+            deps,
+            name: suite,
+            since: startedAt.get(journey) ?? new Date(deps.now()),
+            target: ready.current,
+          }),
+        reset: (prefixes) => deps.resetSuites(prefixes, ready.current),
+        settingsOf: (name) => readSuiteSettings(name, ready.current),
+        rebootOnto: (settings) => deps.rebootInstance(ready.current, settings, run.env),
+        reboot: () => deps.rebootInstance(ready.current, {}, run.env),
+        fixturesOf: (name) => SUITES.find((suite) => suite.name === name)?.fixtures ?? [],
+        startFixture: (fixture) => deps.readHostBFixture(fixture, run).start(),
+        resetFixture: (fixture) => deps.readHostBFixture(fixture, run).reset(),
+        stopFixture: (fixture) => deps.readHostBFixture(fixture, run).stop(),
+
+        recreate: async () => {
+          ready.current = await deps.recreateInstance(run);
+        },
+        isInterrupted: () => state.interrupted,
+        now: deps.now,
+        onSuiteStart: (name) => {
+          deps.log(`== [${String(getSuiteIndex(name))}] ${name}`);
+        },
+        onSuiteEnd: (suiteResult) => {
+          const section: Section = {
+            index: getSuiteIndex(suiteResult.name),
+            name: suiteResult.name,
+            verdict: suiteResult.passed ? 'PASS' : 'FAIL',
+            durationMs: suiteResult.durationMs,
+          };
+
+          sections.push(section);
+          deps.log(`== ${formatSection(section)}`);
+        },
+        log: deps.warn,
+      });
+
+      stoppedBecause = result.stoppedBecause;
+
+      if (stoppedBecause !== null && stoppedBecause !== 'interrupted') {
+        deps.warn(`== the run stopped: ${stoppedBecause}`);
+      }
+
+      const isUp = stoppedBecause === null || stoppedBecause === 'interrupted';
+
+      if (!args.keep && isUp) {
+        await deps.removeLeftovers(args.suites, ready.current, run.env);
+      }
     }
-
-    const isUp = stoppedBecause === null || stoppedBecause === 'interrupted';
-
-    if (!args.keep && isUp) {
-      await deps.removeLeftovers(args.suites, ready.current, run.env);
+  } finally {
+    try {
+      if (args.suites.includes('https')) {
+        await deps.stopPebble();
+      }
+    } finally {
+      if (tailnet.kind === 'headscale') {
+        await deps.stopHeadscale();
+      }
     }
-  }
-
-  if (args.suites.includes('https')) {
-    await deps.stopPebble();
   }
 
   deps.writeResults(sections, {
@@ -314,6 +343,30 @@ export async function runE2E(options: Readonly<RunE2EOptions>): Promise<number> 
 
 function formatReason(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function startTailnet(
+  deps: HarnessDeps,
+  suites: readonly string[],
+  env: HarnessEnv,
+): Promise<HarnessTailnet> {
+  const kind = pickRunTailnet(suites, env);
+
+  if (kind === 'headscale') {
+    try {
+      return { kind, ...(await deps.startHeadscale()) };
+    } catch (error) {
+      await deps.stopHeadscale();
+
+      throw new Error(`the Headscale tailnet did not start: ${formatReason(error)}`, {
+        cause: error,
+      });
+    }
+  }
+
+  const key = kind === 'tailscale' ? await deps.readTailscaleKey(env) : null;
+
+  return key === null ? { kind: 'off' } : { kind: 'tailscale', ...key };
 }
 
 async function runTimed(

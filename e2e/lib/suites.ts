@@ -73,7 +73,7 @@ export const SUITES: readonly Suite[] = [
     name: 'tailscale',
     prefix: 'e2e-ts-',
     images: ['e2e-tiny'],
-    journeys: ['tailscale-reach', 'tailscale-identities', 'tailscale-names'],
+    journeys: ['tailscale-reach', 'tailscale-identities'],
 
     // impd reads this rule at start, and the reboot keeps the node.
     settings: () => ({
@@ -172,9 +172,23 @@ export const SUITES: readonly Suite[] = [
     name: 'moves-tailnet',
     prefix: 'e2e-mvt-',
     images: ['e2e-tiny'],
-    journeys: ['moves-tailnet-peer', 'moves-tailnet-names'],
+    journeys: ['moves-tailnet-peer'],
     fixtures: ['host-b-tailnet'],
     settings: (target) => buildMoveSettings(readMoveOptions('host-b-tailnet'), target.portOffset),
+  },
+
+  // Per-imp names need Tailscale itself, so the suite joins it only with
+  // IMP_E2E_TAILNET_NAMES=1, and skips without it.
+  {
+    name: 'tailnet-names',
+    prefix: 'e2e-tsn-',
+    images: ['e2e-tiny'],
+    journeys: ['tailscale-names', 'moves-tailnet-names'],
+    fixtures: process.env['IMP_E2E_TAILNET_NAMES'] === '1' ? ['host-b-tailnet-names'] : [],
+    settings: (target) =>
+      process.env['IMP_E2E_TAILNET_NAMES'] === '1'
+        ? buildMoveSettings(readMoveOptions('host-b-tailnet-names'), target.portOffset)
+        : null,
   },
 
   {
@@ -231,6 +245,9 @@ export const FAST_GROUPS: readonly (readonly string[])[] = [
   ],
   ['sleep', 'reverse', 'jail'],
   ['mcp', 'mcp-oauth', 'inner', 'memory', 'ksm'],
+
+  // The suites that join the run's Headscale tailnet.
+  ['tailscale', 'egress', 'moves-tailnet'],
 ];
 
 export const SUITE_SETS: Readonly<Record<string, readonly string[]>> = {

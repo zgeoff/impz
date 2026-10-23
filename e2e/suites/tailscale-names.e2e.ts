@@ -25,7 +25,7 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: getSuitePrefix('tailscale'), stack, client };
+  return { prefix: getSuitePrefix('tailnet-names'), stack, client };
 }
 
 // collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
@@ -46,7 +46,7 @@ test.skipIf(tailnetNamesMissing)(
 
     // The suite's settings both ways, so the journeys after this one still run on
     // them.
-    const settings = readSuiteSettings('tailscale', instance);
+    const settings = readSuiteSettings('tailnet-names', instance);
 
     ctx.stack.defer(() => runDevScript('reboot', instance, { ...settings }));
 

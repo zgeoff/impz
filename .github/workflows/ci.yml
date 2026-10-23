@@ -152,7 +152,8 @@ jobs:
       - name: Test ACME
         run: bun run test:pebble
 
-      # tailscale-up.sh joining Headscale in Docker with a tagged pre-auth key
+      # tailscale-up.sh joining Headscale in Docker with a tagged pre-auth key,
+      # and the e2e harness's Headscale: its policy and its teardown
       - name: Test Headscale Join
         run: bun run test:headscale
 
@@ -420,10 +421,10 @@ jobs:
           TARBALL: ${{ steps.pack.outputs.tarball }}
         run: scripts/release/check-client-runtimes.sh "$TARBALL"
 
-  # Boots real microVMs: the fast end-to-end set in its three groups
+  # Boots real microVMs: the fast end-to-end set in its four groups
   # (FAST_GROUPS in e2e/lib/suites.ts, e2e/test-e2e.sh --group N),
   # each against a dev instance on its own runner's KVM. The `e2e` job below
-  # is the required check over all three.
+  # is the required check over all four.
   e2e-group:
     name: e2e (group ${{ matrix.group }})
     runs-on: ubuntu-24.04
@@ -447,6 +448,10 @@ jobs:
           - group: 3
             browser: false
             host-tests: false
+          # the tailnet suites, on a Headscale that the harness starts
+          - group: 4
+            browser: false
+            host-tests: false
     env:
       # the fast set at reduced size for a 4-core, 16 GB runner
       E2E_RAM_BUDGET_MIB: 4096
@@ -459,7 +464,7 @@ jobs:
       IMP_HOST_IMAGE: imp-host:dev
       IMP_HOST_IMAGE_READY: 1
       # PRs read the caches main writes; their own writes would only crowd
-      # the repo's cache quota. One group writes on main, so three writers
+      # the repo's cache quota. One group writes on main, so four writers
       # never race on the same scopes
       WRITE_CACHE: ${{ github.event_name == 'push' && matrix.group == 1 }}
     steps:
@@ -502,7 +507,8 @@ jobs:
       # /mnt is the runner's larger temp disk; the XFS file goes there when
       # the image has one. CI must not pass --clean to the harness: it
       # refuses to wipe a data dir outside .data/ that holds no imp.xfs, and
-      # a fresh runner has nothing to clean.
+      # a fresh runner has nothing to clean. The moves-tailnet suite's second
+      # host keeps its data beside the instance's, in <data>-mv-b.
       - name: Pick the data dir
         run: |
           df -h / /mnt || true
@@ -511,8 +517,8 @@ jobs:
           else
             data=$GITHUB_WORKSPACE/.data/ci
           fi
-          sudo mkdir -p "$data"
-          sudo chown "$(id -u):$(id -g)" "$data"
+          sudo mkdir -p "$data" "$data-mv-b"
+          sudo chown "$(id -u):$(id -g)" "$data" "$data-mv-b"
           echo "IMP_DEV_DATA=$data" >> "$GITHUB_ENV"
 
       - name: Setup Bun
@@ -571,8 +577,8 @@ jobs:
       - name: Name the e2e registry
         run: echo '10.200.0.1 imp-e2e-registry.test' | sudo tee -a /etc/hosts
 
-      # No TAILSCALE_AUTHKEY here: the fast set has no tailscale suite, and
-      # outside acceptance a missed timing limit only warns.
+      # No Tailscale secret here: the tailnet suites join the run's own
+      # Headscale, and outside acceptance a missed timing limit only warns.
       - name: End-to-end tests
         run: e2e/test-e2e.sh --group ${{ matrix.group }}
 

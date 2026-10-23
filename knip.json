@@ -22,6 +22,7 @@
         // the bootstrap harness that e2e/test-bootstrap.sh runs
         "e2e/test-bootstrap.ts",
         "host/scripts/*.headscale.ts",
+        "e2e/lib/*.headscale.ts",
         "scripts/ci/run-related-tests.ts",
         // the dev CLI that scripts/dev/dev.sh runs
         "scripts/dev/dev.ts",
