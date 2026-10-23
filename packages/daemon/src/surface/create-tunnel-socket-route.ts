@@ -19,7 +19,7 @@ interface PeerServer {
   readonly requestIP: (request: Request) => { readonly address: string } | null;
 }
 
-export interface TunnelSocketDeps {
+interface TunnelSocketDeps {
   readonly imps: Pick<ImpService, 'readImp' | 'openDial' | 'openListener' | 'openAccept'>;
   readonly audit: Pick<ApiAudit, 'record'>;
   readonly now: () => number;

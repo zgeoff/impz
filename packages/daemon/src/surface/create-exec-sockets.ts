@@ -21,7 +21,7 @@ interface PeerServer {
   readonly requestIP: (request: Request) => { readonly address: string } | null;
 }
 
-export interface ExecSocketDeps {
+interface ExecSocketDeps {
   readonly imps: ImpService;
   readonly audit: Pick<ApiAudit, 'record'>;
   readonly now: () => number;

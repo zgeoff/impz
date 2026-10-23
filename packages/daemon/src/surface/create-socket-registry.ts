@@ -1,10 +1,10 @@
-export interface SocketEntry<Session> {
+interface SocketEntry<Session> {
   readonly session: Session;
   readonly close: (code: number, reason: string) => void;
   readonly forget: () => void;
 }
 
-export interface SocketRegistry<Session> {
+interface SocketRegistry<Session> {
   readonly add: (id: string, entry: SocketEntry<Session>) => void;
   readonly findSession: (id: string) => Session | undefined;
   readonly remove: (id: string) => SocketEntry<Session> | undefined;
