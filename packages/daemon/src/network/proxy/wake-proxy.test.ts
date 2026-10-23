@@ -1,12 +1,12 @@
 import { expect, jest, mock, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
 import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
 import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
-import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { removeImp, updateImpMove } from '../../platform/db/imps';
 import { PEER_HEADER, createForwardedPeers } from './forwarded-peers';

@@ -1,9 +1,9 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { createConnection } from 'node:net';
 import type { EgressMode } from '@impz/api';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { startStubBrokerGuestSocket } from '../../../testing/network/start-stub-broker-guest-socket';
 import { startStubBrokerReplyTarget } from '../../../testing/network/start-stub-broker-reply-target';
-import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { parseSubnet } from '../../host-net/net/addressing';
 import { buildRangeMatcher } from '../../host-net/net/range-matcher';
 import { REFUSED_RANGES4 } from '../../host-net/net/ranges';

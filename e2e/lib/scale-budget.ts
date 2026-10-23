@@ -1,3 +1,4 @@
+import type { WaitForOptions } from '@impz/test-utils/wait-for';
 import { collectBudgetBreaches, readMaxOpenMs } from './budget-overshoot';
 import type { BudgetCheck, Overshoot, OvershootLimits, SleepSpan } from './budget-overshoot';
 import {
@@ -10,7 +11,6 @@ import { runInContainer } from './instance';
 import { startSleepWatch } from './sleep-events';
 import type { SleepWatch } from './sleep-events';
 import { waitFor } from './wait-for';
-import type { WaitForOptions } from './wait-for';
 
 const BUDGET_SAMPLE_MS = 500;
 

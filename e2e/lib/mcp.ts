@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { readLines } from '@impz/shared';
 import * as z from 'zod';
 import { readImpEnv } from './imp-cli';
 import { REPO_ROOT, instance } from './instance';
@@ -43,22 +44,10 @@ export async function startMcpSession(args: readonly string[]): Promise<McpSessi
   const responses = new Map<unknown, unknown>();
 
   void (async () => {
-    const decoder = new TextDecoder();
+    for await (const line of readLines(subprocess.stdout)) {
+      const message = MessageSchema.parse(JSON.parse(line));
 
-    let buffer = '';
-
-    for await (const chunk of subprocess.stdout) {
-      buffer += decoder.decode(chunk, { stream: true });
-
-      const lines = buffer.split('\n');
-
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const message = MessageSchema.parse(JSON.parse(line));
-
-        responses.set(message.id, message);
-      }
+      responses.set(message.id, message);
     }
   })();
 

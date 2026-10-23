@@ -2,6 +2,7 @@ import { lookup } from 'node:dns/promises';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ImpClient } from '@impz/client';
+import { createTestCertificates } from '@impz/test-utils/create-test-certificates';
 import * as z from 'zod';
 import { config } from './config';
 import { runImp } from './imp-cli';
@@ -151,24 +152,12 @@ export async function startRegistry(
     rmSync(certs, { recursive: true, force: true });
   });
 
-  await runChecked([
-    'openssl',
-    'req',
-    '-x509',
-    '-newkey',
-    'rsa:2048',
-    '-nodes',
-    '-days',
-    '1',
-    '-subj',
-    `/CN=${name}`,
-    '-addext',
-    `subjectAltName=DNS:${name}`,
-    '-keyout',
-    join(certs, 'key.pem'),
-    '-out',
-    join(certs, 'cert.pem'),
-  ]);
+  const certificates = await createTestCertificates({ dnsNames: [name] });
+
+  writeFileSync(join(certs, 'key.pem'), certificates.keyPem);
+
+  // The registry serves the chain, and a client that trusts the file finds the CA in it.
+  writeFileSync(join(certs, 'cert.pem'), certificates.chainPem);
 
   await runChecked([
     'docker',

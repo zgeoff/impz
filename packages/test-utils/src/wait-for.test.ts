@@ -97,3 +97,21 @@ test('it rethrows the last failure of the attempt once the deadline passes', () 
 
   expect(waiting).rejects.toThrowWithMessage(Error, 'attempt 4 failed');
 });
+
+test('it names what it waited for and the last failure once the deadline passes, given a label', () => {
+  const ctx = setupTest();
+  let attempts = 0;
+
+  const waiting = waitFor(
+    () => {
+      attempts++;
+      throw new Error(`attempt ${attempts} failed`);
+    },
+    { intervalMs: 10, timeoutMs: 30, now: ctx.now, wait: ctx.wait, label: 'the flaky thing' },
+  );
+
+  expect(waiting).rejects.toThrowWithMessage(
+    Error,
+    'timed out after 30 ms waiting for the flaky thing: attempt 4 failed',
+  );
+});

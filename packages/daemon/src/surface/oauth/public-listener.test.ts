@@ -2,6 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { ApprovalCodeSchema } from '@impz/api';
 import { readMcpAnswer } from '@impz/mcp/test-utils/read-mcp-answer';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { waitFor } from '@impz/test-utils/wait-for';
 import {
   Client,
@@ -18,7 +19,6 @@ import * as z from 'zod';
 import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
 import { runOAuthSignIn } from '../../../testing/identity/run-oauth-sign-in';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
-import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubMcpTransport } from '../../../testing/surface/build-stub-mcp-transport';
 import { buildStubExecGuest } from '../../../testing/vm/build-stub-exec-guest';

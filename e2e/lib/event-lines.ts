@@ -1,3 +1,4 @@
+import { readLines } from '@impz/shared';
 import * as z from 'zod';
 
 const EventLineSchema = z.object({
@@ -28,23 +29,11 @@ export async function readEventLines(
   stdout: ReadableStream<Uint8Array>,
   onLine: (line: string) => void,
 ): Promise<void> {
-  const decoder = new TextDecoder();
+  for await (const line of readLines(stdout)) {
+    const formatted = formatEventLine(line);
 
-  let buffered = '';
-
-  for await (const chunk of stdout) {
-    buffered += decoder.decode(chunk, { stream: true });
-
-    const lines = buffered.split('\n');
-
-    buffered = lines.pop() ?? '';
-
-    for (const line of lines) {
-      const formatted = formatEventLine(line);
-
-      if (formatted !== null) {
-        onLine(formatted);
-      }
+    if (formatted !== null) {
+      onLine(formatted);
     }
   }
 }

@@ -1,5 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { formatShellWord } from '@impz/test-utils/format-shell-word';
 
 export interface StubBin {
   readonly bin: string;
@@ -20,7 +21,7 @@ export function createStubBin(directory: string, name: string, script = ''): Stu
 
   writeFileSync(
     file,
-    `#!/bin/bash\nSTUB_CALLS='${calls.replaceAll("'", String.raw`'\''`)}'\nprintf '%s\\n' "${name} $*" >>"$STUB_CALLS"\n${script}\n`,
+    `#!/bin/bash\nSTUB_CALLS=${formatShellWord(calls)}\nprintf '%s\\n' "${name} $*" >>"$STUB_CALLS"\n${script}\n`,
   );
 
   chmodSync(file, 0o755);

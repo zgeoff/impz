@@ -6,11 +6,11 @@ import { CLIENT_VERSION, createImpClient } from '@impz/client';
 import { makeStubImpdWithNewReason } from '@impz/client/test-utils/make-stub-impd-with-new-reason';
 import {
   buildStubImageBuilder,
-  claimFreePorts,
   createFilesTar,
   startBuilderImpd,
   startTestImpd,
 } from '@impz/daemon/testing';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';

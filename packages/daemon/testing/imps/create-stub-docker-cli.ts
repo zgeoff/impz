@@ -1,5 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { formatShellWord } from '@impz/test-utils/format-shell-word';
 import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';
 
 interface StubDockerInspect {
@@ -150,10 +151,6 @@ function buildInspectArm(options: BuildInspectArmOptions): string {
     `  ${formatShellWord(options.argv)}) ${present}echo >>${count}; n=$(($(wc -l <${count}) - 1))`,
     `    [ "$n" -gt ${last} ] && n=${last}; cat ${output}"$n"-${formatKey} ;;`,
   ].join('\n');
-}
-
-function formatShellWord(value: string): string {
-  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
 }
 
 function buildPullArm(index: number, ref: string, pull: StubDockerPull, state: string): string {

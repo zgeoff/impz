@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import { readMcpAnswer } from '@impz/mcp/test-utils/read-mcp-answer';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import invariant from 'tiny-invariant';
 import { buildStubTailscale } from '../../../testing/network/build-stub-tailscale';
-import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { TEST_TOKEN } from '../../../testing/test-token';
 import { buildStubExecGuest } from '../../../testing/vm/build-stub-exec-guest';

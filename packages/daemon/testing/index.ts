@@ -29,7 +29,6 @@ export { readHostNetfilter } from './host-net/read-host-netfilter';
 export { runInNetns } from './host-net/run-in-netns';
 export { buildQueryGate } from './platform/build-query-gate';
 export { buildStubClock } from './platform/build-stub-clock';
-export { claimFreePorts } from './platform/claim-free-ports';
 export { readInBackground } from './platform/read-in-background';
 
 export {

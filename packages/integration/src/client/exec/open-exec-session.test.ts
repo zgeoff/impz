@@ -7,10 +7,10 @@ import { startStubImpdSocket } from '@impz/client/test-utils/start-stub-impd-soc
 import {
   buildImpPaths,
   buildStubExecAgent,
-  claimFreePorts,
   startStubAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { server } from '@impz/test-utils/mock-server';
 import { http } from 'msw';
 
