@@ -25,7 +25,9 @@ does nothing. Otherwise it:
 4. Runs
    `tailscale up --auth-key=file:... --hostname=${IMP_TAILSCALE_HOSTNAME:-imp} --advertise-tags=tag:imp --accept-dns=false --reset --timeout=60s`.
    The key goes through a 0600 temp file, or the key file itself, so it never shows in argv. A node
-   that runs from saved state under another hostname logs in again only when there is a key.
+   that runs from saved state under another hostname logs in again only when there is a key. With
+   `IMP_TAILSCALE_LOGIN_SERVER` set, it passes `--login-server` in place of `--advertise-tags`
+   ([Headscale](#headscale)).
 5. Waits for `Running` and prints the tailnet IP and MagicDNS name.
 
 `host/scripts/tailscale-down.sh` runs `tailscale logout` and stops `tailscaled`. Logout deletes an
@@ -35,6 +37,21 @@ ACL: `autogroup:member -> tag:imp:*`. Members reach the host on any port. The ho
 traffic that leaves through it) cannot open connections to members. Replies to member connections
 pass. With more than one host, add `tag:imp -> tag:imp:7070`, so hosts can reach each other's impd
 API for [moves](./hosts.md#the-acl). Guests never use it: their egress refuses `100.64.0.0/10`.
+
+## Headscale
+
+`IMP_TAILSCALE_LOGIN_SERVER` points the node at a [Headscale](https://headscale.net) control server
+in place of Tailscale's. Headscale refuses a pre-auth key join that advertises any tag, and gives
+the node the tags of its key instead, so `tailscale-up.sh` advertises none. Make the key with its
+tags:
+
+```sh
+headscale preauthkeys create --tags tag:imp-e2e
+```
+
+The tag check works as with Tailscale: with `IMP_TAILSCALE_TAGS` set, a node whose tags differ joins
+again with the key, or goes down. `bun run test:headscale` joins a Headscale tailnet in Docker this
+way.
 
 ## State and ephemeral keys
 

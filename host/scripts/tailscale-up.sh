@@ -16,6 +16,8 @@
 #      IMP_TAILSCALE_HOSTNAME    tailnet hostname (default imp)
 #      IMP_TAILSCALE_TAGS        tags to advertise, comma-separated (default tag:imp); the
 #                                e2e harness sets tag:imp-e2e
+#      IMP_TAILSCALE_LOGIN_SERVER  a Headscale control server (default Tailscale's); its key
+#                                carries the tags, so none are advertised
 #      IMP_TAILSCALE_STATE_DIR   node state (default /var/lib/imp/tailscale); "mem" keeps it in memory
 #      IMP_DNS                   resolvers used if resolv.conf points into the tailnet,
 #                                comma-separated as impd reads it (default "1.1.1.1,8.8.8.8")
@@ -125,6 +127,9 @@ done
 # join: log in with the key. The key goes through a file so it never shows
 # in argv (ps, /proc).
 reauth=()
+# Headscale refuses any advertised tag on a key join: the key carries them.
+control=(--advertise-tags="${IMP_TAILSCALE_TAGS:-tag:imp}")
+[ -z "${IMP_TAILSCALE_LOGIN_SERVER:-}" ] || control=(--login-server="$IMP_TAILSCALE_LOGIN_SERVER")
 join() {
   local auth=$key_file rc=0
   if [ -z "$auth" ]; then
@@ -133,7 +138,7 @@ join() {
     printf '%s' "$TAILSCALE_AUTHKEY" >"$auth"
   fi
   ts up --reset "${reauth[@]}" --auth-key="file:$auth" --hostname="$hostname" \
-    --advertise-tags="${IMP_TAILSCALE_TAGS:-tag:imp}" --accept-dns=false --timeout=60s || rc=$?
+    "${control[@]}" --accept-dns=false --timeout=60s || rc=$?
   [ -n "$key_file" ] || rm -f "$auth"
   if [ "$rc" != 0 ]; then
     echo "tailscale-up: tailscale up failed with the key. A single-use key that was used already, an" \

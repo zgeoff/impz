@@ -786,3 +786,86 @@ test('it never puts the key on the command line', () => {
 
   expect(ctx.tailscale.readCalls('up').join('\n')).not.toContain('fake-key');
 });
+
+test('it joins Tailscale as tag:imp when no login server is given', () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
+
+  ctx.tailscale.writeNode({
+    BackendState: 'NeedsLogin',
+    Self: { HostName: '', Tags: [], TailscaleIPs: [], DNSName: '' },
+  });
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      '"$0" >"$1" 2>"$2"',
+      new URL('tailscale-up.sh', import.meta.url).pathname,
+      ctx.out,
+      ctx.err,
+    ],
+    {
+      env: {
+        PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_RESOLV_CONF: ctx.resolvConf,
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
+        IMP_TAILSCALE_HOSTNAME: 'imp',
+        TAILSCALE_AUTHKEY: 'fake-key',
+      },
+    },
+  );
+
+  expect(result.exitCode).toBe(0);
+
+  expect(ctx.tailscale.readCalls('up')).toStrictEqual([
+    expect.stringMatching(
+      /^up --reset --auth-key=file:\S+ --hostname=imp --advertise-tags=tag:imp --accept-dns=false --timeout=60s$/u,
+    ),
+  ]);
+});
+
+test('it joins the login server without advertising tags, which its key carries', () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
+
+  ctx.tailscale.writeNode({
+    BackendState: 'NeedsLogin',
+    Self: { HostName: '', Tags: [], TailscaleIPs: [], DNSName: '' },
+  });
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      '"$0" >"$1" 2>"$2"',
+      new URL('tailscale-up.sh', import.meta.url).pathname,
+      ctx.out,
+      ctx.err,
+    ],
+    {
+      env: {
+        PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_RESOLV_CONF: ctx.resolvConf,
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
+        IMP_TAILSCALE_HOSTNAME: 'imp',
+        TAILSCALE_AUTHKEY: 'fake-key',
+        IMP_TAILSCALE_LOGIN_SERVER: 'http://headscale.test:8080',
+      },
+    },
+  );
+
+  expect(result.exitCode).toBe(0);
+
+  expect(ctx.tailscale.readCalls('up')).toStrictEqual([
+    expect.stringMatching(
+      /^up --reset --auth-key=file:\S+ --hostname=imp --login-server=http:\/\/headscale\.test:8080 --accept-dns=false --timeout=60s$/u,
+    ),
+  ]);
+});
