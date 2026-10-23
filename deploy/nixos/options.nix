@@ -254,8 +254,9 @@ in
       default = null;
       example = "/run/secrets/imp-tailscale-authkey";
       description = ''
-        A tagged auth key for the host container's node, outside the Nix
-        store, such as /var/lib/imp-host/secrets/tailscale-authkey (root,
+        A tagged auth key for the host container's node, or a tagged
+        Headscale pre-auth key with settings.IMP_TAILSCALE_LOGIN_SERVER,
+        outside the Nix store, such as /var/lib/imp-host/secrets/tailscale-authkey (root,
         0400). A copy is mounted read-only into the container at each start,
         and tailscale reads it only when the node has to join: when the pool
         holds no node state, or the saved node needs a login. A missing file

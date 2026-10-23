@@ -1,13 +1,4 @@
-import {
-  EXEC_CLOSE_RESTARTING,
-  EXEC_PATH,
-  EXEC_TICKET_PARAM,
-  IMAGE_BUILD_PATH,
-  MCP_PATH,
-  TUNNEL_CLOSE_RESTARTING,
-  TUNNEL_PATH,
-} from '@impz/api';
-import type { ExecSocket } from '@impz/client';
+import { IMAGE_BUILD_PATH, MCP_PATH } from '@impz/api';
 import { ORPCError, onError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { StrictGetMethodPlugin } from '@orpc/server/plugins';
@@ -18,32 +9,20 @@ import { createLogouts } from '../identity/auth/logouts';
 import type { Revocations } from '../identity/auth/revocations';
 import { findBearer } from '../identity/auth/token-store';
 import type { MoveService } from '../imp-ops/moves/move-service';
-import { buildAuditedBackend } from '../imps/exec/audited-backend';
-import { createExecSession } from '../imps/exec/exec-session';
-import type { ExecSession } from '../imps/exec/exec-session';
-import { createInProcessSocket } from '../imps/exec/in-process-socket';
-import { createReverseForwards } from '../imps/reverse/reverse-forwards';
-import { createTunnelLimits, createTunnelSession } from '../imps/tunnel/tunnel-session';
-import type { TunnelSession } from '../imps/tunnel/tunnel-session';
 import { redeemPeerAddress } from '../network/proxy/forwarded-peers';
 import type { ForwardedPeers } from '../network/proxy/forwarded-peers';
-import { withAuditedOpen } from '../platform/audit/api-audit';
-import { buildForbiddenError } from '../platform/errors/impd-errors';
 import { isAllowedOrigin } from '../platform/http/is-allowed-origin';
-import { formatCaller, isCallerAllowed } from '../platform/principal/caller';
 import type { Caller } from '../platform/principal/caller';
 import { getImpdLogger } from '../platform/process/get-impd-logger';
-import type { ListenSpec } from '../vm/agent-client/listener-stream';
 import { createSessionHandler } from './auth/session-handler';
 import { createDashboardRoutes } from './create-dashboard-routes';
+import { createExecSockets } from './create-exec-sockets';
 import { createRouter } from './create-router';
 import type { RouterDeps } from './create-router';
-import { buildGrantedBackend } from './exec/exec-grant';
-import type { ExecGrant } from './exec/exec-grant';
+import { createTunnelSocketRoute } from './create-tunnel-socket-route';
 import { createExecTickets, isCallerLive } from './exec/exec-tickets';
 import type { BuildContextRoute } from './images/build-context-route';
 import { createMcpEndpoint } from './mcp/mcp-endpoint';
-import { readBufferedAmount } from './read-buffered-amount';
 import { toApiImage } from './to-api-image';
 import { withRetryAfter } from './with-retry-after';
 
@@ -51,9 +30,6 @@ import { withRetryAfter } from './with-retry-after';
 // client that vanished without a close lets go of its session, and of the
 // imp's idle timer, within a minute.
 const EXEC_SOCKET_OPTIONS = { idleTimeout: 30, sendPings: true } as const;
-
-// WebSocket's close code for a policy violation.
-const CLOSE_REVOKED = 1008;
 const EVENT_KEEPALIVE_MS = 5000;
 
 export interface AppDeps extends Omit<RouterDeps, 'execTickets'> {
@@ -65,12 +41,6 @@ export interface AppDeps extends Omit<RouterDeps, 'execTickets'> {
   readonly buildContexts: BuildContextRoute;
   readonly moves: MoveService;
   readonly logRpcFailure?: (failure: unknown) => void;
-}
-
-interface SocketEntry<Session> {
-  readonly session: Session;
-  readonly close: (code: number, reason: string) => void;
-  readonly forget: () => void;
 }
 
 interface PeerServer {
@@ -91,7 +61,11 @@ export function createApp(deps: AppDeps) {
     tailnet: deps.tailnet,
   };
 
-  const findCaller = (request: Request, server: PeerServer | null, cookie: boolean) => {
+  const findCaller = (
+    request: Request,
+    server: Pick<PeerServer, 'requestIP'> | null,
+    cookie: boolean,
+  ) => {
     const socket = server?.requestIP(request)?.address ?? null;
     const peer = redeemPeerAddress(request, socket, deps.peers);
 
@@ -120,28 +94,7 @@ export function createApp(deps: AppDeps) {
     ],
   });
 
-  const sessions = new Map<string, SocketEntry<ExecSession>>();
-  const tunnels = new Map<string, SocketEntry<TunnelSession>>();
-
-  const tunnelLimits = createTunnelLimits();
-  const reverseForwards = createReverseForwards();
-
-  const grants = new WeakMap<Request, ExecGrant>();
-  const tunnelCallers = new WeakMap<Request, Caller>();
-
   const logouts = createLogouts();
-
-  const buildExecBackend = (grant: ExecGrant | undefined) => {
-    const actor = grant?.caller ?? { kind: 'token', name: 'unknown' };
-
-    return buildAuditedBackend({
-      backend: buildGrantedBackend(deps.imps, grant),
-      audit: deps.audit,
-      actor,
-      events: deps.imps.events,
-      now: deps.now,
-    });
-  };
 
   const readRevoked = (caller: Readonly<Caller> | undefined): AbortSignal | null => {
     const signals = [
@@ -189,45 +142,24 @@ export function createApp(deps: AppDeps) {
     return withRetryAfter(handled.response);
   };
 
-  const openExecSocket = (url: string): ExecSocket => {
-    const ticket = new URL(url).searchParams.get(EXEC_TICKET_PARAM);
-
-    const holder = ticket === null ? null : execTickets.redeem(ticket);
-    const id = `in-process-${crypto.randomUUID()}`;
-
-    return createInProcessSocket((peer) => {
-      if (holder === null) {
-        return null;
-      }
-
-      const grant = { caller: holder.caller, name: holder.name };
-      const session = createExecSession(peer, buildExecBackend(grant));
-
-      const forget = handleRevocation(grant.caller, () => {
-        peer.close(CLOSE_REVOKED, 'the token was removed');
-      });
-
-      sessions.set(id, { session, close: peer.close, forget });
-
-      return {
-        handleMessage: session.handleMessage,
-        handleClose: () => {
-          session.handleClose();
-
-          forget();
-
-          sessions.delete(id);
-        },
-      };
-    });
+  const socketDeps = {
+    imps: deps.imps,
+    audit: deps.audit,
+    now: deps.now,
+    findCaller: (request: Request, server: Pick<PeerServer, 'requestIP'> | null) =>
+      findCaller(request, server, false),
+    closeOnRevocation: handleRevocation,
   };
+
+  const execSockets = createExecSockets({ ...socketDeps, execTickets });
+  const tunnelSockets = createTunnelSocketRoute(socketDeps);
 
   const mcpServers = new WeakMap<Request, PeerServer | null>();
 
   const mcp = createMcpEndpoint({
     findCaller: (request) => findCaller(request, mcpServers.get(request) ?? null, false),
     handleRpc,
-    connectExec: openExecSocket,
+    connectExec: execSockets.openExecSocket,
     readEnds,
   });
 
@@ -238,7 +170,7 @@ export function createApp(deps: AppDeps) {
       return bearer === null ? Promise.resolve(null) : deps.oauth.resolveAccess(bearer);
     },
     handleRpc,
-    connectExec: openExecSocket,
+    connectExec: execSockets.openExecSocket,
     readEnds,
     isCrossOrigin: (request) =>
       !isAllowedOrigin(request, { kind: 'public-route', origin: deps.oauth.issuer }),
@@ -325,179 +257,8 @@ export function createApp(deps: AppDeps) {
       { parse: 'none' },
     )
 
-    .ws(EXEC_PATH, {
-      beforeHandle: async (context) => {
-        const ticket = new URL(context.request.url).searchParams.get(EXEC_TICKET_PARAM);
-
-        if (ticket !== null) {
-          const holder = execTickets.redeem(ticket);
-
-          if (holder === null) {
-            return Response.json({ error: 'unauthorized' }, { status: 401 });
-          }
-
-          grants.set(context.request, { caller: holder.caller, name: holder.name });
-
-          // Elysia ends the upgrade on any returned value, null included
-          // oxlint-disable-next-line unicorn/no-useless-undefined
-          return undefined;
-        }
-
-        const caller = await findCaller(context.request, context.server, false);
-
-        if (caller === null) {
-          return Response.json({ error: 'unauthorized' }, { status: 401 });
-        }
-
-        grants.set(context.request, { caller, name: null });
-
-        // oxlint-disable-next-line unicorn/no-useless-undefined
-        return undefined;
-      },
-      open: (ws) => {
-        const grant = grants.get(ws.data.request);
-
-        const session = createExecSession(
-          {
-            sendText: (text) => {
-              ws.raw.send(text);
-            },
-
-            // Bun answers 0 for a message it dropped.
-            sendBinary: (data) => ws.raw.send(data) !== 0,
-            close: (code, reason) => {
-              ws.raw.close(code, reason);
-            },
-            readBufferedAmount: () => readBufferedAmount(ws.raw),
-          },
-          buildExecBackend(grant),
-        );
-
-        const forget = handleRevocation(grant?.caller, () => {
-          ws.raw.close(CLOSE_REVOKED, 'the token was removed');
-        });
-
-        sessions.set(ws.id, {
-          session,
-          close: (code, reason) => {
-            ws.raw.close(code, reason);
-          },
-          forget,
-        });
-      },
-      message: (ws, message) => {
-        sessions.get(ws.id)?.session.handleMessage(message);
-      },
-      drain: (ws) => {
-        sessions.get(ws.id)?.session.handleDrain();
-      },
-      close: (ws) => {
-        const entry = sessions.get(ws.id);
-
-        entry?.session.handleClose();
-        entry?.forget();
-        sessions.delete(ws.id);
-      },
-    })
-
-    .ws(TUNNEL_PATH, {
-      beforeHandle: async (context) => {
-        const caller = await findCaller(context.request, context.server, false);
-
-        if (caller === null) {
-          return Response.json({ error: 'unauthorized' }, { status: 401 });
-        }
-
-        tunnelCallers.set(context.request, caller);
-
-        // oxlint-disable-next-line unicorn/no-useless-undefined
-        return undefined;
-      },
-      open: (ws) => {
-        const caller = tunnelCallers.get(ws.data.request);
-
-        const peer = {
-          close: (code: number, reason: string): void => {
-            ws.raw.close(code, reason);
-          },
-        };
-
-        const session = createTunnelSession(
-          {
-            sendText: (text) => {
-              ws.raw.send(text);
-            },
-            sendBinary: (data) => {
-              ws.raw.send(data);
-            },
-            close: peer.close,
-          },
-          {
-            readImpId: async (name) => {
-              if (caller === undefined || !isCallerAllowed(caller, 'exec', name)) {
-                const who = caller === undefined ? 'nobody' : formatCaller(caller);
-
-                throw buildForbiddenError(`${who} may not open a tunnel into imp ${name}`);
-              }
-
-              const imp = await deps.imps.readImp(name);
-
-              return imp.id;
-            },
-            openDial: (name, target) => {
-              const port = target.address.split(':').at(-1) ?? '';
-
-              return withAuditedOpen(
-                deps.audit,
-                {
-                  procedure: `tunnel:${port}`,
-                  actor: caller ?? { kind: 'token', name: 'unknown' },
-                  impName: name,
-                  startedAt: deps.now(),
-                },
-                () => deps.imps.openDial(name, target, 'tunnel'),
-              );
-            },
-            openListener: (name, spec) => {
-              const where = 'port' in spec ? String(spec.port) : readListenPath(spec);
-
-              return withAuditedOpen(
-                deps.audit,
-                {
-                  procedure: `reverse:${where}`,
-                  actor: caller ?? { kind: 'token', name: 'unknown' },
-                  impName: name,
-                  startedAt: deps.now(),
-                },
-                () => deps.imps.openListener(name, spec, null),
-              );
-            },
-            openAccept: (name, listener, connection) =>
-              deps.imps.openAccept(name, listener, connection, 'tunnel'),
-            owner:
-              caller === undefined ? '' : `${caller.kind}:${caller.name}:${caller.tokenId ?? ''}`,
-          },
-          tunnelLimits,
-          reverseForwards,
-        );
-
-        const forget = handleRevocation(caller, () => {
-          peer.close(CLOSE_REVOKED, 'the token was removed');
-        });
-
-        tunnels.set(ws.id, { session, close: peer.close, forget });
-      },
-      message: (ws, message) => {
-        tunnels.get(ws.id)?.session.handleMessage(message);
-      },
-      close: (ws) => {
-        const entry = tunnels.get(ws.id);
-
-        entry?.session.handleClose();
-        entry?.forget();
-        tunnels.delete(ws.id);
-      },
-    });
+    .use(execSockets.route)
+    .use(tunnelSockets.route);
 
   return {
     app,
@@ -505,14 +266,8 @@ export function createApp(deps: AppDeps) {
 
     closeExecSessions: () => {
       deps.imps.endLogFollows();
-
-      for (const entry of sessions.values()) {
-        entry.close(EXEC_CLOSE_RESTARTING, 'impd is restarting');
-      }
-
-      for (const entry of tunnels.values()) {
-        entry.close(TUNNEL_CLOSE_RESTARTING, 'impd is restarting');
-      }
+      execSockets.closeSessions();
+      tunnelSockets.closeTunnels();
     },
   };
 }
@@ -524,8 +279,4 @@ function buildHealthWarnings(
   const reboot = rebootReason === null ? [] : [`host needs a reboot: ${rebootReason}`];
 
   return [...reboot, ...storageWarnings];
-}
-
-function readListenPath(spec: ListenSpec): string {
-  return spec.network === 'unix' ? (spec.path ?? 'auto') : spec.network;
 }

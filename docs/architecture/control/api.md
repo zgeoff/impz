@@ -31,8 +31,8 @@ report, which measures the memory of every awake VM, so a client that only check
 then reads the flags from `system.info`.
 
 The router checks the caller's access before it validates the input or runs the handler, and a
-procedure missing from the access map is refused ([auth](./auth.md#scopes)). Handlers that list
-filter by the caller's imps.
+procedure whose metadata declares no access rule is refused ([auth](./auth.md#scopes)). Handlers
+that list filter by the caller's imps.
 
 ## Exec and tunnels
 
@@ -65,7 +65,7 @@ stopping.
 - **The MCP server** comes in two forms. `impz mcp` runs locally over stdio with the CLI's client,
   and its guard against mistakes is no security limit. impd's own `/mcp` endpoint is streamable
   HTTP, and runs each tool call through the same procedure handler in process, as the calling
-  credential, so the access map and the audit log cover it as they cover the CLI. A public MCP
+  credential, so the access rules and the audit log cover it as they cover the CLI. A public MCP
   route, off by default, serves the same tools behind OAuth ([auth](./auth.md#oauth)).
 - **The dashboard** is a React app impd serves under `/ui/`. It holds no token: it calls the API on
   impd's own origin with the session cookie ([auth](./auth.md#the-dashboard-session)), and gets exec

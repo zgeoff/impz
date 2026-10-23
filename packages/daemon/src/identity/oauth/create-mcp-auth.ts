@@ -13,11 +13,11 @@ import { mintSecret } from '../../platform/secrets/mint-secret';
 import type { Revocations } from '../auth/revocations';
 import type { TokenStore } from '../auth/token-store';
 import { CLIENT_SCOPES, createApproverPlugin } from './create-approver-plugin';
+import { createOAuthHandlers } from './create-oauth-handlers';
+import type { AuthServer, OAuthHandlers } from './create-oauth-handlers';
 import { createSignIns } from './create-sign-ins';
 import { deriveTokenHash } from './derive-token-hash';
 import { isPatternsWithin, pickGrantScope, readLowerScope } from './grant-limits';
-import { makeOAuthRouter } from './make-oauth-router';
-import type { AuthServer } from './make-oauth-router';
 import type { PublicMcpConfig } from './public-mcp-config';
 
 const MINUTE_MS = 60_000;
@@ -48,7 +48,7 @@ export interface McpAuth {
     imps: readonly string[] | undefined,
   ) => void;
 
-  readonly handle: (request: Request) => Promise<Response | null>;
+  readonly handlers: OAuthHandlers | null;
 
   readonly resolveAccess: (bearer: string) => Promise<Caller | null>;
   readonly removeExpired: () => Promise<void>;
@@ -196,18 +196,20 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     },
   };
 
-  const handle = makeOAuthRouter({
-    auth: server,
-    db,
-    signIns,
-    origin,
-    resource,
-    isOn: deps.config !== null,
-    now: deps.now,
-    log: deps.log,
-    readApprover,
-    removeGrantRows,
-  });
+  const handlers =
+    deps.config === null
+      ? null
+      : createOAuthHandlers({
+          auth: server,
+          db,
+          signIns,
+          origin,
+          resource,
+          now: deps.now,
+          log: deps.log,
+          readApprover,
+          removeGrantRows,
+        });
 
   const requireClient = async (name: string) => {
     const client = await db
@@ -369,7 +371,7 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
       );
     },
 
-    handle,
+    handlers,
 
     resolveAccess: async (bearer) => {
       let payload: unknown;

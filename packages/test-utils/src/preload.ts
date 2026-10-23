@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll } from 'bun:test';
+import { bypassAmbientProxy } from './bypass-ambient-proxy';
 import { server } from './mock-server';
 import { registerRunHooks } from './register-run-hooks';
 import { registerTracing } from './register-tracing';
@@ -8,6 +9,7 @@ import { buildRoutedFetch } from './route-fetch';
 const nativeFetch = globalThis.fetch;
 
 removeAmbientImpEnv();
+bypassAmbientProxy();
 registerRunHooks();
 registerTracing();
 

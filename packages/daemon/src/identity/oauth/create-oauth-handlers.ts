@@ -28,11 +28,7 @@ import { stripDpopProof } from './strip-dpop-proof';
 const MINUTE_MS = 60_000;
 const CONSENT_MS = 10 * MINUTE_MS;
 const MAX_FORM_BYTES = 16 * 1024;
-
-const RESOURCE_METADATA_PATHS: ReadonlySet<string> = new Set([
-  '/.well-known/oauth-protected-resource',
-  '/.well-known/oauth-protected-resource/mcp',
-]);
+const METADATA_HEADERS = { 'cache-control': 'no-store' };
 
 export interface AuthServer {
   readonly handler: (request: Request) => Promise<Response>;
@@ -43,14 +39,13 @@ export interface AuthServer {
   readonly readSessionCookie: () => Promise<{ readonly name: string; readonly secure: boolean }>;
 }
 
-interface OAuthRouterDeps {
+interface OAuthHandlerDeps {
   readonly auth: AuthServer;
   readonly db: ImpDatabase;
   readonly signIns: SignIns;
   readonly origin: string;
   readonly resource: string;
 
-  readonly isOn: boolean;
   readonly now: () => number;
   readonly log: (message: string) => void;
   readonly readApprover: (
@@ -73,9 +68,23 @@ interface SignedIn {
   readonly expiresAt: number;
 }
 
-export function makeOAuthRouter(
-  deps: Readonly<OAuthRouterDeps>,
-): (request: Request) => Promise<Response | null> {
+interface Advertised {
+  readonly status: number;
+  readonly fields: Readonly<Record<string, unknown>>;
+}
+
+export interface OAuthHandlers {
+  readonly readServerMetadata: (request: Request) => Promise<Response>;
+  readonly readResourceMetadata: (request: Request) => Promise<Response>;
+  readonly answerError: (request: Request) => Response;
+  readonly runAuthorize: (request: Request) => Promise<Response>;
+  readonly runTokenRequest: (request: Request) => Promise<Response>;
+  readonly runRevoke: (request: Request) => Promise<Response>;
+  readonly runLogin: (request: Request) => Promise<Response>;
+  readonly runConsent: (request: Request) => Promise<Response>;
+}
+
+export function createOAuthHandlers(deps: Readonly<OAuthHandlerDeps>): OAuthHandlers {
   const host = new URL(deps.origin).host;
   const signedIn = new Map<string, SignedIn>();
 
@@ -115,40 +124,21 @@ export function makeOAuthRouter(
       body,
     });
 
-  const readMetadata = async (
-    request: Request,
-    url: Readonly<RequestTarget>,
-  ): Promise<Response> => {
-    const response = await deps.auth.handler(toPublicRequest(request, url));
+  const readAdvertised = async (request: Request): Promise<Advertised | null> => {
+    const response = await deps.auth.handler(toPublicRequest(request, new URL(request.url)));
     const metadata: unknown = await response.json();
 
     if (typeof metadata !== 'object' || metadata === null) {
-      return new Response(null, { status: 503 });
+      return null;
     }
 
-    const advertised = Object.fromEntries(
+    const fields = Object.fromEntries(
       Object.entries(metadata).filter(
         ([key]) => !key.startsWith('introspection_') && !key.startsWith('dpop_'),
       ),
     );
 
-    const headers = { 'cache-control': 'no-store' };
-
-    if (RESOURCE_METADATA_PATHS.has(url.pathname)) {
-      return Response.json(
-        { ...advertised, resource_name: 'imp' },
-        { status: response.status, headers },
-      );
-    }
-
-    return Response.json(
-      {
-        ...advertised,
-        token_endpoint_auth_methods_supported: ['none'],
-        revocation_endpoint_auth_methods_supported: ['none'],
-      },
-      { headers },
-    );
+    return { status: response.status, fields };
   };
 
   const runAuthorize = async (url: Readonly<RequestTarget>): Promise<Response> => {
@@ -498,48 +488,10 @@ export function makeOAuthRouter(
     });
   };
 
-  return (request) => {
-    if (!deps.isOn) {
-      return Promise.resolve(null);
-    }
-
-    const url = new URL(request.url);
-
-    const route = `${request.method} ${url.pathname}`;
-
-    if (
-      route === 'GET /.well-known/oauth-authorization-server' ||
-      (request.method === 'GET' && RESOURCE_METADATA_PATHS.has(url.pathname))
-    ) {
-      return readMetadata(request, url);
-    }
-
-    // where better-auth sends a refusal it cannot return to the client
-    if (route === 'GET /error') {
-      const isUnknownClient = url.searchParams.get('error') === 'invalid_client';
-      const page = isUnknownClient ? 'unknown_client' : 'bad_request';
-
-      return Promise.resolve(buildErrorPage(page));
-    }
-
-    if (route === 'GET /oauth2/authorize') {
-      return runAuthorize(url);
-    }
-
-    if (route === 'POST /oauth2/token') {
-      return runTokenRequest(request, url);
-    }
-
-    if (route === 'POST /oauth2/revoke') {
-      return runRevoke(request, url);
-    }
-
-    const isPage = url.pathname === '/login' || url.pathname === '/consent';
-
-    if (!isPage || (request.method !== 'GET' && request.method !== 'POST')) {
-      return Promise.resolve(null);
-    }
-
+  const runPage = (
+    request: Request,
+    run: (request: Request, url: Readonly<RequestTarget>) => Promise<Response>,
+  ): Promise<Response> => {
     if (
       request.method === 'POST' &&
       !isAllowedOrigin(request, { kind: 'same-origin-form', origin: deps.origin })
@@ -547,7 +499,51 @@ export function makeOAuthRouter(
       return Promise.resolve(buildErrorPage('bad_request'));
     }
 
-    return url.pathname === '/login' ? runLogin(request, url) : runConsent(request, url);
+    return run(request, new URL(request.url));
+  };
+
+  return {
+    readServerMetadata: async (request) => {
+      const advertised = await readAdvertised(request);
+
+      if (advertised === null) {
+        return new Response(null, { status: 503 });
+      }
+
+      return Response.json(
+        {
+          ...advertised.fields,
+          token_endpoint_auth_methods_supported: ['none'],
+          revocation_endpoint_auth_methods_supported: ['none'],
+        },
+        { headers: METADATA_HEADERS },
+      );
+    },
+    readResourceMetadata: async (request) => {
+      const advertised = await readAdvertised(request);
+
+      if (advertised === null) {
+        return new Response(null, { status: 503 });
+      }
+
+      return Response.json(
+        { ...advertised.fields, resource_name: 'imp' },
+        { status: advertised.status, headers: METADATA_HEADERS },
+      );
+    },
+
+    // where better-auth sends a refusal it cannot return to the client
+    answerError: (request) => {
+      const isUnknownClient = new URL(request.url).searchParams.get('error') === 'invalid_client';
+      const page = isUnknownClient ? 'unknown_client' : 'bad_request';
+
+      return buildErrorPage(page);
+    },
+    runAuthorize: (request) => runAuthorize(new URL(request.url)),
+    runTokenRequest: (request) => runTokenRequest(request, new URL(request.url)),
+    runRevoke: (request) => runRevoke(request, new URL(request.url)),
+    runLogin: (request) => runPage(request, runLogin),
+    runConsent: (request) => runPage(request, runConsent),
   };
 }
 

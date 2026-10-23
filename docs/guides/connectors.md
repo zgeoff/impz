@@ -95,6 +95,8 @@ one it sends upstream. A request on a filtered grant whose path holds an encoded
 `%5C`) is refused, because the service could decode it into a segment break that the pattern never
 saw. On a filtered grant the broker drops the `X-HTTP-Method-Override`, `X-HTTP-Method` and
 `X-Method-Override` headers, so a service that honours them cannot run a method the filter refused.
+impd refuses a secret whose `--header` is one of these 3 names, because the credential would then
+override the method.
 
 A path filter narrows neither a GraphQL endpoint nor the query string. A GraphQL service takes every
 query and mutation on one path, so a grant for `POST /graphql` lets the imp send any operation the

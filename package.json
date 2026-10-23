@@ -1,6 +1,6 @@
 {
   "name": "impz",
-  "version": "2.10.3",
+  "version": "2.10.6",
   "private": true,
   "description": "Persistent Linux microVMs that sleep when idle and wake on request",
   "license": "MIT",
@@ -50,6 +50,7 @@
       "@zgeoff/bun-test-extended": "0.2.1",
       "@zgeoff/bun-test-react": "0.2.1",
       "@zgeoff/format-codemod": "0.3.1",
+      "@zgeoff/kysely-bun-sqlite": "0.3.0",
       "@zgeoff/oxlint-config": "0.5.2",
       "@zgeoff/skill-gate": "0.2.6",
       "acme-client": "5.4.0",
@@ -105,6 +106,7 @@
     "check": "bun run check:static && bun test",
     "check:static": "bun run deadcode && bun run format:check && bun run lint:full && bun run lint:docs && bun run typecheck",
     "test:host": "bun test ./packages/daemon/src/network/egress/egress-ruleset.test.ts ./host/scripts/setup-net.test.ts ./packages/daemon/testing/host-net/run-in-netns.test.ts ./packages/daemon/testing/network/build-stub-public-network.test.ts",
+    "test:headscale": "bun test ./host/scripts/tailscale-up.headscale.ts",
     "test:pebble": "bun scripts/dev/pull-pebble-images.ts && bun test ./packages/daemon/src/network/https/acme/acme-issuer.pebble.ts",
     "test:dashboard": "bun run --cwd packages/dashboard test",
     "typecheck": "tsrs -p tsconfig.json --noEmit && tsrs -p packages/dashboard/tsconfig.json --noEmit",
