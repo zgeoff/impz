@@ -4,6 +4,7 @@ import type { McpAuth } from '../../identity/oauth/create-mcp-auth';
 import type { PublicMcpConfig } from '../../identity/oauth/public-mcp-config';
 import { readBodyText } from '../../identity/oauth/read-body-text';
 import { tapStream } from '../../platform/process/tap-stream';
+import { createPublicApp } from './create-public-app';
 
 const MAX_OPEN = 64;
 const MAX_CONTROL = 16;
@@ -12,13 +13,14 @@ const MAX_CONTROL_BYTES = 16 * 1024;
 // A JSON-RPC message carries a file write's content, 4 MiB as text.
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const IDLE_TIMEOUT_S = 30;
-const NOT_FOUND = 'not found';
 
 export interface PublicListenerDeps {
   readonly config: PublicMcpConfig;
-  readonly oauth: McpAuth;
+  readonly oauth: Pick<McpAuth, 'handlers'>;
   readonly mcp: HttpTransport;
 }
+
+type TimeoutServer = Pick<Bun.Server<undefined>, 'timeout'>;
 
 export interface PublicListener {
   readonly port: number;
@@ -28,32 +30,34 @@ export interface PublicListener {
 /* @internal */
 export function createPublicHandler(
   deps: Readonly<PublicListenerDeps>,
-): (request: Request, server: Pick<Bun.Server<undefined>, 'timeout'> | null) => Promise<Response> {
+  log: (message: string) => void,
+): (request: Request, server: TimeoutServer | null) => Promise<Response> {
   const state = { open: 0, control: 0 };
+
+  const servers = new WeakMap<Request, TimeoutServer>();
+
   const host = deps.config.host.toLowerCase();
 
-  const handleRequest = async (
-    request: Request,
-    server: Pick<Bun.Server<undefined>, 'timeout'> | null,
-  ): Promise<Response> => {
-    const url = new URL(request.url);
+  const app = createPublicApp({
+    oauth: deps.oauth.handlers,
+    mcp: deps.mcp,
+    holdOpen: (request) => {
+      servers.get(request)?.timeout(request, 0);
+    },
+    log,
+  });
 
+  const handleRequest = (request: Request, server: TimeoutServer | null): Promise<Response> => {
     // A name the front did not route here, or a page that rebinds DNS.
     if ((request.headers.get('host') ?? '').toLowerCase() !== host) {
-      return buildNotFound();
+      return Promise.resolve(new Response('not found', { status: 404 }));
     }
 
-    const path = url.pathname;
-
-    if (path === MCP_PATH) {
-      server?.timeout(request, 0);
-
-      return deps.mcp.respond(request);
+    if (server !== null) {
+      servers.set(request, server);
     }
 
-    const answered = await deps.oauth.handle(request);
-
-    return answered ?? buildNotFound();
+    return app.handle(request);
   };
 
   const handleControl = async (request: Request): Promise<Response> => {
@@ -149,7 +153,7 @@ export function startPublicListener(
   deps: Readonly<PublicListenerDeps>,
   log: (message: string) => void,
 ): PublicListener {
-  const handle = createPublicHandler(deps);
+  const handle = createPublicHandler(deps, log);
 
   const handleRequest = (request: Request, bunServer: Bun.Server<undefined>) =>
     handle(request, bunServer);
@@ -226,8 +230,4 @@ function isNotification(text: string): boolean {
 
 function buildTooMany(): Response {
   return new Response('too many requests', { status: 429, headers: { 'retry-after': '1' } });
-}
-
-function buildNotFound(): Response {
-  return new Response(NOT_FOUND, { status: 404 });
 }

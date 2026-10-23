@@ -3,6 +3,7 @@ import { createRevocations } from '../../src/identity/auth/revocations';
 import { loadTokenStore } from '../../src/identity/auth/token-store';
 import { createMcpAuth } from '../../src/identity/oauth/create-mcp-auth';
 import { createTestDatabase } from '../platform/create-test-database';
+import { makeOAuthResponder } from '../surface/make-oauth-responder';
 import { createPendingSignIn } from './create-pending-sign-in';
 
 async function setupTest() {
@@ -29,11 +30,7 @@ async function setupTest() {
 
   return {
     auth,
-    respond: async (request: Request) => {
-      const answered = await auth.handle(request);
-
-      return answered ?? new Response('not found', { status: 404 });
-    },
+    respond: makeOAuthResponder(auth),
   };
 }
 
