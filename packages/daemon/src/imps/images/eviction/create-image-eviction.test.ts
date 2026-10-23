@@ -495,6 +495,54 @@ test('it removes at the next run a rootfs whose removal failed after its row wen
   expect(existsSync(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs)).toBeFalse();
 });
 
+test('it keeps the record of a leftover rootfs whose removal fails again, and warns', async () => {
+  const ctx = await setupTest();
+
+  const eviction = createImageEviction({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: ctx.db,
+    storage: {
+      readUsage: () => Promise.resolve({ usedBytes: 90, availableBytes: 10 }),
+      measureImages: () =>
+        Promise.resolve({
+          images: new Map([['sha256:1', { freedBytes: 50, isShared: false }]]),
+          freeingBytes: 0,
+        }),
+    },
+    storageGate: createStorageGate(),
+    removeIdleImage: ctx.writer.removeIdleImage,
+    removeIdleRootfs: ctx.writer.removeIdleRootfs,
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+
+  // a file where the images directory belongs makes every rootfs removal fail
+  await writeFile(join(ctx.dataDir, 'images'), '');
+
+  await eviction.runEviction();
+
+  ctx.logs.length = 0;
+
+  await eviction.runEviction();
+
+  const removals = await listImageRemovals(ctx.db);
+
+  expect(ctx.logs).toStrictEqual([
+    expect.toStartWith(
+      'WARNING impd.image image eviction: could not remove the rootfs of sha256:1, and tries again at the next image write: ',
+    ),
+  ]);
+
+  expect(removals).toStrictEqual(['sha256:1']);
+});
+
 test('it keeps the rootfs of a removed image that a new image row uses again', async () => {
   const ctx = await setupTest();
 
