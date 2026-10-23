@@ -523,6 +523,27 @@ test('it throws the ORPCError that ends the stream', async () => {
   });
 });
 
+test('it stops waiting on the feature check when the caller aborts', async () => {
+  server.use(
+    http.post('http://impd.test/rpc/system/features', () => Promise.withResolvers<never>().promise),
+  );
+
+  const client = createImpClient({ url: 'http://impd.test/', token: 'token' });
+
+  const caller = new AbortController();
+
+  const building = client.buildImage('web', new Blob(['tar']), { signal: caller.signal });
+
+  caller.abort();
+
+  const outcome = await building.then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(outcome).toMatchObject({ name: 'AbortError' });
+});
+
 test('it refuses to upload to an impd without the build context upload', async () => {
   const ctx = await setupTest();
 

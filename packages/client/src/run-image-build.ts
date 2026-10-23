@@ -21,13 +21,15 @@ export async function runImageBuild(
   context: BuildContext,
   options: Readonly<BuildImageOptions> = {},
 ): Promise<Image> {
-  await requireFeatures(deps.rpc, { buildContextUpload: 'answer the upload with not found' });
+  const call = { ...(options.signal !== undefined && { signal: options.signal }) };
+
+  await requireFeatures(deps.rpc, { buildContextUpload: 'answer the upload with not found' }, call);
 
   const upload = await writeBuildContext(deps, name, context, options);
 
   const events = await deps.rpc.images.buildStream(
     { upload: upload.id, logs: options.onLog !== undefined },
-    { ...(options.signal !== undefined && { signal: options.signal }) },
+    call,
   );
 
   for await (const event of events) {
