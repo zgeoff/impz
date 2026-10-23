@@ -34,7 +34,7 @@ export async function runRawBuild(build: Readonly<RawBuild>): Promise<Image> {
   });
 
   const [body, stderr, exitCode] = await Promise.all([
-    new Response(tar.stdout).bytes(),
+    new Response(tar.stdout).blob(),
     new Response(tar.stderr).text(),
     tar.exited,
   ]);
