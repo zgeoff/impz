@@ -23,7 +23,7 @@ import {
 import { removeImageIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
-// collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
+// collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
 const isReady = await checkRegistryReady(
   buildRegistryPlan(instance, config.registryName, REPO_ROOT),
 );

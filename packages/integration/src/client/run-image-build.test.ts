@@ -53,11 +53,11 @@ test('it throws PAYLOAD_TOO_LARGE for a context over the limit impd keeps', asyn
 
   const client = createImpClient({ url: host.url, token: ctx.rootToken });
 
-  // fetch keeps the declared size only for a stream the caller made.
+  // fetch keeps the declared size only for a stream the caller made, and it
+  // fails a request whose stream ends short of that size, so this one stays open
   const context = new ReadableStream<Uint8Array>({
     start: (controller) => {
       controller.enqueue(new TextEncoder().encode('tar'));
-      controller.close();
     },
   });
 

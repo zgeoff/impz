@@ -76,6 +76,7 @@ test('it refuses a request that is not a socket upgrade with 400', async () => {
 test('it stops when the test finishes', async () => {
   const ctx = await setupTest();
 
+  // the child's refused fetch: a newer Bun gives a refused connection its errno name
   const run = runChildTests(
     ctx.directoryPath,
     [
@@ -84,7 +85,7 @@ test('it stops when the test finishes', async () => {
       'const seen = { url: "" };',
       "test('it starts', () => { seen.url = startStubImpdSocket([]).url; });",
       "test('it finds it stopped', () => {",
-      '  expect(fetch(seen.url)).rejects.toMatchObject({ code: "ConnectionRefused" });',
+      '  expect(fetch(seen.url)).rejects.toMatchObject({ code: expect.stringMatching(/^(?:ConnectionRefused|ECONNREFUSED)$/v) });',
       '});',
     ].join('\n'),
   );

@@ -147,7 +147,7 @@ test('it removes its filler when the test ends', async () => {
 
   await sampler.fill(1024 ** 2, stats.bavail * stats.bsize - 8 * 1024 ** 2);
 
-  // On Bun 1.4.2 a hook that throws skips the hooks after it, so one hook
+  // In Bun a hook that throws skips the hooks after it, so one hook
   // reads, removes the directory, then checks, and never leaks it.
   onTestFinished(async () => {
     const left = await readdir(fillers);

@@ -661,9 +661,29 @@ test('it keeps the token out of a fetch error', () => {
     readToken: () => Promise.resolve('cf-token-secret\u0000'),
   });
 
+  // an older Bun puts the refused value after the header's name
   expect(provider.setA('imp.example.com', '100.64.0.7')).rejects.toThrowWithMessage(
     Error,
-    /^(?!.*cf-token-secret).*<token>/v,
+    /^(?!.*cf-token-secret)Header 'Authorization' has invalid value(?:: 'Bearer <token>')?$/v,
+  );
+});
+
+test('it cuts the token out of a fetch error that names it', () => {
+  // an older Bun's error text, which no header value draws from the pinned Bun
+  const refuse = mock(() =>
+    Promise.reject(
+      new TypeError("Header 'Authorization' has invalid value: 'Bearer cf-token-secret'"),
+    ),
+  );
+
+  const provider = createCloudflareProvider({
+    readToken: () => Promise.resolve('cf-token-secret'),
+    fetch: refuse,
+  });
+
+  expect(provider.setA('imp.example.com', '100.64.0.7')).rejects.toThrowWithMessage(
+    Error,
+    "Header 'Authorization' has invalid value: 'Bearer <token>'",
   );
 });
 
