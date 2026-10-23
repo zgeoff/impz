@@ -22,7 +22,7 @@ export const config = {
 
   metricsFile: process.env['E2E_METRICS_FILE'] ?? null,
 
-  // The name must resolve to 127.0.0.1 on this machine.
+  // The name must resolve on this machine to the registry network's gateway.
   registryName: process.env['E2E_REGISTRY_NAME'] ?? 'imp-e2e-registry.test',
 } as const;
 

@@ -66,13 +66,13 @@ test('#collectUnpinnedRequests keeps every reference but the pin’s digest', ()
   ).toStrictEqual(['1']);
 });
 
-test('#startRegistry runs a registry labelled with the instance on the gateway, on a certificate for its name', async () => {
+test("#startRegistry runs a registry labelled with the instance on its network's gateway, on a certificate for its name", async () => {
   const ctx = await setupTest();
 
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    ['case "$1" in', '  container) exit 1 ;;', '  network) echo 172.17.0.1 ;;', 'esac'].join('\n'),
+    ['case "$1" in', '  container) exit 1 ;;', 'esac'].join('\n'),
   );
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
@@ -81,7 +81,14 @@ test('#startRegistry runs a registry labelled with the instance on the gateway, 
 
   const registry = await startRegistry(
     ctx.stack,
-    { name: 'imp-e2e-registry.test', port: 15_443, certDirectory: certs },
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: certs,
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
     'e2e-reg-registry-1',
   );
 
@@ -98,21 +105,22 @@ test('#startRegistry runs a registry labelled with the instance on the gateway, 
 
   expect(calls.split('\n')).toStrictEqual([
     'docker container inspect e2e-reg-registry-1',
-    'docker network inspect bridge --format {{(index .IPAM.Config 0).Gateway}}',
-    `docker run --detach --name e2e-reg-registry-1 --label imp-e2e-instance=${instance.container} --network host --volume ${certs}:/certs:ro --env REGISTRY_HTTP_ADDR=172.17.0.1:15443 --env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/cert.pem --env REGISTRY_HTTP_TLS_KEY=/certs/key.pem registry:2`,
+    'docker network rm imp-dev-registry',
+    `docker network create --label imp-e2e-instance=${instance.container} --subnet 10.200.0.0/24 --gateway 10.200.0.1 imp-dev-registry`,
+    `docker run --detach --name e2e-reg-registry-1 --label imp-e2e-instance=${instance.container} --network host --volume ${certs}:/certs:ro --env REGISTRY_HTTP_ADDR=10.200.0.1:15443 --env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/cert.pem --env REGISTRY_HTTP_TLS_KEY=/certs/key.pem registry:2`,
     '',
   ]);
 
   expect(cert.subjectAltName).toBe('DNS:imp-e2e-registry.test');
 });
 
-test('#startRegistry removes the registry it ran and its certificates once the stack goes', async () => {
+test('#startRegistry removes the registry it ran, its certificates and its network once the stack goes', async () => {
   const ctx = await setupTest();
 
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    ['case "$1" in', '  container) exit 1 ;;', '  network) echo 172.17.0.1 ;;', 'esac'].join('\n'),
+    ['case "$1" in', '  container) exit 1 ;;', 'esac'].join('\n'),
   );
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
@@ -121,7 +129,14 @@ test('#startRegistry removes the registry it ran and its certificates once the s
 
   await startRegistry(
     ctx.stack,
-    { name: 'imp-e2e-registry.test', port: 15_443, certDirectory: certs },
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: certs,
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
     'e2e-reg-registry-1',
   );
 
@@ -129,7 +144,12 @@ test('#startRegistry removes the registry it ran and its certificates once the s
 
   const calls = await readFile(docker.calls, 'utf8');
 
-  expect(calls.split('\n').at(-2)).toBe('docker rm --force --volumes e2e-reg-registry-1');
+  expect(calls.split('\n').slice(-3)).toStrictEqual([
+    'docker rm --force --volumes e2e-reg-registry-1',
+    'docker network rm imp-dev-registry',
+    '',
+  ]);
+
   expect(existsSync(certs)).toBeFalse();
 });
 
@@ -144,7 +164,14 @@ test('#startRegistry refuses a container name that is taken, before it makes any
 
   const failure = await startRegistry(
     ctx.stack,
-    { name: 'imp-e2e-registry.test', port: 15_443, certDirectory: certs },
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: certs,
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
     'e2e-reg-registry-1',
   ).then(
     () => null,
@@ -169,9 +196,7 @@ test('#startRegistry removes no container when the registry does not start', asy
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    ['case "$1" in', '  container|run) exit 1 ;;', '  network) echo 172.17.0.1 ;;', 'esac'].join(
-      '\n',
-    ),
+    ['case "$1" in', '  container|run) exit 1 ;;', 'esac'].join('\n'),
   );
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
@@ -182,6 +207,9 @@ test('#startRegistry removes no container when the registry does not start', asy
       name: 'imp-e2e-registry.test',
       port: 15_443,
       certDirectory: join(ctx.directoryPath, 'registry-tls'),
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
     },
     'e2e-reg-registry-1',
   ).then(

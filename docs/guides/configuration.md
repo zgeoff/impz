@@ -265,12 +265,12 @@ HTTPS settings except the token: `IMP_DOMAIN`, `IMP_DNS_PROVIDER`, `IMP_DNS_API_
 `IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`, and `IMP_ACME_CA_FILE` and
 `IMP_BUILD_TEST_REGISTRY_CA` as paths under the repo. `IMP_E2E=1` lets impd use the `challtestsrv`
 DNS provider. With `IMP_BUILD_TEST_REGISTRY` set, the container resolves the registry's name to the
-Docker host's gateway. With `IMP_TAILNET_NAMES=1`, `dev.sh` writes the OAuth client from 1Password
-into the data directory and sets `IMP_TAILNET_OAUTH_FILE`. `IMP_DEV_NETWORK` puts the container on
-that Docker network. `IMP_DEV_BACKUP_ENV_FILE` names a Docker env file with the repository's `AWS_*`
-keys, so the keys in your own shell never reach the container. Other impd variables keep their
-defaults in the dev container. A ZFS dev instance needs the zfs module on the machine;
-`scripts/zfs-host-test.sh` runs one on a throwaway pool.
+address your machine resolves it to. With `IMP_TAILNET_NAMES=1`, `dev.sh` writes the OAuth client
+from 1Password into the data directory and sets `IMP_TAILNET_OAUTH_FILE`. `IMP_DEV_NETWORK` puts the
+container on that Docker network. `IMP_DEV_BACKUP_ENV_FILE` names a Docker env file with the
+repository's `AWS_*` keys, so the keys in your own shell never reach the container. Other impd
+variables keep their defaults in the dev container. A ZFS dev instance needs the zfs module on the
+machine; `scripts/zfs-host-test.sh` runs one on a throwaway pool.
 
 ## CLI
 

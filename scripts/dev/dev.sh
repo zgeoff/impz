@@ -63,7 +63,7 @@
 #      IMP_MOVE_TEST_CIDR and IMP_PEER_URL pass through for the moves suite.
 #      IMP_BUILD_TEST_REGISTRY (<name>:<port>) and IMP_BUILD_TEST_REGISTRY_CA
 #      pass through for the registry suite, and the container resolves <name>
-#      to the Docker host's gateway, where the suite's registry listens.
+#      to the address this machine resolves it to.
 #      IMP_UPLINK_MTU overrides the MTU read from this machine's default route.
 #      IMP_BACKUP_* pass through too (docs/architecture/storage/backups.md), and
 #      IMP_DEV_BACKUP_ENV_FILE is a docker --env-file with the repository's
@@ -290,7 +290,13 @@ up() {
       tuning+=(-e "IMP_BUILD_TEST_REGISTRY_CA=$(in_container "$IMP_BUILD_TEST_REGISTRY_CA")")
     fi
     if [ -n "${IMP_BUILD_TEST_REGISTRY:-}" ]; then
-      tuning+=(--add-host "${IMP_BUILD_TEST_REGISTRY%:*}:host-gateway")
+      local registry_name=${IMP_BUILD_TEST_REGISTRY%:*} registry_ip
+      registry_ip=$(getent ahostsv4 "$registry_name" | awk 'NR == 1 {print $1}' || true)
+      if [ -z "$registry_ip" ]; then
+        echo "dev.sh: $registry_name (IMP_BUILD_TEST_REGISTRY) does not resolve on this machine" >&2
+        exit 1
+      fi
+      tuning+=(--add-host "$registry_name:$registry_ip")
     fi
     local network=() ports=()
     [ -n "${IMP_DEV_NETWORK:-}" ] && network=(--network "$IMP_DEV_NETWORK")

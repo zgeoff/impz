@@ -224,7 +224,7 @@ test('it writes the test registry into the builder, once its engine answers and 
     log: () => {},
     testRegistry: {
       name: 'registry.example.test',
-      address: '172.17.0.1',
+      address: '10.200.0.1',
       port: 5443,
       caPath: join(ctx.dataDir, 'registry-ca.pem'),
     },
@@ -249,7 +249,7 @@ test('it writes the test registry into the builder, once its engine answers and 
       'registry.example.test',
       '5443',
       '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n',
-      '172.17.0.1',
+      '10.200.0.1',
     ],
     ['echo'],
   ]);
@@ -280,7 +280,7 @@ test('it fails the build when the builder refuses the test registry, and removes
     log: () => {},
     testRegistry: {
       name: 'registry.example.test',
-      address: '172.17.0.1',
+      address: '10.200.0.1',
       port: 5443,
       caPath: join(ctx.dataDir, 'registry-ca.pem'),
     },

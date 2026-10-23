@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { config } from '../lib/config';
 import { createRegistryTrust } from '../lib/create-registry-trust';
 import { createInstanceClient, runInImp } from '../lib/imp-cli';
-import { REPO_ROOT, instance, runCommand } from '../lib/instance';
+import { REPO_ROOT, instance } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { buildRegistryPlan } from '../lib/registry-plan';
 import {
@@ -20,7 +20,9 @@ import { removeImageIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
-const isReady = await checkRegistryReady(config.registryName);
+const isReady = await checkRegistryReady(
+  buildRegistryPlan(instance, config.registryName, REPO_ROOT),
+);
 
 const registryMissing = !isReady;
 
@@ -76,64 +78,12 @@ test.skipIf(registryMissing)(
 
     registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, mutable));
 
-    // TEMPORARY diagnostic, removed before review
-    const port = ctx.registry.address.split(':')[1] ?? '';
-
-    const diagnostics = [
-      [
-        'docker',
-        'exec',
-        instance.container,
-        'curl',
-        '-sk',
-        '-m',
-        '5',
-        '-o',
-        '/dev/null',
-        '-w',
-        '%{http_code}',
-        `https://172.17.0.1:${port}/v2/`,
-      ],
-      ['sudo', '-n', 'iptables', '-S'],
-      ['sudo', '-n', 'iptables', '-t', 'nat', '-S'],
-      ['sudo', '-n', 'nft', 'list', 'ruleset'],
-      [
-        'docker',
-        'exec',
-        '-d',
-        instance.container,
-        'sh',
-        '-c',
-        'for i in $(seq 200); do nft list table inet imp_egress > /tmp/egress-$i 2>&1; iptables -S FORWARD >> /tmp/egress-$i; sleep 0.05; done',
-      ],
-    ];
-
-    for (const argv of diagnostics) {
-      const result = await runCommand(argv);
-
-      console.log(
-        `DIAG ${argv.join(' ')}\n${String(result.exitCode)}\n${result.stdout}${result.stderr}`,
-      );
-    }
-
     const seen = await runBuildAndListRequests({
       registry: ctx.registry,
       directory: ctx.directoryPath,
       repository,
       dockerfile: `FROM ${moved.tag}\nRUN cat /v\n`,
       name: mutable,
-    }).catch(async (error: unknown) => {
-      const dump = await runCommand([
-        'docker',
-        'exec',
-        instance.container,
-        'sh',
-        '-c',
-        'for f in $(ls /tmp/egress-* | sort -t- -k2 -n); do if grep -q "jump slot" "$f"; then echo "== $f"; cat "$f"; break; fi; done',
-      ]);
-
-      console.log(`DIAG the first egress table with a slot\n${dump.stdout}${dump.stderr}`);
-      throw error;
     });
 
     await createImageImp(ctx.stack, ctx.client, mutable);

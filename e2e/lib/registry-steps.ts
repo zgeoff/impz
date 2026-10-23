@@ -11,7 +11,7 @@ import { registerRemoval } from './register-removal';
 import type { RegistryPlan } from './registry-plan';
 import { removeImpIfPresent } from './reset-baseline';
 
-// The registry listens on the Docker host's gateway under a name, which this
+// The registry listens on its network's gateway under a name, which this
 // machine resolves to the gateway and impd's container learns from dev.sh, so
 // both the host engine and a builder reach it. CI puts the name in /etc/hosts.
 
@@ -31,19 +31,6 @@ export interface MovedTag {
 
 const RepoDigestsSchema = z.array(z.string());
 
-async function readDockerGateway(): Promise<string> {
-  const gateway = await runChecked([
-    'docker',
-    'network',
-    'inspect',
-    'bridge',
-    '--format',
-    '{{(index .IPAM.Config 0).Gateway}}',
-  ]);
-
-  return gateway.trim();
-}
-
 export function parseManifestRequests(logs: string, repository: string): string[] {
   const pattern = new RegExp(`uri="/v2/${repository}/manifests/(?<reference>[^"]+)"`, 'gv');
 
@@ -62,34 +49,33 @@ export function getRepoDigest(digests: string, repository: string): string {
   return own;
 }
 
-// The engine may use the host's copy and ask nothing, or ask for the pin, but
-// never for the tag.
 export function collectUnpinnedRequests(pinned: string, seen: readonly string[]): string[] {
   const digest = pinned.slice(pinned.indexOf('@') + 1);
 
   return seen.filter((reference) => reference !== digest);
 }
 
-export async function checkRegistryReady(name: string): Promise<boolean> {
-  const gateway = await readDockerGateway();
+export async function checkRegistryReady(plan: Readonly<RegistryPlan>): Promise<boolean> {
+  const name = plan.name;
+
   const resolved = await lookup(name).catch(() => null);
   const sudo = await runCommand(['sudo', '--non-interactive', 'true']);
 
   // The engine asks a registry by name for HTTPS, so a journey trusts its own
   // certificate in certs.d, which needs sudo. A name that resolves elsewhere
   // would send the pushes there.
-  if (resolved?.address === gateway && sudo.exitCode === 0) {
+  if (resolved?.address === plan.gateway && sudo.exitCode === 0) {
     return true;
   }
 
   if (process.env['CI'] !== undefined) {
     throw new Error(
-      `CI is set, but ${name} does not resolve to ${gateway} or sudo needs a password`,
+      `CI is set, but ${name} does not resolve to ${plan.gateway} or sudo needs a password`,
     );
   }
 
   console.log(
-    `    skipped: the suite needs ${name} to resolve to the Docker gateway ${gateway} and sudo with no password, as CI has; E2E_REGISTRY_NAME=imp-e2e.${gateway}.nip.io names one through DNS`,
+    `    skipped: the suite needs ${name} to resolve to ${plan.gateway} and sudo with no password, as CI has; E2E_REGISTRY_NAME=imp-e2e.${plan.gateway}.nip.io names one through DNS`,
   );
 
   return false;
@@ -97,8 +83,8 @@ export async function checkRegistryReady(name: string): Promise<boolean> {
 
 const REGISTRY_OWNER_LABEL = 'imp-e2e-instance';
 
-// The certificate directory is the plan's, which impd reads for each builder,
-// so the stack removes it with the registry.
+// The stack removes the plan's network and its certificate directory, which
+// impd reads for each builder, with the registry.
 export async function startRegistry(
   stack: Readonly<Pick<AsyncDisposableStack, 'defer'>>,
   plan: Readonly<RegistryPlan>,
@@ -113,7 +99,25 @@ export async function startRegistry(
   const name = plan.name;
   const certs = plan.certDirectory;
 
-  const gateway = await readDockerGateway();
+  // The network is named for this instance, so one a stopped run left is this instance's.
+  await runCommand(['docker', 'network', 'rm', plan.network]);
+
+  await runChecked([
+    'docker',
+    'network',
+    'create',
+    '--label',
+    `${REGISTRY_OWNER_LABEL}=${instance.container}`,
+    '--subnet',
+    plan.subnet,
+    '--gateway',
+    plan.gateway,
+    plan.network,
+  ]);
+
+  stack.defer(async () => {
+    await runCommand(['docker', 'network', 'rm', plan.network]);
+  });
 
   mkdirSync(certs, { recursive: true });
 
@@ -153,7 +157,7 @@ export async function startRegistry(
     '--volume',
     `${certs}:/certs:ro`,
     '--env',
-    `REGISTRY_HTTP_ADDR=${gateway}:${String(plan.port)}`,
+    `REGISTRY_HTTP_ADDR=${plan.gateway}:${String(plan.port)}`,
     '--env',
     'REGISTRY_HTTP_TLS_CERTIFICATE=/certs/cert.pem',
     '--env',
