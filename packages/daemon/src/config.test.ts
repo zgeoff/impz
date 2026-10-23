@@ -370,6 +370,12 @@ test('it takes egress deny addresses and CIDRs of both families', () => {
   ]);
 });
 
+test('it reads an egress deny address with a leading zero in an octet as decimal', () => {
+  const config = loadConfig({ IMP_EGRESS_DENY: '198.051.100.007' });
+
+  expect(config.egressDeny).toStrictEqual(['198.51.100.7/32']);
+});
+
 test('it denies egress to IMP_PUBLIC_IP once, when the deny list names it too', () => {
   const config = loadConfig({
     IMP_DOMAIN: 'imp.example.com',

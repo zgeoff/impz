@@ -1,3 +1,4 @@
+import { toPlainOctets } from '@impz/shared';
 import { IPv4 } from 'ipaddr.js';
 import { deriveGuestIp6 } from './addressing6';
 import type { Prefix64 } from './addressing6';
@@ -143,8 +144,10 @@ export function formatSubnet(subnet: Subnet): string {
   return `${formatIpv4(subnet.network)}/${String(subnet.prefixLength)}`;
 }
 
+// an operator's setting can hold an octet with a leading zero, such as 010,
+// which impd reads as decimal and the strict parser refuses
 export function formatCidr4(text: string): string | null {
-  const parsed = parseCidr(text);
+  const parsed = parseCidr(toPlainOctets(text));
 
   if (parsed === null || !(parsed.address instanceof IPv4)) {
     return null;
