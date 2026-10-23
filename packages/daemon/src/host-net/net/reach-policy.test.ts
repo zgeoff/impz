@@ -5,21 +5,15 @@ import { parseSubnet } from './addressing';
 import { parsePrefix64 } from './addressing6';
 import { NO_HOST_ROUTES, createReachPolicy } from './reach-policy';
 
-function setupTest() {
+test('it builds the ranges each imp and each public imp is refused', () => {
   const prefix = parsePrefix64('fd12:3456:789a::/64');
 
   invariant(prefix);
 
-  return { subnet: parseSubnet('10.66.0.0/16'), ipv6: { prefix, nat66: true, uplink: 'eth0' } };
-}
-
-test('it builds the ranges each imp and each public imp is refused', () => {
-  const ctx = setupTest();
-
   const reach = createReachPolicy({
     subnet: parseSubnet('44.66.0.0/16'),
     deny: ['198.51.100.7/32', '2001:db8:9::/48'],
-    ipv6: ctx.ipv6,
+    ipv6: { prefix, nat66: true, uplink: 'eth0' },
     now: () => 0,
     ...buildStubHostRoutes().deps,
   });
@@ -50,6 +44,7 @@ test.each([
   ['239.1.2.3', 'multicast', true],
   ['255.255.255.255', 'broadcast', true],
   ['198.51.100.9', 'documentation', true],
+  ['10.66.0.5', "the imps' IPv4 subnet", true],
   ['fd12:3456:789a::a42:6', "the imps' IPv6 prefix", true],
   ['fd00:ec2::254', "a cloud's metadata service", true],
   ['64:ff9b::a9fe:a9fe', 'NAT64', true],
@@ -61,15 +56,16 @@ test.each([
   ['2606:4700::1111', 'a public IPv6 address', false],
   ['2001:db8:b::1', 'an IPv6 documentation address', false],
 ])('it holds %s, %s, refused to an imp: %p', async (address, _label, refused) => {
-  const ctx = setupTest();
-  const routes = buildStubHostRoutes({ connected6: ['2001:db8:a::/64'] });
+  const prefix = parsePrefix64('fd12:3456:789a::/64');
+
+  invariant(prefix);
 
   const reach = createReachPolicy({
-    subnet: ctx.subnet,
+    subnet: parseSubnet('10.66.0.0/16'),
     deny: [],
-    ipv6: ctx.ipv6,
+    ipv6: { prefix, nat66: true, uplink: 'eth0' },
     now: () => 0,
-    ...routes.deps,
+    ...buildStubHostRoutes({ connected6: ['2001:db8:a::/64'] }).deps,
   });
 
   const host = await reach.read(false);
@@ -85,15 +81,16 @@ test.each([
   ['140.82.112.3', 'a public IPv4 address', false],
   ['2606:4700::1111', 'a public IPv6 address', false],
 ])('it holds %s, %s, refused to a public imp: %p', async (address, _label, refused) => {
-  const ctx = setupTest();
-  const routes = buildStubHostRoutes({ connected4: ['172.17.0.0/16'] });
+  const prefix = parsePrefix64('fd12:3456:789a::/64');
+
+  invariant(prefix);
 
   const reach = createReachPolicy({
-    subnet: ctx.subnet,
+    subnet: parseSubnet('10.66.0.0/16'),
     deny: ['198.51.100.7'],
-    ipv6: ctx.ipv6,
+    ipv6: { prefix, nat66: true, uplink: 'eth0' },
     now: () => 0,
-    ...routes.deps,
+    ...buildStubHostRoutes({ connected4: ['172.17.0.0/16'] }).deps,
   });
 
   const host = await reach.read(true);
@@ -102,10 +99,8 @@ test.each([
 });
 
 test('it refuses every IPv6 address to an imp when impd has no IPv6 plan', async () => {
-  const ctx = setupTest();
-
   const reach = createReachPolicy({
-    subnet: ctx.subnet,
+    subnet: parseSubnet('10.66.0.0/16'),
     deny: [],
     ipv6: null,
     now: () => 0,
@@ -118,15 +113,12 @@ test('it refuses every IPv6 address to an imp when impd has no IPv6 plan', async
 });
 
 test("it reads the host's uplinks for a public imp", async () => {
-  const ctx = setupTest();
-  const routes = buildStubHostRoutes({ uplinks: { ipv4: ['eth0'], ipv6: ['eth1'] } });
-
   const reach = createReachPolicy({
-    subnet: ctx.subnet,
+    subnet: parseSubnet('10.66.0.0/16'),
     deny: [],
-    ipv6: ctx.ipv6,
+    ipv6: null,
     now: () => 0,
-    ...routes.deps,
+    ...buildStubHostRoutes({ uplinks: { ipv4: ['eth0'], ipv6: ['eth1'] } }).deps,
   });
 
   const host = await reach.read(true);
@@ -135,12 +127,11 @@ test("it reads the host's uplinks for a public imp", async () => {
 });
 
 test('it reads none of the IPv4 routes for imps that are not public', async () => {
-  const ctx = setupTest();
   const readConnected4 = mock(() => Promise.resolve(['172.17.0.0/16']));
   const readUplinks = mock(() => Promise.resolve({ ipv4: ['eth0'], ipv6: [] }));
 
   const reach = createReachPolicy({
-    subnet: ctx.subnet,
+    subnet: parseSubnet('10.66.0.0/16'),
     deny: [],
     ipv6: null,
     now: () => 0,
@@ -157,13 +148,12 @@ test('it reads none of the IPv4 routes for imps that are not public', async () =
 });
 
 test('it fails a read when a route read fails', () => {
-  const ctx = setupTest();
   const routes = buildStubHostRoutes();
 
   routes.failUplinks('ip -4 route show default exited 1');
 
   const reach = createReachPolicy({
-    subnet: ctx.subnet,
+    subnet: parseSubnet('10.66.0.0/16'),
     deny: [],
     ipv6: null,
     now: () => 0,
@@ -174,14 +164,17 @@ test('it fails a read when a route read fails', () => {
 });
 
 test('it answers a cached read from the last read within 30 s', async () => {
-  const ctx = setupTest();
+  const prefix = parsePrefix64('fd12:3456:789a::/64');
+
+  invariant(prefix);
+
   const clock = { now: 0 };
   const readConnected6 = mock(() => Promise.resolve(['2001:db8:a::/64']));
 
   const reach = createReachPolicy({
-    subnet: ctx.subnet,
+    subnet: parseSubnet('10.66.0.0/16'),
     deny: [],
-    ipv6: ctx.ipv6,
+    ipv6: { prefix, nat66: true, uplink: 'eth0' },
     now: () => clock.now,
     ...buildStubHostRoutes().deps,
     readConnected6,
@@ -197,14 +190,17 @@ test('it answers a cached read from the last read within 30 s', async () => {
 });
 
 test('it reads the host again for a cached read 30 s after the last read', async () => {
-  const ctx = setupTest();
+  const prefix = parsePrefix64('fd12:3456:789a::/64');
+
+  invariant(prefix);
+
   const clock = { now: 0 };
   const readConnected6 = mock(() => Promise.resolve(['2001:db8:a::/64']));
 
   const reach = createReachPolicy({
-    subnet: ctx.subnet,
+    subnet: parseSubnet('10.66.0.0/16'),
     deny: [],
-    ipv6: ctx.ipv6,
+    ipv6: { prefix, nat66: true, uplink: 'eth0' },
     now: () => clock.now,
     ...buildStubHostRoutes().deps,
     readConnected6,
@@ -220,15 +216,12 @@ test('it reads the host again for a cached read 30 s after the last read', async
 });
 
 test('it reads the host again for a public imp after a read for imps that are not public', async () => {
-  const ctx = setupTest();
-  const routes = buildStubHostRoutes({ connected4: ['172.17.0.0/16'] });
-
   const reach = createReachPolicy({
-    subnet: ctx.subnet,
+    subnet: parseSubnet('10.66.0.0/16'),
     deny: [],
-    ipv6: ctx.ipv6,
+    ipv6: null,
     now: () => 0,
-    ...routes.deps,
+    ...buildStubHostRoutes({ connected4: ['172.17.0.0/16'] }).deps,
   });
 
   await reach.read(false);
