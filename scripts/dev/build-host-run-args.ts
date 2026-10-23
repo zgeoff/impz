@@ -22,7 +22,6 @@ const TUNING_VARIABLES = [
   'IMP_TAILNET_NAMES',
   'IMP_TAILNET_NAME_PREFIX',
   'IMP_BUILD_CONTEXT_MAX_MIB',
-  'IMP_BUILD_ISOLATION',
   'IMP_BUILD_MEMORY_MIB',
   'IMP_BUILD_DISK_GIB',
   'IMP_BUILD_IMAGE_MAX_MIB',
@@ -64,6 +63,7 @@ const TUNING_VARIABLES = [
   'IMP_PEER_URL',
   'IMP_MCP_PUBLIC_URL',
   'IMP_MCP_PUBLIC_PORT',
+  'IMP_BUILD_TEST_REGISTRY',
 ] as const;
 
 export type TailscaleArg = 'off' | 'key' | 'none';
@@ -77,6 +77,8 @@ interface HostRunOptions {
   readonly tailscale: TailscaleArg;
   readonly tailnetOAuthFile: string | null;
   readonly acmeCAFile: string | null;
+  readonly registryCAFile: string | null;
+  readonly registryHost: string | null;
   readonly kernel: string;
   readonly systemDrive: string;
   readonly uplinkMTU: string;
@@ -142,6 +144,10 @@ export function buildHostRunArgs(options: HostRunOptions): string[] {
       buildSettingArgs(env, variable, (value) => ['-e', `${variable}=${value}`]),
     ),
     ...(options.acmeCAFile === null ? [] : ['-e', `IMP_ACME_CA_FILE=${options.acmeCAFile}`]),
+    ...(options.registryCAFile === null
+      ? []
+      : ['-e', `IMP_BUILD_TEST_REGISTRY_CA=${options.registryCAFile}`]),
+    ...(options.registryHost === null ? [] : ['--add-host', options.registryHost]),
     '-e',
     'IMP_BROKER_TEST_UPSTREAMS=/data/broker-test-upstreams.json',
     '-e',

@@ -4,16 +4,17 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { config } from '../lib/config';
 import { createRegistryTrust } from '../lib/create-registry-trust';
-import { createInstanceClient, runImp } from '../lib/imp-cli';
-import { REPO_ROOT, runChecked, runCommand } from '../lib/instance';
+import { createInstanceClient, runImp, runInImp } from '../lib/imp-cli';
+import { REPO_ROOT, instance, runChecked, runCommand } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { writeRegistryIndex } from '../lib/registry-index';
+import { buildRegistryPlan } from '../lib/registry-plan';
 import {
   checkRegistryReady,
+  createImageImp,
   createPushedImage,
   listManifestRequests,
   readBusyboxDigest,
-  readFileInImage,
   readHostArch,
   removeStaleRegistries,
   startRegistry,
@@ -23,7 +24,9 @@ import { removeImageIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
 // collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
-const isReady = await checkRegistryReady(config.registryName);
+const isReady = await checkRegistryReady(
+  buildRegistryPlan(instance, config.registryName, REPO_ROOT),
+);
 
 const registryMissing = !isReady;
 
@@ -44,7 +47,11 @@ async function setupTest() {
 
   const container = `${prefix}registry-${String(process.pid)}`;
 
-  const registry = await startRegistry(stack, config.registryName, container, directory);
+  const registry = await startRegistry(
+    stack,
+    buildRegistryPlan(instance, config.registryName, REPO_ROOT),
+    container,
+  );
 
   // The engine reads certs.d on each request, so it needs no restart.
   const trust = await createRegistryTrust({
@@ -134,7 +141,9 @@ test.skipIf(registryMissing)(
       multi,
     );
 
-    const content = await readFileInImage(multi, '/v');
+    await createImageImp(ctx.stack, ctx.client, multi);
+
+    const content = await runInImp(multi, 'cat', '/v');
     const references = await listManifestRequests(ctx.registry, repository);
 
     console.log(`    the registry saw manifest requests: ${references.join(', ')}`);

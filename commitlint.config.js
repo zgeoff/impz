@@ -1,4 +1,13 @@
 const config = {
+  // commitlint's default header pattern has no `!`, so a breaking header such as
+  // `feat(daemon)!: …` parses with an empty subject and fails subject-empty.
+  parserPreset: {
+    parserOpts: {
+      headerPattern: /^(?<type>\w*)(?:\((?<scope>.*)\))?!?: (?<subject>.*)$/u,
+      breakingHeaderPattern: /^(?<type>\w*)(?:\((?<scope>.*)\))?!: (?<subject>.*)$/u,
+      headerCorrespondence: ['type', 'scope', 'subject'],
+    },
+  },
   rules: {
     'body-leading-blank': [2, 'always'],
     'footer-leading-blank': [2, 'always'],

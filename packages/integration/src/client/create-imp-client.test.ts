@@ -4,11 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CLIENT_VERSION, createImpClient } from '@impz/client';
 import { makeStubImpdWithNewReason } from '@impz/client/test-utils/make-stub-impd-with-new-reason';
-import { startStubDockerEngine } from '@impz/client/test-utils/start-stub-docker-engine';
-import { DOCKERFILE_FRONTEND, createStubDockerCli, startTestImpd } from '@impz/daemon/testing';
+import {
+  buildStubImageBuilder,
+  createFilesTar,
+  startBuilderImpd,
+  startTestImpd,
+} from '@impz/daemon/testing';
 import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { server } from '@impz/test-utils/mock-server';
-import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import { HttpResponse, http } from 'msw';
@@ -34,7 +37,15 @@ async function setupTest() {
     return harness;
   };
 
-  return { client, startImpd, workDir, rootToken };
+  const startBuildImpd = async (builder: Parameters<typeof startBuilderImpd>[1]) => {
+    const harness = await startBuilderImpd(stack, builder, { rootToken });
+
+    server.use(http.all('http://impd.test/*', (info) => harness.impd.api.app.handle(info.request)));
+
+    return harness;
+  };
+
+  return { client, startImpd, startBuildImpd, workDir, rootToken };
 }
 
 test('#createImpClient calls the contract under the base url with the bearer token', async () => {
@@ -385,33 +396,12 @@ test('#checkServer rejects at the abort of its signal when impd never answers', 
 test('#images.addStream hands on each progress event, then the image', async () => {
   const ctx = await setupTest();
 
-  const imageId = `sha256:${'c'.repeat(64)}`;
-
-  await mkdir(join(ctx.workDir, 'tree'));
-  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'from busybox\n');
-
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [
-      {
-        refs: ['busybox:1.37'],
-        inspects: [
-          {
-            Id: imageId,
-            RepoDigests: [`busybox@sha256:${'d'.repeat(64)}`],
-            Config: {},
-            Size: 1024,
-          },
-        ],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.workDir, { hello: 'from busybox\n' })],
+    repoDigest: `sha256:${'d'.repeat(64)}`,
   });
 
-  updateEnv('PATH', docker.path);
-
-  await ctx.startImpd({ IMP_BUILD_ISOLATION: 'host' });
+  await ctx.startBuildImpd(builder);
 
   const events = await ctx.client.images.addStream({ ref: 'busybox:1.37', name: 'box' });
   const received = await Array.fromAsync(events);
@@ -425,7 +415,7 @@ test('#images.addStream hands on each progress event, then the image', async () 
         id: expect.toBeString(),
         name: 'box',
         ref: 'busybox:1.37',
-        digest: imageId,
+        digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
         source: 'oci',
         createdAt: expect.toBeDate(),
         sizeBytes: expect.toBeNumber(),
@@ -438,7 +428,12 @@ test('#images.addStream hands on each progress event, then the image', async () 
 test('#images.addStream throws the ORPCError of an add that impd refuses', async () => {
   const ctx = await setupTest();
 
-  await ctx.startImpd({ IMP_BUILD_ISOLATION: 'host' });
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'d'.repeat(64)}`,
+  });
+
+  await ctx.startBuildImpd(builder);
 
   const events = await ctx.client.images.addStream({ ref: 'busybox:1.37', name: 'imp-builder' });
 
@@ -455,37 +450,23 @@ test('#images.addStream throws the ORPCError of an add that impd refuses', async
 test('#images.buildStream hands on each progress event as it comes, then the image', async () => {
   const ctx = await setupTest();
 
-  const imageId = `sha256:${'b'.repeat(64)}`;
   const release = Promise.withResolvers<void>();
 
-  await mkdir(join(ctx.workDir, 'tree'));
-  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
-
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
+  onTestFinished(() => {
+    release.resolve();
   });
 
-  updateEnv('PATH', docker.path);
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: async () => {
+      await release.promise;
 
-  const engine = startStubDockerEngine({
-    socketPath: join(ctx.workDir, 'docker.sock'),
-    imageId,
-    holdUntil: () => release.promise,
+      return {};
+    },
   });
 
-  await ctx.startImpd({
-    IMP_BUILD_ISOLATION: 'host',
-    DOCKER_HOST: `unix://${join(ctx.workDir, 'docker.sock')}`,
-  });
+  await ctx.startBuildImpd(builder);
 
   await mkdir(join(ctx.workDir, 'context'));
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\n');
@@ -525,7 +506,7 @@ test('#images.buildStream hands on each progress event as it comes, then the ima
         id: expect.toBeString(),
         name: 'web',
         ref: 'imp/web:latest',
-        digest: imageId,
+        digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
         source: 'oci',
         createdAt: expect.toBeDate(),
         sizeBytes: expect.toBeNumber(),
@@ -533,8 +514,6 @@ test('#images.buildStream hands on each progress event as it comes, then the ima
       },
     },
   ]);
-
-  expect(engine.unexpected).toStrictEqual([]);
 });
 
 // oRPC checks outputs on the server, not in the client, so a reason this

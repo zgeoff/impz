@@ -78,7 +78,7 @@ test('it refuses an export or rm of a container the proxy did not create', async
   expect(state.trim()).toBe('created');
 });
 
-test('it refuses every build under IMP_BUILD_ISOLATION=imp, even one a host build may send', async () => {
+test('it refuses every build, even one with the params BuildKit takes', async () => {
   const result = await runInContainer([
     'sh',
     '-c',
@@ -95,8 +95,7 @@ test('it refuses every build under IMP_BUILD_ISOLATION=imp, even one a host buil
 
   expect(parseProxyAnswer(result.stdout)).toStrictEqual({
     status: 403,
-    message:
-      'imp-docker-proxy: a build is refused: under IMP_BUILD_ISOLATION=imp impd builds in builder imps',
+    message: 'imp-docker-proxy: POST /build is not a call impd makes',
   });
 });
 

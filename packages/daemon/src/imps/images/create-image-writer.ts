@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { NameSchema } from '@impz/api';
-import type { ImageBuildPhase } from '@impz/api';
 import * as z from 'zod';
 import {
   countImageDigestUses,
@@ -27,37 +26,30 @@ import { BUILDER_IMAGE } from './builder-imps';
 import { writeGuestTree } from './guest-build';
 import type { GuestExec } from './guest-exec';
 import { buildImageRuntimeConfig } from './image-naming';
-import { pickRepoDigest } from './image-pin';
 import { planRootfs, planRootfsOverhead } from './rootfs-plan';
 import { runDocker, runDockerChecked } from './run-docker';
 import { writeExportedTree } from './unpack-export';
 import { writeImageConfig } from './write-image-config';
-
-const RepoDigestsSchema = z.array(z.string()).nullish();
 
 const InspectSchema = z.tuple([
   z.object({
     Id: z.string(),
     Config: z.unknown(),
     Size: z.number().optional(),
-    RepoDigests: RepoDigestsSchema,
   }),
 ]);
 
 interface HostImageOptions {
-  readonly onResolved?: ((reference: string) => void) | undefined;
+  readonly signal: AbortSignal;
 
-  readonly signal?: AbortSignal | undefined;
-
-  readonly onPulled?: (() => void) | undefined;
-  readonly setPhase?: ((phase: ImageBuildPhase) => void) | undefined;
+  readonly onPulled: () => void;
 }
 
 export interface ImageWriter {
   readonly createImageOnHost: (
     ref: string,
     imageName: string,
-    options?: Readonly<HostImageOptions>,
+    options: Readonly<HostImageOptions>,
   ) => Promise<ImageRecord>;
 
   readonly writeGuestImage: (
@@ -114,8 +106,8 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   const guestRootfsLock = buildKeyedMutex();
   const docker = { env: deps.dockerEnv };
 
-  const readInspect = async (ref: string, signal: AbortSignal | undefined) => {
-    const options = { ...docker, ...(signal !== undefined && { signal }) };
+  const readInspect = async (ref: string, signal: AbortSignal) => {
+    const options = { ...docker, signal };
 
     const first = await runDocker(['image', 'inspect', ref], options);
 
@@ -125,7 +117,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
 
     await runDockerChecked(['pull', '--quiet', ref], options);
 
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
 
     const stdout = await runDockerChecked(['image', 'inspect', ref], options);
 
@@ -304,18 +296,12 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   const createImageOnHost = async (
     ref: string,
     imageName: string,
-    options: Readonly<HostImageOptions> = {},
+    options: Readonly<HostImageOptions>,
   ): Promise<ImageRecord> => {
     const inspect = await readInspect(ref, options.signal);
 
-    options.onPulled?.();
-    const resolved = pickRepoDigest(ref, inspect.RepoDigests ?? []);
+    options.onPulled();
 
-    if (resolved !== null) {
-      options.onResolved?.(resolved);
-    }
-
-    options.setPhase?.('unpack');
     const treeBytes = inspect.Size ?? 0;
     const buildBytes = 2 * treeBytes + planRootfsOverhead(treeBytes);
     const withRoom = deps.diskBudget.withRoom;
