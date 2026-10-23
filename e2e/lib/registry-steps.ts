@@ -1,12 +1,19 @@
 import { lookup } from 'node:dns/promises';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { ImpClient } from '@impz/client';
 import * as z from 'zod';
+import { config } from './config';
 import { runImp } from './imp-cli';
+import { waitForExec } from './imps';
 import { instance, runChecked, runCommand } from './instance';
+import { registerRemoval } from './register-removal';
+import type { RegistryPlan } from './registry-plan';
+import { removeImpIfPresent } from './reset-baseline';
 
-// On the host's loopback under a name, since the proxy refuses an IP or
-// localhost; CI puts the name in /etc/hosts.
+// The registry listens on the Docker host's gateway under a name, which this
+// machine resolves to the gateway and impd's container learns from dev.sh, so
+// both the host engine and a builder reach it. CI puts the name in /etc/hosts.
 
 export interface Registry {
   readonly address: string;
@@ -19,18 +26,22 @@ export interface MovedTag {
   readonly tag: string;
   readonly kept: string;
   readonly pinned: string;
+  readonly current: string;
 }
 
 const RepoDigestsSchema = z.array(z.string());
 
-export function parsePublishedPort(published: string): string {
-  const port = published.trim().split('\n')[0]?.split(':').at(-1) ?? '';
+export async function readDockerGateway(): Promise<string> {
+  const gateway = await runChecked([
+    'docker',
+    'network',
+    'inspect',
+    'bridge',
+    '--format',
+    '{{(index .IPAM.Config 0).Gateway}}',
+  ]);
 
-  if (!/^\d+$/v.test(port)) {
-    throw new Error(`no published port in "${published}"`);
-  }
-
-  return port;
+  return gateway.trim();
 }
 
 export function parseManifestRequests(logs: string, repository: string): string[] {
@@ -60,24 +71,25 @@ export function collectUnpinnedRequests(pinned: string, seen: readonly string[])
 }
 
 export async function checkRegistryReady(name: string): Promise<boolean> {
+  const gateway = await readDockerGateway();
   const resolved = await lookup(name).catch(() => null);
   const sudo = await runCommand(['sudo', '--non-interactive', 'true']);
 
   // The engine asks a registry by name for HTTPS, so a journey trusts its own
   // certificate in certs.d, which needs sudo. A name that resolves elsewhere
   // would send the pushes there.
-  if (resolved?.address === '127.0.0.1' && sudo.exitCode === 0) {
+  if (resolved?.address === gateway && sudo.exitCode === 0) {
     return true;
   }
 
   if (process.env['CI'] !== undefined) {
     throw new Error(
-      `CI is set, but ${name} does not resolve to 127.0.0.1 or sudo needs a password`,
+      `CI is set, but ${name} does not resolve to ${gateway} or sudo needs a password`,
     );
   }
 
   console.log(
-    `    skipped: the suite needs ${name} to resolve to 127.0.0.1 and sudo with no password, as CI has; E2E_REGISTRY_NAME=imp-e2e.127.0.0.1.nip.io names one through DNS`,
+    `    skipped: the suite needs ${name} to resolve to the Docker gateway ${gateway} and sudo with no password, as CI has; E2E_REGISTRY_NAME=imp-e2e.${gateway}.nip.io names one through DNS`,
   );
 
   return false;
@@ -85,11 +97,12 @@ export async function checkRegistryReady(name: string): Promise<boolean> {
 
 const REGISTRY_OWNER_LABEL = 'imp-e2e-instance';
 
+// The certificate directory is the plan's, which impd reads for each builder,
+// so the stack removes it with the registry.
 export async function startRegistry(
   stack: Readonly<Pick<AsyncDisposableStack, 'defer'>>,
-  name: string,
+  plan: Readonly<RegistryPlan>,
   container: string,
-  directory: string,
 ): Promise<Registry> {
   const taken = await runCommand(['docker', 'container', 'inspect', container]);
 
@@ -97,9 +110,16 @@ export async function startRegistry(
     throw new Error(`a container named ${container} is already there`);
   }
 
-  const certs = join(directory, 'certs');
+  const name = plan.name;
+  const certs = plan.certDirectory;
+
+  const gateway = await readDockerGateway();
 
   mkdirSync(certs, { recursive: true });
+
+  stack.defer(() => {
+    rmSync(certs, { recursive: true, force: true });
+  });
 
   await runChecked([
     'openssl',
@@ -128,10 +148,12 @@ export async function startRegistry(
     container,
     '--label',
     `${REGISTRY_OWNER_LABEL}=${instance.container}`,
-    '--publish',
-    '127.0.0.1::5000',
+    '--network',
+    'host',
     '--volume',
     `${certs}:/certs:ro`,
+    '--env',
+    `REGISTRY_HTTP_ADDR=${gateway}:${String(plan.port)}`,
     '--env',
     'REGISTRY_HTTP_TLS_CERTIFICATE=/certs/cert.pem',
     '--env',
@@ -143,10 +165,8 @@ export async function startRegistry(
     await runCommand(['docker', 'rm', '--force', '--volumes', container]);
   });
 
-  const published = await runChecked(['docker', 'port', container, '5000/tcp']);
-
   return {
-    address: `${name}:${parsePublishedPort(published)}`,
+    address: `${name}:${String(plan.port)}`,
     container,
     certPath: join(certs, 'cert.pem'),
   };
@@ -228,10 +248,10 @@ export async function createPushedImage(
   context: string,
   tag: string,
   platform?: string,
-): Promise<void> {
+): Promise<string> {
   const platformArgs = platform === undefined ? [] : ['--platform', platform];
 
-  await runChecked([
+  const built = await runChecked([
     'docker',
     'build',
     '--quiet',
@@ -244,6 +264,8 @@ export async function createPushedImage(
   ]);
 
   await runChecked(['docker', 'push', '--quiet', tag]);
+
+  return built.trim();
 }
 
 export async function listManifestRequests(
@@ -255,10 +277,17 @@ export async function listManifestRequests(
   return parseManifestRequests(`${logs.stdout}${logs.stderr}`, repository);
 }
 
-export async function readFileInImage(name: string, path: string): Promise<string> {
-  const output = await runChecked(['docker', 'run', '--rm', `imp/${name}:latest`, 'cat', path]);
+// impd keeps a built image in its own store, so a journey reads it from an imp.
+export async function createImageImp(
+  stack: Readonly<Pick<AsyncDisposableStack, 'defer'>>,
+  client: ImpClient,
+  name: string,
+): Promise<void> {
+  await runImp('new', name, '--image', name, '--memory', '512');
 
-  return output.trim();
+  registerRemoval(stack, config.keep, () => removeImpIfPresent(client, name));
+
+  await waitForExec(name);
 }
 
 export async function readHostArch(): Promise<string> {
@@ -304,10 +333,25 @@ export async function createMovedTag(
 
   const pinned = getRepoDigest(repoDigests, `${registry.address}/${repository}`);
 
-  await createPushedImage(writeContext(directory, `${repository}-new`, from, 'new'), tag);
+  const moved = await createPushedImage(
+    writeContext(directory, `${repository}-new`, from, 'new'),
+    tag,
+  );
+
+  const currentDigests = await runChecked([
+    'docker',
+    'image',
+    'inspect',
+    '--format',
+    '{{json .RepoDigests}}',
+    moved,
+  ]);
+
+  const current = getRepoDigest(currentDigests, `${registry.address}/${repository}`);
+
   await runChecked(['docker', 'tag', kept, tag]);
 
-  return { tag, kept, pinned };
+  return { tag, kept, pinned, current };
 }
 
 interface RunBuildAndListRequestsOptions {

@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { instance } from './instance';
+import { config } from './config';
+import { REPO_ROOT, instance } from './instance';
 import type { Suite } from './suites';
 import {
   FAST_GROUPS,
@@ -59,6 +60,22 @@ test('#readSuiteSettings reads the settings a suite runs its journeys on', () =>
 
 test('#readSuiteSettings reads null for a suite on the run’s own settings', () => {
   expect(readSuiteSettings('templates', instance)).toBeNull();
+});
+
+test("#readSuiteSettings opens the registry suite's registry to builders on an e2e impd", () => {
+  expect(
+    readSuiteSettings('registry', { ...instance, container: 'imp-dev-test', portOffset: 30 }),
+  ).toStrictEqual({
+    IMP_E2E: '1',
+    IMP_BUILD_TEST_REGISTRY: `${config.registryName}:15473`,
+    IMP_BUILD_TEST_REGISTRY_CA: join(
+      REPO_ROOT,
+      '.cache',
+      'e2e',
+      'imp-dev-test-registry-tls',
+      'cert.pem',
+    ),
+  });
 });
 
 test('#readSuiteSettings puts the sleep suite on a 5 s idle timeout', () => {
@@ -133,6 +150,7 @@ test('#SUITES gives every suite its own e2e- imp name prefix', () => {
 test('#SUITE_SETS builds the fast set from the groups, in run order', () => {
   expect(SUITE_SETS['fast']).toStrictEqual([
     'lifecycle',
+    'registry',
     'checkpoints',
     'disks',
     'sleep',
