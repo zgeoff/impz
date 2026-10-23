@@ -1,9 +1,9 @@
 import type { SlotAddress } from '../../host-net/net/addressing';
 import { GATEWAY_IP6 } from '../../host-net/net/addressing6';
-import { ONLINE_MOVABLE_ARG, getRegionMib } from '../memory/elastic-memory';
 import type { ImpPaths } from '../storage/data-layout';
 import { BASE_BOOT_ARGS } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
+import { ONLINE_MOVABLE_ARG, getRegionMib } from './elastic-memory';
 import type { JailUser } from './jail';
 
 export interface VmPlan {

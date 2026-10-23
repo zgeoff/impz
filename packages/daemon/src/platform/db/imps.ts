@@ -1,12 +1,10 @@
 import type { EgressPolicy, ImpKind, ImpState, MoveState, PublicAuth } from '@impz/api';
 import { sql } from 'kysely';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
-import { MOVE_TRANSITIONS } from '../../imp-ops/moves/move-transitions';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
-import { requireTransition } from '../../imps/imps/imp-transitions';
 import { getErrorMessage } from '../process/get-error-message';
 import { allocateSlot } from './allocate-slot';
 import { ImpClashError } from './imp-clash-error';
+import { requireTransition } from './imp-transitions';
+import { MOVE_TRANSITIONS } from './move-transitions';
 import type { ImpDatabase, ImpQueries } from './open-database';
 import { SlotTakenError } from './slot-taken-error';
 import { toImpRecord } from './to-imp-record';

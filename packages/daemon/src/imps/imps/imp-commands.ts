@@ -2,6 +2,7 @@ import { mkdirSync, rmSync } from 'node:fs';
 import type { EgressPolicy, Imp, ImpKind } from '@impz/api';
 import { listCheckpoints } from '../../platform/db/checkpoints';
 import type { ImageRecord } from '../../platform/db/images';
+import { requireTransition } from '../../platform/db/imp-transitions';
 import {
   listImps,
   readImpByName,
@@ -12,9 +13,9 @@ import {
 import type { ImpRecord } from '../../platform/db/imps';
 import { buildInvalidStateError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-import { isRamBudgetError } from '../../vm/governor/ram-budget-error';
-import { resolveMaxMemoryMib } from '../../vm/memory/elastic-memory';
+import { isRamBudgetError } from '../../vm/imps-contract/ram-budget-error';
 import { buildImagePaths } from '../../vm/storage/data-layout';
+import { resolveMaxMemoryMib } from '../../vm/vmm/elastic-memory';
 import { resolveCpuSettings } from './cpu-limit';
 import { createImpRecord } from './create-imp-record';
 import type { ImpContext, ImpGuest, ImpHost, ImpVms } from './imp-context';
@@ -24,7 +25,6 @@ import { checkLiveness } from './imp-liveness';
 import { toLockedImp } from './imp-lock';
 import type { ImpLock, LockedImp } from './imp-lock';
 import type { ImpPresenter, ImpUrls } from './imp-presenter';
-import { requireTransition } from './imp-transitions';
 import type { ImpVmOps } from './imp-vm-ops';
 
 interface CreateImpInput {

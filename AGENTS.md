@@ -72,6 +72,9 @@ docs/
   entries of `zgeoff/import-zones` give the order: a layer imports only itself and the layers below
   it. The composition root's files sit at the top of `src/`, above every layer. A known upward
   import carries a disable comment that holds the issue that removes it.
+- The vm layer's folders follow the same rule among themselves: the `daemon-vm-folder-*` entries
+  give their order, so no import cycle runs between two vm folders. A new vm folder takes a place in
+  that order.
 - The agent's packages in `agent/internal/` sit in one folder per layer, and the `layer-*` depguard
   rules in [`agent/.golangci.yml`](agent/.golangci.yml) give the order and deny each upward import.
   A new package goes in its layer's folder and takes that layer's rule. Two packages sit outside the

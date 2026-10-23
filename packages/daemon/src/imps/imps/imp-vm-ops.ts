@@ -1,5 +1,6 @@
 import type { ColdBootCause } from '@impz/api';
 import { removeNextBootCause, writeColdBoot } from '../../platform/db/cold-boots';
+import { requireTransition } from '../../platform/db/imp-transitions';
 import { removeIdentityReset, updateImpActivity, updateImpDisk } from '../../platform/db/imps';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { ImpdError } from '../../platform/errors/impd-error';
@@ -17,7 +18,6 @@ import { checkMergeFlag } from './check-merge-flag';
 import type { ImpContext } from './imp-context';
 import { toLockedImp } from './imp-lock';
 import type { LockedImp } from './imp-lock';
-import { requireTransition } from './imp-transitions';
 import { makeSleepImpVm } from './make-sleep-imp-vm';
 import type { YoungGuestWait } from './make-sleep-imp-vm';
 import { makeWakeImpVm } from './make-wake-imp-vm';

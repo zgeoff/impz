@@ -55,7 +55,7 @@ export { loadConfig } from '../src/config';
 export { openDialStream } from '../src/vm/agent-client/dial-stream';
 export { openAccept, openListener } from '../src/vm/agent-client/listener-stream';
 export { sendServicesAdd } from '../src/vm/agent-client/service-requests';
-export { ENFORCE_INTERVAL_MS, ENFORCE_TRIGGER } from '../src/vm/governor/ram-governor';
+export { ENFORCE_INTERVAL_MS, ENFORCE_TRIGGER } from '../src/imp-ops/governor/ram-governor';
 export { VmIdentitySchema, readVmIdentity, writeVmIdentity } from '../src/vm/sleep/vm-identity';
 export { buildTemplateKey } from '../src/vm/templates/boot-templates';
 export { createGenerationLog } from '../src/imps/session-logs/generation-log';

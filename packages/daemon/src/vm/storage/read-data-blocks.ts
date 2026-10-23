@@ -1,6 +1,6 @@
 import { fstatSync } from 'node:fs';
 import { readErrno, readLibc } from '../../platform/process/libc';
-import { EXTENT_FLAGS, readOpenFileExtents, readSyncedExtentBatch } from '../../vm/storage/fiemap';
+import { EXTENT_FLAGS, readOpenFileExtents, readSyncedExtentBatch } from './fiemap';
 
 // Linux's lseek(2) whence values, and the one errno that is an answer.
 const SEEK_DATA = 3;

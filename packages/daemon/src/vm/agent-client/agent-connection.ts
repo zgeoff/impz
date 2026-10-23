@@ -3,7 +3,7 @@ import type { Socket } from 'node:net';
 import type { JsonValue } from '@bufbuild/protobuf';
 import { buildFrameDecoder, encodeFrame, encodeJsonFrame } from '@impz/agent-protocol';
 import type { AgentFrame, FrameType } from '@impz/agent-protocol';
-import { requireSocket } from '../vmm/vm-files';
+import { requireSocket } from '../files/vm-files';
 
 const AGENT_PORT = 1024;
 

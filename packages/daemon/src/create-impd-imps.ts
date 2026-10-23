@@ -5,6 +5,9 @@ import type { Ipv6Plan } from './host-net/net/ipv6-plan';
 import type { TailscaleStatus } from './host-net/net/tailscale-status';
 import { readGuestNetBytes } from './host-net/net/tap-bytes';
 import { createTapDevices } from './host-net/net/tap-devices';
+import { createRamGovernor } from './imp-ops/governor/ram-governor';
+import type { RamGovernor } from './imp-ops/governor/ram-governor';
+import { createImpWatchdog } from './imp-ops/watchdog/imp-watchdog';
 import type { ImpBoundaries, ImpdDeps } from './impd-deps';
 import { growFilesystem } from './imps/imps/imp-disk';
 import { createImpService } from './imps/imps/imp-service';
@@ -16,8 +19,7 @@ import { countImpsByState, listImps } from './platform/db/imps';
 import { printLog } from './platform/process/print-log';
 import { runCommand } from './platform/process/run-command';
 import { startImpTelemetry } from './platform/telemetry/imp-telemetry';
-import { createRamGovernor } from './vm/governor/ram-governor';
-import type { RamAdmission, RamGovernor } from './vm/governor/ram-governor';
+import type { RamAdmission } from './vm/imps-contract/ram-admission';
 import { createMemoryController } from './vm/memory/memory-controller';
 import type { MemoryController } from './vm/memory/memory-controller';
 import { createPluggedSizes } from './vm/memory/plugged-sizes';
@@ -138,7 +140,7 @@ export function createImpdImps(
     pluggedSizes,
   };
 
-  const imps = createImpService(serviceDeps);
+  const imps = createImpService(serviceDeps, createImpWatchdog);
   const ksm = config.ksm;
 
   // KSM reports a VM's profit as negative while its metadata outweighs what it merged

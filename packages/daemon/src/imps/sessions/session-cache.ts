@@ -1,6 +1,4 @@
-import type { SessionInfo } from '@impz/agent-protocol';
-
-export type SeenSession = SessionInfo & { readonly observedUnixMs?: number };
+import type { SeenSession } from '../../vm/agent-client/seen-session';
 
 export interface SessionCache {
   readonly record: (impId: string, sessions: readonly SeenSession[]) => void;
@@ -20,8 +18,4 @@ export function createSessionCache(): SessionCache {
       sessions.delete(impId);
     },
   };
-}
-
-export function toSeenSessions(list: readonly SessionInfo[], at: Date): SeenSession[] {
-  return list.map((session) => ({ ...session, observedUnixMs: at.getTime() }));
 }

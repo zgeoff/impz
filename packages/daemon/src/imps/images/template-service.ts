@@ -16,13 +16,13 @@ import {
   buildNotBackedUpError,
 } from '../../platform/errors/impd-errors';
 import { printLog } from '../../platform/process/print-log';
-import type { DiskFreezer } from '../../vm/checkpoints/consistent-disk';
-import { createConsistentDisk } from '../../vm/checkpoints/consistent-disk';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpsConfig } from '../imps-config';
+import type { DiskFreezer } from '../imps/consistent-disk';
+import { createConsistentDisk } from '../imps/consistent-disk';
 import type { ImpCheckpointHooks } from '../imps/imp-service';
 import { BUILDER_IMAGE } from './builder-imps';
 

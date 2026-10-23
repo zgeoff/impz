@@ -1,7 +1,6 @@
 import type { StreamedCommand } from '../../platform/process/run-stream';
+import type { StorageBackendKind } from '../vm-config';
 import type { ImpPaths } from './data-layout';
-
-export type StorageBackendKind = 'xfs' | 'zfs';
 
 export type DiskSource =
   | { readonly kind: 'image'; readonly digest: string }

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { ImpState } from '@impz/api';
-import { ImpdError } from '../../platform/errors/impd-error';
+import { ImpdError } from '../errors/impd-error';
 import { canTransition, collectStatesLeadingTo, requireTransition } from './imp-transitions';
 
 test.each<[ImpState, ImpState]>([

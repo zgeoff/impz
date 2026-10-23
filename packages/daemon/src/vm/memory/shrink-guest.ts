@@ -1,5 +1,5 @@
+import { getSpareTotalMib, toWholeBlocks } from '../vmm/elastic-memory';
 import type { GuestMemory, VmRunner } from '../vmm/vm-runner';
-import { getSpareTotalMib, toWholeBlocks } from './elastic-memory';
 
 const POLL_MS = 100;
 const STALL_MS = 500;

@@ -2,9 +2,9 @@ import { expect, mock, test } from 'bun:test';
 import type { ImpEvent } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import fc from 'fast-check';
-import { buildStubGovernedHostArbitraries } from '../../../testing/vm/build-stub-governed-host-arbitraries';
-import { createStubGovernedHost } from '../../../testing/vm/create-stub-governed-host';
-import type { RoomLeft } from '../../../testing/vm/create-stub-governed-host';
+import { buildStubGovernedHostArbitraries } from '../../../testing/imp-ops/build-stub-governed-host-arbitraries';
+import { createStubGovernedHost } from '../../../testing/imp-ops/create-stub-governed-host';
+import type { RoomLeft } from '../../../testing/imp-ops/create-stub-governed-host';
 import { createEventBus } from '../../platform/events/event-bus';
 import { ENFORCE_INTERVAL_MS, createRamGovernor } from './ram-governor';
 

@@ -3,9 +3,8 @@ import { chmodSync, closeSync, mkdirSync, openSync, rmSync, statSync } from 'nod
 import { join } from 'node:path';
 import { sql } from 'kysely';
 import * as z from 'zod';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
-import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { buildConflictError } from '../errors/impd-errors';
+import type { DiskRoom } from '../process/disk-room';
 import type { ImpQueries } from './open-database';
 
 export interface DatabaseCopyFile {
@@ -33,7 +32,7 @@ function buildDatabaseCopyPath(dataDir: string, name: string): string {
 }
 
 export interface WriteDatabaseCopyOptions {
-  readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
+  readonly diskBudget: DiskRoom;
   readonly dataDir: string;
   readonly name: string;
   readonly now: () => number;
