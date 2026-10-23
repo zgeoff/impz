@@ -432,7 +432,7 @@ test('#runDockerBuild ends the request when its signal aborts while the build ru
 
 // Bun reads its fetch idle limit (360 s by default) only at startup, so a
 // child Bun runs with 1 s; its unprotected fetch is the control that the
-// limit expires, after about 8 s on Bun 1.4.2
+// limit expires, after about 8 s on Bun 1.4.3
 test('#runDockerBuild gets the image of a build silent past the idle limit, which a client still cancels', async () => {
   const ctx = await setupTest();
 

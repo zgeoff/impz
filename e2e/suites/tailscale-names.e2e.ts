@@ -28,7 +28,7 @@ async function setupTest() {
   return { prefix: getSuitePrefix('tailscale'), stack, client };
 }
 
-// collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
+// collection-time gate: Bun 1.4.3's skipIf takes a boolean and has no in-body skip
 const tailscaleStatus = await readLocalTailscaleStatus();
 
 // Set IMP_E2E_TAILNET_NAMES=1 once the Services OAuth client and the tailnet

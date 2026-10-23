@@ -6,7 +6,7 @@ import { buildSetupNetGates, readHostNetfilter, runInNetns } from '@impz/daemon/
 // namespace when not root, with a dummy uplink. Each test skips where that or
 // a tool it runs is missing, unless IMP_HOST_TESTS=required: `bun run test:host`.
 
-// At module level: Bun 1.4.2's skipIf takes a boolean and has no in-body skip.
+// At module level: Bun 1.4.3's skipIf takes a boolean and has no in-body skip.
 const gates = buildSetupNetGates(readHostNetfilter());
 
 // it changes nothing before the check, so it runs anywhere

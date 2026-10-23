@@ -209,7 +209,7 @@ export function createSocketErrorReport(
   const logOther = makeLimitedLog(log, now);
 
   return (...args) => {
-    // Bun 1.4.2 passes the error alone, not after the socket its types name
+    // Bun 1.4.3 passes the error alone, not after the socket its types name
     const error = args.at(-1);
     const write = isRoutineSocketError(error) ? logRoutine : logOther;
 

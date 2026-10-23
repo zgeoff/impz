@@ -25,7 +25,7 @@ async function setupTest() {
   return { prefix: getSuitePrefix('tailscale'), stack, client };
 }
 
-// collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
+// collection-time gate: Bun 1.4.3's skipIf takes a boolean and has no in-body skip
 const tailscaleStatus = await readLocalTailscaleStatus();
 
 // The definition of done needs the tailnet; any other run skips without it.

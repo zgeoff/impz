@@ -26,7 +26,7 @@ each; open one when the task touches its area.
 
 ## Traps
 
-- **Cleanup runs first-in, first-out.** On Bun 1.4.2, `onTestFinished` callbacks run in registration
+- **Cleanup runs first-in, first-out.** On Bun 1.4.3, `onTestFinished` callbacks run in registration
   order, and a callback that throws skips the ones after it. A util that registers its own cleanup
   therefore releases before anything the test registers after it.
 - **Ambient `IMP_*` settings vanish.** The root preload deletes every `IMP_*` variable the shell
@@ -34,6 +34,10 @@ each; open one when the task touches its area.
   test. Set an impd setting with [`updateEnv`](../../../packages/test-utils/src/update-env.ts)
   before `setupTest()`, which reads it through
   [`readImpEnv`](../../../packages/test-utils/src/read-imp-env.ts).
+- **The shell's proxy is off.** The root preload empties `HTTP_PROXY`, `HTTPS_PROXY` and
+  `ALL_PROXY`, in upper and lower case, because Bun's fetch sends a loopback address that `NO_PROXY`
+  leaves out, such as `127.0.0.2`, through the proxy. A test of proxy behaviour sets the variable
+  with `updateEnv`.
 - **MSW sees only `fetch`, and not all of it.** A `fetch` to loopback or a unix socket skips MSW and
   goes to the real network. `node:http` clients and WebSockets bypass MSW too, so those boundaries
   need a real stand-in server.
