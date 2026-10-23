@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.1](https://github.com/zgeoff/impz/compare/v3.0.0...v3.0.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **daemon:** refuse a failed code verifier with invalid_grant ([#660](https://github.com/zgeoff/impz/issues/660)) ([1c3783a](https://github.com/zgeoff/impz/commit/1c3783a25076c7132c98c619d135b875081ef754))
+
 ## [3.0.0](https://github.com/zgeoff/impz/compare/v2.11.0...v3.0.0) (2026-10-23)
 
 ### ⚠ BREAKING CHANGES
