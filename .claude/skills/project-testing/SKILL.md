@@ -34,10 +34,11 @@ each; open one when the task touches its area.
   test. Set an impd setting with [`updateEnv`](../../../packages/test-utils/src/update-env.ts)
   before `setupTest()`, which reads it through
   [`readImpEnv`](../../../packages/test-utils/src/read-imp-env.ts).
-- **An ambient proxy is turned off.** Bun's `fetch` sends even a unix-socket or loopback request
-  through the proxy that the shell's `HTTPS_PROXY` names, and it keeps that proxy after the variable
-  is deleted. The root preload sets `NO_PROXY` to `*` instead, and every child process inherits it,
-  so a child that a test sends through a proxy overrides it, as curl's `--noproxy ''` does.
+- **An ambient proxy is turned off.** Bun's `fetch` sends a loopback request through the proxy that
+  the shell's `HTTPS_PROXY` names. Bun 1.4.2 keeps that proxy after the variable is deleted and Bun
+  1.4.3 follows the delete, so the root preload sets `NO_PROXY` to `*`, which turns the proxy off on
+  both. Every child process inherits it, so a child that a test sends through a proxy overrides it,
+  as curl's `--noproxy ''` does.
 - **MSW sees only `fetch`, and not all of it.** A `fetch` to loopback or a unix socket skips MSW and
   goes to the real network. `node:http` clients and WebSockets bypass MSW too, so those boundaries
   need a real stand-in server.
