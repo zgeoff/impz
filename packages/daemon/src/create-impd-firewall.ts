@@ -9,6 +9,7 @@ import { checkHostRules6, readOrCreateUlaPrefix, resolveIpv6Plan } from './host-
 import type { Ipv6Plan } from './host-net/net/ipv6-plan';
 import { createReachPolicy } from './host-net/net/reach-policy';
 import type { ImpdDeps } from './impd-deps';
+import type { BuilderTestRegistry } from './imps/images/builder-imps';
 import { createBroker } from './network/broker/broker-service';
 import type { Broker } from './network/broker/broker-service';
 import type { SecretFiles } from './network/broker/secret-files';
@@ -16,12 +17,14 @@ import { runNft } from './network/egress/egress-firewall';
 import { createEgressService } from './network/egress/egress-service';
 import type { EgressService } from './network/egress/egress-service';
 import { printLog } from './platform/process/print-log';
+import { resolveTestRegistry } from './resolve-test-registry';
 import type { ImpdStopParts } from './stop-impd';
 
 export interface ImpdFirewall {
   readonly ipv6: Ipv6Plan | null;
   readonly broker: Broker;
   readonly egress: EgressService;
+  readonly testRegistry: BuilderTestRegistry | null;
 }
 
 export async function createImpdFirewall(
@@ -67,11 +70,14 @@ export async function createImpdFirewall(
 
   plan.broker = broker;
 
+  const testRegistry = await resolveTestRegistry(config.build.testRegistry, log);
+
   const egress = createEgressService({
     config,
     db: deps.db,
     ipv6,
     reach,
+    testRegistry,
     log,
     isGranted: broker.isGranted,
     closeTunnels: broker.closeTunnels,
@@ -83,5 +89,5 @@ export async function createImpdFirewall(
 
   await egress.start();
 
-  return { ipv6, broker, egress };
+  return { ipv6, broker, egress, testRegistry };
 }

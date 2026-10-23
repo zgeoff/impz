@@ -201,6 +201,111 @@ test('it asks the builder engine again, a poll later, until it answers, then run
   ]);
 });
 
+test('it writes the test registry into the builder, once its engine answers and before the build runs', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(
+    join(ctx.dataDir, 'registry-ca.pem'),
+    '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n',
+  );
+
+  const guest = buildStubGuest(() => ({ stdout: 'ok' }));
+
+  const builders = createBuilders({
+    config: ctx.config,
+    db: ctx.db,
+    imps: {
+      ...ctx.impd.imps,
+      openBuilderExec: (_name, request) => guest.open(request),
+    },
+    ensureImage: async () => {
+      await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
+    },
+    log: () => {},
+    testRegistry: {
+      name: 'registry.example.test',
+      address: '172.17.0.1',
+      port: 5443,
+      caPath: join(ctx.dataDir, 'registry-ca.pem'),
+    },
+  });
+
+  await builders.withBuilder(new AbortController().signal, (exec) =>
+    exec(['echo'], { signal: new AbortController().signal }),
+  );
+
+  expect(guest.runs.map((run) => run.argv)).toStrictEqual([
+    ['docker', 'info', '--format', '{{.ServerVersion}}'],
+    [
+      'sh',
+      '-c',
+      [
+        'set -e',
+        'mkdir -p "/etc/docker/certs.d/$1:$2"',
+        'printf "%s" "$3" > "/etc/docker/certs.d/$1:$2/ca.crt"',
+        String.raw`printf "%s %s\n" "$4" "$1" >> /etc/hosts`,
+      ].join('\n'),
+      'sh',
+      'registry.example.test',
+      '5443',
+      '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n',
+      '172.17.0.1',
+    ],
+    ['echo'],
+  ]);
+});
+
+test('it fails the build when the builder refuses the test registry, and removes the builder', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(
+    join(ctx.dataDir, 'registry-ca.pem'),
+    '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n',
+  );
+
+  const guest = buildStubGuest((run) =>
+    run.argv[0] === 'sh' ? { code: 1, stderr: 'sh: read-only file system' } : {},
+  );
+
+  const builders = createBuilders({
+    config: ctx.config,
+    db: ctx.db,
+    imps: {
+      ...ctx.impd.imps,
+      openBuilderExec: (_name, request) => guest.open(request),
+    },
+    ensureImage: async () => {
+      await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
+    },
+    log: () => {},
+    testRegistry: {
+      name: 'registry.example.test',
+      address: '172.17.0.1',
+      port: 5443,
+      caPath: join(ctx.dataDir, 'registry-ca.pem'),
+    },
+  });
+
+  const building = builders.withBuilder(new AbortController().signal, () =>
+    Promise.resolve('built'),
+  );
+
+  const failure = await building.then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const imps = await listImps(ctx.db);
+
+  expect(failure).toStrictEqual(
+    new Error(
+      'writing the test registry registry.example.test into the builder: sh: read-only file system',
+    ),
+  );
+
+  expect(imps).toStrictEqual([]);
+});
+
 test('it fails the build when the builder engine does not answer in 60 s, and removes the builder', async () => {
   const ctx = await setupTest();
 

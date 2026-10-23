@@ -73,6 +73,8 @@ error.
 | `IMP_TAILNET_IDENTITIES`        | none                                      | JSON rules that give tailnet members a scope without a token ([tokens](./tokens.md#tailnet-identity)). Unset, every caller needs a token.                                                                                                                             |
 | `IMP_PEER_URL`                  | the tailnet IP and `IMP_API_PORT`         | The URL a source uses to [move](./hosts.md#moves) an imp here. It must name a literal tailnet address; impd refuses to start otherwise.                                                                                                                               |
 | `IMP_MOVE_TEST_CIDR`            | none                                      | Tests only, with `IMP_E2E=1`: one more private range, /16 or narrower, that moves may come from and go to, off the tailnet ([moves](../architecture/storage/moves.md#the-steps)). impd logs a warning at start.                                                       |
+| `IMP_BUILD_TEST_REGISTRY`       | none                                      | Tests only, with `IMP_E2E=1`: a registry as `<name>:<port>` that builders may reach at the private address impd resolves the name to at start ([public](../architecture/network/egress.md#public)). impd logs a warning at start.                                     |
+| `IMP_BUILD_TEST_REGISTRY_CA`    | none                                      | Tests only, with `IMP_BUILD_TEST_REGISTRY`: the PEM file of that registry's CA, which impd copies into each builder.                                                                                                                                                  |
 | `IMP_DASHBOARD_DIR`             | none                                      | The [dashboard](./dashboard.md)'s built files, served at `/ui/`. The release image sets its own.                                                                                                                                                                      |
 
 A host on Linux 6.7 or later does not set a restored TSC back, so it can set
@@ -255,16 +257,18 @@ impd tuning passes through an allowlist. When set on your machine, `dev.sh` pass
 `IMP_WATCHDOG_ACTION`, `IMP_TAILSCALE_HOSTNAME`, `IMP_TAILNET_IDENTITIES`, `IMP_TAILNET_NAMES`,
 `IMP_TAILNET_NAME_PREFIX`, `IMP_BUILD_CONTEXT_MAX_MIB`, `IMP_BROKER_PORT`, `IMP_KSM`,
 `IMP_KSM_HEADROOM_PERCENT`, `IMP_SSH_AUTHORIZED_KEYS`, `IMP_STORAGE_BACKEND`, `IMP_ZFS_ROOT`,
-`IMP_ZFS_ALLOW_UIOMOVE_BUG`, `IMP_SUBNET6`, `IMP_JAILER`, `IMP_JAILER_BIN`, `IMP_PEER_URL` and
-`IMP_MOVE_TEST_CIDR` to impd, the `IMP_BACKUP_*` variables, and the HTTPS settings except the token:
-`IMP_DOMAIN`, `IMP_DNS_PROVIDER`, `IMP_DNS_API_URL`, `IMP_ACME_DIRECTORY`, `IMP_ACME_EMAIL`,
-`IMP_HTTPS_PORT`, `IMP_HTTP_PORT`, `IMP_PUBLIC_IP`, `IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`,
-and `IMP_ACME_CA_FILE` as a path under the repo. `IMP_E2E=1` lets impd use the `challtestsrv` DNS
-provider. With `IMP_TAILNET_NAMES=1`, `dev.sh` writes the OAuth client from 1Password into the data
-directory and sets `IMP_TAILNET_OAUTH_FILE`. `IMP_DEV_NETWORK` puts the container on that Docker
-network. `IMP_DEV_BACKUP_ENV_FILE` names a Docker env file with the repository's `AWS_*` keys, so
-the keys in your own shell never reach the container. Other impd variables keep their defaults in
-the dev container. A ZFS dev instance needs the zfs module on the machine;
+`IMP_ZFS_ALLOW_UIOMOVE_BUG`, `IMP_SUBNET6`, `IMP_JAILER`, `IMP_JAILER_BIN`, `IMP_PEER_URL`,
+`IMP_MOVE_TEST_CIDR` and `IMP_BUILD_TEST_REGISTRY` to impd, the `IMP_BACKUP_*` variables, and the
+HTTPS settings except the token: `IMP_DOMAIN`, `IMP_DNS_PROVIDER`, `IMP_DNS_API_URL`,
+`IMP_ACME_DIRECTORY`, `IMP_ACME_EMAIL`, `IMP_HTTPS_PORT`, `IMP_HTTP_PORT`, `IMP_PUBLIC_IP`,
+`IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`, and `IMP_ACME_CA_FILE` and
+`IMP_BUILD_TEST_REGISTRY_CA` as paths under the repo. `IMP_E2E=1` lets impd use the `challtestsrv`
+DNS provider. With `IMP_BUILD_TEST_REGISTRY` set, the container resolves the registry's name to the
+Docker host's gateway. With `IMP_TAILNET_NAMES=1`, `dev.sh` writes the OAuth client from 1Password
+into the data directory and sets `IMP_TAILNET_OAUTH_FILE`. `IMP_DEV_NETWORK` puts the container on
+that Docker network. `IMP_DEV_BACKUP_ENV_FILE` names a Docker env file with the repository's `AWS_*`
+keys, so the keys in your own shell never reach the container. Other impd variables keep their
+defaults in the dev container. A ZFS dev instance needs the zfs module on the machine;
 `scripts/zfs-host-test.sh` runs one on a throwaway pool.
 
 ## CLI

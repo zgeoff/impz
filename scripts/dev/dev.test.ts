@@ -484,6 +484,52 @@ test('it refuses up with an IMP_ACME_CA_FILE outside the repo', () => {
   expect(readFileSync(docker.calls, 'utf8')).not.toInclude('docker run -d --name imp-dev ');
 });
 
+test("it passes the test registry to impd, names it as the Docker host's gateway, and maps its CA into the container", () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({
+      containers: { 'imp-dev': false, 'imp-dev-docker-proxy': true },
+      hasImage: true,
+      hasSocket: true,
+      logs: { 'imp-dev': 'impd: /dev/kvm is missing\n' },
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', 'exit 7');
+
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
+  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
+
+  Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+
+      IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
+      IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+      IMP_HOST_IMAGE_READY: '1',
+      IMP_DEV_TAILNET: '0',
+      IMP_UPLINK_MTU: '1500',
+      IMP_E2E: '1',
+      IMP_BUILD_TEST_REGISTRY: 'registry.example.test:5443',
+      IMP_BUILD_TEST_REGISTRY_CA: new URL('../../.cache/e2e/registry-ca.pem', import.meta.url)
+        .pathname,
+    },
+  });
+
+  const run = readFileSync(docker.calls, 'utf8')
+    .split('\n')
+    .find((line) => line.startsWith('docker run -d --name imp-dev '));
+
+  expect(run).toInclude(' -e IMP_BUILD_TEST_REGISTRY=registry.example.test:5443 ');
+  expect(run).toInclude(' -e IMP_BUILD_TEST_REGISTRY_CA=/src/.cache/e2e/registry-ca.pem ');
+  expect(run).toInclude(' --add-host registry.example.test:host-gateway ');
+});
+
 test('it fails up when the container stops before impd is ready, printing its log', () => {
   const ctx = setupTest();
 

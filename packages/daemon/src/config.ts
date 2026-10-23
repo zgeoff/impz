@@ -9,7 +9,7 @@ import { PublicMcpEnvSchema, parsePublicMcpConfig } from './identity/oauth/publi
 import { loadBackupConfig } from './imp-ops/backup/backup-config';
 import { buildPeerRanges, parsePeerUrlAddress } from './imp-ops/moves/peer-address';
 import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from './imps/images/build-image';
-import type { ImageEvictionConfig } from './imps/imps-config';
+import type { ImageEvictionConfig, TestRegistryConfig } from './imps/imps-config';
 import { checkPublicPorts } from './network/https/check-public-ports';
 import { HttpsEnvSchema, listHttpsWarnings, readHttpsConfig } from './network/https/https-config';
 import {
@@ -62,6 +62,11 @@ const EnvSchema = z.object({
     .string()
     .regex(BUILD_IMAGE_PATTERN, 'must name an image by digest, <ref>@sha256:<hex>')
     .default(DEFAULT_BUILD_IMAGE),
+  IMP_BUILD_TEST_REGISTRY: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9.\-]*:\d+$/v, 'must be <name>:<port>')
+    .optional(),
+  IMP_BUILD_TEST_REGISTRY_CA: z.string().optional(),
   IMP_IMAGE_EVICT_HIGH_PERCENT: MarkSchema.optional(),
   IMP_IMAGE_EVICT_LOW_PERCENT: MarkSchema.optional(),
   IMP_SESSION_LOG_MAX_MIB: CountSchema.default(16),
@@ -286,6 +291,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
       imageMaxBytes: parsed.IMP_BUILD_IMAGE_MAX_MIB * 1024 ** 2,
       imageMaxFiles: parsed.IMP_BUILD_IMAGE_MAX_FILES,
       image: parsed.IMP_BUILD_IMAGE,
+      testRegistry: parseTestRegistry(parsed),
     },
     imageEviction: parseImageEvictionConfig(
       parsed.IMP_IMAGE_EVICT_HIGH_PERCENT,
@@ -324,6 +330,36 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
     moves: { peerUrl: parsed.IMP_PEER_URL ?? null, testCidr: parsed.IMP_MOVE_TEST_CIDR ?? null },
     warnings: listHttpsWarnings(parsed),
   };
+}
+
+function parseTestRegistry(parsed: z.infer<typeof EnvSchema>): TestRegistryConfig | null {
+  const registry = parsed.IMP_BUILD_TEST_REGISTRY;
+  const caPath = parsed.IMP_BUILD_TEST_REGISTRY_CA;
+
+  if (registry === undefined && caPath === undefined) {
+    return null;
+  }
+
+  if (parsed.IMP_E2E !== '1') {
+    throw new Error(
+      'IMP_BUILD_TEST_REGISTRY opens a private address to builders, and only an e2e host may set it',
+    );
+  }
+
+  if (registry === undefined || caPath === undefined) {
+    throw new Error(
+      'IMP_BUILD_TEST_REGISTRY and IMP_BUILD_TEST_REGISTRY_CA go together; set both or neither',
+    );
+  }
+
+  const colon = registry.lastIndexOf(':');
+  const port = Number(registry.slice(colon + 1));
+
+  if (port < 1 || port > 65_535) {
+    throw new Error(`IMP_BUILD_TEST_REGISTRY has no valid port: ${registry}`);
+  }
+
+  return { name: registry.slice(0, colon), port, caPath };
 }
 
 function parseImageEvictionConfig(

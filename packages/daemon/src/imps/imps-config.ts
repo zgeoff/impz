@@ -7,6 +7,13 @@ interface BuildConfig {
   readonly imageMaxBytes: number;
   readonly imageMaxFiles: number;
   readonly image: string;
+  readonly testRegistry: TestRegistryConfig | null;
+}
+
+export interface TestRegistryConfig {
+  readonly name: string;
+  readonly port: number;
+  readonly caPath: string;
 }
 
 export interface ImageEvictionConfig {

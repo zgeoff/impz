@@ -61,6 +61,9 @@
 #      only, as the moves suite's second host does. IMP_DEV_TAILNET=0 keeps
 #      the container off the tailnet whatever key there is.
 #      IMP_MOVE_TEST_CIDR and IMP_PEER_URL pass through for the moves suite.
+#      IMP_BUILD_TEST_REGISTRY (<name>:<port>) and IMP_BUILD_TEST_REGISTRY_CA
+#      pass through for the registry suite, and the container resolves <name>
+#      to the Docker host's gateway, where the suite's registry listens.
 #      IMP_UPLINK_MTU overrides the MTU read from this machine's default route.
 #      IMP_BACKUP_* pass through too (docs/architecture/storage/backups.md), and
 #      IMP_DEV_BACKUP_ENV_FILE is a docker --env-file with the repository's
@@ -102,7 +105,7 @@ tuning_vars=(IMP_IDLE_TIMEOUT_S IMP_IDLE_CPU_PERCENT IMP_RAM_BUDGET_MIB IMP_BOOT
   IMP_BACKUP_INTERVAL_S IMP_BACKUP_KEEP IMP_BACKUP_FORGET IMP_BACKUP_DATABASE IMP_BACKUP_CPUS
   IMP_BACKUP_MEMORY_MIB
   IMP_BOOT_TEMPLATES IMP_JAILER IMP_JAILER_BIN IMP_MOVE_TEST_CIDR IMP_PEER_URL
-  IMP_MCP_PUBLIC_URL IMP_MCP_PUBLIC_PORT)
+  IMP_MCP_PUBLIC_URL IMP_MCP_PUBLIC_PORT IMP_BUILD_TEST_REGISTRY)
 
 # in_container PATH maps a path under the repo to its /src path.
 in_container() {
@@ -282,6 +285,12 @@ up() {
     done
     if [ -n "${IMP_ACME_CA_FILE:-}" ]; then
       tuning+=(-e "IMP_ACME_CA_FILE=$(in_container "$IMP_ACME_CA_FILE")")
+    fi
+    if [ -n "${IMP_BUILD_TEST_REGISTRY_CA:-}" ]; then
+      tuning+=(-e "IMP_BUILD_TEST_REGISTRY_CA=$(in_container "$IMP_BUILD_TEST_REGISTRY_CA")")
+    fi
+    if [ -n "${IMP_BUILD_TEST_REGISTRY:-}" ]; then
+      tuning+=(--add-host "${IMP_BUILD_TEST_REGISTRY%:*}:host-gateway")
     fi
     local network=() ports=()
     [ -n "${IMP_DEV_NETWORK:-}" ] && network=(--network "$IMP_DEV_NETWORK")
