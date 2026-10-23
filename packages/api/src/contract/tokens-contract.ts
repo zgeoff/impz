@@ -1,4 +1,3 @@
-import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { EmptySchema } from '../schemas/empty-schema';
 import { NameInputSchema } from '../schemas/name-input-schema';
@@ -15,15 +14,15 @@ import {
   SshPublicKeySchema,
   TokenSchema,
 } from '../schemas/token-schema';
-import { IMP_ERRORS } from './imp-errors';
-
-const base = oc.errors(IMP_ERRORS);
+import { ACCESS } from './access';
+import { contractBase as base } from './contract-base';
 
 export const tokensContract = {
-  list: base.output(z.array(TokenSchema)),
+  list: base.meta(ACCESS.manageHost).output(z.array(TokenSchema)),
 
   // This answer holds the token's secret, and no later call returns it.
   create: base
+    .meta(ACCESS.manageHost)
     .input(
       z.object({
         name: NameSchema,
@@ -39,6 +38,7 @@ export const tokensContract = {
     .output(z.object({ token: TokenSchema, secret: z.string() })),
 
   update: base
+    .meta(ACCESS.manageHost)
     .input(
       z
         .object({
@@ -54,13 +54,17 @@ export const tokensContract = {
     )
     .output(TokenSchema),
 
-  delete: base.input(NameInputSchema).output(EmptySchema),
+  delete: base.meta(ACCESS.manageHost).input(NameInputSchema).output(EmptySchema),
 
-  addKey: base.input(z.object({ name: NameSchema, key: SshPublicKeySchema })).output(SshKeySchema),
+  addKey: base
+    .meta(ACCESS.manageHost)
+    .input(z.object({ name: NameSchema, key: SshPublicKeySchema }))
+    .output(SshKeySchema),
 
   removeKey: base
+    .meta(ACCESS.manageHost)
     .input(z.object({ name: NameSchema, fingerprint: z.string() }))
     .output(EmptySchema),
 
-  whoami: base.output(IdentitySchema),
+  whoami: base.meta(ACCESS.readAny).output(IdentitySchema),
 };
