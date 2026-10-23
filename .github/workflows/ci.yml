@@ -98,10 +98,11 @@ jobs:
         continue-on-error: true
         run: bash .claude/skills/docs-writing/scripts/check-length.sh --package README.md
 
-      # an image build's disk hold against what it really takes, on a small
-      # loop-mounted XFS of its own, as impd's data dir is; the tests skip
-      # without IMP_TEST_SMALL_FS, and the mount needs sudo
-      - name: Test Build Disk Hold
+      # an image build's disk hold against what it really takes, and a moved
+      # disk's data blocks, on a small loop-mounted XFS of its own, as impd's
+      # data dir is; the tests skip without IMP_TEST_SMALL_FS, and the mount
+      # needs sudo
+      - name: Test Small Filesystem
         run: |
           command -v mkfs.xfs || { sudo apt-get update && sudo apt-get install -y --no-install-recommends xfsprogs; }
           fs="$RUNNER_TEMP/small-fs"
@@ -111,7 +112,7 @@ jobs:
           sudo mount -o loop "$fs.img" "$fs"
           trap 'sudo umount "$fs" && rm -f "$fs.img" && rmdir "$fs"' EXIT
           sudo chown "$(id -u):$(id -g)" "$fs"
-          IMP_TEST_SMALL_FS="$fs" bun test packages/daemon/src/imps/images/create-image-builds.test.ts -t 'small filesystem'
+          IMP_TEST_SMALL_FS="$fs" bun test packages/daemon/src/imps/images/create-image-builds.test.ts packages/daemon/src/imp-ops/backup/write-changed-blocks.test.ts packages/daemon/src/imp-ops/backup/read-data-blocks.test.ts -t 'small filesystem'
 
       # impd's port of the Dockerfile parser against the Go parser it ports,
       # at the commit behind the pinned frontend (scripts/dockerfile-difftest)
@@ -150,6 +151,10 @@ jobs:
       # the ACME issuer against Pebble and challtestsrv in Docker
       - name: Test ACME
         run: bun run test:pebble
+
+      # tailscale-up.sh joining Headscale in Docker with a tagged pre-auth key
+      - name: Test Headscale Join
+        run: bun run test:headscale
 
       # its own run: the component tests register a DOM that must not reach
       # the daemon's tests (bunfig.toml pathIgnorePatterns)
@@ -559,11 +564,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
-      # The registry suite's registry runs on loopback under this name, since
-      # the docker proxy refuses an IP or localhost; the suite trusts its
+      # The registry suite's registry listens under this name on the gateway of
+      # its own Docker network (e2e/lib/registry-plan.ts, port offset 0), which
+      # both this host's engine and impd's builders reach; the suite trusts its
       # certificate in /etc/docker/certs.d with sudo
       - name: Name the e2e registry
-        run: echo '127.0.0.1 imp-e2e-registry.test' | sudo tee -a /etc/hosts
+        run: echo '10.200.0.1 imp-e2e-registry.test' | sudo tee -a /etc/hosts
 
       # No TAILSCALE_AUTHKEY here: the fast set has no tailscale suite, and
       # outside acceptance a missed timing limit only warns.
@@ -653,6 +659,8 @@ jobs:
       IMP_HOST_IMAGE_READY: 1
       IMP_ZFS_E2E_SUITES: ${{ matrix.suites }}
       IMP_ZFS_TEST_UNIT: 0
+      # each shard has its runner to itself
+      E2E_OWNS_ZFS_HOST: 1
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

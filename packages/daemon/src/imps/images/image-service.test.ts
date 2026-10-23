@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
+import { buildStubImageBuilder } from '../../../testing/imps/build-stub-image-builder';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { loadConfig } from '../../config';
@@ -89,83 +90,16 @@ test('#runImageBuild refuses a context path that docker could read as a flag', a
   });
 });
 
-test('#addImage answers a proxy refusal of the pull as BAD_REQUEST with its message alone', async () => {
+test('#ensureBuilderImage leaves no work directory behind when the create fails', async () => {
   const ctx = await setupTest();
 
-  const refusal = "imp-docker-proxy: registry localhost:5320 is the host's own";
+  const config = loadConfig({ IMP_DATA_DIR: ctx.dataDir });
 
   const docker = createStubDockerCli({
     directory: ctx.dataDir,
     images: [
       {
-        refs: ['registry.example/pulled:1'],
-        inspects: [{ Id: `sha256:${'c'.repeat(64)}` }],
-        isOnHost: false,
-        pull: { stderr: `Error response from daemon: ${refusal}` },
-      },
-    ],
-  });
-
-  updateEnv('PATH', docker.path);
-
-  const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_ISOLATION: 'host' }),
-    db: ctx.db,
-    storage: ctx.storage,
-    storageGate: createStorageGate(),
-    diskBudget: ctx.diskBudget,
-    readBuilders: () => null,
-    log: () => {},
-  });
-
-  const adding = images.addImage('registry.example/pulled:1', 'x');
-
-  expect(adding).rejects.toMatchObject({ code: 'BAD_REQUEST', message: refusal });
-});
-
-test('#addImage answers a proxy refusal of the create as BAD_REQUEST with its message alone', async () => {
-  const ctx = await setupTest();
-
-  const refusal = "imp-docker-proxy: registry localhost:5320 is the host's own";
-
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['registry.example/local:1'],
-        inspects: [{ Id: `sha256:${'c'.repeat(64)}`, Config: {}, Size: 1 }],
-      },
-    ],
-    create: {
-      stderr: `Unable to find image 'localhost:5320/x:1' locally\nError response from daemon: ${refusal}`,
-    },
-  });
-
-  updateEnv('PATH', docker.path);
-
-  const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_ISOLATION: 'host' }),
-    db: ctx.db,
-    storage: ctx.storage,
-    storageGate: createStorageGate(),
-    diskBudget: ctx.diskBudget,
-    readBuilders: () => null,
-    log: () => {},
-  });
-
-  const adding = images.addImage('registry.example/local:1', 'x');
-
-  expect(adding).rejects.toMatchObject({ code: 'BAD_REQUEST', message: refusal });
-});
-
-test('#addImage leaves no work directory behind when the create fails', async () => {
-  const ctx = await setupTest();
-
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['registry.example/local:1'],
+        refs: [config.build.image],
         inspects: [{ Id: `sha256:${'c'.repeat(64)}`, Config: {}, Size: 1 }],
       },
     ],
@@ -176,7 +110,7 @@ test('#addImage leaves no work directory behind when the create fails', async ()
   mkdirSync(join(ctx.dataDir, 'images'));
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_ISOLATION: 'host' }),
+    config,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: createStorageGate(),
@@ -185,11 +119,11 @@ test('#addImage leaves no work directory behind when the create fails', async ()
     log: () => {},
   });
 
-  const adding = images.addImage('registry.example/local:1', 'x');
+  const ensuring = images.ensureBuilderImage();
 
-  await adding.catch(() => {});
+  await ensuring.catch(() => {});
 
-  expect(adding).rejects.toThrow('no space left on device');
+  expect(ensuring).rejects.toThrow('no space left on device');
   expect(readdirSync(join(ctx.dataDir, 'images'))).toStrictEqual([]);
 });
 
@@ -197,7 +131,7 @@ test('#addImage answers SERVICE_UNAVAILABLE while the builders are not up', asyn
   const ctx = await setupTest();
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_ISOLATION: 'imp' }),
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
     storageGate: createStorageGate(),
@@ -226,7 +160,7 @@ test('#buildImageFromContext answers SERVICE_UNAVAILABLE while the builders are 
   Bun.spawnSync(['tar', '-C', contextDir, '-cf', tarPath, 'Dockerfile']);
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_ISOLATION: 'imp' }),
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
     storageGate: createStorageGate(),
@@ -364,19 +298,18 @@ test('#runImageBuild refuses a Dockerfile image that is not an image reference',
   const ctx = await setupTest();
 
   const contextDir = join(ctx.dataDir, 'context');
-  const docker = createStubDockerCli({ directory: ctx.dataDir });
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'a'.repeat(64)}` });
 
-  updateEnv('PATH', docker.path);
   mkdirSync(contextDir);
   writeFileSync(join(contextDir, 'Dockerfile'), 'FROM a..b\n');
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_ISOLATION: 'host' }),
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
-    readBuilders: () => null,
+    readBuilders: () => builder.builders,
     log: () => {},
   });
 
@@ -393,32 +326,21 @@ test('#runImageBuild answers BAD_REQUEST when the pinned Dockerfile does not par
 
   const contextDir = join(ctx.dataDir, 'context');
 
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['busybox:1'],
-        inspects: [
-          {
-            Id: `sha256:${'c'.repeat(64)}`,
-            RepoDigests: [`busybox@sha256:${'a'.repeat(64)} AS evil`],
-          },
-        ],
-      },
-    ],
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'a'.repeat(64)} AS evil`,
   });
 
-  updateEnv('PATH', docker.path);
   mkdirSync(contextDir);
   writeFileSync(join(contextDir, 'Dockerfile'), 'FROM busybox:1\n');
 
   const images = createImageService({
-    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_ISOLATION: 'host' }),
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
-    readBuilders: () => null,
+    readBuilders: () => builder.builders,
     log: () => {},
   });
 

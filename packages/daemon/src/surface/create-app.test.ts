@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ImpContract } from '@impz/api';
@@ -14,12 +14,15 @@ import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
 import packageJson from '../../package.json' with { type: 'json' };
 import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
-import { createStubDockerCli } from '../../testing/imps/create-stub-docker-cli';
+import { buildStubImageBuilder } from '../../testing/imps/build-stub-image-builder';
+import { createBuilderImage } from '../../testing/imps/create-builder-image';
+import { createFilesTar } from '../../testing/imps/create-files-tar';
 import { createStubCloudflareApi } from '../../testing/network/create-stub-cloudflare-api';
 import { startTestImpd } from '../../testing/start-test-impd';
 import { tryExecSocket, tryTunnelSocket } from '../../testing/surface/try-impd-sockets';
 import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
 import { buildStubZfsStorage } from '../../testing/vm/build-stub-zfs-storage';
+import type { ImpService } from '../imps/imps/imp-service';
 import { listApiCalls } from '../platform/db/api-audit';
 import { createImage } from '../platform/db/images';
 import { readImpByName } from '../platform/db/imps';
@@ -30,6 +33,7 @@ import type { CpuCgroups } from '../vm/vmm/cpu-cgroups';
 interface SetupOptions {
   readonly cgroups: CpuCgroups;
   readonly createStorage?: (dataDir: string) => StorageBackend;
+  readonly openBuilderExec?: ImpService['openBuilderExec'];
 }
 
 async function setupTest(options: SetupOptions) {
@@ -49,6 +53,9 @@ async function setupTest(options: SetupOptions) {
     frozenClockMs: Date.UTC(2026, 0, 1),
     cgroups: options.cgroups,
     ...(options.createStorage !== undefined && { createStorage: options.createStorage }),
+    ...(options.openBuilderExec !== undefined && {
+      boundaries: { agent: { openBuilderExec: options.openBuilderExec } },
+    }),
     kernelFiles: {
       taintPath,
       bootIdPath: join(taintDir, 'boot_id'),
@@ -1346,31 +1353,21 @@ test('it refuses an exec ticket used once', async () => {
 });
 
 test("it keeps the reference an image add's pull resolved in its audit row", async () => {
-  updateEnv('IMP_BUILD_ISOLATION', 'host');
+  const directory = await mkdtemp(join(tmpdir(), 'image-add-audit-'));
+
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(directory, { hello: 'hi' })],
+    repoDigest: `sha256:${'d'.repeat(64)}`,
+  });
 
   const ctx = await setupTest({
     cgroups: buildStubCpuCgroups().cgroups,
+    openBuilderExec: (_name, request) => builder.guest.open(request),
   });
 
-  const pulled = `busybox@sha256:${'d'.repeat(64)}`;
-
-  await mkdir(join(ctx.dataDir, 'tree'));
-  await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
-
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['busybox'],
-        inspects: [{ Id: `sha256:${'b'.repeat(64)}`, Config: {}, Size: 2, RepoDigests: [pulled] }],
-        isOnHost: false,
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout,
-  });
-
-  updateEnv('PATH', docker.path);
+  await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
 
   await ctx.client.images.add({ ref: 'busybox', name: 'box' });
 
@@ -1384,7 +1381,7 @@ test("it keeps the reference an image add's pull resolved in its audit row", asy
     return adds.map((row) => row.detail);
   });
 
-  expect(details).toStrictEqual([pulled]);
+  expect(details).toStrictEqual([`busybox@sha256:${'d'.repeat(64)}`]);
 });
 
 test('it audits an exec on a ticket the token asked for as the token', async () => {

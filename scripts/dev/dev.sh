@@ -61,6 +61,9 @@
 #      only, as the moves suite's second host does. IMP_DEV_TAILNET=0 keeps
 #      the container off the tailnet whatever key there is.
 #      IMP_MOVE_TEST_CIDR and IMP_PEER_URL pass through for the moves suite.
+#      IMP_BUILD_TEST_REGISTRY (<name>:<port>) and IMP_BUILD_TEST_REGISTRY_CA
+#      pass through for the registry suite, and the container resolves <name>
+#      to the address this machine resolves it to.
 #      IMP_UPLINK_MTU overrides the MTU read from this machine's default route.
 #      IMP_BACKUP_* pass through too (docs/architecture/storage/backups.md), and
 #      IMP_DEV_BACKUP_ENV_FILE is a docker --env-file with the repository's
@@ -91,7 +94,7 @@ tuning_vars=(IMP_IDLE_TIMEOUT_S IMP_IDLE_CPU_PERCENT IMP_RAM_BUDGET_MIB IMP_BOOT
   IMP_WAKE_RESERVE_MIB IMP_SLEEP_MIN_GUEST_UPTIME_MS IMP_DEFAULT_VCPUS IMP_DEFAULT_MEMORY_MIB
   IMP_DEFAULT_DISK_GIB IMP_DISK_RESERVE_GIB IMP_TAILSCALE_HOSTNAME IMP_TAILSCALE_TAGS
   IMP_TAILNET_IDENTITIES IMP_TAILNET_NAMES IMP_TAILNET_NAME_PREFIX IMP_BUILD_CONTEXT_MAX_MIB
-  IMP_BUILD_ISOLATION IMP_BUILD_MEMORY_MIB IMP_BUILD_DISK_GIB IMP_BUILD_IMAGE_MAX_MIB
+  IMP_BUILD_MEMORY_MIB IMP_BUILD_DISK_GIB IMP_BUILD_IMAGE_MAX_MIB
   IMP_BUILD_IMAGE_MAX_FILES IMP_BUILD_IMAGE
   IMP_WATCHDOG_TIMEOUT_S IMP_WATCHDOG_ACTION IMP_KSM
   IMP_KSM_HEADROOM_PERCENT
@@ -102,7 +105,7 @@ tuning_vars=(IMP_IDLE_TIMEOUT_S IMP_IDLE_CPU_PERCENT IMP_RAM_BUDGET_MIB IMP_BOOT
   IMP_BACKUP_INTERVAL_S IMP_BACKUP_KEEP IMP_BACKUP_FORGET IMP_BACKUP_DATABASE IMP_BACKUP_CPUS
   IMP_BACKUP_MEMORY_MIB
   IMP_BOOT_TEMPLATES IMP_JAILER IMP_JAILER_BIN IMP_MOVE_TEST_CIDR IMP_PEER_URL
-  IMP_MCP_PUBLIC_URL IMP_MCP_PUBLIC_PORT)
+  IMP_MCP_PUBLIC_URL IMP_MCP_PUBLIC_PORT IMP_BUILD_TEST_REGISTRY)
 
 # in_container PATH maps a path under the repo to its /src path.
 in_container() {
@@ -158,17 +161,14 @@ start_proxy() {
     bun build --compile packages/daemon/src/imps/docker-proxy/main.ts \
     --outfile /out/imp-docker-proxy.new >/dev/null
   mapfile -t privileges < <(read_proxy_privileges)
-  # the settings the proxy reads too: under imp isolation it pulls only
-  # IMP_BUILD_IMAGE. impd takes each from this env, else .env, so the proxy
-  # does too; only these keys are read from .env, never its secrets.
-  local var value
-  for var in IMP_BUILD_CONTEXT_MAX_MIB IMP_BUILD_ISOLATION IMP_BUILD_IMAGE; do
-    value=${!var:-}
-    if [ -z "$value" ] && [ -f "$IMP_ROOT/.env" ]; then
-      value=$(sed -n "s/^$var=//p" "$IMP_ROOT/.env" | tail -n 1 | tr -d '\r')
-    fi
-    [ -n "$value" ] && context+=(-e "$var=$value")
-  done
+  # the setting the proxy reads too: it pulls only IMP_BUILD_IMAGE. impd takes
+  # it from this env, else .env, so the proxy does too; only this key is read
+  # from .env, never its secrets.
+  local value=${IMP_BUILD_IMAGE:-}
+  if [ -z "$value" ] && [ -f "$IMP_ROOT/.env" ]; then
+    value=$(sed -n 's/^IMP_BUILD_IMAGE=//p' "$IMP_ROOT/.env" | tail -n 1 | tr -d '\r')
+  fi
+  [ -n "$value" ] && context+=(-e "IMP_BUILD_IMAGE=$value")
   stamp=$({
     sha256sum <"$data/imp-docker-proxy.new"
     printf '%s\n' "${privileges[@]}" "${context[@]}" "$IMP_HOST_IMAGE"
@@ -285,6 +285,18 @@ up() {
     done
     if [ -n "${IMP_ACME_CA_FILE:-}" ]; then
       tuning+=(-e "IMP_ACME_CA_FILE=$(in_container "$IMP_ACME_CA_FILE")")
+    fi
+    if [ -n "${IMP_BUILD_TEST_REGISTRY_CA:-}" ]; then
+      tuning+=(-e "IMP_BUILD_TEST_REGISTRY_CA=$(in_container "$IMP_BUILD_TEST_REGISTRY_CA")")
+    fi
+    if [ -n "${IMP_BUILD_TEST_REGISTRY:-}" ]; then
+      local registry_name=${IMP_BUILD_TEST_REGISTRY%:*} registry_ip
+      registry_ip=$(getent ahostsv4 "$registry_name" | awk 'NR == 1 {print $1}' || true)
+      if [ -z "$registry_ip" ]; then
+        echo "dev.sh: $registry_name (IMP_BUILD_TEST_REGISTRY) does not resolve on this machine" >&2
+        exit 1
+      fi
+      tuning+=(--add-host "$registry_name:$registry_ip")
     fi
     local network=() ports=()
     [ -n "${IMP_DEV_NETWORK:-}" ] && network=(--network "$IMP_DEV_NETWORK")

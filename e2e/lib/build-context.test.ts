@@ -3,10 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
-import { createStubDockerBin } from '@impz/client/test-utils/create-stub-docker-bin';
-import { startStubDockerEngine } from '@impz/client/test-utils/start-stub-docker-engine';
-import { startTestImpd } from '@impz/daemon/testing';
-import { updateEnv } from '@impz/test-utils/update-env';
+import { buildStubImageBuilder, createFilesTar, startBuilderImpd } from '@impz/daemon/testing';
 import { sendRawBuild, writeBuildContext } from './build-context';
 
 async function setupTest() {
@@ -18,23 +15,23 @@ async function setupTest() {
 
   stack.defer(() => rm(root, { recursive: true, force: true }));
 
-  const dockerSocket = join(root, 'docker.sock');
   const rootToken = faker.string.alphanumeric(32);
 
-  // No builder imp has an agent here, so builds run on the host engine. impd
-  // listens with its own body limit, so the build route, not Bun, refuses a
-  // large context.
-  const harness = await startTestImpd(stack, {
-    dataDir: join(root, 'data'),
-    rootToken,
-    env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: `unix://${dockerSocket}` },
-  });
+  // impd listens with its own body limit, so the build route, not Bun, refuses
+  // a large context.
+  const startImpd = async (builder: Parameters<typeof startBuilderImpd>[1]) => {
+    const harness = await startBuilderImpd(stack, builder, {
+      dataDir: join(root, 'data'),
+      rootToken,
+    });
+
+    return harness.url;
+  };
 
   return {
     root,
-    dockerSocket,
     rootToken,
-    apiUrl: harness.url,
+    startImpd,
   };
 }
 
@@ -53,23 +50,19 @@ test('#writeBuildContext makes a named directory that holds the Dockerfile', asy
 test('#sendRawBuild builds a tar of exactly the named files on impd under the token and image name', async () => {
   const ctx = await setupTest();
 
-  const imageId = `sha256:${'b'.repeat(64)}`;
-
-  const docker = createStubDockerBin(ctx.root, {
-    'imp/e2e-img-raw:latest': { id: imageId, repoDigests: [], files: { hello: 'built\n' } },
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.root, { hello: 'built\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  updateEnv('PATH', `${docker.binDir}:${process.env['PATH'] ?? ''}`);
-
-  const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
-
+  const apiUrl = await ctx.startImpd(builder);
   const directoryPath = await writeBuildContext(ctx.root, 'ctx', 'FROM scratch\nCOPY kept.txt /\n');
 
   await writeFile(join(directoryPath, 'kept.txt'), 'kept');
   await writeFile(join(directoryPath, 'left-out.txt'), 'left out');
 
   const response = await sendRawBuild({
-    apiUrl: ctx.apiUrl,
+    apiUrl,
     token: ctx.rootToken,
     directoryPath,
     files: ['Dockerfile', 'kept.txt'],
@@ -79,7 +72,7 @@ test('#sendRawBuild builds a tar of exactly the named files on impd under the to
   const built: unknown = await response.json();
 
   const listed = Bun.spawnSync(['tar', '-tf', '-'], {
-    stdin: engine.contexts.at(0) ?? new Uint8Array(),
+    stdin: builder.builtContexts.at(0) ?? new Uint8Array(),
   }).stdout.toString();
 
   expect(response.status).toBe(200);
@@ -89,10 +82,17 @@ test('#sendRawBuild builds a tar of exactly the named files on impd under the to
 
 test('#sendRawBuild answers impd’s refusal of another token', async () => {
   const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const apiUrl = await ctx.startImpd(builder);
   const directoryPath = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
 
   const response = await sendRawBuild({
-    apiUrl: ctx.apiUrl,
+    apiUrl,
     token: 'imp_wrong',
     directoryPath,
     files: ['Dockerfile'],
@@ -104,11 +104,18 @@ test('#sendRawBuild answers impd’s refusal of another token', async () => {
 
 test('#sendRawBuild throws with tar’s reason when a named file is missing', async () => {
   const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const apiUrl = await ctx.startImpd(builder);
   const directoryPath = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
 
   expect(
     sendRawBuild({
-      apiUrl: ctx.apiUrl,
+      apiUrl,
       token: ctx.rootToken,
       directoryPath,
       files: ['missing.txt'],

@@ -39,6 +39,9 @@ export async function writeChangedBlocks(source: string, target: string): Promis
       }),
     ]);
 
+    // XFS preallocates past the end that each write extends, and leaves that space allocated
+    await output.truncate(size);
+
     for (const block of [...blocks].toSorted((left, right) => left - right)) {
       const offset = block * READ_BYTES;
       const length = Math.min(READ_BYTES, size - offset);
@@ -63,7 +66,6 @@ export async function writeChangedBlocks(source: string, target: string): Promis
       }
     }
 
-    await output.truncate(size);
     await output.sync();
 
     return written;

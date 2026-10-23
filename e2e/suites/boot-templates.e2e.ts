@@ -18,7 +18,7 @@ import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { createInstanceClient, requireImp, runImp, runInImp, runShellInImp } from '../lib/imp-cli';
 import { waitForExec } from '../lib/imps';
-import { readImpdLogSince, runInContainer } from '../lib/instance';
+import { instance, readImpdLogSince, runChecked, runInContainer } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
@@ -362,3 +362,109 @@ test('it times impz new from a template: the wall time and its spans', async () 
     ready: 10,
   });
 });
+
+test.skipIf(!config.ownsZfsHost)(
+  'it times the guest steps of impz new from a template on a ZFS host that caches no data',
+  async () => {
+    const ctx = await setupTest();
+
+    const image = resolveImageName('e2e-ws');
+    const first = `${ctx.prefix}cold-time-a`;
+    const spare = `${ctx.prefix}cold-time-x`;
+    const agentSpans: number[] = [];
+    const guestSpans: Record<string, number[]> = {};
+
+    await checkShapeTemplateAbsent(368);
+
+    registerRemoval(ctx.stack, config.keep, () => removeShapeTemplates(368));
+
+    await runImp('new', first, '--image', image, '--memory', '368', '--cpus', '2');
+
+    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, first));
+
+    await waitForExec(first);
+    await runImp('new', spare, '--image', image, '--memory', '368', '--cpus', '2');
+
+    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, spare));
+
+    await waitForExec(spare);
+    await runImp('rm', spare);
+    await waitForShapeTemplate(368);
+
+    // A production guest pays tens of microseconds for each page it first
+    // touches after a restore; with its caches warm, a test host pays a few.
+    await runChecked([
+      'docker',
+      'exec',
+      instance.container,
+      'sh',
+      '-c',
+      'zfs set primarycache=metadata "$IMP_ZFS_ROOT"',
+    ]);
+
+    ctx.stack.defer(async () => {
+      await runChecked([
+        'docker',
+        'exec',
+        instance.container,
+        'sh',
+        '-c',
+        'zfs inherit primarycache "$IMP_ZFS_ROOT"',
+      ]);
+    });
+
+    for (let index = 0; index < 10; index += 1) {
+      const name = `${ctx.prefix}cold-time-${String(index)}`;
+
+      await runChecked(['sudo', '--non-interactive', 'sysctl', '--quiet', 'vm.drop_caches=3']);
+
+      const created = new Date();
+
+      await runImp('new', name, '--image', image, '--memory', '368', '--cpus', '2');
+
+      registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+      await waitForExec(name);
+
+      const log = await readImpdLogSince(created);
+
+      agentSpans.push(parseLoggedSteps(log, name, 'restored boot template')['agent'] ?? 0);
+
+      const guestSteps = parseLoggedGuestSteps(log, name, 'restored boot template');
+
+      for (const [step, durationMs] of Object.entries(guestSteps)) {
+        guestSpans[step] = [...(guestSpans[step] ?? []), durationMs];
+      }
+
+      await runImp('rm', name);
+    }
+
+    writeMetric('bootTemplateColdAgentMs', {
+      p50: pickPercentile(agentSpans, 0.5),
+      max: pickPercentile(agentSpans, 1),
+      count: agentSpans.length,
+    });
+
+    writeMetric(
+      'bootTemplateColdGuestStepsP50Ms',
+      Object.fromEntries(
+        Object.entries(guestSpans).map(([step, values]) => [step, pickPercentile(values, 0.5)]),
+      ),
+    );
+
+    expect(agentSpans).toSatisfyAll((durationMs: number) => durationMs > 0);
+
+    expect(
+      Object.fromEntries(Object.entries(guestSpans).map(([step, values]) => [step, values.length])),
+    ).toMatchObject({
+      claim: 10,
+      mount: 10,
+      grow: 10,
+      network: 10,
+      inner: 10,
+      root: 10,
+      services: 10,
+      ready: 10,
+    });
+  },
+);

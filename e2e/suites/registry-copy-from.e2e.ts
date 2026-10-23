@@ -3,15 +3,17 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { config } from '../lib/config';
 import { createRegistryTrust } from '../lib/create-registry-trust';
-import { createInstanceClient } from '../lib/imp-cli';
-import { REPO_ROOT } from '../lib/instance';
+import { createInstanceClient, runInImp } from '../lib/imp-cli';
+import { REPO_ROOT, instance } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
+import { buildRegistryPlan } from '../lib/registry-plan';
 import {
   checkRegistryReady,
   collectUnpinnedRequests,
+  createImageImp,
   createMovedTag,
+  getDigest,
   readBusyboxDigest,
-  readFileInImage,
   removeStaleRegistries,
   runBuildAndListRequests,
   startRegistry,
@@ -20,7 +22,9 @@ import { removeImageIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 
 // collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
-const isReady = await checkRegistryReady(config.registryName);
+const isReady = await checkRegistryReady(
+  buildRegistryPlan(instance, config.registryName, REPO_ROOT),
+);
 
 const registryMissing = !isReady;
 
@@ -41,7 +45,11 @@ async function setupTest() {
 
   const container = `${prefix}registry-${String(process.pid)}`;
 
-  const registry = await startRegistry(stack, config.registryName, container, directory);
+  const registry = await startRegistry(
+    stack,
+    buildRegistryPlan(instance, config.registryName, REPO_ROOT),
+    container,
+  );
 
   // The engine reads certs.d on each request, so it needs no restart.
   const trust = await createRegistryTrust({
@@ -61,7 +69,7 @@ async function setupTest() {
 }
 
 test.skipIf(registryMissing)(
-  'it uses the content impd inspected for COPY --from and RUN --mount from= a moved tag',
+  'it uses the content impd pinned for COPY --from and RUN --mount from= a moved tag, fetched by digest after the pin',
   async () => {
     const ctx = await setupTest();
 
@@ -88,11 +96,14 @@ test.skipIf(registryMissing)(
       name: copied,
     });
 
-    const fromCopy = await readFileInImage(copied, '/copied');
-    const fromMount = await readFileInImage(copied, '/mounted');
+    await createImageImp(ctx.stack, ctx.client, copied);
 
-    expect(collectUnpinnedRequests(moved.pinned, seen)).toStrictEqual([]);
-    expect(fromCopy).toBe('old');
-    expect(fromMount).toBe('old');
+    const fromCopy = await runInImp(copied, 'cat', '/copied');
+    const fromMount = await runInImp(copied, 'cat', '/mounted');
+
+    expect(collectUnpinnedRequests(moved.current, seen)).toStrictEqual(['1']);
+    expect(seen).toContain(getDigest(moved.current));
+    expect(fromCopy).toBe('new');
+    expect(fromMount).toBe('new');
   },
 );

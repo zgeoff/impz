@@ -32,13 +32,13 @@ test('it fills every setting from its default when the env is empty', () => {
     diskReserveBytes: null,
     buildContextMaxBytes: 1024 ** 3,
     build: {
-      isolation: 'imp',
       memoryMib: 2048,
       diskBytes: 20 * 1024 ** 3,
       imageMaxBytes: 8192 * 1024 ** 2,
       imageMaxFiles: 1_000_000,
       image:
         'ghcr.io/zgeoff/imp-base:0.29.0@sha256:1851f631ea77f3a99b6f1f9af8ca8868434f4cd066158bcf9def8678c29b0c21',
+      testRegistry: null,
     },
     imageEviction: null,
     sessionLog: {
@@ -73,6 +73,60 @@ test('it fills every setting from its default when the env is empty', () => {
     moves: { peerUrl: null, testCidr: null },
     warnings: [],
   });
+});
+
+test('it refuses a test registry for builders on a host that is not an e2e host', () => {
+  expect(() =>
+    loadConfig({
+      IMP_BUILD_TEST_REGISTRY: 'registry.example.test:5443',
+      IMP_BUILD_TEST_REGISTRY_CA: '/data/registry-ca.pem',
+    }),
+  ).toThrow(
+    'IMP_BUILD_TEST_REGISTRY opens a private address to builders, and only an e2e host may set it',
+  );
+});
+
+test('it reads a test registry for builders on an e2e host', () => {
+  const config = loadConfig({
+    IMP_BUILD_TEST_REGISTRY: 'registry.example.test:5443',
+    IMP_BUILD_TEST_REGISTRY_CA: '/data/registry-ca.pem',
+    IMP_E2E: '1',
+  });
+
+  expect(config.build.testRegistry).toStrictEqual({
+    name: 'registry.example.test',
+    port: 5443,
+    caPath: '/data/registry-ca.pem',
+  });
+});
+
+test.each([
+  ['IMP_BUILD_TEST_REGISTRY', 'registry.example.test:5443'],
+  ['IMP_BUILD_TEST_REGISTRY_CA', '/data/registry-ca.pem'],
+])('it refuses %s set without the other', (key, value) => {
+  expect(() => loadConfig({ [key]: value, IMP_E2E: '1' })).toThrow(
+    'IMP_BUILD_TEST_REGISTRY and IMP_BUILD_TEST_REGISTRY_CA go together; set both or neither',
+  );
+});
+
+test('it refuses a test registry with no port', () => {
+  expect(() =>
+    loadConfig({
+      IMP_BUILD_TEST_REGISTRY: 'registry.example.test',
+      IMP_BUILD_TEST_REGISTRY_CA: '/data/registry-ca.pem',
+      IMP_E2E: '1',
+    }),
+  ).toThrow('must be <name>:<port>');
+});
+
+test('it refuses a test registry whose port is past 65535', () => {
+  expect(() =>
+    loadConfig({
+      IMP_BUILD_TEST_REGISTRY: 'registry.example.test:70000',
+      IMP_BUILD_TEST_REGISTRY_CA: '/data/registry-ca.pem',
+      IMP_E2E: '1',
+    }),
+  ).toThrow('IMP_BUILD_TEST_REGISTRY has no valid port: registry.example.test:70000');
 });
 
 test('it refuses a move test range off the tailnet on a host that is not an e2e host', () => {

@@ -116,7 +116,7 @@ to the server and run it as root. Take it from a release tag: it runs the image 
 <!-- x-release-please-start-version -->
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/zgeoff/impz/v2.10.5/deploy/bootstrap.sh
+curl -fsSLO https://raw.githubusercontent.com/zgeoff/impz/v2.11.0/deploy/bootstrap.sh
 install -m 0600 /dev/null /root/ts-key && vi /root/ts-key        # the auth key, one line
 bash bootstrap.sh --dry-run --data-device /dev/nvme1n1 --tailscale-authkey-file /root/ts-key
 bash bootstrap.sh --yes --data-device /dev/nvme1n1 --tailscale-authkey-file /root/ts-key
@@ -435,7 +435,7 @@ gh attestation verify oci://ghcr.io/zgeoff/imp-host:<version> -R zgeoff/impz
 <!-- x-release-please-start-version -->
 
 ```sh
-docker pull ghcr.io/zgeoff/imp-host:2.10.5
+docker pull ghcr.io/zgeoff/imp-host:2.11.0
 gh release download -R zgeoff/impz -p 'impz-linux-x64' -p SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS && install -m 0755 impz-linux-x64 ~/.local/bin/impz
 ```
@@ -539,8 +539,8 @@ install -D -m 0644 deploy/imp-host.seccomp.json /etc/imp/imp-host.seccomp.json
   ```
 
   The file runs `imp-docker-proxy` beside imp-host. Put `IMP_DOCKER_GID` in a `.env` next to the
-  file to keep it. The proxy never reads the env file, so a changed `IMP_BUILD_CONTEXT_MAX_MIB` goes
-  in that `.env` too.
+  file to keep it. The proxy never reads the env file, so a changed `IMP_BUILD_IMAGE` goes in that
+  `.env` too.
 
   Compose does not read the host's addresses into `IMP_HOST_ADDRESSES`, as the unit does at each
   start. With `public` imps, list the host's addresses and networks (`ip -o addr show scope global`)

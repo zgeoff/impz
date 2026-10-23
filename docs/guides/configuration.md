@@ -41,7 +41,6 @@ error.
 | `IMP_SESSION_LOG_IMP_MAX_MIB`   | `64`                                      | All of one imp's session logs; ended ones go first ([session logs](./session-logs.md#what-is-kept)).                                                                                                                                                                  |
 | `IMP_SESSION_LOG_IMP_MAX_LIVE`  | `8`                                       | Live session logs per imp; a session past it runs unlogged ([session logs](./session-logs.md#what-is-kept)).                                                                                                                                                          |
 | `IMP_SESSION_LOG_MAX_AGE_DAYS`  | `7`                                       | How long an ended session log stays ([session logs](./session-logs.md#what-is-kept)).                                                                                                                                                                                 |
-| `IMP_BUILD_ISOLATION`           | `imp`                                     | Where image adds and builds run: `imp`, in a throwaway builder imp under the `public` policy, or `host`, on the host's engine, for one release only ([add an image](./images.md#add-an-image), [isolated builds](./images.md#isolated-builds)).                       |
 | `IMP_BUILD_MEMORY_MIB`          | `2048`                                    | Each builder imp's memory.                                                                                                                                                                                                                                            |
 | `IMP_BUILD_DISK_GIB`            | `20`                                      | Each builder imp's disk; a build that fills it fails.                                                                                                                                                                                                                 |
 | `IMP_BUILD_IMAGE_MAX_MIB`       | `8192`                                    | The largest filesystem a build's export may stream out of its builder, and may take on disk.                                                                                                                                                                          |
@@ -74,6 +73,8 @@ error.
 | `IMP_TAILNET_IDENTITIES`        | none                                      | JSON rules that give tailnet members a scope without a token ([tokens](./tokens.md#tailnet-identity)). Unset, every caller needs a token.                                                                                                                             |
 | `IMP_PEER_URL`                  | the tailnet IP and `IMP_API_PORT`         | The URL a source uses to [move](./hosts.md#moves) an imp here. It must name a literal tailnet address; impd refuses to start otherwise.                                                                                                                               |
 | `IMP_MOVE_TEST_CIDR`            | none                                      | Tests only, with `IMP_E2E=1`: one more private range, /16 or narrower, that moves may come from and go to, off the tailnet ([moves](../architecture/storage/moves.md#the-steps)). impd logs a warning at start.                                                       |
+| `IMP_BUILD_TEST_REGISTRY`       | none                                      | Tests only, with `IMP_E2E=1`: a registry as `<name>:<port>` that builders may reach at the private address impd resolves the name to at start ([public](../architecture/network/egress.md#public)). impd logs a warning at start.                                     |
+| `IMP_BUILD_TEST_REGISTRY_CA`    | none                                      | Tests only, with `IMP_BUILD_TEST_REGISTRY`: the PEM file of that registry's CA, which impd copies into each builder.                                                                                                                                                  |
 | `IMP_DASHBOARD_DIR`             | none                                      | The [dashboard](./dashboard.md)'s built files, served at `/ui/`. The release image sets its own.                                                                                                                                                                      |
 
 A host on Linux 6.7 or later does not set a restored TSC back, so it can set
@@ -155,22 +156,23 @@ impd's `IMP_SUBNET`, `IMP_BROKER_PORT` and `IMP_EGRESS_DNS_PORT`, its defaults i
 entrypoint takes them from `impd --network-env`, so a setting impd refuses stops the container
 before anything starts.
 
-| Variable                     | Default                            | Read by            | Meaning                                                                                                                                                     |
-| ---------------------------- | ---------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `IMP_STORAGE_BACKEND`        | `xfs`                              | `setup-storage.sh` | `zfs` mounts `IMP_ZFS_ROOT` on `/var/lib/imp` and skips the loop file.                                                                                      |
-| `IMP_ZFS_ROOT`               | none                               | `setup-storage.sh` | The dataset to mount; it must have `mountpoint=legacy`.                                                                                                     |
-| `IMP_STORAGE_LOOP`           | `1`; `0` in the release image      | `setup-storage.sh` | `1` loop-mounts `IMP_STORAGE_FILE` when nothing is mounted at `/var/lib/imp`; `0` refuses to start.                                                         |
-| `IMP_STORAGE_GIB`            | `200`                              | `setup-storage.sh` | The size of the sparse XFS loop file.                                                                                                                       |
-| `IMP_STORAGE_FILE`           | `/data/imp.xfs`                    | `setup-storage.sh` | Where the loop file lives. Unused when `/var/lib/imp` is already XFS.                                                                                       |
-| `IMP_UPLINK_MTU`             | none                               | `setup-net.sh`     | The MTU outside the container, for the TCP MSS clamp (less 40, or 60 for IPv6). Unset: path MTU.                                                            |
-| `TAILSCALE_AUTHKEY`          | none                               | `tailscale-up.sh`  | A tagged auth key. Unset: the saved node state, if any, else no tailnet.                                                                                    |
-| `IMP_TAILSCALE_AUTHKEY_FILE` | none                               | `tailscale-up.sh`  | A file that holds the key instead, read by `tailscale` only to join.                                                                                        |
-| `IMP_TAILSCALE_HOSTNAME`     | `imp`                              | `tailscale-up.sh`  | The tailnet hostname.                                                                                                                                       |
-| `IMP_TAILSCALE_TAGS`         | `tag:imp`                          | `tailscale-up.sh`  | The tags the node advertises, comma-separated. When set, a node with other tags joins again with the key, or goes down. The e2e harness sets `tag:imp-e2e`. |
-| `IMP_TAILSCALE_STATE_DIR`    | `/var/lib/imp/tailscale`           | `tailscale-up.sh`  | Node state; `mem` keeps it in memory.                                                                                                                       |
-| `IMP_DNS`                    | `1.1.1.1,8.8.8.8`                  | `tailscale-up.sh`  | Resolvers for the container when its resolv.conf points into the tailnet.                                                                                   |
-| `IMP_DAEMON`                 | `/src/packages/daemon/src/main.ts` | `entrypoint`       | The impd the supervisor runs: a `.ts` file under bun, else a binary. The release image sets `/usr/local/bin/impd`.                                          |
-| `IMP_ENV_FILE`               | none                               | `entrypoint`       | A docker `--env-file` whose lines the entrypoint exports before anything else, over the image's env. The NixOS module mounts its env file here.             |
+| Variable                     | Default                            | Read by            | Meaning                                                                                                                                                                                                           |
+| ---------------------------- | ---------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IMP_STORAGE_BACKEND`        | `xfs`                              | `setup-storage.sh` | `zfs` mounts `IMP_ZFS_ROOT` on `/var/lib/imp` and skips the loop file.                                                                                                                                            |
+| `IMP_ZFS_ROOT`               | none                               | `setup-storage.sh` | The dataset to mount; it must have `mountpoint=legacy`.                                                                                                                                                           |
+| `IMP_STORAGE_LOOP`           | `1`; `0` in the release image      | `setup-storage.sh` | `1` loop-mounts `IMP_STORAGE_FILE` when nothing is mounted at `/var/lib/imp`; `0` refuses to start.                                                                                                               |
+| `IMP_STORAGE_GIB`            | `200`                              | `setup-storage.sh` | The size of the sparse XFS loop file.                                                                                                                                                                             |
+| `IMP_STORAGE_FILE`           | `/data/imp.xfs`                    | `setup-storage.sh` | Where the loop file lives. Unused when `/var/lib/imp` is already XFS.                                                                                                                                             |
+| `IMP_UPLINK_MTU`             | none                               | `setup-net.sh`     | The MTU outside the container, for the TCP MSS clamp (less 40, or 60 for IPv6). Unset: path MTU.                                                                                                                  |
+| `TAILSCALE_AUTHKEY`          | none                               | `tailscale-up.sh`  | A tagged auth key. Unset: the saved node state, if any, else no tailnet.                                                                                                                                          |
+| `IMP_TAILSCALE_AUTHKEY_FILE` | none                               | `tailscale-up.sh`  | A file that holds the key instead, read by `tailscale` only to join.                                                                                                                                              |
+| `IMP_TAILSCALE_HOSTNAME`     | `imp`                              | `tailscale-up.sh`  | The tailnet hostname.                                                                                                                                                                                             |
+| `IMP_TAILSCALE_TAGS`         | `tag:imp`                          | `tailscale-up.sh`  | The tags the node advertises, comma-separated, or with a login server the tags its key must give it. When set, a node with other tags joins again with the key, or goes down. The e2e harness sets `tag:imp-e2e`. |
+| `IMP_TAILSCALE_LOGIN_SERVER` | Tailscale's                        | `tailscale-up.sh`  | A [Headscale](./tailscale.md#headscale) control server to join, such as `http://headscale:8080`. The key carries the tags, so the node advertises none.                                                           |
+| `IMP_TAILSCALE_STATE_DIR`    | `/var/lib/imp/tailscale`           | `tailscale-up.sh`  | Node state; `mem` keeps it in memory.                                                                                                                                                                             |
+| `IMP_DNS`                    | `1.1.1.1,8.8.8.8`                  | `tailscale-up.sh`  | Resolvers for the container when its resolv.conf points into the tailnet.                                                                                                                                         |
+| `IMP_DAEMON`                 | `/src/packages/daemon/src/main.ts` | `entrypoint`       | The impd the supervisor runs: a `.ts` file under bun, else a binary. The release image sets `/usr/local/bin/impd`.                                                                                                |
+| `IMP_ENV_FILE`               | none                               | `entrypoint`       | A docker `--env-file` whose lines the entrypoint exports before anything else, over the image's env. The NixOS module mounts its env file here.                                                                   |
 
 **NOTE:** impd and `tailscale-up.sh` read the same `IMP_DNS`, a comma-separated list. `dev.sh` does
 not pass `IMP_DNS`, so the dev instance uses the defaults.
@@ -256,17 +258,19 @@ impd tuning passes through an allowlist. When set on your machine, `dev.sh` pass
 `IMP_WATCHDOG_ACTION`, `IMP_TAILSCALE_HOSTNAME`, `IMP_TAILNET_IDENTITIES`, `IMP_TAILNET_NAMES`,
 `IMP_TAILNET_NAME_PREFIX`, `IMP_BUILD_CONTEXT_MAX_MIB`, `IMP_BROKER_PORT`, `IMP_KSM`,
 `IMP_KSM_HEADROOM_PERCENT`, `IMP_SSH_AUTHORIZED_KEYS`, `IMP_STORAGE_BACKEND`, `IMP_ZFS_ROOT`,
-`IMP_ZFS_ALLOW_UIOMOVE_BUG`, `IMP_SUBNET6`, `IMP_JAILER`, `IMP_JAILER_BIN`, `IMP_PEER_URL` and
-`IMP_MOVE_TEST_CIDR` to impd, the `IMP_BACKUP_*` variables, and the HTTPS settings except the token:
-`IMP_DOMAIN`, `IMP_DNS_PROVIDER`, `IMP_DNS_API_URL`, `IMP_ACME_DIRECTORY`, `IMP_ACME_EMAIL`,
-`IMP_HTTPS_PORT`, `IMP_HTTP_PORT`, `IMP_PUBLIC_IP`, `IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`,
-and `IMP_ACME_CA_FILE` as a path under the repo. `IMP_E2E=1` lets impd use the `challtestsrv` DNS
-provider. With `IMP_TAILNET_NAMES=1`, `dev.sh` writes the OAuth client from 1Password into the data
-directory and sets `IMP_TAILNET_OAUTH_FILE`. `IMP_DEV_NETWORK` puts the container on that Docker
-network. `IMP_DEV_BACKUP_ENV_FILE` names a Docker env file with the repository's `AWS_*` keys, so
-the keys in your own shell never reach the container. Other impd variables keep their defaults in
-the dev container. A ZFS dev instance needs the zfs module on the machine;
-`scripts/zfs-host-test.sh` runs one on a throwaway pool.
+`IMP_ZFS_ALLOW_UIOMOVE_BUG`, `IMP_SUBNET6`, `IMP_JAILER`, `IMP_JAILER_BIN`, `IMP_PEER_URL`,
+`IMP_MOVE_TEST_CIDR` and `IMP_BUILD_TEST_REGISTRY` to impd, the `IMP_BACKUP_*` variables, and the
+HTTPS settings except the token: `IMP_DOMAIN`, `IMP_DNS_PROVIDER`, `IMP_DNS_API_URL`,
+`IMP_ACME_DIRECTORY`, `IMP_ACME_EMAIL`, `IMP_HTTPS_PORT`, `IMP_HTTP_PORT`, `IMP_PUBLIC_IP`,
+`IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`, and `IMP_ACME_CA_FILE` and
+`IMP_BUILD_TEST_REGISTRY_CA` as paths under the repo. `IMP_E2E=1` lets impd use the `challtestsrv`
+DNS provider. With `IMP_BUILD_TEST_REGISTRY` set, the container resolves the registry's name to the
+address your machine resolves it to. With `IMP_TAILNET_NAMES=1`, `dev.sh` writes the OAuth client
+from 1Password into the data directory and sets `IMP_TAILNET_OAUTH_FILE`. `IMP_DEV_NETWORK` puts the
+container on that Docker network. `IMP_DEV_BACKUP_ENV_FILE` names a Docker env file with the
+repository's `AWS_*` keys, so the keys in your own shell never reach the container. Other impd
+variables keep their defaults in the dev container. A ZFS dev instance needs the zfs module on the
+machine; `scripts/zfs-host-test.sh` runs one on a throwaway pool.
 
 ## CLI
 

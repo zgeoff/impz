@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.11.0](https://github.com/zgeoff/impz/compare/v2.10.6...v2.11.0) (2026-10-23)
+
+### Features
+
+- **host:** join a headscale tailnet with a tagged pre-auth key
+  ([#636](https://github.com/zgeoff/impz/issues/636))
+  ([02509f2](https://github.com/zgeoff/impz/commit/02509f257838d019356726b28dfdabad82eb427b))
+
+### Performance Improvements
+
+- **agent:** cache the agent binary before a boot template parks
+  ([#626](https://github.com/zgeoff/impz/issues/626))
+  ([ad24cdb](https://github.com/zgeoff/impz/commit/ad24cdb9320eb6f5c5eb885a41585df8bd278d3f))
+
+## [2.10.6](https://github.com/zgeoff/impz/compare/v2.10.5...v2.10.6) (2026-10-23)
+
+### Bug Fixes
+
+- **api:** refuse a secret rule whose header overrides the method
+  ([#649](https://github.com/zgeoff/impz/issues/649))
+  ([d808882](https://github.com/zgeoff/impz/commit/d808882c1576a2f8cf25e7b6a36aa330f058ca82))
+
 ## [2.10.5](https://github.com/zgeoff/impz/compare/v2.10.4...v2.10.5) (2026-10-23)
 
 ### Bug Fixes
