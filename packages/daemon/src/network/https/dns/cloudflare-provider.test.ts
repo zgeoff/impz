@@ -668,6 +668,25 @@ test('it keeps the token out of a fetch error', () => {
   );
 });
 
+test('it cuts the token out of a fetch error that names it', () => {
+  // the error text of Bun before 1.4.3, which no header value draws from Bun 1.4.3
+  const refuse = mock(() =>
+    Promise.reject(
+      new TypeError("Header 'Authorization' has invalid value: 'Bearer cf-token-secret'"),
+    ),
+  );
+
+  const provider = createCloudflareProvider({
+    readToken: () => Promise.resolve('cf-token-secret'),
+    fetch: refuse,
+  });
+
+  expect(provider.setA('imp.example.com', '100.64.0.7')).rejects.toThrowWithMessage(
+    Error,
+    "Header 'Authorization' has invalid value: 'Bearer <token>'",
+  );
+});
+
 test('it waits for the TXT values on every nameserver of the zone', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const asked: string[] = [];

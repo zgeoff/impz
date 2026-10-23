@@ -51,15 +51,19 @@ export type CloudflareZone = z.input<typeof ZoneSchema>;
 /* @internal */
 export type CloudflareRecord = z.input<typeof RecordSchema>;
 
+type CloudflareFetch = (url: string, init: RequestInit) => Promise<Response>;
+
 interface CloudflareOptions {
   readonly readToken: () => Promise<string>;
   readonly apiUrl?: string;
   readonly propagation?: WaitForTxtOptions;
   readonly log?: (message: string) => void;
+  readonly fetch?: CloudflareFetch;
 }
 
 export function createCloudflareProvider(options: CloudflareOptions): DnsProvider {
   const base = options.apiUrl ?? CLOUDFLARE_API;
+  const send = options.fetch ?? fetch;
 
   const zones = new Map<string, Zone>();
 
@@ -80,7 +84,7 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
 
     const json = body === undefined ? null : JSON.stringify(body);
 
-    const response = await sendFetch(`${base}${path}`, token, method, json);
+    const response = await sendFetch(send, token, { url: `${base}${path}`, method, body: json });
     const text = await response.text();
 
     const parsed = EnvelopeSchema.safeParse(parseJsonOrNull(text));
@@ -255,19 +259,18 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
 // fetch, with the token cut out of its errors: Bun before 1.4.3 names a header
 // value it refuses, and the error reaches the log and system info
 async function sendFetch(
-  url: string,
+  send: CloudflareFetch,
   token: string,
-  method: string,
-  body: string | null,
+  request: Readonly<{ url: string; method: string; body: string | null }>,
 ): Promise<Response> {
   try {
-    return await fetch(url, {
-      method,
+    return await send(request.url, {
+      method: request.method,
       headers: {
         authorization: `Bearer ${token}`,
-        ...(body !== null && { 'content-type': 'application/json' }),
+        ...(request.body !== null && { 'content-type': 'application/json' }),
       },
-      ...(body !== null && { body }),
+      ...(request.body !== null && { body: request.body }),
       signal: AbortSignal.timeout(30_000),
     });
   } catch (error) {
