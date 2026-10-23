@@ -35,13 +35,13 @@ interface ExtentRead {
 
 type BatchRead = { readonly extents: Extent[] } | { readonly errno: number };
 
-// FIEMAP_FLAG_SYNC stays off, because it flushes the guest's dirty pages first
-function readBatch(fd: number, start: number, buffer: Uint8Array): BatchRead {
+function readBatch(fd: number, start: number, buffer: Uint8Array, flags: number): BatchRead {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 
   buffer.fill(0);
   view.setBigUint64(0, BigInt(start), true);
   view.setBigUint64(8, 0xff_ff_ff_ff_ff_ff_ff_ffn, true);
+  view.setUint32(16, flags, true);
   view.setUint32(24, BATCH_EXTENTS, true);
 
   const result = readLibc()?.ioctl(fd, FS_IOC_FIEMAP, ptr(buffer));
@@ -79,7 +79,8 @@ export async function readExtents(path: string, deadline: number): Promise<Exten
         return { extents, isComplete: false };
       }
 
-      const read = readBatch(fd, start, buffer);
+      // FIEMAP_FLAG_SYNC stays off, because it flushes the guest's dirty pages first
+      const read = readBatch(fd, start, buffer, 0);
 
       if ('errno' in read) {
         throw new Error(`FIEMAP failed: errno ${String(read.errno)}`);
@@ -103,15 +104,17 @@ export async function readExtents(path: string, deadline: number): Promise<Exten
   }
 }
 
-// takes its batches back to back, so a running guest's writes wait out the whole read; null where
-// the file system has no FIEMAP, as on ZFS or tmpfs
+const FIEMAP_FLAG_SYNC = 0x1;
+
+// flushes first, because the kernel keeps an extent unwritten until writeback even when the page
+// cache holds data for it; null where the file system has no FIEMAP, as on ZFS or tmpfs
 export function readOpenFileExtents(fd: number): Extent[] | null {
   const buffer = new Uint8Array(HEADER_BYTES + BATCH_EXTENTS * EXTENT_BYTES);
 
   const extents: Extent[] = [];
 
   for (let start = 0; ;) {
-    const read = readBatch(fd, start, buffer);
+    const read = readBatch(fd, start, buffer, FIEMAP_FLAG_SYNC);
 
     if ('errno' in read) {
       return null;
