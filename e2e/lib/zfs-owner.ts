@@ -12,6 +12,12 @@ const ZfsOwnerSchema = z.object({
 
 export type ZfsOwner = z.infer<typeof ZfsOwnerSchema>;
 
+export function formatZfsOwnerFile(owner: Readonly<ZfsOwner>): string {
+  const fields: ZfsOwner = { pool: owner.pool, root: owner.root, vdev: owner.vdev };
+
+  return `${JSON.stringify(fields)}\n`;
+}
+
 export interface ZfsCommandResult {
   readonly exitCode: number;
   readonly stdout: string;

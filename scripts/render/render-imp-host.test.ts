@@ -3,7 +3,6 @@ import { readFileSync, readdirSync } from 'node:fs';
 import {
   BOOTSTRAP_PARTS,
   parseHostArgs,
-  parseZfsPool,
   render,
   renderBootstrap,
   renderCompose,
@@ -414,22 +413,6 @@ test('#renderStorage refuses a storage.sh without the properties line', () => {
   expect(() => renderStorage('storage_zfs() { :; }\n', ['-O', 'atime=off'])).toThrowWithMessage(
     Error,
     'deploy/bootstrap/storage.sh: no line for ZPOOL_CREATE_PROPERTIES',
-  );
-});
-
-test('#parseZfsPool reads the create words', () => {
-  expect(parseZfsPool('{"create": ["-o", "ashift=12", "-O", "xattr=sa"]}')).toStrictEqual([
-    '-o',
-    'ashift=12',
-    '-O',
-    'xattr=sa',
-  ]);
-});
-
-test('#parseZfsPool refuses a word the shell would split or expand', () => {
-  expect(() => parseZfsPool('{"create": ["-O", "comment=two words"]}')).toThrowWithMessage(
-    Error,
-    /^deploy\/zfs-pool\.json: .*is not a plain word/su,
   );
 });
 

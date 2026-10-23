@@ -1,35 +1,29 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
-import { $ } from 'bun';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { makeOpReader } from '../lib/make-op-reader.ts';
+import { probeDirectory } from '../lib/probe-directory.ts';
 import { readRealPath } from '../lib/read-real-path.ts';
 import { readTextOrNull } from '../lib/read-text-or-null.ts';
+import { removeFile } from '../lib/remove-file.ts';
+import { runBunShell } from '../lib/run-bun-shell.ts';
 import { writeSecretText } from '../lib/write-secret-text.ts';
+import { writeStderr } from '../lib/write-stderr.ts';
+import { writeStdoutLine } from '../lib/write-stdout-line.ts';
+import { writeText } from '../lib/write-text.ts';
 import type { DevIO } from './types.ts';
 
 export function wireDevIO(): DevIO {
   return {
-    // Bun's shell breaks when it is called as a method, with another object as its this.
-    shell: (strings, ...expressions) => $(strings, ...expressions),
+    shell: runBunShell,
     runAttached: (argv) =>
       Bun.spawn([...argv], { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' }).exited,
     files: {
       probePath: existsSync,
       probeFile: (path) => statSync(path, { throwIfNoEntry: false })?.isFile() ?? false,
-      probeDirectory: (path) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false,
+      probeDirectory,
       readText: readTextOrNull,
       readBytes: (path) => readFileSync(path),
       readRealPath: (path) => readRealPath(path, process.cwd()),
-      writeText: (path, text) => {
-        writeFileSync(path, text);
-      },
+      writeText,
       writeSecretText,
       createDirectory: (path) => {
         mkdirSync(path, { recursive: true });
@@ -37,19 +31,13 @@ export function wireDevIO(): DevIO {
       rename: (from, to) => {
         renameSync(from, to);
       },
-      remove: (path) => {
-        rmSync(path, { force: true });
-      },
+      remove: removeFile,
     },
     makeOpReader,
     now: Date.now,
     sleep: Bun.sleep,
-    writeStdout: (line) => {
-      console.log(line);
-    },
-    writeStderr: (text) => {
-      process.stderr.write(text);
-    },
+    writeStdout: writeStdoutLine,
+    writeStderr,
     user: `${String(process.getuid?.() ?? 0)}:${String(process.getgid?.() ?? 0)}`,
   };
 }

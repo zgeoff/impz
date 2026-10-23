@@ -26,18 +26,14 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  const scripts = join(directory, 'root', 'scripts');
-  const e2e = join(directory, 'root', 'e2e');
-  const deploy = join(directory, 'root', 'deploy');
+  const root = join(directory, 'root');
+  const scripts = join(root, 'scripts');
+  const e2e = join(root, 'e2e');
+  const deploy = join(root, 'deploy');
 
   mkdirSync(join(scripts, 'dev'), { recursive: true });
   mkdirSync(e2e);
   mkdirSync(deploy);
-
-  copyFileSync(
-    new URL('zfs-host-test.sh', import.meta.url).pathname,
-    join(scripts, 'zfs-host-test.sh'),
-  );
 
   copyFileSync(
     new URL('../deploy/zfs-pool.json', import.meta.url).pathname,
@@ -59,7 +55,11 @@ function setupTest() {
     moduleVersion: join(directory, 'zfs-version'),
     calls: sudo.calls,
     path: `${sudo.bin}:${process.env['PATH'] ?? ''}`,
-    script: join(scripts, 'zfs-host-test.sh'),
+    root,
+    script: new URL('zfs-host-test.sh', import.meta.url).pathname,
+
+    // With IMP_ROOT at root, the entry runs the stub scripts there in place of the checkout's own.
+    run: [process.execPath, new URL('zfs-host-test.ts', import.meta.url).pathname],
   };
 }
 
@@ -74,9 +74,10 @@ test('it runs the unit tests and suites on a bench pool, then releases all it ma
   mkdirSync(work);
   createStubZpool(ctx.stubs);
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -156,9 +157,10 @@ test('it refuses a bench pool name that is taken and touches nothing', () => {
   mkdirSync(work);
   createStubBin(ctx.stubs, 'zpool');
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -173,7 +175,10 @@ test('it refuses a bench pool name that is taken and touches nothing', () => {
     /^zfs-host-test: a pool named impbench\d+ already exists; refusing to touch it\n$/u,
   );
 
-  expect(calls).toBe('sudo zpool list impbenchPID\nzpool list impbenchPID\n');
+  expect(calls).toBe(
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
+  );
+
   expect(existsSync(join(work, 'bench.img'))).toBeFalse();
 });
 
@@ -189,9 +194,10 @@ test('it refuses a work dir that already holds a bench.img and leaves the file a
   writeFileSync(join(work, 'bench.img'), 'another run');
   createStubZpool(ctx.stubs);
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -206,7 +212,10 @@ test('it refuses a work dir that already holds a bench.img and leaves the file a
     `zfs-host-test: ${work}/bench.img already exists; refusing to touch it\n`,
   );
 
-  expect(calls).toBe('sudo zpool list impbenchPID\nzpool list impbenchPID\n');
+  expect(calls).toBe(
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
+  );
+
   expect(readFileSync(join(work, 'bench.img'), 'utf8')).toBe('another run');
 });
 
@@ -224,9 +233,10 @@ test('it refuses a bench.img that is a symlink and leaves the link and its targe
   symlinkSync(target, join(work, 'bench.img'));
   createStubZpool(ctx.stubs);
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -254,9 +264,10 @@ test('it never destroys a pool or stops an instance when its own pool create fai
   mkdirSync(work);
   createStubZpool(ctx.stubs, { create: 'fails' });
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -301,9 +312,10 @@ test('it fails and keeps the pool file, saying so, when the pool will not go', (
   createStubZpool(ctx.stubs, { destroy: 'fails' });
   createStubBin(ctx.stubs, 'dmesg', 'echo "[  12.000000] eth0: link up"');
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -350,9 +362,10 @@ test('it keeps the pool file, prints the oops and passes when a kernel oops in Z
 EOF`,
   );
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -407,9 +420,10 @@ test('it fails and keeps the pool file when an oops outside ZFS sits beside a ZF
 EOF`,
   );
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -455,9 +469,10 @@ test('it fails and keeps the pool file when a ZFS soft lockup comes before an oo
 EOF`,
   );
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -500,9 +515,10 @@ test('it keeps the pool file and passes when a page-fault oops in ZFS holds the 
 EOF`,
   );
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -546,9 +562,10 @@ test('it fails and keeps the pool file when a destroy fails for a reason other t
 EOF`,
   );
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -577,9 +594,10 @@ test('it refuses a work dir that already holds a data dir and leaves it as it wa
   writeFileSync(join(work, 'data', 'imp.db'), 'another run');
   createStubZpool(ctx.stubs);
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -594,7 +612,10 @@ test('it refuses a work dir that already holds a data dir and leaves it as it wa
     `zfs-host-test: ${work}/data already exists; refusing to touch it\n`,
   );
 
-  expect(calls).toBe('sudo zpool list impbenchPID\nzpool list impbenchPID\n');
+  expect(calls).toBe(
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
+  );
+
   expect(readFileSync(join(work, 'data', 'imp.db'), 'utf8')).toBe('another run');
 });
 
@@ -609,9 +630,10 @@ test('it refuses an imp-zfs container that is already there and touches nothing'
   createStubZpool(ctx.stubs);
   createStubInstanceDocker(ctx.stubs, { containers: ['imp-zfs'] });
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -627,7 +649,7 @@ test('it refuses an imp-zfs container that is already there and touches nothing'
   );
 
   expect(calls).toBe(
-    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\n',
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
   );
 
   expect(existsSync(join(work, 'data'))).toBeFalse();
@@ -645,9 +667,10 @@ test('it refuses a work dir that already holds the moves suites’ B data dir an
   writeFileSync(join(work, 'data-mv-b', 'imp.db'), 'another run');
   createStubZpool(ctx.stubs);
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -662,7 +685,10 @@ test('it refuses a work dir that already holds the moves suites’ B data dir an
     `zfs-host-test: ${work}/data-mv-b already exists; refusing to touch it\n`,
   );
 
-  expect(calls).toBe('sudo zpool list impbenchPID\nzpool list impbenchPID\n');
+  expect(calls).toBe(
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
+  );
+
   expect(readFileSync(join(work, 'data-mv-b', 'imp.db'), 'utf8')).toBe('another run');
   expect(existsSync(join(work, 'data'))).toBeFalse();
 });
@@ -678,9 +704,10 @@ test('it refuses an imp-zfs-mv-b container that is already there and touches not
   createStubZpool(ctx.stubs);
   createStubInstanceDocker(ctx.stubs, { containers: ['imp-zfs-mv-b'] });
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -696,7 +723,7 @@ test('it refuses an imp-zfs-mv-b container that is already there and touches not
   );
 
   expect(calls).toBe(
-    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\n',
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
   );
 
   expect(existsSync(join(work, 'data'))).toBeFalse();
@@ -713,9 +740,10 @@ test('it refuses an imp-zfs-mv network that is already there and touches nothing
   createStubZpool(ctx.stubs);
   createStubInstanceDocker(ctx.stubs, { containers: [], networks: ['imp-zfs-mv'] });
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -747,9 +775,10 @@ test('it makes a work dir that does not exist yet, parents included', () => {
 
   createStubZpool(ctx.stubs);
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -785,11 +814,12 @@ test('it stops the suites, the moves suites’ B, the instance and the pool when
     `printf '%s\\n' "  for $IMP_DEV_NAME on $IMP_DEV_DATA" >>'${ctx.calls}'`,
   );
 
-  const subprocess = Bun.spawn([ctx.script], {
+  const subprocess = Bun.spawn(ctx.run, {
     stdout: 'ignore',
     stderr: 'ignore',
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -851,11 +881,12 @@ test('it destroys the pool and removes its file when SIGTERM comes during the po
   mkdirSync(work);
   createStubZpool(ctx.stubs, { create: { startedMarker, release } });
 
-  const subprocess = Bun.spawn([ctx.script], {
+  const subprocess = Bun.spawn(ctx.run, {
     stdout: 'ignore',
     stderr: 'ignore',
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -899,6 +930,88 @@ test('it destroys the pool and removes its file when SIGTERM comes during the po
   expect(existsSync(join(work, 'bench.img'))).toBeFalse();
 });
 
+test('it finishes cleanup and exits as stopped when SIGTERM comes during cleanup after the suites pass', async () => {
+  const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+  createStubInstanceDocker(ctx.stubs, { containers: [] });
+
+  const work = join(ctx.directoryPath, 'work');
+  const startedMarker = join(ctx.directoryPath, 'destroy-started');
+  const release = join(ctx.directoryPath, 'destroy-release');
+
+  mkdirSync(work);
+  createStubZpool(ctx.stubs, { destroy: { startedMarker, release } });
+
+  const subprocess = Bun.spawn(ctx.run, {
+    stdout: 'ignore',
+    stderr: 'ignore',
+    env: {
+      PATH: ctx.path,
+      IMP_ROOT: ctx.root,
+      IMP_ZFS_TEST_DIR: work,
+      IMP_ZFS_BENCH_GIB: '1',
+      IMP_ZFS_TEST_UNIT: '0',
+      IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
+    },
+  });
+
+  onTestFinished(() => {
+    subprocess.kill('SIGKILL');
+  });
+
+  await waitFor(() => readFileSync(startedMarker), { timeoutMs: 10_000 });
+
+  // The destroy holds until the release, so the signal lands inside cleanup.
+  subprocess.kill('SIGTERM');
+
+  writeFileSync(release, '');
+
+  const exitCode = await subprocess.exited;
+
+  expect(exitCode).toBe(143);
+  expect(readFileSync(join(ctx.stubs, 'pools'), 'utf8')).toBe('');
+  expect(existsSync(join(work, 'bench.img'))).toBeFalse();
+  expect(existsSync(join(work, 'summary.txt'))).toBeTrue();
+});
+
+test('it fails, saying so, when the pool file will not go', () => {
+  const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+  createStubInstanceDocker(ctx.stubs, { containers: [] });
+
+  const work = join(ctx.directoryPath, 'work');
+
+  mkdirSync(work);
+  createStubZpool(ctx.stubs);
+
+  createStubBin(
+    ctx.stubs,
+    'rm',
+    `echo "rm: cannot remove '$2': Operation not permitted" >&2; exit 1`,
+  );
+
+  const result = Bun.spawnSync(ctx.run, {
+    env: {
+      PATH: ctx.path,
+      IMP_ROOT: ctx.root,
+      IMP_ZFS_TEST_DIR: work,
+      IMP_ZFS_BENCH_GIB: '1',
+      IMP_ZFS_TEST_UNIT: '0',
+      IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
+    },
+  });
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    `rm: cannot remove '${work}/bench.img': Operation not permitted\nzfs-host-test: could not remove ${work}/bench.img\n`,
+  );
+
+  expect(existsSync(join(work, 'bench.img'))).toBeTrue();
+});
+
 test('it keeps the pool file and fails while a pool still uses it', () => {
   const ctx = setupTest();
 
@@ -910,9 +1023,10 @@ test('it keeps the pool file and fails while a pool still uses it', () => {
   mkdirSync(work);
   createStubZpool(ctx.stubs, { destroy: 'ignored' });
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -941,9 +1055,10 @@ test('it removes its pool file while another pool uses a vdev path that only sta
   createStubZpool(ctx.stubs);
   writeFileSync(join(ctx.stubs, 'pools'), `tank ${work}/bench.img old\n`);
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -969,9 +1084,10 @@ test('it keeps the pool file and fails while another pool uses a vdev path equal
   createStubZpool(ctx.stubs);
   writeFileSync(join(ctx.stubs, 'pools'), `tank ${work}/bench.img\n`);
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -1000,9 +1116,10 @@ test('it destroys its pool and removes the file when the work dir path holds spa
   mkdirSync(work);
   createStubZpool(ctx.stubs);
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -1026,9 +1143,10 @@ test('it destroys its pool and removes the file when the work dir path holds a s
   mkdirSync(work);
   createStubZpool(ctx.stubs);
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',
@@ -1052,9 +1170,10 @@ test('it keeps the pool file and fails when zpool cannot say what uses it', () =
   mkdirSync(work);
   createStubZpool(ctx.stubs, { queries: 'fail' });
 
-  const result = Bun.spawnSync([ctx.script], {
+  const result = Bun.spawnSync(ctx.run, {
     env: {
       PATH: ctx.path,
+      IMP_ROOT: ctx.root,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_BENCH_GIB: '1',
       IMP_ZFS_TEST_UNIT: '0',

@@ -12,6 +12,10 @@ interface StubBootstrapDocker {
   readonly ipv6Route?: string;
   readonly logs?: string;
   readonly runningCLI?: 'imp' | 'impz';
+
+  // The test harness's teardown script inside a test container, and the container's removal.
+  readonly teardown?: 'fails';
+  readonly removal?: 'fails';
 }
 
 const SECCOMP_IN_IMAGE = '/usr/local/share/imp/deploy/imp-host.seccomp.json';
@@ -44,7 +48,9 @@ ${seccompImages.map((image) => `  "run --rm "${image}" cat ${SECCOMP_IN_IMAGE}")
   "exec imp-host findmnt -n -r -o SOURCE,FSTYPE --mountpoint /var/lib/imp") ${buildPrint(stub.dataMount)} ;;
   "exec imp-host ip -6 route show default") ${buildPrint(stub.ipv6Route)} ;;
   "logs imp-host") ${buildPrint(stub.logs)} ;;
-  *) echo "unexpected: docker $*" >&2; exit 1 ;;
+  "exec "*" bash -c "*) ${stub.teardown === 'fails' ? 'echo "teardown: zpool destroy failed: pool is busy" >&2; exit 1' : ':'} ;;
+  "rm -f -v "*) ${stub.removal === 'fails' ? 'echo "Error response from daemon: cannot remove container" >&2; exit 1' : ':'} ;;
+  *)echo "unexpected: docker $*" >&2; exit 1 ;;
 esac`;
 }
 

@@ -1,5 +1,5 @@
 {
-  "$comment": "The properties zpool create gives the pool that holds imp's datasets, as its arguments before the pool name. bun run render:deploy writes them into deploy/bootstrap/storage.sh and bootstrap.sh's copy; scripts/test-zfs.sh, scripts/zfs-host-test.sh and e2e/test-bootstrap.sh read this file. impd sets recordsize on the datasets it makes, so the pool's root keeps the default.",
+  "$comment": "The properties zpool create gives the pool that holds imp's datasets, as its arguments before the pool name. bun run render:deploy writes them into deploy/bootstrap/storage.sh and bootstrap.sh's copy; scripts/lib/parse-zfs-pool-properties.ts parses this file for render:deploy and the zfs test harnesses, and e2e/test-bootstrap.sh reads it. impd sets recordsize on the datasets it makes, so the pool's root keeps the default.",
   "create": [
     "-o",
     "ashift=12",

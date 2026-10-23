@@ -12,6 +12,7 @@ import { readHostPrivileges } from '../lib/read-host-privileges.ts';
 import { readMachineID } from '../lib/read-machine-id.ts';
 import { readTailscaleAuthkey } from '../lib/read-tailscale-authkey.ts';
 import { REPO_ROOT } from '../lib/repo-root.ts';
+import { toProcessEnv } from '../lib/to-process-env.ts';
 import { writeTailnetOAuthFile } from '../lib/write-tailnet-oauth-file.ts';
 import { buildHostRunArgs } from './build-host-run-args.ts';
 import type { TailscaleArg } from './build-host-run-args.ts';
@@ -329,12 +330,6 @@ async function readUplinkMTU(io: DevIO): Promise<string> {
   const device = route.stdout.toString().split(/\s+/u)[4] ?? '';
 
   return io.files.readText(`/sys/class/net/${device}/mtu`)?.trim() ?? '1500';
-}
-
-function toProcessEnv(env: DevEnv): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-  );
 }
 
 // SIGTERM gives impd time to sleep every imp, so memory survives.
