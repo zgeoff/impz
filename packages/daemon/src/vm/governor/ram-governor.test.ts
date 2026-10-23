@@ -6,13 +6,13 @@ import { buildStubGovernedHostArbitraries } from '../../../testing/vm/build-stub
 import { createStubGovernedHost } from '../../../testing/vm/create-stub-governed-host';
 import type { RoomLeft } from '../../../testing/vm/create-stub-governed-host';
 import { createEventBus } from '../../platform/events/event-bus';
-import { ENFORCE_INTERVAL_MS, READING_MAX_AGE_MS, createRamGovernor } from './ram-governor';
+import { ENFORCE_INTERVAL_MS, createRamGovernor } from './ram-governor';
 
 test('it enforces the budget every 5 s, as the docs say', () => {
   expect(ENFORCE_INTERVAL_MS).toBe(5000);
 });
 
-test('it admits on the last reading and reads no VM RAM again while the budget is far', async () => {
+test('it admits on the resident counts and walks no VM pages while the budget is far', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['a', 'b', 'x'],
@@ -25,16 +25,12 @@ test('it admits on the last reading and reads no VM RAM again while the budget i
   const readRamMib = mock(host.deps.readRamMib);
   const governor = createRamGovernor({ ...host.deps, readRamMib, log: () => {} });
 
-  await governor.enforce();
-
-  readRamMib.mockClear();
-
   await governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600 });
 
   expect(readRamMib).not.toHaveBeenCalled();
 });
 
-test('it counts the reserve it admitted on the last reading', async () => {
+test('it counts the reserve it admitted on the resident counts', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['a', 'x'],
@@ -43,7 +39,6 @@ test('it counts the reserve it admitted on the last reading', async () => {
 
   const governor = createRamGovernor({ ...host.deps, log: () => {} });
 
-  await governor.enforce();
   await governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600 });
 
   const usage = await governor.readUsage();
@@ -51,7 +46,7 @@ test('it counts the reserve it admitted on the last reading', async () => {
   expect(usage).toStrictEqual({ usedMib: 200, reservedMib: 300, headroomMib: 0 });
 });
 
-test('it reads every VM again and makes room when the last reading leaves too little', async () => {
+test('it walks every VM and makes room when the resident counts leave too little', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['old', 'new', 'x'],
@@ -64,97 +59,27 @@ test('it reads every VM again and makes room when the last reading leaves too li
   const readRamMib = mock(host.deps.readRamMib);
   const governor = createRamGovernor({ ...host.deps, readRamMib, log: () => {} });
 
-  await governor.enforce();
-
-  readRamMib.mockClear();
-
   await governor.admit({ id: 'x', name: 'x', reserveMib: 500, memoryMib: 600 });
 
   expect(readRamMib).toHaveBeenCalled();
   expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
 });
 
-test('it counts what a guest faulted in since the last reading', async () => {
-  const host = createStubGovernedHost({
-    budgetMib: 1000,
-    ids: ['old', 'x'],
-    awake: [{ id: 'old', rssMib: 300 }],
-  });
-
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
-
-  await governor.enforce();
-
-  host.applyChange({ kind: 'rss', id: 'old', mib: 700 }, governor);
-
-  await governor.admit({ id: 'x', name: 'x', reserveMib: 400, memoryMib: 600 });
-
-  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
-});
-
-test('it counts what a guest faulted in after an unplug during the last reading', async () => {
+test('it makes room by what a guest holds now when its pages dipped during an earlier walk', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,
     ids: ['old', 'x'],
     awake: [{ id: 'old', rssMib: 900 }],
   });
 
-  const readRamMib = mock(host.deps.readRamMib);
-  const governor = createRamGovernor({ ...host.deps, readRamMib, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps, log: () => {} });
 
-  readRamMib.mockImplementationOnce((pid, id) => {
-    host.applyChange({ kind: 'rss', id: 'old', mib: 200 }, governor);
-
-    return host.deps.readRamMib(pid, id);
-  });
+  host.applyChange({ kind: 'dip', id: 'old', mib: 200 }, governor);
 
   await governor.enforce();
-
-  host.applyChange({ kind: 'rss', id: 'old', mib: 800 }, governor);
-
   await governor.admit({ id: 'x', name: 'x', reserveMib: 400, memoryMib: 600 });
 
   expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
-});
-
-test('it reads every VM again once the last reading is too old', async () => {
-  const host = createStubGovernedHost({
-    budgetMib: 1000,
-    ids: ['a', 'x'],
-    awake: [{ id: 'a', rssMib: 200 }],
-  });
-
-  const readRamMib = mock(host.deps.readRamMib);
-  const governor = createRamGovernor({ ...host.deps, readRamMib, log: () => {} });
-
-  await governor.enforce();
-
-  readRamMib.mockClear();
-  host.applyChange({ kind: 'tick', durationMs: READING_MAX_AGE_MS + 1 }, governor);
-
-  await governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600 });
-
-  expect(readRamMib).toHaveBeenCalled();
-});
-
-test('it reads every VM again when an imp woke after the last reading', async () => {
-  const host = createStubGovernedHost({
-    budgetMib: 1000,
-    ids: ['a', 'woke', 'x'],
-    awake: [{ id: 'a', rssMib: 200 }],
-  });
-
-  const readRamMib = mock(host.deps.readRamMib);
-  const governor = createRamGovernor({ ...host.deps, readRamMib, log: () => {} });
-
-  await governor.enforce();
-
-  readRamMib.mockClear();
-  host.markAdmitted('woke');
-
-  await governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600 });
-
-  expect(readRamMib).toHaveBeenCalled();
 });
 
 test('it sleeps the least recently active imp that is not busy to make room', async () => {

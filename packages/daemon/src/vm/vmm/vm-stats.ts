@@ -46,8 +46,8 @@ export async function readOwnedRamMibAsync(
   }
 }
 
-// The kernel keeps these counters per process, so this read walks no pages. Pss is not among them,
-// but a page faulted in after a Pss reading raises them by the same amount.
+// The kernel keeps these counters per process, so this read walks no pages. A page's Rss is never
+// less than its Pss, so the sum bounds what smaps_rollup's anonymous and shmem Pss count.
 export async function readResidentMibAsync(
   pid: number,
   apiSocket: string,

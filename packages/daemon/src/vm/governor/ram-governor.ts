@@ -14,11 +14,6 @@ const RESERVATION_TTL_MS = 20_000;
 export const ENFORCE_INTERVAL_MS = 5000;
 export const ENFORCE_TRIGGER = 'RAM over budget';
 
-// KSM can split merged pages after a reading, which no resident counter shows. The KSM headroom
-// covers what splits within a tick add, so a reading older than one late tick is read again.
-/* @internal */
-export const READING_MAX_AGE_MS = 2 * ENFORCE_INTERVAL_MS;
-
 interface AwakeImp {
   readonly id: string;
   readonly name: string;
@@ -101,7 +96,8 @@ export interface RamGovernorDeps {
   readonly listAwake: () => Promise<AwakeImp[]>;
   readonly readRamMib: (pid: number, apiSocket: string) => Promise<number | null>;
 
-  // Kept per process by the kernel, so a read is cheap where readRamMib walks every mapped page.
+  // The kernel keeps this count per process, so a read walks no pages. A page's share of it is never
+  // less than its share of what readRamMib counts, KSM or not.
   readonly readResidentMib: (pid: number, apiSocket: string) => Promise<number | null>;
 
   // Writes split pages that KSM merged faster than a tick, so a share of what KSM saves stays free.
@@ -113,18 +109,6 @@ export interface RamGovernorDeps {
   readonly now?: () => number;
   readonly events?: EventBus;
   readonly reclaim?: (excludeId: string | null) => Promise<number>;
-}
-
-interface VmReading {
-  readonly pid: number;
-  readonly ownedMib: number;
-  readonly residentMib: number;
-}
-
-interface VmReadings {
-  readonly at: number;
-  readonly byImp: ReadonlyMap<string, VmReading>;
-  readonly headroomMib: number;
 }
 
 interface Reservation {
@@ -142,7 +126,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
   const now = deps.now ?? Date.now;
   let stuckOver = false;
-  let lastReadings: VmReadings | null = null;
 
   const emitDecision = (decision: GovernorDecision): void => {
     deps.events?.publish({
@@ -198,16 +181,20 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     return reservation.mib;
   };
 
-  const sumEffectiveUsage = (
-    awake: readonly AwakeImp[],
-    readings: readonly (number | null)[],
-    headroomMib: number,
+  const readEffectiveUsage = async (
     excludeId: string | null,
+    readVmMib: RamGovernorDeps['readRamMib'] = deps.readRamMib,
   ) => {
+    const listed = await deps.listAwake();
+
+    const awake = listed.filter((imp) => imp.id !== excludeId);
+
     const byImp = new Map<string, number>();
 
     let usedMib = 0;
-    let effectiveMib = headroomMib;
+    let effectiveMib = 0;
+
+    const readings = await Promise.all(awake.map((imp) => readVmMib(imp.pid, imp.apiSocket)));
 
     for (const [index, imp] of awake.entries()) {
       const measured = readings[index] ?? 0;
@@ -225,67 +212,13 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       }
     }
 
-    return { awake, byImp, usedMib, effectiveMib, headroomMib };
-  };
-
-  const readVmRam = async (imp: AwakeImp) => {
-    // The page walk is not atomic: a page faulted in during it counts in the walk and again in the
-    // growth from the lower count, and a page unplugged during it leaves that lower count behind.
-    const residentBeforeMib = await deps.readResidentMib(imp.pid, imp.apiSocket);
-    const ownedMib = await deps.readRamMib(imp.pid, imp.apiSocket);
-    const residentAfterMib = await deps.readResidentMib(imp.pid, imp.apiSocket);
-
-    const residentMib =
-      residentBeforeMib === null || residentAfterMib === null
-        ? null
-        : Math.min(residentBeforeMib, residentAfterMib);
-
-    return { ownedMib, residentMib };
-  };
-
-  const readEffectiveUsage = async (excludeId: string | null) => {
-    const at = now();
-
-    const listed = await deps.listAwake();
-
-    const awake = listed.filter((imp) => imp.id !== excludeId);
-
-    const readings = await Promise.all(awake.map((imp) => readVmRam(imp)));
-
     const headroom = deps.readHeadroomMib?.(awake.map((imp) => imp.pid)) ?? Promise.resolve(0);
 
     const headroomMib = await headroom;
 
-    lastReadings = { at, byImp: collectVmReadings(awake, readings), headroomMib };
+    effectiveMib += headroomMib;
 
-    return sumEffectiveUsage(
-      awake,
-      readings.map((reading) => reading.ownedMib),
-      headroomMib,
-      excludeId,
-    );
-  };
-
-  const readBoundedEffectiveMib = async (excludeId: string): Promise<number | null> => {
-    const recent = lastReadings;
-
-    if (recent === null || now() - recent.at > READING_MAX_AGE_MS) {
-      return null;
-    }
-
-    const listed = await deps.listAwake();
-
-    const awake = listed.filter((imp) => imp.id !== excludeId);
-
-    const residents = await Promise.all(
-      awake.map((imp) => deps.readResidentMib(imp.pid, imp.apiSocket)),
-    );
-
-    const bounds = buildRamBounds(recent, awake, residents);
-
-    return bounds === null
-      ? null
-      : sumEffectiveUsage(awake, bounds, recent.headroomMib, excludeId).effectiveMib;
+    return { awake, byImp, usedMib, effectiveMib, headroomMib };
   };
 
   const readFreeRoom = async (
@@ -414,10 +347,10 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           throw buildImpOverBudgetError(deps.budgetMib, usage.effectiveMib, request.memoryMib);
         }
 
-        const boundMib = await readBoundedEffectiveMib(request.id);
+        const bound = await readEffectiveUsage(request.id, deps.readResidentMib);
 
-        if (boundMib !== null && boundMib + request.reserveMib <= deps.budgetMib) {
-          recordAdmission(request, boundMib);
+        if (bound.effectiveMib + request.reserveMib <= deps.budgetMib) {
+          recordAdmission(request, bound.effectiveMib);
 
           return;
         }
@@ -559,46 +492,4 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         }
       }),
   };
-}
-
-function collectVmReadings(
-  awake: readonly AwakeImp[],
-  readings: readonly { ownedMib: number | null; residentMib: number | null }[],
-): Map<string, VmReading> {
-  const byImp = new Map<string, VmReading>();
-
-  for (const [index, imp] of awake.entries()) {
-    const reading = readings[index];
-
-    if (reading !== undefined && reading.ownedMib !== null && reading.residentMib !== null) {
-      byImp.set(imp.id, {
-        pid: imp.pid,
-        ownedMib: reading.ownedMib,
-        residentMib: reading.residentMib,
-      });
-    }
-  }
-
-  return byImp;
-}
-
-function buildRamBounds(
-  recent: VmReadings,
-  awake: readonly AwakeImp[],
-  residents: readonly (number | null)[],
-): number[] | null {
-  const bounds: number[] = [];
-
-  for (const [index, imp] of awake.entries()) {
-    const reading = recent.byImp.get(imp.id);
-    const residentMib = residents[index] ?? null;
-
-    if (reading?.pid !== imp.pid || residentMib === null) {
-      return null;
-    }
-
-    bounds.push(reading.ownedMib + Math.max(0, residentMib - reading.residentMib));
-  }
-
-  return bounds;
 }
