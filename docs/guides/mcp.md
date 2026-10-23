@@ -203,10 +203,11 @@ operator runs. The route is off until `IMP_MCP_PUBLIC_URL` is set.
 | `/.well-known/oauth-authorization-server`              | authorization server metadata (RFC 8414)                 |
 | `/oauth2/authorize`, `/oauth2/token`, `/oauth2/revoke` | authorization, the token endpoint, revocation (RFC 7009) |
 | `/login`, `/consent`                                   | the two sign-in pages                                    |
+| `/error`                                               | the page for a sign-in the server refuses to start       |
 
 Every other path gets the same 404, as does a request whose `Host` is not the origin's. The
 authorization server is [better-auth](https://www.better-auth.com/) with its OAuth provider and MCP
-plugins, over impd's own database, and impd serves the two pages it sends a browser to. The route
+plugins, over impd's own database, and impd serves the pages it sends a browser to. The route
 follows the MCP authorization spec of 2026-07-28: PKCE with S256, a resource indicator (RFC 8707)
 bound to `<origin>/mcp`, and `iss` on the redirect that carries a code (RFC 9207). It has no dynamic
 registration and no client ID metadata documents: the operator adds each client.
