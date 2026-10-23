@@ -1,18 +1,9 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { expect, mock, test } from 'bun:test';
 import { createInstance } from './instance';
 import type { HarnessDeps } from './run-e2e';
 import { runE2E } from './run-e2e';
 
 function setupTest() {
-  const directory = mkdtempSync(join(tmpdir(), 'run-e2e-'));
-
-  onTestFinished(() => {
-    rmSync(directory, { recursive: true, force: true });
-  });
-
   const deps = {
     readHostImage: mock<HarnessDeps['readHostImage']>(),
     readTailscaleKey: mock<HarnessDeps['readTailscaleKey']>(),
@@ -27,6 +18,9 @@ function setupTest() {
     readHostBFixture: mock<HarnessDeps['readHostBFixture']>(),
     removeLeftovers: mock<HarnessDeps['removeLeftovers']>(),
     stopPebble: mock<HarnessDeps['stopPebble']>(),
+    createDirectory: mock<HarnessDeps['createDirectory']>(),
+    removeFile: mock<HarnessDeps['removeFile']>(),
+    writeResults: mock<HarnessDeps['writeResults']>(),
     onSignal: mock<HarnessDeps['onSignal']>(),
     exit: mock<HarnessDeps['exit']>(),
     now: mock<HarnessDeps['now']>(),
@@ -34,7 +28,7 @@ function setupTest() {
     warn: mock<HarnessDeps['warn']>(),
   };
 
-  return { resultsDir: join(directory, 'results'), deps };
+  return { deps };
 }
 
 test('it prints the usage for --help and touches nothing', async () => {
@@ -44,7 +38,7 @@ test('it prints the usage for --help and touches nothing', async () => {
     argv: ['--help'],
     env: {},
     bunPath: '/usr/local/bin/bun',
-    resultsDir: ctx.resultsDir,
+    resultsDir: '/var/tmp/imp-e2e-results',
     deps: ctx.deps,
   });
 
@@ -56,6 +50,7 @@ test('it prints the usage for --help and touches nothing', async () => {
 
   expect(ctx.deps.readHostImage).not.toHaveBeenCalled();
   expect(ctx.deps.setUpInstance).not.toHaveBeenCalled();
+  expect(ctx.deps.createDirectory).not.toHaveBeenCalled();
 });
 
 test('it refuses an unknown flag with the usage and exit code 2', async () => {
@@ -65,13 +60,37 @@ test('it refuses an unknown flag with the usage and exit code 2', async () => {
     argv: ['--fast'],
     env: {},
     bunPath: '/usr/local/bin/bun',
-    resultsDir: ctx.resultsDir,
+    resultsDir: '/var/tmp/imp-e2e-results',
     deps: ctx.deps,
   });
 
   expect(exitCode).toBe(2);
   expect(ctx.deps.warn).toHaveBeenCalledWith(expect.toStartWith('test-e2e: '));
   expect(ctx.deps.setUpInstance).not.toHaveBeenCalled();
+});
+
+test('it makes the results folder and drops the last run metrics before it sets up', async () => {
+  const ctx = setupTest();
+
+  ctx.deps.readHostImage.mockReturnValue('imp-host:dev-imp-0f3a91c2');
+  ctx.deps.setUpInstance.mockRejectedValue(new Error('scripts/dev/dev.sh up exited 1'));
+  ctx.deps.now.mockReturnValue(1_767_225_600_000);
+
+  await runE2E({
+    argv: ['--only', 'docker'],
+    env: {},
+    bunPath: '/usr/local/bin/bun',
+    resultsDir: '/var/tmp/imp-e2e-results',
+    deps: ctx.deps,
+  });
+
+  expect(ctx.deps.createDirectory).toHaveBeenCalledExactlyOnceWith('/var/tmp/imp-e2e-results');
+
+  expect(ctx.deps.removeFile).toHaveBeenCalledExactlyOnceWith(
+    '/var/tmp/imp-e2e-results/metrics.jsonl',
+  );
+
+  expect(ctx.deps.removeFile).toHaveBeenCalledBefore(ctx.deps.setUpInstance);
 });
 
 test('it records a failed setup and runs no journey', async () => {
@@ -85,22 +104,24 @@ test('it records a failed setup and runs no journey', async () => {
     argv: ['--only', 'docker'],
     env: {},
     bunPath: '/usr/local/bin/bun',
-    resultsDir: ctx.resultsDir,
+    resultsDir: '/var/tmp/imp-e2e-results',
     deps: ctx.deps,
   });
-
-  const results: unknown = JSON.parse(readFileSync(join(ctx.resultsDir, 'results.json'), 'utf8'));
 
   expect(exitCode).toBe(1);
   expect(ctx.deps.warn).toHaveBeenCalledWith('    FAIL: scripts/dev/dev.sh up exited 1');
   expect(ctx.deps.runJourney).not.toHaveBeenCalled();
 
-  expect(results).toStrictEqual({
-    runAt: '2026-01-01T00:00:00.000Z',
-    ramBudgetMib: 6144,
-    idleTimeoutS: 10,
-    section0: { name: 'setup', verdict: 'FAIL', durationMs: 0 },
-  });
+  expect(ctx.deps.writeResults).toHaveBeenCalledExactlyOnceWith(
+    [{ index: 0, name: 'setup', verdict: 'FAIL', durationMs: 0 }],
+    {
+      resultsFile: '/var/tmp/imp-e2e-results/results.json',
+      metricsFile: '/var/tmp/imp-e2e-results/metrics.jsonl',
+      ramBudgetMib: 6144,
+      idleTimeoutS: 10,
+      now: expect.any(Function),
+    },
+  );
 });
 
 test('it sets the instance up with the harness env and leaves its own env unchanged', async () => {
@@ -115,7 +136,7 @@ test('it sets the instance up with the harness env and leaves its own env unchan
     argv: ['--only', 'docker'],
     env,
     bunPath: '/usr/local/bin/bun',
-    resultsDir: ctx.resultsDir,
+    resultsDir: '/var/tmp/imp-e2e-results',
     deps: ctx.deps,
   });
 
@@ -134,9 +155,8 @@ test('it sets the instance up with the harness env and leaves its own env unchan
   expect(env).toStrictEqual({ PATH: '/usr/bin', TAILSCALE_AUTHKEY: 'fake-dev-key' });
 });
 
-test('it hands each journey the token of the instance it set up', async () => {
+test('it runs each journey with its full argv and the env of the instance it set up', async () => {
   const ctx = setupTest();
-  const metricsFile = join(ctx.resultsDir, 'metrics.jsonl');
 
   const instance = createInstance({
     container: 'imp-e2e-a',
@@ -155,21 +175,34 @@ test('it hands each journey the token of the instance it set up', async () => {
     argv: ['--only', 'docker', '--keep'],
     env: { PATH: '/usr/bin' },
     bunPath: '/usr/local/bin/bun',
-    resultsDir: ctx.resultsDir,
+    resultsDir: '/var/tmp/imp-e2e-results',
     deps: ctx.deps,
   });
 
   expect(exitCode).toBe(0);
 
-  expect(ctx.deps.runJourney).toHaveBeenCalledExactlyOnceWith(
-    expect.objectContaining({
-      argv: expect.arrayContaining(['/usr/local/bin/bun', 'test']) as unknown,
-      env: expect.objectContaining({
-        IMP_TOKEN: 'fake-run-token',
-        IMP_HOST_IMAGE: 'imp-host:dev-imp-0f3a91c2',
-        E2E_KEEP: '1',
-        E2E_METRICS_FILE: metricsFile,
-      }) as unknown,
-    }),
-  );
+  expect(ctx.deps.runJourney).toHaveBeenCalledExactlyOnceWith({
+    argv: [
+      '/usr/local/bin/bun',
+      'test',
+      '--config=e2e/bunfig.toml',
+      '--bail',
+      '--timeout',
+      '3600000',
+      './e2e/suites/docker.e2e.ts',
+    ],
+    env: {
+      PATH: '/usr/bin',
+      IMP_HOST_IMAGE: 'imp-host:dev-imp-0f3a91c2',
+      IMP_RAM_BUDGET_MIB: '6144',
+      IMP_IDLE_TIMEOUT_S: '10',
+      IMP_DEV_TAILNET: '0',
+      IMP_TOKEN: 'fake-run-token',
+      E2E_KEEP: '1',
+      E2E_KEPT_PREFIXES: '',
+      E2E_ACCEPTANCE: '0',
+      E2E_METRICS_FILE: '/var/tmp/imp-e2e-results/metrics.jsonl',
+    },
+    onStart: expect.any(Function),
+  });
 });

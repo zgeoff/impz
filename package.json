@@ -125,6 +125,7 @@
     "@impz/cli": "workspace:*",
     "@impz/client": "workspace:*",
     "@impz/daemon": "workspace:*",
+    "@impz/shared": "workspace:*",
     "@impz/test-utils": "workspace:*",
     "@modelcontextprotocol/client": "catalog:",
     "@stylistic/eslint-plugin": "catalog:",

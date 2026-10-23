@@ -1,4 +1,4 @@
-import { readFileSync, statfsSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, statfsSync } from 'node:fs';
 import { createImpClient } from '@impz/client';
 import type { HarnessEnv } from './config';
 import { createMissingImages } from './fixtures';
@@ -33,6 +33,7 @@ import { runSuite, stopSuiteGroup } from './run-suite';
 import type { FixtureImage } from './suites';
 import { SUITES } from './suites';
 import { readTailscaleE2EAuthKey } from './tailscale-key';
+import { writeResults } from './write-results';
 
 export function wireHarnessDeps(cwd: string): HarnessDeps {
   return {
@@ -70,6 +71,13 @@ export function wireHarnessDeps(cwd: string): HarnessDeps {
     readHostBFixture,
     removeLeftovers,
     stopPebble,
+    createDirectory: (path) => {
+      mkdirSync(path, { recursive: true });
+    },
+    removeFile: (path) => {
+      rmSync(path, { force: true });
+    },
+    writeResults,
     onSignal: (signal, handler) => {
       process.on(signal, handler);
     },

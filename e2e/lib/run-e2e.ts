@@ -1,4 +1,3 @@
-import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { collectBootFallbacks } from './boot-fallbacks';
 import { buildHarnessEnv } from './build-harness-env';
@@ -18,8 +17,7 @@ import {
   readSuiteSettings,
 } from './suites';
 import type { TailscaleE2EKey } from './tailscale-key';
-import { writeResults } from './write-results';
-import type { Section } from './write-results';
+import type { ResultsOptions, Section } from './write-results';
 
 export interface HarnessRun {
   readonly args: HarnessArgs;
@@ -60,6 +58,11 @@ export interface HarnessDeps {
   ) => Promise<void>;
 
   readonly stopPebble: () => Promise<void>;
+  readonly createDirectory: (path: string) => void;
+  readonly removeFile: (path: string) => void;
+
+  readonly writeResults: (sections: readonly Section[], options: Readonly<ResultsOptions>) => void;
+
   readonly onSignal: (signal: NodeJS.Signals, handler: () => void) => void;
   readonly exit: (code: number) => void;
   readonly now: () => number;
@@ -160,8 +163,8 @@ export async function runE2E(options: Readonly<RunE2EOptions>): Promise<number> 
     stopRun('SIGTERM');
   });
 
-  mkdirSync(options.resultsDir, { recursive: true });
-  rmSync(metricsFile, { force: true });
+  deps.createDirectory(options.resultsDir);
+  deps.removeFile(metricsFile);
 
   const setup = await runTimed(deps, 'setup', async () => {
     started.instance = await deps.setUpInstance(run);
@@ -277,7 +280,7 @@ export async function runE2E(options: Readonly<RunE2EOptions>): Promise<number> 
     await deps.stopPebble();
   }
 
-  writeResults(sections, {
+  deps.writeResults(sections, {
     resultsFile,
     metricsFile,
     ramBudgetMib: config.ramBudgetMib,

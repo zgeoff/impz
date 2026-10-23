@@ -1,3 +1,4 @@
+import { buildWithout } from '@impz/shared';
 import type { E2EConfig, HarnessEnv } from './config';
 import type { TailscaleE2EKey } from './tailscale-key';
 
@@ -12,7 +13,7 @@ interface HarnessEnvOptions {
 // tag:imp-e2e, which reaches no live impd, so dev's own key never passes through.
 export function buildHarnessEnv(options: Readonly<HarnessEnvOptions>): HarnessEnv {
   const env = {
-    ...stripTailscaleKey(options.env),
+    ...buildWithout(options.env, ['TAILSCALE_AUTHKEY']),
     IMP_HOST_IMAGE: options.hostImage,
     IMP_RAM_BUDGET_MIB: String(options.config.ramBudgetMib),
     IMP_IDLE_TIMEOUT_S: String(options.config.idleTimeoutS),
@@ -27,8 +28,4 @@ export function buildHarnessEnv(options: Readonly<HarnessEnvOptions>): HarnessEn
     TAILSCALE_AUTHKEY: options.tailnet.key,
     IMP_TAILSCALE_TAGS: options.tailnet.tags,
   };
-}
-
-function stripTailscaleKey(env: HarnessEnv): HarnessEnv {
-  return Object.fromEntries(Object.entries(env).filter(([name]) => name !== 'TAILSCALE_AUTHKEY'));
 }

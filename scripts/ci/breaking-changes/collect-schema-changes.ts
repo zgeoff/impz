@@ -1,6 +1,6 @@
 import type { MessageDirection } from '@impz/api';
+import { buildWithout } from '@impz/shared';
 import { ANNOTATIONS } from './annotations';
-import { buildWithout } from './build-without';
 import { collectBoundChange } from './collect-bound-change';
 import { collectBoundChanges } from './collect-bound-changes';
 import { collectSchemaMap } from './collect-schema-map';
