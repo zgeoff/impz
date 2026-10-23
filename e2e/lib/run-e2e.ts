@@ -1,12 +1,15 @@
 import { join } from 'node:path';
 import { collectBootFallbacks } from './boot-fallbacks';
 import { buildHarnessEnv } from './build-harness-env';
+import type { HarnessTailnet } from './build-harness-env';
 import { buildConfig } from './config';
 import type { E2EConfig, HarnessEnv } from './config';
+import type { HeadscaleTailnet } from './headscale';
 import type { DevInstance } from './instance';
 import type { HostBFixture } from './move-hosts';
 import type { HarnessArgs } from './parse-args';
 import { parseArgs } from './parse-args';
+import { pickRunTailnet } from './pick-run-tailnet';
 import { hasRunPassed, runSuites } from './run-suites';
 import {
   FAST_GROUPS,
@@ -34,6 +37,8 @@ interface JourneyRequest {
 export interface HarnessDeps {
   readonly readHostImage: (env: HarnessEnv) => string;
   readonly readTailscaleKey: (env: HarnessEnv) => Promise<TailscaleE2EKey | null>;
+  readonly startHeadscale: () => Promise<HeadscaleTailnet>;
+  readonly stopHeadscale: () => Promise<void>;
 
   readonly setUpInstance: (run: Readonly<HarnessRun>) => Promise<DevInstance>;
   readonly recreateInstance: (run: Readonly<HarnessRun>) => Promise<DevInstance>;
@@ -127,8 +132,15 @@ export async function runE2E(options: Readonly<RunE2EOptions>): Promise<number> 
 
   const config = buildConfig(options.env);
   const hostImage = deps.readHostImage(options.env);
-  const isTailnetRun = args.suites.includes('tailscale') || args.suites.includes('moves-tailnet');
-  const tailnet = isTailnetRun ? await deps.readTailscaleKey(options.env) : null;
+  let tailnet: HarnessTailnet;
+
+  try {
+    tailnet = await startTailnet(deps, args.suites, options.env);
+  } catch (error) {
+    deps.warn(`test-e2e: ${formatReason(error)}`);
+
+    return 1;
+  }
 
   const run: HarnessRun = {
     args,
@@ -280,6 +292,10 @@ export async function runE2E(options: Readonly<RunE2EOptions>): Promise<number> 
     await deps.stopPebble();
   }
 
+  if (tailnet.kind === 'headscale') {
+    await deps.stopHeadscale();
+  }
+
   deps.writeResults(sections, {
     resultsFile,
     metricsFile,
@@ -314,6 +330,30 @@ export async function runE2E(options: Readonly<RunE2EOptions>): Promise<number> 
 
 function formatReason(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function startTailnet(
+  deps: HarnessDeps,
+  suites: readonly string[],
+  env: HarnessEnv,
+): Promise<HarnessTailnet> {
+  const kind = pickRunTailnet(suites, env);
+
+  if (kind === 'headscale') {
+    try {
+      return { kind, ...(await deps.startHeadscale()) };
+    } catch (error) {
+      await deps.stopHeadscale();
+
+      throw new Error(`the Headscale tailnet did not start: ${formatReason(error)}`, {
+        cause: error,
+      });
+    }
+  }
+
+  const key = kind === 'tailscale' ? await deps.readTailscaleKey(env) : null;
+
+  return key === null ? { kind: 'off' } : { kind: 'tailscale', ...key };
 }
 
 async function runTimed(

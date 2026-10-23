@@ -7,6 +7,8 @@ function setupTest() {
   const deps = {
     readHostImage: mock<HarnessDeps['readHostImage']>(),
     readTailscaleKey: mock<HarnessDeps['readTailscaleKey']>(),
+    startHeadscale: mock<HarnessDeps['startHeadscale']>(),
+    stopHeadscale: mock<HarnessDeps['stopHeadscale']>(),
     setUpInstance: mock<HarnessDeps['setUpInstance']>(),
     recreateInstance: mock<HarnessDeps['recreateInstance']>(),
     resetSuites: mock<HarnessDeps['resetSuites']>(),
@@ -155,7 +157,7 @@ test('it sets the instance up with the harness env and leaves its own env unchan
   expect(env).toStrictEqual({ PATH: '/usr/bin', TAILSCALE_AUTHKEY: 'fake-dev-key' });
 });
 
-test('it gives the e2e tailnet key, never the dev key, to setup, host B and each journey', async () => {
+test('it gives the Headscale key, never the dev key, to setup, host B and each journey', async () => {
   const ctx = setupTest();
 
   const instance = createInstance({
@@ -172,7 +174,13 @@ test('it gives the e2e tailnet key, never the dev key, to setup, host B and each
   };
 
   ctx.deps.readHostImage.mockReturnValue('imp-host:dev-imp-0f3a91c2');
-  ctx.deps.readTailscaleKey.mockResolvedValue({ key: 'fake-e2e-key', tags: 'tag:imp-e2e' });
+
+  ctx.deps.startHeadscale.mockResolvedValue({
+    key: 'fake-headscale-key',
+    network: 'imp-e2e-a-ts',
+    member: 'imp-e2e-a-ts-member',
+  });
+
   ctx.deps.setUpInstance.mockResolvedValue({ ...instance, token: 'fake-run-token' });
   ctx.deps.readHostBFixture.mockReturnValue(fixture);
   ctx.deps.runJourney.mockResolvedValue(0);
@@ -192,8 +200,12 @@ test('it gives the e2e tailnet key, never the dev key, to setup, host B and each
     IMP_HOST_IMAGE: 'imp-host:dev-imp-0f3a91c2',
     IMP_RAM_BUDGET_MIB: '6144',
     IMP_IDLE_TIMEOUT_S: '10',
-    TAILSCALE_AUTHKEY: 'fake-e2e-key',
+    TAILSCALE_AUTHKEY: 'fake-headscale-key',
     IMP_TAILSCALE_TAGS: 'tag:imp-e2e',
+    IMP_TAILSCALE_LOGIN_SERVER: 'http://headscale:8080',
+    IMP_TAILSCALE_STATE_DIR: 'mem',
+    IMP_DEV_NETWORK: 'imp-e2e-a-ts',
+    E2E_TAILNET_MEMBER: 'imp-e2e-a-ts-member',
   };
 
   expect(ctx.deps.setUpInstance).toHaveBeenCalledExactlyOnceWith(
@@ -207,8 +219,115 @@ test('it gives the e2e tailnet key, never the dev key, to setup, host B and each
 
   expect(ctx.deps.runJourney.mock.calls.map((call) => call[0].env)).toStrictEqual([
     expect.objectContaining(tailnetEnv),
+  ]);
+
+  expect(ctx.deps.readTailscaleKey).not.toHaveBeenCalled();
+});
+
+test('it removes the run’s Headscale once the suites are done', async () => {
+  const ctx = setupTest();
+
+  const instance = createInstance({
+    container: 'imp-e2e-a',
+    dataDir: '/var/tmp/imp-e2e-a',
+    network: 'imp-e2e-a-net',
+    ip: '10.100.0.10',
+  });
+
+  ctx.deps.readHostImage.mockReturnValue('imp-host:dev-imp-0f3a91c2');
+
+  ctx.deps.startHeadscale.mockResolvedValue({
+    key: 'fake-headscale-key',
+    network: 'imp-e2e-a-ts',
+    member: 'imp-e2e-a-ts-member',
+  });
+
+  ctx.deps.setUpInstance.mockResolvedValue({ ...instance, token: 'fake-run-token' });
+  ctx.deps.runJourney.mockResolvedValue(0);
+  ctx.deps.readImpdLogSince.mockResolvedValue('');
+  ctx.deps.now.mockReturnValue(1_767_225_600_000);
+
+  await runE2E({
+    argv: ['--only', 'egress', '--keep'],
+    env: { PATH: '/usr/bin' },
+    bunPath: '/usr/local/bin/bun',
+    resultsDir: '/var/tmp/imp-e2e-results',
+    deps: ctx.deps,
+  });
+
+  expect(ctx.deps.stopHeadscale).toHaveBeenCalledOnce();
+  expect(ctx.deps.stopHeadscale).toHaveBeenCalledAfter(ctx.deps.runJourney);
+});
+
+test('it removes a Headscale that did not start and sets nothing up', async () => {
+  const ctx = setupTest();
+
+  ctx.deps.readHostImage.mockReturnValue('imp-host:dev-imp-0f3a91c2');
+  ctx.deps.startHeadscale.mockRejectedValue(new Error('docker start imp-e2e-a-headscale exited 1'));
+
+  const exitCode = await runE2E({
+    argv: ['--only', 'tailscale'],
+    env: { PATH: '/usr/bin' },
+    bunPath: '/usr/local/bin/bun',
+    resultsDir: '/var/tmp/imp-e2e-results',
+    deps: ctx.deps,
+  });
+
+  expect(exitCode).toBe(1);
+
+  expect(ctx.deps.warn).toHaveBeenCalledWith(
+    'test-e2e: the Headscale tailnet did not start: docker start imp-e2e-a-headscale exited 1',
+  );
+
+  expect(ctx.deps.stopHeadscale).toHaveBeenCalledOnce();
+  expect(ctx.deps.setUpInstance).not.toHaveBeenCalled();
+});
+
+test('it gives the e2e Tailscale key to setup and each journey of the names suite once its names are on', async () => {
+  const ctx = setupTest();
+
+  const instance = createInstance({
+    container: 'imp-e2e-a',
+    dataDir: '/var/tmp/imp-e2e-a',
+    network: 'imp-e2e-a-net',
+    ip: '10.100.0.10',
+  });
+
+  ctx.deps.readHostImage.mockReturnValue('imp-host:dev-imp-0f3a91c2');
+  ctx.deps.readTailscaleKey.mockResolvedValue({ key: 'fake-e2e-key', tags: 'tag:imp-e2e' });
+  ctx.deps.setUpInstance.mockResolvedValue({ ...instance, token: 'fake-run-token' });
+  ctx.deps.runJourney.mockResolvedValue(0);
+  ctx.deps.readImpdLogSince.mockResolvedValue('');
+  ctx.deps.now.mockReturnValue(1_767_225_600_000);
+
+  await runE2E({
+    argv: ['--only', 'tailnet-names', '--keep'],
+    env: { PATH: '/usr/bin', TAILSCALE_AUTHKEY: 'fake-dev-key', IMP_E2E_TAILNET_NAMES: '1' },
+    bunPath: '/usr/local/bin/bun',
+    resultsDir: '/var/tmp/imp-e2e-results',
+    deps: ctx.deps,
+  });
+
+  const tailnetEnv = {
+    PATH: '/usr/bin',
+    IMP_E2E_TAILNET_NAMES: '1',
+    IMP_HOST_IMAGE: 'imp-host:dev-imp-0f3a91c2',
+    IMP_RAM_BUDGET_MIB: '6144',
+    IMP_IDLE_TIMEOUT_S: '10',
+    TAILSCALE_AUTHKEY: 'fake-e2e-key',
+    IMP_TAILSCALE_TAGS: 'tag:imp-e2e',
+  };
+
+  expect(ctx.deps.setUpInstance).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ env: tailnetEnv }),
+  );
+
+  expect(ctx.deps.runJourney.mock.calls.map((call) => call[0].env)).toStrictEqual([
+    expect.objectContaining(tailnetEnv),
     expect.objectContaining(tailnetEnv),
   ]);
+
+  expect(ctx.deps.startHeadscale).not.toHaveBeenCalled();
 });
 
 test('it runs each journey with its full argv and the env of the instance it set up', async () => {

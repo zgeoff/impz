@@ -3,7 +3,7 @@ import { readInfo } from '../lib/imp-cli';
 import { readMoveHosts } from '../lib/move-hosts';
 
 function setupTest() {
-  const hosts = readMoveHosts({ tailnet: false });
+  const hosts = readMoveHosts({ tailnet: 'off' });
 
   return { hosts };
 }

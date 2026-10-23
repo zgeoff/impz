@@ -58,6 +58,19 @@ test('#readSuiteSettings reads the settings a suite runs its journeys on', () =>
   });
 });
 
+test('#readSuiteSettings puts the moves-tailnet suite beside host B on the move network', () => {
+  expect(readSuiteSettings('moves-tailnet', instance)).toStrictEqual({
+    IMP_RAM_BUDGET_MIB: '2048',
+    IMP_DEFAULT_MEMORY_MIB: '512',
+    IMP_DEV_NETWORK: `${instance.container}-mv`,
+    IMP_DEV_IP: '10.100.0.10',
+  });
+});
+
+test('#readSuiteSettings leaves the names suite on the run’s own settings while its names are off', () => {
+  expect(readSuiteSettings('tailnet-names', instance)).toBeNull();
+});
+
 test('#readSuiteSettings reads null for a suite on the run’s own settings', () => {
   expect(readSuiteSettings('templates', instance)).toBeNull();
 });
@@ -155,6 +168,7 @@ test('#SUITE_SETS builds the fast set from the groups, in run order', () => {
     'disks',
     'sleep',
     'restart',
+    'tailscale',
     'mcp',
     'mcp-oauth',
     'offsets',
@@ -167,11 +181,13 @@ test('#SUITE_SETS builds the fast set from the groups, in run order', () => {
     'dashboard',
     'tokens',
     'leases',
+    'egress',
     'cpu',
     'templates',
     'boot-templates',
     'inner',
     'socket',
+    'moves-tailnet',
     'jail',
     'memory',
     'ksm',
@@ -184,8 +200,8 @@ test('#FAST_GROUPS puts no suite in two groups', () => {
   expect(new Set(suites).size).toBe(suites.length);
 });
 
-test('#FAST_GROUPS splits the fast set three ways', () => {
-  expect(FAST_GROUPS).toHaveLength(3);
+test('#FAST_GROUPS splits the fast set four ways', () => {
+  expect(FAST_GROUPS).toHaveLength(4);
 });
 
 test('#FAST_GROUPS keeps the run order inside each group', () => {

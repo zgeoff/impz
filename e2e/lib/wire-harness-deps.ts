@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, rmSync, statfsSync } from 'node:fs';
 import { createImpClient } from '@impz/client';
 import type { HarnessEnv } from './config';
 import { createMissingImages } from './fixtures';
+import { startHeadscale, stopHeadscale } from './headscale';
 import { listImageNames, readInfo, runImpWith } from './imp-cli';
 import { removeImpsWithPrefix } from './imps';
 import type { DevInstance } from './instance';
@@ -39,6 +40,8 @@ export function wireHarnessDeps(cwd: string): HarnessDeps {
   return {
     readHostImage,
     readTailscaleKey: readTailscaleE2EAuthKey,
+    startHeadscale: () => startHeadscale(),
+    stopHeadscale: () => stopHeadscale(),
     setUpInstance: async (run) => {
       const target = buildInstance(run.env, cwd);
 

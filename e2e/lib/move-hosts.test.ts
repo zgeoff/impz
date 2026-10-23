@@ -36,6 +36,11 @@ async function setupTest() {
 
       return Promise.resolve();
     },
+    connectHeadscale: (network) => {
+      steps.push(`headscale ${network}`);
+
+      return Promise.resolve();
+    },
     startHost: (host) => {
       steps.push(`up ${host.container} ${host.env['IMP_DEV_IP'] ?? ''}`);
 
@@ -115,7 +120,7 @@ test.each([39_936, -1])(
 test('#readMoveHosts names B, its network and the CLI config beside the run’s own instance', () => {
   updateEnv('IMP_DEV_PORT_OFFSET', '1400');
 
-  const hosts = readMoveHosts({ tailnet: false });
+  const hosts = readMoveHosts({ tailnet: 'off' });
 
   expect(hosts.hostA).toBe(instance);
   expect(hosts.hostB.container).toBe(`${instance.container}-mv-b`);
@@ -133,7 +138,7 @@ test('#readMoveHosts puts B on a ZFS root dataset of its own beside the run’s'
   updateEnv('IMP_STORAGE_BACKEND', 'zfs');
   updateEnv('IMP_ZFS_ROOT', 'impbench42/imp');
 
-  const hosts = readMoveHosts({ tailnet: false });
+  const hosts = readMoveHosts({ tailnet: 'off' });
 
   expect(hosts.hostB.env['IMP_ZFS_ROOT']).toBe('impbench42/imp-mv-b');
 });
@@ -141,21 +146,13 @@ test('#readMoveHosts puts B on a ZFS root dataset of its own beside the run’s'
 test('#readMoveHosts gives B no ZFS root on XFS', () => {
   updateEnv('IMP_ZFS_ROOT', 'impbench42/imp');
 
-  const hosts = readMoveHosts({ tailnet: false });
+  const hosts = readMoveHosts({ tailnet: 'off' });
 
   expect(hosts.hostB.env).not.toContainKey('IMP_ZFS_ROOT');
 });
 
-test('#readMoveHosts counts A as rebooted onto the network for a move off the tailnet', () => {
-  expect(readMoveHosts({ tailnet: false }).isARebooted).toBeTrue();
-});
-
-test('#readMoveHosts leaves A as it is for a move over the tailnet', () => {
-  expect(readMoveHosts({ tailnet: true }).isARebooted).toBeFalse();
-});
-
 test('#buildMoveSettings puts A on the move network with the test range and its peer URL', () => {
-  expect(buildMoveSettings({ tailnet: false }, 1400)).toStrictEqual({
+  expect(buildMoveSettings({ tailnet: 'off' }, 1400)).toStrictEqual({
     IMP_RAM_BUDGET_MIB: '2048',
     IMP_DEFAULT_MEMORY_MIB: '512',
     IMP_E2E: '1',
@@ -166,12 +163,20 @@ test('#buildMoveSettings puts A on the move network with the test range and its 
   });
 });
 
-test('#buildMoveSettings leaves A on the run’s settings for a move over the tailnet', () => {
-  expect(buildMoveSettings({ tailnet: true }, 1400)).toBeNull();
+test('#buildMoveSettings puts A on the move network for a move over Headscale, with no test range', () => {
+  expect(buildMoveSettings({ tailnet: 'headscale' }, 1400)).toStrictEqual({
+    IMP_RAM_BUDGET_MIB: '2048',
+    IMP_DEFAULT_MEMORY_MIB: '512',
+    IMP_DEV_NETWORK: `${instance.container}-mv`,
+    IMP_DEV_IP: '10.105.120.10',
+  });
 });
 
-test('#buildMoveSettings gives A the settings a move over the tailnet adds, with no test range', () => {
-  const settings = buildMoveSettings({ tailnet: true, env: { IMP_TAILNET_NAMES: '1' } }, 1400);
+test('#buildMoveSettings gives A the settings a move over Tailscale adds, with no test range', () => {
+  const settings = buildMoveSettings(
+    { tailnet: 'tailscale', env: { IMP_TAILNET_NAMES: '1' } },
+    1400,
+  );
 
   expect(settings).toStrictEqual({
     IMP_TAILNET_NAMES: '1',
@@ -183,24 +188,35 @@ test('#buildMoveSettings gives A the settings a move over the tailnet adds, with
 });
 
 test('#readMoveOptions runs host-b off the tailnet', () => {
-  expect(readMoveOptions('host-b')).toStrictEqual({ tailnet: false });
+  expect(readMoveOptions('host-b')).toStrictEqual({ tailnet: 'off' });
 });
 
-test('#readMoveOptions runs host-b-tailnet on the tailnet without per-imp names by default', () => {
-  expect(readMoveOptions('host-b-tailnet')).toStrictEqual({ tailnet: true });
+test('#readMoveOptions runs host-b-tailnet on Headscale without per-imp names', () => {
+  expect(readMoveOptions('host-b-tailnet')).toStrictEqual({ tailnet: 'headscale' });
 });
 
-test('#readMoveOptions runs host-b-tailnet with per-imp names under the test prefix once they are ready', () => {
-  updateEnv('IMP_E2E_TAILNET_NAMES', '1');
-
-  expect(readMoveOptions('host-b-tailnet')).toStrictEqual({
-    tailnet: true,
+test('#readMoveOptions runs host-b-tailnet-names on Tailscale with per-imp names under the test prefix', () => {
+  expect(readMoveOptions('host-b-tailnet-names')).toStrictEqual({
+    tailnet: 'tailscale',
     env: { IMP_TAILNET_NAMES: '1', IMP_TAILNET_NAME_PREFIX: 'e2e-' },
   });
 });
 
-test('#readMoveHosts counts A as rebooted for a move over the tailnet with settings of its own', () => {
-  expect(readMoveHosts({ tailnet: true, env: { IMP_TAILNET_NAMES: '1' } }).isARebooted).toBeTrue();
+test('#createHostBFixture connects Headscale to the move network before B starts on Headscale', async () => {
+  const ctx = await setupTest();
+
+  updateEnv('IMP_DEV_PORT_OFFSET', '1400');
+
+  await createHostBFixture({ tailnet: 'headscale' }, 'e2e-mvt-', ctx.deps).start();
+
+  expect(ctx.steps).toStrictEqual([
+    'leftovers',
+    `network ${instance.container}-mv 10.105.120.0/24 10.105.120.1`,
+    `headscale ${instance.container}-mv`,
+    `up ${instance.container}-mv-b 10.105.120.11`,
+    `login http://10.105.120.11:7070 ${ctx.cliDir} stale=false`,
+    `reset ${instance.container}-mv-b e2e-mvt-`,
+  ]);
 });
 
 test('#createHostBFixture starts B on the move network once leftovers are gone, saves it in a fresh CLI config, then resets it', async () => {
@@ -210,7 +226,7 @@ test('#createHostBFixture starts B on the move network once leftovers are gone, 
 
   await mkdir(ctx.cliDir);
   await writeFile(join(ctx.cliDir, 'stale'), '');
-  await createHostBFixture({ tailnet: false }, 'e2e-mv-', ctx.deps).start();
+  await createHostBFixture({ tailnet: 'off' }, 'e2e-mv-', ctx.deps).start();
 
   expect(ctx.steps).toStrictEqual([
     'leftovers',
@@ -231,7 +247,7 @@ test('#createHostBFixture makes B from nothing and resets it again when its rese
     () => Promise.resolve(),
   ]);
 
-  await createHostBFixture({ tailnet: false }, 'e2e-mv-', {
+  await createHostBFixture({ tailnet: 'off' }, 'e2e-mv-', {
     ...ctx.deps,
     resetHost: (host, prefix) => {
       ctx.steps.push(`reset ${host.container} ${prefix}`);
@@ -257,7 +273,7 @@ test('#createHostBFixture makes B from nothing and resets it again when its rese
 test('#createHostBFixture rejects the start when B made from nothing still fails its reset', async () => {
   const ctx = await setupTest();
 
-  const start = createHostBFixture({ tailnet: false }, 'e2e-mv-', {
+  const start = createHostBFixture({ tailnet: 'off' }, 'e2e-mv-', {
     ...ctx.deps,
     resetHost: () => Promise.reject(new Error('impd refused the removal')),
   }).start();
@@ -268,7 +284,7 @@ test('#createHostBFixture rejects the start when B made from nothing still fails
 test('#createHostBFixture keeps B’s data under --keep and rejects the start when its reset fails', async () => {
   const ctx = await setupTest();
 
-  const start = createHostBFixture({ tailnet: false }, 'e2e-mv-', {
+  const start = createHostBFixture({ tailnet: 'off' }, 'e2e-mv-', {
     ...ctx.deps,
     keep: true,
     resetHost: (host, prefix) => {
@@ -292,7 +308,7 @@ test('#createHostBFixture keeps B’s data under --keep and rejects the start wh
 test('#createHostBFixture resets B for the suite’s prefix', async () => {
   const ctx = await setupTest();
 
-  await createHostBFixture({ tailnet: false }, 'e2e-mv-', ctx.deps).reset();
+  await createHostBFixture({ tailnet: 'off' }, 'e2e-mv-', ctx.deps).reset();
 
   expect(ctx.steps).toStrictEqual([`reset ${instance.container}-mv-b e2e-mv-`]);
 });
@@ -301,7 +317,7 @@ test('#createHostBFixture stops B and removes its CLI config', async () => {
   const ctx = await setupTest();
 
   await mkdir(ctx.cliDir);
-  await createHostBFixture({ tailnet: false }, 'e2e-mv-', ctx.deps).stop();
+  await createHostBFixture({ tailnet: 'off' }, 'e2e-mv-', ctx.deps).stop();
 
   expect(ctx.steps).toStrictEqual(['leftovers']);
   expect(existsSync(ctx.cliDir)).toBeFalse();

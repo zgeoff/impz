@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { $ } from 'bun';
 import * as z from 'zod';
+import { HEADSCALE_IMAGES } from '../../scripts/dev/headscale-images';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -48,7 +49,7 @@ async function setupTest() {
 
   const headscale = `${prefix}-headscale`;
 
-  await $`docker run -d --name ${headscale} --network ${prefix} --network-alias headscale -v ${directory}:/etc/headscale:ro --tmpfs /var/lib/headscale headscale/headscale:0.29.5@sha256:780ed2f9e85719a2211277433f2c8afb45105d0d25031949a6848a485f9e216d serve`.quiet();
+  await $`docker run -d --name ${headscale} --network ${prefix} --network-alias headscale -v ${directory}:/etc/headscale:ro --tmpfs /var/lib/headscale ${HEADSCALE_IMAGES.headscale} serve`.quiet();
 
   stack.defer(async () => {
     await $`docker rm -f ${headscale}`.quiet();
@@ -57,7 +58,7 @@ async function setupTest() {
   const node = `${prefix}-node`;
 
   // the host image's tools that tailscale-up.sh runs, on Tailscale's own image
-  await $`docker run -d --name ${node} --network ${prefix} --cap-add NET_ADMIN --device /dev/net/tun -v ${dirname(Bun.fileURLToPath(import.meta.url))}:/scripts:ro --entrypoint sleep tailscale/tailscale:v1.104.2@sha256:b11583ad2e93e4671128538c88cf11f460444a5d7e449311dd1933a400ab849d infinity`.quiet();
+  await $`docker run -d --name ${node} --network ${prefix} --cap-add NET_ADMIN --device /dev/net/tun -v ${dirname(Bun.fileURLToPath(import.meta.url))}:/scripts:ro --entrypoint sleep ${HEADSCALE_IMAGES.tailscale} infinity`.quiet();
 
   stack.defer(async () => {
     await $`docker rm -f ${node}`.quiet();
