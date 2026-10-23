@@ -1,11 +1,13 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { expect, mock, onTestFinished, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildDevImageTag } from '../lib/build-dev-image-tag.ts';
 import { buildStubDevDocker } from '../test-utils/build-stub-dev-docker';
 import { buildStubDevHostDocker } from '../test-utils/build-stub-dev-host-docker';
 import { createStubBin } from '../test-utils/create-stub-bin';
-import { runSourcedFunction } from '../test-utils/run-sourced-function';
+import { runDev } from './dev.ts';
+import { wireDevIO } from './wire-dev-io.ts';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-dev-'));
@@ -55,7 +57,7 @@ test('it refuses an unknown command with its usage and exit 2', () => {
   }).toStrictEqual({
     exitCode: 2,
     stdout: '',
-    stderr: `usage: ${new URL('dev.sh', import.meta.url).pathname} up|down|reboot|logs|restart|shell|token|prune\n`,
+    stderr: 'usage: scripts/dev/dev.sh up|down|reboot|logs|restart|shell|token|prune\n',
   });
 });
 
@@ -120,7 +122,10 @@ test('it fails a restart whose new proxy stops without a socket, printing its lo
   });
 });
 
-test('it fails a restart whose impd is not ready by IMP_DEV_READY_TIMEOUT_S', () => {
+test.each([
+  ['reports impd is not ready', `echo '{"ready":false}'`],
+  ['exits nonzero after it printed ready', `echo '{"ready":true'; exit 18`],
+])('it fails a restart by IMP_DEV_READY_TIMEOUT_S whose health check %s', (_label, curl) => {
   const ctx = setupTest();
 
   const docker = createStubBin(
@@ -133,7 +138,7 @@ test('it fails a restart whose impd is not ready by IMP_DEV_READY_TIMEOUT_S', ()
     }),
   );
 
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":false}'`);
+  createStubBin(ctx.directoryPath, 'curl', curl);
 
   // A host without Docker has no docker socket, so stat answers for the socket's group.
   createStubBin(ctx.directoryPath, 'stat', 'echo 999');
@@ -267,6 +272,225 @@ test('it finishes a restart under IMP_DEV_STOP_TIMEOUT_S once the old impd exits
   }).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 
   expect(readFileSync(docker.calls, 'utf8')).toInclude('docker exec imp-dev kill -HUP 4242\n');
+});
+
+test('it replaces a running proxy once over a stamp from the bash script, then reuses it', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({
+      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': true },
+      hasImage: true,
+      hasSocket: true,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
+  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
+  mkdirSync(join(ctx.directoryPath, 'data'));
+
+  writeFileSync(
+    join(ctx.directoryPath, 'data', 'imp-docker-proxy.stamp'),
+    '9f2c4e1b7a35d0c8e6f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7  -\n',
+  );
+
+  const options = {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+    },
+  };
+
+  const first = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], options);
+  const second = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], options);
+
+  expect(first.exitCode).toBe(0);
+  expect(second.exitCode).toBe(0);
+
+  expect(
+    readFileSync(docker.calls, 'utf8')
+      .split('\n')
+      .filter((call) => call.startsWith('docker run -d --name imp-dev-docker-proxy ')),
+  ).toBeArrayOfSize(1);
+});
+
+test('it fails a restart whose IMP_DEV_READY_TIMEOUT_S is not a number', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({
+      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': true },
+      hasImage: true,
+      hasSocket: true,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":false}'`);
+
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
+  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+      IMP_DEV_READY_TIMEOUT_S: 'oops',
+    },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr: 'dev.sh: IMP_DEV_READY_TIMEOUT_S=oops is not a number of seconds\n',
+  });
+});
+
+test('it fails a restart with the reason when it cannot look up the old impd', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({
+      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': true },
+      hasImage: true,
+      hasSocket: true,
+      impdLookupError: { exitCode: 127, stderr: 'exec: "pgrep": executable file not found\n' },
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
+  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+    },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr: `dev.sh: cannot find impd's process in imp-dev\nexec: "pgrep": executable file not found\n`,
+  });
+
+  expect(readFileSync(docker.calls, 'utf8')).not.toInclude('kill -HUP');
+});
+
+test('it fails a restart with the reason when it cannot read the docker socket group', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({
+      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': false },
+      hasImage: true,
+      hasSocket: true,
+    }),
+  );
+
+  createStubBin(
+    ctx.directoryPath,
+    'stat',
+    `echo "stat: cannot statx '/var/run/docker.sock': No such file or directory" >&2; exit 1`,
+  );
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+    },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr:
+      "dev.sh: cannot read the group of /var/run/docker.sock\nstat: cannot statx '/var/run/docker.sock': No such file or directory\n",
+  });
+});
+
+test('it refuses up when IMP_KERNEL names a directory', () => {
+  const ctx = setupTest();
+  const docker = createStubBin(ctx.directoryPath, 'docker', 'exit 1');
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_KERNEL: ctx.directoryPath,
+    },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr: `dev.sh: no kernel at ${ctx.directoryPath}\n`,
+  });
+
+  expect(readFileSync(docker.calls, 'utf8')).toBe('');
+});
+
+test('it refuses up when IMP_SYSTEM_DRIVE names a directory', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: true }),
+  );
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+
+      IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
+      IMP_SYSTEM_DRIVE: ctx.directoryPath,
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+      IMP_HOST_IMAGE_READY: '1',
+    },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr: `dev.sh: no system drive at ${ctx.directoryPath}\n`,
+  });
 });
 
 test('it refuses up without a kernel before it asks docker anything', () => {
@@ -404,7 +628,7 @@ test('it refuses up with IMP_TAILNET_NAMES=1 when 1Password has no OAuth client'
   expect(readFileSync(docker.calls, 'utf8')).not.toInclude('docker run -d --name imp-dev ');
 });
 
-test('it passes the Tailscale key to docker by name only in up, and never traces it', () => {
+test('it passes the Tailscale key to docker in its environment, never in its arguments', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
@@ -413,12 +637,16 @@ test('it passes the Tailscale key to docker by name only in up, and never traces
     [
       'case "$*" in *imp-docker-proxy.new) : > "$IMP_DEV_DATA/imp-docker-proxy.new"; exit 0 ;; esac',
       'case "$*" in *bin/imp-docker-proxy) exit 0 ;; esac',
+      `case "$*" in "run -d --name imp-dev-trace-check "*) printf '%s' "$TAILSCALE_AUTHKEY" > '${join(ctx.directoryPath, 'docker-env-key')}'; exit 1 ;; esac`,
       'case "$1" in run|inspect) exit 1 ;; esac',
       'exit 0',
     ].join('\n'),
   );
 
-  const result = Bun.spawnSync(['bash', '-x', new URL('dev.sh', import.meta.url).pathname, 'up'], {
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
+  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
     env: {
       PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
       HOME: ctx.directoryPath,
@@ -433,12 +661,17 @@ test('it passes the Tailscale key to docker by name only in up, and never traces
     },
   });
 
-  const trace = result.stderr.toString();
+  const calls = readFileSync(docker.calls, 'utf8');
 
-  expect(result.exitCode).not.toBe(0);
-  expect(trace).toContain('-e TAILSCALE_AUTHKEY ');
-  expect(trace).toContain('-e IMP_TAILSCALE_TAGS=tag:imp-e2e');
-  expect(trace).not.toContain('fake-tskey-for-the-trace-check');
+  expect(result.exitCode).toBe(1);
+  expect(calls).toContain('-e TAILSCALE_AUTHKEY ');
+  expect(calls).toContain('-e IMP_TAILSCALE_TAGS=tag:imp-e2e');
+  expect(calls).not.toContain('fake-tskey-for-the-trace-check');
+  expect(result.stderr.toString()).not.toContain('fake-tskey-for-the-trace-check');
+
+  expect(readFileSync(join(ctx.directoryPath, 'docker-env-key'), 'utf8')).toBe(
+    'fake-tskey-for-the-trace-check',
+  );
 });
 
 test('it refuses up with an IMP_ACME_CA_FILE outside the repo', () => {
@@ -623,6 +856,66 @@ test('it fails up when the container stops before impd is ready, printing its lo
   });
 });
 
+test('it gives the container the real path of a kernel that a symlink outside the repo leads to', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({
+      containers: { 'imp-dev': false, 'imp-dev-docker-proxy': true },
+      hasImage: true,
+      hasSocket: true,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', 'exit 7');
+
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
+  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
+
+  const kernel = join(ctx.directoryPath, 'vmlinux');
+
+  symlinkSync(new URL('../../package.json', import.meta.url).pathname, kernel);
+
+  Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+
+      IMP_KERNEL: kernel,
+      IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+      IMP_HOST_IMAGE_READY: '1',
+      IMP_DEV_TAILNET: '0',
+      IMP_UPLINK_MTU: '1500',
+    },
+  });
+
+  expect(readFileSync(docker.calls, 'utf8')).toInclude(' -e IMP_KERNEL=/src/package.json ');
+});
+
+test('it runs logs, shell and token on the caller terminal through the given runner', async () => {
+  const runAttached = mock(() => Promise.resolve(3));
+
+  const exitCode = await runDev({
+    argv: ['token'],
+    env: {},
+    cwd: '/',
+    io: { ...wireDevIO(), runAttached },
+  });
+
+  expect(exitCode).toBe(3);
+
+  expect(runAttached).toHaveBeenCalledExactlyOnceWith([
+    'docker',
+    'exec',
+    'imp-dev',
+    'cat',
+    '/var/lib/imp/token',
+  ]);
+});
+
 test('it stops before it asks docker anything when there is no machine id', () => {
   const ctx = setupTest();
   const docker = createStubBin(ctx.directoryPath, 'docker', 'exit 1');
@@ -643,18 +936,39 @@ test('it stops before it asks docker anything when there is no machine id', () =
   expect(readFileSync(docker.calls, 'utf8')).toBe('');
 });
 
-test('it removes the own tag of a gone checkout on this machine, then the leftovers', () => {
+test('it fails prune with the reason when docker cannot list the images', () => {
   const ctx = setupTest();
 
-  const lib = new URL('../lib.sh', import.meta.url).pathname;
+  writeFileSync(join(ctx.directoryPath, 'machine-id'), 'fake-machine-id\n');
 
-  const gone = runSourcedFunction({
-    script: lib,
-    fn: 'dev_image_tag',
-    args: [join(ctx.directoryPath, 'gone')],
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    'echo "Cannot connect to the Docker daemon at unix:///var/run/docker.sock" >&2; exit 1',
+  );
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'prune'], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_MACHINE_ID_FILE: join(ctx.directoryPath, 'machine-id'),
+    },
   });
 
-  const tag = gone.stdout.trim();
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr:
+      'dev.sh: docker image ls failed\nCannot connect to the Docker daemon at unix:///var/run/docker.sock\n',
+  });
+});
+
+test('it removes the own tag of a gone checkout on this machine, then the leftovers', () => {
+  const ctx = setupTest();
+  const tag = buildDevImageTag(join(ctx.directoryPath, 'gone'));
 
   writeFileSync(join(ctx.directoryPath, 'machine-id'), 'fake-machine-id\n');
 
@@ -695,22 +1009,8 @@ test('it removes the own tag of a gone checkout on this machine, then the leftov
 
 test("it never removes a live checkout's image, another machine's, or an unmarked one", () => {
   const ctx = setupTest();
-
-  const lib = new URL('../lib.sh', import.meta.url).pathname;
-
-  const live = runSourcedFunction({ script: lib, fn: 'dev_image_tag', args: [ctx.directoryPath] });
-
-  const other = runSourcedFunction({
-    script: lib,
-    fn: 'dev_image_tag',
-    args: [join(ctx.directoryPath, 'other')],
-  });
-
-  const bare = runSourcedFunction({
-    script: lib,
-    fn: 'dev_image_tag',
-    args: [join(ctx.directoryPath, 'unmarked')],
-  });
+  const other = join(ctx.directoryPath, 'other');
+  const unmarked = join(ctx.directoryPath, 'unmarked');
 
   writeFileSync(join(ctx.directoryPath, 'machine-id'), 'fake-machine-id\n');
 
@@ -719,17 +1019,17 @@ test("it never removes a live checkout's image, another machine's, or an unmarke
     'docker',
     buildStubDevDocker([
       {
-        tag: live.stdout.trim(),
+        tag: buildDevImageTag(ctx.directoryPath),
         id: 'id-live',
         labels: { worktree: ctx.directoryPath, machine: 'fake-machine-id' },
       },
       {
-        tag: other.stdout.trim(),
+        tag: buildDevImageTag(other),
         id: 'id-other',
         labels: { worktree: join(ctx.directoryPath, 'other'), machine: 'another-machine' },
       },
       {
-        tag: bare.stdout.trim(),
+        tag: buildDevImageTag(unmarked),
         id: 'id-unmarked',
         labels: { worktree: join(ctx.directoryPath, 'unmarked'), machine: '' },
       },
@@ -755,26 +1055,14 @@ test("it never removes a live checkout's image, another machine's, or an unmarke
   expect(
     readFileSync(docker.calls, 'utf8')
       .split('\n')
-      .filter((call) => /^docker (?:image rm|ps) /u.test(call)),
+      .filter((call) => call.startsWith('docker image rm ')),
   ).toStrictEqual([]);
 });
 
 test('it keeps a gone checkout image it cannot remove, and says why', () => {
   const ctx = setupTest();
-
-  const lib = new URL('../lib.sh', import.meta.url).pathname;
-
-  const stuck = runSourcedFunction({
-    script: lib,
-    fn: 'dev_image_tag',
-    args: [join(ctx.directoryPath, 'stuck')],
-  });
-
-  const used = runSourcedFunction({
-    script: lib,
-    fn: 'dev_image_tag',
-    args: [join(ctx.directoryPath, 'used')],
-  });
+  const stuck = buildDevImageTag(join(ctx.directoryPath, 'stuck'));
+  const used = buildDevImageTag(join(ctx.directoryPath, 'used'));
 
   writeFileSync(join(ctx.directoryPath, 'machine-id'), 'fake-machine-id\n');
 
@@ -783,7 +1071,7 @@ test('it keeps a gone checkout image it cannot remove, and says why', () => {
     'docker',
     buildStubDevDocker([
       {
-        tag: stuck.stdout.trim(),
+        tag: stuck,
         id: 'id-stuck',
         labels: { worktree: join(ctx.directoryPath, 'stuck'), machine: 'fake-machine-id' },
         isStuck: true,
@@ -794,7 +1082,7 @@ test('it keeps a gone checkout image it cannot remove, and says why', () => {
         labels: { worktree: join(ctx.directoryPath, 'stuck'), machine: 'fake-machine-id' },
       },
       {
-        tag: used.stdout.trim(),
+        tag: used,
         id: 'id-used',
         labels: { worktree: join(ctx.directoryPath, 'used'), machine: 'fake-machine-id' },
         container: 'c0ffee',
@@ -813,9 +1101,9 @@ test('it keeps a gone checkout image it cannot remove, and says why', () => {
   expect(result.exitCode).toBe(0);
 
   expect(result.stdout.toString().split('\n')).toStrictEqual([
-    `dev.sh: keeping ${stuck.stdout.trim()}: docker image rm failed`,
+    `dev.sh: keeping ${stuck}: docker image rm failed`,
     `dev.sh: keeping imp-host:pinned: not the tag of ${join(ctx.directoryPath, 'stuck')}`,
-    `dev.sh: keeping ${used.stdout.trim()}: a container uses it`,
+    `dev.sh: keeping ${used}: a container uses it`,
     'dev.sh: keeping imp-host:dev-broken-5: docker image inspect failed',
     '',
   ]);

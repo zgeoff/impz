@@ -379,8 +379,7 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  process.env['IMP_HOST_IMAGE'] = await readHostImage();
-
+  process.env['IMP_HOST_IMAGE'] = readHostImage();
   process.env['IMP_RAM_BUDGET_MIB'] = String(config.ramBudgetMib);
   process.env['IMP_IDLE_TIMEOUT_S'] = String(config.idleTimeoutS);
 

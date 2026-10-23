@@ -1,20 +1,18 @@
-import { LIB_SCRIPT, runCommand } from './instance';
+import { makeOpReader } from '../../scripts/lib/make-op-reader.ts';
+import { readTailscaleE2EAuthkey } from '../../scripts/lib/read-tailscale-e2e-authkey.ts';
 
 // Never print the key. Only the tag:imp-e2e OAuth client: dev's tag:imp key
 // would join a node that reaches a live impd.
 export async function readTailscaleE2EAuthKey(): Promise<{ key: string; tags: string } | null> {
-  const result = await runCommand([
-    'bash',
-    '-c',
-    String.raw`source "$1"; load_tailscale_e2e_authkey || exit 0; printf "%s\n%s" "$IMP_TAILSCALE_TAGS" "$TAILSCALE_AUTHKEY"`,
-    'bash',
-    LIB_SCRIPT,
-  ]);
+  const authkey = await readTailscaleE2EAuthkey({
+    env: process.env,
+    readOp: makeOpReader(process.env),
+    warn: (line) => {
+      console.error(line);
+    },
+  });
 
-  const [tags = '', ...rest] = result.stdout.split('\n');
-  const key = rest.join('\n').trim();
-
-  return key === '' ? null : { key, tags };
+  return authkey === null ? null : { key: authkey.key, tags: authkey.tags ?? '' };
 }
 
 export function probeTailscaleE2EKey(): boolean {
