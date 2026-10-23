@@ -8,7 +8,9 @@ import {
 } from '../../../platform/db/images';
 import type { ImageUse } from '../../../platform/db/images';
 import type { ImpDatabase } from '../../../platform/db/open-database';
+import type { Clock } from '../../../platform/process/clock';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { StorageBackend } from '../../../vm/storage/storage-backend';
 import type { StorageGate } from '../../../vm/storage/storage-gate';
 import type { ImpsConfig } from '../../imps-config';
@@ -28,12 +30,11 @@ export interface ImageEvictionDeps {
   readonly storageGate: Pick<StorageGate, 'join'>;
   readonly removeIdleImage: ImageWriter['removeIdleImage'];
   readonly removeIdleRootfs: ImageWriter['removeIdleRootfs'];
-  readonly log: (message: string) => void;
-  readonly now?: () => number;
+  readonly clock: Pick<Clock, 'now'>;
 }
 
 export function createImageEviction(deps: ImageEvictionDeps): ImageEviction {
-  const now = deps.now ?? Date.now;
+  const logger = getImpdLogger('image');
 
   const removeImage = async (use: Readonly<ImageUse>): Promise<void> => {
     try {
@@ -44,12 +45,17 @@ export function createImageEviction(deps: ImageEvictionDeps): ImageEviction {
       if (isRemoved) {
         await removeImageRemoval(deps.db, use.digest);
 
-        deps.log(
-          `impd: image eviction: removed ${use.name} (${formatBytes(use.sizeBytes)}, last used ${new Date(use.lastUsedAt).toISOString()})`,
-        );
+        logger.info('image eviction: removed {name} ({size}, last used {lastUsedAt})', {
+          name: use.name,
+          size: formatBytes(use.sizeBytes),
+          lastUsedAt: new Date(use.lastUsedAt).toISOString(),
+        });
       }
     } catch (error) {
-      deps.log(`impd: image eviction: could not remove ${use.name}: ${getErrorMessage(error)}`);
+      logger.warning('image eviction: could not remove {name}: {error}', {
+        name: use.name,
+        error: getErrorMessage(error),
+      });
     }
   };
 
@@ -64,8 +70,9 @@ export function createImageEviction(deps: ImageEvictionDeps): ImageEviction {
           await removeImageRemoval(deps.db, digest);
         }
       } catch (error) {
-        deps.log(
-          `impd: image eviction: could not remove the rootfs of ${digest}, and tries again at the next image write: ${getErrorMessage(error)}`,
+        logger.warning(
+          'image eviction: could not remove the rootfs of {digest}, and tries again at the next image write: {error}',
+          { digest, error: getErrorMessage(error) },
         );
       }
     }
@@ -80,7 +87,7 @@ export function createImageEviction(deps: ImageEvictionDeps): ImageEviction {
       return;
     }
 
-    const at = now();
+    const at = deps.clock.now();
 
     const uses = await listImageUses(deps.db);
 

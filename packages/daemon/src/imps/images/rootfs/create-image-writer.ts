@@ -4,7 +4,9 @@ import * as z from 'zod';
 import type { ImageRecord } from '../../../platform/db/images';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import { buildConflictError } from '../../../platform/errors/impd-errors';
+import type { Clock } from '../../../platform/process/clock';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
 import { runChecked, runCommand } from '../../../platform/process/run-command';
 import { createSingleFlight } from '../../../platform/process/single-flight';
@@ -72,11 +74,10 @@ interface ImageWriterDeps {
   readonly storageGate: StorageGate;
 
   readonly diskBudget: Pick<DiskBudget, 'withRoom' | 'withGrowingRoom'>;
-  readonly log: (message: string) => void;
 
   readonly dockerEnv?: Readonly<Record<string, string>>;
 
-  readonly now?: () => number;
+  readonly clock: Pick<Clock, 'now'>;
 }
 
 interface GuestRootfs {
@@ -90,7 +91,7 @@ interface GuestRootfs {
 
 export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   const storageGate = deps.storageGate;
-  const now = deps.now ?? Date.now;
+  const logger = getImpdLogger('image');
   const building = createSingleFlight<number>();
 
   const publishers = new Map<string, number>();
@@ -197,7 +198,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     digest: string,
     sizeBytes: number,
   ): Promise<ImageRecord> => {
-    const at = now();
+    const at = deps.clock.now();
 
     const existing = await readHeldImage(deps.db, imageName, at);
 
@@ -271,8 +272,13 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
       try {
         await removeUnusedRootfs(deps.db, deps.storage, digest);
       } catch (error) {
-        deps.log(
-          `impd: image ${imageName}: could not remove the unused rootfs of ${digest}: ${getErrorMessage(error)}`,
+        logger.warning(
+          'image {imageName}: could not remove the unused rootfs of {digest}: {error}',
+          {
+            imageName,
+            digest,
+            error: getErrorMessage(error),
+          },
         );
       }
     });

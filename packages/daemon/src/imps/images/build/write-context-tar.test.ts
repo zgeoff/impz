@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { listLocalEntries } from '@impz/local-tar';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { writeContextTar } from './write-context-tar';
 
 async function setupTest() {
@@ -80,6 +81,26 @@ test('it writes the tar readable by impd alone', async () => {
   await writeContextTar(entries, join(ctx.directoryPath, 'context.tar'));
 
   expect(statSync(join(ctx.directoryPath, 'context.tar')).mode & 0o777).toBe(0o600);
+});
+
+test('it warns of an entry it leaves out of the tar', async () => {
+  const ctx = await setupTest();
+
+  const logs = captureImpdLogs();
+  const context = join(ctx.directoryPath, 'context');
+
+  mkdirSync(context);
+  writeFileSync(join(context, 'Dockerfile'), 'FROM scratch\n');
+
+  Bun.spawnSync(['mkfifo', join(context, 'pipe')]);
+
+  const entries = await listLocalEntries(context);
+
+  await writeContextTar(entries, join(ctx.directoryPath, 'context.tar'));
+
+  expect(logs).toStrictEqual([
+    `WARNING impd.image image build context: ${context}/pipe: not a file, directory or symlink; left out`,
+  ]);
 });
 
 test('it refuses a path that exists already', async () => {

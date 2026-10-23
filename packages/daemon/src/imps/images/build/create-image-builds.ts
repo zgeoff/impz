@@ -12,6 +12,8 @@ import {
 } from '@impz/local-tar';
 import type { ImageRecord } from '../../../platform/db/images';
 import { ImpdError } from '../../../platform/errors/impd-error';
+import type { Clock } from '../../../platform/process/clock';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildUploadsDir } from '../../../vm/storage/data-layout';
 import type { DiskBudget } from '../../../vm/storage/disk-budget';
 import { checkReferenceRegistry } from '../../docker-contract/check-registry';
@@ -76,13 +78,13 @@ interface ImageBuildsDeps {
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
 
   readonly readBuilders: () => Builders | null;
-  readonly log: (message: string) => void;
 
-  readonly now?: () => number;
+  readonly clock: Pick<Clock, 'now'>;
 }
 
 export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): ImageBuilds {
-  const buildRuns = createBuildRuns(deps.now ?? Date.now);
+  const logger = getImpdLogger('image');
+  const buildRuns = createBuildRuns(() => deps.clock.now());
   const buildSlots = createBuildSlots();
 
   const resolvePinnedDockerfile = async (
@@ -192,9 +194,11 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
           const pinList = pinned.pins.map((pin) => `${pin.use} ${pin.ref} as ${pin.pin}`);
 
-          deps.log(
-            `impd: image build ${name}: image store ${pinned.store}; pinned ${pinList.join(', ') || 'no image'}`,
-          );
+          logger.info('image build {name}: image store {store}; pinned {pins}', {
+            name,
+            store: pinned.store,
+            pins: pinList.join(', ') || 'no image',
+          });
 
           signal.throwIfAborted();
 
@@ -220,11 +224,11 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
         return builders.withBuilder(signal, async (exec, builderName) => {
           options.setBuilder?.(builderName);
-          const started = performance.now();
+          const started = deps.clock.now();
 
           await writePinnedContext(createBuildEngine(toEngineRun(exec)));
 
-          const pinned = performance.now();
+          const pinned = deps.clock.now();
 
           await runGuestBuild(exec, {
             tarPath: rewrittenPath,
@@ -233,7 +237,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
             output: options.output,
           });
 
-          const ran = performance.now();
+          const ran = deps.clock.now();
 
           options.setPhase?.('unpack');
 
@@ -241,11 +245,14 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
           const pinsMs = Math.round(pinned - started);
           const buildMs = Math.round(ran - pinned);
-          const imageMs = Math.round(performance.now() - ran);
+          const imageMs = Math.round(deps.clock.now() - ran);
 
-          deps.log(
-            `impd: image build ${name}: pins=${String(pinsMs)}ms build=${String(buildMs)}ms image=${String(imageMs)}ms`,
-          );
+          logger.info('image build {name}: pins={pinsMs}ms build={buildMs}ms image={imageMs}ms', {
+            name,
+            pinsMs,
+            buildMs,
+            imageMs,
+          });
 
           return image;
         });

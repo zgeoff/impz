@@ -8,7 +8,10 @@ import {
   buildInvalidStateError,
   buildNotBackedUpError,
 } from '../../platform/errors/impd-errors';
+import type { Clock } from '../../platform/process/clock';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { printLog } from '../../platform/process/print-log';
+import { REAL_CLOCK } from '../../platform/process/real-clock';
 import type { DiskFreezer } from '../../vm/checkpoints/consistent-disk';
 import { createConsistentDisk } from '../../vm/checkpoints/consistent-disk';
 import { buildImagePaths } from '../../vm/storage/data-layout';
@@ -39,20 +42,19 @@ interface TemplateServiceDeps {
 
   readonly diskBudget: Pick<DiskBudget, 'requireRoom'>;
   readonly runImageEviction: () => Promise<void>;
-  readonly now?: () => number;
+  readonly clock?: Pick<Clock, 'now'>;
   readonly log?: (message: string) => void;
   readonly freezer?: DiskFreezer;
 }
 
 export function createTemplateService(deps: TemplateServiceDeps): TemplateService {
-  const log = deps.log ?? printLog;
-  const now = deps.now ?? Date.now;
+  const clock = deps.clock ?? REAL_CLOCK;
   const storage = deps.storage;
 
   const withConsistentDisk = createConsistentDisk({
     storage,
     imps: deps.imps,
-    log,
+    log: deps.log ?? printLog,
     freezer: deps.freezer,
   });
 
@@ -94,7 +96,7 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
           );
         }
 
-        const existing = await readHeldImage(deps.db, name, now());
+        const existing = await readHeldImage(deps.db, name, clock.now());
 
         if (existing !== undefined && existing.source !== 'imp') {
           throw buildConflictError(
@@ -104,7 +106,7 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
           );
         }
 
-        const started = performance.now();
+        const started = clock.now();
         const digest = `${TEMPLATE_DIGEST_PREFIX}${Bun.randomUUIDv7()}`;
 
         await storage.createImageFromImp(digest, imp.id, {
@@ -125,7 +127,7 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
             sourceImp: imp.name,
             sizeBytes: statSync(rootfs).blocks * 512,
           },
-          now(),
+          clock.now(),
         ).catch(async (error: unknown) => {
           await storage.removeImage(digest);
 
@@ -136,9 +138,11 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
           await removeUnusedRootfs(deps.db, storage, existing.digest);
         }
 
-        const durationMs = Math.round(performance.now() - started);
+        const durationMs = Math.round(clock.now() - started);
 
-        log(`impd: ${imp.name}: template ${name} in ${String(durationMs)}ms`);
+        getImpdLogger('image')
+          .with({ imp: imp.name })
+          .info('template {name} in {durationMs}ms', { name, durationMs });
 
         return image;
       }),

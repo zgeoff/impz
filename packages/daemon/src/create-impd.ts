@@ -233,7 +233,6 @@ async function startImpdParts(
     db,
     imps: { ...imps, ...deps.agent },
     ensureImage: stored.images.ensureBuilderImage,
-    log,
     testRegistry: firewall.testRegistry,
   });
 
