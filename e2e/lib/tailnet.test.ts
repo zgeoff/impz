@@ -5,7 +5,6 @@ import {
   isTailnetReady,
   parseSelfTags,
   parseTailscaleStatus,
-  parseWgetStatus,
   readTailnetMember,
   requireTailnetReady,
 } from './tailnet';
@@ -161,28 +160,6 @@ test('#findTailnetNode gives null for a peer without a MagicDNS name', () => {
   const peers = [{ DNSName: '', TailscaleIPs: ['100.64.0.7'], Online: true }];
 
   expect(findTailnetNode(peers, '100.64.0.7')).toBeNull();
-});
-
-test('#parseWgetStatus reads the status of a response wget printed with its headers', () => {
-  const stderr = '  HTTP/1.1 200 OK\n  Content-Type: application/json\n  Connection: close\n  \n';
-
-  expect(parseWgetStatus(stderr)).toBe(200);
-});
-
-test('#parseWgetStatus reads an error status that wget refused the body of', () => {
-  const stderr = '  HTTP/1.1 403 Forbidden\nwget: server returned error: HTTP/1.1 403 Forbidden\n';
-
-  expect(parseWgetStatus(stderr)).toBe(403);
-});
-
-test('#parseWgetStatus reads the last response after a redirect', () => {
-  const stderr = '  HTTP/1.1 302 Found\n  Location: /rpc/tokens/whoami\n  HTTP/1.1 200 OK\n';
-
-  expect(parseWgetStatus(stderr)).toBe(200);
-});
-
-test('#parseWgetStatus gives null when wget reached no server', () => {
-  expect(parseWgetStatus('wget: download timed out\n')).toBeNull();
 });
 
 test('#readTailnetMember names the member container the harness started', () => {

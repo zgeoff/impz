@@ -1,12 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { createImpClient } from '@impz/client';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { createInstanceClient, runImp } from '../lib/imp-cli';
 import { waitForExec } from '../lib/imps';
+import { runCommand } from '../lib/instance';
+import { makeMemberFetch } from '../lib/make-member-fetch';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
-import { readTailnetMember, sendMemberRpc, waitForTailnetIp } from '../lib/tailnet';
+import { readTailnetMember, waitForTailnetIp } from '../lib/tailnet';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -30,11 +33,19 @@ test('it lets a tailnet member a rule names reach the API without a token, with 
   await waitForExec(name);
 
   const ip = await waitForTailnetIp();
-  const whoami = await sendMemberRpc(ctx.member, ip, 'tokens/whoami', {});
-  const stop = await sendMemberRpc(ctx.member, ip, 'imps/stop', { name });
 
-  const identity: unknown = JSON.parse(whoami.body);
+  const member = createImpClient({
+    url: `http://${ip}:7070`,
+    fetch: makeMemberFetch(ctx.member, { runCommand }),
+  });
 
-  expect(identity).toMatchObject({ json: { kind: 'tailnet', scope: 'read', imps: null } });
-  expect(stop.status).toBe(403);
+  const identity = await member.tokens.whoami();
+
+  const stop = await member.imps.stop({ name }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(identity).toMatchObject({ kind: 'tailnet', scope: 'read', imps: null });
+  expect(stop).toMatchObject({ code: 'FORBIDDEN', status: 403 });
 });
