@@ -1,7 +1,9 @@
 import { listImps } from '../../../platform/db/imps';
 import type { ImpDatabase } from '../../../platform/db/open-database';
-import type { StartTimer } from '../../../platform/process/clock';
+import type { Clock, StartTimer } from '../../../platform/process/clock';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
+import { REAL_CLOCK } from '../../../platform/process/real-clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
 import type { ImpsConfig } from '../../imps-config';
 import type { ImpService } from '../../imps/imp-service';
@@ -38,30 +40,26 @@ export interface BuildersDeps {
   readonly imps: Pick<ImpService, 'createImp' | 'destroyImpId' | 'openBuilderExec'>;
 
   readonly ensureImage: (signal: AbortSignal) => Promise<void>;
-  readonly log: (message: string) => void;
 
   readonly testRegistry?: BuilderTestRegistry | null;
 
   readonly startTimer?: StartTimer;
 
-  readonly engineClock?: EngineClock;
+  readonly clock?: Pick<Clock, 'now' | 'sleep'>;
+
+  readonly pickBuilderName?: () => string;
 }
 
-function pickBuilderName(): string {
-  const picks = Array.from({ length: 8 }, () => Math.random() * NAME_ALPHABET.length);
+function pickRandomBuilderName(): string {
+  const picks = crypto.getRandomValues(new Uint8Array(8));
 
-  return `imp-build-${picks.map((pick) => NAME_ALPHABET[Math.floor(pick)]).join('')}`;
-}
-
-interface EngineClock {
-  readonly now: () => number;
-  readonly wait: (durationMs: number) => Promise<void>;
+  return `imp-build-${[...picks].map((pick) => NAME_ALPHABET[pick % NAME_ALPHABET.length]).join('')}`;
 }
 
 async function waitForEngine(
   exec: GuestExec,
   signal: AbortSignal,
-  clock: Readonly<EngineClock>,
+  clock: Pick<Clock, 'now' | 'sleep'>,
 ): Promise<void> {
   const deadline = clock.now() + ENGINE_READY_MS;
 
@@ -81,7 +79,7 @@ async function waitForEngine(
       );
     }
 
-    await clock.wait(ENGINE_POLL_MS);
+    await clock.sleep(ENGINE_POLL_MS);
   }
 }
 
@@ -125,7 +123,9 @@ export function createBuilders(deps: BuildersDeps): Builders {
   const startTimer: StartTimer =
     deps.startTimer ?? ((fire, durationMs) => startRealTimer(fire, durationMs, { isUnref: true }));
 
-  const engineClock = deps.engineClock ?? { now: Date.now, wait: Bun.sleep };
+  const clock = deps.clock ?? REAL_CLOCK;
+  const pickBuilderName = deps.pickBuilderName ?? pickRandomBuilderName;
+  const logger = getImpdLogger('image');
 
   const retrying = new Set<string>();
 
@@ -135,8 +135,9 @@ export function createBuilders(deps: BuildersDeps): Builders {
 
       return true;
     } catch (error) {
-      deps.log(
-        `impd: image build: ERROR: builder ${name} survives its removal, tried again every ${String(REMOVE_RETRY_MS / 1000)} s: ${getErrorMessage(error)}`,
+      logger.error(
+        'image build: builder {name} survives its removal, tried again every {retryS} s: {error}',
+        { name, retryS: REMOVE_RETRY_MS / 1000, error: getErrorMessage(error) },
       );
 
       return false;
@@ -155,7 +156,7 @@ export function createBuilders(deps: BuildersDeps): Builders {
 
       if (gone) {
         retrying.delete(id);
-        deps.log(`impd: image build: removed builder ${name}`);
+        logger.info('image build: removed builder {name}', { name });
 
         return;
       }
@@ -182,7 +183,7 @@ export function createBuilders(deps: BuildersDeps): Builders {
 
       const id = Bun.randomUUIDv7();
       const name = pickBuilderName();
-      const started = performance.now();
+      const started = clock.now();
 
       try {
         await deps.imps.createImp({
@@ -197,15 +198,15 @@ export function createBuilders(deps: BuildersDeps): Builders {
 
         const exec = createGuestExec((request) => deps.imps.openBuilderExec(name, request));
 
-        await waitForEngine(exec, signal, engineClock);
+        await waitForEngine(exec, signal, clock);
 
         if (deps.testRegistry !== undefined && deps.testRegistry !== null) {
           await writeTestRegistry(exec, deps.testRegistry, signal);
         }
 
-        const readyMs = Math.round(performance.now() - started);
+        const readyMs = Math.round(clock.now() - started);
 
-        deps.log(`impd: image build: builder ${name} ready in ${String(readyMs)}ms`);
+        logger.info('image build: builder {name} ready in {readyMs}ms', { name, readyMs });
 
         return await run(exec, name);
       } finally {
@@ -216,7 +217,7 @@ export function createBuilders(deps: BuildersDeps): Builders {
       const imps = await listImps(deps.db);
 
       for (const imp of imps.filter((each) => each.kind === 'builder')) {
-        deps.log(`impd: removing builder ${imp.name}, which a stopped impd left`);
+        logger.info('removing builder {name}, which a stopped impd left', { name: imp.name });
 
         await removeBuilder(imp.id, imp.name);
       }

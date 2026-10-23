@@ -1,7 +1,6 @@
 import { chmodSync, rmSync } from 'node:fs';
 import { loadOrCreateToken } from '../../identity/token';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { printLog } from '../../platform/process/print-log';
 import { setupLogging } from '../../platform/process/setup-logging';
 import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from '../docker-contract/build-image';
 import { CREATE_BODY_MAX_BYTES, createDockerProxy } from './proxy';
@@ -50,7 +49,6 @@ function main(): void {
     token: loadOrCreateToken(stateDir),
     hostImage,
     builderImage,
-    log: printLog,
   });
 
   rmSync(listen, { force: true });
@@ -70,7 +68,8 @@ function main(): void {
   chmodSync(listen, 0o600);
 
   getImpdLogger('docker-proxy').info(
-    `imp-docker-proxy on ${listen}, engine ${upstreamSocket}, host image ${hostImage}, pulls only ${builderImage}, no builds`,
+    'imp-docker-proxy on {listen}, engine {upstreamSocket}, host image {hostImage}, pulls only {builderImage}, no builds',
+    { listen, upstreamSocket, hostImage, builderImage },
   );
 
   const stop = async (): Promise<void> => {

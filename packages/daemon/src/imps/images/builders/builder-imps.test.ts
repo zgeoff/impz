@@ -11,6 +11,7 @@ import {
 } from '../../../../testing/imps/build-stub-image-builder';
 import { createBuilderImage } from '../../../../testing/imps/create-builder-image';
 import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../../testing/start-test-impd';
 import { buildStubGuest } from '../../../../testing/vm/build-stub-guest';
 import { createImage } from '../../../platform/db/images';
@@ -42,7 +43,6 @@ test('it gives a build a public builder of the build size', async () => {
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: () => {},
   });
 
   const builder = await builders.withBuilder(new AbortController().signal, async () => {
@@ -53,7 +53,7 @@ test('it gives a build a public builder of the build size', async () => {
 
   expect(builder).toMatchObject({
     kind: 'builder',
-    name: expect.stringMatching(/^imp-build-[a-z2-9]{8}$/v) as unknown,
+    name: expect.stringMatching(/^imp-build-[a-km-np-z2-9]{8}$/v) as unknown,
     memoryMib: 512,
     diskBytes: 4 * 1024 ** 3,
   });
@@ -74,7 +74,6 @@ test('it holds the public egress policy for the builder while the build runs', a
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: () => {},
   });
 
   const policy = await builders.withBuilder(new AbortController().signal, async () => {
@@ -103,7 +102,6 @@ test('it removes the builder and its egress policy when the build ends', async (
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: () => {},
   });
 
   const name = await builders.withBuilder(new AbortController().signal, async () => {
@@ -146,7 +144,6 @@ test('it adds the builder image before the builder starts', async () => {
 
       ensured.push(builderImage.name);
     },
-    log: () => {},
   });
 
   await builders.withBuilder(new AbortController().signal, () => Promise.resolve());
@@ -181,8 +178,7 @@ test('it asks the builder engine again, a poll later, until it answers, then run
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: () => {},
-    engineClock: { now: clock.now, wait: clock.sleep },
+    clock,
   });
 
   const ran = await builders.withBuilder(new AbortController().signal, async (exec) => {
@@ -201,6 +197,68 @@ test('it asks the builder engine again, a poll later, until it answers, then run
   ]);
 });
 
+test('it logs the time its builder took to answer, on its clock', async () => {
+  const ctx = await setupTest();
+
+  const logs = captureImpdLogs();
+  const infos = { count: 0 };
+
+  const guest = buildStubGuest((run) => {
+    if (run.argv[1] !== 'info') {
+      return { stdout: 'ok' };
+    }
+
+    infos.count += 1;
+
+    return infos.count === 1 ? { code: 1, stderr: 'Cannot connect to the Docker daemon' } : {};
+  });
+
+  const clock = buildStubClock();
+
+  const builders = createBuilders({
+    config: ctx.config,
+    db: ctx.db,
+    imps: {
+      ...ctx.impd.imps,
+      openBuilderExec: (_name, request) => guest.open(request),
+    },
+    ensureImage: async () => {
+      await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
+    },
+    clock,
+    pickBuilderName: () => 'imp-build-timed',
+  });
+
+  await builders.withBuilder(new AbortController().signal, () => Promise.resolve());
+
+  expect(logs).toContain('INFO impd.image image build: builder imp-build-timed ready in 500ms');
+});
+
+test('it names each builder with its name picker', async () => {
+  const ctx = await setupTest();
+
+  const guest = buildStubGuest(() => ({ stdout: 'ok' }));
+
+  const builders = createBuilders({
+    config: ctx.config,
+    db: ctx.db,
+    imps: {
+      ...ctx.impd.imps,
+      openBuilderExec: (_name, request) => guest.open(request),
+    },
+    ensureImage: async () => {
+      await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
+    },
+    pickBuilderName: () => 'imp-build-picked',
+  });
+
+  const name = await builders.withBuilder(new AbortController().signal, (_exec, builder) =>
+    Promise.resolve(builder),
+  );
+
+  expect(name).toBe('imp-build-picked');
+});
+
 test('it writes the test registry into the builder, once its engine answers and before the build runs', async () => {
   const ctx = await setupTest();
 
@@ -216,7 +274,6 @@ test('it writes the test registry into the builder, once its engine answers and 
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: () => {},
     testRegistry: {
       name: 'registry.example.test',
       address: '10.200.0.1',
@@ -268,7 +325,6 @@ test('it fails the build when the builder refuses the test registry, and removes
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: () => {},
     testRegistry: {
       name: 'registry.example.test',
       address: '10.200.0.1',
@@ -314,8 +370,7 @@ test('it fails the build when the builder engine does not answer in 60 s, and re
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: () => {},
-    engineClock: { now: clock.now, wait: clock.sleep },
+    clock,
   });
 
   const building = builders.withBuilder(new AbortController().signal, () =>
@@ -347,7 +402,6 @@ test('it removes the builder of a failed build and rethrows the build error', as
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: () => {},
   });
 
   const building = builders.withBuilder(new AbortController().signal, () =>
@@ -374,7 +428,6 @@ test('it removes the builders a stopped impd left, and never a user imp', async 
       openBuilderExec: (_name, request) => guest.open(request),
     },
     ensureImage: () => Promise.resolve(),
-    log: () => {},
   });
 
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
@@ -398,7 +451,7 @@ test('it keeps the build of a builder that survives its removal, and logs the su
 
   const guest = buildStubGuest(() => ({ stdout: 'ok' }));
   const timers = buildStubClock();
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const builders = createBuilders({
     config: ctx.config,
@@ -410,10 +463,8 @@ test('it keeps the build of a builder that survives its removal, and logs the su
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: (message) => {
-      logs.push(message);
-    },
     startTimer: timers.startTimer,
+    pickBuilderName: () => 'imp-build-survivor',
   });
 
   ctx.fake.queue('stop', 'fail');
@@ -428,9 +479,9 @@ test('it keeps the build of a builder that survives its removal, and logs the su
   expect(survivors.map((imp) => imp.kind)).toStrictEqual(['builder']);
   expect(timers.readPendingMs()).toStrictEqual([30_000]);
 
-  expect(logs).toSatisfyAny((line: string) =>
-    /^impd: image build: ERROR: builder imp-build-[a-z2-9]{8} survives its removal, tried again every 30 s: firecracker \d+ survived SIGKILL$/v.test(
-      line,
+  expect(logs).toContainEqual(
+    expect.stringMatching(
+      /^ERROR impd\.image image build: builder imp-build-survivor survives its removal, tried again every 30 s: firecracker \d+ survived SIGKILL$/v,
     ),
   );
 });
@@ -440,7 +491,7 @@ test('it removes a builder that survived its removal on a later retry', async ()
 
   const guest = buildStubGuest(() => ({ stdout: 'ok' }));
   const timers = buildStubClock();
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const builders = createBuilders({
     config: ctx.config,
@@ -452,10 +503,8 @@ test('it removes a builder that survived its removal on a later retry', async ()
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: (message) => {
-      logs.push(message);
-    },
     startTimer: timers.startTimer,
+    pickBuilderName: () => 'imp-build-survivor',
   });
 
   ctx.fake.queue('stop', 'fail');
@@ -467,9 +516,7 @@ test('it removes a builder that survived its removal on a later retry', async ()
   timers.firePending();
 
   await waitFor(() => {
-    expect(logs).toSatisfyAny((line: string) =>
-      /^impd: image build: removed builder imp-build-[a-z2-9]{8}$/v.test(line),
-    );
+    expect(logs).toContain('INFO impd.image image build: removed builder imp-build-survivor');
   });
 
   const imps = await listImps(ctx.db);
@@ -483,7 +530,7 @@ test('it retries the removal of a leftover builder that survives it at start', a
 
   const guest = buildStubGuest(() => ({ stdout: 'ok' }));
   const timers = buildStubClock();
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const builders = createBuilders({
     config: ctx.config,
@@ -493,9 +540,6 @@ test('it retries the removal of a leftover builder that survives it at start', a
       openBuilderExec: (_name, request) => guest.open(request),
     },
     ensureImage: () => Promise.resolve(),
-    log: (message) => {
-      logs.push(message);
-    },
     startTimer: timers.startTimer,
   });
 
@@ -521,12 +565,14 @@ test('it retries the removal of a leftover builder that survives it at start', a
   timers.firePending();
 
   await waitFor(() => {
-    expect(logs).toContain('impd: image build: removed builder imp-build-left');
+    expect(logs).toContain('INFO impd.image image build: removed builder imp-build-left');
   });
 
   const imps = await listImps(ctx.db);
 
-  const errors = logs.filter((line) => line.includes('ERROR: builder imp-build-left'));
+  const errors = logs.filter((line) =>
+    line.startsWith('ERROR impd.image image build: builder imp-build-left survives'),
+  );
 
   expect(imps).toStrictEqual([]);
   expect(errors).toHaveLength(2);
@@ -537,7 +583,7 @@ test('it never removes a user imp that took the id of a removed builder on a ret
 
   const guest = buildStubGuest(() => ({ stdout: 'ok' }));
   const timers = buildStubClock();
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const builders = createBuilders({
     config: ctx.config,
@@ -547,9 +593,6 @@ test('it never removes a user imp that took the id of a removed builder on a ret
       openBuilderExec: (_name, request) => guest.open(request),
     },
     ensureImage: () => Promise.resolve(),
-    log: (message) => {
-      logs.push(message);
-    },
     startTimer: timers.startTimer,
   });
 
@@ -581,7 +624,7 @@ test('it never removes a user imp that took the id of a removed builder on a ret
   timers.firePending();
 
   await waitFor(() => {
-    expect(logs).toContain('impd: image build: removed builder imp-build-left');
+    expect(logs).toContain('INFO impd.image image build: removed builder imp-build-left');
   });
 
   const imps = await listImps(ctx.db);
@@ -626,7 +669,6 @@ test('it ends an export over its file limit and removes its builder, with no cli
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: () => {},
   });
 
   const exporting = builders.withBuilder(new AbortController().signal, (exec) =>
@@ -684,7 +726,6 @@ test('it ends an export stopped while its exec opens, closes the exec and remove
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: () => {},
   });
 
   const exporting = builders.withBuilder(new AbortController().signal, (exec) =>
@@ -758,7 +799,6 @@ test('it leaves the imp that holds a name a builder create fails on', async () =
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    log: () => {},
   });
 
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');

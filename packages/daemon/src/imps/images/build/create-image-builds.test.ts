@@ -26,6 +26,7 @@ import { createStubImageMkfs } from '../../../../testing/imps/create-stub-image-
 import { createTreeTar } from '../../../../testing/imps/create-tree-tar';
 import { spawnSparseFilesTar } from '../../../../testing/imps/spawn-sparse-files-tar';
 import { buildQueryGate } from '../../../../testing/platform/build-query-gate';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { buildStubStoragePressure } from '../../../../testing/vm/build-stub-storage-pressure';
 import { startDiskSampler } from '../../../../testing/vm/start-disk-sampler';
 import { loadConfig } from '../../../config';
@@ -134,7 +135,6 @@ test('it pins, builds and exports in its builder, with no host engine call', asy
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -185,6 +185,42 @@ test('it pins, builds and exports in its builder, with no host engine call', asy
   ]);
 });
 
+test('it logs the pins of a build and the time of each phase on its clock', async () => {
+  const ctx = await setupTest();
+
+  const logged = captureImpdLogs();
+  const times = buildStubAnswerQueue([1000, 1250, 4250, 4250, 4750]);
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => builder.builders,
+    clock: { now: times.next },
+  });
+
+  await Bun.write(
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+  );
+
+  await images.buildImageFromContext(join(ctx.directoryPath, 'context.tar'), 'web', undefined, {
+    signal: new AbortController().signal,
+  });
+
+  expect(logged).toStrictEqual([
+    `INFO impd.image image build web: image store classic; pinned FROM base.test/a:1 as base.test/a@sha256:${'a'.repeat(64)}`,
+    'INFO impd.image image build web: pins=250ms build=3000ms image=500ms',
+  ]);
+});
+
 test('it builds in its builder, with no host engine call, under a leftover IMP_BUILD_ISOLATION=host', async () => {
   const ctx = await setupTest();
 
@@ -200,7 +236,6 @@ test('it builds in its builder, with no host engine call, under a leftover IMP_B
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -251,8 +286,7 @@ test('it lists an on-host build with its builder and step while it runs, and sen
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
-    now: () => Date.parse('2026-05-06T07:08:09.000Z'),
+    clock: { now: () => Date.parse('2026-05-06T07:08:09.000Z') },
   });
 
   await mkdir(join(ctx.directoryPath, 'context'));
@@ -314,7 +348,6 @@ test('it holds disk in 256 MiB steps as the export grows, not at the image cap',
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -346,7 +379,6 @@ test('it refuses with DISK_FULL an export that outgrows the free disk', async ()
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -383,7 +415,6 @@ test('it stops the export at the step the free disk refuses', async () => {
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -422,7 +453,6 @@ test('it releases the disk hold once a build succeeds', async () => {
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -448,7 +478,7 @@ test('it removes the least recently used images after a build under storage pres
     repoDigest: `sha256:${'a'.repeat(64)}`,
   });
 
-  const logged: string[] = [];
+  const logged = captureImpdLogs();
 
   const images = createImageService({
     config: loadConfig({
@@ -464,9 +494,6 @@ test('it removes the least recently used images after a build under storage pres
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: (message) => {
-      logged.push(message);
-    },
   });
 
   for (const [name, lastUsedAt] of [
@@ -523,9 +550,9 @@ test('it removes the least recently used images after a build under storage pres
   expect(existsSync(removedRootfs)).toBeFalse();
   expect(existsSync(usedRootfs)).toBeTrue();
 
-  expect(logged.filter((line) => line.startsWith('impd: image eviction:'))).toStrictEqual([
-    'impd: image eviction: removed web-3333333 (1.0 GiB, last used 2026-08-03T00:00:00.000Z)',
-    'impd: image eviction: removed web-4444444 (1.0 GiB, last used 2026-08-04T00:00:00.000Z)',
+  expect(logged.filter((line) => line.includes(' image eviction:'))).toStrictEqual([
+    'INFO impd.image image eviction: removed web-3333333 (1.0 GiB, last used 2026-08-03T00:00:00.000Z)',
+    'INFO impd.image image eviction: removed web-4444444 (1.0 GiB, last used 2026-08-04T00:00:00.000Z)',
   ]);
 });
 
@@ -547,7 +574,6 @@ test('it keeps every image after a build under storage pressure while no marks a
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111' }));
@@ -598,7 +624,6 @@ test('it keeps an old image that a build of the same digest rebuilds', async () 
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -649,8 +674,7 @@ test('it records the service clock as the last use of an image it builds', async
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
-    now: () => Date.parse('2030-01-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2030-01-01T00:00:00Z') },
   });
 
   await Bun.write(
@@ -714,7 +738,6 @@ test('it returns a row that still exists when an eviction reaches a same-digest 
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -798,7 +821,6 @@ test('it rebuilds an image under a new digest when an eviction reaches the build
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => holder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -887,7 +909,6 @@ test('it keeps an image while a build of another name publishes its digest', asy
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -949,7 +970,6 @@ test('it releases the disk hold when the export is over the file limit', async (
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -998,7 +1018,6 @@ test('it refuses an export over IMP_BUILD_IMAGE_MAX_FILES', async () => {
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1038,7 +1057,6 @@ test('it releases the disk hold when the free disk refuses the export', async ()
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1081,7 +1099,6 @@ test('it releases the disk hold when the client goes while the builder holds its
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1131,7 +1148,6 @@ test('it fails the build when the client goes while the builder holds its export
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1182,7 +1198,6 @@ test('it leaves no new row and no rootfs when a template takes the name during t
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1246,7 +1261,6 @@ test('it refuses a build whose name a template took during the build', async () 
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1293,7 +1307,6 @@ test('it keeps the rootfs another build of the digest is writing when its own ro
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1379,7 +1392,6 @@ test('it keeps the rootfs when an image rm runs while a build of its digest is b
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1457,7 +1469,6 @@ test("it removes that rootfs after all when the build's row then fails", async (
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1529,7 +1540,6 @@ test('it removes a rootfs whose write fails after it is published', async () => 
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1582,7 +1592,6 @@ test('it returns the error of a rootfs write that fails after it is published', 
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1621,7 +1630,6 @@ test('it leaves no row, rootfs or hold when the client goes while mkfs.ext4 runs
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1681,7 +1689,6 @@ test('it ends a stalled export over a limit at once, with its builder and its di
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1724,7 +1731,6 @@ test('it refuses a Dockerfile the input guard refuses', async () => {
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1758,7 +1764,6 @@ test('it boots no builder for a Dockerfile the input guard refuses', async () =>
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1807,7 +1812,6 @@ test("it changes no host file through a built image's image.json link", async ()
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1845,7 +1849,6 @@ test('it refuses an image whose /etc/imp is a link to a host directory', async (
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1891,7 +1894,6 @@ test('it writes nothing into the host directory an /etc/imp link names', async (
     storageGate: createStorageGate(),
     diskBudget: ctx.recordedBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   await Bun.write(
@@ -1979,7 +1981,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
           ),
       },
       readBuilders: () => builder.builders,
-      log: () => {},
     });
 
     await Bun.write(
@@ -2070,7 +2071,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
           ),
       },
       readBuilders: () => builder.builders,
-      log: () => {},
     });
 
     await Bun.write(
@@ -2159,7 +2159,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
           ),
       },
       readBuilders: () => builder.builders,
-      log: () => {},
     });
 
     await Bun.write(
@@ -2248,7 +2247,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
           ),
       },
       readBuilders: () => builder.builders,
-      log: () => {},
     });
 
     await Bun.write(
@@ -2341,7 +2339,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
           ),
       },
       readBuilders: () => builder.builders,
-      log: () => {},
     });
 
     await Bun.write(
@@ -2431,7 +2428,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
           ),
       },
       readBuilders: () => builder.builders,
-      log: () => {},
     });
 
     await Bun.write(
@@ -2525,7 +2521,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
           ),
       },
       readBuilders: () => builder.builders,
-      log: () => {},
     });
 
     await Bun.write(
@@ -2603,7 +2598,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       storageGate: createStorageGate(),
       diskBudget,
       readBuilders: () => builder.builders,
-      log: () => {},
     });
 
     await Bun.write(
@@ -2679,7 +2673,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       storageGate: createStorageGate(),
       diskBudget,
       readBuilders: () => builder.builders,
-      log: () => {},
     });
 
     await Bun.write(

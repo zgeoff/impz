@@ -66,7 +66,7 @@ test('it builds images/examples/hello from its pinned base in a builder, and the
 
   expect(digest).toStartWith('@sha256:');
   expect(log).toContain(`pinned FROM ${ref} as ghcr.io/zgeoff/imp-base${digest}`);
-  expect(log).toContain(`impd: image build ${name}: pins=`);
+  expect(log).toContain(`INFO impd.image image build ${name}: pins=`);
   expect(images).toContain(name);
 
   await runImp('new', name, '--image', name, '--memory', '1024');

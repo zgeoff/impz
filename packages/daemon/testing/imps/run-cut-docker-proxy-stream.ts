@@ -28,7 +28,6 @@ const server = Bun.serve({
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
     builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
-    log: () => {},
   }),
 });
 

@@ -1,4 +1,4 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { buildMockNewImage } from '../../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../../testing/imps/build-mock-new-imp';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../../testing/platform/create-test-database';
 import { buildStubFiemap } from '../../../../testing/vm/build-stub-fiemap';
 import { loadConfig } from '../../../config';
@@ -16,6 +17,7 @@ import {
   updateImagePin,
 } from '../../../platform/db/images';
 import { createImp } from '../../../platform/db/imps';
+import { REAL_CLOCK } from '../../../platform/process/real-clock';
 import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';
 import { createStorageGate } from '../../../vm/storage/storage-gate';
@@ -43,7 +45,7 @@ async function setupTest() {
       reserveBytes: null,
       log: () => {},
     }),
-    log: () => {},
+    clock: REAL_CLOCK,
   });
 
   return {
@@ -52,7 +54,7 @@ async function setupTest() {
     fiemap,
     storage,
     writer,
-    log: mock<(message: string) => void>(() => {}),
+    logs: captureImpdLogs(),
   };
 }
 
@@ -69,8 +71,7 @@ test('it keeps every image while no marks are set', async () => {
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2026-10-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
@@ -106,8 +107,7 @@ test('it keeps every image and measures none while usage is below the high mark'
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2026-10-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
@@ -140,8 +140,7 @@ test('it removes the least recently used images until usage falls under the low 
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2026-10-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
   });
 
   await createImage(
@@ -200,9 +199,9 @@ test('it removes the least recently used images until usage falls under the low 
   expect(existsSync(buildImagePaths(ctx.dataDir, 'sha256:1').rootfs)).toBeFalse();
   expect(existsSync(buildImagePaths(ctx.dataDir, 'sha256:2').rootfs)).toBeFalse();
 
-  expect(ctx.log.mock.calls).toStrictEqual([
-    ['impd: image eviction: removed web-1111111 (1.6 GiB, last used 2026-09-01T00:00:00.000Z)'],
-    ['impd: image eviction: removed web-2222222 (1.0 GiB, last used 2026-09-02T00:00:00.000Z)'],
+  expect(ctx.logs).toStrictEqual([
+    'INFO impd.image image eviction: removed web-1111111 (1.6 GiB, last used 2026-09-01T00:00:00.000Z)',
+    'INFO impd.image image eviction: removed web-2222222 (1.0 GiB, last used 2026-09-02T00:00:00.000Z)',
   ]);
 });
 
@@ -226,8 +225,7 @@ test('it counts the bytes a pool still frees in the background as available', as
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2026-10-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
@@ -268,8 +266,7 @@ test('it reads usage again after the measure, once the storage settled earlier r
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2026-10-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
@@ -312,8 +309,7 @@ test('it runs one more pass for an eviction asked for while a pass runs', async 
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2026-10-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
@@ -355,8 +351,7 @@ test('it runs a single pass for evictions asked for one after another', async ()
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2026-10-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
   });
 
   await eviction.runEviction();
@@ -383,8 +378,7 @@ test('it never removes an image an imp uses, a pinned image, or the image impd b
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2026-10-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
   });
 
   const used = await createImage(ctx.db, buildMockNewImage({ name: 'used', digest: 'sha256:1' }));
@@ -425,8 +419,7 @@ test('it records the eviction as the last use of each image an imp uses', async 
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2030-01-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2030-01-01T00:00:00Z') },
   });
 
   const used = await createImage(ctx.db, buildMockNewImage({ name: 'used' }));
@@ -466,8 +459,7 @@ test('it removes at the next run a rootfs whose removal failed after its row wen
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2026-10-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
@@ -481,7 +473,7 @@ test('it removes at the next run a rootfs whose removal failed after its row wen
 
   const failedRemovals = await listImageRemovals(ctx.db);
 
-  const failedLog = ctx.log.mock.calls.map((call) => call[0]);
+  const failedLog = [...ctx.logs];
 
   await rm(join(ctx.dataDir, 'images'));
   await mkdir(buildImagePaths(ctx.dataDir, 'sha256:1').directory, { recursive: true });
@@ -495,7 +487,7 @@ test('it removes at the next run a rootfs whose removal failed after its row wen
   expect(failedRemovals).toStrictEqual(['sha256:1']);
 
   expect(failedLog).toStrictEqual([
-    expect.toStartWith('impd: image eviction: could not remove web-1111111: '),
+    expect.toStartWith('WARNING impd.image image eviction: could not remove web-1111111: '),
   ]);
 
   expect(removals).toStrictEqual([]);
@@ -513,8 +505,7 @@ test('it keeps the rootfs of a removed image that a new image row uses again', a
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2026-10-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
   });
 
   await ctx.db.insertInto('image_removals').values({ digest: 'sha256:1', created_at: 0 }).execute();
@@ -541,8 +532,7 @@ test('it keeps the record of a removed rootfs while a publisher of its digest de
     storageGate: createStorageGate(),
     removeIdleImage: ctx.writer.removeIdleImage,
     removeIdleRootfs: ctx.writer.removeIdleRootfs,
-    log: ctx.log,
-    now: () => Date.parse('2026-10-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2026-10-01T00:00:00Z') },
   });
 
   await ctx.db.insertInto('image_removals').values({ digest: 'sha256:1', created_at: 0 }).execute();

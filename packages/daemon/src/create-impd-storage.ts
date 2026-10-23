@@ -41,8 +41,7 @@ export function createImpdStorage(config: Config, deps: Readonly<ImpdDeps>): Imp
     storageGate,
     diskBudget,
     readBuilders: () => buildersHolder.builders,
-    log,
-    ...(deps.now !== undefined && { now: deps.now }),
+    ...(deps.now !== undefined && { clock: { now: deps.now } }),
     ...deps.images,
   });
 

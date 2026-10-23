@@ -10,7 +10,10 @@ import type { ImageRecord } from '../../platform/db/images';
 import { countImpsUsingImage } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
+import type { Clock } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { REAL_CLOCK } from '../../platform/process/real-clock';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
@@ -50,7 +53,6 @@ export interface ImageServiceDeps {
   readonly diskBudget: Pick<DiskBudget, 'withRoom' | 'withGrowingRoom'>;
 
   readonly readBuilders: () => Builders | null;
-  readonly log: (message: string) => void;
 
   readonly builderImagePullMs?: number | undefined;
 
@@ -60,14 +62,14 @@ export interface ImageServiceDeps {
 
   readonly seedRef?: string | null;
 
-  readonly now?: () => number;
+  readonly clock?: Pick<Clock, 'now'>;
 }
 
 export function createImageService(deps: ImageServiceDeps): ImageService {
-  const writer = createImageWriter(deps);
-  const now = deps.now ?? Date.now;
-  const builds = createImageBuilds(deps, writer);
-  const adds = createImageAdds(deps, writer);
+  const clock = deps.clock ?? REAL_CLOCK;
+  const writer = createImageWriter({ ...deps, clock });
+  const builds = createImageBuilds({ ...deps, clock }, writer);
+  const adds = createImageAdds({ ...deps, clock }, writer);
 
   const eviction = createImageEviction({
     config: deps.config,
@@ -76,15 +78,14 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
     storageGate: deps.storageGate,
     removeIdleImage: writer.removeIdleImage,
     removeIdleRootfs: writer.removeIdleRootfs,
-    log: deps.log,
-    now,
+    clock,
   });
 
   const runEviction = async (): Promise<void> => {
     try {
       await eviction.runEviction();
     } catch (error) {
-      deps.log(`impd: image eviction: ${getErrorMessage(error)}`);
+      getImpdLogger('image').error('image eviction: {error}', { error: getErrorMessage(error) });
     }
   };
 
@@ -113,7 +114,7 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
 
     // The use goes in before the read, so an eviction either sees it and keeps the image, or
     // removed the image first and the read finds nothing.
-    await updateImageUse(deps.db, 'name', names, now());
+    await updateImageUse(deps.db, 'name', names, clock.now());
 
     const image =
       name === undefined ? await readDefaultImage() : await readImageByName(deps.db, name);
