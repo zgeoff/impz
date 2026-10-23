@@ -1,4 +1,4 @@
-import { eventIterator, oc } from '@orpc/contract';
+import { eventIterator } from '@orpc/contract';
 import * as z from 'zod';
 import { DockerfilePathSchema, ImageOpEventSchema } from '../protocols/image-build-protocol';
 import { ApiCallSchema } from '../schemas/api-call-schema';
@@ -68,11 +68,10 @@ import { SessionNameSchema, SessionSchema } from '../schemas/session-schema';
 import { DatabaseCopySchema, StorageGcSchema } from '../schemas/storage-schema';
 import { SystemFeaturesInfoSchema, SystemInfoSchema } from '../schemas/system-info-schema';
 import { ScopeSchema } from '../schemas/token-schema';
-import { IMP_ERRORS } from './imp-errors';
+import { ACCESS } from './access';
+import { contractBase as base } from './contract-base';
 import { impsContract } from './imps-contract';
 import { tokensContract } from './tokens-contract';
-
-const base = oc.errors(IMP_ERRORS);
 
 // A lease labelled `hold` never blocks a sleep, so it would hold nothing.
 const LeaseInputSchema = z.object({
@@ -105,21 +104,26 @@ export const callerContract = {
   imps: impsContract,
 
   leases: {
-    acquire: base.input(LeaseInputSchema).output(LeaseSchema),
+    acquire: base.meta(ACCESS.execImp).input(LeaseInputSchema).output(LeaseSchema),
 
-    renew: base.input(LeaseInputSchema).output(LeaseSchema),
+    renew: base.meta(ACCESS.execImp).input(LeaseInputSchema).output(LeaseSchema),
 
     release: base
+      .meta(ACCESS.execImp)
       .input(z.object({ name: NameSchema, label: LeaseLabelSchema }))
       .output(z.object({ released: z.boolean() })),
 
     list: base
+      .meta({ access: { scope: 'exec', on: 'any', audit: false } })
       .input(z.object({ name: NameSchema.optional(), label: LeaseLabelSchema.optional() }))
       .output(z.array(LeaseSchema)),
   },
 
+  // a move hands the whole imp, its disk and checkpoints, to another host;
+  // on the target a ticket takes in an image and grants, which are host-wide
   moves: {
     prepare: base
+      .meta(ACCESS.manageImpNoGrantable)
       .input(
         z.object({
           name: NameSchema,
@@ -132,9 +136,10 @@ export const callerContract = {
       )
       .output(MovePlanSchema),
 
-    facts: base.output(WarmHostSchema),
+    facts: base.meta(ACCESS.manageHost).output(WarmHostSchema),
 
     receive: base
+      .meta(ACCESS.manageHost)
       .input(
         z.object({
           name: NameSchema,
@@ -145,40 +150,55 @@ export const callerContract = {
       .output(MoveTicketSchema),
 
     send: base
+      .meta(ACCESS.manageImpNoGrantable)
       .input(z.object({ name: NameSchema, to: PeerUrlSchema, ticket: z.string() }))
       .output(MoveStatusSchema),
 
-    status: base.input(z.object({ name: NameSchema })).output(MoveStatusSchema),
+    status: base
+      .meta(ACCESS.readImp)
+      .input(z.object({ name: NameSchema }))
+      .output(MoveStatusSchema),
 
-    reissue: base.input(z.object({ name: NameSchema })).output(MoveTicketSchema),
+    reissue: base
+      .meta(ACCESS.manageHost)
+      .input(z.object({ name: NameSchema }))
+      .output(MoveTicketSchema),
 
     resume: base
+      .meta(ACCESS.manageImpNoGrantable)
       .input(z.object({ name: NameSchema, ticket: z.string().optional() }))
       .output(MoveStatusSchema),
 
-    abort: base.input(z.object({ name: NameSchema })).output(MoveStatusSchema),
+    abort: base
+      .meta(ACCESS.manageImp)
+      .input(z.object({ name: NameSchema }))
+      .output(MoveStatusSchema),
   },
 
   checkpoints: {
-    create: base.input(CheckpointCreateInputSchema).output(CheckpointSchema),
+    create: base.meta(ACCESS.manageImp).input(CheckpointCreateInputSchema).output(CheckpointSchema),
 
-    list: base.input(NameInputSchema).output(z.array(CheckpointSchema)),
+    list: base.meta(ACCESS.readImp).input(NameInputSchema).output(z.array(CheckpointSchema)),
 
     restore: base
+      .meta(ACCESS.manageImp)
       .input(z.object({ name: NameSchema, checkpoint: CheckpointRefSchema }))
       .output(ImpSchema),
 
     delete: base
+      .meta(ACCESS.manageImp)
       .input(z.object({ name: NameSchema, checkpoint: CheckpointRefSchema }))
       .output(EmptySchema),
   },
 
+  // a backup holds every imp; a restore can replace any of them
   backups: {
-    run: base.output(BackupRunSchema),
+    run: base.meta(ACCESS.manageHost).output(BackupRunSchema),
 
-    list: base.output(BackupStatusSchema),
+    list: base.meta(ACCESS.readHost).output(BackupStatusSchema),
 
     restore: base
+      .meta(ACCESS.manageHost)
       .input(
         z.object({
           name: NameSchema.optional(),
@@ -192,53 +212,80 @@ export const callerContract = {
       )
       .output(BackupRestoreSchema),
 
-    check: base.input(z.object({ subset: BackupCheckSubsetSchema.optional() })).output(EmptySchema),
+    check: base
+      .meta(ACCESS.manageHost)
+      .input(z.object({ subset: BackupCheckSubsetSchema.optional() }))
+      .output(EmptySchema),
   },
 
   images: {
-    list: base.output(z.array(ImageSchema)),
+    list: base.meta(ACCESS.readAny).output(z.array(ImageSchema)),
 
-    add: base.input(ImageAddInputSchema).output(ImageSchema),
+    // an image is the host's, but a token for some imps may add one under
+    // its own names from the registry path it was given; a build or a
+    // template stays host-wide
+    add: base.meta(ACCESS.manageImage).input(ImageAddInputSchema).output(ImageSchema),
 
-    build: base.input(ImageBuildInputSchema).output(ImageSchema),
+    build: base.meta(ACCESS.manageHost).input(ImageBuildInputSchema).output(ImageSchema),
 
-    addStream: base.input(ImageAddInputSchema).output(eventIterator(ImageOpEventSchema)),
-    buildStream: base.input(ImageBuildInputSchema).output(eventIterator(ImageOpEventSchema)),
+    addStream: base
+      .meta({ access: { scope: 'manage', on: 'image', audit: 'refusals' } })
+      .input(ImageAddInputSchema)
+      .output(eventIterator(ImageOpEventSchema)),
+    buildStream: base
+      .meta({ access: { scope: 'manage', on: 'host', audit: 'refusals' } })
+      .input(ImageBuildInputSchema)
+      .output(eventIterator(ImageOpEventSchema)),
 
-    builds: base.output(z.array(ImageBuildRunSchema)),
+    // a running build's steps show its Dockerfile's commands: host-wide
+    builds: base.meta(ACCESS.readHost).output(z.array(ImageBuildRunSchema)),
 
-    delete: base.input(NameInputSchema).output(EmptySchema),
+    delete: base.meta(ACCESS.manageHost).input(NameInputSchema).output(EmptySchema),
 
-    pin: base.input(NameInputSchema).output(ImageSchema),
-    unpin: base.input(NameInputSchema).output(ImageSchema),
+    pin: base.meta(ACCESS.manageHost).input(NameInputSchema).output(ImageSchema),
+    unpin: base.meta(ACCESS.manageHost).input(NameInputSchema).output(ImageSchema),
   },
 
   exec: {
     ticket: base
+      .meta({ access: { scope: 'exec', on: 'imp', fields: ['name'], audit: false } })
       .input(NameInputSchema)
       .output(z.object({ ticket: z.string(), expiresAt: z.date() })),
   },
 
   sessions: {
-    list: base.input(NameInputSchema).output(z.array(SessionSchema)),
+    list: base.meta(ACCESS.readImp).input(NameInputSchema).output(z.array(SessionSchema)),
 
     kill: base
+      .meta(ACCESS.execImp)
       .input(z.object({ name: NameSchema, session: SessionNameSchema }))
       .output(EmptySchema),
 
-    logs: base.input(SessionLogListInputSchema).output(z.array(SessionLogSchema)),
+    // a session's output can hold anything its program printed: reading or
+    // deleting it is for those who may attach, and each read is audited
+    logs: base
+      .meta(ACCESS.readImp)
+      .input(SessionLogListInputSchema)
+      .output(z.array(SessionLogSchema)),
 
-    readLog: base.input(SessionLogReadInputSchema).output(SessionLogReadSchema),
+    readLog: base
+      .meta(ACCESS.execImp)
+      .input(SessionLogReadInputSchema)
+      .output(SessionLogReadSchema),
 
     deleteLog: base
+      .meta(ACCESS.execImp)
       .input(SessionLogDeleteInputSchema)
       .output(z.object({ deleted: z.int().nonnegative() })),
   },
 
+  // a service runs a command as an exec does, and its log can hold
+  // anything the command prints
   services: {
-    list: base.input(NameInputSchema).output(ServiceListSchema),
+    list: base.meta(ACCESS.readImp).input(NameInputSchema).output(ServiceListSchema),
 
     add: base
+      .meta(ACCESS.execImp)
       .input(
         z.object({
           name: NameSchema,
@@ -249,14 +296,17 @@ export const callerContract = {
       .output(EmptySchema),
 
     remove: base
+      .meta(ACCESS.execImp)
       .input(z.object({ name: NameSchema, service: ServiceNameSchema }))
       .output(EmptySchema),
 
     restart: base
+      .meta(ACCESS.execImp)
       .input(z.object({ name: NameSchema, service: ServiceNameSchema }))
       .output(EmptySchema),
 
     logs: base
+      .meta(ACCESS.execImp)
       .input(
         z.object({
           name: NameSchema,
@@ -268,18 +318,24 @@ export const callerContract = {
       .output(eventIterator(ServiceLogSchema)),
   },
 
+  // whoever may run a command in the imp may write a file there as root
   files: {
     write: base
+      .meta(ACCESS.execImp)
       .input(z.object({ name: NameSchema, path: FilePathSchema, content: FileContentSchema }))
       .output(z.object({ path: z.string() })),
 
     remove: base
+      .meta(ACCESS.execImp)
       .input(z.object({ name: NameSchema, path: FilePathSchema }))
       .output(z.object({ removed: z.boolean() })),
   },
 
+  // secrets belong to the host: a grant hands one to an imp, so a token
+  // limited to some imps could grant itself any secret
   secrets: {
     add: base
+      .meta(ACCESS.manageHost)
       .input(
         z.object({
           name: SecretNameSchema,
@@ -293,29 +349,44 @@ export const callerContract = {
       )
       .output(SecretAddedSchema),
 
-    list: base.output(z.array(SecretSchema)),
+    list: base.meta(ACCESS.readAny).output(z.array(SecretSchema)),
 
-    refresh: base.input(z.object({ name: SecretNameSchema })).output(SecretSchema),
+    refresh: base
+      .meta(ACCESS.manageHost)
+      .input(z.object({ name: SecretNameSchema }))
+      .output(SecretSchema),
 
-    delete: base.input(z.object({ name: SecretNameSchema })).output(EmptySchema),
+    delete: base
+      .meta(ACCESS.manageHost)
+      .input(z.object({ name: SecretNameSchema }))
+      .output(EmptySchema),
   },
 
+  // a member reaches every other imp on the network, so a token limited to
+  // some imps could reach past them; list shows the caller's imps only
   networks: {
-    list: base.output(z.array(NetworkSchema)),
+    list: base.meta(ACCESS.readAny).output(z.array(NetworkSchema)),
 
-    create: base.input(NameInputSchema).output(NetworkSchema),
+    create: base.meta(ACCESS.manageHost).input(NameInputSchema).output(NetworkSchema),
 
-    delete: base.input(NameInputSchema).output(EmptySchema),
+    delete: base.meta(ACCESS.manageHost).input(NameInputSchema).output(EmptySchema),
 
-    join: base.input(z.object({ network: NameSchema, name: NameSchema })).output(NetworkJoinSchema),
+    join: base
+      .meta(ACCESS.manageHost)
+      .input(z.object({ network: NameSchema, name: NameSchema }))
+      .output(NetworkJoinSchema),
 
-    warnings: base.input(NameInputSchema).output(z.array(z.string())),
+    warnings: base.meta(ACCESS.readImp).input(NameInputSchema).output(z.array(z.string())),
 
-    leave: base.input(z.object({ network: NameSchema, name: NameSchema })).output(NetworkSchema),
+    leave: base
+      .meta(ACCESS.manageHost)
+      .input(z.object({ network: NameSchema, name: NameSchema }))
+      .output(NetworkSchema),
   },
 
   grants: {
     add: base
+      .meta(ACCESS.manageGrant)
       .input(
         z.object({
           name: NameSchema,
@@ -326,16 +397,18 @@ export const callerContract = {
       .output(EmptySchema),
 
     delete: base
+      .meta(ACCESS.manageGrant)
       .input(z.object({ name: NameSchema, secret: SecretNameSchema }))
       .output(EmptySchema),
 
-    list: base.input(NameInputSchema).output(z.array(SecretNameSchema)),
+    list: base.meta(ACCESS.readImp).input(NameInputSchema).output(z.array(SecretNameSchema)),
 
-    details: base.input(NameInputSchema).output(z.array(GrantSchema)),
+    details: base.meta(ACCESS.readImp).input(NameInputSchema).output(z.array(GrantSchema)),
   },
 
   audit: {
     list: base
+      .meta(ACCESS.readAny)
       .input(
         z.object({
           name: NameSchema.optional(),
@@ -345,6 +418,7 @@ export const callerContract = {
       .output(z.array(AuditEntrySchema)),
 
     refused: base
+      .meta(ACCESS.readAny)
       .input(
         z.object({
           name: NameSchema.optional(),
@@ -354,6 +428,7 @@ export const callerContract = {
       .output(z.array(RefusedRequestSchema)),
 
     calls: base
+      .meta(ACCESS.readAny)
       .input(
         z.object({
           name: NameSchema.optional(),
@@ -364,15 +439,16 @@ export const callerContract = {
   },
 
   events: {
-    stream: base.output(eventIterator(ImpEventSchema)),
+    stream: base.meta(ACCESS.readAny).output(eventIterator(ImpEventSchema)),
   },
 
   system: {
-    info: base.output(SystemInfoSchema),
+    info: base.meta(ACCESS.readAny).output(SystemInfoSchema),
 
-    features: base.output(SystemFeaturesInfoSchema),
+    features: base.meta(ACCESS.readAny).output(SystemFeaturesInfoSchema),
 
     gc: base
+      .meta(ACCESS.manageHost)
       .input(
         z.object({
           dryRun: z.boolean().optional(),
@@ -384,35 +460,48 @@ export const callerContract = {
       )
       .output(StorageGcSchema),
 
-    copyDatabase: base.input(z.object({ name: NameSchema.optional() })).output(DatabaseCopySchema),
+    // the copy holds every imp, token hash and grant
+    copyDatabase: base
+      .meta(ACCESS.manageHost)
+      .input(z.object({ name: NameSchema.optional() }))
+      .output(DatabaseCopySchema),
   },
 
   oauth: {
     clients: {
-      list: base.output(z.array(OAuthClientSchema)),
+      list: base.meta(ACCESS.manageHost).output(z.array(OAuthClientSchema)),
 
       add: base
+        .meta(ACCESS.manageHost)
         .input(z.object({ name: NameSchema, redirectUris: RedirectUrisSchema }))
         .output(OAuthClientSchema),
 
       update: base
+        .meta(ACCESS.manageHost)
         .input(z.object({ name: NameSchema, redirectUris: RedirectUrisSchema }))
         .output(OAuthClientSchema),
 
-      delete: base.input(NameInputSchema).output(EmptySchema),
+      delete: base.meta(ACCESS.manageHost).input(NameInputSchema).output(EmptySchema),
     },
 
     grants: {
-      list: base.output(z.array(OAuthGrantSchema)),
+      list: base.meta(ACCESS.manageHost).output(z.array(OAuthGrantSchema)),
 
-      delete: base.input(z.object({ id: z.string().min(1).max(64) })).output(EmptySchema),
+      delete: base
+        .meta(ACCESS.manageHost)
+        .input(z.object({ id: z.string().min(1).max(64) }))
+        .output(EmptySchema),
     },
 
     // Only a named token approves a sign-in, and never with more than its own
     // scope and imps.
     approvals: {
-      get: base.input(z.object({ code: ApprovalCodeSchema })).output(OAuthApprovalSchema),
+      get: base
+        .meta(ACCESS.readAny)
+        .input(z.object({ code: ApprovalCodeSchema }))
+        .output(OAuthApprovalSchema),
       approve: base
+        .meta(ACCESS.readAny)
         .input(
           z.object({
             code: ApprovalCodeSchema,

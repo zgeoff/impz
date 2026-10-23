@@ -10,9 +10,6 @@
       "error",
       {
         "exemptNames": [
-          // kysely's DatabaseConnection interface, which the bun:sqlite driver's
-          // connection implements
-          "executeQuery",
           // the MCP SDK's OAuthClientProvider interface
           "saveTokens",
           "saveCodeVerifier",
@@ -52,7 +49,7 @@
           // the daemon's own test helpers build queries against real databases
           "db": ["packages/daemon/src/platform/db/**", "packages/daemon/testing/**"],
           "tests": [
-            "**/*.{test,e2e,pebble}.{ts,tsx}",
+            "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
             "**/{test-utils,smoke,mocks}/**",
             "packages/daemon/testing/**",
             "packages/dashboard/e2e/**",
@@ -88,7 +85,7 @@
             "from": ["packages"],
             "to": ["tests"],
             "ignore": [
-              "**/*.{test,e2e,pebble}.{ts,tsx}",
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "packages/daemon/testing/**",
               "packages/dashboard/e2e/**",
@@ -100,7 +97,7 @@
             "name": "daemon-layer-platform",
             "from": ["daemon-platform"],
             "ignore": [
-              "**/*.{test,e2e,pebble}.{ts,tsx}",
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "**/test-setup.ts"
             ],
@@ -111,7 +108,7 @@
             "name": "daemon-layer-host-net",
             "from": ["daemon-host-net"],
             "ignore": [
-              "**/*.{test,e2e,pebble}.{ts,tsx}",
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "**/test-setup.ts"
             ],
@@ -122,7 +119,7 @@
             "name": "daemon-layer-vm",
             "from": ["daemon-vm"],
             "ignore": [
-              "**/*.{test,e2e,pebble}.{ts,tsx}",
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "**/test-setup.ts"
             ],
@@ -135,7 +132,7 @@
             "ignore": [
               // imp-docker-proxy's composition root, as main.ts is impd's
               "packages/daemon/src/imps/docker-proxy/main.ts",
-              "**/*.{test,e2e,pebble}.{ts,tsx}",
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "**/test-setup.ts"
             ],
@@ -146,7 +143,7 @@
             "name": "daemon-layer-network",
             "from": ["daemon-network"],
             "ignore": [
-              "**/*.{test,e2e,pebble}.{ts,tsx}",
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "**/test-setup.ts"
             ],
@@ -163,7 +160,7 @@
             "name": "daemon-layer-identity",
             "from": ["daemon-identity"],
             "ignore": [
-              "**/*.{test,e2e,pebble}.{ts,tsx}",
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "**/test-setup.ts"
             ],
@@ -181,7 +178,7 @@
             "name": "daemon-layer-imp-ops",
             "from": ["daemon-imp-ops"],
             "ignore": [
-              "**/*.{test,e2e,pebble}.{ts,tsx}",
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "**/test-setup.ts"
             ],
@@ -200,7 +197,7 @@
             "name": "daemon-layer-surface",
             "from": ["daemon-surface"],
             "ignore": [
-              "**/*.{test,e2e,pebble}.{ts,tsx}",
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "**/test-setup.ts"
             ],
@@ -242,7 +239,7 @@
             "modules": ["@orpc/server", "@orpc/client"],
             "from": ["daemon-below-surface"],
             "ignore": [
-              "**/*.{test,e2e,pebble}.{ts,tsx}",
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "**/test-setup.ts"
             ],
@@ -251,7 +248,7 @@
           },
           {
             "name": "kysely",
-            "modules": ["kysely", "kysely-codegen"],
+            "modules": ["kysely", "kysely-codegen", "@zgeoff/kysely-bun-sqlite"],
             "from": ["packages"],
             "allow": ["db"],
             "reason": "query through a repository in packages/daemon/src/platform/db instead"

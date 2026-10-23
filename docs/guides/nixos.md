@@ -247,12 +247,14 @@ sops.secrets.imp-dns-api-token = {
 ## The Tailscale key
 
 `tailscaleAuthKeyFile` names a file outside the Nix store that holds a tagged auth key
-([Tailscale](./tailscale.md)). Keep it at `/var/lib/imp-host/secrets/tailscale-authkey`, owned by
-root, mode 0400: `/var/lib/imp-host` is the module's own directory (0700), and a reinstall with
-nixos-anywhere can put the file there with `--extra-files`. The key never goes into the env file or
-the store. At each start the module copies it to `/run/imp-host` and mounts the copy read-only into
-the container at `/run/imp/tailscale-authkey`, and `tailscale-up.sh` in the container decides when
-to use it ([how it works](./tailscale.md#how-it-works)):
+([Tailscale](./tailscale.md)), or a tagged pre-auth key for the Headscale server that
+`settings.IMP_TAILSCALE_LOGIN_SERVER` names ([Headscale](./tailscale.md#headscale)). Keep it at
+`/var/lib/imp-host/secrets/tailscale-authkey`, owned by root, mode 0400: `/var/lib/imp-host` is the
+module's own directory (0700), and a reinstall with nixos-anywhere can put the file there with
+`--extra-files`. The key never goes into the env file or the store. At each start the module copies
+it to `/run/imp-host` and mounts the copy read-only into the container at
+`/run/imp/tailscale-authkey`, and `tailscale-up.sh` in the container decides when to use it
+([how it works](./tailscale.md#how-it-works)):
 
 - With node state in the pool, `tailscaled` comes back from it, and the key is not used.
 - With no state, or a saved node that needs a login, `tailscale` joins with the key. An ephemeral

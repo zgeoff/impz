@@ -34,20 +34,26 @@ binds a secret to an imp ([the credential broker](../network/broker.md)).
 
 ## Scopes
 
-Scopes nest: `read`, then `exec`, then `manage`. An access map gives every procedure the scope it
-needs and what it targets: the host, an imp named in its input, a grant, or nothing. A procedure
-missing from the map is refused, so a new procedure is closed until someone writes its rule. The
-router checks the map before input validation and before the handler, and a refusal is `FORBIDDEN`
-with a reason that says whether the scope or the imps fell short. An imp target is checked against
-the caller's patterns by name, and a call that names a new imp, such as a create or a fork, needs a
-pattern that covers the new name too. Some calls are host-wide whatever their input, because what
-they touch is shared: tokens, secrets and grants, networks, backups and the receiving side of a
-move. A scoped token can be given a list of secrets it may grant to its own imps, so an agent can
-set up an imp without host-wide reach. Such a token may not fork or move an imp, because a fork
-copies grants and a move carries them. A scoped token can also be given an image ref prefix, so a
-service adds its own released images: the access check then takes an image add whose name is within
-the token's patterns and whose ref starts with the prefix and is pinned by digest, since a tag can
-move after the owner trusted it.
+Scopes nest: `read`, then `exec`, then `manage`. Each procedure in the API contract declares its
+access rule in its oRPC metadata: the scope it needs and what it targets, which is the host, an imp
+named in its input, an image, a grant, or nothing. A call that makes the session, such as the login,
+declares that it needs no session instead. A procedure with no rule is refused to every caller, so a
+new procedure is closed until someone writes its rule, and a contract test fails on it. The router's
+middleware reads the rule from the procedure's metadata before input validation and before the
+handler, and a refusal is `FORBIDDEN` with a reason that says whether the scope or the imps fell
+short. An imp target is checked against the caller's patterns by name, and a call that names a new
+imp, such as a create or a fork, needs a pattern that covers the new name too. Some calls are
+host-wide whatever their input, because what they touch is shared: tokens, secrets and grants,
+networks, backups and the receiving side of a move. A scoped token can be given a list of secrets it
+may grant to its own imps, so an agent can set up an imp without host-wide reach. Such a token may
+not fork or move an imp, because a fork copies grants and a move carries them. A scoped token can
+also be given an image ref prefix, so a service adds its own released images: the access check then
+takes an image add whose name is within the token's patterns and whose ref starts with the prefix
+and is pinned by digest, since a tag can move after the owner trusted it.
+
+The set of target kinds is closed. Authorization stays a rule per procedure in the contract, and a
+need for a new kind of target starts a redesign of authorization, not one more kind and one more
+token column.
 
 ## The dashboard session
 

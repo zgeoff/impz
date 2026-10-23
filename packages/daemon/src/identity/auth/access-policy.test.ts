@@ -8,6 +8,7 @@ import {
   PROCEDURE_ACCESS,
   checkAccess,
   findAccess,
+  findDeclaredAccess,
   findField,
   findForkAuthority,
   findGrantAuthority,
@@ -29,6 +30,34 @@ test('#PROCEDURE_ACCESS has a rule for every procedure a caller reaches, and no 
 test('#checkAccess refuses a path with no rule to every caller', async () => {
   const refusal = await checkAccess(findAccess('imps.someday'), buildMockCaller(), {}, () =>
     Promise.resolve(null),
+  );
+
+  expect(refusal).toStrictEqual({ message: 'this call has no access rule', reason: null });
+});
+
+test('#findDeclaredAccess reads the rule a procedure declares in its metadata', () => {
+  expect(
+    findDeclaredAccess({ access: { scope: 'exec', on: 'imp', fields: ['name'] } }),
+  ).toStrictEqual({ scope: 'exec', on: 'imp', fields: ['name'] });
+});
+
+test('#checkAccess refuses a procedure with no access metadata to a host-wide manage caller', async () => {
+  const refusal = await checkAccess(
+    findDeclaredAccess({}),
+    buildMockCaller({ scope: 'manage' }),
+    { name: 'a' },
+    () => Promise.resolve(null),
+  );
+
+  expect(refusal).toStrictEqual({ message: 'this call has no access rule', reason: null });
+});
+
+test('#checkAccess refuses a caller’s procedure that declares it needs no session', async () => {
+  const refusal = await checkAccess(
+    findDeclaredAccess({ access: { on: 'none' } }),
+    buildMockCaller({ scope: 'manage' }),
+    {},
+    () => Promise.resolve(null),
   );
 
   expect(refusal).toStrictEqual({ message: 'this call has no access rule', reason: null });

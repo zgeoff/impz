@@ -67,9 +67,11 @@ func Run() error {
 	// cmdline
 	claimed := params.Template
 	if params.Template {
-		c, err := claim.Park(listenVsock, buildPing, func(c *proto.Claim) error {
-			steps.restart()
-			return claim.Apply(c, inner.UserDisk)
+		c, err := parkTemplate(inner.AgentBinary, func() (*proto.Claim, error) {
+			return claim.Park(listenVsock, buildPing, func(c *proto.Claim) error {
+				steps.restart()
+				return claim.Apply(c, inner.UserDisk)
+			})
 		})
 		if err != nil {
 			return err

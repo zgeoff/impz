@@ -22,9 +22,16 @@ const SelfSchema = z.object({
 
 const NodeSchema = z.object({ BackendState: z.string(), Self: SelfSchema });
 
+interface StubTailscalePrefs {
+  readonly ControlURL: string;
+}
+
 export interface StubTailscale {
   readonly bin: string;
   readonly writeNode: (node: StubTailscaleNode) => void;
+
+  // Until prefs are written or up runs, the node is on Tailscale's own server.
+  readonly writePrefs: (prefs: StubTailscalePrefs) => void;
 
   // Until the start is released, status reports Starting whatever the node says.
   readonly holdStart: () => void;
@@ -37,12 +44,21 @@ export interface StubTailscale {
 export function createStubTailscale(directory: string): StubTailscale {
   const status = join(directory, 'tailscale-status.json');
   const starting = join(directory, 'tailscale-starting');
+  const prefs = join(directory, 'tailscale-prefs.json');
 
   const stub = createStubBin(
     directory,
     'tailscale',
     String.raw`status=${JSON.stringify(status)}
 starting=${JSON.stringify(starting)}
+prefs=${JSON.stringify(prefs)}
+read_prefs() {
+  if [ -e "$prefs" ]; then
+    cat "$prefs"
+  else
+    echo '{"ControlURL": "https://controlplane.tailscale.com"}'
+  fi
+}
 shift
 case $1 in
   status)
@@ -52,14 +68,25 @@ case $1 in
       cat "$status"
     fi
     ;;
+  debug)
+    [ "$2" = prefs ] && read_prefs
+    ;;
   up)
-    hostname= tags=
+    hostname= tags= control=https://controlplane.tailscale.com reauth=
     for arg in "$@"; do
       case $arg in
         --hostname=*) hostname=$(cut -d= -f2- <<<"$arg") ;;
         --advertise-tags=*) tags=$(cut -d= -f2- <<<"$arg") ;;
+        --login-server=*) control=$(cut -d= -f2- <<<"$arg") ;;
+        --force-reauth) reauth=1 ;;
       esac
     done
+    if [ -z "$reauth" ] && [ -e "$status" ] && [ "$(jq -r .BackendState "$status")" = Running ] &&
+      [ "$(read_prefs | jq -r .ControlURL)" != "$control" ]; then
+      echo "can't change --login-server without --force-reauth" >&2
+      exit 1
+    fi
+    jq -n --arg url "$control" '{ControlURL: $url}' >"$prefs"
     jq -n --arg host "$hostname" --arg tags "$tags" \
       '{BackendState: "Running", Self: {HostName: $host, Tags: ($tags | split(",")), TailscaleIPs: ["100.64.0.9"], DNSName: "imp.tail1234.ts.net."}}' \
       >"$status"
@@ -75,6 +102,9 @@ esac`,
     bin: stub.bin,
     writeNode: (node) => {
       writeFileSync(status, JSON.stringify(node));
+    },
+    writePrefs: (nodePrefs) => {
+      writeFileSync(prefs, JSON.stringify(nodePrefs));
     },
     holdStart: () => {
       writeFileSync(starting, '');
