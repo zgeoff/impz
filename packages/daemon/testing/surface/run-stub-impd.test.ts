@@ -50,7 +50,7 @@ async function setupTest() {
   return { child, tempDir, served };
 }
 
-// each test outlives setupTest's 15 s wait for the child impd, which took over
+// each test outlives the 15 s startup wait for the child impd, which took over
 // the default 5 s to start on a loaded 2 GiB host
 test('it serves impd with the smoke imp to a client holding its token', async () => {
   const ctx = await setupTest();
