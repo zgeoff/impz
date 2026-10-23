@@ -4,12 +4,15 @@ import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import { countTreeBytes } from '../../vm/storage/count-tree-bytes';
 import { DOCKERFILE_FRONTEND } from '../docker-contract/dockerfile-frontend';
+import { toEngineRun } from './build-engine';
 import type { BuildOutput } from './create-build-steps';
 import { createPlainLines } from './create-plain-lines';
 import { DockerBuildError } from './docker-build-error';
+import { formatFailureTail } from './format-failure-tail';
 import type { GuestExec } from './guest-exec';
 import { ImageLimitError } from './image-limit-error';
-import { PIN_INSPECT_FORMAT, PinInspectSchema, formatPlatform, pickRepoDigest } from './image-pin';
+import { pickRepoDigest, requireImagePlatform } from './image-pin';
+import { readImageInspect } from './read-image-inspect';
 import { planRootfsOverhead } from './rootfs-plan';
 import { UNPACK_TAR_ARGS, assertUnpacked } from './unpack-export';
 
@@ -82,29 +85,17 @@ export async function loadGuestImage(
 
   if (pulled.exitCode !== 0) {
     throw new ImpdError('BAD_REQUEST', {
-      message: `the pull of ${ref} in the builder failed: ${pulled.stderr.trim().slice(-LOG_MAX_CHARS)}`,
+      message: `the pull of ${ref} in the builder failed: ${formatFailureTail(pulled.stderr)}`,
     });
   }
 
-  const inspected = await exec(
-    ['docker', 'image', 'inspect', '--format', PIN_INSPECT_FORMAT, ref],
-    {
-      signal,
-    },
-  );
+  const inspect = await readImageInspect(toEngineRun(exec), ref, signal);
 
-  if (inspected.exitCode !== 0) {
-    throw new Error(`docker image inspect ${ref} in the builder: ${inspected.stderr.trim()}`);
+  if (inspect === null) {
+    throw new Error(`docker image inspect ${ref} failed after its pull in the builder`);
   }
 
-  const inspect = PinInspectSchema.parse(JSON.parse(inspected.stdout));
-  const imagePlatform = formatPlatform(inspect.Os, inspect.Architecture);
-
-  if (imagePlatform !== options.platform) {
-    throw new ImpdError('BAD_REQUEST', {
-      message: `${ref} pulled for ${imagePlatform}, not ${options.platform}`,
-    });
-  }
+  requireImagePlatform(ref, inspect, options.platform);
 
   const tagged = await exec(['docker', 'tag', ref, GUEST_BUILD_TAG], { signal });
 

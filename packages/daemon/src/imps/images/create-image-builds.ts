@@ -24,15 +24,20 @@ import type { Builders } from './builder-imps';
 import { createBuildRuns } from './create-build-runs';
 import type { BuildRuns } from './create-build-runs';
 import type { BuildOutput } from './create-build-steps';
-import { requireClientImageName } from './create-image-writer';
 import type { ImageWriter } from './create-image-writer';
 import { DockerBuildError } from './docker-build-error';
 import { checkDockerfile, renderPinnedDockerfile } from './dockerfile-check';
 import type { ExternalImage } from './dockerfile-check';
 import { DockerfileError } from './dockerfile-error';
 import { runGuestBuild } from './guest-build';
-import { formatPinFailure, formatPlatform, pickRepoDigest, readImageStore } from './image-pin';
+import {
+  formatPinFailure,
+  pickRepoDigest,
+  readImageStore,
+  requireImagePlatform,
+} from './image-pin';
 import type { ImageStore, Pin, PinInspect } from './image-pin';
+import { requireClientImageName } from './require-client-image-name';
 import { writeContextTar } from './write-context-tar';
 
 const DOCKERFILE_MAX_BYTES = 1024 ** 2;
@@ -374,13 +379,8 @@ function pickPin(
   platform: string,
 ): string {
   const ref = image.ref;
-  const imagePlatform = formatPlatform(inspect.Os, inspect.Architecture);
 
-  if (imagePlatform !== platform) {
-    throw new ImpdError('BAD_REQUEST', {
-      message: `${image.use} ${ref}: the host has this image for ${imagePlatform}, and builds for ${platform}`,
-    });
-  }
+  requireImagePlatform(`${image.use} ${ref}`, inspect, platform);
 
   // The Dockerfile frontend runs the ONBUILD triggers of every image the build reaches,
   // including a COPY --from or a mount's, where impd cannot check them.

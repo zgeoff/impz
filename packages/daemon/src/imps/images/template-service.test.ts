@@ -228,7 +228,7 @@ test('it refuses the builders image name for a template', async () => {
   const creating = ctx.impd.templates.createTemplate('dev', BUILDER_IMAGE);
 
   expect(creating).rejects.toMatchObject({
-    code: 'CONFLICT',
+    code: 'BAD_REQUEST',
     message: `the image name ${BUILDER_IMAGE} is impd's, for its image builders; pick another`,
   });
 });

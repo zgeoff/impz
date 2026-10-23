@@ -3,11 +3,11 @@ import { ImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { DOCKERFILE_FRONTEND } from '../docker-contract/dockerfile-frontend';
 import type { ExternalImage } from './dockerfile-check';
+import { formatFailureTail } from './format-failure-tail';
 import type { GuestExec } from './guest-exec';
-import { PIN_INSPECT_FORMAT, PinInspectSchema, normalizePlatform } from './image-pin';
+import { normalizePlatform } from './image-pin';
 import type { PinInspect } from './image-pin';
-
-const FAILURE_MAX_CHARS = 4000;
+import { readImageInspect } from './read-image-inspect';
 
 interface EngineResult {
   readonly exitCode: number;
@@ -36,19 +36,6 @@ export function createBuildEngine(run: EngineRun): BuildEngine {
     return result;
   };
 
-  const readPinInspect = async (ref: string, signal: AbortSignal): Promise<PinInspect | null> => {
-    const inspected = await runAborting(
-      ['docker', 'image', 'inspect', '--format', PIN_INSPECT_FORMAT, ref],
-      signal,
-    );
-
-    if (inspected.exitCode !== 0) {
-      return null;
-    }
-
-    return PinInspectSchema.parse(JSON.parse(inspected.stdout));
-  };
-
   return {
     readPlatform: async (signal) => {
       const version = await runAborting(
@@ -72,7 +59,7 @@ export function createBuildEngine(run: EngineRun): BuildEngine {
     loadImage: async (image, signal) => {
       const ref = image.ref;
 
-      const local = await readPinInspect(ref, signal);
+      const local = await readImageInspect(run, ref, signal);
 
       if (local !== null) {
         return local;
@@ -82,11 +69,11 @@ export function createBuildEngine(run: EngineRun): BuildEngine {
 
       if (pulled.exitCode !== 0) {
         throw new ImpdError('BAD_REQUEST', {
-          message: `${image.use} ${ref}: the pull failed: ${pulled.stderr.trim().slice(-FAILURE_MAX_CHARS)}`,
+          message: `${image.use} ${ref}: the pull failed: ${formatFailureTail(pulled.stderr)}`,
         });
       }
 
-      const loaded = await readPinInspect(ref, signal);
+      const loaded = await readImageInspect(run, ref, signal);
 
       if (loaded === null) {
         throw new Error(`docker image inspect ${ref} failed after its pull`);
@@ -108,7 +95,7 @@ export function createBuildEngine(run: EngineRun): BuildEngine {
 
       if (pulled.exitCode !== 0) {
         throw new ImpdError('BAD_GATEWAY', {
-          message: `the Dockerfile frontend ${DOCKERFILE_FRONTEND}: the pull failed: ${pulled.stderr.trim().slice(-FAILURE_MAX_CHARS)}`,
+          message: `the Dockerfile frontend ${DOCKERFILE_FRONTEND}: the pull failed: ${formatFailureTail(pulled.stderr)}`,
         });
       }
 

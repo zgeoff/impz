@@ -1,4 +1,5 @@
 import * as z from 'zod';
+import { ImpdError } from '../../platform/errors/impd-error';
 import {
   formatFamiliarRepository,
   parseImageReference,
@@ -55,6 +56,20 @@ export function normalizePlatform(os: string, architecture: string): string {
   }
 
   return platform;
+}
+
+export function requireImagePlatform(
+  subject: string,
+  inspect: Readonly<PinInspect>,
+  platform: string,
+): void {
+  const imagePlatform = formatPlatform(inspect.Os, inspect.Architecture);
+
+  if (imagePlatform !== platform) {
+    throw new ImpdError('BAD_REQUEST', {
+      message: `${subject} is for ${imagePlatform}, and the builder builds for ${platform}`,
+    });
+  }
 }
 
 export function pickRepoDigest(ref: string, repoDigests: readonly string[]): string | null {

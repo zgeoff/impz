@@ -2150,8 +2150,7 @@ test('it refuses an arm64 image on an amd64 host before the build', async () => 
 
   expect(body).toStrictEqual({
     code: 'BAD_REQUEST',
-    message:
-      'FROM base.test/arm:1: the host has this image for linux/arm64, and builds for linux/amd64',
+    message: 'FROM base.test/arm:1 is for linux/arm64, and the builder builds for linux/amd64',
   });
 
   expect(builder.builtDockerfiles).toStrictEqual([]);
@@ -2201,8 +2200,7 @@ test('it refuses a 32-bit arm image on an amd64 host before the build', async ()
 
   expect(body).toStrictEqual({
     code: 'BAD_REQUEST',
-    message:
-      'FROM base.test/arm32:1: the host has this image for linux/arm, and builds for linux/amd64',
+    message: 'FROM base.test/arm32:1 is for linux/arm, and the builder builds for linux/amd64',
   });
 
   expect(builder.builtDockerfiles).toStrictEqual([]);

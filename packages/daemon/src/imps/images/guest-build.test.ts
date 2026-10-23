@@ -838,7 +838,7 @@ test('#loadGuestImage fails when the inspect after the pull exits non-zero', () 
     }),
   ).rejects.toThrowWithMessage(
     Error,
-    'docker image inspect busybox:1.37 in the builder: No such image: busybox:1.37',
+    'docker image inspect busybox:1.37 failed after its pull in the builder',
   );
 });
 
@@ -857,7 +857,7 @@ test('#loadGuestImage refuses an image the builder pulled for another platform',
     }),
   ).rejects.toMatchObject({
     code: 'BAD_REQUEST',
-    message: 'busybox:1.37 pulled for linux/arm64, not linux/amd64',
+    message: 'busybox:1.37 is for linux/arm64, and the builder builds for linux/amd64',
   });
 });
 

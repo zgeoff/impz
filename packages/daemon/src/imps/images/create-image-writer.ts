@@ -1,17 +1,8 @@
 import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { NameSchema } from '@impz/api';
 import * as z from 'zod';
-import {
-  countImageDigestUses,
-  createImage,
-  readImageByName,
-  updateImage,
-  updateImageUse,
-} from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { ImpdError } from '../../platform/errors/impd-error';
 import { buildConflictError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
@@ -22,14 +13,16 @@ import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpsConfig } from '../imps-config';
-import { BUILDER_IMAGE } from './builder-imps';
 import { writeGuestTree } from './guest-build';
 import type { GuestExec } from './guest-exec';
 import { buildImageRuntimeConfig } from './image-naming';
+import { readHeldImage } from './read-held-image';
+import { removeUnusedRootfs } from './remove-unused-rootfs';
 import { planRootfs, planRootfsOverhead } from './rootfs-plan';
 import { runDocker, runDockerChecked } from './run-docker';
 import { writeExportedTree } from './unpack-export';
 import { writeImageConfig } from './write-image-config';
+import { writeImageRow } from './write-image-row';
 
 const InspectSchema = z.tuple([
   z.object({
@@ -198,43 +191,34 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   const createRootfsOnce = (digest: string, create: () => Promise<number>) =>
     building.run(digest, create);
 
-  const writeImageRow = async (
+  const writeDockerImageRow = async (
     imageName: string,
     ref: string,
     digest: string,
     sizeBytes: number,
   ): Promise<ImageRecord> => {
-    // The use goes in before the read, so an image eviction either sees it and keeps the row, or
-    // removed the row first and the read finds nothing.
     const at = now();
 
-    await updateImageUse(deps.db, 'name', [imageName], at);
-
-    const existing = await readImageByName(deps.db, imageName);
+    const existing = await readHeldImage(deps.db, imageName, at);
 
     requireDockerImage(existing);
 
-    if (existing === undefined) {
-      return createImage(deps.db, { name: imageName, ref, digest, sizeBytes }, at);
-    }
-
-    if (existing.digest === digest) {
+    if (existing?.digest === digest) {
       return existing;
     }
 
-    const updated = await updateImage(deps.db, existing.id, { ref, digest, sizeBytes }, at);
+    const written = await writeImageRow(
+      deps.db,
+      existing,
+      { name: imageName, ref, digest, sizeBytes },
+      at,
+    );
 
-    await removeIdleRootfs(existing.digest);
-
-    return updated;
-  };
-
-  const removeUnusedRootfs = async (digest: string): Promise<void> => {
-    const uses = await countImageDigestUses(deps.db, digest);
-
-    if (uses === 0) {
-      await deps.storage.removeImage(digest);
+    if (existing !== undefined) {
+      await removeIdleRootfs(existing.digest);
     }
+
+    return written;
   };
 
   const removeIdleRootfs = (digest: string): Promise<boolean> =>
@@ -245,7 +229,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
         return false;
       }
 
-      await removeUnusedRootfs(digest);
+      await removeUnusedRootfs(deps.db, deps.storage, digest);
 
       return true;
     });
@@ -256,7 +240,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
         return false;
       }
 
-      await removeUnusedRootfs(digest);
+      await removeUnusedRootfs(deps.db, deps.storage, digest);
 
       return true;
     });
@@ -285,7 +269,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
       }
 
       try {
-        await removeUnusedRootfs(digest);
+        await removeUnusedRootfs(deps.db, deps.storage, digest);
       } catch (error) {
         deps.log(
           `impd: image ${imageName}: could not remove the unused rootfs of ${digest}: ${getErrorMessage(error)}`,
@@ -315,7 +299,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
             createRootfs(ref, inspect.Id, inspect.Config),
           );
 
-          return await writeImageRow(imageName, ref, inspect.Id, sizeBytes);
+          return await writeDockerImageRow(imageName, ref, inspect.Id, sizeBytes);
         } finally {
           await releasePublisher(inspect.Id, imageName);
         }
@@ -346,7 +330,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
 
       guest.signal.throwIfAborted();
 
-      return await writeImageRow(guest.imageName, guest.ref, digest, sizeBytes);
+      return await writeDockerImageRow(guest.imageName, guest.ref, digest, sizeBytes);
     } finally {
       await releasePublisher(digest, guest.imageName);
     }
@@ -404,18 +388,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   };
 
   return { createImageOnHost, writeGuestImage, removeIdleRootfs, removeIdleImage, withPublisher };
-}
-
-export function requireClientImageName(name: string): string {
-  const imageName = NameSchema.parse(name);
-
-  if (imageName === BUILDER_IMAGE) {
-    throw new ImpdError('BAD_REQUEST', {
-      message: `the image name ${BUILDER_IMAGE} is impd's, for its image builders; pick another`,
-    });
-  }
-
-  return imageName;
 }
 
 export function requireDockerImage(existing: ImageRecord | undefined): void {
