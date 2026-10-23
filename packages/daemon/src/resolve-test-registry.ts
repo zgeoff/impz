@@ -1,4 +1,4 @@
-import type { BuilderTestRegistry } from './imps/images/builder-imps';
+import type { BuilderTestRegistry } from './imps/images/builders/builder-imps';
 import type { TestRegistryConfig } from './imps/imps-config';
 
 export interface TestRegistryBoundaries {

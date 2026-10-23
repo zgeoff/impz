@@ -29,13 +29,13 @@ import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
+import { writeChangedBlocks } from '../../vm/storage/write-changed-blocks';
 import { buildCheckpointId } from '../checkpoints/checkpoint-service';
 import { BackupManifestSchema } from './backup-manifest';
 import type { BackupManifest, ManifestImage, ManifestImp } from './backup-manifest';
 import { buildDigestTag } from './build-digest-tag';
 import { createRestoredAccess } from './create-restored-access';
 import type { Restic, ResticSnapshot } from './restic';
-import { writeChangedBlocks } from './write-changed-blocks';
 
 export interface RestoreInput {
   readonly name?: string | undefined;

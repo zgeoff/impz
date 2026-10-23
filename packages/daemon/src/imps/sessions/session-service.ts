@@ -4,6 +4,7 @@ import type { ImpRecord } from '../../platform/db/imps';
 import { buildAgentOutdatedApiError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import { sendActivity, sendSessionKill } from '../../vm/agent-client/agent-requests';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
+import { toSeenSessions } from '../../vm/agent-client/seen-session';
 import type { ImpGuest, ImpHost, ImpVms } from '../imps/imp-context';
 import type { ImpLock } from '../imps/imp-lock';
 import type { ImpRuntime } from '../imps/imp-runtime';
@@ -11,7 +12,6 @@ import { findSessionLogImp } from '../session-logs/find-session-log-imp';
 import type { SessionLogReadRequest } from '../session-logs/session-log-files';
 import type { SessionLogTarget } from '../session-logs/session-log-service';
 import { readSeenSessions } from './count-sessions';
-import { toSeenSessions } from './session-cache';
 import { toApiSession } from './to-api-session';
 
 export interface SessionService {

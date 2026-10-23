@@ -55,12 +55,17 @@ export { loadConfig } from '../src/config';
 export { openDialStream } from '../src/vm/agent-client/dial-stream';
 export { openAccept, openListener } from '../src/vm/agent-client/listener-stream';
 export { sendServicesAdd } from '../src/vm/agent-client/service-requests';
-export { ENFORCE_INTERVAL_MS, ENFORCE_TRIGGER } from '../src/vm/governor/ram-governor';
+export { ENFORCE_INTERVAL_MS, ENFORCE_TRIGGER } from '../src/imp-ops/governor/ram-governor';
 export { VmIdentitySchema, readVmIdentity, writeVmIdentity } from '../src/vm/sleep/vm-identity';
 export { buildTemplateKey } from '../src/vm/templates/boot-templates';
 export { createGenerationLog } from '../src/imps/session-logs/generation-log';
-export { DOCKERFILE_FRONTEND } from '../src/imps/docker-proxy/dockerfile-frontend';
-export { BUILD_KEEPALIVE_MS } from '../src/imps/images/build-event-stream';
-export { checkDockerfile, renderPinnedDockerfile } from '../src/imps/images/dockerfile-check';
-export { parseDockerfile, splitNameWords } from '../src/imps/images/dockerfile-parse';
-export type { Instruction } from '../src/imps/images/dockerfile-parse';
+export { DOCKERFILE_FRONTEND } from '../src/imps/docker-contract/dockerfile-frontend';
+export { BUILD_KEEPALIVE_MS } from '../src/imps/images/build/build-event-stream';
+
+export {
+  checkDockerfile,
+  renderPinnedDockerfile,
+} from '../src/imps/images/dockerfile/dockerfile-check';
+
+export { parseDockerfile, splitNameWords } from '../src/imps/images/dockerfile/dockerfile-parse';
+export type { Instruction } from '../src/imps/images/dockerfile/dockerfile-parse';

@@ -19,7 +19,7 @@ import { getErrorMessage } from '../../platform/process/get-error-message';
 import { runCommand } from '../../platform/process/run-command';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { createSingleFlight } from '../../platform/process/single-flight';
-import type { RamAdmission } from '../governor/ram-governor';
+import type { RamAdmission } from '../imps-contract/ram-admission';
 import type { HostIdentity } from '../sleep/vm-identity';
 import type { DiskBudget } from '../storage/disk-budget';
 import { BASE_BOOT_ARGS, VM_DEVICES } from '../vmm/configure-vm';

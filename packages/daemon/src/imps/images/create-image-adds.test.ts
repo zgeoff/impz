@@ -3,6 +3,7 @@ import { existsSync, readdirSync, symlinkSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
@@ -12,6 +13,7 @@ import { createFilesTar } from '../../../testing/imps/create-files-tar';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
 import { createStubImageMkfs } from '../../../testing/imps/create-stub-image-mkfs';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import type { StubAnswer } from '../../../testing/vm/build-stub-guest';
 import { loadConfig } from '../../config';
@@ -19,7 +21,7 @@ import { createImage, listImages, readImageByName } from '../../platform/db/imag
 import { listImps } from '../../platform/db/imps';
 import { runChecked } from '../../platform/process/run-command';
 import { buildImagePaths } from '../../vm/storage/data-layout';
-import { BUILDER_IMAGE, createBuilders } from './builder-imps';
+import { BUILDER_IMAGE, createBuilders } from './builders/builder-imps';
 import { createImageService } from './image-service';
 
 async function setupTest() {
@@ -43,7 +45,7 @@ async function setupTest() {
     },
   });
 
-  return Object.assign(harness, { stack, docker });
+  return Object.assign(harness, { stack, docker, lines: captureImpdLogs() });
 }
 
 test('it adds an image through a builder for one platform, with no host engine call', async () => {
@@ -69,9 +71,6 @@ test('it adds an image through a builder for one platform, with no host engine c
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -79,9 +78,6 @@ test('it adds an image through a builder for one platform, with no host engine c
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const resolved: string[] = [];
@@ -121,10 +117,47 @@ test('it adds an image through a builder for one platform, with no host engine c
     'tag busybox:latest imp-build:latest',
   ]);
 
-  expect(ctx.logs).toSatisfyAny((line: string) =>
-    line.startsWith(
-      `impd: image add box: busybox:latest for linux/amd64 (busybox@sha256:${'b'.repeat(64)}), digest ${image.digest};`,
+  expect(ctx.lines).toContainEqual(
+    expect.toStartWith(
+      `INFO impd.image image add box: busybox:latest for linux/amd64 (busybox@sha256:${'b'.repeat(64)}), digest ${image.digest}; pull=`,
     ),
+  );
+});
+
+test('it logs the pull and image times of an add on its clock', async () => {
+  const ctx = await setupTest();
+
+  const config = loadConfig({ IMP_DATA_DIR: ctx.dataDir });
+  const times = buildStubAnswerQueue([1000, 1300, 1600, 1900]);
+
+  await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    config,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: ctx.impd.storageGate,
+    diskBudget: ctx.impd.diskBudget,
+    readBuilders: () => builders,
+    clock: { now: times.next },
+  });
+
+  const builders = createBuilders({
+    config,
+    db: ctx.db,
+    imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    ensureImage: (signal) => images.ensureBuilderImage(signal),
+  });
+
+  const image = await images.addImage('busybox', 'box');
+
+  expect(ctx.lines).toContain(
+    `INFO impd.image image add box: busybox:latest for linux/amd64 (busybox@sha256:${'b'.repeat(64)}), digest ${image.digest}; pull=300ms image=600ms`,
   );
 });
 
@@ -152,7 +185,6 @@ test('it adds an image through a builder, with no host engine call, under a left
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: () => {},
   });
 
   const builders = createBuilders({
@@ -160,7 +192,6 @@ test('it adds an image through a builder, with no host engine call, under a left
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: () => {},
   });
 
   const image = await images.addImage('busybox', 'box');
@@ -197,9 +228,6 @@ test('it returns a failed pull in the builder as the client error', async () => 
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -207,9 +235,6 @@ test('it returns a failed pull in the builder as the client error', async () => 
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   expect(images.addImage('busybox:nope', 'box')).rejects.toMatchObject({
@@ -247,9 +272,6 @@ test("it returns a registry's refusal of a pull in the builder as the client err
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -257,9 +279,6 @@ test("it returns a registry's refusal of a pull in the builder as the client err
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   expect(images.addImage('private.test/x:1', 'box')).rejects.toMatchObject({
@@ -292,9 +311,6 @@ test('it leaves no builder, row or work directory after a failed pull', async ()
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -302,9 +318,6 @@ test('it leaves no builder, row or work directory after a failed pull', async ()
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const adding = images.addImage('busybox:nope', 'box');
@@ -354,9 +367,6 @@ test('it refuses an export over IMP_BUILD_IMAGE_MAX_MIB', async () => {
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -364,9 +374,6 @@ test('it refuses an export over IMP_BUILD_IMAGE_MAX_MIB', async () => {
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   expect(images.addImage('busybox:1.37', 'box')).rejects.toMatchObject({
@@ -399,9 +406,6 @@ test('it leaves no builder, row or work directory after an export over the limit
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -409,9 +413,6 @@ test('it leaves no builder, row or work directory after an export over the limit
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const adding = images.addImage('busybox:1.37', 'box');
@@ -466,9 +467,6 @@ test("it changes no host file through an added image's image.json link", async (
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -476,9 +474,6 @@ test("it changes no host file through an added image's image.json link", async (
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   await images.addImage('busybox:1.37', 'box');
@@ -519,9 +514,6 @@ test('it ends the pull in the builder, and the builder, when the client goes', a
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -529,9 +521,6 @@ test('it ends the pull in the builder, and the builder, when the client goes', a
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const client = new AbortController();
@@ -579,9 +568,6 @@ test.each([
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -589,9 +575,6 @@ test.each([
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   expect(images.addImage(ref, 'box')).rejects.toMatchObject({
@@ -626,9 +609,6 @@ test('it fails the add of a builder the governor refuses, with no host engine ca
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -636,9 +616,6 @@ test('it fails the add of a builder the governor refuses, with no host engine ca
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   expect(images.addImage('busybox:1.37', 'box')).rejects.toThrowWithMessage(
@@ -671,9 +648,6 @@ test('it fails the add with SERVICE_UNAVAILABLE when the host engine cannot give
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -681,9 +655,6 @@ test('it fails the add with SERVICE_UNAVAILABLE when the host engine cannot give
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   expect(images.addImage('busybox:1.37', 'box')).rejects.toMatchObject({
@@ -712,9 +683,6 @@ test('it asks the host engine only for the builder image when it cannot give it'
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -722,9 +690,6 @@ test('it asks the host engine only for the builder image when it cannot give it'
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const adding = images.addImage('busybox:1.37', 'box');
@@ -780,9 +745,6 @@ test('it adds a bumped IMP_BUILD_IMAGE once, by its digest, and moves the row', 
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -790,9 +752,6 @@ test('it adds a bumped IMP_BUILD_IMAGE once, by its digest, and moves the row', 
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   await images.ensureBuilderImage();
@@ -841,9 +800,6 @@ test('it seeds the default image at first start through a builder', async () => 
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -851,9 +807,6 @@ test('it seeds the default image at first start through a builder', async () => 
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   await images.seedDefaultImage();
@@ -897,9 +850,6 @@ test('it seeds the default image at the next start once the builder image has la
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -907,9 +857,6 @@ test('it seeds the default image at the next start once the builder image has la
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   await images.seedDefaultImage();
@@ -951,9 +898,6 @@ test('it fails a builder image pull that hangs at its limit, naming IMP_BUILD_IM
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
     builderImagePullMs: 300,
     startPullLimit: () => {
       const limit = new AbortController();
@@ -969,9 +913,6 @@ test('it fails a builder image pull that hangs at its limit, naming IMP_BUILD_IM
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const image = config.build.image;
@@ -1022,9 +963,6 @@ test('it makes no host engine call beyond the inspect and the pull when the pull
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
     builderImagePullMs: 300,
     startPullLimit: () => {
       const limit = new AbortController();
@@ -1040,9 +978,6 @@ test('it makes no host engine call beyond the inspect and the pull when the pull
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const ensuring = images.ensureBuilderImage();
@@ -1092,9 +1027,6 @@ test('it pulls the builder image again on the add after a pull that failed', asy
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
     builderImagePullMs: 300,
     startPullLimit: () => {
       const limit = new AbortController();
@@ -1110,9 +1042,6 @@ test('it pulls the builder image again on the add after a pull that failed', asy
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const failing = images.ensureBuilderImage();
@@ -1180,9 +1109,6 @@ test('it stops the wait of a caller that goes, and the pull it shared goes on fo
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -1190,9 +1116,6 @@ test('it stops the wait of a caller that goes, and the pull it shared goes on fo
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const client = new AbortController();
@@ -1245,9 +1168,6 @@ test('it does not pull a builder image the host engine has already', async () =>
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
     builderImagePullMs: 300,
   });
 
@@ -1256,9 +1176,6 @@ test('it does not pull a builder image the host engine has already', async () =>
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   await images.ensureBuilderImage();
@@ -1303,9 +1220,6 @@ test('it names the error of a step after the pull that fails past the limit, not
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
     builderImagePullMs: 300,
     startPullLimit: () => {
       const limit = new AbortController();
@@ -1321,9 +1235,6 @@ test('it names the error of a step after the pull that fails past the limit, not
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const ensuring = images.ensureBuilderImage();
@@ -1369,9 +1280,6 @@ test('it leaves no row, rootfs, hold or builder when the client leaves an add wh
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -1379,9 +1287,6 @@ test('it leaves no row, rootfs, hold or builder when the client leaves an add wh
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const client = new AbortController();
@@ -1440,9 +1345,6 @@ test('it leaves no new row and no rootfs when a template takes the name during a
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -1450,9 +1352,6 @@ test('it leaves no new row and no rootfs when a template takes the name during a
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const adding = images.addImage('busybox:1.37', 'box');
@@ -1504,9 +1403,6 @@ test("it keeps the other's row and rootfs when an add and a build of one digest 
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -1514,9 +1410,6 @@ test("it keeps the other's row and rootfs when an add and a build of one digest 
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const adding = images.addImage('busybox:1.37', 'box');
@@ -1603,9 +1496,6 @@ test('it keeps the rootfs when an image rm runs while an add of its digest is be
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -1613,9 +1503,6 @@ test('it keeps the rootfs when an image rm runs while an add of its digest is be
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const first = await images.addImage('busybox:1.37', 'one');
@@ -1679,9 +1566,6 @@ test("it removes that rootfs after all when the add's row then fails", async () 
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -1689,9 +1573,6 @@ test("it removes that rootfs after all when the add's row then fails", async () 
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const first = await images.addImage('busybox:1.37', 'one');
@@ -1754,9 +1635,6 @@ test('it logs a cleanup removal that fails, and returns the add its own error', 
     storageGate: ctx.impd.storageGate,
     diskBudget: ctx.impd.diskBudget,
     readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const builders = createBuilders({
@@ -1764,9 +1642,6 @@ test('it logs a cleanup removal that fails, and returns the add its own error', 
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
     ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
   });
 
   const adding = images.addImage('busybox:1.37', 'box');
@@ -1781,9 +1656,9 @@ test('it logs a cleanup removal that fails, and returns the add its own error', 
     'image box is a template; make it again from an imp, or pick another name',
   );
 
-  expect(ctx.logs).toSatisfyAny((line: string) =>
-    /^impd: image box: could not remove the unused rootfs of imp-build-[a-f0-9]{64}: the disk is read-only$/v.test(
-      line,
+  expect(ctx.lines).toContainEqual(
+    expect.stringMatching(
+      /^WARNING impd\.image image box: could not remove the unused rootfs of imp-build-[a-f0-9]{64}: the disk is read-only$/v,
     ),
   );
 });

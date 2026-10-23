@@ -5,36 +5,8 @@ import {
   checkImageReference,
   checkNoQuery,
   checkPullQuery,
-  checkReferenceRegistry,
   checkRemoveQuery,
-  parseImageReference,
 } from './rules';
-
-test.each([
-  ['LocalHost/name', "registry LocalHost is the host's own"],
-  ['LOCALHOST:5000/x', "registry LOCALHOST:5000 is the host's own"],
-  ['Reg.LocalHost/x', "registry Reg.LocalHost is the host's own"],
-  ['10.0.0.5:5000/y', 'registry 10.0.0.5:5000 is an IP address'],
-])('#checkReferenceRegistry names the refused registry of %s', (reference, problem) => {
-  expect(checkReferenceRegistry(reference)).toBe(problem);
-});
-
-test('#checkReferenceRegistry passes a named registry', () => {
-  expect(checkReferenceRegistry('ghcr.io/x')).toBeNull();
-});
-
-test.each([
-  ['busybox', 'docker.io', 'library/busybox'],
-  ['docker.io/library/busybox:1.36', 'docker.io', 'library/busybox'],
-  ['index.docker.io/library/busybox', 'docker.io', 'library/busybox'],
-  ['ghcr.io/zgeoff/imp-host:latest', 'ghcr.io', 'zgeoff/imp-host'],
-  ['localhost:5000/x@sha256:ab', 'localhost:5000', 'x'],
-  ['LocalHost/name', 'LocalHost', 'name'],
-  ['imp-host:dev', 'docker.io', 'library/imp-host'],
-  ['zgeoff/impz:1', 'docker.io', 'zgeoff/impz'],
-])('#parseImageReference reads %s as registry %s and path %s', (reference, registry, path) => {
-  expect(parseImageReference(reference)).toStrictEqual({ registry, path });
-});
 
 test.each([
   ['localhost/x', "registry localhost is the host's own"],

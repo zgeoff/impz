@@ -17,10 +17,9 @@ import { IMPD_USER } from '../../platform/process/impd-user';
 import { parseMounts, readMounts as readHostMounts } from '../../platform/process/mounts';
 import { listPids, readStatFields } from '../../platform/process/proc';
 import type { CommandRunner } from '../../platform/process/run-command';
-import type { ImpPaths } from '../storage/data-layout';
-import type { FirecrackerPaths } from './firecracker-process';
+import { writeRegularFile } from '../files/vm-files';
+import type { FirecrackerPaths, ImpPaths } from '../storage/data-layout';
 import { probeProcessOfUid, stopProcessOfUid } from './process-owner';
-import { writeRegularFile } from './vm-files';
 
 export interface JailUser {
   readonly uid: number;

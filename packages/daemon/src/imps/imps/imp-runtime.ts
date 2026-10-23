@@ -21,11 +21,11 @@ import type {
 } from '../../vm/agent-client/exec-stream';
 import { openAccept, openListener } from '../../vm/agent-client/listener-stream';
 import type { GuestListener, ListenSpec } from '../../vm/agent-client/listener-stream';
+import { toSeenSessions } from '../../vm/agent-client/seen-session';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import { isDiskFullError } from '../../vm/storage/disk-full-error';
 import type { BootTemplates } from '../../vm/templates/boot-templates';
 import { findSessionLogImp } from '../session-logs/find-session-log-imp';
-import { toSeenSessions } from '../sessions/session-cache';
 import type { ActivityTracker, ConnectionKind } from './activity-tracker';
 import type { ImpClock, ImpGuest, ImpHost, ImpMemory, ImpVms } from './imp-context';
 import type { ImpLock, LockedImp } from './imp-lock';

@@ -1,6 +1,12 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { FirecrackerPaths } from '../vmm/firecracker-process';
+
+export interface FirecrackerPaths {
+  readonly apiSocket: string;
+  readonly vsockSocket: string;
+  readonly logFile: string;
+  readonly pidFile: string;
+}
 
 export interface ImpPaths extends FirecrackerPaths {
   readonly impId: string;

@@ -230,7 +230,7 @@ too, because ZFS keeps the dataset while that snapshot lives. impd logs each rem
 image's size and last use:
 
 ```text
-impd: image eviction: removed web-0a1b2c3 (1.5 GiB, last used 2026-09-01T00:00:00.000Z)
+INFO impd.image image eviction: removed web-0a1b2c3 (1.5 GiB, last used 2026-09-01T00:00:00.000Z)
 ```
 
 impd records the rootfs of each image it removes, by eviction or by `impz image rm`, until the

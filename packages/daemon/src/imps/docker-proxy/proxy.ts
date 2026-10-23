@@ -1,10 +1,9 @@
-import type { Logger } from '@logtape/logtape';
 import { P, match } from 'ts-pattern';
 import { z } from 'zod';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { tapStream } from '../../platform/process/tap-stream';
-import { formatEngineFailure, formatRefusal } from './refusal';
+import { formatEngineFailure, formatRefusal } from '../docker-contract/refusal';
 import { formatQuery, getRequestRoute } from './router';
 import type { RoutedRequest } from './router';
 import { checkCreateBody, checkNoQuery, checkPullQuery, checkRemoveQuery } from './rules';
@@ -36,10 +35,6 @@ export interface DockerProxyOptions {
   readonly token: string;
   readonly hostImage: string;
   readonly builderImage: string;
-  readonly log: (message: string) => void;
-
-  // impd.docker-proxy by default
-  readonly logger?: Pick<Logger, 'warning'>;
   readonly controlCallMs?: number;
 }
 
@@ -123,7 +118,7 @@ interface UpstreamCall {
 export function createDockerProxy(
   options: DockerProxyOptions,
 ): (request: Request) => Promise<Response> {
-  const logger = options.logger ?? getImpdLogger('docker-proxy');
+  const logger = getImpdLogger('docker-proxy');
 
   const sendUpstream = (versionPrefix: string, call: UpstreamCall): Promise<Response> => {
     const search = call.query === undefined ? '' : formatQuery(call.query);
@@ -159,7 +154,7 @@ export function createDockerProxy(
   };
 
   const buildRefusal = (request: Request, path: string, reason: string): Response => {
-    options.log(`refused ${request.method} ${path}: ${reason}`);
+    logger.warning('refused {method} {path}: {reason}', { method: request.method, path, reason });
 
     return buildJsonResponse(403, formatRefusal(reason));
   };
@@ -357,7 +352,11 @@ export function createDockerProxy(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
-      options.log(`error on ${request.method} ${url.pathname}: ${message}`);
+      logger.error('error on {method} {path}: {message}', {
+        method: request.method,
+        path: url.pathname,
+        message,
+      });
 
       return buildJsonResponse(502, formatEngineFailure(message));
     }

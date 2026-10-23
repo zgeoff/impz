@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';
+import { PIN_INSPECT_FORMAT } from '../../src/imps/images/pull/image-pin';
 import { runCommand } from '../../src/platform/process/run-command';
 import { createStubDockerCli } from './create-stub-docker-cli';
 
@@ -373,6 +373,51 @@ test('it prints the export tar it was given', async () => {
   });
 
   expect(result.stdout).toBe('tar');
+});
+
+test('it keeps a held export running after it prints the tar', async () => {
+  const ctx = await setupTest();
+
+  const docker = createStubDockerCli({
+    directory: ctx.directoryPath,
+    exportTar: new TextEncoder().encode('tar'),
+    isExportHeld: true,
+  });
+
+  const child = Bun.spawn(['docker', 'export', 'c'.repeat(64)], {
+    env: { PATH: docker.path },
+    stdout: 'pipe',
+  });
+
+  onTestFinished(() => {
+    child.kill();
+  });
+
+  const printed = await child.stdout.getReader().read();
+
+  expect(new TextDecoder().decode(printed.value)).toBe('tar');
+  expect(child.exitCode).toBeNull();
+});
+
+test('it ends a held export on a signal', async () => {
+  const ctx = await setupTest();
+
+  const docker = createStubDockerCli({
+    directory: ctx.directoryPath,
+    exportTar: new TextEncoder().encode('tar'),
+    isExportHeld: true,
+  });
+
+  const child = Bun.spawn(['docker', 'export', 'c'.repeat(64)], {
+    env: { PATH: docker.path },
+    stdout: 'pipe',
+  });
+
+  await child.stdout.getReader().read();
+
+  child.kill();
+
+  expect(child.exited).resolves.toBeNumber();
 });
 
 test('it fails a call it does not model and names it', async () => {

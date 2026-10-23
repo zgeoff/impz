@@ -1,12 +1,11 @@
 import type { ImpRecord } from '../../platform/db/imps';
 import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
 import { createSingleFlight } from '../../platform/process/single-flight';
+import type { WatchdogAction } from '../vm-config';
 
 const HOUR_MS = 3_600_000;
 const FIRST_BACKOFF_MS = 60_000;
 const MAX_RECOVERIES_PER_HOUR = 3;
-
-export type WatchdogAction = 'report' | 'restart' | 'snapshot';
 
 interface AgentWatchdogDeps {
   readonly timeoutMs: number;

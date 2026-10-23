@@ -4,17 +4,21 @@ import { listImages, readImageByName } from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
+import type { Clock } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSingleFlight } from '../../platform/process/single-flight';
-import { checkReferenceRegistry } from '../docker-proxy/rules';
+import { checkReferenceRegistry } from '../docker-contract/check-registry';
+import { parseImageReference } from '../docker-contract/parse-image-reference';
 import type { ImpsConfig } from '../imps-config';
-import { createBuildEngine, toEngineRun } from './build-engine';
-import { BUILDER_IMAGE } from './builder-imps';
-import type { Builders } from './builder-imps';
-import { requireClientImageName, requireDockerImage } from './create-image-writer';
-import type { ImageWriter } from './create-image-writer';
-import { loadGuestImage } from './guest-build';
+import { createBuildEngine, toEngineRun } from './build/build-engine';
+import { loadGuestImage } from './build/guest-build';
+import { BUILDER_IMAGE } from './builders/builder-imps';
+import type { Builders } from './builders/builder-imps';
 import { deriveImageName } from './image-naming';
+import { requireClientImageName } from './require-client-image-name';
+import { requireDockerImage } from './rootfs/create-image-writer';
+import type { ImageWriter } from './rootfs/create-image-writer';
 
 export const FALLBACK_DEFAULT_IMAGE = 'ubuntu';
 const SEED_REF = 'ubuntu:24.04';
@@ -48,7 +52,8 @@ interface ImageAddsDeps {
   readonly db: ImpDatabase;
 
   readonly readBuilders: () => Builders | null;
-  readonly log: (message: string) => void;
+
+  readonly clock: Pick<Clock, 'now'>;
 
   readonly builderImagePullMs?: number | undefined;
 
@@ -75,7 +80,7 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
     const explicitRef = formatExplicitRef(ref);
 
     return builders.withBuilder(signal, async (exec) => {
-      const started = performance.now();
+      const started = deps.clock.now();
 
       const platform = await createBuildEngine(toEngineRun(exec)).readPlatform(signal);
       const pulled = await loadGuestImage(exec, { ref: explicitRef, platform, signal });
@@ -84,16 +89,25 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
         options.onResolved?.(pulled);
       }
 
-      const pullMs = Math.round(performance.now() - started);
+      const pullMs = Math.round(deps.clock.now() - started);
 
       options.setPhase?.('unpack');
 
       const image = await writer.writeGuestImage(exec, imageName, ref, signal);
 
-      const imageMs = Math.round(performance.now() - started) - pullMs;
+      const imageMs = Math.round(deps.clock.now() - started) - pullMs;
 
-      deps.log(
-        `impd: image add ${imageName}: ${explicitRef} for ${platform}${pulled === null ? '' : ` (${pulled})`}, digest ${image.digest}; pull=${String(pullMs)}ms image=${String(imageMs)}ms`,
+      getImpdLogger('image').info(
+        'image add {imageName}: {ref} for {platform}{resolved}, digest {digest}; pull={pullMs}ms image={imageMs}ms',
+        {
+          imageName,
+          ref: explicitRef,
+          platform,
+          resolved: pulled === null ? '' : ` (${pulled})`,
+          digest: image.digest,
+          pullMs,
+          imageMs,
+        },
       );
 
       return image;
@@ -190,11 +204,9 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
 }
 
 function formatExplicitRef(ref: string): string {
-  const [withoutDigest = ''] = ref.split('@');
-  const lastSlash = withoutDigest.lastIndexOf('/');
-  const hasTag = withoutDigest.includes(':', lastSlash + 1);
+  const parsed = parseImageReference(ref);
 
-  return ref.includes('@') || hasTag ? ref : `${ref}:latest`;
+  return parsed.digest === null && parsed.tag === null ? `${ref}:latest` : ref;
 }
 
 // The ref goes into docker's argv, where a leading `-` reads as a flag, so every caller is

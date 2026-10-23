@@ -5,9 +5,9 @@ import { IMAGE_BUILD_STREAM_TYPE, ImageBuildQuerySchema, callerContract } from '
 import type { Image, ImageBuildQuery } from '@impz/api';
 import { ORPCError } from '@orpc/server';
 import { checkAccess, findDeclaredAccess } from '../../identity/auth/access-policy';
-import { createBuildEventStream } from '../../imps/images/build-event-stream';
-import type { BuildReport, Repeat } from '../../imps/images/build-event-stream';
-import type { BuildRun } from '../../imps/images/create-build-runs';
+import { createBuildEventStream } from '../../imps/images/build/build-event-stream';
+import type { BuildReport, Repeat } from '../../imps/images/build/build-event-stream';
+import type { BuildRun } from '../../imps/images/build/create-build-runs';
 import type { ImageService } from '../../imps/images/image-service';
 import type { ApiAudit } from '../../platform/audit/api-audit';
 import type { ImageRecord } from '../../platform/db/images';

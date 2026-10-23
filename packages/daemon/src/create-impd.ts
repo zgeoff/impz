@@ -16,8 +16,8 @@ import { createBackupService } from './imp-ops/backup/backup-service';
 import { createIdleLoop } from './imp-ops/idle/idle-loop';
 import type { ImpdBoundaries, ImpdDeps } from './impd-deps';
 import type { ImpdStartupStep, RunImpdStartupStep } from './impd-startup-steps';
-import { createBuilders } from './imps/images/builder-imps';
-import { readSetfcapWarning } from './imps/images/unpack-export';
+import { createBuilders } from './imps/images/builders/builder-imps';
+import { readSetfcapWarning } from './imps/images/rootfs/unpack-export';
 import { createKernelOopsWatch } from './imps/imps/kernel-oops-watch';
 import { removeUnusedDrives } from './imps/imps/remove-unused-drives';
 import { createAuthorizedKeys } from './imps/ssh/authorized-keys';
@@ -233,7 +233,6 @@ async function startImpdParts(
     db,
     imps: { ...imps, ...deps.agent },
     ensureImage: stored.images.ensureBuilderImage,
-    log,
     testRegistry: firewall.testRegistry,
   });
 

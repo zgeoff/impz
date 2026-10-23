@@ -3,10 +3,10 @@ import {
   buildAgentUnknownError,
   hasFeature,
 } from '../agent-client/agent-outdated';
-import type { GrowRequest } from '../governor/ram-governor';
+import type { GrowRequest } from '../imps-contract/grow-request';
 import type { ImpPaths } from '../storage/data-layout';
+import { GROW_STEP_MIB, getLowMib, getRegionMib, getStructPageMib } from '../vmm/elastic-memory';
 import type { GuestMemory, VmRunner } from '../vmm/vm-runner';
-import { GROW_STEP_MIB, getLowMib, getRegionMib, getStructPageMib } from './elastic-memory';
 import type { MemoryLimit } from './memory-limit';
 import { getShrinkTargetMib, shrinkGuest } from './shrink-guest';
 

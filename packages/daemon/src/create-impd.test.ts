@@ -15,6 +15,7 @@ import { createStubDockerCli } from '../testing/imps/create-stub-docker-cli';
 import { readNoTailscale } from '../testing/network/read-no-tailscale';
 import { buildQueryGate } from '../testing/platform/build-query-gate';
 import { buildStubTickerTimer } from '../testing/platform/build-stub-ticker-timer';
+import { captureImpdLogs } from '../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../testing/start-test-impd';
 import { TEST_TOKEN } from '../testing/test-token';
 import { buildStubCpuCgroups } from '../testing/vm/build-stub-cpu-cgroups';
@@ -22,8 +23,8 @@ import { buildStubVmm } from '../testing/vm/build-stub-vmm';
 import { loadConfig } from './config';
 import { createImpd } from './create-impd';
 import type { ImpdBoundaries } from './impd-deps';
-import { DEFAULT_BUILD_IMAGE } from './imps/images/build-image';
-import { readSetfcapWarning } from './imps/images/unpack-export';
+import { DEFAULT_BUILD_IMAGE } from './imps/docker-contract/build-image';
+import { readSetfcapWarning } from './imps/images/rootfs/unpack-export';
 import { createImage } from './platform/db/images';
 import { createImp, listImps } from './platform/db/imps';
 import { openDatabase } from './platform/db/open-database';
@@ -259,6 +260,8 @@ test('it removes a system drive that no imp uses when it boots', async () => {
 test('it removes a builder that a stopped impd left when it boots', async () => {
   const ctx = await setupTest();
 
+  const lines = captureImpdLogs();
+
   const image = await createImage(
     ctx.db,
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
@@ -271,7 +274,10 @@ test('it removes a builder that a stopped impd left when it boots', async () => 
 
   await ctx.restartImpd();
 
-  expect(ctx.logs).toContain('impd: removing builder imp-build-left, which a stopped impd left');
+  expect(lines).toContain(
+    'INFO impd.image removing builder imp-build-left, which a stopped impd left',
+  );
+
   expect(listImps(ctx.db)).resolves.toStrictEqual([]);
 });
 

@@ -1,10 +1,10 @@
+import { requireTransition } from '../../platform/db/imp-transitions';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { isLockedImp, toLockedImp } from './imp-lock';
 import type { LockedImp } from './imp-lock';
-import { requireTransition } from './imp-transitions';
 
 export async function updateLockedImpState(
   db: ImpDatabase,

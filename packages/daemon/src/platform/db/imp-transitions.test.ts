@@ -1,0 +1,111 @@
+import { expect, test } from 'bun:test';
+import type { ImpState } from '@impz/api';
+import { ImpdError } from '../errors/impd-error';
+import { canTransition, collectStatesLeadingTo, requireTransition } from './imp-transitions';
+
+test.each<[ImpState, ImpState]>([
+  ['creating', 'running'],
+  ['creating', 'stopped'],
+  ['creating', 'error'],
+  ['running', 'stopped'],
+  ['running', 'sleeping'],
+  ['running', 'error'],
+  ['sleeping', 'running'],
+  ['sleeping', 'stopped'],
+  ['sleeping', 'error'],
+  ['stopped', 'running'],
+  ['stopped', 'error'],
+  ['error', 'running'],
+  ['error', 'stopped'],
+])('#canTransition allows %s to %s', (from, to) => {
+  expect(canTransition(from, to)).toBeTrue();
+});
+
+test.each<[ImpState, ImpState]>([
+  ['creating', 'sleeping'],
+  ['running', 'running'],
+  ['stopped', 'sleeping'],
+  ['error', 'sleeping'],
+])('#canTransition refuses %s to %s', (from, to) => {
+  expect(canTransition(from, to)).toBeFalse();
+});
+
+test.each<[string, string, string]>([
+  ['constructor', 'name', 'Object'],
+  ['__proto__', 'constructor', 'any'],
+  ['running', 'constructor', 'any'],
+  ['running', '__proto__', 'any'],
+  ['hibernating', 'running', 'any'],
+  ['running', 'hibernating', 'any'],
+  ['running', 'sleeping', 'teleport'],
+  ['running', 'sleeping', 'constructor'],
+])('#canTransition refuses the unknown move %s to %s via %s', (from, to, via) => {
+  const answer: unknown = Reflect.apply(canTransition, undefined, [from, to, via]);
+
+  expect(answer).toBeFalse();
+});
+
+test('#canTransition allows a warm move stopped to sleeping', () => {
+  expect(canTransition('stopped', 'sleeping', 'warm move')).toBeTrue();
+});
+
+test('#canTransition allows a warm move every edge open to any action', () => {
+  expect(canTransition('running', 'sleeping', 'warm move')).toBeTrue();
+});
+
+test.each<[ImpState]>([['creating'], ['error']])(
+  '#canTransition refuses a warm move %s to sleeping',
+  (from) => {
+    expect(canTransition(from, 'sleeping', 'warm move')).toBeFalse();
+  },
+);
+
+test('#collectStatesLeadingTo names only running for a sleep', () => {
+  expect(collectStatesLeadingTo('sleeping')).toStrictEqual(['running']);
+});
+
+test('#collectStatesLeadingTo names running and stopped for a warm move to sleeping', () => {
+  expect(collectStatesLeadingTo('sleeping', 'warm move')).toStrictEqual(['running', 'stopped']);
+});
+
+test('#collectStatesLeadingTo names every state that can reach running', () => {
+  expect(collectStatesLeadingTo('running')).toStrictEqual([
+    'creating',
+    'sleeping',
+    'stopped',
+    'error',
+  ]);
+});
+
+test('#collectStatesLeadingTo names every state that can reach stopped', () => {
+  expect(collectStatesLeadingTo('stopped')).toStrictEqual([
+    'creating',
+    'running',
+    'sleeping',
+    'error',
+  ]);
+});
+
+test('#collectStatesLeadingTo names no state for creating', () => {
+  expect(collectStatesLeadingTo('creating')).toBeEmpty();
+});
+
+test('#requireTransition passes an allowed transition', () => {
+  expect(() => {
+    requireTransition('running', 'stopped', 'stop');
+  }).not.toThrow();
+});
+
+test('#requireTransition throws INVALID_STATE with the states that lead to the target', () => {
+  const refusal = Promise.try(() => {
+    requireTransition('stopped', 'sleeping', 'sleep');
+  });
+
+  expect(refusal).rejects.toStrictEqual(
+    new ImpdError('INVALID_STATE', {
+      status: 409,
+      message: 'cannot sleep an imp that is stopped (allowed: running)',
+      data: { state: 'stopped', allowed: ['running'] },
+    }),
+  );
+});

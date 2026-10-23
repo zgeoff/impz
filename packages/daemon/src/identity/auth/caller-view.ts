@@ -6,7 +6,7 @@ import { buildForbiddenError } from '../../platform/errors/impd-errors';
 import { LeasedError } from '../../platform/errors/leased-error';
 import { formatCaller, isCallerAllowed } from '../../platform/principal/caller';
 import type { Caller } from '../../platform/principal/caller';
-import { RamBudgetError } from '../../vm/governor/ram-budget-error';
+import { RamBudgetError } from '../../vm/imps-contract/ram-budget-error';
 
 function canSeeEveryOwner(caller: Readonly<Caller>): boolean {
   return caller.imps === null && hasScope(caller.scope, 'manage');

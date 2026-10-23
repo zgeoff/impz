@@ -1,4 +1,4 @@
-import type { ReadDataBlocksOptions } from '../../src/imp-ops/backup/read-data-blocks';
+import type { ReadDataBlocksOptions } from '../../src/vm/storage/read-data-blocks';
 
 const SEEK_DATA = 3;
 const SEEK_HOLE = 4;

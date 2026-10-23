@@ -1,4 +1,5 @@
 import type { GuestNetBytes } from '../../host-net/net/tap-bytes';
+import type { ResourceDelta } from '../../platform/telemetry/resource-delta';
 import type { CpuStat } from '../../vm/vmm/cpu-cgroups';
 
 // /proc/<pid>/stat counts CPU time in USER_HZ ticks, hundredths of a second.
@@ -13,15 +14,6 @@ interface ResourceSample {
   readonly netTxBytes: number;
   readonly ramMib: number | null;
   readonly rssMib: number | null;
-}
-
-export interface ResourceDelta {
-  readonly intervalMs: number;
-  readonly cpuPercent: number;
-  readonly cpuUsec: number;
-  readonly throttledUsec: number;
-  readonly netRxBytes: number;
-  readonly netTxBytes: number;
 }
 
 interface VmMemory {

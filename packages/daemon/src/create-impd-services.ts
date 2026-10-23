@@ -45,7 +45,7 @@ export function createImpdServices(
     storageGate: parts.storage.storageGate,
     diskBudget: parts.storage.diskBudget,
     runImageEviction: parts.storage.images.runImageEviction,
-    now: deps.now ?? Date.now,
+    ...(deps.now !== undefined && { clock: { now: deps.now } }),
     log,
     ...freezer,
   });

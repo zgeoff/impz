@@ -1,5 +1,7 @@
 import { rmSync } from 'node:fs';
 import type { Checkpoint, Imp } from '@impz/api';
+import { createConsistentDisk } from '../../imps/imps/consistent-disk';
+import type { DiskFreezer } from '../../imps/imps/consistent-disk';
 import { toLockedImp } from '../../imps/imps/imp-lock';
 import type { ImpCheckpointHooks } from '../../imps/imps/imp-service';
 import { updateLockedImpState } from '../../imps/imps/update-locked-imp-state';
@@ -24,8 +26,6 @@ import {
 } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { printLog } from '../../platform/process/print-log';
-import { createConsistentDisk } from '../../vm/checkpoints/consistent-disk';
-import type { DiskFreezer } from '../../vm/checkpoints/consistent-disk';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import type { StorageBackend } from '../../vm/storage/storage-backend';

@@ -3,7 +3,7 @@ import type { Hash } from 'node:crypto';
 import { open } from 'node:fs/promises';
 import * as z from 'zod';
 import type { StreamedCommand } from '../../platform/process/run-stream';
-import { readDataBlocks } from '../backup/read-data-blocks';
+import { readDataBlocks } from '../../vm/storage/read-data-blocks';
 
 export const MOVE_FRAMES = { header: 1, file: 2, data: 3, fileEnd: 4, end: 5 } as const;
 

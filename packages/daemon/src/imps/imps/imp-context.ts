@@ -12,7 +12,7 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import type { EventBus } from '../../platform/events/event-bus';
 import { printLog } from '../../platform/process/print-log';
 import type { openTapStream } from '../../vm/agent-client/exec-stream';
-import type { RamAdmission } from '../../vm/governor/ram-governor';
+import type { RamAdmission } from '../../vm/imps-contract/ram-admission';
 import { NO_MEMORY_LIMIT } from '../../vm/memory/memory-limit';
 import type { MemoryLimit } from '../../vm/memory/memory-limit';
 import { createPluggedSizes } from '../../vm/memory/plugged-sizes';
