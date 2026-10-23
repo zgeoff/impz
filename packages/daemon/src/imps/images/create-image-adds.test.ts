@@ -128,6 +128,51 @@ test('it adds an image through a builder for one platform, with no host engine c
   );
 });
 
+test('it adds an image through a builder, with no host engine call, under a leftover IMP_BUILD_ISOLATION=host', async () => {
+  const ctx = await setupTest();
+
+  const config = loadConfig({
+    IMP_DATA_DIR: ctx.dataDir,
+    IMP_BUILD_MEMORY_MIB: '512',
+    IMP_BUILD_DISK_GIB: '4',
+    IMP_BUILD_ISOLATION: 'host',
+  });
+
+  await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    config,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: ctx.impd.storageGate,
+    diskBudget: ctx.impd.diskBudget,
+    readBuilders: () => builders,
+    log: () => {},
+  });
+
+  const builders = createBuilders({
+    config,
+    db: ctx.db,
+    imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    ensureImage: (signal) => images.ensureBuilderImage(signal),
+    log: () => {},
+  });
+
+  const image = await images.addImage('busybox', 'box');
+
+  expect(existsSync(buildImagePaths(ctx.dataDir, image.digest).rootfs)).toBeTrue();
+  expect(ctx.docker.readCalls()).toStrictEqual([]);
+
+  expect(builder.guest.runs.map((run) => run.argv.slice(1).join(' '))).toContain(
+    'pull --quiet --platform linux/amd64 busybox:latest',
+  );
+});
+
 test('it returns a failed pull in the builder as the client error', async () => {
   const ctx = await setupTest();
 

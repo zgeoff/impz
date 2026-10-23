@@ -180,6 +180,47 @@ test('it pins, builds and exports in its builder, with no host engine call', asy
   ]);
 });
 
+test('it builds in its builder, with no host engine call, under a leftover IMP_BUILD_ISOLATION=host', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_ISOLATION: 'host' }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => builder.builders,
+    log: () => {},
+  });
+
+  await Bun.write(
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+  );
+
+  const image = await images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
+
+  expect(existsSync(buildImagePaths(ctx.dataDir, image.digest).rootfs)).toBeTrue();
+
+  expect(builder.builtDockerfiles).toStrictEqual([
+    `FROM base.test/a@sha256:${'a'.repeat(64)}\nRUN true\n`,
+  ]);
+
+  expect(ctx.docker.readCalls()).toStrictEqual([]);
+});
+
 test('it lists an on-host build with its builder and step while it runs, and sends its output', async () => {
   const ctx = await setupTest();
 
