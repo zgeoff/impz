@@ -2,7 +2,9 @@ import * as z from 'zod';
 import { EGRESS_MODE_TRAITS } from './egress-mode-traits';
 
 const HOST_PATTERN = /^(?:[a-z0-9_][a-z0-9_-]{0,62}\.)+[a-z][a-z0-9-]{0,62}$/u;
-const CIDR_PATTERN = /^(?<address>(?:\d{1,3}\.){3}\d{1,3})(?:\/(?<prefix>\d{1,2}))?$/u;
+
+const CIDR_PATTERN =
+  /^(?<address>(?:(?:0|[1-9]\d{0,2})\.){3}(?:0|[1-9]\d{0,2}))(?:\/(?<prefix>\d{1,2}))?$/u;
 
 export const EgressModeSchema = z.enum(['open', 'public', 'box', 'none']);
 

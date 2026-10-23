@@ -1,6 +1,5 @@
 import { copyFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { EgressPolicySchema } from '@impz/api';
 import type { BackupRestore, EgressPolicy, Imp } from '@impz/api';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImageService } from '../../imps/images/image-service';
@@ -16,6 +15,7 @@ import {
 } from '../../platform/db/images';
 import { listImps, readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { parseEgressPolicy } from '../../platform/db/parse-egress-policy';
 import { ImpdError } from '../../platform/errors/impd-error';
 import {
   buildConflictError,
@@ -450,10 +450,10 @@ async function createCheckpointDisk(deps: RestoreDeps, impId: string) {
 }
 
 function resolveEgressPolicy(deps: RestoreDeps, name: string, imp: ManifestImp): EgressPolicy {
-  const parsed = EgressPolicySchema.safeParse({ mode: imp.egressPolicy, allow: imp.egressAllow });
+  const policy = parseEgressPolicy(imp.egressPolicy, imp.egressAllow);
 
-  if (parsed.success) {
-    return parsed.data;
+  if (policy !== null) {
+    return policy;
   }
 
   deps.log(

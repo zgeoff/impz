@@ -3,7 +3,6 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { copyFile, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EgressPolicy, WarmHost } from '@impz/api';
-import { EgressPolicySchema } from '@impz/api';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
@@ -20,6 +19,7 @@ import { readImpById } from '../../platform/db/imps';
 import { updateMoveTicket } from '../../platform/db/move-tickets';
 import type { MoveTicketRow } from '../../platform/db/move-tickets';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { parseEgressPolicy } from '../../platform/db/parse-egress-policy';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
 import { toDigestHex } from '../../vm/storage/data-layout';
@@ -439,10 +439,10 @@ function buildReceivedDigest(rootfsSha256: string, configSha256: string): string
 }
 
 function resolvePolicy(header: MoveHeader, log: (message: string) => void): EgressPolicy {
-  const parsed = EgressPolicySchema.safeParse(header.imp.egress);
+  const policy = parseEgressPolicy(header.imp.egress.mode, header.imp.egress.allow);
 
-  if (parsed.success) {
-    return parsed.data;
+  if (policy !== null) {
+    return policy;
   }
 
   log(`impd: move: ${header.imp.name}: unknown egress policy; received as none`);
