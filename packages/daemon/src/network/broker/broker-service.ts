@@ -241,6 +241,9 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     listSecrets: secrets.listSecrets,
     refreshSecret: secrets.refreshSecret,
     deleteSecret: secrets.removeSecret,
+
+    // Never cached: a secret's name can come to mean another secret than the
+    // one a token was given.
     readSecretGeneration: async (name) => {
       const secret = await readSecret(db, name);
 
