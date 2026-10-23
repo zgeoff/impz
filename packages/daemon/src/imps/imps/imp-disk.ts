@@ -1,7 +1,6 @@
 import { statSync, truncateSync } from 'node:fs';
 import { formatBytes } from '@impz/shared';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { runChecked } from '../../platform/process/run-command';
 
 export const MIB = 1024 * 1024;
@@ -39,7 +38,7 @@ export function readFileBytes(path: string): number {
 }
 
 export function buildDiskTooSmallError(diskBytes: number, floorBytes: number, why: string) {
-  return new ORPCError('BAD_REQUEST', {
+  return new ImpdError('BAD_REQUEST', {
     message: `a disk of ${formatBytes(diskBytes)} is smaller than ${why} (${formatBytes(floorBytes)})`,
   });
 }

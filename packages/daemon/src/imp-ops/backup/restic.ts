@@ -1,8 +1,7 @@
 import * as z from 'zod';
+import { buildNotFoundError } from '../../platform/errors/impd-errors';
 import { runCommand } from '../../platform/process/run-command';
 import type { CommandResult } from '../../platform/process/run-command';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildNotFoundError } from '../../surface/api-errors';
 import type { BackupConfig, BackupKeep } from './backup-config';
 
 type ResticRunner = (

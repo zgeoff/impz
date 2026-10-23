@@ -305,11 +305,14 @@ export async function startTestImpd(
         },
         forward: () => Promise.reject(new Error('no upstream in tests')),
         resolveExact: () => Promise.resolve([]),
+        ...extra.egress,
+      },
+      reach: {
         readConnected6: () => Promise.resolve(['2001:db8:a::/64']),
         readConnected4: () => Promise.resolve(['172.17.0.0/16', '172.17.0.2/32', '44.0.0.0/24']),
         readUplinks:
           options.readUplinks ?? (() => Promise.resolve({ ipv4: ['eth0'], ipv6: ['eth0'] })),
-        ...extra.egress,
+        ...extra.reach,
       },
       imps: {
         readRamMib: (pid) => (fake.alive.has(pid) ? FAKE_VM_RAM_MIB : null),

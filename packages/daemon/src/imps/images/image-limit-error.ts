@@ -1,7 +1,6 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 
-export class ImageLimitError extends ORPCError<'BAD_REQUEST', undefined> {
+export class ImageLimitError extends ImpdError<'BAD_REQUEST'> {
   override readonly name = 'ImageLimitError';
 
   constructor(limit: 'bytes' | 'files', max: number) {

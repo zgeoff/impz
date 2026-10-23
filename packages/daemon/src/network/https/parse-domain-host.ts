@@ -1,15 +1,16 @@
 import { NameSchema } from '@impz/api';
+import { normalizeHost } from '../proxy/normalize-host';
 
 export type DomainRoute =
   | { readonly kind: 'apex' }
   | { readonly kind: 'imp'; readonly name: string };
 
 export function parseDomainHost(host: string | null, domain: string): DomainRoute | null {
-  if (host === null || host.startsWith('[')) {
+  const hostname = normalizeHost(host);
+
+  if (hostname === null) {
     return null;
   }
-
-  const hostname = host.replace(/:\d+$/u, '').replace(/\.$/u, '').toLowerCase();
 
   if (hostname === domain) {
     return { kind: 'apex' };

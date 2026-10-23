@@ -1,5 +1,4 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildExitError, runCommand } from '../../platform/process/run-command';
 import type { CommandResult } from '../../platform/process/run-command';
@@ -11,7 +10,7 @@ interface DockerOptions {
   readonly signal?: AbortSignal;
 }
 
-export function readRefusalError(call: string, output: string): ORPCError<string, unknown> | null {
+export function readRefusalError(call: string, output: string): ImpdError | null {
   const refusal = readProxyRefusal(output);
 
   if (refusal === null) {
@@ -20,7 +19,7 @@ export function readRefusalError(call: string, output: string): ORPCError<string
 
   getImpdLogger('image').warning('{call} refused: {refusal}', { call, refusal });
 
-  return new ORPCError('BAD_REQUEST', { message: refusal });
+  return new ImpdError('BAD_REQUEST', { message: refusal });
 }
 
 export async function runDocker(

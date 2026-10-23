@@ -3,14 +3,8 @@ import { probeUnshare } from '../../../testing/host-net/probe-unshare';
 import { runInNetns } from '../../../testing/host-net/run-in-netns';
 import { buildMockFirewallSlot } from '../../../testing/network/build-mock-firewall-slot';
 import { buildStubPublicNetwork } from '../../../testing/network/build-stub-public-network';
-import { BLOCKED_RANGES6, DOCUMENTATION_RANGES6 } from '../../host-net/net/ranges6';
-import { REFUSED_RANGES } from '../broker/tunnel-target';
-import {
-  buildElementChange,
-  buildNat66Removal,
-  buildNat66Ruleset,
-  buildRuleset,
-} from './egress-ruleset';
+import { BLOCKED_RANGES6, DOCUMENTATION_RANGES6, REFUSED_RANGES4 } from '../../host-net/net/ranges';
+import { buildElementChange, buildRuleset } from './egress-ruleset';
 
 test('#buildRuleset writes the whole table for one slot of each mode and a network', () => {
   const script = buildRuleset({
@@ -518,26 +512,6 @@ test('#buildElementChange writes nothing for no addresses', () => {
   expect(buildElementChange('add', 0, [])).toBe('');
 });
 
-test('#buildNat66Removal deletes the NAT66 table whether or not it exists', () => {
-  expect(buildNat66Removal()).toBe('table ip6 imp_nat66 {}\ndelete table ip6 imp_nat66\n');
-});
-
-test('#buildNat66Ruleset masquerades the prefix out of the uplink in a table of its own', () => {
-  expect(buildNat66Ruleset('fd12:3456:789a::/64', 'eth0')).toBe(
-    [
-      'table ip6 imp_nat66 {}',
-      'delete table ip6 imp_nat66',
-      'table ip6 imp_nat66 {',
-      '  chain postrouting {',
-      '    type nat hook postrouting priority srcnat; policy accept;',
-      '    oifname "eth0" ip6 saddr fd12:3456:789a::/64 masquerade',
-      '  }',
-      '}',
-      '',
-    ].join('\n'),
-  );
-});
-
 test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
   '#buildRuleset applies over the table it already applied',
   () => {
@@ -574,15 +548,9 @@ test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
       networks: [],
       subnet: '10.66.0.0/16',
       dnsServers: ['1.1.1.1', '8.8.8.8'],
-      privateRanges: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
       blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64'],
-      public4: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
       public6: [
         ...BLOCKED_RANGES6,
         'fd12:3456:789a::/64',
@@ -649,15 +617,9 @@ test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
       networks: [],
       subnet: '10.66.0.0/16',
       dnsServers: ['1.1.1.1', '8.8.8.8'],
-      privateRanges: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
       blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64'],
-      public4: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
       public6: [
         ...BLOCKED_RANGES6,
         'fd12:3456:789a::/64',
@@ -729,15 +691,9 @@ test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
       networks: [],
       subnet: '10.66.0.0/16',
       dnsServers: ['1.1.1.1', '8.8.8.8'],
-      privateRanges: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
       blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64'],
-      public4: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
       public6: [
         ...BLOCKED_RANGES6,
         'fd12:3456:789a::/64',
@@ -774,15 +730,9 @@ test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
       networks: [],
       subnet: '10.66.0.0/16',
       dnsServers: ['1.1.1.1', '8.8.8.8'],
-      privateRanges: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
       blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64'],
-      public4: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
       public6: [
         ...BLOCKED_RANGES6,
         'fd12:3456:789a::/64',
@@ -851,15 +801,9 @@ test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
       networks: [],
       subnet: '10.66.0.0/16',
       dnsServers: ['1.1.1.1', '8.8.8.8'],
-      privateRanges: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
       blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64'],
-      public4: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
       public6: [
         ...BLOCKED_RANGES6,
         'fd12:3456:789a::/64',
@@ -898,68 +842,6 @@ for slot in 0 1 2; do nft list chain inet imp_egress slot$slot | grep -E 'saddr|
       stderr: '',
       exitCode: 0,
     });
-  },
-);
-
-test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
-  "#buildNat66Ruleset masquerades the guests' prefix out the uplink, applied twice",
-  () => {
-    const nat66 = buildNat66Ruleset('fd12:3456:789a::/64', 'eth0');
-
-    const run = runInNetns({
-      script: `
-printf '%s' "$NAT66" | nft -f -
-printf '%s' "$NAT66" | nft -f -
-nft list chain ip6 imp_nat66 postrouting | grep masquerade | sed 's/^[[:space:]]*//'
-`,
-      env: { NAT66: nat66 },
-      mount: false,
-    });
-
-    expect(run).toStrictEqual({
-      stdout: 'oifname "eth0" ip6 saddr fd12:3456:789a::/64 masquerade\n',
-      stderr: '',
-      exitCode: 0,
-    });
-  },
-);
-
-test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
-  '#buildNat66Removal applies where there is no NAT66 table',
-  () => {
-    const removal = buildNat66Removal();
-
-    const run = runInNetns({
-      script: `
-printf '%s' "$REMOVAL" | nft -f -
-nft list tables
-`,
-      env: { REMOVAL: removal },
-      mount: false,
-    });
-
-    expect(run).toStrictEqual({ stdout: '', stderr: '', exitCode: 0 });
-  },
-);
-
-test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
-  '#buildNat66Removal removes the NAT66 table',
-  () => {
-    const nat66 = buildNat66Ruleset('fd12:3456:789a::/64', 'eth0');
-    const removal = buildNat66Removal();
-
-    const run = runInNetns({
-      script: `
-printf '%s' "$NAT66" | nft -f -
-nft list tables
-printf '%s' "$REMOVAL" | nft -f -
-nft list tables
-`,
-      env: { NAT66: nat66, REMOVAL: removal },
-      mount: false,
-    });
-
-    expect(run).toStrictEqual({ stdout: 'table ip6 imp_nat66\n', stderr: '', exitCode: 0 });
   },
 );
 
@@ -1008,15 +890,9 @@ test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
       ],
       subnet: '10.66.0.0/16',
       dnsServers: ['1.1.1.1', '8.8.8.8'],
-      privateRanges: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
       blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64'],
-      public4: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
       public6: [
         ...BLOCKED_RANGES6,
         'fd12:3456:789a::/64',
@@ -1092,15 +968,9 @@ test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
       ],
       subnet: '10.66.0.0/16',
       dnsServers: ['1.1.1.1', '8.8.8.8'],
-      privateRanges: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
       blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64'],
-      public4: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
       public6: [
         ...BLOCKED_RANGES6,
         'fd12:3456:789a::/64',
@@ -1146,15 +1016,9 @@ test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(
       networks: [[{ tap: 'imp1', guestIp: '10.66.0.6' }]],
       subnet: '10.66.0.0/16',
       dnsServers: ['1.1.1.1', '8.8.8.8'],
-      privateRanges: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
       blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64'],
-      public4: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
       public6: [
         ...BLOCKED_RANGES6,
         'fd12:3456:789a::/64',
@@ -1235,15 +1099,9 @@ test.skipIf(
     ],
     subnet: '10.66.0.0/16',
     dnsServers: ['1.1.1.1', '8.8.8.8'],
-    privateRanges: [
-      ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-      '10.66.0.0/16',
-    ],
+    privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
     blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64'],
-    public4: [
-      ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-      '10.66.0.0/16',
-    ],
+    public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
     public6: [
       ...BLOCKED_RANGES6,
       'fd12:3456:789a::/64',
@@ -1346,13 +1204,10 @@ test.skipIf(
     networks: [],
     subnet: '10.66.0.0/16',
     dnsServers: ['1.1.1.1', '8.8.8.8'],
-    privateRanges: [
-      ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-      '10.66.0.0/16',
-    ],
+    privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
     blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64', '2a00:44::/64'],
     public4: [
-      ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
+      ...REFUSED_RANGES4,
       '10.66.0.0/16',
       '44.0.0.0/24',
       '44.0.0.1/32',
@@ -1433,15 +1288,9 @@ test.skipIf(
     networks: [],
     subnet: '10.66.0.0/16',
     dnsServers: ['1.1.1.1', '8.8.8.8'],
-    privateRanges: [
-      ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-      '10.66.0.0/16',
-    ],
+    privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
     blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64'],
-    public4: [
-      ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-      '10.66.0.0/16',
-    ],
+    public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
     public6: [
       ...BLOCKED_RANGES6,
       'fd12:3456:789a::/64',
@@ -1505,15 +1354,9 @@ test.skipIf(
       networks: [],
       subnet: '10.66.0.0/16',
       dnsServers: ['1.1.1.1', '8.8.8.8'],
-      privateRanges: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
       blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64', '2001:db8:a::/64'],
-      public4: [
-        ...REFUSED_RANGES.map(([network, prefix]) => `${network}/${String(prefix)}`),
-        '10.66.0.0/16',
-      ],
+      public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
       public6: [
         ...BLOCKED_RANGES6,
         'fd12:3456:789a::/64',

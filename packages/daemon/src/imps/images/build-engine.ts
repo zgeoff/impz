@@ -1,6 +1,5 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import * as z from 'zod';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
 import type { ExternalImage } from './dockerfile-check';
@@ -82,7 +81,7 @@ export function createBuildEngine(run: EngineRun): BuildEngine {
       const pulled = await runAborting(['docker', 'pull', '--quiet', ref], signal);
 
       if (pulled.exitCode !== 0) {
-        throw new ORPCError('BAD_REQUEST', {
+        throw new ImpdError('BAD_REQUEST', {
           message: `${image.use} ${ref}: the pull failed: ${pulled.stderr.trim().slice(-FAILURE_MAX_CHARS)}`,
         });
       }
@@ -108,7 +107,7 @@ export function createBuildEngine(run: EngineRun): BuildEngine {
       const pulled = await runAborting(['docker', 'pull', '--quiet', DOCKERFILE_FRONTEND], signal);
 
       if (pulled.exitCode !== 0) {
-        throw new ORPCError('BAD_GATEWAY', {
+        throw new ImpdError('BAD_GATEWAY', {
           message: `the Dockerfile frontend ${DOCKERFILE_FRONTEND}: the pull failed: ${pulled.stderr.trim().slice(-FAILURE_MAX_CHARS)}`,
         });
       }

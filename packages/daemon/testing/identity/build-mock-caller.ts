@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { Caller } from '../../src/identity/auth/caller';
+import type { Caller } from '../../src/platform/principal/caller';
 
 export function buildMockCaller(overrides: Partial<Caller> = {}): Caller {
   const tokenId = overrides.tokenId === undefined ? faker.string.uuid() : overrides.tokenId;

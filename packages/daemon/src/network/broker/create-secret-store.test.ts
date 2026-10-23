@@ -7,10 +7,12 @@ import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
+import { buildStubHostRoutes } from '../../../testing/host-net/build-stub-host-routes';
 import { buildStubBrokerJwt } from '../../../testing/network/build-stub-broker-jwt';
 import { createStubBrokerTokenEndpoint } from '../../../testing/network/create-stub-broker-token-endpoint';
 import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
+import { createReachPolicy } from '../../host-net/net/reach-policy';
 import { readImpByName } from '../../platform/db/imps';
 import { readSecret, removeSecret, upsertSecret } from '../../platform/db/secrets';
 import type { SecretRecord } from '../../platform/db/secrets';
@@ -24,7 +26,15 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack);
 
-  return Object.assign(harness, { stack });
+  const reach = createReachPolicy({
+    subnet: harness.config.subnet,
+    deny: [],
+    ipv6: null,
+    now: Date.now,
+    ...buildStubHostRoutes().deps,
+  });
+
+  return Object.assign(harness, { stack, reach });
 }
 
 test('it sends the first refresh once the row is committed', async () => {
@@ -841,7 +851,12 @@ test('it refreshes a pending secret when the broker starts', async () => {
 
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
-  const started = await createBroker({ config: ctx.config, db: ctx.db, log: () => {} });
+  const started = await createBroker({
+    config: ctx.config,
+    db: ctx.db,
+    log: () => {},
+    reach: ctx.reach,
+  });
 
   ctx.stack.defer(() => started.stop());
 
@@ -1242,6 +1257,7 @@ test('it keeps aside a new file whose row never came, on the next start', async 
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: ctx.reach,
   });
 
   ctx.stack.defer(() => restarted.stop());
@@ -1269,6 +1285,7 @@ test('it removes the old file of a committed replace, on the next start', async 
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: ctx.reach,
   });
 
   ctx.stack.defer(() => restarted.stop());
@@ -1343,6 +1360,7 @@ test('it removes on the next start the old file a replace could not, not keeping
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: ctx.reach,
   });
 
   ctx.stack.defer(() => restarted.stop());

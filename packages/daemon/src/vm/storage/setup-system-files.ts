@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Config } from '../../config';
 import { writeCopyDurably } from '../../platform/process/write-file-durably';
+import type { VmConfig } from '../vm-config';
 import { buildSystemDrivePath } from './data-layout';
 import { deriveFileSha256, readKernelInfo } from './system-file-info';
 import type { SystemFileInfo } from './system-file-info';
@@ -12,7 +12,9 @@ export interface SystemFiles {
   readonly info: SystemFileInfo;
 }
 
-export async function setupSystemFiles(config: Config): Promise<SystemFiles> {
+export async function setupSystemFiles(
+  config: Pick<VmConfig, 'dataDir' | 'kernelPath' | 'kernelSource' | 'systemDriveSource'>,
+): Promise<SystemFiles> {
   const kernelSource = config.kernelSource ?? config.kernelPath;
 
   if (!existsSync(kernelSource)) {

@@ -1,4 +1,3 @@
-import type { Config } from '../../config';
 import type { Revocations } from '../../identity/auth/revocations';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImpRuntime } from '../../imps/imps/imp-runtime';
@@ -8,13 +7,14 @@ import type { ApiAudit } from '../../platform/audit/api-audit';
 import { readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import type { SurfaceConfig } from '../surface-config';
 import { loadOrCreateHostKey, readFingerprint, setupSshDir } from './host-key';
 import { createLoginKeys } from './login-keys';
 import { startSshGateway } from './ssh-gateway';
 import type { SshGateway } from './ssh-gateway';
 
 interface StartSshDeps {
-  readonly config: Pick<Config, 'dataDir' | 'sshPort' | 'sshAuthorizedKeys'>;
+  readonly config: Pick<SurfaceConfig, 'dataDir' | 'sshPort' | 'sshAuthorizedKeys'>;
   readonly db: ImpDatabase;
   readonly authorizedKeys: AuthorizedKeys;
   readonly tokens: Pick<TokenStore, 'findSshKey'>;

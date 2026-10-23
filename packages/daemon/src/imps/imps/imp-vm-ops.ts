@@ -1,13 +1,11 @@
 import type { ColdBootCause } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import { removeNextBootCause, writeColdBoot } from '../../platform/db/cold-boots';
 import { removeIdentityReset, updateImpActivity, updateImpDisk } from '../../platform/db/imps';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
+import { ImpdError } from '../../platform/errors/impd-error';
+import { buildAgentOutdatedApiError, buildStoppingError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSemaphore } from '../../platform/process/semaphore';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildAgentOutdatedApiError, buildStoppingError } from '../../surface/api-errors';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
 import { removeSnapshot } from '../../vm/sleep/snapshot-meta';
 import { writeVmIdentity } from '../../vm/sleep/vm-identity';
@@ -289,7 +287,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
         );
       }
 
-      throw new ORPCError('INTERNAL_SERVER_ERROR', {
+      throw new ImpdError('INTERNAL_SERVER_ERROR', {
         message: `the disk grew, but the guest did not grow its filesystem (its next wake or boot does): ${message}`,
         cause: error,
       });

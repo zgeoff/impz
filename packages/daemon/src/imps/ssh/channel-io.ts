@@ -1,7 +1,6 @@
 import type { Readable, Writable } from 'node:stream';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import type { ServerChannel } from 'ssh2';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { AgentError } from '../../vm/agent-client/agent-connection';
 import type { DialStream } from '../../vm/agent-client/dial-stream';
@@ -70,7 +69,7 @@ export function formatFailure(error: unknown): string {
     return `${error.code}: ${error.detail}`;
   }
 
-  if (error instanceof ORPCError) {
+  if (error instanceof ImpdError) {
     return `${String(error.code)}: ${error.message}`;
   }
 

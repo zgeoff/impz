@@ -2,10 +2,7 @@ import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path';
 import { NameSchema } from '@impz/api';
 import type { ImageBuildPhase } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import * as z from 'zod';
-import type { Config } from '../../config';
 import {
   countImageDigestUses,
   createImage,
@@ -15,16 +12,17 @@ import {
 } from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { ImpdError } from '../../platform/errors/impd-error';
+import { buildConflictError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { runChecked, runCommand } from '../../platform/process/run-command';
 import { createSingleFlight } from '../../platform/process/single-flight';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildConflictError } from '../../surface/api-errors';
 import { buildImagePaths, buildImagesDir } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
+import type { ImpsConfig } from '../imps-config';
 import { BUILDER_IMAGE } from './builder-imps';
 import { writeGuestTree } from './guest-build';
 import type { GuestExec } from './guest-exec';
@@ -82,7 +80,7 @@ export interface ImageWriter {
 }
 
 interface ImageWriterDeps {
-  readonly config: Config;
+  readonly config: ImpsConfig;
   readonly db: ImpDatabase;
   readonly storage: StorageBackend;
 
@@ -426,7 +424,7 @@ export function requireClientImageName(name: string): string {
   const imageName = NameSchema.parse(name);
 
   if (imageName === BUILDER_IMAGE) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `the image name ${BUILDER_IMAGE} is impd's, for its image builders; pick another`,
     });
   }

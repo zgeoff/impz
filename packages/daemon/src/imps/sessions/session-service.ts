@@ -1,8 +1,7 @@
 import type { Session, SessionLog, SessionLogRead } from '@impz/api';
 import { updateImpActivity } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildAgentOutdatedApiError, buildNotFoundError } from '../../surface/api-errors';
+import { buildAgentOutdatedApiError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import { sendActivity, sendSessionKill } from '../../vm/agent-client/agent-requests';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
 import type { ImpGuest, ImpHost, ImpVms } from '../imps/imp-context';

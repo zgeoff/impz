@@ -9,6 +9,7 @@ import type { EgressService } from './network/egress/egress-service';
 import { createNetworkService } from './network/networks/network-service';
 import { createApiAudit } from './platform/audit/api-audit';
 import { printLog } from './platform/process/print-log';
+import { readErrorCode } from './surface/read-error-code';
 import { createStorageGc } from './vm/storage/storage-gc';
 
 export function createImpdServices(
@@ -59,7 +60,7 @@ export function createImpdServices(
     secretFiles: parts.secretFiles,
   });
 
-  const audit = createApiAudit({ db, now: deps.now ?? Date.now, log });
+  const audit = createApiAudit({ db, now: deps.now ?? Date.now, log, readErrorCode });
 
   return { checkpoints, templates, networks, gc, audit };
 }

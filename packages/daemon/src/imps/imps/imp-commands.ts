@@ -3,9 +3,9 @@ import type { EgressPolicy, Imp, ImpKind } from '@impz/api';
 import { listCheckpoints } from '../../platform/db/checkpoints';
 import type { ImageRecord } from '../../platform/db/images';
 import { listImps, removeImp, updateImpDisk, updateImpSettings } from '../../platform/db/imps';
+import { buildInvalidStateError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildInvalidStateError, isRamBudgetError } from '../../surface/api-errors';
+import { isRamBudgetError } from '../../vm/governor/ram-budget-error';
 import { resolveMaxMemoryMib } from '../../vm/memory/elastic-memory';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { resolveCpuSettings } from './cpu-limit';

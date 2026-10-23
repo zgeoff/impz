@@ -3,8 +3,7 @@ import { open } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { SessionLog, SessionLogRead } from '@impz/api';
 import { SESSION_LOG_READ_MAX_BYTES } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
 import {
   countLogBytes,
@@ -138,7 +137,7 @@ function readMeta(
   const meta = readLive(generation) ?? fromFile;
 
   if (meta?.session !== request.session) {
-    throw new ORPCError('NOT_FOUND', {
+    throw new ImpdError('NOT_FOUND', {
       message: `no log of session ${request.session} generation ${generation}`,
       data: { kind: 'session', name: request.session },
     });
@@ -199,7 +198,7 @@ async function readRangeOnce(
   const plan = planLogRead(meta.segments, meta.origin, request.from, limit);
 
   if (plan.kind === 'past_end') {
-    throw new ORPCError('INVALID_RESUME', {
+    throw new ImpdError('INVALID_RESUME', {
       message: `offset ${String(request.from)} is past the end of the log, ${String(plan.logEnd)}`,
       data: { end: plan.logEnd, bufferStart: plan.logStart },
     });

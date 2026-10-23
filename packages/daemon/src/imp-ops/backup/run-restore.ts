@@ -1,9 +1,6 @@
 import { copyFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { EgressPolicySchema } from '@impz/api';
 import type { BackupRestore, EgressPolicy, Imp } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
@@ -18,13 +15,14 @@ import {
 } from '../../platform/db/images';
 import { listImps, readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { getErrorMessage } from '../../platform/process/get-error-message';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
+import { parseEgressPolicy } from '../../platform/db/parse-egress-policy';
+import { ImpdError } from '../../platform/errors/impd-error';
 import {
   buildConflictError,
   buildNotBackedUpError,
   buildNotFoundError,
-} from '../../surface/api-errors';
+} from '../../platform/errors/impd-errors';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { BACKUP_TREE } from '../../vm/storage/data-layout';
 import type { buildBackupPaths } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
@@ -70,11 +68,11 @@ type SkippedGrant = BackupRestore['skippedGrants'][number];
 
 export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promise<BackupRestore> {
   if ((input.all === true) === (input.name !== undefined)) {
-    throw new ORPCError('BAD_REQUEST', { message: 'restore one imp by name, or all of them' });
+    throw new ImpdError('BAD_REQUEST', { message: 'restore one imp by name, or all of them' });
   }
 
   if (input.all === true && input.as !== undefined) {
-    throw new ORPCError('BAD_REQUEST', { message: '`as` renames one imp, not all of them' });
+    throw new ImpdError('BAD_REQUEST', { message: '`as` renames one imp, not all of them' });
   }
 
   // A stale lock from a crashed run would block even reading the repository.
@@ -105,7 +103,7 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
   const presentNames = new Set(present.map((imp) => imp.name));
 
   if (input.all === true && present.length > 0 && input.merge !== true) {
-    throw new ORPCError('PRECONDITION_FAILED', {
+    throw new ImpdError('PRECONDITION_FAILED', {
       message: `impd has ${String(present.length)} imps already; restore --all --merge adds the backup's imps to them`,
     });
   }
@@ -452,10 +450,10 @@ async function createCheckpointDisk(deps: RestoreDeps, impId: string) {
 }
 
 function resolveEgressPolicy(deps: RestoreDeps, name: string, imp: ManifestImp): EgressPolicy {
-  const parsed = EgressPolicySchema.safeParse({ mode: imp.egressPolicy, allow: imp.egressAllow });
+  const policy = parseEgressPolicy(imp.egressPolicy, imp.egressAllow);
 
-  if (parsed.success) {
-    return parsed.data;
+  if (policy !== null) {
+    return policy;
   }
 
   deps.log(

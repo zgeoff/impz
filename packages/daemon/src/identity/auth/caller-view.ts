@@ -1,12 +1,12 @@
 import type { Lease, LeaseSummary } from '@impz/api';
 import { hasScope } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import type { LeaseRecord } from '../../platform/db/leases';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildForbiddenError, findCallerData } from '../../surface/api-errors';
-import { formatCaller, isCallerAllowed } from './caller';
-import type { Caller } from './caller';
+import { ImpdError } from '../../platform/errors/impd-error';
+import { buildForbiddenError } from '../../platform/errors/impd-errors';
+import { LeasedError } from '../../platform/errors/leased-error';
+import { formatCaller, isCallerAllowed } from '../../platform/principal/caller';
+import type { Caller } from '../../platform/principal/caller';
+import { RamBudgetError } from '../../vm/governor/ram-budget-error';
 
 function canSeeEveryOwner(caller: Readonly<Caller>): boolean {
   return caller.imps === null && hasScope(caller.scope, 'manage');
@@ -51,9 +51,7 @@ export function isLeaseVisible(caller: Readonly<Caller> | null, lease: Readonly<
 }
 
 export function toCallerError(error: unknown, caller: Readonly<Caller> | null): unknown {
-  const hidden = findCallerData(error);
-
-  if (hidden === undefined || !(error instanceof ORPCError)) {
+  if (!(error instanceof LeasedError || error instanceof RamBudgetError)) {
     return error;
   }
 
@@ -61,11 +59,11 @@ export function toCallerError(error: unknown, caller: Readonly<Caller> | null): 
   const base = typeof data === 'object' && data !== null ? data : {};
 
   const shown =
-    hidden.kind === 'leases'
-      ? toLeaseSummary(caller, hidden.name, hidden.leases)
-      : buildVisibleProtected(caller, hidden.imps);
+    error instanceof LeasedError
+      ? toLeaseSummary(caller, error.impName, error.leases)
+      : buildVisibleProtected(caller, error.protectedImps);
 
-  return new ORPCError(error.code, {
+  return new ImpdError(error.code, {
     status: error.status,
     message: error.message,
     data: { ...base, ...shown },

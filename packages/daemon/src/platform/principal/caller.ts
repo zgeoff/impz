@@ -1,6 +1,6 @@
 import { hasScope, isImpAllowed } from '@impz/api';
 import type { ApiActor, Identity, Scope } from '@impz/api';
-import type { GrantableSecret } from '../../platform/db/tokens';
+import type { GrantableSecret } from '../db/tokens';
 
 export interface Caller {
   readonly kind: ApiActor;

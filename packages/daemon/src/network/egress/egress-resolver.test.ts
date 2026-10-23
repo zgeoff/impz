@@ -296,7 +296,7 @@ test('#createQueryHandler refuses a slot past its burst', async () => {
 
   const handle = createQueryHandler({
     ...egress.deps,
-    readRate: () => ({ burst: 2, perSecond: 1 }),
+    readRate: () => ({ size: 2, refillMs: 1000 }),
   });
 
   await handle('10.66.0.6', buildMockDnsQuery({ name: 'github.com', type: 'A' }));
@@ -312,7 +312,7 @@ test('#createQueryHandler answers a slot past its burst again once its bucket re
 
   const handle = createQueryHandler({
     ...egress.deps,
-    readRate: () => ({ burst: 2, perSecond: 1 }),
+    readRate: () => ({ size: 2, refillMs: 1000 }),
   });
 
   await handle('10.66.0.6', buildMockDnsQuery({ name: 'github.com', type: 'A' }));
@@ -333,7 +333,7 @@ test('#createQueryHandler refuses a rate-limited query plainly, with no EDE 18',
 
   const handle = createQueryHandler({
     ...egress.deps,
-    readRate: () => ({ burst: 1, perSecond: 1 }),
+    readRate: () => ({ size: 1, refillMs: 1000 }),
   });
 
   await handle('10.66.0.6', buildMockDnsQuery({ name: 'github.com', type: 'A' }));
@@ -353,7 +353,7 @@ test("#createQueryHandler keeps each slot's rate its own", async () => {
 
   const handle = createQueryHandler({
     ...egress.deps,
-    readRate: () => ({ burst: 1, perSecond: 0 }),
+    readRate: () => ({ size: 1, refillMs: Infinity }),
   });
 
   await handle('10.66.0.6', buildMockDnsQuery({ name: 'github.com', type: 'A' }));

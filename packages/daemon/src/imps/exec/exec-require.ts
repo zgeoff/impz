@@ -1,10 +1,9 @@
 import type { ExecRequirement } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
 import { PROXY_VARIABLE } from '../../network/broker/guest-trust';
 // oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
 import type { BrokerExecEnv } from '../../network/broker/guest-trust';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { readEnvKey } from './merge-env';
 
 export function isBrokerRequired(requirements: readonly ExecRequirement[] | undefined): boolean {
@@ -12,7 +11,7 @@ export function isBrokerRequired(requirements: readonly ExecRequirement[] | unde
 }
 
 export function buildBrokerNotReadyError(detail: string) {
-  return new ORPCError('PRECONDITION_FAILED', {
+  return new ImpdError('PRECONDITION_FAILED', {
     message: `the broker is not ready for this exec: ${detail}`,
     data: { reason: 'broker_not_ready' as const, detail },
   });

@@ -1,10 +1,9 @@
 import type { Imp } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives each module its config
-import type { HttpsConfig } from '../../network/https/https-config';
 import { listImages, readImageById } from '../../platform/db/images';
 import type { ImpRecord } from '../../platform/db/imps';
 import { listLeases } from '../../platform/db/leases';
 import type { LeaseRecord } from '../../platform/db/leases';
+import type { ImpHttpsConfig } from '../imps-config';
 import { countSessions } from '../sessions/count-sessions';
 import { readBootStatus } from './boot-status';
 import type { ImpContext } from './imp-context';
@@ -220,7 +219,7 @@ export function createImpPresenter(
   };
 }
 
-function buildHttpsUrl(name: string, https: HttpsConfig | null): string | null {
+function buildHttpsUrl(name: string, https: ImpHttpsConfig | null): string | null {
   if (https === null) {
     return null;
   }
@@ -231,7 +230,7 @@ function buildHttpsUrl(name: string, https: HttpsConfig | null): string | null {
 }
 
 // Docker publishes the public listener as 443, so the URL has no port.
-function buildPublicUrl(imp: ImpRecord, https: HttpsConfig | null): string | null {
+function buildPublicUrl(imp: ImpRecord, https: ImpHttpsConfig | null): string | null {
   if (imp.publicAuth === null || https === null || https.public === null) {
     return null;
   }

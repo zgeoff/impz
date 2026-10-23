@@ -48,8 +48,8 @@ jobs:
     permissions:
       contents: read
     # a hung step (a script that never exits, a wedged process) must fail the
-    # run, not burn runner hours
-    timeout-minutes: 10
+    # run, not burn runner hours; a healthy run takes about 9 minutes
+    timeout-minutes: 15
     steps:
       # two commits, so Protocol Wire Format has main's schema to compare with
       - name: Checkout

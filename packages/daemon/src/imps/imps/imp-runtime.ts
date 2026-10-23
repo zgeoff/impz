@@ -1,17 +1,14 @@
 import type { Activity, InnerStatus } from '@impz/agent-protocol';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import { listColdBoots } from '../../platform/db/cold-boots';
 import { listImps, readImpById, readImpByName, updateImpActivity } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
-import { getErrorMessage } from '../../platform/process/get-error-message';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
+import { ImpdError } from '../../platform/errors/impd-error';
 import {
   buildBuilderError,
   buildInvalidStateError,
-  isDiskFullError,
   isMovingError,
-} from '../../surface/api-errors';
+} from '../../platform/errors/impd-errors';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import { sendActivity, sendPing } from '../../vm/agent-client/agent-requests';
 import { openDialStream } from '../../vm/agent-client/dial-stream';
@@ -25,6 +22,7 @@ import type {
 import { openAccept, openListener } from '../../vm/agent-client/listener-stream';
 import type { GuestListener, ListenSpec } from '../../vm/agent-client/listener-stream';
 import type { ImpPaths } from '../../vm/storage/data-layout';
+import { isDiskFullError } from '../../vm/storage/disk-full-error';
 import type { BootTemplates } from '../../vm/templates/boot-templates';
 import { findSessionLogImp } from '../session-logs/find-session-log-imp';
 import { toSeenSessions } from '../sessions/session-cache';
@@ -503,10 +501,10 @@ async function readNotAwakeError(context: ImpHost, imp: ImpRecord): Promise<Erro
 
   const coldBoots = await listColdBoots(context.db, imp.id);
 
-  return new ORPCError('INVALID_STATE', {
+  return new ImpdError('INVALID_STATE', {
     status: error.status,
     message: error.message,
-    data: { ...error.data, coldBoots },
+    data: { state: imp.state, allowed: ['running'], coldBoots },
   });
 }
 

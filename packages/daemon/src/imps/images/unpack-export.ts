@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { buildExitError, runCommand } from '../../platform/process/run-command';
 import type { CommandResult } from '../../platform/process/run-command';
 
@@ -47,13 +46,13 @@ export function assertUnpacked(result: CommandResult): void {
   const failure = findXattrFailure(result.stderr);
 
   if (failure?.missingSetfcap === true) {
-    throw new ORPCError('PRECONDITION_FAILED', {
+    throw new ImpdError('PRECONDITION_FAILED', {
       message: `the image has a file capability that impd could not keep (${failure.line}); ${SETFCAP_HELP}`,
     });
   }
 
   if (failure !== null) {
-    throw new ORPCError('INTERNAL_SERVER_ERROR', {
+    throw new ImpdError('INTERNAL_SERVER_ERROR', {
       message: `the image has an extended attribute that impd could not keep: ${failure.line}`,
     });
   }

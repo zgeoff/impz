@@ -13,12 +13,12 @@ import { tryExecSocket, tryTunnelSocket } from '../../../testing/surface/try-imp
 import { TEST_TOKEN } from '../../../testing/test-token';
 import { buildStubExecGuest } from '../../../testing/vm/build-stub-exec-guest';
 import { startStubExecAgent } from '../../../testing/vm/start-stub-exec-agent';
+import { PROCEDURE_ACCESS } from '../../identity/auth/access-policy';
+import { runWhois } from '../../identity/auth/tailnet-identity';
 import { PEER_HEADER } from '../../network/proxy/forwarded-peers';
-import { listApiCalls } from '../../platform/db/api-audit';
-import { writeAuditEntry } from '../../platform/db/broker-audit';
 import { buildImpPaths } from '../../vm/storage/data-layout';
-import { PROCEDURE_ACCESS } from './access-policy';
-import { runWhois } from './tailnet-identity';
+import { listApiCalls } from '../db/api-audit';
+import { writeAuditEntry } from '../db/broker-audit';
 
 interface SetupOptions {
   readonly tailscale: Pick<ReturnType<typeof buildStubTailscale>, 'run'>;

@@ -1,5 +1,4 @@
 import type { EgressPolicy } from '@impz/api';
-import type { Config } from '../../config';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
 import type { SlotAddress } from '../../host-net/net/addressing';
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
@@ -33,6 +32,7 @@ import type { JailUser } from '../../vm/vmm/jail';
 import type { VmRunner } from '../../vm/vmm/vm-runner';
 import { readCpuTicks } from '../../vm/vmm/vm-stats';
 import type { ImageService } from '../images/image-service';
+import type { ImpsConfig } from '../imps-config';
 import { createSessionLogs } from '../session-logs/session-log-service';
 import type { SessionLogs } from '../session-logs/session-log-service';
 import { createSessionCache } from '../sessions/session-cache';
@@ -67,7 +67,7 @@ interface SleepTiming {
 }
 
 export interface ImpServiceDeps {
-  readonly config: Config;
+  readonly config: ImpsConfig;
   readonly db: ImpDatabase;
   readonly images: ImageService;
   readonly taps: TapDevices;
@@ -136,7 +136,7 @@ export interface ImpServiceDeps {
 }
 
 export interface ImpHost {
-  readonly config: Config;
+  readonly config: ImpsConfig;
   readonly db: ImpDatabase;
   readonly log: (message: string) => void;
   readonly identity: HostIdentity;

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { AgentError } from '../../vm/agent-client/agent-connection';
 import { formatFailure } from './channel-io';
 
@@ -10,7 +10,7 @@ test('it formats an agent error as its code and detail', () => {
 });
 
 test('it formats an API error as its code and message', () => {
-  expect(formatFailure(new ORPCError('NOT_FOUND', { message: 'no imp named box' }))).toBe(
+  expect(formatFailure(new ImpdError('NOT_FOUND', { message: 'no imp named box' }))).toBe(
     'NOT_FOUND: no imp named box',
   );
 });

@@ -3,7 +3,9 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
+import { buildStubHostRoutes } from '../../../testing/host-net/build-stub-host-routes';
 import { loadConfig } from '../../config';
+import { createReachPolicy } from '../../host-net/net/reach-policy';
 import { writeConsistentCopy } from '../../platform/db/database-copy';
 import { openDatabase } from '../../platform/db/open-database';
 import { listFileRemovals, readSecret } from '../../platform/db/secrets';
@@ -24,7 +26,15 @@ async function setupTest() {
 
   const config = loadConfig({ IMP_DATA_DIR: dataDir });
 
-  return { stack, config, db, dataDir };
+  const reach = createReachPolicy({
+    subnet: config.subnet,
+    deny: [],
+    ipv6: null,
+    now: Date.now,
+    ...buildStubHostRoutes().deps,
+  });
+
+  return { stack, config, db, dataDir, reach };
 }
 
 test('it keeps aside a value no row of an older database names', async () => {
@@ -35,6 +45,7 @@ test('it keeps aside a value no row of an older database names', async () => {
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: ctx.reach,
   });
 
   ctx.stack.defer(() => first.stop());
@@ -62,6 +73,7 @@ test('it keeps aside a value no row of an older database names', async () => {
     config: ctx.config,
     db: older,
     runOAuthTimer: false,
+    reach: ctx.reach,
     now: () => Date.parse('2026-10-04T05:30:00.000Z'),
     log: (message) => {
       logs.push(message);
@@ -91,6 +103,7 @@ test('it removes the old file of a delete that stopped before removing it, on th
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: ctx.reach,
   });
 
   ctx.stack.defer(() => first.stop());
@@ -119,6 +132,7 @@ test('it removes the old file of a delete that stopped before removing it, on th
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: ctx.reach,
   });
 
   ctx.stack.defer(() => restarted.stop());
@@ -138,6 +152,7 @@ test('it removes the old file of a replace that stopped before removing it, on t
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: ctx.reach,
   });
 
   ctx.stack.defer(() => first.stop());
@@ -166,6 +181,7 @@ test('it removes the old file of a replace that stopped before removing it, on t
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: ctx.reach,
   });
 
   ctx.stack.defer(() => restarted.stop());
@@ -189,6 +205,7 @@ test('it keeps the record of a file whose removal fails again, and keeps the fil
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: ctx.reach,
   });
 
   ctx.stack.defer(() => first.stop());
@@ -215,6 +232,7 @@ test('it keeps the record of a file whose removal fails again, and keeps the fil
     config: ctx.config,
     db: ctx.db,
     runOAuthTimer: false,
+    reach: ctx.reach,
     log: (message) => {
       logs.push(message);
     },
@@ -241,6 +259,7 @@ test('it never removes a recorded file that a row still names', async () => {
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: ctx.reach,
   });
 
   ctx.stack.defer(() => first.stop());
@@ -262,6 +281,7 @@ test('it never removes a recorded file that a row still names', async () => {
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: ctx.reach,
   });
 
   ctx.stack.defer(() => restarted.stop());

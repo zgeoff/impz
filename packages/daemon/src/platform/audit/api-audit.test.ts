@@ -1,8 +1,9 @@
 import { expect, test } from 'bun:test';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { ORPCError } from '@orpc/server';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
+import { readErrorCode } from '../../surface/read-error-code';
 import { listApiCalls } from '../db/api-audit';
+import { ImpdError } from '../errors/impd-error';
 import { createApiAudit, findImpName, withAuditedOpen } from './api-audit';
 
 async function setupTest() {
@@ -17,6 +18,7 @@ async function setupTest() {
     log: (line) => {
       logs.push(line);
     },
+    readErrorCode,
   });
 
   return { db: database.db, clock, logs, audit };
@@ -84,7 +86,7 @@ test('#withAuditedOpen records an open that succeeds as ok, with its duration', 
 test('#withAuditedOpen records the code of a refused open and rethrows its error', async () => {
   const ctx = await setupTest();
 
-  const refusal = new ORPCError('INVALID_STATE', { message: 'dev is stopped' });
+  const refusal = new ImpdError('INVALID_STATE', { message: 'dev is stopped' });
 
   const opening = withAuditedOpen(
     ctx.audit,

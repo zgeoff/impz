@@ -15,8 +15,7 @@ import {
 } from '../../platform/db/networks';
 import type { NetworkRecord } from '../../platform/db/networks';
 import type { ImpDatabase } from '../../platform/db/open-database';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
+import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import type { EgressService } from '../egress/egress-service';
 
 export interface NetworkDeps {

@@ -1,5 +1,9 @@
+import { toPlainOctets } from '@impz/shared';
+import { IPv4 } from 'ipaddr.js';
 import { deriveGuestIp6 } from './addressing6';
 import type { Prefix64 } from './addressing6';
+import { parseAddress } from './parse-address';
+import { parseCidr } from './parse-cidr';
 
 const SLOT_SIZE = 4;
 const SLOT_PREFIX_LENGTH = 30;
@@ -32,35 +36,23 @@ export interface SlotPlan {
 }
 
 export function parseSubnet(cidr: string): Subnet {
-  const [address = '', prefixText = '', ...rest] = cidr.split('/');
-  const parts = address.split('.');
+  const parsed = cidr.includes('/') ? parseCidr(cidr) : null;
 
-  if (
-    rest.length > 0 ||
-    parts.length !== 4 ||
-    ![...parts, prefixText].every((part) => isDecimal(part))
-  ) {
+  if (parsed === null || !(parsed.address instanceof IPv4)) {
     throw new Error(`subnet is not an IPv4 CIDR: ${cidr}`);
   }
 
-  const octets = parts.map(Number);
-  const prefix = Number(prefixText);
-
-  if (octets.some((octet) => octet > 255)) {
-    throw new Error(`subnet is not an IPv4 CIDR: ${cidr}`);
-  }
-
-  if (prefix < 8 || prefix > SLOT_PREFIX_LENGTH) {
+  if (parsed.bits < 8 || parsed.bits > SLOT_PREFIX_LENGTH) {
     throw new Error(`subnet prefix must be between /8 and /30: ${cidr}`);
   }
 
-  const network = octets.reduce((acc, octet) => acc * 256 + octet, 0);
+  const network = toNumber(parsed.address);
 
-  if (network % 2 ** (32 - prefix) !== 0) {
+  if (network % 2 ** (32 - parsed.bits) !== 0) {
     throw new Error(`subnet has host bits set: ${cidr}`);
   }
 
-  return { network, prefixLength: prefix };
+  return { network, prefixLength: parsed.bits };
 }
 
 // Tailscale's 100.64.0.0/10: a guest with an address in it would look like
@@ -108,21 +100,16 @@ export function deriveSlotAddress(slot: number, plan: SlotPlan): SlotAddress {
 }
 
 export function parseIpv4(text: string, allowMapped = false): number | null {
+  const address = parseAddress(text);
+
+  if (address instanceof IPv4) {
+    return toNumber(address);
+  }
+
   // Node writes an IPv4 peer of a dual-stack socket as ::ffff:a.b.c.d
-  const plain = allowMapped && text.startsWith('::ffff:') ? text.slice('::ffff:'.length) : text;
-  const parts = plain.split('.');
-
-  if (parts.length !== 4 || !parts.every((part) => isDecimal(part))) {
-    return null;
-  }
-
-  const octets = parts.map(Number);
-
-  if (octets.some((octet) => octet > 255)) {
-    return null;
-  }
-
-  return octets.reduce((acc, octet) => acc * 256 + octet, 0);
+  return allowMapped && address?.isIPv4MappedAddress() === true
+    ? toNumber(address.toIPv4Address())
+    : null;
 }
 
 export function findPeerSlot(peer: string, local: string, subnet: Subnet): number | null {
@@ -157,20 +144,22 @@ export function formatSubnet(subnet: Subnet): string {
   return `${formatIpv4(subnet.network)}/${String(subnet.prefixLength)}`;
 }
 
+// an operator's setting can hold an octet with a leading zero, such as 010,
+// which impd reads as decimal and the strict parser refuses
 export function formatCidr4(text: string): string | null {
-  const [address = '', prefixText = '32', ...rest] = text.split('/');
-  const ip = parseIpv4(address);
-  const prefix = Number(prefixText);
+  const parsed = parseCidr(toPlainOctets(text));
 
-  if (ip === null || rest.length > 0 || !/^\d{1,2}$/u.test(prefixText) || prefix > 32) {
+  if (parsed === null || !(parsed.address instanceof IPv4)) {
     return null;
   }
 
-  return formatSubnet({ network: ip - (ip % 2 ** (32 - prefix)), prefixLength: prefix });
+  const ip = toNumber(parsed.address);
+
+  return formatSubnet({ network: ip - (ip % 2 ** (32 - parsed.bits)), prefixLength: parsed.bits });
 }
 
-function isDecimal(text: string): boolean {
-  return /^\d{1,3}$/u.test(text);
+function toNumber(address: IPv4): number {
+  return address.octets.reduce((acc, octet) => acc * 256 + octet, 0);
 }
 
 function formatIpv4(address: number): string {

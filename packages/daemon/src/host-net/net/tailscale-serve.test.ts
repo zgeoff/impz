@@ -1,28 +1,45 @@
 import { expect, test } from 'bun:test';
 import { buildStubTailscaleServe } from '../../../testing/network/build-stub-tailscale-serve';
-import { parseServePorts, readServePorts } from './tailscale-serve';
+import { parseServeStatus, readServePorts } from './tailscale-serve';
 
-test('#parseServePorts lists the ports tailscale serve holds', () => {
+test('#parseServeStatus reads the ports tailscale serve holds, and each served service as its ports and proxy targets', () => {
   const json = JSON.stringify({
     TCP: { '443': { HTTPS: true }, '20000': { HTTPS: true } },
     Web: { 'imp.tail1234.ts.net:443': { Handlers: { '/': { Proxy: 'http://127.0.0.1:20000' } } } },
+    Services: {
+      'svc:box': {
+        TCP: { '80': { HTTP: true }, '443': { HTTPS: true } },
+        Web: {
+          'box.tail1234.ts.net:80': { Handlers: { '/': { Proxy: 'http://127.0.0.1:20000' } } },
+          'box.tail1234.ts.net:443': { Handlers: { '/': { Proxy: 'http://127.0.0.1:20000' } } },
+        },
+      },
+      'svc:raw': { TCP: { '5432': { TCPForward: '127.0.0.1:5432' } } },
+    },
   });
 
-  expect(parseServePorts(json)).toStrictEqual([443, 20_000]);
+  expect(parseServeStatus(json)).toStrictEqual({
+    ports: [443, 20_000],
+    services: new Map([
+      ['svc:box', ['80 http://127.0.0.1:20000', '443 http://127.0.0.1:20000']],
+      ['svc:raw', []],
+    ]),
+  });
 });
 
 test.each([
   ['an empty config', '{}'],
   ['no output', ''],
   ['output that is not JSON', 'No serve config'],
-])('#parseServePorts holds no port for %s', (_label, json) => {
-  expect(parseServePorts(json)).toStrictEqual([]);
+  ['JSON of the wrong shape', '{"Services": []}'],
+])('#parseServeStatus reads %s as no port held and nothing served', (_label, json) => {
+  expect(parseServeStatus(json)).toStrictEqual({ ports: [], services: new Map() });
 });
 
-test('#parseServePorts skips a TCP key that is not a port', () => {
+test('#parseServeStatus skips a TCP key that is not a port', () => {
   const json = JSON.stringify({ TCP: { '443': { HTTPS: true }, web: { HTTPS: true } } });
 
-  expect(parseServePorts(json)).toStrictEqual([443]);
+  expect(parseServeStatus(json).ports).toStrictEqual([443]);
 });
 
 test('#readServePorts reads the held ports from tailscale serve status', async () => {

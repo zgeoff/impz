@@ -1,5 +1,5 @@
-import type { Config } from '../config';
 import { MOVE_PART_BYTES } from '../imp-ops/moves/move-parts';
+import type { SurfaceConfig } from './surface-config';
 
 // Bun refuses a larger body before any route sees it, so the slack leaves the
 // build route room to answer 413 itself.
@@ -10,7 +10,7 @@ const BODY_SLACK_BYTES = 1024 ** 2;
 const API_IDLE_TIMEOUT_S = 30;
 
 export function buildApiListenOptions(
-  config: Readonly<Pick<Config, 'apiPort' | 'buildContextMaxBytes'>>,
+  config: Readonly<Pick<SurfaceConfig, 'apiPort' | 'buildContextMaxBytes'>>,
   idleTimeout: number = API_IDLE_TIMEOUT_S,
   hostname?: string,
 ) {

@@ -1,6 +1,6 @@
-import { EgressPolicySchema } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
 import type { ImpDatabase } from './open-database';
+import { parseEgressPolicy } from './parse-egress-policy';
 
 export interface EgressSlot {
   readonly impId: string;
@@ -15,9 +15,9 @@ const CLOSED: EgressPolicy = { mode: 'none', allow: [] };
 
 export function parseStoredPolicy(mode: string, allow: string): EgressPolicy {
   try {
-    const parsed = EgressPolicySchema.safeParse({ mode, allow: JSON.parse(allow) as unknown });
+    const list: unknown = JSON.parse(allow);
 
-    return parsed.success ? parsed.data : CLOSED;
+    return parseEgressPolicy(mode, list) ?? CLOSED;
   } catch {
     return CLOSED;
   }

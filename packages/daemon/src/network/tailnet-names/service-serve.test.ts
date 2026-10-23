@@ -1,38 +1,6 @@
 import { expect, test } from 'bun:test';
 import { buildStubTailscaleServe } from '../../../testing/network/build-stub-tailscale-serve';
-import { createServiceServe, listServeEntries, parseServedServices } from './service-serve';
-
-test('it reads each served service as its ports and proxy targets', () => {
-  const json = JSON.stringify({
-    TCP: { '443': { HTTPS: true } },
-    Services: {
-      'svc:box': {
-        TCP: { '80': { HTTP: true }, '443': { HTTPS: true } },
-        Web: {
-          'box.tail1234.ts.net:80': { Handlers: { '/': { Proxy: 'http://127.0.0.1:20000' } } },
-          'box.tail1234.ts.net:443': { Handlers: { '/': { Proxy: 'http://127.0.0.1:20000' } } },
-        },
-      },
-      'svc:raw': { TCP: { '5432': { TCPForward: '127.0.0.1:5432' } } },
-    },
-  });
-
-  expect(parseServedServices(json)).toStrictEqual(
-    new Map([
-      ['svc:box', ['80 http://127.0.0.1:20000', '443 http://127.0.0.1:20000']],
-      ['svc:raw', []],
-    ]),
-  );
-});
-
-test.each([
-  ['no output', ''],
-  ['an empty config', '{}'],
-  ['output that is not JSON', 'No serve config'],
-  ['JSON of the wrong shape', '{"Services": []}'],
-])('it reads %s as nothing served', (_label, output) => {
-  expect(parseServedServices(output)).toStrictEqual(new Map());
-});
+import { createServiceServe, listServeEntries } from './service-serve';
 
 test('it lists HTTPS on 443 and HTTP on 80 as what a service to a target serves', () => {
   expect(listServeEntries('http://127.0.0.1:20000')).toStrictEqual([

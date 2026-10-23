@@ -1,6 +1,5 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import * as z from 'zod';
+import { ImpdError } from '../../platform/errors/impd-error';
 import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import { countTreeBytes } from '../../vm/storage/count-tree-bytes';
@@ -82,7 +81,7 @@ export async function loadGuestImage(
   });
 
   if (pulled.exitCode !== 0) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `the pull of ${ref} in the builder failed: ${pulled.stderr.trim().slice(-LOG_MAX_CHARS)}`,
     });
   }
@@ -102,7 +101,7 @@ export async function loadGuestImage(
   const imagePlatform = formatPlatform(inspect.Os, inspect.Architecture);
 
   if (imagePlatform !== options.platform) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `${ref} pulled for ${imagePlatform}, not ${options.platform}`,
     });
   }

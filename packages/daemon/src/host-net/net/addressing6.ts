@@ -1,3 +1,7 @@
+import { IPv6 } from 'ipaddr.js';
+import { parseAddress } from './parse-address';
+import { parseCidr } from './parse-cidr';
+
 const GROUPS = 8;
 const GROUP_BITS = 16n;
 const PREFIX_LENGTH = 64;
@@ -11,70 +15,41 @@ export interface Prefix64 {
 }
 
 export function parseIpv6(text: string): bigint | null {
-  if (!text.includes(':') || text.includes('%') || text.includes('[')) {
-    return null;
-  }
+  const address = parseAddress(text);
 
-  let normal: string;
-
-  try {
-    normal = new URL(`http://[${text}]/`).hostname.slice(1, -1);
-  } catch {
-    return null;
-  }
-
-  const [head = '', tail] = normal.split('::');
-  const headGroups = head === '' ? [] : head.split(':');
-  const tailGroups = tail === undefined || tail === '' ? [] : tail.split(':');
-  const missing = GROUPS - headGroups.length - tailGroups.length;
-
-  if (tail === undefined ? missing !== 0 : missing < 1) {
-    return null;
-  }
-
-  const groups = [...headGroups, ...Array.from({ length: missing }, () => '0'), ...tailGroups];
-
-  return groups.reduce((acc, group) => (acc << GROUP_BITS) + BigInt(`0x${group}`), 0n);
+  return address instanceof IPv6 ? toBigint(address) : null;
 }
 
 export function formatIpv6(address: bigint): string {
   const groups = Array.from({ length: GROUPS }, (_, index) =>
-    ((address >> (GROUP_BITS * BigInt(GROUPS - 1 - index))) & 0xff_ffn).toString(16),
+    Number((address >> (GROUP_BITS * BigInt(GROUPS - 1 - index))) & 0xff_ffn),
   );
 
-  // the URL parser writes the canonical form (RFC 5952)
-  return new URL(`http://[${groups.join(':')}]/`).hostname.slice(1, -1);
+  return new IPv6(groups).toRFC5952String();
 }
 
 export function formatCidr6(text: string): string | null {
-  const [address = '', prefixText = '128', ...rest] = text.split('/');
-  const parsed = parseIpv6(address);
-  const prefix = Number(prefixText);
+  const parsed = parseCidr(text);
 
-  if (
-    parsed === null ||
-    rest.length > 0 ||
-    !Number.isInteger(prefix) ||
-    prefix < 0 ||
-    prefix > 128
-  ) {
+  if (parsed === null || !(parsed.address instanceof IPv6)) {
     return null;
   }
 
-  const hostBits = BigInt(128 - prefix);
+  const hostBits = BigInt(128 - parsed.bits);
+  const network = (toBigint(parsed.address) >> hostBits) << hostBits;
 
-  return `${formatIpv6((parsed >> hostBits) << hostBits)}/${String(prefix)}`;
+  return `${formatIpv6(network)}/${String(parsed.bits)}`;
 }
 
 export function parsePrefix64(cidr: string): Prefix64 | null {
-  const [address = '', prefixText, ...rest] = cidr.split('/');
-  const network = parseIpv6(address);
+  const parsed = parseCidr(cidr);
+  const network = parsed?.address instanceof IPv6 ? toBigint(parsed.address) : null;
 
-  if (network === null || rest.length > 0 || prefixText !== String(PREFIX_LENGTH)) {
-    return null;
-  }
-
-  if (network % 2n ** 64n !== 0n) {
+  if (
+    network === null ||
+    !cidr.endsWith(`/${String(PREFIX_LENGTH)}`) ||
+    network % 2n ** 64n !== 0n
+  ) {
     return null;
   }
 
@@ -92,6 +67,18 @@ export function buildUlaPrefix(random: Uint8Array): Prefix64 {
   return { network, text: `${formatIpv6(network)}/${String(PREFIX_LENGTH)}` };
 }
 
+export function findMappedIpv4(address: string): string | null {
+  const parsed = parseAddress(address);
+
+  return parsed instanceof IPv6 && parsed.isIPv4MappedAddress()
+    ? parsed.toIPv4Address().toString()
+    : null;
+}
+
 export function deriveGuestIp6(prefix: Readonly<Prefix64>, guestIpv4: number): string {
   return formatIpv6(prefix.network + BigInt(guestIpv4));
+}
+
+function toBigint(address: IPv6): bigint {
+  return address.parts.reduce((acc, group) => (acc << GROUP_BITS) + BigInt(group), 0n);
 }

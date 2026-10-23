@@ -1,7 +1,6 @@
 import { closeSync, constants, lstatSync, mkdirSync, openSync, rmSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 
 // The tree's names are the image's own and impd writes as root, so no step may follow a
 // link out of the tree.
@@ -41,7 +40,7 @@ function createDirectory(path: string, name: string): void {
   }
 
   if (!stat.isDirectory()) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `the image's ${name} is ${stat.isSymbolicLink() ? 'a symlink' : 'not a directory'}; impd writes /etc/imp/image.json there, so it must be a directory`,
     });
   }

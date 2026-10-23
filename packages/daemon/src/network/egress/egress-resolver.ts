@@ -4,6 +4,8 @@ import { findGuestSlot } from '../../host-net/net/addressing';
 import type { Subnet } from '../../host-net/net/addressing';
 import { createCountedLimit } from '../../platform/process/counted-limit';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { createTokenBuckets } from '../../platform/process/token-buckets';
+import type { BucketSpec } from '../../platform/process/token-buckets';
 import { EDE_PROHIBITED, RCODE, buildEmptyReply, buildLocalReply, readQuery } from './dns-messages';
 import type { DnsForward } from './dns-upstream';
 import { normalizeName } from './egress-rules';
@@ -11,11 +13,6 @@ import type { AddressAnswer } from './egress-sets';
 import type { LocalAnswer } from './network-names';
 
 export type QueryVerdict = 'admit' | 'answer' | 'screen' | 'refuse';
-
-export interface RateLimit {
-  readonly burst: number;
-  readonly perSecond: number;
-}
 
 export interface ResolverDeps {
   readonly subnet: Subnet;
@@ -40,7 +37,7 @@ export interface ResolverDeps {
 
   readonly maxTtlS: number;
 
-  readonly readRate: (slot: number) => RateLimit;
+  readonly readRate: (slot: number) => BucketSpec;
   readonly now: () => number;
   readonly log: (message: string) => void;
 }
@@ -48,24 +45,7 @@ export interface ResolverDeps {
 export type QueryHandler = (source: string, message: Uint8Array) => Promise<Uint8Array>;
 
 export function createQueryHandler(deps: ResolverDeps): QueryHandler {
-  const tokens = new Map<number, { level: number; at: number }>();
-
-  const tryTakeToken = (slot: number): boolean => {
-    const now = deps.now();
-    const rate = deps.readRate(slot);
-    const bucket = tokens.get(slot) ?? { level: rate.burst, at: now };
-    const level = Math.min(rate.burst, bucket.level + ((now - bucket.at) / 1000) * rate.perSecond);
-
-    if (level < 1) {
-      tokens.set(slot, { level, at: now });
-
-      return false;
-    }
-
-    tokens.set(slot, { level: level - 1, at: now });
-
-    return true;
-  };
+  const tryTakeToken = createTokenBuckets(deps.readRate, deps.now);
 
   return async (source, message) => {
     const slot = findGuestSlot(source, deps.subnet);

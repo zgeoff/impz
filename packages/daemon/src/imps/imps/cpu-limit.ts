@@ -1,6 +1,5 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import type { CpuSettings } from '../../platform/db/imps';
+import { ImpdError } from '../../platform/errors/impd-error';
 
 // Below this limit the VMM thread starves and a boot times out.
 const MIN_CPU_LIMIT = 0.1;
@@ -20,13 +19,13 @@ export function resolveCpuSettings(
   const weight = input.cpuWeight ?? current?.weight ?? DEFAULT_CPU_WEIGHT;
 
   if (limit !== null && (limit < MIN_CPU_LIMIT || limit > hostCpus)) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: `a CPU limit is from ${String(MIN_CPU_LIMIT)} to the host's ${String(hostCpus)} cores`,
     });
   }
 
   if (!Number.isInteger(weight) || weight < 1 || weight > 10_000) {
-    throw new ORPCError('BAD_REQUEST', {
+    throw new ImpdError('BAD_REQUEST', {
       message: 'a CPU weight is a whole number from 1 to 10000',
     });
   }

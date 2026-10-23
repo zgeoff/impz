@@ -34,9 +34,11 @@ one. Both refuse before they add any credential, so a refused row never holds on
 
 Any other host gets a plain tunnel. A tunnel starts inside the host container, past the firewall
 that holds the guests in, so the broker refuses it every private, shared, loopback and link-local
-range, the blocked IPv6 ranges, and the container's own addresses, and holds a tunnel to the imp's
-egress policy ([egress](./egress.md)). A host a grant covers stays reachable under every policy,
-because the terminator dials it from the host container.
+range, the imp range, the blocked IPv6 ranges, and the container's own addresses, and holds a tunnel
+to the imp's egress policy ([egress](./egress.md)). The broker reads these ranges from the reach
+policy that builds the egress firewall's, so a range the firewall refuses an imp is refused to its
+tunnels as well. A host a grant covers stays reachable under every policy, because the terminator
+dials it from the host container.
 
 ## Secrets
 

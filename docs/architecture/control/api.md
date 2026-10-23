@@ -17,10 +17,12 @@ rather than writing them again.
 A control call, such as a create, a checkpoint or a token change, is an oRPC procedure. The contract
 carries each procedure's input and output schemas and its typed errors, so the client's types and
 the daemon's handlers come from one source, and an error a client switches on, such as `LEASED`,
-`MOVING` or `RAM_BUDGET_EXCEEDED`, is part of the contract. A long call that could outlast a
-client's fetch timeout, such as an image add or a build, has a streamed twin that yields progress
-events. Procedures take POST only, because a GET is what a link or an image on any page can make a
-browser send.
+`MOVING` or `RAM_BUDGET_EXCEEDED`, is part of the contract. impd's domain code throws its own error
+with that code, and the router turns it into the contract's error in one place, so an error that a
+streamed call raises after it returned reaches the client in the same shape as any other. A long
+call that could outlast a client's fetch timeout, such as an image add or a build, has a streamed
+twin that yields progress events. Procedures take POST only, because a GET is what a link or an
+image on any page can make a browser send.
 
 A client finds out what an impd can do from `system.features`, which returns impd's version and
 feature flags and reads nothing else. `system.info` returns the same flags inside a full status

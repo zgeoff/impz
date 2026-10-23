@@ -1,8 +1,7 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import type { StartTimer } from '../../platform/process/clock';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { startRealTimer } from '../../platform/process/start-real-timer';
+import { DiskFullError } from './disk-full-error';
 import type { StorageBackend } from './storage-backend';
 
 const GIB = 1024 ** 3;
@@ -77,7 +76,7 @@ export function createDiskBudget(deps: DiskBudgetDeps): DiskBudget {
       const free = status.availableBytes - status.pendingBytes + readWrittenBytes();
 
       if (free - bytes < status.reserveBytes) {
-        throw buildDiskFullError(Math.max(0, free), status.reserveBytes, bytes);
+        throw new DiskFullError(Math.max(0, free), status.reserveBytes, bytes);
       }
 
       ledger.pendingBytes += bytes;
@@ -139,14 +138,4 @@ export function createDiskBudget(deps: DiskBudgetDeps): DiskBudget {
     requireRoom: (bytes) => withRoom(bytes, () => Promise.resolve()),
     readStatus,
   };
-}
-
-function buildDiskFullError(availableBytes: number, reserveBytes: number, requestedBytes: number) {
-  const formatGib = (bytes: number) => `${(bytes / GIB).toFixed(1)} GiB`;
-
-  return new ORPCError('DISK_FULL', {
-    status: 507,
-    message: `not enough free disk: ${formatGib(availableBytes)} free, ${formatGib(requestedBytes)} wanted, and ${formatGib(reserveBytes)} is held in reserve (IMP_DISK_RESERVE_GIB)`,
-    data: { availableBytes, reserveBytes, requestedBytes },
-  });
 }

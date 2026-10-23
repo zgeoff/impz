@@ -9,8 +9,8 @@ import {
   writeLease,
 } from '../../platform/db/leases';
 import type { LeaseRecord } from '../../platform/db/leases';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildLeaseNotHeldError, buildLeasedError } from '../../surface/api-errors';
+import { buildLeaseNotHeldError } from '../../platform/errors/impd-errors';
+import { LeasedError } from '../../platform/errors/leased-error';
 import type { ImpClock, ImpHost } from './imp-context';
 import { toLockedImp } from './imp-lock';
 import type { ImpLock, LockedImp } from './imp-lock';
@@ -202,7 +202,7 @@ export function createImpLeases(parts: ImpLeaseParts): ImpLeases {
       const blocking = leases.filter((lease) => isBlockingLease(lease));
 
       if (blocking.length > 0) {
-        throw buildLeasedError(imp.name, blocking);
+        throw new LeasedError(imp.name, blocking);
       }
     },
 

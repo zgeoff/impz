@@ -1,5 +1,5 @@
-import { isValidSignature } from '../../platform/secrets/is-valid-signature';
-import { sign } from '../../platform/secrets/sign';
+import { isValidSignature } from '../secrets/is-valid-signature';
+import { sign } from '../secrets/sign';
 
 const SESSION_COOKIE = 'imp_session';
 

@@ -1,23 +1,20 @@
 import type { Logger } from '@logtape/logtape';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
 import type { Server, WebSocketHandler } from 'bun';
-import type { Config } from '../../config';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 moves the caller into platform
-import { stripSessionCookie } from '../../identity/auth/session-cookie';
 import type { ImpRuntime } from '../../imps/imps/imp-runtime';
 import type { ImpRecord } from '../../platform/db/imps';
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { isImpdError } from '../../platform/errors/impd-error';
+import { MOVING_RETRY_AFTER_S } from '../../platform/errors/impd-errors';
+import { stripSessionCookie } from '../../platform/http/session-cookie';
 import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import { tapStream } from '../../platform/process/tap-stream';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { MOVING_RETRY_AFTER_S } from '../../surface/api-errors';
+import type { NetworkConfig } from '../network-config';
 import { buildErrorPage } from './error-pages';
 import { PEER_HEADER, isCallerPath } from './forwarded-peers';
 import type { ForwardedPeers } from './forwarded-peers';
@@ -48,7 +45,7 @@ interface SocketData {
 }
 
 interface WakeProxyDeps {
-  readonly config: Config;
+  readonly config: Pick<NetworkConfig, 'apiPort' | 'proxyPort' | 'subnet' | 'portBase'>;
   readonly db: ImpDatabase;
   readonly imps: Pick<ImpRuntime, 'requireRunning' | 'tracker' | 'recordActivity'>;
   readonly log: (message: string) => void;
@@ -511,14 +508,14 @@ function toSendableCode(code: number): number {
 }
 
 function buildWakeErrorPage(name: string, error: unknown): Response {
-  if (error instanceof ORPCError && error.code === 'NOT_FOUND') {
+  if (isImpdError(error, 'NOT_FOUND')) {
     return buildErrorPage(404, `There is no imp named ${name}.`);
   }
 
   const reason = getErrorMessage(error);
   const page = buildErrorPage(503, `${name} could not wake: ${reason}`);
 
-  if (error instanceof ORPCError && error.code === 'MOVING') {
+  if (isImpdError(error, 'MOVING')) {
     page.headers.set('retry-after', String(MOVING_RETRY_AFTER_S));
   }
 

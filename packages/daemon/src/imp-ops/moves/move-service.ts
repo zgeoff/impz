@@ -1,12 +1,11 @@
 import type { WarmHost } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
-import type { Config } from '../../config';
+import { ImpdError } from '../../platform/errors/impd-error';
+import type { ImpOpsConfig } from '../imp-ops-config';
 import { createMoveReceiver } from './move-receiver';
 import type { MoveReceiver, MoveReceiverDeps } from './move-receiver';
 import { createMoveSender } from './move-sender';
 import type { MoveSender, MoveSenderDeps } from './move-sender';
-import { createPeerRanges } from './peer-address';
+import { buildPeerRanges } from './peer-address';
 import { readWarmHost } from './warm-facts';
 
 export type MoveService = MoveSender &
@@ -21,7 +20,10 @@ export interface MoveServiceDeps
   extends
     Omit<MoveSenderDeps, 'ranges' | SharedKeys>,
     Omit<MoveReceiverDeps, 'ranges' | 'readPeerUrl' | SharedKeys> {
-  readonly config: Pick<Config, 'apiPort' | 'moves' | 'dataDir' | 'subnet' | 'brokerPort' | 'dns'>;
+  readonly config: Pick<
+    ImpOpsConfig,
+    'apiPort' | 'moves' | 'dataDir' | 'subnet' | 'brokerPort' | 'dns'
+  >;
   readonly storage: MoveSenderDeps['storage'] & MoveReceiverDeps['storage'];
   readonly imps: MoveSenderDeps['imps'] & MoveReceiverDeps['imps'];
 
@@ -33,7 +35,7 @@ export interface MoveServiceDeps
 }
 
 export function createMoveService(deps: MoveServiceDeps): MoveService {
-  const ranges = createPeerRanges(deps.config.moves.testCidr);
+  const ranges = buildPeerRanges(deps.config.moves.testCidr);
 
   if (ranges.testCidr !== null) {
     deps.log(
@@ -49,7 +51,7 @@ export function createMoveService(deps: MoveServiceDeps): MoveService {
     const ip = await deps.readTailnetIp();
 
     if (ip === null) {
-      throw new ORPCError('PRECONDITION_FAILED', {
+      throw new ImpdError('PRECONDITION_FAILED', {
         message:
           'this host is not on the tailnet, and IMP_PEER_URL is unset: it cannot receive moves',
       });

@@ -1,7 +1,7 @@
-import type { Caller } from '../../identity/auth/caller';
 import type { BoundSshKey } from '../../identity/auth/token-store';
 import { formatKeyFingerprint } from '../../imps/ssh/authorized-keys';
 import type { AuthorizedKey, AuthorizedKeys } from '../../imps/ssh/authorized-keys';
+import type { Caller } from '../../platform/principal/caller';
 
 interface LoginKey {
   readonly key: AuthorizedKey;

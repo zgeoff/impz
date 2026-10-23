@@ -1,9 +1,9 @@
-import type { Config } from '../../config';
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { startRealTimer } from '../../platform/process/start-real-timer';
+import type { ImpsConfig } from '../imps-config';
 import type { ImpService } from '../imps/imp-service';
 import { createGuestExec } from './guest-exec';
 import type { GuestExec } from './guest-exec';
@@ -24,7 +24,7 @@ export interface Builders {
 }
 
 export interface BuildersDeps {
-  readonly config: Pick<Config, 'build'>;
+  readonly config: Pick<ImpsConfig, 'build'>;
   readonly db: ImpDatabase;
   readonly imps: Pick<ImpService, 'createImp' | 'destroyImpId' | 'openBuilderExec'>;
 

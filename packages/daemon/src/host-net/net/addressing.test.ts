@@ -198,6 +198,7 @@ test.each([
   ['172.17.0.2/16', '172.17.0.0/16'],
   ['10.66.0.9', '10.66.0.9/32'],
   ['0.0.0.0/0', '0.0.0.0/0'],
+  ['010.066.0.9/16', '10.66.0.0/16'],
 ])('#formatCidr4 writes %s as the network %s', (text, network) => {
   expect(formatCidr4(text)).toBe(network);
 });

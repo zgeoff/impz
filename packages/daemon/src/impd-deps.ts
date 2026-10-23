@@ -1,5 +1,6 @@
 import type { ImpdMoveBoundaries } from './create-impd-moves';
 import type { Ipv6Plan } from './host-net/net/ipv6-plan';
+import type { ReachBoundaries } from './host-net/net/reach-policy';
 import type { TailscaleStatus } from './host-net/net/tailscale-status';
 import type { TapDevices } from './host-net/net/tap-devices';
 import type { TailnetPeer } from './identity/auth/tailnet-identity';
@@ -36,9 +37,6 @@ type BrokerBoundaries = Pick<
 type EgressBoundaries = Pick<
   EgressDeps,
   | 'runNft'
-  | 'readConnected6'
-  | 'readConnected4'
-  | 'readUplinks'
   | 'flushConnections'
   | 'flushPair'
   | 'readForwardRules'
@@ -92,6 +90,7 @@ export interface ImpdDeps {
   readonly taps?: TapDevices;
   readonly broker?: BrokerBoundaries;
   readonly egress?: EgressBoundaries;
+  readonly reach?: Partial<ReachBoundaries>;
   readonly imps?: ImpBoundaries;
   readonly images?: Pick<ImageServiceDeps, 'dockerEnv' | 'builderImagePullMs' | 'seedRef'>;
   readonly moves?: ImpdMoveBoundaries;

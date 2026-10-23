@@ -1,4 +1,3 @@
-import type { Config } from '../../config';
 import {
   listImages,
   readImageByName,
@@ -10,12 +9,12 @@ import {
 import type { ImageRecord } from '../../platform/db/images';
 import { countImpsUsingImage } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
+import type { ImpsConfig } from '../imps-config';
 import type { Builders } from './builder-imps';
 import { FALLBACK_DEFAULT_IMAGE, createImageAdds } from './create-image-adds';
 import type { ImageAdds } from './create-image-adds';
@@ -42,7 +41,7 @@ export type ImageService = ImageAdds &
   };
 
 export interface ImageServiceDeps {
-  readonly config: Config;
+  readonly config: ImpsConfig;
   readonly db: ImpDatabase;
   readonly storage: StorageBackend;
 

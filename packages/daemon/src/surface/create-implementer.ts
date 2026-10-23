@@ -1,4 +1,5 @@
 import { callerContract } from '@impz/api';
+import { mapEventIterator } from '@orpc/client';
 import { implement } from '@orpc/server';
 import {
   checkAccess,
@@ -7,13 +8,14 @@ import {
   isRefusalAudited,
 } from '../identity/auth/access-policy';
 import { readChangedImps } from '../identity/auth/builder-calls';
-import type { Caller } from '../identity/auth/caller';
 import { toCallerError } from '../identity/auth/caller-view';
 import { findImpName } from '../platform/audit/api-audit';
 import { readImpByName } from '../platform/db/imps';
 import { readSecret } from '../platform/db/secrets';
-import { buildBuilderError, buildForbiddenError } from './api-errors';
+import { buildBuilderError, buildForbiddenError } from '../platform/errors/impd-errors';
+import type { Caller } from '../platform/principal/caller';
 import type { RouterDeps } from './create-router';
+import { toORPCError } from './to-orpc-error';
 
 export interface RpcContext {
   readonly caller: Caller;
@@ -70,6 +72,8 @@ export function createImplementer(deps: RouterDeps) {
         detail: auditDetail.value,
       });
 
+      const toApiError = (error: unknown) => toORPCError(toCallerError(error, caller));
+
       if (!isAuditedProcedure(procedure)) {
         try {
           await requireAccess();
@@ -78,13 +82,15 @@ export function createImplementer(deps: RouterDeps) {
             deps.audit.record(buildCall(null), error);
           }
 
-          throw toCallerError(error, caller);
+          throw toApiError(error);
         }
 
         try {
-          return await options.next({ context: { auditDetail } });
+          const result = await options.next({ context: { auditDetail } });
+
+          return withStreamErrors(result, toApiError);
         } catch (error) {
-          throw toCallerError(error, caller);
+          throw toApiError(error);
         }
       }
 
@@ -95,10 +101,31 @@ export function createImplementer(deps: RouterDeps) {
 
         deps.audit.record(buildCall(result.output), null);
 
-        return result;
+        return withStreamErrors(result, toApiError);
       } catch (error) {
         deps.audit.record(buildCall(null), error);
-        throw toCallerError(error, caller);
+        throw toApiError(error);
       }
     });
+}
+
+// a stream's error comes after the procedure returned, outside the catch above
+function withStreamErrors<T extends { readonly output: unknown }>(
+  result: T,
+  toApiError: (error: unknown) => unknown,
+): T {
+  if (!isAsyncIterator(result.output)) {
+    return result;
+  }
+
+  const output = mapEventIterator(result.output, {
+    value: (value) => Promise.resolve(value),
+    error: (failure) => Promise.resolve(toApiError(failure)),
+  });
+
+  return { ...result, output };
+}
+
+function isAsyncIterator(value: unknown): value is AsyncIterator<unknown> {
+  return typeof value === 'object' && value !== null && Symbol.asyncIterator in value;
 }

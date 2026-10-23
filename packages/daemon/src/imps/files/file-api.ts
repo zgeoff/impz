@@ -1,8 +1,6 @@
 import { FILES_GUEST_DIR } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildAgentOutdatedApiError } from '../../surface/api-errors';
+import { ImpdError } from '../../platform/errors/impd-error';
+import { buildAgentOutdatedApiError } from '../../platform/errors/impd-errors';
 import { sendFilesRemove, sendFilesWrite } from '../../vm/agent-client/file-requests';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
 import type { ImpRuntime } from '../imps/imp-runtime';
@@ -50,7 +48,7 @@ export function createFileApi(parts: FileApiParts): FileApi {
 
 function toApiError(error: unknown): unknown {
   if (isAgentError(error, 'BAD_REQUEST') || isAgentError(error, 'NO_SPACE')) {
-    return new ORPCError('BAD_REQUEST', { message: error.detail });
+    return new ImpdError('BAD_REQUEST', { message: error.detail });
   }
 
   if (isAgentError(error, 'AGENT_OUTDATED')) {

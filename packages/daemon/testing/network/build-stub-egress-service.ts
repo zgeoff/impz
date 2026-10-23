@@ -61,7 +61,7 @@ export function buildStubEgressService(options: Readonly<StubEgressServiceOption
     },
     isScreened: (address) => screened.has(address),
     maxTtlS: 86_400,
-    readRate: () => ({ burst: 100, perSecond: 10 }),
+    readRate: () => ({ size: 100, refillMs: 100 }),
     now: () => clock.nowMs,
     log: (message) => {
       logs.push(message);

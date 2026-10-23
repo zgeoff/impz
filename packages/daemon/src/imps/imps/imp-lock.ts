@@ -1,10 +1,13 @@
 import { readImpById, readImpByName } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
+import {
+  buildMovingError,
+  buildNotFoundError,
+  isMovingError,
+} from '../../platform/errors/impd-errors';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import type { TryResult } from '../../platform/process/keyed-mutex';
 import { withImpLogContext } from '../../platform/process/with-imp-log-context';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildMovingError, buildNotFoundError, isMovingError } from '../../surface/api-errors';
 import type { ImpDisk, ImpHost, ImpMemory, ImpVms } from './imp-context';
 import { checkLiveness } from './imp-liveness';
 

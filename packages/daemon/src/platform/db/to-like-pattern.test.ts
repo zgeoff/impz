@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { isImpAllowed } from '@impz/api';
 import fc from 'fast-check';
-import { toLikePattern } from './imp-patterns';
+import { toLikePattern } from './to-like-pattern';
 
 test('it turns each * into the % of a LIKE pattern', () => {
   expect(toLikePattern('a*b*')).toBe('a%b%');

@@ -1,8 +1,5 @@
 import { rmSync } from 'node:fs';
 import type { Checkpoint, Imp } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { ORPCError } from '@orpc/server';
-import type { Config } from '../../config';
 import { toLockedImp } from '../../imps/imps/imp-lock';
 import type { ImpCheckpointHooks } from '../../imps/imps/imp-service';
 import { updateLockedImpState } from '../../imps/imps/update-locked-imp-state';
@@ -19,19 +16,20 @@ import { readEgressPolicy } from '../../platform/db/egress';
 import { readImpByName, updateImpDisk } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { getErrorMessage } from '../../platform/process/get-error-message';
-import { printLog } from '../../platform/process/print-log';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
+import { ImpdError, isImpdError } from '../../platform/errors/impd-error';
 import {
   buildConflictError,
   buildInvalidStateError,
   buildNotFoundError,
-} from '../../surface/api-errors';
+} from '../../platform/errors/impd-errors';
+import { getErrorMessage } from '../../platform/process/get-error-message';
+import { printLog } from '../../platform/process/print-log';
 import { createConsistentDisk } from '../../vm/checkpoints/consistent-disk';
 import type { DiskFreezer } from '../../vm/checkpoints/consistent-disk';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
+import type { ImpOpsConfig } from '../imp-ops-config';
 
 /* @internal */
 export const CHECKPOINT_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
@@ -60,7 +58,7 @@ interface ForkedImp {
 }
 
 export interface CheckpointServiceDeps {
-  readonly config: Config;
+  readonly config: ImpOpsConfig;
   readonly db: ImpDatabase;
   readonly imps: ImpCheckpointHooks;
   readonly storage: StorageBackend;
@@ -138,7 +136,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
       deps.imps.lockImp(name, async (imp) => {
         if (label !== undefined) {
           if (!isValidCheckpointLabel(label)) {
-            throw new ORPCError('BAD_REQUEST', {
+            throw new ImpdError('BAD_REQUEST', {
               message: `a label must not start with ${CHECKPOINT_ID_PREFIX}`,
             });
           }
@@ -356,7 +354,7 @@ function buildSourceChangedError(source: string) {
 }
 
 function isImpNotFound(error: unknown): boolean {
-  if (!(error instanceof ORPCError) || error.code !== 'NOT_FOUND') {
+  if (!isImpdError(error, 'NOT_FOUND')) {
     return false;
   }
 

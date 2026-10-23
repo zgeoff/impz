@@ -2,7 +2,7 @@ import { verifyOAuthQueryParams } from '@better-auth/oauth-provider';
 import type { Scope } from '@impz/api';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
-import type { Caller } from '../auth/caller';
+import type { Caller } from '../../platform/principal/caller';
 import { buildBadTokenRequest } from './build-bad-token-request';
 import { buildConsentBinding } from './build-consent-binding';
 import type { Approval, SignIns } from './create-sign-ins';

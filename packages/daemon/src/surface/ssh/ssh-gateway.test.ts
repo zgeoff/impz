@@ -5,7 +5,6 @@ import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { ORPCError } from '@orpc/server';
 import { Client, utils } from 'ssh2';
 import type { PublicKeyAuthMethod } from 'ssh2';
 import invariant from 'tiny-invariant';
@@ -22,9 +21,10 @@ import { createRevocations } from '../../identity/auth/revocations';
 import { loadTokenStore } from '../../identity/auth/token-store';
 import { MAX_AGENT_CHANNELS } from '../../imps/ssh/agent-forwarding';
 import { createAuthorizedKeys } from '../../imps/ssh/authorized-keys';
+import { ImpdError } from '../../platform/errors/impd-error';
+import { buildMovingError } from '../../platform/errors/impd-errors';
 import { AgentError } from '../../vm/agent-client/agent-connection';
 import { buildAgentOutdatedError } from '../../vm/agent-client/agent-outdated';
-import { buildMovingError } from '../api-errors';
 import { generateEd25519Key } from './host-key';
 import { createLoginKeys } from './login-keys';
 import { DEFAULT_LIMITS, startSshGateway } from './ssh-gateway';
@@ -898,7 +898,7 @@ test('it answers a channel with the failed wake’s error and exit status 255', 
 
   writeFileSync(ctx.keysPath, `${key.public}\n`, { mode: 0o600 });
 
-  ctx.ssh.stub.wakeError = new ORPCError('RAM_BUDGET_EXCEEDED', {
+  ctx.ssh.stub.wakeError = new ImpdError('RAM_BUDGET_EXCEEDED', {
     message: 'no room for box under the RAM budget',
   });
 
@@ -933,7 +933,7 @@ test('it runs no program when the wake fails', async () => {
 
   writeFileSync(ctx.keysPath, `${key.public}\n`, { mode: 0o600 });
 
-  ctx.ssh.stub.wakeError = new ORPCError('RAM_BUDGET_EXCEEDED', { message: 'no room' });
+  ctx.ssh.stub.wakeError = new ImpdError('RAM_BUDGET_EXCEEDED', { message: 'no room' });
 
   const client = await openSshClient({
     host: '127.0.0.1',

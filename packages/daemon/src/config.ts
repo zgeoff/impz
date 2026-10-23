@@ -1,30 +1,23 @@
-import { BlockList } from 'node:net';
 import { join } from 'node:path';
 import * as z from 'zod';
 import { countSlots, formatCidr4, isTailnetOverlap, parseSubnet } from './host-net/net/addressing';
-import type { Subnet } from './host-net/net/addressing';
 import { formatCidr6 } from './host-net/net/addressing6';
 import { parseIpv6Setting } from './host-net/net/ipv6-plan';
-import type { Ipv6Setting } from './host-net/net/ipv6-plan';
+import { buildRangeMatcher } from './host-net/net/range-matcher';
 import { parseTailnetRules } from './identity/auth/parse-tailnet-rules';
-import type { TailnetRule } from './identity/auth/tailnet-identity';
 import { PublicMcpEnvSchema, parsePublicMcpConfig } from './identity/oauth/public-mcp-config';
-import type { PublicMcpConfig } from './identity/oauth/public-mcp-config';
 import { loadBackupConfig } from './imp-ops/backup/backup-config';
-import type { BackupConfig } from './imp-ops/backup/backup-config';
-import { createPeerRanges, readPeerUrlAddress } from './imp-ops/moves/peer-address';
+import { buildPeerRanges, parsePeerUrlAddress } from './imp-ops/moves/peer-address';
 import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from './imps/images/build-image';
-import type { SessionLogLimits } from './imps/session-logs/session-log-service';
+import type { ImageEvictionConfig } from './imps/imps-config';
 import { checkPublicPorts } from './network/https/check-public-ports';
 import { HttpsEnvSchema, listHttpsWarnings, readHttpsConfig } from './network/https/https-config';
-import type { HttpsConfig } from './network/https/https-config';
 import {
   TailnetNamesEnvSchema,
   parseTailnetNamesConfig,
 } from './network/tailnet-names/tailnet-names-config';
-import type { TailnetNamesConfig } from './network/tailnet-names/tailnet-names-config';
-import type { StorageBackendKind } from './vm/storage/storage-backend';
-import type { WatchdogAction } from './vm/watchdog/agent-watchdog';
+import type { SurfaceConfig } from './surface/surface-config';
+import type { KsmConfig } from './vm/vm-config';
 
 const PortSchema = z.coerce.number().pipe(z.int().min(1).max(65_535));
 const CountSchema = z.coerce.number().pipe(z.int().positive());
@@ -112,85 +105,7 @@ export const NetworkEnvSchema = EnvSchema.pick({
   IMP_EGRESS_DNS_PORT: true,
 });
 
-interface BuildConfig {
-  readonly isolation: 'imp' | 'host';
-  readonly memoryMib: number;
-  readonly diskBytes: number;
-  readonly imageMaxBytes: number;
-  readonly imageMaxFiles: number;
-  readonly image: string;
-}
-
-export interface ImageEvictionConfig {
-  readonly highPercent: number;
-  readonly lowPercent: number;
-}
-
-export interface Config {
-  readonly dataDir: string;
-  readonly apiPort: number;
-  readonly proxyPort: number;
-  readonly portBase: number;
-  readonly sshPort: number | null;
-  readonly sshAuthorizedKeys: boolean;
-  readonly brokerPort: number;
-  readonly egressDnsPort: number;
-  readonly egressDeny: readonly string[];
-  readonly hostAddresses: readonly string[];
-  readonly brokerTestUpstreams: string | null;
-  readonly ramBudgetMib: number;
-  readonly idleTimeoutS: number;
-
-  // percent of one core, so a VM with several vCPUs can exceed 100
-  readonly idleCpuPercent: number;
-  readonly bootReservePercent: number;
-  readonly wakeReserveMib: number;
-
-  // a guest slept too young loses its clock on the next wake
-  readonly sleepMinGuestUptimeMs: number;
-  readonly bootTemplates: boolean;
-  readonly watchdogTimeoutS: number;
-  readonly watchdogAction: WatchdogAction;
-  readonly defaultVcpus: number;
-  readonly defaultMemoryMib: number;
-  readonly defaultDiskBytes: number;
-  readonly diskReserveBytes: number | null;
-  readonly buildContextMaxBytes: number;
-  readonly build: BuildConfig;
-  readonly imageEviction: ImageEvictionConfig | null;
-  readonly sessionLog: SessionLogLimits;
-  readonly dockerHost: string | null;
-  readonly dns: readonly string[];
-  readonly subnet: Subnet;
-  readonly ipv6: Ipv6Setting;
-  readonly firecrackerBin: string;
-  readonly jailerBin: string | null;
-  readonly jailDir: string;
-  readonly ksm: { readonly execBin: string; readonly headroomPercent: number } | null;
-  readonly kernelPath: string;
-
-  // impd copies the kernel and system drive in on start, so a rebuild never changes a
-  // file that a running VM has open
-  readonly kernelSource: string | null;
-  readonly systemDriveSource: string;
-  readonly defaultImage: string;
-  readonly storageBackend: StorageBackendKind;
-  readonly zfsRoot: string | null;
-  readonly isUiomoveBugAllowed: boolean;
-
-  // a node with no key is still on the tailnet when the entrypoint started tailscaled from
-  // saved node state after bootstrap blanked the spent key
-  readonly tailscaleEnabled: boolean;
-
-  // Tailscale gives the node another name while an older node holds this one
-  readonly tailscaleHostname: string;
-  readonly tailnetRules: readonly TailnetRule[] | null;
-  readonly dashboardDir: string | null;
-  readonly backup: BackupConfig | null;
-  readonly https: HttpsConfig | null;
-  readonly publicMcp: PublicMcpConfig | null;
-  readonly tailnetNames: TailnetNamesConfig | null;
-  readonly moves: { readonly peerUrl: string | null; readonly testCidr: string | null };
+export interface Config extends SurfaceConfig {
   readonly warnings: readonly string[];
 }
 
@@ -216,11 +131,7 @@ function splitList(value: string): string[] {
   return value.split(',').map((item) => item.trim());
 }
 
-const PRIVATE_V4 = new BlockList();
-
-PRIVATE_V4.addSubnet('10.0.0.0', 8, 'ipv4');
-PRIVATE_V4.addSubnet('172.16.0.0', 12, 'ipv4');
-PRIVATE_V4.addSubnet('192.168.0.0', 16, 'ipv4');
+const isPrivate4 = buildRangeMatcher(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']);
 
 // The peer URL is checked against the ranges a source sends to here, so a source never
 // refuses it late.
@@ -238,7 +149,7 @@ function checkMoveSettings(
 
     const [address = '', prefix = ''] = testCidr.split('/');
 
-    if (Number(prefix) < 16 || !PRIVATE_V4.check(address, 'ipv4')) {
+    if (Number(prefix) < 16 || !isPrivate4(address)) {
       throw new Error(`IMP_MOVE_TEST_CIDR must be a private range of /16 or narrower: ${testCidr}`);
     }
   }
@@ -247,13 +158,13 @@ function checkMoveSettings(
     return;
   }
 
-  const address = readPeerUrlAddress(peerUrl);
+  const address = parsePeerUrlAddress(peerUrl);
 
   if (address === null) {
     throw new Error(`IMP_PEER_URL must name a literal address, not a name: ${peerUrl}`);
   }
 
-  if (!createPeerRanges(testCidr ?? null).isAllowed(address)) {
+  if (!buildPeerRanges(testCidr ?? null).isAllowed(address)) {
     throw new Error(
       `IMP_PEER_URL must name a tailnet address${isE2e ? ' or one in IMP_MOVE_TEST_CIDR' : ''}: ${peerUrl}`,
     );
@@ -444,7 +355,7 @@ function parseKsmConfig(
   parsed: Readonly<
     Pick<z.infer<typeof EnvSchema>, 'IMP_KSM' | 'IMP_KSM_EXEC' | 'IMP_KSM_HEADROOM_PERCENT'>
   >,
-): Config['ksm'] {
+): KsmConfig | null {
   if (parsed.IMP_KSM === '0') {
     return null;
   }

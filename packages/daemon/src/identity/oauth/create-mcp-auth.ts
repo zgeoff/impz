@@ -7,10 +7,9 @@ import { betterAuth } from 'better-auth';
 import type { BetterAuthPlugin } from 'better-auth';
 import { isAPIError } from 'better-auth/api';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
+import type { Caller } from '../../platform/principal/caller';
 import { mintSecret } from '../../platform/secrets/mint-secret';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-364 gives this layer its own errors
-import { buildConflictError, buildNotFoundError } from '../../surface/api-errors';
-import type { Caller } from '../auth/caller';
 import type { Revocations } from '../auth/revocations';
 import type { TokenStore } from '../auth/token-store';
 import { CLIENT_SCOPES, createApproverPlugin } from './create-approver-plugin';

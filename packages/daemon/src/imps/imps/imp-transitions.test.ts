@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { ImpState } from '@impz/api';
-import { ORPCError } from '@orpc/server';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { canTransition, collectStatesLeadingTo, requireTransition } from './imp-transitions';
 
 test.each<[ImpState, ImpState]>([
@@ -102,7 +102,7 @@ test('#requireTransition throws INVALID_STATE with the states that lead to the t
   });
 
   expect(refusal).rejects.toStrictEqual(
-    new ORPCError('INVALID_STATE', {
+    new ImpdError('INVALID_STATE', {
       status: 409,
       message: 'cannot sleep an imp that is stopped (allowed: running)',
       data: { state: 'stopped', allowed: ['running'] },

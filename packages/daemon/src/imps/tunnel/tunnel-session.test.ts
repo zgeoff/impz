@@ -7,11 +7,11 @@ import {
   TUNNEL_WINDOW_BYTES,
 } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { ORPCError } from '@orpc/server';
 import invariant from 'tiny-invariant';
 import { buildStubTunnelPeer } from '../../../testing/imps/build-stub-tunnel-peer';
 import { buildStubDialStream } from '../../../testing/vm/build-stub-dial-stream';
 import { buildStubGuestListener } from '../../../testing/vm/build-stub-guest-listener';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { AgentError } from '../../vm/agent-client/agent-connection';
 import type { DialStream } from '../../vm/agent-client/dial-stream';
 import type { GuestListener } from '../../vm/agent-client/listener-stream';
@@ -323,7 +323,7 @@ test('it sends the client NOT_FOUND for an imp that does not exist', async () =>
   const session = createTunnelSession(
     tunnel.peer,
     {
-      readImpId: () => Promise.reject(new ORPCError('NOT_FOUND', { message: 'no imp named box' })),
+      readImpId: () => Promise.reject(new ImpdError('NOT_FOUND', { message: 'no imp named box' })),
       openDial,
       openListener: mock(),
       openAccept: mock(),

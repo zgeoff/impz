@@ -26,6 +26,7 @@ import { createApiAudit } from '../../platform/audit/api-audit';
 import { listApiCalls } from '../../platform/db/api-audit';
 import { runChecked } from '../../platform/process/run-command';
 import { buildUploadsDir } from '../../vm/storage/data-layout';
+import { readErrorCode } from '../read-error-code';
 import { toApiImage } from '../to-api-image';
 import { createBuildContextRoute } from './build-context-route';
 
@@ -274,7 +275,7 @@ test('it streams progress lines while the build runs, then the image', async () 
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10,
   });
@@ -351,7 +352,7 @@ test('it streams the step and output of a running build, and lists it in images.
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10_000,
   });
@@ -616,7 +617,7 @@ test('it refuses with 413 a context whose Content-Length is over the limit', asy
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10_000,
   });
@@ -651,7 +652,7 @@ test('it frees the build slot of a context refused for its Content-Length', asyn
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10_000,
   });
@@ -689,7 +690,7 @@ test('it refuses with 413 a context whose bytes run over the limit, and removes 
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10_000,
   });
@@ -726,7 +727,7 @@ test('it refuses with 413 a streamed build whose Content-Length is over the limi
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10_000,
   });
@@ -752,7 +753,7 @@ test('it ends a streamed build whose bytes run over the limit with a too-large e
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10_000,
   });
@@ -793,7 +794,7 @@ test('it hands a context of exactly the limit to the build', async () => {
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10_000,
   });
@@ -826,7 +827,7 @@ test('it refuses a build with no body', async () => {
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10_000,
   });
@@ -854,7 +855,7 @@ test('it refuses a build whose body is longer than its Content-Length', async ()
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10_000,
   });
@@ -888,7 +889,7 @@ test('it refuses a build whose body is empty', async () => {
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10_000,
   });
@@ -3020,7 +3021,7 @@ test('it clears what an earlier impd left in the uploads directory when a route 
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: ctx.impd.images,
     diskBudget: ctx.impd.diskBudget,
-    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {} }),
+    audit: createApiAudit({ db: ctx.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
     keepaliveMs: 10_000,
   });

@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { MOVING_RETRY_AFTER_S } from './api-errors';
+import { MOVING_RETRY_AFTER_S } from '../platform/errors/impd-errors';
 
 export async function withRetryAfter(response: Response): Promise<Response> {
   if (response.status !== 409) {
