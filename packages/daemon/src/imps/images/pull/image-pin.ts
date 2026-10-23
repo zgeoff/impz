@@ -39,6 +39,7 @@ const ARCHITECTURES = new Map([
   ['i686', '386'],
 ]);
 
+/* @internal */
 export function formatPlatform(os: string, architecture: string): string {
   const arch = architecture.toLowerCase();
 
