@@ -425,7 +425,10 @@ export function createOAuthHandlers(deps: Readonly<OAuthHandlerDeps>): OAuthHand
       response.status === 401 &&
       new URLSearchParams(body).get('grant_type') === 'authorization_code'
     ) {
-      const refusal: unknown = await response.clone().json();
+      const refusal: unknown = await response
+        .clone()
+        .json()
+        .catch(() => null);
 
       if (PKCEMissSchema.safeParse(refusal).success) {
         return buildPKCERefusal();
@@ -462,7 +465,10 @@ export function createOAuthHandlers(deps: Readonly<OAuthHandlerDeps>): OAuthHand
 
     // RFC 7009: a token the server does not know is answered as revoked
     if (owner === undefined && response.status === 400) {
-      const refusal: unknown = await response.clone().json();
+      const refusal: unknown = await response
+        .clone()
+        .json()
+        .catch(() => null);
 
       if (readErrorDescription(refusal) === 'token not found') {
         return new Response(null, { status: 200, headers: { 'cache-control': 'no-store' } });
