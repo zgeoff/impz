@@ -36,7 +36,7 @@ export function buildStubDevHostDocker(stub: StubDevHostDocker): string {
   const pgrep =
     lookupError === undefined
       ? pgrepMatch
-      : `  "exec "*" pgrep -f "*) printf '%s' ${buildShellWord(lookupError.stderr)} >&2; exit ${String(lookupError.exitCode)} ;;`;
+      : `  "exec "*" pgrep -f "*) printf '%s' ${formatShellWord(lookupError.stderr)} >&2; exit ${String(lookupError.exitCode)} ;;`;
 
   return [
     'case "$*" in',
