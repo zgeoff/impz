@@ -1,4 +1,3 @@
-import { listApiCalls } from '../platform/db/api-audit';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 import { requireNamedImp } from './require-named-imp';
@@ -34,8 +33,7 @@ export function buildAuditRoutes(os: RpcImplementer, deps: RouterDeps) {
 
       requireNamedImp(caller, context.input.name);
 
-      return listApiCalls(
-        deps.db,
+      return deps.audit.listCalls(
         context.input.name ?? null,
         context.input.limit ?? AUDIT_LIMIT,
         caller.imps,

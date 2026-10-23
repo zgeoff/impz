@@ -8,9 +8,10 @@
     // the synced skill-gate hook in .claude/ imports it, outside every project pattern
     "@zgeoff/skill-gate"
   ],
-  // POSIX tools the tests run through Bun's shell, and the Go toolchain's
-  // gofmt, which the go:fmt-vet pre-push job runs
-  "ignoreBinaries": ["mkfifo", "gofmt"],
+  // POSIX tools the tests run through Bun's shell, the Go toolchain's gofmt,
+  // which the go:fmt-vet pre-push job runs, and the tools the Headscale test
+  // runs inside its containers
+  "ignoreBinaries": ["mkfifo", "gofmt", "apk", "headscale", "tailscale"],
   "workspaces": {
     ".": {
       // run-related-tests.ts is a synced CLI that test:related reaches through
@@ -18,6 +19,7 @@
       "entry": [
         "e2e/main.ts",
         "e2e/suites/*.e2e.ts",
+        "host/scripts/*.headscale.ts",
         "scripts/ci/run-related-tests.ts",
         // a protoc plugin buf.gen.yaml runs
         "scripts/proto/protoc-gen-protocol-reference.ts"
