@@ -1,13 +1,14 @@
 # The e2e tailnet
 
 The e2e harness runs the tailscale, egress and moves-tailnet suites on a tailnet of the run's own: a
-Headscale control server in a container, which holds no production service and needs no secret.
-Every node on it joins as `tag:imp-e2e`, under a policy that copies the production tailnet's grants
-for that tag, so the suites test the same contract. The tailnet-names suite and a dev instance
-started with `IMP_TAILSCALE_OP=1` join Tailscale itself as `tag:imp-e2e`, which impz owns with its
-OAuth client and the 1Password vault `imp-e2e`. [Development](./development.md#end-to-end-tests)
-covers how to run the suites, and [configuration](../guides/configuration.md#dev-instance) covers
-the order in which `dev.sh` looks for a key.
+Headscale control server in a container, which holds no production service and needs no secret. Each
+impd node on it joins as `tag:imp-e2e`, under a policy that copies the production tailnet's grants
+for that tag, so the suites test the same contract. The test-side member joins as a user, with no
+tag. The tailnet-names suite and a dev instance started with `IMP_TAILSCALE_OP=1` join Tailscale
+itself as `tag:imp-e2e`, which impz owns with its OAuth client and the 1Password vault `imp-e2e`.
+[Development](./development.md#end-to-end-tests) covers how to run the suites, and
+[configuration](../guides/configuration.md#dev-instance) covers the order in which `dev.sh` looks
+for a key.
 
 ## The run's Headscale
 
