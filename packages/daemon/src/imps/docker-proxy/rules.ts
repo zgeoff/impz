@@ -1,3 +1,6 @@
+import { checkRegistry } from '../docker-contract/check-registry';
+import { parseImageReference } from '../docker-contract/parse-image-reference';
+
 export type Check = { readonly isOk: true } | { readonly isOk: false; readonly reason: string };
 
 const OK: Check = { isOk: true };
@@ -49,59 +52,6 @@ function checkQuery(
   return OK;
 }
 
-export interface ImageReference {
-  readonly registry: string;
-  readonly path: string;
-}
-
-export function parseImageReference(reference: string): ImageReference {
-  const withoutDigest = reference.split('@')[0] ?? '';
-  const lastSlash = withoutDigest.lastIndexOf('/');
-  const tagColon = withoutDigest.indexOf(':', lastSlash + 1);
-  const name = tagColon === -1 ? withoutDigest : withoutDigest.slice(0, tagColon);
-  const [first = '', ...rest] = name.split('/');
-
-  const isRegistry =
-    rest.length > 0 &&
-    (first.includes('.') || first.includes(':') || first.toLowerCase() === 'localhost');
-
-  const registry = isRegistry ? first : 'docker.io';
-  const path = isRegistry ? rest.join('/') : name;
-
-  return {
-    registry: registry === 'index.docker.io' ? 'docker.io' : registry,
-    path: registry === 'docker.io' && !path.includes('/') ? `library/${path}` : path,
-  };
-}
-
-function readRegistryHost(registry: string): string {
-  if (registry.startsWith('[')) {
-    return registry.slice(1, registry.indexOf(']'));
-  }
-
-  return registry.split(':')[0] ?? '';
-}
-
-// The engine pulls from the host's network, so a loopback, link-local or IP-literal registry
-// would reach a service on the host.
-function checkRegistry(registry: string): string | null {
-  const host = readRegistryHost(registry).toLowerCase();
-
-  if (host === 'localhost' || host.endsWith('.localhost')) {
-    return `registry ${registry} is the host's own`;
-  }
-
-  if (/^[0-9.]+$/v.test(host) || host.includes(':')) {
-    return `registry ${registry} is an IP address`;
-  }
-
-  return null;
-}
-
-export function checkReferenceRegistry(reference: string): string | null {
-  return checkRegistry(parseImageReference(reference).registry);
-}
-
 /* @internal */
 export function checkImageReference(reference: string, hostImage: string): Check {
   if (!/^[A-Za-z0-9][A-Za-z0-9._\/:@\[\]\-]*$/v.test(reference)) {
@@ -135,9 +85,8 @@ function checkTag(value: string): string | null {
 function checkPullOnly(fromImage: string, tag: string, pullOnly: string): Check {
   const image = parseImageReference(fromImage);
   const only = parseImageReference(pullOnly);
-  const digest = pullOnly.split('@')[1] ?? '';
 
-  if (image.registry === only.registry && image.path === only.path && tag === digest) {
+  if (image.registry === only.registry && image.path === only.path && tag === only.digest) {
     return OK;
   }
 
@@ -247,12 +196,12 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 function checkCreateOnly(image: string, builderImage: string): Check {
   const named = parseImageReference(image);
   const only = parseImageReference(builderImage);
-  const digest = builderImage.split('@')[1] ?? '';
 
   if (
     named.registry === only.registry &&
     named.path === only.path &&
-    image.split('@')[1] === digest
+    named.digest !== null &&
+    named.digest === only.digest
   ) {
     return OK;
   }

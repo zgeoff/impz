@@ -5,7 +5,6 @@ import {
   normalizePlatform,
   pickRepoDigest,
   readImageStore,
-  toRepository,
 } from './image-pin';
 
 test.each([
@@ -44,21 +43,14 @@ test.each([
   },
 );
 
-test.each([
-  ['busybox:1.37', 'busybox'],
-  ['docker.io/library/busybox:1.37', 'busybox'],
-  ['index.docker.io/acme/app', 'acme/app'],
-  [`ghcr.io/acme/app:2@sha256:${'a'.repeat(64)}`, 'ghcr.io/acme/app'],
-  ['registry.test:5000/app:1', 'registry.test:5000/app'],
-  ['localhost/app', 'localhost/app'],
-  ['LocalHost/app:1', 'LocalHost/app'],
-  ['library/busybox', 'library/busybox'],
-])(
-  '#toRepository names the repository of %s as %s, as RepoDigests writes it',
-  (ref, repository) => {
-    expect(toRepository(ref)).toBe(repository);
-  },
-);
+test('#pickRepoDigest pins an official image named under library/ by its own repository digest', () => {
+  expect(
+    pickRepoDigest('library/busybox:1.37', [
+      `other.test/x@sha256:${'b'.repeat(64)}`,
+      `busybox@sha256:${'a'.repeat(64)}`,
+    ]),
+  ).toBe(`busybox@sha256:${'a'.repeat(64)}`);
+});
 
 test('#pickRepoDigest pins a ref by its own digest when it names one', () => {
   expect(

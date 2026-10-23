@@ -22,7 +22,7 @@ import { buildStubVmm } from '../testing/vm/build-stub-vmm';
 import { loadConfig } from './config';
 import { createImpd } from './create-impd';
 import type { ImpdBoundaries } from './impd-deps';
-import { DEFAULT_BUILD_IMAGE } from './imps/images/build-image';
+import { DEFAULT_BUILD_IMAGE } from './imps/docker-contract/build-image';
 import { readSetfcapWarning } from './imps/images/unpack-export';
 import { createImage } from './platform/db/images';
 import { createImp, listImps } from './platform/db/imps';

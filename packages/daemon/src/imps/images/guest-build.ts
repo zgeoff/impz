@@ -3,7 +3,7 @@ import { ImpdError } from '../../platform/errors/impd-error';
 import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import { countTreeBytes } from '../../vm/storage/count-tree-bytes';
-import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
+import { DOCKERFILE_FRONTEND } from '../docker-contract/dockerfile-frontend';
 import type { BuildOutput } from './create-build-steps';
 import { createPlainLines } from './create-plain-lines';
 import { DockerBuildError } from './docker-build-error';

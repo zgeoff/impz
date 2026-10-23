@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { tapStream } from '../../platform/process/tap-stream';
-import { formatEngineFailure, formatRefusal } from './refusal';
+import { formatEngineFailure, formatRefusal } from '../docker-contract/refusal';
 import { formatQuery, getRequestRoute } from './router';
 import type { RoutedRequest } from './router';
 import { checkCreateBody, checkNoQuery, checkPullQuery, checkRemoveQuery } from './rules';

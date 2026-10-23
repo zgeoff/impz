@@ -1,4 +1,8 @@
 import * as z from 'zod';
+import {
+  formatFamiliarRepository,
+  parseImageReference,
+} from '../docker-contract/parse-image-reference';
 
 export const PIN_INSPECT_FORMAT =
   '{"Id":{{json .Id}},"RepoDigests":{{json .RepoDigests}},"Os":{{json .Os}},"Architecture":{{json .Architecture}},"Config":{{json .Config}}}';
@@ -53,33 +57,12 @@ export function normalizePlatform(os: string, architecture: string): string {
   return platform;
 }
 
-/* @internal */
-export function toRepository(ref: string): string {
-  const named = ref.split('@')[0] ?? ref;
-  const slash = named.lastIndexOf('/');
-  const colon = named.lastIndexOf(':');
-  const repository = colon > slash ? named.slice(0, colon) : named;
-  const [first = '', ...rest] = repository.split('/');
-
-  const hasDomain =
-    rest.length > 0 &&
-    (first.includes('.') || first.includes(':') || first.toLowerCase() === 'localhost');
-
-  if (!hasDomain || (first !== 'docker.io' && first !== 'index.docker.io')) {
-    return repository;
-  }
-
-  const path = rest.join('/');
-
-  return rest.length === 2 && rest[0] === 'library' ? (rest[1] ?? path) : path;
-}
-
 export function pickRepoDigest(ref: string, repoDigests: readonly string[]): string | null {
-  const repository = toRepository(ref);
-  const [, written] = ref.split('@');
+  const parsed = parseImageReference(ref);
+  const repository = formatFamiliarRepository(parsed);
 
-  if (written !== undefined) {
-    return `${repository}@${written}`;
+  if (parsed.digest !== null) {
+    return `${repository}@${parsed.digest}`;
   }
 
   const own = repoDigests.find((entry) => entry.split('@')[0] === repository);

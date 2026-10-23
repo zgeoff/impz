@@ -10,7 +10,7 @@ import {
 } from '../../../testing/imps/build-stub-image-builder';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { buildStubGuest } from '../../../testing/vm/build-stub-guest';
-import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
+import { DOCKERFILE_FRONTEND } from '../docker-contract/dockerfile-frontend';
 import { DockerBuildError } from './docker-build-error';
 import { loadGuestImage, runGuestBuild, writeGuestTree } from './guest-build';
 import { createGuestExec } from './guest-exec';
