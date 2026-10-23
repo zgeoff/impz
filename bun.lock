@@ -56,7 +56,7 @@
     },
     "packages/api": {
       "name": "@impz/api",
-      "version": "2.10.3",
+      "version": "2.10.4",
       "dependencies": {
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -69,7 +69,7 @@
     },
     "packages/cli": {
       "name": "@impz/cli",
-      "version": "2.10.3",
+      "version": "2.10.4",
       "bin": {
         "impz": "src/main.ts",
       },
@@ -95,7 +95,7 @@
     },
     "packages/client": {
       "name": "@impz/client",
-      "version": "2.10.3",
+      "version": "2.10.4",
       "dependencies": {
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -120,7 +120,7 @@
     },
     "packages/daemon": {
       "name": "@impz/daemon",
-      "version": "2.10.3",
+      "version": "2.10.4",
       "dependencies": {
         "@better-auth/mcp": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
@@ -138,6 +138,7 @@
         "@opentelemetry/resources": "catalog:",
         "@opentelemetry/sdk-metrics": "catalog:",
         "@opentelemetry/sdk-trace-base": "catalog:",
+        "@orpc/client": "catalog:",
         "@orpc/server": "catalog:",
         "@peculiar/x509": "catalog:",
         "acme-client": "catalog:",
@@ -158,7 +159,6 @@
         "@impz/test-utils": "workspace:*",
         "@modelcontextprotocol/client": "catalog:",
         "@msw/data": "catalog:",
-        "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
         "@types/dns-packet": "catalog:",
         "@types/ssh2": "catalog:",
