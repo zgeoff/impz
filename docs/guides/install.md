@@ -539,8 +539,8 @@ install -D -m 0644 deploy/imp-host.seccomp.json /etc/imp/imp-host.seccomp.json
   ```
 
   The file runs `imp-docker-proxy` beside imp-host. Put `IMP_DOCKER_GID` in a `.env` next to the
-  file to keep it. The proxy never reads the env file, so a changed `IMP_BUILD_CONTEXT_MAX_MIB` goes
-  in that `.env` too.
+  file to keep it. The proxy never reads the env file, so a changed `IMP_BUILD_IMAGE` goes in that
+  `.env` too.
 
   Compose does not read the host's addresses into `IMP_HOST_ADDRESSES`, as the unit does at each
   start. With `public` imps, list the host's addresses and networks (`ip -o addr show scope global`)

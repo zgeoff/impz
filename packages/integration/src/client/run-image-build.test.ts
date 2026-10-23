@@ -6,13 +6,12 @@ import { IMAGE_BUILD_STREAM_TYPE } from '@impz/api';
 import type { ImageBuildProgress } from '@impz/api';
 import { createImpClient } from '@impz/client';
 import { buildStubImpdBeforeBuildStream } from '@impz/client/test-utils/build-stub-impd-before-build-stream';
-import { startStubDockerEngine } from '@impz/client/test-utils/start-stub-docker-engine';
-import { DOCKERFILE_FRONTEND, createStubDockerCli, startTestImpd } from '@impz/daemon/testing';
+import { buildStubImageBuilder, createFilesTar, startBuilderImpd } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
-import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import { http } from 'msw';
+import invariant from 'tiny-invariant';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -25,12 +24,12 @@ async function setupTest() {
 
   stack.defer(() => rm(workDir, { recursive: true, force: true }));
 
-  const dockerSocket = join(workDir, 'docker.sock');
-
-  const startImpd = async (boundaries: Readonly<{ keepaliveMs?: number }> = {}) => {
-    const harness = await startTestImpd(stack, {
+  const startImpd = async (
+    builder: Parameters<typeof startBuilderImpd>[1],
+    boundaries: Readonly<{ keepaliveMs?: number }> = {},
+  ) => {
+    const harness = await startBuilderImpd(stack, builder, {
       rootToken,
-      env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: `unix://${dockerSocket}` },
       frozenClockMs: Date.UTC(2026, 0, 1),
       boundaries,
     });
@@ -40,7 +39,6 @@ async function setupTest() {
 
   return {
     startImpd,
-    dockerSocket,
     workDir,
     rootToken,
   };
@@ -48,7 +46,10 @@ async function setupTest() {
 
 test('it throws PAYLOAD_TOO_LARGE for a context over the limit impd keeps', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const host = await ctx.startImpd(builder);
 
   const client = createImpClient({ url: host.url, token: ctx.rootToken });
 
@@ -68,7 +69,10 @@ test('it throws PAYLOAD_TOO_LARGE for a context over the limit impd keeps', asyn
 
 test('it throws BAD_REQUEST for a Dockerfile outside the context', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const host = await ctx.startImpd(builder);
 
   const client = createImpClient({ url: host.url, token: ctx.rootToken });
 
@@ -79,7 +83,10 @@ test('it throws BAD_REQUEST for a Dockerfile outside the context', async () => {
 
 test('it throws UNAUTHORIZED for a wrong token', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const host = await ctx.startImpd(builder);
 
   const client = createImpClient({ url: host.url, token: 'wrong' });
 
@@ -91,29 +98,13 @@ test('it throws UNAUTHORIZED for a wrong token', async () => {
 
 test('it uploads a Blob as the build context and answers the image', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
 
-  const imageId = `sha256:${'b'.repeat(64)}`;
-
-  await mkdir(join(ctx.workDir, 'tree'));
-  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
-
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  updateEnv('PATH', docker.path);
-
-  const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
+  const host = await ctx.startImpd(builder);
 
   await mkdir(join(ctx.workDir, 'context'));
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\nCOPY note /\n');
@@ -125,14 +116,14 @@ test('it uploads a Blob as the build context and answers the image', async () =>
   const built = await client.buildImage('web', new Blob([tar]));
 
   const note = Bun.spawnSync(['tar', '-xO', '-f', '-', '--wildcards', '*note'], {
-    stdin: engine.contexts.at(0) ?? new Uint8Array(),
+    stdin: builder.builtContexts.at(0) ?? new Uint8Array(),
   });
 
   expect(built).toStrictEqual({
     id: expect.toBeString(),
     name: 'web',
     ref: 'imp/web:latest',
-    digest: imageId,
+    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
@@ -140,34 +131,17 @@ test('it uploads a Blob as the build context and answers the image', async () =>
   });
 
   expect(note.stdout.toString()).toBe('as a blob');
-  expect(engine.unexpected).toStrictEqual([]);
 });
 
 test('it uploads bytes as the build context', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
 
-  const imageId = `sha256:${'b'.repeat(64)}`;
-
-  await mkdir(join(ctx.workDir, 'tree'));
-  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
-
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  updateEnv('PATH', docker.path);
-
-  const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
+  const host = await ctx.startImpd(builder);
 
   await mkdir(join(ctx.workDir, 'context'));
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\nCOPY note /\n');
@@ -179,14 +153,14 @@ test('it uploads bytes as the build context', async () => {
   const built = await client.buildImage('web', new Uint8Array(tar));
 
   const note = Bun.spawnSync(['tar', '-xO', '-f', '-', '--wildcards', '*note'], {
-    stdin: engine.contexts.at(0) ?? new Uint8Array(),
+    stdin: builder.builtContexts.at(0) ?? new Uint8Array(),
   });
 
   expect(built).toStrictEqual({
     id: expect.toBeString(),
     name: 'web',
     ref: 'imp/web:latest',
-    digest: imageId,
+    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
@@ -194,34 +168,17 @@ test('it uploads bytes as the build context', async () => {
   });
 
   expect(note.stdout.toString()).toBe('as bytes');
-  expect(engine.unexpected).toStrictEqual([]);
 });
 
 test('it uploads a stream as the build context', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
 
-  const imageId = `sha256:${'b'.repeat(64)}`;
-
-  await mkdir(join(ctx.workDir, 'tree'));
-  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
-
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  updateEnv('PATH', docker.path);
-
-  const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
+  const host = await ctx.startImpd(builder);
 
   await mkdir(join(ctx.workDir, 'context'));
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\nCOPY note /\n');
@@ -233,14 +190,14 @@ test('it uploads a stream as the build context', async () => {
   const built = await client.buildImage('web', new Blob([tar]).stream());
 
   const note = Bun.spawnSync(['tar', '-xO', '-f', '-', '--wildcards', '*note'], {
-    stdin: engine.contexts.at(0) ?? new Uint8Array(),
+    stdin: builder.builtContexts.at(0) ?? new Uint8Array(),
   });
 
   expect(built).toStrictEqual({
     id: expect.toBeString(),
     name: 'web',
     ref: 'imp/web:latest',
-    digest: imageId,
+    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
@@ -248,34 +205,17 @@ test('it uploads a stream as the build context', async () => {
   });
 
   expect(note.stdout.toString()).toBe('as a stream');
-  expect(engine.unexpected).toStrictEqual([]);
 });
 
 test('it sends the name, the Dockerfile, the token and what it accepts', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
 
-  const imageId = `sha256:${'b'.repeat(64)}`;
-
-  await mkdir(join(ctx.workDir, 'tree'));
-  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
-
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  updateEnv('PATH', docker.path);
-
-  const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
+  const host = await ctx.startImpd(builder);
 
   await mkdir(join(ctx.workDir, 'context', 'sub'), { recursive: true });
   await writeFile(join(ctx.workDir, 'context', 'sub', 'Dockerfile'), 'FROM scratch\n');
@@ -305,35 +245,17 @@ test('it sends the name, the Dockerfile, the token and what it accepts', async (
     ['content-type', 'application/x-tar'],
     ['accept', `${IMAGE_BUILD_STREAM_TYPE}, application/json`],
   ]);
-
-  expect(engine.unexpected).toStrictEqual([]);
 });
 
 test('it sends the size of a stream as its Content-Length, which impd builds to', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
 
-  const imageId = `sha256:${'b'.repeat(64)}`;
-
-  await mkdir(join(ctx.workDir, 'tree'));
-  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
-
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  updateEnv('PATH', docker.path);
-
-  const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
+  const host = await ctx.startImpd(builder);
 
   await mkdir(join(ctx.workDir, 'context'));
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\nCOPY note /\n');
@@ -354,14 +276,14 @@ test('it sends the size of a stream as its Content-Length, which impd builds to'
   const built = await client.buildImage('web', context, { size: tar.byteLength });
 
   const note = Bun.spawnSync(['tar', '-xO', '-f', '-', '--wildcards', '*note'], {
-    stdin: engine.contexts.at(0) ?? new Uint8Array(),
+    stdin: builder.builtContexts.at(0) ?? new Uint8Array(),
   });
 
   expect(built).toStrictEqual({
     id: expect.toBeString(),
     name: 'web',
     ref: 'imp/web:latest',
-    digest: imageId,
+    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
@@ -369,45 +291,30 @@ test('it sends the size of a stream as its Content-Length, which impd builds to'
   });
 
   expect(note.stdout.toString()).toBe('with its size');
-  expect(engine.unexpected).toStrictEqual([]);
 });
 
 test(
   'it outlasts the idle deadline of a client fetch on progress lines while the engine is silent',
   async () => {
     const ctx = await setupTest();
-    const host = await ctx.startImpd({ keepaliveMs: 500 });
 
-    const imageId = `sha256:${'b'.repeat(64)}`;
     const release = Promise.withResolvers<void>();
 
     onTestFinished(() => {
       release.resolve();
     });
 
-    await mkdir(join(ctx.workDir, 'tree'));
-    await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
+    const builder = buildStubImageBuilder({
+      exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
+      repoDigest: `sha256:${'b'.repeat(64)}`,
+      onBuild: async () => {
+        await release.promise;
 
-    const docker = createStubDockerCli({
-      directory: ctx.workDir,
-      images: [
-        { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-        {
-          refs: ['imp/web:latest'],
-          inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
-        },
-      ],
-      create: { id: 'c'.repeat(64) },
-      exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
+        return {};
+      },
     });
 
-    updateEnv('PATH', docker.path);
-
-    const engine = startStubDockerEngine({
-      socketPath: ctx.dockerSocket,
-      imageId,
-      holdUntil: () => release.promise,
-    });
+    const host = await ctx.startImpd(builder, { keepaliveMs: 500 });
 
     await mkdir(join(ctx.workDir, 'context'));
     await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\n');
@@ -476,7 +383,6 @@ test(
 
     expect(output.join('').trimEnd().split('\n').at(-1)).toBe('{"type":"image","name":"web"}');
     expect(exitCode).toBe(0);
-    expect(engine.unexpected).toStrictEqual([]);
   },
   { timeout: 30_000 },
 );
@@ -485,38 +391,14 @@ test(
   'it gives up at the idle deadline of a client fetch on an impd from before the stream, which stops the build',
   async () => {
     const ctx = await setupTest();
-    const host = await ctx.startImpd({ keepaliveMs: 500 });
 
-    const imageId = `sha256:${'b'.repeat(64)}`;
-    const release = Promise.withResolvers<void>();
-
-    onTestFinished(() => {
-      release.resolve();
+    const builder = buildStubImageBuilder({
+      exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
+      repoDigest: `sha256:${'b'.repeat(64)}`,
+      onBuild: () => Promise.withResolvers<never>().promise,
     });
 
-    await mkdir(join(ctx.workDir, 'tree'));
-    await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
-
-    const docker = createStubDockerCli({
-      directory: ctx.workDir,
-      images: [
-        { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-        {
-          refs: ['imp/web:latest'],
-          inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
-        },
-      ],
-      create: { id: 'c'.repeat(64) },
-      exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
-    });
-
-    updateEnv('PATH', docker.path);
-
-    const engine = startStubDockerEngine({
-      socketPath: ctx.dockerSocket,
-      imageId,
-      holdUntil: () => release.promise,
-    });
+    const host = await ctx.startImpd(builder, { keepaliveMs: 500 });
 
     await mkdir(join(ctx.workDir, 'context'));
     await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\n');
@@ -564,8 +446,14 @@ test(
 
     const output = new Response(child.stdout).text();
 
-    await waitFor(() => {
-      expect(engine.contexts).toBeArrayOfSize(1);
+    const build = await waitFor(() => {
+      const run = builder.guest.runs.find((candidate) => candidate.argv[1] === 'build');
+
+      invariant(run);
+
+      expect(builder.builtContexts).toBeArrayOfSize(1);
+
+      return run;
     });
 
     const heldAt = Date.now();
@@ -574,8 +462,10 @@ test(
 
     const gaveUpAfterMs = Date.now() - heldAt;
 
-    await waitFor(() => {
-      expect(engine.signals.at(0)?.aborted).toBeTrue();
+    const closed = await waitFor(() => {
+      expect(build.closed).toBeTrue();
+
+      return build.closed;
     });
 
     const images = await createImpClient({ url: host.url, token: ctx.rootToken }).images.list();
@@ -584,42 +474,32 @@ test(
     expect(said).toBe('{"type":"error","name":"TimeoutError"}\n');
     expect(exitCode).toBe(0);
     expect(gaveUpAfterMs).toBeWithin(7000, 9000);
-    expect(images).toStrictEqual([]);
-    expect(engine.unexpected).toStrictEqual([]);
+    expect(closed).toBeTrue();
+    expect(images.map((image) => image.name)).toStrictEqual(['imp-builder']);
   },
   { timeout: 30_000 },
 );
 
 test('it reports each progress line as it arrives, before the image', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
 
-  const imageId = `sha256:${'b'.repeat(64)}`;
   const release = Promise.withResolvers<void>();
 
-  await mkdir(join(ctx.workDir, 'tree'));
-  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
-
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
+  onTestFinished(() => {
+    release.resolve();
   });
 
-  updateEnv('PATH', docker.path);
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: async () => {
+      await release.promise;
 
-  const engine = startStubDockerEngine({
-    socketPath: ctx.dockerSocket,
-    imageId,
-    holdUntil: () => release.promise,
+      return {};
+    },
   });
+
+  const host = await ctx.startImpd(builder);
 
   await mkdir(join(ctx.workDir, 'context'));
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\n');
@@ -651,32 +531,24 @@ test('it reports each progress line as it arrives, before the image', async () =
     id: expect.toBeString(),
     name: 'web',
     ref: 'imp/web:latest',
-    digest: imageId,
+    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
     pinned: false,
   });
-
-  expect(engine.unexpected).toStrictEqual([]);
 });
 
 test('it throws the ORPCError of the error line that ends the stream', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
 
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: () => ({ code: 1, stderr: 'the Dockerfile: no such file: note\n' }),
   });
 
-  updateEnv('PATH', docker.path);
-
-  const engine = startStubDockerEngine({
-    socketPath: ctx.dockerSocket,
-    imageId: `sha256:${'b'.repeat(64)}`,
-    failure: 'the Dockerfile: no such file: note',
-  });
+  const host = await ctx.startImpd(builder);
 
   await mkdir(join(ctx.workDir, 'context'));
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\nCOPY note /\n');
@@ -692,35 +564,17 @@ test('it throws the ORPCError of the error line that ends the stream', async () 
     status: 400,
     message: expect.toInclude('the Dockerfile: no such file: note'),
   });
-
-  expect(engine.unexpected).toStrictEqual([]);
 });
 
 test('it answers the image from an impd that answers JSON, from before the stream', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
 
-  const imageId = `sha256:${'b'.repeat(64)}`;
-
-  await mkdir(join(ctx.workDir, 'tree'));
-  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'built\n');
-
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: imageId, RepoDigests: [], Config: {}, Size: 1024 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  updateEnv('PATH', docker.path);
-
-  const engine = startStubDockerEngine({ socketPath: ctx.dockerSocket, imageId });
+  const host = await ctx.startImpd(builder);
 
   await mkdir(join(ctx.workDir, 'context'));
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\n');
@@ -739,7 +593,7 @@ test('it answers the image from an impd that answers JSON, from before the strea
     id: expect.toBeString(),
     name: 'web',
     ref: 'imp/web:latest',
-    digest: imageId,
+    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
     source: 'oci',
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
@@ -747,25 +601,18 @@ test('it answers the image from an impd that answers JSON, from before the strea
   });
 
   expect(progress).not.toHaveBeenCalled();
-  expect(engine.unexpected).toStrictEqual([]);
 });
 
 test('it throws the ORPCError that an impd from before the stream answers', async () => {
   const ctx = await setupTest();
-  const host = await ctx.startImpd();
 
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: () => ({ code: 1, stderr: 'the Dockerfile: no such file: note\n' }),
   });
 
-  updateEnv('PATH', docker.path);
-
-  const engine = startStubDockerEngine({
-    socketPath: ctx.dockerSocket,
-    imageId: `sha256:${'b'.repeat(64)}`,
-    failure: 'the Dockerfile: no such file: note',
-  });
+  const host = await ctx.startImpd(builder);
 
   await mkdir(join(ctx.workDir, 'context'));
   await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\nCOPY note /\n');
@@ -785,6 +632,4 @@ test('it throws the ORPCError that an impd from before the stream answers', asyn
     status: 400,
     message: expect.toInclude('the Dockerfile: no such file: note'),
   });
-
-  expect(engine.unexpected).toStrictEqual([]);
 });
