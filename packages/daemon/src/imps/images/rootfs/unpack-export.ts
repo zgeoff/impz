@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { ImpdError } from '../../../platform/errors/impd-error';
-import { buildExitError, runCommand } from '../../../platform/process/run-command';
+import { buildExitError } from '../../../platform/process/run-command';
 import type { CommandResult } from '../../../platform/process/run-command';
 
 // CAP_SETFCAP's bit in /proc/<pid>/status (linux/capability.h).
@@ -19,21 +19,96 @@ export const UNPACK_TAR_ARGS = [
   '-',
 ] as const;
 
-const UNPACK_SCRIPT = `docker export "$1" | LC_ALL=C ${UNPACK_TAR_ARGS.map((arg) => `'${arg}'`).join(' ')} -C "$2"`;
-
 export async function writeExportedTree(containerId: string, root: string): Promise<void> {
-  const result = await runCommand([
-    'bash',
-    '-o',
-    'pipefail',
-    '-c',
-    UNPACK_SCRIPT,
-    'export',
-    containerId,
-    root,
+  const exporter = Bun.spawn(['docker', 'export', containerId], {
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env: process.env,
+  });
+
+  const tar = Bun.spawn([...UNPACK_TAR_ARGS, '-C', root], {
+    stdin: exporter.stdout,
+    stdout: 'ignore',
+    stderr: 'pipe',
+    env: { ...process.env, LC_ALL: 'C' },
+  });
+
+  const state = { hasExportEnded: false, isTarFirst: false, isExportStopped: false };
+
+  const waitForExport = async () => {
+    await exporter.exited;
+
+    state.hasExportEnded = true;
+  };
+
+  // A tar that stops reads nothing more, and an export that still writes would wait on it
+  // forever.
+  const waitForTar = async () => {
+    const code = await tar.exited;
+
+    if (code !== 0 && !state.hasExportEnded) {
+      state.isTarFirst = true;
+      state.isExportStopped = true;
+
+      exporter.kill();
+    }
+  };
+
+  void waitForExport();
+  void waitForTar();
+
+  const [exportCode, exportStderr, tarCode, tarStderr] = await Promise.all([
+    exporter.exited,
+    new Response(exporter.stderr).text(),
+    tar.exited,
+    new Response(tar.stderr).text(),
   ]);
 
-  assertUnpacked(result);
+  const failure = findUnpackFailure({
+    containerId,
+    exported: { exitCode: exportCode, stdout: '', stderr: exportStderr },
+    unpacked: { exitCode: tarCode, stdout: '', stderr: tarStderr },
+    isTarFirst: state.isTarFirst,
+    isExportStopped: state.isExportStopped && exporter.signalCode !== null,
+  });
+
+  if (failure !== null) {
+    throw failure;
+  }
+
+  assertUnpacked({ exitCode: tarCode, stdout: '', stderr: tarStderr });
+}
+
+interface UnpackOutcome {
+  readonly containerId: string;
+  readonly exported: CommandResult;
+  readonly unpacked: CommandResult;
+
+  readonly isTarFirst: boolean;
+
+  readonly isExportStopped: boolean;
+}
+
+/* @internal */
+export function findUnpackFailure(outcome: Readonly<UnpackOutcome>): Error | null {
+  const exportFailure =
+    outcome.exported.exitCode === 0 || outcome.isExportStopped
+      ? null
+      : buildExitError(['docker', 'export', outcome.containerId], outcome.exported);
+
+  const tarFailure =
+    outcome.unpacked.exitCode === 0 ? null : buildExitError(['tar'], outcome.unpacked);
+
+  if (exportFailure === null || tarFailure === null) {
+    return exportFailure ?? tarFailure;
+  }
+
+  const [first, second] = outcome.isTarFirst
+    ? [tarFailure, exportFailure]
+    : [exportFailure, tarFailure];
+
+  return new Error(`${first.message}; ${second.message}`);
 }
 
 // tar only warns, and exits 0, when it cannot set an extended attribute, and a binary that
