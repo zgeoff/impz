@@ -61,7 +61,7 @@ export function wireHarnessDeps(cwd: string): HarnessDeps {
 
       return startInstance(target, run);
     },
-    resetSuites: (prefixes, target) => resetSuites(prefixes, target),
+    resetSuites,
     rebootInstance: (target, settings, env) => runDevScript('reboot', target, settings, env),
     runJourney: (request) =>
       runSuite({ argv: request.argv, cwd: REPO_ROOT, env: request.env, onStart: request.onStart }),
