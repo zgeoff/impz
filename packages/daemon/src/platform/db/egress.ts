@@ -8,6 +8,7 @@ export interface EgressSlot {
   readonly slot: number;
   readonly guestIp: string;
   readonly policy: EgressPolicy;
+  readonly isBuilder: boolean;
 }
 
 // none blocks everything: a value impd did not write fails closed
@@ -51,7 +52,7 @@ export async function writeEgressPolicy(
 export async function listEgressSlots(db: ImpDatabase): Promise<EgressSlot[]> {
   const rows = await db
     .selectFrom('imps')
-    .select(['id', 'name', 'slot', 'ip', 'egress_policy', 'egress_allow'])
+    .select(['id', 'name', 'slot', 'ip', 'egress_policy', 'egress_allow', 'kind'])
     .orderBy('slot')
     .execute();
 
@@ -61,5 +62,6 @@ export async function listEgressSlots(db: ImpDatabase): Promise<EgressSlot[]> {
     slot: row.slot,
     guestIp: row.ip,
     policy: parseStoredPolicy(row.egress_policy, row.egress_allow),
+    isBuilder: row.kind === 'builder',
   }));
 }

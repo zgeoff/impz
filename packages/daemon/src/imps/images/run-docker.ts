@@ -10,18 +10,6 @@ interface DockerOptions {
   readonly signal?: AbortSignal;
 }
 
-export function readRefusalError(call: string, output: string): ImpdError | null {
-  const refusal = readProxyRefusal(output);
-
-  if (refusal === null) {
-    return null;
-  }
-
-  getImpdLogger('image').warning('{call} refused: {refusal}', { call, refusal });
-
-  return new ImpdError('BAD_REQUEST', { message: refusal });
-}
-
 export async function runDocker(
   argv: readonly string[],
   options: DockerOptions = {},
@@ -40,6 +28,18 @@ export async function runDocker(
   }
 
   return result;
+}
+
+function readRefusalError(call: string, output: string): ImpdError | null {
+  const refusal = readProxyRefusal(output);
+
+  if (refusal === null) {
+    return null;
+  }
+
+  getImpdLogger('image').warning('{call} refused: {refusal}', { call, refusal });
+
+  return new ImpdError('BAD_REQUEST', { message: refusal });
 }
 
 export async function runDockerChecked(

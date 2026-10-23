@@ -19,9 +19,6 @@ import { deriveImageName } from './image-naming';
 export const FALLBACK_DEFAULT_IMAGE = 'ubuntu';
 const SEED_REF = 'ubuntu:24.04';
 
-export const HOST_ADD_WARNING =
-  'impd: WARNING: IMP_BUILD_ISOLATION=host: image adds pull onto the host engine, which keeps each image impd pulled; gone in the next release (docs/guides/images.md#add-an-image)';
-
 interface AddImageOptions {
   readonly setPhase?: (phase: ImageBuildPhase) => void;
 
@@ -111,8 +108,8 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
   ): Promise<ImageRecord> => {
     assertImageRef(ref);
 
-    // imp-docker-proxy refuses these registries only for a host pull, and a builder's pull
-    // reaches a literal address under imp isolation, so impd refuses them for both.
+    // A builder's pull reaches a literal address that imp-docker-proxy never sees, so impd
+    // refuses these registries before any builder boots.
     const registryProblem = checkReferenceRegistry(ref);
 
     if (registryProblem !== null) {
@@ -125,12 +122,6 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
     const taken = await readImageByName(deps.db, imageName);
 
     requireDockerImage(taken);
-
-    if (deps.config.build.isolation === 'host') {
-      deps.log(HOST_ADD_WARNING);
-
-      return writer.createImageOnHost(ref, imageName, options);
-    }
 
     return createImageInBuilder(ref, imageName, options);
   };

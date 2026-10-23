@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
-import { readRefusalError, runDocker, runDockerChecked } from './run-docker';
+import { runDocker, runDockerChecked } from './run-docker';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -16,24 +16,6 @@ async function setupTest() {
 
   return { directoryPath: directory };
 }
-
-test('#readRefusalError reads the proxy refusal in the CLI output as the client BAD_REQUEST', () => {
-  expect(
-    readRefusalError(
-      'docker pull',
-      "Error response from daemon: imp-docker-proxy: registry localhost:5320 is the host's own\n",
-    ),
-  ).toMatchObject({
-    code: 'BAD_REQUEST',
-    message: "imp-docker-proxy: registry localhost:5320 is the host's own",
-  });
-});
-
-test('#readRefusalError reads no refusal in output the proxy did not write', () => {
-  expect(
-    readRefusalError('docker pull', 'Error response from daemon: No such image: busybox:1\n'),
-  ).toBeNull();
-});
 
 test('#runDocker answers a failed call with its exit code and output', async () => {
   const ctx = await setupTest();
