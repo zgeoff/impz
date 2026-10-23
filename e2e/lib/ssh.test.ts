@@ -74,6 +74,20 @@ test('#startLocalSshAgent serves the key it made until stop, which removes its s
   expect(existsSync(agent.socket)).toBeFalse();
 });
 
+test('#startLocalSshAgent refuses a socket path past the unix socket limit, naming it', async () => {
+  const ctx = await setupTest();
+
+  expect(
+    startLocalSshAgent(
+      { configArgs: [], directory: ctx.directoryPath, cleanup: () => Promise.resolve() },
+      'a-label-long-enough-that-the-socket-path-passes-the-limit-of-a-unix-socket-path-on-linux',
+    ),
+  ).rejects.toThrowWithMessage(
+    Error,
+    /^ssh-agent socket \/tmp\/imp-agent-.* is longer than 107 bytes$/u,
+  );
+});
+
 test('#startLocalSshAgent stops again without an error once it has stopped', async () => {
   const ctx = await setupTest();
 
