@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StartTimer } from '../../platform/process/clock';
@@ -29,8 +28,8 @@ export interface BuilderTestRegistry {
   readonly address: string;
   readonly port: number;
 
-  // Read for each builder, so the registry's certificate may change while impd runs.
-  readonly caPath: string;
+  // Called for each builder, so the registry's certificate may change while impd runs.
+  readonly readCA: () => Promise<string>;
 }
 
 export interface BuildersDeps {
@@ -99,7 +98,7 @@ async function writeTestRegistry(
   registry: Readonly<BuilderTestRegistry>,
   signal: AbortSignal,
 ): Promise<void> {
-  const ca = await readFile(registry.caPath, 'utf8');
+  const ca = await registry.readCA();
 
   const written = await exec(
     [

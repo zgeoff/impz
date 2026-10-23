@@ -204,11 +204,6 @@ test('it asks the builder engine again, a poll later, until it answers, then run
 test('it writes the test registry into the builder, once its engine answers and before the build runs', async () => {
   const ctx = await setupTest();
 
-  await writeFile(
-    join(ctx.dataDir, 'registry-ca.pem'),
-    '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n',
-  );
-
   const guest = buildStubGuest(() => ({ stdout: 'ok' }));
 
   const builders = createBuilders({
@@ -226,7 +221,8 @@ test('it writes the test registry into the builder, once its engine answers and 
       name: 'registry.example.test',
       address: '10.200.0.1',
       port: 5443,
-      caPath: join(ctx.dataDir, 'registry-ca.pem'),
+      readCA: () =>
+        Promise.resolve('-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n'),
     },
   });
 
@@ -258,11 +254,6 @@ test('it writes the test registry into the builder, once its engine answers and 
 test('it fails the build when the builder refuses the test registry, and removes the builder', async () => {
   const ctx = await setupTest();
 
-  await writeFile(
-    join(ctx.dataDir, 'registry-ca.pem'),
-    '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n',
-  );
-
   const guest = buildStubGuest((run) =>
     run.argv[0] === 'sh' ? { code: 1, stderr: 'sh: read-only file system' } : {},
   );
@@ -282,7 +273,8 @@ test('it fails the build when the builder refuses the test registry, and removes
       name: 'registry.example.test',
       address: '10.200.0.1',
       port: 5443,
-      caPath: join(ctx.dataDir, 'registry-ca.pem'),
+      readCA: () =>
+        Promise.resolve('-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n'),
     },
   });
 

@@ -1,4 +1,5 @@
 import { lookup } from 'node:dns/promises';
+import { readFile } from 'node:fs/promises';
 import type { BuilderTestRegistry } from './imps/images/builder-imps';
 import type { TestRegistryConfig } from './imps/imps-config';
 
@@ -22,6 +23,6 @@ export async function resolveTestRegistry(
     name: config.name,
     address: resolved.address,
     port: config.port,
-    caPath: config.caPath,
+    readCA: () => readFile(config.caPath, 'utf8'),
   };
 }
