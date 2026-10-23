@@ -425,6 +425,46 @@ test('#buildRuleset lets a public slot out only by an uplink, then refuses its r
   );
 });
 
+test('#buildRuleset lets a public slot with a test registry reach that one address and port before its ranges', () => {
+  const script = buildRuleset({
+    slots: [
+      buildMockFirewallSlot({
+        slot: 3,
+        guestIp: '10.66.0.14',
+        mode: 'public',
+        testRegistry: { address: '172.17.0.1', port: 5443 },
+      }),
+    ],
+    networks: [],
+    subnet: '10.66.0.0/16',
+    dnsServers: [],
+    privateRanges: ['10.66.0.0/16'],
+    blocked6: [],
+    public4: ['10.0.0.0/8', '172.17.0.0/16'],
+    public6: ['fc00::/7'],
+    uplinks4: ['eth0'],
+    uplinks6: ['eth0'],
+    dnsPort: 5353,
+    setSize: 4096,
+  });
+
+  expect(script).toInclude(
+    [
+      '  chain slot3 {',
+      '    ip saddr != 10.66.0.14 drop',
+      '    meta nfproto ipv6 drop',
+      '    ct state invalid drop',
+      '    meta nfproto ipv4 oifname != @uplinks4 goto deny',
+      '    meta nfproto ipv6 oifname != @uplinks6 goto deny',
+      '    ip daddr 172.17.0.1 tcp dport 5443 accept',
+      '    ip daddr @public4 goto deny',
+      '    ip6 daddr @public6 goto deny',
+      '    accept',
+      '  }',
+    ].join('\n'),
+  );
+});
+
 test('#buildRuleset writes empty uplink sets, which refuse a public slot everything, with no uplink', () => {
   const script = buildRuleset({
     slots: [buildMockFirewallSlot({ slot: 3, mode: 'public' })],
@@ -1261,6 +1301,62 @@ for target in 10.250.77.1 44.0.0.2 8.8.4.4 1.2.3.4 2001:db8:77::1; do reach g0 $
       'g0>2001:db8:77::1 yes',
       '',
     ].join('\n'),
+    stderr: '',
+    exitCode: 0,
+  });
+});
+
+test.skipIf(
+  !probeUnshare([
+    'sh',
+    '-c',
+    'nft list ruleset && iptables -S && ip link && command -v ping && command -v sysctl',
+  ]),
+)('#buildRuleset lets a public imp with a test registry reach only that private port', () => {
+  const table = buildRuleset({
+    slots: [
+      {
+        slot: 3,
+        tap: 'imp3',
+        guestIp: '10.66.0.14',
+        guestIp6: 'fd12:3456:789a::3:2',
+        mode: 'public',
+        cidrs: [],
+        addresses: [],
+        testRegistry: { address: '10.250.77.1', port: 5443 },
+      },
+    ],
+    networks: [],
+    subnet: '10.66.0.0/16',
+    dnsServers: ['1.1.1.1', '8.8.8.8'],
+    privateRanges: [...REFUSED_RANGES4, '10.66.0.0/16'],
+    blocked6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64'],
+    public4: [...REFUSED_RANGES4, '10.66.0.0/16'],
+    public6: [...BLOCKED_RANGES6, 'fd12:3456:789a::/64'],
+    uplinks4: ['up0'],
+    uplinks6: ['up0'],
+    dnsPort: 7053,
+    setSize: 4096,
+  });
+
+  const run = runInNetns({
+    script: `${buildStubPublicNetwork()}
+printf '%s' "$TABLE" | nft -f -
+ip netns exec wan "$BUN" -e 'for (const port of [5443, 5444]) Bun.listen({ hostname: "10.250.77.1", port, socket: { data() {} } })' &
+listener=$!
+until ip netns exec wan ss -ltn | grep -q ':5444 '; do sleep 0.1; done
+connect() { ip netns exec g3 timeout 4 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null && echo "g3>$1:$2 yes" || echo "g3>$1:$2 no"; }
+connect 10.250.77.1 5443
+connect 10.250.77.1 5444
+connect 93.184.215.14 5443
+kill $listener
+`,
+    env: { TABLE: table, BUN: process.execPath },
+    mount: true,
+  });
+
+  expect(run).toStrictEqual({
+    stdout: 'g3>10.250.77.1:5443 yes\ng3>10.250.77.1:5444 no\ng3>93.184.215.14:5443 no\n',
     stderr: '',
     exitCode: 0,
   });

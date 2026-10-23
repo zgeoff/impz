@@ -2,12 +2,18 @@ import type { VmConfig } from '../vm/vm-config';
 import type { SessionLogLimits } from './session-logs/session-log-service';
 
 interface BuildConfig {
-  readonly isolation: 'imp' | 'host';
   readonly memoryMib: number;
   readonly diskBytes: number;
   readonly imageMaxBytes: number;
   readonly imageMaxFiles: number;
   readonly image: string;
+  readonly testRegistry: TestRegistryConfig | null;
+}
+
+export interface TestRegistryConfig {
+  readonly name: string;
+  readonly port: number;
+  readonly caPath: string;
 }
 
 export interface ImageEvictionConfig {

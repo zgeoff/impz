@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DOCKERFILE_FRONTEND } from '../../src/imps/docker-proxy/dockerfile-frontend';
 import { createGuestExec } from '../../src/imps/images/guest-exec';
 import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';
 import { STUB_BUILDER_CONTAINER, buildStubImageBuilder } from './build-stub-image-builder';
@@ -74,6 +75,39 @@ test('it records the Dockerfile of each context a build gets on stdin', async ()
   expect(builder.builtDockerfiles).toStrictEqual(['FROM scratch\n']);
 });
 
+test('it records the whole context tar each build gets on stdin', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
+
+  await writeFile(join(ctx.directoryPath, 'Dockerfile'), 'FROM scratch\nCOPY note /\n');
+  await writeFile(join(ctx.directoryPath, 'note'), 'in the context');
+
+  Bun.spawnSync([
+    'tar',
+    '-C',
+    ctx.directoryPath,
+    '-cf',
+    join(ctx.directoryPath, 'context.tar'),
+    'Dockerfile',
+    'note',
+  ]);
+
+  await builder.builders.withBuilder(new AbortController().signal, (exec) =>
+    exec(['docker', 'build', '-'], {
+      signal: new AbortController().signal,
+      stdinPath: join(ctx.directoryPath, 'context.tar'),
+    }),
+  );
+
+  const note = Bun.spawnSync(['tar', '-xO', '-f', '-', 'note'], {
+    stdin: builder.builtContexts.at(0) ?? new Uint8Array(),
+  });
+
+  expect(builder.builtContexts).toHaveLength(1);
+  expect(note.stdout.toString()).toBe('in the context');
+});
+
 test('it writes the plain progress a test gives to the stderr of a build', async () => {
   const ctx = await setupTest();
 
@@ -144,6 +178,38 @@ test('it answers a pull as the test says', async () => {
 
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toBe('manifest unknown');
+});
+
+test('it answers a build as the test says, after it records the Dockerfile', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: 'sha256:1',
+    onBuild: () => ({ code: 1, stderr: 'RUN false: exit code 1' }),
+  });
+
+  await writeFile(join(ctx.directoryPath, 'Dockerfile'), 'FROM scratch\nRUN false\n');
+
+  Bun.spawnSync([
+    'tar',
+    '-C',
+    ctx.directoryPath,
+    '-cf',
+    join(ctx.directoryPath, 'context.tar'),
+    'Dockerfile',
+  ]);
+
+  const answered = await builder.builders.withBuilder(new AbortController().signal, (exec) =>
+    exec(['docker', 'build', '-'], {
+      signal: new AbortController().signal,
+      stdinPath: join(ctx.directoryPath, 'context.tar'),
+    }),
+  );
+
+  expect(answered.exitCode).toBe(1);
+  expect(answered.stderr).toBe('RUN false: exit code 1');
+  expect(builder.builtDockerfiles).toStrictEqual(['FROM scratch\nRUN false\n']);
 });
 
 test('it fails a call it does not model and names it', async () => {
@@ -293,4 +359,224 @@ test('it keeps a stalled export open until the exec is closed', async () => {
 
   expect(exporting).rejects.toMatchObject({ name: 'AbortError' });
   expect(builder.guest.runs.at(-1)?.closed).toBeTrue();
+});
+
+test('it answers the pin inspect of an image in its table with the fields the test gives', async () => {
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: 'sha256:1',
+    images: {
+      'base.test/onbuild:1': {
+        Id: `sha256:${'c'.repeat(64)}`,
+        RepoDigests: [`base.test/onbuild@sha256:${'a'.repeat(64)}`],
+        Architecture: 'aarch64',
+        OnBuild: ['RUN id'],
+      },
+    },
+  });
+
+  const exec = createGuestExec(builder.guest.open);
+
+  const result = await exec(
+    ['docker', 'image', 'inspect', '--format', PIN_INSPECT_FORMAT, 'base.test/onbuild:1'],
+    { signal: new AbortController().signal },
+  );
+
+  expect(JSON.parse(result.stdout)).toStrictEqual({
+    Id: `sha256:${'c'.repeat(64)}`,
+    RepoDigests: [`base.test/onbuild@sha256:${'a'.repeat(64)}`],
+    Os: 'linux',
+    Architecture: 'aarch64',
+    Config: { OnBuild: ['RUN id'] },
+  });
+});
+
+test('it fails the pin inspect of an image its table lacks, as the engine does', async () => {
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: 'sha256:1',
+    images: { 'base.test/a:1': { Id: `sha256:${'c'.repeat(64)}`, RepoDigests: [] } },
+  });
+
+  const exec = createGuestExec(builder.guest.open);
+
+  const result = await exec(
+    ['docker', 'image', 'inspect', '--format', PIN_INSPECT_FORMAT, 'base.test/other:1'],
+    { signal: new AbortController().signal },
+  );
+
+  expect(result).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr: 'Error response from daemon: No such image: base.test/other:1\n',
+  });
+});
+
+test('it fails the pin inspect of a table image that is not on the engine', async () => {
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: 'sha256:1',
+    images: {
+      'base.test/a:1': { Id: `sha256:${'c'.repeat(64)}`, RepoDigests: [], isOnEngine: false },
+    },
+  });
+
+  const exec = createGuestExec(builder.guest.open);
+
+  const result = await exec(
+    ['docker', 'image', 'inspect', '--format', PIN_INSPECT_FORMAT, 'base.test/a:1'],
+    { signal: new AbortController().signal },
+  );
+
+  expect(result.exitCode).toBe(1);
+});
+
+test('it answers the pin inspect of a table image once a pull brings it to the engine', async () => {
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: 'sha256:1',
+    images: {
+      'base.test/a:1': {
+        Id: `sha256:${'c'.repeat(64)}`,
+        RepoDigests: [`base.test/a@sha256:${'a'.repeat(64)}`],
+        isOnEngine: false,
+      },
+    },
+  });
+
+  const exec = createGuestExec(builder.guest.open);
+
+  await exec(['docker', 'pull', '--quiet', 'base.test/a:1'], {
+    signal: new AbortController().signal,
+  });
+
+  const result = await exec(
+    ['docker', 'image', 'inspect', '--format', PIN_INSPECT_FORMAT, 'base.test/a:1'],
+    { signal: new AbortController().signal },
+  );
+
+  expect(JSON.parse(result.stdout)).toStrictEqual({
+    Id: `sha256:${'c'.repeat(64)}`,
+    RepoDigests: [`base.test/a@sha256:${'a'.repeat(64)}`],
+    Os: 'linux',
+    Architecture: 'amd64',
+    Config: {},
+  });
+});
+
+test('it fails the pull of a table image with the stderr the test gives', async () => {
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: 'sha256:1',
+    images: {
+      'mnt.test/c:3': {
+        Id: `sha256:${'c'.repeat(64)}`,
+        RepoDigests: [],
+        isOnEngine: false,
+        pullError: 'no such registry',
+      },
+    },
+  });
+
+  const exec = createGuestExec(builder.guest.open);
+
+  const result = await exec(['docker', 'pull', '--quiet', 'mnt.test/c:3'], {
+    signal: new AbortController().signal,
+  });
+
+  expect(result).toStrictEqual({ exitCode: 1, stdout: '', stderr: 'no such registry\n' });
+});
+
+test('it keeps a table image off the engine after its pull fails', async () => {
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: 'sha256:1',
+    images: {
+      'base.test/a:1': { Id: `sha256:${'c'.repeat(64)}`, RepoDigests: [], isOnEngine: false },
+    },
+    onPull: () => ({ code: 1, stderr: 'manifest unknown' }),
+  });
+
+  const exec = createGuestExec(builder.guest.open);
+
+  await exec(['docker', 'pull', '--quiet', 'base.test/a:1'], {
+    signal: new AbortController().signal,
+  });
+
+  const result = await exec(
+    ['docker', 'image', 'inspect', '--format', PIN_INSPECT_FORMAT, 'base.test/a:1'],
+    { signal: new AbortController().signal },
+  );
+
+  expect(result.exitCode).toBe(1);
+});
+
+test('it answers the inspect of the Dockerfile frontend with its ID by default', async () => {
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
+  const exec = createGuestExec(builder.guest.open);
+
+  const result = await exec(
+    ['docker', 'image', 'inspect', '--format', '{{.Id}}', DOCKERFILE_FRONTEND],
+    { signal: new AbortController().signal },
+  );
+
+  expect(result).toStrictEqual({ exitCode: 0, stdout: `sha256:${'f'.repeat(64)}\n`, stderr: '' });
+});
+
+test('it fails the inspect of a Dockerfile frontend the test leaves off the engine', async () => {
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: 'sha256:1',
+    frontend: { isOnEngine: false },
+  });
+
+  const exec = createGuestExec(builder.guest.open);
+
+  const result = await exec(
+    ['docker', 'image', 'inspect', '--format', '{{.Id}}', DOCKERFILE_FRONTEND],
+    { signal: new AbortController().signal },
+  );
+
+  expect(result).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr: `Error response from daemon: No such image: ${DOCKERFILE_FRONTEND}\n`,
+  });
+});
+
+test('it answers the inspect of a Dockerfile frontend once a pull brings it', async () => {
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: 'sha256:1',
+    frontend: { isOnEngine: false },
+  });
+
+  const exec = createGuestExec(builder.guest.open);
+
+  await exec(['docker', 'pull', '--quiet', DOCKERFILE_FRONTEND], {
+    signal: new AbortController().signal,
+  });
+
+  const result = await exec(
+    ['docker', 'image', 'inspect', '--format', '{{.Id}}', DOCKERFILE_FRONTEND],
+    { signal: new AbortController().signal },
+  );
+
+  expect(result.stdout).toBe(`sha256:${'f'.repeat(64)}\n`);
+});
+
+test('it fails the pull of the Dockerfile frontend with the stderr the test gives', async () => {
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: 'sha256:1',
+    frontend: { isOnEngine: false, pullError: 'no route to host' },
+  });
+
+  const exec = createGuestExec(builder.guest.open);
+
+  const result = await exec(['docker', 'pull', '--quiet', DOCKERFILE_FRONTEND], {
+    signal: new AbortController().signal,
+  });
+
+  expect(result).toStrictEqual({ exitCode: 1, stdout: '', stderr: 'no route to host\n' });
 });

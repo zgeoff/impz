@@ -27,8 +27,7 @@ const server = Bun.serve({
     upstreamSocket: engineSocket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: () => {},
   }),
 });
@@ -36,7 +35,7 @@ const server = Bun.serve({
 stack.defer(() => server.stop(true));
 
 const response = await fetch(
-  `http://127.0.0.1:${String(server.port)}/v1.55/images/create?fromImage=busybox&tag=latest`,
+  `http://127.0.0.1:${String(server.port)}/v1.55/images/create?fromImage=ghcr.io%2Fzgeoff%2Fimp-base&tag=sha256%3A${'d'.repeat(64)}`,
   { method: 'POST' },
 );
 

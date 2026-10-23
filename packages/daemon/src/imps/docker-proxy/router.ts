@@ -3,7 +3,6 @@ type Route =
   | { readonly kind: 'version' }
   | { readonly kind: 'image-inspect'; readonly name: string }
   | { readonly kind: 'pull' }
-  | { readonly kind: 'build' }
   | { readonly kind: 'create' }
   | { readonly kind: 'export'; readonly id: string }
   | { readonly kind: 'remove'; readonly id: string };
@@ -61,10 +60,6 @@ function findRoute(method: string, path: string): Route | null {
   if (method === 'POST') {
     if (path === '/images/create') {
       return { kind: 'pull' };
-    }
-
-    if (path === '/build') {
-      return { kind: 'build' };
     }
 
     if (path === '/containers/create') {
