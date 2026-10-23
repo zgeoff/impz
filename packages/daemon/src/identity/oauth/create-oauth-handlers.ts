@@ -6,7 +6,7 @@ import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
 import type { Caller } from '../../platform/principal/caller';
 import { buildBadTokenRequest } from './build-bad-token-request';
 import { buildConsentBinding } from './build-consent-binding';
-import { buildPkceRefusal } from './build-pkce-refusal';
+import { buildPKCERefusal } from './build-pkce-refusal';
 import type { Approval, SignIns } from './create-sign-ins';
 import { formatApprovalCode } from './create-sign-ins';
 import { deriveTokenHash } from './derive-token-hash';
@@ -32,7 +32,7 @@ const CONSENT_MS = 10 * MINUTE_MS;
 const MAX_FORM_BYTES = 16 * 1024;
 const METADATA_HEADERS = { 'cache-control': 'no-store' };
 
-const PkceMissSchema = z.object({
+const PKCEMissSchema = z.object({
   error: z.literal('invalid_request'),
   error_description: z.literal('code verification failed'),
 });
@@ -427,8 +427,8 @@ export function createOAuthHandlers(deps: Readonly<OAuthHandlerDeps>): OAuthHand
     ) {
       const refusal: unknown = await response.clone().json();
 
-      if (PkceMissSchema.safeParse(refusal).success) {
-        return buildPkceRefusal();
+      if (PKCEMissSchema.safeParse(refusal).success) {
+        return buildPKCERefusal();
       }
     }
 
