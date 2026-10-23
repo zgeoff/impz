@@ -16,6 +16,7 @@ export const ENFORCE_TRIGGER = 'RAM over budget';
 
 // KSM can split merged pages after a reading, which no resident counter shows. The KSM headroom
 // covers what splits within a tick add, so a reading older than one late tick is read again.
+/* @internal */
 export const READING_MAX_AGE_MS = 2 * ENFORCE_INTERVAL_MS;
 
 interface AwakeImp {
