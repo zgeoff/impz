@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.6](https://github.com/zgeoff/impz/compare/v2.10.5...v2.10.6) (2026-10-23)
+
+
+### Bug Fixes
+
+* **api:** refuse a secret rule whose header overrides the method ([#649](https://github.com/zgeoff/impz/issues/649)) ([d808882](https://github.com/zgeoff/impz/commit/d808882c1576a2f8cf25e7b6a36aa330f058ca82))
+
 ## [2.10.5](https://github.com/zgeoff/impz/compare/v2.10.4...v2.10.5) (2026-10-23)
 
 ### Bug Fixes
