@@ -11,8 +11,9 @@ import {
 } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record';
 import { createStubBin } from '../scripts/test-utils/create-stub-bin';
+import { createStubCurl } from '../scripts/test-utils/create-stub-curl';
 import { createStubRepoScript } from '../scripts/test-utils/create-stub-repo-script';
 
 // build.sh keeps its sources and output beside itself, so each test runs a
@@ -79,7 +80,7 @@ test('it downloads, checks and unpacks the source, then builds it in the kernel-
 
   const sha256 = new Bun.CryptoHasher('sha256').update(readFileSync(tarball)).digest('hex');
 
-  createStubBin(ctx.stubs, 'curl', `cp ${formatShellWord(tarball)} "$5"`);
+  createStubCurl(ctx.stubs, { source: tarball });
   createStubBin(ctx.stubs, 'docker');
 
   // docker run writes it in the container
@@ -129,7 +130,7 @@ test('it stops after unpacking the source with --fetch', () => {
 
   const sha256 = new Bun.CryptoHasher('sha256').update(readFileSync(tarball)).digest('hex');
 
-  createStubBin(ctx.stubs, 'curl', `cp ${formatShellWord(tarball)} "$5"`);
+  createStubCurl(ctx.stubs, { source: tarball });
   createStubBin(ctx.stubs, 'docker');
 
   const result = Bun.spawnSync([ctx.script, '--fetch'], {
@@ -265,7 +266,7 @@ test('it takes KVER and KSHA256 from the environment over kernel/version', () =>
 
   const sha256 = new Bun.CryptoHasher('sha256').update(readFileSync(tarball)).digest('hex');
 
-  createStubBin(ctx.stubs, 'curl', `cp ${formatShellWord(tarball)} "$5"`);
+  createStubCurl(ctx.stubs, { source: tarball });
   createStubBin(ctx.stubs, 'docker');
 
   const result = Bun.spawnSync([ctx.script, '--fetch'], {
@@ -297,7 +298,8 @@ test('it keeps no tarball from a download that fails, so the next run downloads 
   const ctx = setupTest();
 
   writeFileSync(join(ctx.kernel, 'version'), 'KVER=6.1.999\nKSHA256=0\n');
-  createStubBin(ctx.stubs, 'curl', 'printf partial >"$5"\nexit 22');
+  writeFileSync(join(ctx.directoryPath, 'partial'), 'partial');
+  createStubCurl(ctx.stubs, { source: join(ctx.directoryPath, 'partial'), exitCode: 22 });
   createStubBin(ctx.stubs, 'docker');
 
   const result = Bun.spawnSync([ctx.script], { env: { PATH: ctx.path, JOBS: '7' } });
@@ -323,13 +325,7 @@ test('it runs make-vmlinux.sh on the unpacked source itself with --in-builder', 
   mkdirSync(join(ctx.build, 'linux-6.1.999'), { recursive: true });
   createStubBin(ctx.stubs, 'curl');
   createStubBin(ctx.stubs, 'docker');
-
-  createStubRepoScript(
-    ctx.kernel,
-    'make-vmlinux.sh',
-    ctx.calls,
-    `printf '%s\\n' "JOBS=$JOBS" >>${formatShellWord(ctx.calls)}`,
-  );
+  createStubRepoScript(ctx.kernel, 'make-vmlinux.sh', ctx.calls, buildStubEnvRecord(['JOBS']));
 
   const result = Bun.spawnSync([ctx.script, '--in-builder'], {
     env: { PATH: ctx.path, JOBS: '7' },
@@ -343,7 +339,7 @@ test('it runs make-vmlinux.sh on the unpacked source itself with --in-builder', 
 
   expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
     `make-vmlinux.sh ${ctx.build}/linux-6.1.999 ${ctx.build}/obj ${ctx.out}`,
-    'JOBS=7',
+    '  JOBS=7',
     '',
   ]);
 });
@@ -354,13 +350,7 @@ test('it builds with one job per processor when JOBS is unset', () => {
   writeFileSync(join(ctx.kernel, 'version'), 'KVER=6.1.999\nKSHA256=0\n');
   mkdirSync(join(ctx.build, 'linux-6.1.999'), { recursive: true });
   createStubBin(ctx.stubs, 'nproc', 'echo 3');
-
-  createStubRepoScript(
-    ctx.kernel,
-    'make-vmlinux.sh',
-    ctx.calls,
-    `printf '%s\\n' "JOBS=$JOBS" >>${formatShellWord(ctx.calls)}`,
-  );
+  createStubRepoScript(ctx.kernel, 'make-vmlinux.sh', ctx.calls, buildStubEnvRecord(['JOBS']));
 
   const result = Bun.spawnSync([ctx.script, '--in-builder'], { env: { PATH: ctx.path } });
 
@@ -373,7 +363,7 @@ test('it builds with one job per processor when JOBS is unset', () => {
   expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
     'nproc ',
     `make-vmlinux.sh ${ctx.build}/linux-6.1.999 ${ctx.build}/obj ${ctx.out}`,
-    'JOBS=3',
+    '  JOBS=3',
     '',
   ]);
 });

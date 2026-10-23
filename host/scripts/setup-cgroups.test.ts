@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
+import { createStubCat } from '../../scripts/test-utils/create-stub-cat';
 
 // Each test points setup-cgroups.sh at a plain directory for /sys/fs/cgroup,
 // and a cat stub answers for /proc/self/cgroup, whose real value differs by host.
@@ -29,12 +30,7 @@ function setupTest() {
 test('it turns limits off when the container is not in a private cgroup v2 namespace', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'cat',
-    `if [ "$1" = /proc/self/cgroup ]; then echo '0::/system.slice/docker.scope'; else command -p cat "$@"; fi`,
-  );
-
+  createStubCat(ctx.directoryPath, { '/proc/self/cgroup': '0::/system.slice/docker.scope' });
   createStubBin(ctx.directoryPath, 'findmnt', 'echo rw,relatime');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
@@ -57,12 +53,7 @@ test('it turns limits off when the container is not in a private cgroup v2 names
 test('it turns CPU and memory limits on when both controllers reach the imps cgroup', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'cat',
-    `if [ "$1" = /proc/self/cgroup ]; then echo '0::/'; else command -p cat "$@"; fi`,
-  );
-
+  createStubCat(ctx.directoryPath, { '/proc/self/cgroup': '0::/' });
   createStubBin(ctx.directoryPath, 'findmnt', 'echo rw,nosuid,nodev,noexec,relatime');
   writeFileSync(join(ctx.root, 'cgroup.procs'), '');
   writeFileSync(join(ctx.root, 'cgroup.controllers'), 'cpuset cpu io memory pids\n');
@@ -97,12 +88,7 @@ test('it turns CPU and memory limits on when both controllers reach the imps cgr
 test('it moves every process to the init cgroup, reading the list again up to five times', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'cat',
-    `if [ "$1" = /proc/self/cgroup ]; then echo '0::/'; else command -p cat "$@"; fi`,
-  );
-
+  createStubCat(ctx.directoryPath, { '/proc/self/cgroup': '0::/' });
   createStubBin(ctx.directoryPath, 'findmnt', 'echo rw,relatime');
   writeFileSync(join(ctx.root, 'cgroup.procs'), '1\n42\n');
   writeFileSync(join(ctx.root, 'cgroup.controllers'), 'cpu memory\n');
@@ -133,12 +119,7 @@ test('it moves every process to the init cgroup, reading the list again up to fi
 test('it remounts a read-only cgroup mount read-write and goes on', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'cat',
-    `if [ "$1" = /proc/self/cgroup ]; then echo '0::/'; else command -p cat "$@"; fi`,
-  );
-
+  createStubCat(ctx.directoryPath, { '/proc/self/cgroup': '0::/' });
   createStubBin(ctx.directoryPath, 'findmnt', 'echo ro,nosuid,nodev,noexec,relatime');
   createStubBin(ctx.directoryPath, 'mount');
   writeFileSync(join(ctx.root, 'cgroup.procs'), '');
@@ -172,12 +153,7 @@ test('it remounts a read-only cgroup mount read-write and goes on', () => {
 test('it turns limits off when the read-only cgroup mount cannot be remounted', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'cat',
-    `if [ "$1" = /proc/self/cgroup ]; then echo '0::/'; else command -p cat "$@"; fi`,
-  );
-
+  createStubCat(ctx.directoryPath, { '/proc/self/cgroup': '0::/' });
   createStubBin(ctx.directoryPath, 'findmnt', 'echo ro,relatime');
   createStubBin(ctx.directoryPath, 'mount', "echo 'mount: permission denied' >&2; exit 32");
 
@@ -206,12 +182,7 @@ test('it turns limits off when the read-only cgroup mount cannot be remounted', 
 test('it never remounts a read-write mount whose options only contain ro inside a word', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'cat',
-    `if [ "$1" = /proc/self/cgroup ]; then echo '0::/'; else command -p cat "$@"; fi`,
-  );
-
+  createStubCat(ctx.directoryPath, { '/proc/self/cgroup': '0::/' });
   createStubBin(ctx.directoryPath, 'findmnt', 'echo rw,relatime,errors=remount-ro');
   createStubBin(ctx.directoryPath, 'mount');
   writeFileSync(join(ctx.root, 'cgroup.procs'), '');
@@ -236,12 +207,7 @@ test('it never remounts a read-write mount whose options only contain ro inside 
 test('it turns limits off and makes no imps cgroup when the root has no cpu controller', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'cat',
-    `if [ "$1" = /proc/self/cgroup ]; then echo '0::/'; else command -p cat "$@"; fi`,
-  );
-
+  createStubCat(ctx.directoryPath, { '/proc/self/cgroup': '0::/' });
   createStubBin(ctx.directoryPath, 'findmnt', 'echo rw,relatime');
   writeFileSync(join(ctx.root, 'cgroup.procs'), '');
   writeFileSync(join(ctx.root, 'cgroup.controllers'), 'cpuset io memory pids\n');
@@ -266,12 +232,7 @@ test('it turns limits off and makes no imps cgroup when the root has no cpu cont
 test('it turns limits off when the root cannot enable the cpu controller', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'cat',
-    `if [ "$1" = /proc/self/cgroup ]; then echo '0::/'; else command -p cat "$@"; fi`,
-  );
-
+  createStubCat(ctx.directoryPath, { '/proc/self/cgroup': '0::/' });
   createStubBin(ctx.directoryPath, 'findmnt', 'echo rw,relatime');
   writeFileSync(join(ctx.root, 'cgroup.procs'), '');
   writeFileSync(join(ctx.root, 'cgroup.controllers'), 'cpu memory\n');
@@ -297,12 +258,7 @@ test('it turns limits off when the root cannot enable the cpu controller', () =>
 test('it turns limits off when the imps cgroup has no cpu controller', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'cat',
-    `if [ "$1" = /proc/self/cgroup ]; then echo '0::/'; else command -p cat "$@"; fi`,
-  );
-
+  createStubCat(ctx.directoryPath, { '/proc/self/cgroup': '0::/' });
   createStubBin(ctx.directoryPath, 'findmnt', 'echo rw,relatime');
   writeFileSync(join(ctx.root, 'cgroup.procs'), '');
   writeFileSync(join(ctx.root, 'cgroup.controllers'), 'cpu memory\n');
@@ -327,12 +283,7 @@ test('it turns limits off when the imps cgroup has no cpu controller', () => {
 test('it keeps CPU limits on without memory limits when the imps cgroup has no memory controller', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'cat',
-    `if [ "$1" = /proc/self/cgroup ]; then echo '0::/'; else command -p cat "$@"; fi`,
-  );
-
+  createStubCat(ctx.directoryPath, { '/proc/self/cgroup': '0::/' });
   createStubBin(ctx.directoryPath, 'findmnt', 'echo rw,relatime');
   writeFileSync(join(ctx.root, 'cgroup.procs'), '');
   writeFileSync(join(ctx.root, 'cgroup.controllers'), 'cpu memory\n');
@@ -359,12 +310,7 @@ test('it keeps CPU limits on without memory limits when the imps cgroup has no m
 test('it goes on quietly when a process cannot move to the init cgroup', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'cat',
-    `if [ "$1" = /proc/self/cgroup ]; then echo '0::/'; else command -p cat "$@"; fi`,
-  );
-
+  createStubCat(ctx.directoryPath, { '/proc/self/cgroup': '0::/' });
   createStubBin(ctx.directoryPath, 'findmnt', 'echo rw,relatime');
   writeFileSync(join(ctx.root, 'cgroup.procs'), '1\n');
   writeFileSync(join(ctx.root, 'cgroup.controllers'), 'cpu memory\n');

@@ -2,8 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
+import { createStubLosetup } from '../../scripts/test-utils/create-stub-losetup';
+import { createStubMountpoint } from '../../scripts/test-utils/create-stub-mountpoint';
 
 // /dev/zfs is a fixed path, so the zfs steps after its check go untested here.
 // mknod records into its own file: make_loop_nodes calls it once for each loop
@@ -158,10 +159,10 @@ test('it refuses a filesystem already mounted at /var/lib/imp that is not XFS, a
 test('it creates a sparse XFS loop file, mounts it and checks that it reflinks', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'mountpoint', `[ "$2" != ${formatShellWord(ctx.root)} ]`);
+  createStubMountpoint(ctx.directoryPath, [ctx.root]);
   createStubBin(ctx.directoryPath, 'truncate');
   createStubBin(ctx.directoryPath, 'mkfs.xfs');
-  createStubBin(ctx.directoryPath, 'losetup', `[ "$1" != -f ] || echo '/dev/loop7777 (lost)'`);
+  createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777 (lost)' });
   createStubBin(ctx.directoryPath, 'mount');
   createStubBin(ctx.directoryPath, 'umount');
   createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
@@ -213,10 +214,10 @@ test('it mounts a loop file that exists already without formatting it again', ()
   const ctx = setupTest();
 
   writeFileSync(ctx.file, '');
-  createStubBin(ctx.directoryPath, 'mountpoint', `[ "$2" != ${formatShellWord(ctx.root)} ]`);
+  createStubMountpoint(ctx.directoryPath, [ctx.root]);
   createStubBin(ctx.directoryPath, 'truncate');
   createStubBin(ctx.directoryPath, 'mkfs.xfs');
-  createStubBin(ctx.directoryPath, 'losetup', `[ "$1" != -f ] || echo '/dev/loop7777 (lost)'`);
+  createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777 (lost)' });
   createStubBin(ctx.directoryPath, 'mount');
   createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
   createStubBin(ctx.directoryPath, 'cp');
@@ -258,8 +259,8 @@ test('it refuses a loop file that a loop device still holds, so two kernels neve
   const ctx = setupTest();
 
   writeFileSync(ctx.file, '');
-  createStubBin(ctx.directoryPath, 'mountpoint', `[ "$2" != ${formatShellWord(ctx.root)} ]`);
-  createStubBin(ctx.directoryPath, 'losetup', `[ "$1" != -j ] || echo /dev/loop3`);
+  createStubMountpoint(ctx.directoryPath, [ctx.root]);
+  createStubLosetup(ctx.directoryPath, { attached: '/dev/loop3' });
   createStubBin(ctx.directoryPath, 'mount');
   createStubBin(ctx.nodesPath, 'mknod');
 
@@ -291,20 +292,10 @@ test('it refuses a loop file that a loop device still holds, so two kernels neve
 
 test('it tries another loop device when another container takes the free one first', () => {
   const ctx = setupTest();
-  const taken = formatShellWord(join(ctx.directoryPath, 'taken'));
 
   writeFileSync(ctx.file, '');
-  createStubBin(ctx.directoryPath, 'mountpoint', `[ "$2" != ${formatShellWord(ctx.root)} ]`);
-
-  createStubBin(
-    ctx.directoryPath,
-    'losetup',
-    `case "$1" in
-  -f) echo /dev/loop7777 ;;
-  /dev/*) [ -e ${taken} ] || { touch ${taken}; exit 1; } ;;
-esac`,
-  );
-
+  createStubMountpoint(ctx.directoryPath, [ctx.root]);
+  createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777', busyAttaches: 1 });
   createStubBin(ctx.directoryPath, 'mount');
   createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
   createStubBin(ctx.directoryPath, 'cp');
@@ -340,17 +331,8 @@ test('it gives up after five loop devices are taken before it can attach one', (
   const ctx = setupTest();
 
   writeFileSync(ctx.file, '');
-  createStubBin(ctx.directoryPath, 'mountpoint', `[ "$2" != ${formatShellWord(ctx.root)} ]`);
-
-  createStubBin(
-    ctx.directoryPath,
-    'losetup',
-    `case "$1" in
-  -f) echo /dev/loop7777 ;;
-  /dev/*) exit 1 ;;
-esac`,
-  );
-
+  createStubMountpoint(ctx.directoryPath, [ctx.root]);
+  createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777', busyAttaches: 5 });
   createStubBin(ctx.directoryPath, 'mount');
   createStubBin(ctx.nodesPath, 'mknod');
 
@@ -394,8 +376,8 @@ test('it fails when the kernel has no free loop device', () => {
   const ctx = setupTest();
 
   writeFileSync(ctx.file, '');
-  createStubBin(ctx.directoryPath, 'mountpoint', `[ "$2" != ${formatShellWord(ctx.root)} ]`);
-  createStubBin(ctx.directoryPath, 'losetup', `[ "$1" != -f ] || exit 1`);
+  createStubMountpoint(ctx.directoryPath, [ctx.root]);
+  createStubLosetup(ctx.directoryPath);
   createStubBin(ctx.directoryPath, 'mount');
   createStubBin(ctx.nodesPath, 'mknod');
 
@@ -422,8 +404,8 @@ test('it detaches the loop device and fails when the mount fails', () => {
   const ctx = setupTest();
 
   writeFileSync(ctx.file, '');
-  createStubBin(ctx.directoryPath, 'mountpoint', `[ "$2" != ${formatShellWord(ctx.root)} ]`);
-  createStubBin(ctx.directoryPath, 'losetup', `[ "$1" != -f ] || echo /dev/loop7777`);
+  createStubMountpoint(ctx.directoryPath, [ctx.root]);
+  createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777' });
   createStubBin(ctx.directoryPath, 'mount', "echo 'mount: wrong fs type' >&2; exit 32");
   createStubBin(ctx.nodesPath, 'mknod');
 
@@ -461,8 +443,8 @@ test('it unmounts its own loop file and fails when the filesystem cannot reflink
   const ctx = setupTest();
 
   writeFileSync(ctx.file, '');
-  createStubBin(ctx.directoryPath, 'mountpoint', `[ "$2" != ${formatShellWord(ctx.root)} ]`);
-  createStubBin(ctx.directoryPath, 'losetup', `[ "$1" != -f ] || echo /dev/loop7777`);
+  createStubMountpoint(ctx.directoryPath, [ctx.root]);
+  createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777' });
   createStubBin(ctx.directoryPath, 'mount');
   createStubBin(ctx.directoryPath, 'umount');
   createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
@@ -508,8 +490,8 @@ test('it unmounts its own loop file and fails when the loop file holds no XFS', 
   const ctx = setupTest();
 
   writeFileSync(ctx.file, '');
-  createStubBin(ctx.directoryPath, 'mountpoint', `[ "$2" != ${formatShellWord(ctx.root)} ]`);
-  createStubBin(ctx.directoryPath, 'losetup', `[ "$1" != -f ] || echo /dev/loop7777`);
+  createStubMountpoint(ctx.directoryPath, [ctx.root]);
+  createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777' });
   createStubBin(ctx.directoryPath, 'mount');
   createStubBin(ctx.directoryPath, 'umount');
   createStubBin(ctx.directoryPath, 'findmnt', 'echo ext4');

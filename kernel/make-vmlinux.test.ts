@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record';
 import { createStubBin } from '../scripts/test-utils/create-stub-bin';
 import { createStubRepoScript } from '../scripts/test-utils/create-stub-repo-script';
 
@@ -39,14 +39,19 @@ function setupTest() {
   const make = createStubBin(
     stubs,
     'make',
-    String.raw`printf '%s\n' "  KBUILD $KBUILD_BUILD_TIMESTAMP|$KBUILD_BUILD_USER|$KBUILD_BUILD_HOST|$KBUILD_BUILD_VERSION" >>"$STUB_CALLS"`,
+    buildStubEnvRecord([
+      'KBUILD_BUILD_TIMESTAMP',
+      'KBUILD_BUILD_USER',
+      'KBUILD_BUILD_HOST',
+      'KBUILD_BUILD_VERSION',
+    ]),
   );
 
   createStubRepoScript(
     join(source, 'scripts', 'kconfig'),
     'merge_config.sh',
     make.calls,
-    `printf '%s\\n' "  KCONFIG_CONFIG=$KCONFIG_CONFIG PWD=$PWD" >>${formatShellWord(make.calls)}`,
+    buildStubEnvRecord(['KCONFIG_CONFIG', 'PWD']),
   );
 
   return {
@@ -90,9 +95,9 @@ test('it merges the config, builds vmlinux with fixed build metadata, and copies
     `merge_config.sh -m -O ${ctx.obj} ${ctx.kernel}/config-base ${ctx.kernel}/docker.fragment`,
     `  KCONFIG_CONFIG=${ctx.obj}/.config PWD=${ctx.source}`,
     `make O=${ctx.obj} olddefconfig`,
-    '  KBUILD 1970-01-01 00:00:00 UTC|imp|imp|1',
+    '  KBUILD_BUILD_TIMESTAMP=1970-01-01 00:00:00 UTC KBUILD_BUILD_USER=imp KBUILD_BUILD_HOST=imp KBUILD_BUILD_VERSION=1',
     `make O=${ctx.obj} -j5 vmlinux`,
-    '  KBUILD 1970-01-01 00:00:00 UTC|imp|imp|1',
+    '  KBUILD_BUILD_TIMESTAMP=1970-01-01 00:00:00 UTC KBUILD_BUILD_USER=imp KBUILD_BUILD_HOST=imp KBUILD_BUILD_VERSION=1',
     '',
   ]);
 

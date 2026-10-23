@@ -1,14 +1,14 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
 import { waitFor } from '@impz/test-utils/wait-for';
+import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record';
 import { createStubBin } from '../scripts/test-utils/create-stub-bin';
+import { createStubImpd } from '../scripts/test-utils/create-stub-impd';
 
 // Each test points IMP_LIB at the stub directory, so the setup scripts the
-// entrypoint runs are stubs that record into the same calls file as impd. A
-// stub impd that ends the supervisor sends SIGTERM to the entrypoint, its parent.
+// entrypoint runs are stubs that record into the same calls file as impd.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-entrypoint-'));
 
@@ -94,18 +94,15 @@ test('it exports impd’s network settings, runs each setup script in order, the
   createStubBin(
     ctx.directoryPath,
     'setup-net.sh',
-    'echo "setup-net sees IMP_SUBNET=$IMP_SUBNET IMP_BROKER_PORT=$IMP_BROKER_PORT" >>"$STUB_CALLS"',
+    buildStubEnvRecord(['IMP_SUBNET', 'IMP_BROKER_PORT']),
   );
 
   createStubBin(ctx.directoryPath, 'tailscale-up.sh');
 
-  createStubBin(
-    ctx.directoryPath,
-    'impd',
-    `if [ "$1" = --network-env ]; then printf 'IMP_SUBNET=10.66.0.0/16\\nIMP_BROKER_PORT=7081\\n'; exit 0; fi
-echo "impd sees IMP_TAILSCALE_NODE=\${IMP_TAILSCALE_NODE:-}" >>"$STUB_CALLS"
-kill -TERM "$PPID"`,
-  );
+  createStubImpd(ctx.directoryPath, {
+    networkEnv: ['IMP_SUBNET=10.66.0.0/16', 'IMP_BROKER_PORT=7081'],
+    recordEnv: ['IMP_TAILSCALE_NODE'],
+  });
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
@@ -127,10 +124,10 @@ kill -TERM "$PPID"`,
     'setup-cgroups.sh ',
     'setup-storage.sh ',
     'setup-net.sh ',
-    'setup-net sees IMP_SUBNET=10.66.0.0/16 IMP_BROKER_PORT=7081',
+    '  IMP_SUBNET=10.66.0.0/16 IMP_BROKER_PORT=7081',
     'tailscale-up.sh ',
     'impd ',
-    'impd sees IMP_TAILSCALE_NODE=',
+    '  IMP_TAILSCALE_NODE=',
     '',
   ]);
 });
@@ -148,13 +145,7 @@ test('it stops the container before impd when a setup script fails', () => {
 
   createStubBin(ctx.directoryPath, 'setup-net.sh');
   createStubBin(ctx.directoryPath, 'tailscale-up.sh');
-
-  createStubBin(
-    ctx.directoryPath,
-    'impd',
-    `if [ "$1" = --network-env ]; then echo IMP_SUBNET=10.66.0.0/16; exit 0; fi
-kill -TERM "$PPID"`,
-  );
+  createStubImpd(ctx.directoryPath, { networkEnv: ['IMP_SUBNET=10.66.0.0/16'] });
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
@@ -186,13 +177,10 @@ test('it starts impd without the tailnet when tailscale-up fails', () => {
   createStubBin(ctx.directoryPath, 'setup-net.sh');
   createStubBin(ctx.directoryPath, 'tailscale-up.sh', 'exit 1');
 
-  createStubBin(
-    ctx.directoryPath,
-    'impd',
-    `if [ "$1" = --network-env ]; then echo IMP_SUBNET=10.66.0.0/16; exit 0; fi
-echo "impd sees IMP_TAILSCALE_NODE=\${IMP_TAILSCALE_NODE:-}" >>"$STUB_CALLS"
-kill -TERM "$PPID"`,
-  );
+  createStubImpd(ctx.directoryPath, {
+    networkEnv: ['IMP_SUBNET=10.66.0.0/16'],
+    recordEnv: ['IMP_TAILSCALE_NODE'],
+  });
 
   // a socket left from an earlier run must not mark the node as up
   const listener = Bun.listen({
@@ -223,7 +211,7 @@ kill -TERM "$PPID"`,
     stderr: 'entrypoint: tailscale-up failed; continuing without the tailnet\n',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8')).toEndWith('impd \nimpd sees IMP_TAILSCALE_NODE=\n');
+  expect(readFileSync(ctx.calls, 'utf8')).toEndWith('impd \n  IMP_TAILSCALE_NODE=\n');
 });
 
 test('it tells impd it is on the tailnet when tailscale-up leaves a tailscaled socket', () => {
@@ -234,13 +222,10 @@ test('it tells impd it is on the tailnet when tailscale-up leaves a tailscaled s
   createStubBin(ctx.directoryPath, 'setup-net.sh');
   createStubBin(ctx.directoryPath, 'tailscale-up.sh');
 
-  createStubBin(
-    ctx.directoryPath,
-    'impd',
-    `if [ "$1" = --network-env ]; then echo IMP_SUBNET=10.66.0.0/16; exit 0; fi
-echo "impd sees IMP_TAILSCALE_NODE=\${IMP_TAILSCALE_NODE:-}" >>"$STUB_CALLS"
-kill -TERM "$PPID"`,
-  );
+  createStubImpd(ctx.directoryPath, {
+    networkEnv: ['IMP_SUBNET=10.66.0.0/16'],
+    recordEnv: ['IMP_TAILSCALE_NODE'],
+  });
 
   const listener = Bun.listen({
     unix: join(ctx.directoryPath, 'tailscaled.sock'),
@@ -261,26 +246,18 @@ kill -TERM "$PPID"`,
   });
 
   expect(result.exitCode).toBe(0);
-  expect(readFileSync(ctx.calls, 'utf8')).toEndWith('impd \nimpd sees IMP_TAILSCALE_NODE=1\n');
+  expect(readFileSync(ctx.calls, 'utf8')).toEndWith('impd \n  IMP_TAILSCALE_NODE=1\n');
 });
 
 test('it restarts impd a second after it exits on its own', () => {
   const ctx = setupTest();
-  const ranOnce = formatShellWord(join(ctx.directoryPath, 'ran-once'));
 
   createStubBin(ctx.directoryPath, 'setup-cgroups.sh');
   createStubBin(ctx.directoryPath, 'setup-storage.sh');
   createStubBin(ctx.directoryPath, 'setup-net.sh');
   createStubBin(ctx.directoryPath, 'tailscale-up.sh');
   createStubBin(ctx.directoryPath, 'sleep');
-
-  createStubBin(
-    ctx.directoryPath,
-    'impd',
-    `if [ "$1" = --network-env ]; then echo IMP_SUBNET=10.66.0.0/16; exit 0; fi
-if [ ! -e ${ranOnce} ]; then touch ${ranOnce}; exit 7; fi
-kill -TERM "$PPID"`,
-  );
+  createStubImpd(ctx.directoryPath, { networkEnv: ['IMP_SUBNET=10.66.0.0/16'], exitCodes: [7] });
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
@@ -305,22 +282,16 @@ kill -TERM "$PPID"`,
 
 test('it stops the running impd and exits 0 on SIGTERM', async () => {
   const ctx = setupTest();
-  const running = join(ctx.directoryPath, 'running');
 
   createStubBin(ctx.directoryPath, 'setup-cgroups.sh');
   createStubBin(ctx.directoryPath, 'setup-storage.sh');
   createStubBin(ctx.directoryPath, 'setup-net.sh');
   createStubBin(ctx.directoryPath, 'tailscale-up.sh');
 
-  // the wait is bounded, so a stub that misses its signal still ends
-  createStubBin(
-    ctx.directoryPath,
-    'impd',
-    `if [ "$1" = --network-env ]; then echo IMP_SUBNET=10.66.0.0/16; exit 0; fi
-trap 'echo "impd got TERM" >>"$STUB_CALLS"; exit 0' TERM
-touch ${formatShellWord(running)}
-for _ in $(seq 300); do command -p sleep 0.1; done`,
-  );
+  const impd = createStubImpd(ctx.directoryPath, {
+    networkEnv: ['IMP_SUBNET=10.66.0.0/16'],
+    lastRun: 'wait-for-term',
+  });
 
   const entrypoint = Bun.spawn(['bash', ctx.script], {
     env: {
@@ -337,7 +308,7 @@ for _ in $(seq 300); do command -p sleep 0.1; done`,
   });
 
   await waitFor(() => {
-    expect(existsSync(running)).toBeTrue();
+    expect(impd.probeRunning()).toBeTrue();
   });
 
   entrypoint.kill('SIGTERM');

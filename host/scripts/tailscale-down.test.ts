@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
+import { createStubProcessTable } from '../../scripts/test-utils/create-stub-process-table';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-tailscale-down-'));
@@ -22,10 +22,8 @@ function setupTest() {
 
 test('it logs out, then stops tailscaled and waits until it is gone', () => {
   const ctx = setupTest();
-  const killed = formatShellWord(join(ctx.directoryPath, 'killed'));
 
-  createStubBin(ctx.directoryPath, 'ps', `[ -e ${killed} ] || echo S`);
-  createStubBin(ctx.directoryPath, 'pkill', `touch ${killed}`);
+  createStubProcessTable(ctx.directoryPath, { processes: { tailscaled: 'S' } });
   createStubBin(ctx.directoryPath, 'tailscale');
   createStubBin(ctx.directoryPath, 'sleep');
 
@@ -93,10 +91,8 @@ test('it counts a zombie tailscaled as stopped', () => {
 
 test('it still stops tailscaled and exits 0 when the logout and the kill fail', () => {
   const ctx = setupTest();
-  const killed = formatShellWord(join(ctx.directoryPath, 'killed'));
 
-  createStubBin(ctx.directoryPath, 'ps', `[ -e ${killed} ] || echo S`);
-  createStubBin(ctx.directoryPath, 'pkill', `touch ${killed}; exit 1`);
+  createStubProcessTable(ctx.directoryPath, { processes: { tailscaled: 'S' }, pkillFails: true });
   createStubBin(ctx.directoryPath, 'tailscale', 'echo "logout failed" >&2; exit 1');
   createStubBin(ctx.directoryPath, 'sleep');
 
