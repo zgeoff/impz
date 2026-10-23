@@ -7,6 +7,7 @@ import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubPressureSwitch } from '../../../testing/vm/build-stub-pressure-switch';
@@ -107,6 +108,31 @@ test('it adds a template image named for its imp', async () => {
     sourceImp: 'dev',
     digest: expect.stringMatching(/^imp-[\da-f\-]{36}$/v) as unknown,
   });
+});
+
+test('it logs the template it adds, with its imp and its time on the impd clock', async () => {
+  const ctx = await setupTest();
+
+  const lines = captureImpdLogs();
+  const baseImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, baseImage.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, baseImage);
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+
+  ctx.clones.after = () => {
+    ctx.advance(3_600_000);
+
+    return Promise.resolve();
+  };
+
+  await ctx.impd.templates.createTemplate('dev', 'tools');
+
+  expect(lines).toContainEqual(
+    expect.stringMatching(/^INFO impd\.image imp=dev template tools in 36\d{5}ms$/v),
+  );
 });
 
 test('it writes the imp disk as the template rootfs', async () => {

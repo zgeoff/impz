@@ -1,7 +1,7 @@
 import { open } from 'node:fs/promises';
 import { writeLocalEntries } from '@impz/local-tar';
 import type { LocalEntry } from '@impz/local-tar';
-import { printLog } from '../../../platform/process/print-log';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 
 const NO_PROGRESS = { add: () => {} };
 
@@ -16,7 +16,7 @@ export async function writeContextTar(entries: readonly LocalEntry[], path: stri
       },
       NO_PROGRESS,
       (text) => {
-        printLog(`impd: image build context: ${text}`);
+        getImpdLogger('image').warning('image build context: {text}', { text });
       },
     );
   } finally {

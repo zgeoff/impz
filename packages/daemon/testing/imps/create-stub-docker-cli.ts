@@ -27,6 +27,7 @@ export interface StubDockerCliOptions {
   readonly images?: readonly StubDockerImage[];
   readonly create?: { readonly id: string } | { readonly stderr: string };
   readonly exportTar?: Uint8Array;
+  readonly isExportHeld?: boolean;
 }
 
 const FORMATS: ReadonlyMap<string, (inspect: StubDockerInspect) => string> = new Map([
@@ -92,7 +93,10 @@ export function createStubDockerCli(options: Readonly<StubDockerCliOptions>) {
   if (options.exportTar !== undefined) {
     writeFileSync(join(state, 'export.tar'), options.exportTar);
 
-    arms.push(`  'export '*) cat ${formatShellWord(join(state, 'export.tar'))} ;;`);
+    // exec, so a signal to the export reaches the sleep that holds its pipes open
+    const hold = options.isExportHeld === true ? '; exec sleep 600' : '';
+
+    arms.push(`  'export '*) cat ${formatShellWord(join(state, 'export.tar'))}${hold} ;;`);
   }
 
   const script = [

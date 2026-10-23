@@ -8,6 +8,7 @@ import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubImageBuilder } from '../../../testing/imps/build-stub-image-builder';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { loadConfig } from '../../config';
 import { createImage, listImageRemovals, listImageUses } from '../../platform/db/images';
 import { openDatabase } from '../../platform/db/open-database';
@@ -57,7 +58,6 @@ test.each(['--help', '-v/:/host', 'ubuntu --privileged', ''])(
       storageGate: createStorageGate(),
       diskBudget: ctx.diskBudget,
       readBuilders: () => null,
-      log: () => {},
     });
 
     const adding = images.addImage(ref, 'x');
@@ -79,7 +79,6 @@ test('#runImageBuild refuses a context path that docker could read as a flag', a
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const building = images.runImageBuild('--file=/etc/passwd', 'x');
@@ -116,7 +115,6 @@ test('#ensureBuilderImage leaves no work directory behind when the create fails'
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const ensuring = images.ensureBuilderImage();
@@ -137,7 +135,6 @@ test('#addImage answers SERVICE_UNAVAILABLE while the builders are not up', asyn
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const adding = images.addImage('busybox:1.37', 'x');
@@ -166,7 +163,6 @@ test('#buildImageFromContext answers SERVICE_UNAVAILABLE while the builders are 
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const building = images.buildImageFromContext(tarPath, 'web', undefined, {
@@ -189,7 +185,6 @@ test('#addImage refuses the name imp-builder, which is impd’s', async () => {
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const adding = images.addImage('busybox:latest', BUILDER_IMAGE);
@@ -210,7 +205,6 @@ test('#buildImageFromContext refuses the name imp-builder, which is impd’s', a
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const building = images.buildImageFromContext('/nowhere.tar', BUILDER_IMAGE, undefined, {
@@ -233,7 +227,6 @@ test('#runImageBuild refuses a context that is not on the impd host', async () =
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const building = images.runImageBuild(join(ctx.dataDir, 'no-such-dir'), 'x');
@@ -254,7 +247,6 @@ test('#runImageBuild refuses a context on the impd host with no Dockerfile', asy
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const building = images.runImageBuild(ctx.dataDir, 'x');
@@ -281,7 +273,6 @@ test('#runImageBuild refuses a context over IMP_BUILD_CONTEXT_MAX_MIB before it 
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const building = images.runImageBuild(contextDir, 'x');
@@ -310,7 +301,6 @@ test('#runImageBuild refuses a Dockerfile image that is not an image reference',
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   const building = images.runImageBuild(contextDir, 'x');
@@ -341,7 +331,6 @@ test('#runImageBuild answers BAD_REQUEST when the pinned Dockerfile does not par
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => builder.builders,
-    log: () => {},
   });
 
   const building = images.runImageBuild(contextDir, 'x');
@@ -362,8 +351,7 @@ test('#resolveImage records the lookup as a use of the image', async () => {
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
-    now: () => Date.parse('2030-01-01T00:00:00Z'),
+    clock: { now: () => Date.parse('2030-01-01T00:00:00Z') },
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-0a1b2c3' }));
@@ -397,7 +385,6 @@ test('#addImage evicts an old image under storage pressure, even when the add fa
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
@@ -437,7 +424,6 @@ test('#runImageBuild evicts an old image under storage pressure, even when the b
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
@@ -477,7 +463,6 @@ test('#buildImageFromContext evicts an old image under storage pressure, even wh
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
@@ -509,7 +494,6 @@ test('#updateImagePin answers NOT_FOUND for a name no image has', async () => {
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   expect(images.updateImagePin('missing', true)).rejects.toMatchObject({ code: 'NOT_FOUND' });
@@ -539,7 +523,6 @@ test('#resolveImage keeps an old image that an eviction reaches while the lookup
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-1111111', digest: 'sha256:1' }));
@@ -567,6 +550,32 @@ test('#resolveImage keeps an old image that an eviction reaches while the lookup
   expect(uses.map((use) => use.name)).toStrictEqual(['web-1111111']);
 });
 
+test('#runImageEviction logs an eviction that fails as an error, and resolves', async () => {
+  const ctx = await setupTest();
+
+  const lines = captureImpdLogs();
+
+  const images = createImageService({
+    config: loadConfig({
+      IMP_DATA_DIR: ctx.dataDir,
+      IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
+      IMP_IMAGE_EVICT_LOW_PERCENT: '60',
+    }),
+    db: ctx.db,
+    storage: {
+      ...ctx.storage,
+      readUsage: () => Promise.reject(new Error('the pool is gone')),
+    },
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+  });
+
+  await images.runImageEviction();
+
+  expect(lines).toStrictEqual(['ERROR impd.image image eviction: the pool is gone']);
+});
+
 test('#resolveImage answers NOT_FOUND for a name no image has', async () => {
   const ctx = await setupTest();
 
@@ -577,7 +586,6 @@ test('#resolveImage answers NOT_FOUND for a name no image has', async () => {
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const resolving = images.resolveImage('missing');
@@ -598,7 +606,6 @@ test('#resolveImage answers NOT_FOUND naming the default image when neither defa
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const resolving = images.resolveImage();
@@ -616,7 +623,6 @@ test('#removeImage answers NOT_FOUND for a name no image has', async () => {
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const removing = images.removeImage('missing');
@@ -642,7 +648,6 @@ test('#removeImage keeps the rootfs while another image uses its digest', async 
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   await images.removeImage('web');
@@ -667,7 +672,6 @@ test('#removeImage removes the rootfs once no image uses its digest', async () =
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   await images.removeImage('web');
@@ -690,7 +694,6 @@ test('#removeImage keeps a record of the rootfs while its removal fails', async 
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const removing = images.removeImage('web');
@@ -714,7 +717,6 @@ test('#removeImage leaves no record of the rootfs once it is gone', async () => 
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   await images.removeImage('web');
@@ -736,7 +738,6 @@ test('#removeImage keeps a record of the rootfs while a publisher of its digest 
     storageGate: createStorageGate(),
     diskBudget: ctx.diskBudget,
     readBuilders: () => null,
-    log: () => {},
   });
 
   const removals = await images.withImagePublisher('sha256:1', 'web-2222222', async () => {
