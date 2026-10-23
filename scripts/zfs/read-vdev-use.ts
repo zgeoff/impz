@@ -2,7 +2,7 @@ import type { DevShell } from '../dev/types.ts';
 import { hasVdevLine } from './has-vdev-line.ts';
 
 // unknown: zpool cannot say, as when it or sudo cannot reach the kernel.
-type VdevUse = 'used' | 'unused' | 'unknown';
+export type VdevUse = 'used' | 'unused' | 'unknown';
 
 interface ReadVdevUseOptions {
   readonly shell: DevShell;

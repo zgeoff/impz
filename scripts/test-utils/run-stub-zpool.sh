@@ -7,7 +7,9 @@
 #   zpool.create-started, then waits for the path in zpool.create-release
 #   before the pool exists, and fails without a pool after 30 s
 # - zpool.destroy: `fails`, `busy` (it fails as zpool does for a held pool),
-#   `ignored` (it exits 0 and the pool stays) or empty
+#   `ignored` (it exits 0 and the pool stays), `held` (it waits as a held create
+#   does, on zpool.destroy-started and zpool.destroy-release, then destroys the
+#   pool) or empty
 # - zpool.queries: `fail` makes list -H and status fail once a pool exists
 stubs=${STUB_CALLS%/*}
 pools=$stubs/pools
@@ -22,6 +24,23 @@ check_query() {
   if [ "$queries" = fail ] && [ -s "$pools" ]; then
     exit 1
   fi
+}
+
+# writes the path in the stubs file $1-started, then waits for the path in
+# $1-release, and fails after 30 s
+hold() {
+  local started release held=0
+  read -r started <"$stubs/$1-started"
+  read -r release <"$stubs/$1-release"
+  : >"$started"
+  while [ ! -e "$release" ]; do
+    [ "$held" -lt 600 ] || {
+      echo "no release within 30 s" >&2
+      exit 1
+    }
+    held=$((held + 1))
+    sleep 0.05
+  done
 }
 
 # the last two arguments: a create's pool and vdev, a destroy's pool
@@ -44,18 +63,7 @@ case "$1" in
       echo "pool already exists" >&2
       exit 1
     elif [ "$create" = held ]; then
-      read -r started <"$stubs/zpool.create-started"
-      read -r release <"$stubs/zpool.create-release"
-      : >"$started"
-      held=0
-      while [ ! -e "$release" ]; do
-        [ "$held" -lt 600 ] || {
-          echo "no release within 30 s" >&2
-          exit 1
-        }
-        held=$((held + 1))
-        sleep 0.05
-      done
+      hold zpool.create
     fi
     printf '%s %s\n' "$prev" "$last" >>"$pools"
     ;;
@@ -80,6 +88,8 @@ case "$1" in
       exit 1
     elif [ "$destroy" = ignored ]; then
       exit 0
+    elif [ "$destroy" = held ]; then
+      hold zpool.destroy
     fi
     grep -v "^$last " "$pools" >"$pools.next" || true
     mv "$pools.next" "$pools"

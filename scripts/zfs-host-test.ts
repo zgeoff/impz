@@ -1,6 +1,7 @@
 import { join, resolve } from 'node:path';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
+import { ZFS_OWNER_FILE, formatZfsOwnerFile } from '../e2e/lib/zfs-owner.ts';
 import type { DevEnv } from './lib/build-dev-layout.ts';
 import { DevError } from './lib/dev-error.ts';
 import { pickSetting } from './lib/pick-setting.ts';
@@ -13,6 +14,8 @@ import { findHostRefusal } from './zfs/find-host-refusal.ts';
 import { formatLocalTimestamp } from './zfs/format-local-timestamp.ts';
 import { formatZfsTimings } from './zfs/format-zfs-timings.ts';
 import { parseZfsOops } from './zfs/parse-zfs-oops.ts';
+import { pickCleanupStep } from './zfs/pick-cleanup-step.ts';
+import type { CleanupAction, CleanupFacts } from './zfs/pick-cleanup-step.ts';
 import { readVdevUse } from './zfs/read-vdev-use.ts';
 import { reportZfsError } from './zfs/report-zfs-error.ts';
 import type { ZfsHostFacts, ZfsIO } from './zfs/types.ts';
@@ -185,7 +188,9 @@ async function runOnPool(options: RunZfsHostTestOptions, host: Host): Promise<nu
     status = run.guard.findStopCode() ?? reportZfsError(options.io, PREFIX, error);
   }
 
-  return removeMade(run, status);
+  const cleaned = await removeMade(run, status);
+
+  return run.guard.findStopCode() ?? cleaned;
 }
 
 // A failed suite still gets its report, and the run then exits with the suites' status.
@@ -231,8 +236,8 @@ async function runSuites(run: PoolRun): Promise<number> {
     ['data-mv-b', `${zfsRoot}-mv-b`],
   ] as const) {
     io.files.writeText(
-      join(host.work, directory, 'imp-e2e-zfs-owner'),
-      `{"pool":"${pool}","root":"${root}","vdev":"${host.img}"}\n`,
+      join(host.work, directory, ZFS_OWNER_FILE),
+      formatZfsOwnerFile({ pool, root, vdev: host.img }),
     );
   }
 
@@ -320,12 +325,10 @@ async function writeReport(run: PoolRun): Promise<void> {
   io.files.writeText(join(work, 'summary.txt'), report);
 }
 
-// In reverse order; the results stay in the work dir. A pool that will not go keeps its file, so it
-// can still be imported and destroyed by hand, and the run fails.
+// In reverse order; the results stay in the work dir.
 async function removeMade(run: PoolRun, status: number): Promise<number> {
   const io = run.options.io;
   const host = run.host;
-  const failed = status === 0 ? 1 : status;
 
   if (run.made.instance) {
     await stopInstances(run);
@@ -335,71 +338,23 @@ async function removeMade(run: PoolRun, status: number): Promise<number> {
     return status;
   }
 
-  const ownUse = await readVdevUse({
-    shell: io.shell,
-    zpool: SUDO_ZPOOL,
-    vdev: host.img,
-    pool: host.pool,
-  });
+  const facts: CleanupFacts = { prefix: PREFIX, pool: host.pool, vdev: host.img, status };
 
-  if (ownUse === 'used') {
-    const destroyed = await io.shell`sudo zpool destroy -f ${host.pool} 2>&1`.quiet().nothrow();
+  for (;;) {
+    const step = pickCleanupStep(facts);
 
-    if (destroyed.exitCode !== 0) {
-      const output = destroyed.stdout.toString().replace(/\n+$/u, '');
-
-      if (output !== '') {
-        io.writeStderr(`${output}\n`);
+    if (step.action === 'finish') {
+      for (const text of step.stderr) {
+        io.writeStderr(text);
       }
 
-      // An oops that kills its task inside ZFS, such as a Firecracker read() that trips the
-      // usercopy check, leaves a dataset hold that only a reboot releases.
-      const oops = output.includes('pool is busy') ? await readZfsOops(run) : [];
-
-      if (oops.length > 0) {
-        io.writeStderr(
-          `${PREFIX}: a kernel oops in ZFS holds ${host.pool} until a reboot; its file stays at ${host.img}\n${oops.join('\n')}\n`,
-        );
-
-        return status;
-      }
-
-      io.writeStderr(`${PREFIX}: could not destroy ${host.pool}; its file stays at ${host.img}\n`);
-
-      return failed;
+      return step.status;
     }
+
+    const seen = await runCleanupStep(run, step.action);
+
+    Object.assign(facts, seen);
   }
-
-  // Never the file of a pool that is still there, or may be.
-  const anyUse = await readVdevUse({
-    shell: io.shell,
-    zpool: SUDO_ZPOOL,
-    vdev: host.img,
-    pool: null,
-  });
-
-  const kept = match(anyUse)
-    .with('unused', () => null)
-    .with('used', () => `a pool still uses ${host.img}; it stays`)
-    .with('unknown', () => `zpool cannot say which pools use ${host.img}; it stays`)
-    .exhaustive();
-
-  if (kept !== null) {
-    io.writeStderr(`${PREFIX}: ${kept}\n`);
-
-    return failed;
-  }
-
-  const removed = await io.shell`sudo rm -f ${host.img}`.quiet().nothrow();
-
-  if (removed.exitCode !== 0) {
-    io.writeStderr(removed.stderr.toString());
-    io.writeStderr(`${PREFIX}: could not remove ${host.img}\n`);
-
-    return failed;
-  }
-
-  return status;
 }
 
 // The moves suites' B goes first, with its docker proxy and volumes, which a stopped run leaves up
@@ -422,6 +377,36 @@ async function stopInstances(run: PoolRun): Promise<void> {
   await io.shell`docker logs ${DEV_NAME} &> ${join(work, 'impd.log')}`.nothrow();
   await io.shell`${devScript} down`.env(run.host.env).nothrow();
   await io.shell`docker network rm ${MOVES_NETWORK}`.quiet().nothrow();
+}
+
+function runCleanupStep(run: PoolRun, action: CleanupAction): Promise<Partial<CleanupFacts>> {
+  const io = run.options.io;
+  const host = run.host;
+
+  return match(action)
+    .with('read-own-use', async () => ({
+      ownUse: await readVdevUse({
+        shell: io.shell,
+        zpool: SUDO_ZPOOL,
+        vdev: host.img,
+        pool: host.pool,
+      }),
+    }))
+    .with('destroy', async () => {
+      const destroyed = await io.shell`sudo zpool destroy -f ${host.pool} 2>&1`.quiet().nothrow();
+
+      return { destroyed: { exitCode: destroyed.exitCode, output: destroyed.stdout.toString() } };
+    })
+    .with('read-oops', async () => ({ oops: await readZfsOops(run) }))
+    .with('read-any-use', async () => ({
+      anyUse: await readVdevUse({ shell: io.shell, zpool: SUDO_ZPOOL, vdev: host.img, pool: null }),
+    }))
+    .with('remove', async () => {
+      const removed = await io.shell`sudo rm -f ${host.img}`.quiet().nothrow();
+
+      return { removed: { exitCode: removed.exitCode, output: removed.stderr.toString() } };
+    })
+    .exhaustive();
 }
 
 // The key lines of each kernel oops since the pool's create whose own trace runs through ZFS;

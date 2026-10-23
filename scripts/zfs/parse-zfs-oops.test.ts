@@ -42,9 +42,10 @@ test('it keeps the key lines of a page-fault oops that a generic BUG line opens'
   ]);
 });
 
-test('it finds no ZFS oops when an oops outside ZFS sits beside a ZFS warning', () => {
-  expect(
-    parseZfsOops(`[  90.200050] ------------[ cut here ]------------
+test.each([
+  [
+    'an oops outside ZFS sits beside a ZFS warning',
+    `[  90.200050] ------------[ cut here ]------------
 [  90.200100] kernel BUG at mm/slub.c:500!
 [  90.200200] Oops: invalid opcode: 0000 [#1] SMP NOPTI
 [  90.200500]  kmem_cache_free+0x10/0x40
@@ -53,13 +54,11 @@ test('it finds no ZFS oops when an oops outside ZFS sits beside a ZFS warning', 
 [  95.300100] WARNING: CPU: 1 PID: 77 at module/zfs/txg.c:600 txg_wait_synced+0x20/0x40 [zfs]
 [  95.300200]  txg_wait_synced+0x20/0x40 [zfs]
 [  95.300300] ---[ end trace 0000000000000000 ]---
-`),
-  ).toStrictEqual([]);
-});
-
-test('it finds no ZFS oops when a ZFS soft lockup closes an open record before an oops outside ZFS', () => {
-  expect(
-    parseZfsOops(`[  80.000000] ------------[ cut here ]------------
+`,
+  ],
+  [
+    'a ZFS soft lockup closes an open record before an oops outside ZFS',
+    `[  80.000000] ------------[ cut here ]------------
 [  80.100000] watchdog: BUG: soft lockup - CPU#2 stuck for 26s! [z_wr_iss:812]
 [  80.100100] CPU: 2 UID: 0 PID: 812 Comm: z_wr_iss Tainted: P O 6.17.0-1-azure
 [  80.100200]  zio_execute+0x90/0x130 [zfs]
@@ -68,8 +67,11 @@ test('it finds no ZFS oops when a ZFS soft lockup closes an open record before a
 [  90.200200] Oops: invalid opcode: 0000 [#1] SMP NOPTI
 [  90.200500]  kmem_cache_free+0x10/0x40
 [  90.200600] ---[ end trace 0000000000000000 ]---
-`),
-  ).toStrictEqual([]);
+`,
+  ],
+  ['the log holds no oops', '[  12.000000] eth0: link up\n'],
+])('it finds no ZFS oops when %s', (_label, log) => {
+  expect(parseZfsOops(log)).toStrictEqual([]);
 });
 
 test('it keeps a ZFS oops that the log ends before its end-trace line', () => {
@@ -80,8 +82,4 @@ test('it keeps a ZFS oops that the log ends before its end-trace line', () => {
     '[  90.200100] kernel BUG at mm/usercopy.c:102!',
     '[  90.200500]  zfs_uiomove_iter+0x47/0xc0 [zfs]',
   ]);
-});
-
-test('it finds no ZFS oops in a log without one', () => {
-  expect(parseZfsOops('[  12.000000] eth0: link up\n')).toStrictEqual([]);
 });

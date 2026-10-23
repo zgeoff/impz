@@ -930,6 +930,51 @@ test('it destroys the pool and removes its file when SIGTERM comes during the po
   expect(existsSync(join(work, 'bench.img'))).toBeFalse();
 });
 
+test('it finishes cleanup and exits as stopped when SIGTERM comes during cleanup after the suites pass', async () => {
+  const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+  createStubInstanceDocker(ctx.stubs, { containers: [] });
+
+  const work = join(ctx.directoryPath, 'work');
+  const startedMarker = join(ctx.directoryPath, 'destroy-started');
+  const release = join(ctx.directoryPath, 'destroy-release');
+
+  mkdirSync(work);
+  createStubZpool(ctx.stubs, { destroy: { startedMarker, release } });
+
+  const subprocess = Bun.spawn(ctx.run, {
+    stdout: 'ignore',
+    stderr: 'ignore',
+    env: {
+      PATH: ctx.path,
+      IMP_ROOT: ctx.root,
+      IMP_ZFS_TEST_DIR: work,
+      IMP_ZFS_BENCH_GIB: '1',
+      IMP_ZFS_TEST_UNIT: '0',
+      IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
+    },
+  });
+
+  onTestFinished(() => {
+    subprocess.kill('SIGKILL');
+  });
+
+  await waitFor(() => readFileSync(startedMarker), { timeoutMs: 10_000 });
+
+  // The destroy holds until the release, so the signal lands inside cleanup.
+  subprocess.kill('SIGTERM');
+
+  writeFileSync(release, '');
+
+  const exitCode = await subprocess.exited;
+
+  expect(exitCode).toBe(143);
+  expect(readFileSync(join(ctx.stubs, 'pools'), 'utf8')).toBe('');
+  expect(existsSync(join(work, 'bench.img'))).toBeFalse();
+  expect(existsSync(join(work, 'summary.txt'))).toBeTrue();
+});
+
 test('it fails, saying so, when the pool file will not go', () => {
   const ctx = setupTest();
 
