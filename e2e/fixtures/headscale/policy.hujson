@@ -1,5 +1,5 @@
-// The production tailnet's tag:imp-e2e entries, and the members grant that
-// lets the test-side client reach every tagged node.
+// The production tailnet's grants for tag:imp-e2e, and the members grant that
+// lets the test-side member reach every tagged node.
 {
   "tagOwners": { "tag:imp-e2e": ["tag:imp-e2e"] },
   "grants": [

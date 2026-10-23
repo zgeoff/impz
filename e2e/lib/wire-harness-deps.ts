@@ -40,8 +40,8 @@ export function wireHarnessDeps(cwd: string): HarnessDeps {
   return {
     readHostImage,
     readTailscaleKey: readTailscaleE2EAuthKey,
-    startHeadscale: () => startHeadscale(),
-    stopHeadscale: () => stopHeadscale(),
+    startHeadscale,
+    stopHeadscale,
     setUpInstance: async (run) => {
       const target = buildInstance(run.env, cwd);
 

@@ -2,7 +2,7 @@
 
 The e2e harness runs the tailscale, egress and moves-tailnet suites on a tailnet of the run's own: a
 Headscale control server in a container, which holds no production service and needs no secret.
-Every node on it joins as `tag:imp-e2e`, under a policy that copies the production tailnet's rules
+Every node on it joins as `tag:imp-e2e`, under a policy that copies the production tailnet's grants
 for that tag, so the suites test the same contract. The tailnet-names suite and a dev instance
 started with `IMP_TAILSCALE_OP=1` join Tailscale itself as `tag:imp-e2e`, which impz owns with its
 OAuth client and the 1Password vault `imp-e2e`. [Development](./development.md#end-to-end-tests)
@@ -33,7 +33,7 @@ Headscale's relay serves plain HTTP, and tailscaled reaches a relay only over TL
 therefore reach each other only on a Docker network they share. The moves-tailnet suite connects
 Headscale to its move network, and the dev instance and its second host meet there.
 
-The policy matches the production tailnet's rules for the tag. Members, such as the member
+The policy copies the production tailnet's grants for the tag. Members, such as the member
 container, reach every port of a `tag:imp-e2e` node. One `tag:imp-e2e` node reaches another only on
 port 7070, so the moves suites' two impds reach each other's API and no other port.
 

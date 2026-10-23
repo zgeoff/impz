@@ -25,8 +25,6 @@ function buildHeadscaleNames(container: string = instance.container) {
 const KeySchema = z.object({ key: z.string().min(1) });
 const UserSchema = z.object({ id: z.number() });
 
-// Never print a key. Each run's control server is new, so a node that a
-// previous run left keeps no address here.
 export async function startHeadscale(
   container: string = instance.container,
 ): Promise<HeadscaleTailnet> {
