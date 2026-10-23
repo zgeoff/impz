@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.10.6](https://github.com/zgeoff/impz/compare/v2.10.5...v2.10.6) (2026-10-23)
+
+### Bug Fixes
+
+- **api:** refuse a secret rule whose header overrides the method
+  ([#649](https://github.com/zgeoff/impz/issues/649))
+  ([d808882](https://github.com/zgeoff/impz/commit/d808882c1576a2f8cf25e7b6a36aa330f058ca82))
+
+## [2.10.5](https://github.com/zgeoff/impz/compare/v2.10.4...v2.10.5) (2026-10-23)
+
+### Bug Fixes
+
+- **e2e:** keep the ssh-agent socket under the unix socket path limit
+  ([#644](https://github.com/zgeoff/impz/issues/644))
+  ([93ba146](https://github.com/zgeoff/impz/commit/93ba146781fb1419f30efc0ca588d4d3f3b58804))
+
+## [2.10.4](https://github.com/zgeoff/impz/compare/v2.10.3...v2.10.4) (2026-10-23)
+
+### Performance Improvements
+
+- **daemon:** admit without a page walk while ram is far under budget
+  ([#637](https://github.com/zgeoff/impz/issues/637))
+  ([d38d41b](https://github.com/zgeoff/impz/commit/d38d41b32820c141580ef69d950fa7cd0ed1500f))
+
 ## [2.10.3](https://github.com/zgeoff/impz/compare/v2.10.2...v2.10.3) (2026-10-22)
 
 ### Bug Fixes

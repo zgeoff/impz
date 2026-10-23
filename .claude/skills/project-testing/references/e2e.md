@@ -91,5 +91,8 @@ The harness touches machine-global resources only where it can prove they are it
   directory. It makes that directory without `--parents`, writes an owner file with its process's
   pid and start time, and removes a stale directory only when the owner file proves that its process
   is gone.
+- The `boot-templates` suite drops the machine's caches and sets `primarycache` on the ZFS root only
+  when `E2E_OWNS_ZFS_HOST=1` says the run has the machine and the root to itself, as each CI ZFS
+  shard has.
 - The tailnet suites join as `tag:imp-e2e`, never `tag:imp`, so a test node cannot reach a live
   impd. An instance that once joined as `tag:imp` keeps that node state until a `--clean` run.
