@@ -1,3 +1,5 @@
+import { P, match } from 'ts-pattern';
+
 const MARKUP: unique symbol = Symbol('markup');
 
 export interface Markup {
@@ -17,15 +19,11 @@ export function renderHTML(strings: TemplateStringsArray, ...parts: readonly Mar
 }
 
 function toHTML(part: MarkupPart): string {
-  if (typeof part === 'string') {
-    return escapeHTML(part);
-  }
-
-  if ('html' in part) {
-    return part.html;
-  }
-
-  return part.map((each) => each.html).join('');
+  return match(part)
+    .with(P.string, (text) => escapeHTML(text))
+    .with(P.array(), (list) => list.map((each) => each.html).join(''))
+    .with({ html: P.string }, (markup) => markup.html)
+    .exhaustive();
 }
 
 function escapeHTML(text: string): string {
