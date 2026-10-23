@@ -8,8 +8,19 @@ import { waitFor } from './wait-for';
 function setupTest() {
   const container = `imp-headscale-${String(process.pid)}-${randomUUID().slice(0, 8)}`;
 
+  // Cleanup runs first in, first out, so this runs before a test's own and
+  // removes every container that holds the network.
   onTestFinished(async () => {
-    await runCommand(['docker', 'rm', '-f', `${container}-ts-member`, `${container}-headscale`]);
+    await runCommand([
+      'docker',
+      'rm',
+      '-f',
+      `${container}-ts-member`,
+      `${container}-headscale`,
+      `${container}-peer`,
+      `${container}-caller`,
+    ]);
+
     await runCommand(['docker', 'network', 'rm', `${container}-ts`]);
   });
 
