@@ -7,8 +7,7 @@ import type { StubAnswer, StubRun } from '../vm/build-stub-guest';
 
 type StubBuilderStep = 'pin' | 'tag' | 'config' | 'create' | 'export';
 
-// The fields a pin inspect renders, and how the builder's engine holds the image.
-export interface StubBuilderImage {
+interface StubBuilderImage {
   readonly Id: string;
   readonly RepoDigests: readonly string[];
   readonly Architecture?: string;
@@ -18,7 +17,7 @@ export interface StubBuilderImage {
   readonly pullError?: string;
 }
 
-export interface StubBuilderFrontend {
+interface StubBuilderFrontend {
   readonly isOnEngine: boolean;
   readonly pullError?: string;
 }
