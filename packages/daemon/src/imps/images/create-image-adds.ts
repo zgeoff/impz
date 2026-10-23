@@ -6,15 +6,17 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSingleFlight } from '../../platform/process/single-flight';
-import { checkReferenceRegistry } from '../docker-proxy/rules';
+import { checkReferenceRegistry } from '../docker-contract/check-registry';
+import { parseImageReference } from '../docker-contract/parse-image-reference';
 import type { ImpsConfig } from '../imps-config';
-import { createBuildEngine, toEngineRun } from './build-engine';
-import { BUILDER_IMAGE } from './builder-imps';
-import type { Builders } from './builder-imps';
-import { requireClientImageName, requireDockerImage } from './create-image-writer';
-import type { ImageWriter } from './create-image-writer';
-import { loadGuestImage } from './guest-build';
+import { createBuildEngine, toEngineRun } from './build/build-engine';
+import { loadGuestImage } from './build/guest-build';
+import { BUILDER_IMAGE } from './builders/builder-imps';
+import type { Builders } from './builders/builder-imps';
 import { deriveImageName } from './image-naming';
+import { requireClientImageName } from './require-client-image-name';
+import { requireDockerImage } from './rootfs/create-image-writer';
+import type { ImageWriter } from './rootfs/create-image-writer';
 
 export const FALLBACK_DEFAULT_IMAGE = 'ubuntu';
 const SEED_REF = 'ubuntu:24.04';
@@ -190,11 +192,9 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
 }
 
 function formatExplicitRef(ref: string): string {
-  const [withoutDigest = ''] = ref.split('@');
-  const lastSlash = withoutDigest.lastIndexOf('/');
-  const hasTag = withoutDigest.includes(':', lastSlash + 1);
+  const parsed = parseImageReference(ref);
 
-  return ref.includes('@') || hasTag ? ref : `${ref}:latest`;
+  return parsed.digest === null && parsed.tag === null ? `${ref}:latest` : ref;
 }
 
 // The ref goes into docker's argv, where a leading `-` reads as a flag, so every caller is

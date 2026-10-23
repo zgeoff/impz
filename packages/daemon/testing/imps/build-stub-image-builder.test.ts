@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DOCKERFILE_FRONTEND } from '../../src/imps/docker-proxy/dockerfile-frontend';
-import { createGuestExec } from '../../src/imps/images/guest-exec';
-import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';
+import { DOCKERFILE_FRONTEND } from '../../src/imps/docker-contract/dockerfile-frontend';
+import { createGuestExec } from '../../src/imps/images/builders/guest-exec';
+import { PIN_INSPECT_FORMAT } from '../../src/imps/images/pull/image-pin';
 import { STUB_BUILDER_CONTAINER, buildStubImageBuilder } from './build-stub-image-builder';
 
 async function setupTest() {

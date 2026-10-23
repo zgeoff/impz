@@ -5,7 +5,7 @@ import type { BackupService } from '../imp-ops/backup/backup-service';
 import type { CheckpointService } from '../imp-ops/checkpoints/checkpoint-service';
 import type { RamGovernor } from '../imp-ops/governor/ram-governor';
 import type { MoveService } from '../imp-ops/moves/move-service';
-import type { Repeat } from '../imps/images/build-event-stream';
+import type { Repeat } from '../imps/images/build/build-event-stream';
 import type { ImageService } from '../imps/images/image-service';
 import type { TemplateService } from '../imps/images/template-service';
 import type { ImpService } from '../imps/imps/imp-service';

@@ -15,14 +15,14 @@ import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpsConfig } from '../imps-config';
-import type { Builders } from './builder-imps';
+import { createImageBuilds } from './build/create-image-builds';
+import type { ImageBuilds } from './build/create-image-builds';
+import type { Builders } from './builders/builder-imps';
 import { FALLBACK_DEFAULT_IMAGE, createImageAdds } from './create-image-adds';
 import type { ImageAdds } from './create-image-adds';
-import { createImageBuilds } from './create-image-builds';
-import type { ImageBuilds } from './create-image-builds';
-import { createImageEviction } from './create-image-eviction';
-import { createImageWriter } from './create-image-writer';
-import type { ImageWriter } from './create-image-writer';
+import { createImageEviction } from './eviction/create-image-eviction';
+import { createImageWriter } from './rootfs/create-image-writer';
+import type { ImageWriter } from './rootfs/create-image-writer';
 
 export type ImageService = ImageAdds &
   ImageBuilds & {

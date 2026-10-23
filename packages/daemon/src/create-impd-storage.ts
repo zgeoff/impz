@@ -1,6 +1,6 @@
 import type { Config } from './config';
 import type { ImpdDeps } from './impd-deps';
-import type { Builders } from './imps/images/builder-imps';
+import type { Builders } from './imps/images/builders/builder-imps';
 import { createImageService } from './imps/images/image-service';
 import type { ImageService } from './imps/images/image-service';
 import { printLog } from './platform/process/print-log';

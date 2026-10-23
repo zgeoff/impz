@@ -14,7 +14,7 @@ import { createImage, readImageByName } from '../../platform/db/images';
 import { createImp, readImpByName } from '../../platform/db/imps';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
-import { BUILDER_IMAGE } from './builder-imps';
+import { BUILDER_IMAGE } from './builders/builder-imps';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -228,7 +228,7 @@ test('it refuses the builders image name for a template', async () => {
   const creating = ctx.impd.templates.createTemplate('dev', BUILDER_IMAGE);
 
   expect(creating).rejects.toMatchObject({
-    code: 'CONFLICT',
+    code: 'BAD_REQUEST',
     message: `the image name ${BUILDER_IMAGE} is impd's, for its image builders; pick another`,
   });
 });
