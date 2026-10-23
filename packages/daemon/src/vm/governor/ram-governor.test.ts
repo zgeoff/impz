@@ -65,6 +65,24 @@ test('it walks every VM and makes room when the resident counts leave too little
   expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
 });
 
+test('it counts the KSM headroom beside the resident counts and makes room for it', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['old', 'x'],
+    awake: [{ id: 'old', rssMib: 600 }],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    readHeadroomMib: () => Promise.resolve(300),
+    log: () => {},
+  });
+
+  await governor.admit({ id: 'x', name: 'x', reserveMib: 200, memoryMib: 600 });
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
+});
+
 test('it makes room by what a guest holds now when its pages dipped during an earlier walk', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,
