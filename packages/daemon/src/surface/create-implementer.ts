@@ -26,7 +26,14 @@ export interface AuditDetail {
 
 export type RpcImplementer = ReturnType<typeof createImplementer>;
 
-export function createImplementer(deps: RouterDeps) {
+interface ImplementerDeps {
+  readonly broker: Pick<RouterDeps['broker'], 'readSecretGeneration'>;
+  readonly imps: Pick<RouterDeps['imps'], 'readImpRecord'>;
+  readonly audit: Pick<RouterDeps['audit'], 'record'>;
+  readonly now: () => number;
+}
+
+export function createImplementer(deps: ImplementerDeps) {
   return implement(callerContract)
     .$context<RpcContext>()
     .use(async (options, input) => {
