@@ -81,6 +81,38 @@ test('it counts nothing resident for an asleep imp', async () => {
   expect(residentMib).toBeNull();
 });
 
+test('it measures a dip on the next reading of an imp, and its resident count stays', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a'],
+    awake: [{ id: 'a', rssMib: 900 }],
+  });
+
+  host.applyChange({ kind: 'dip', id: 'a', mib: 200 }, { release: () => {} });
+
+  const ramMib = await host.deps.readRamMib(1, 'a');
+  const residentMib = await host.deps.readResidentMib(1, 'a');
+
+  expect(ramMib).toBe(200);
+  expect(residentMib).toBe(900);
+});
+
+test('it measures an imp in full again after its dip', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a'],
+    awake: [{ id: 'a', rssMib: 900 }],
+  });
+
+  host.applyChange({ kind: 'dip', id: 'a', mib: 200 }, { release: () => {} });
+
+  await host.deps.readRamMib(1, 'a');
+
+  const ramMib = await host.deps.readRamMib(1, 'a');
+
+  expect(ramMib).toBe(900);
+});
+
 test('it sleeps an awake imp the governor asks for', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,
@@ -221,6 +253,7 @@ test('it marks an admitted imp awake, measuring nothing, active now', () => {
     busy: false,
     failsSleep: false,
     spareMib: 0,
+    dipMib: null,
   });
 });
 
@@ -263,6 +296,7 @@ test('it reads what an asleep imp holds reserved from the governor usage', async
     busy: false,
     failsSleep: false,
     spareMib: 0,
+    dipMib: null,
   });
 });
 
