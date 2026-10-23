@@ -31,7 +31,7 @@ export interface MovedTag {
 
 const RepoDigestsSchema = z.array(z.string());
 
-export async function readDockerGateway(): Promise<string> {
+async function readDockerGateway(): Promise<string> {
   const gateway = await runChecked([
     'docker',
     'network',
