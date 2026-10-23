@@ -71,6 +71,7 @@ export async function runTestBootstrap(options: RunTestBootstrapOptions): Promis
   };
 
   let exitCode: number;
+  let cleanupCode = 0;
 
   try {
     await runPlan({ ...run, io: guarded });
@@ -79,10 +80,14 @@ export async function runTestBootstrap(options: RunTestBootstrapOptions): Promis
   } catch (error) {
     exitCode = signals.received === null ? reportFailure(io, error) : 0;
   } finally {
-    await cleanUpRun(run);
+    cleanupCode = await cleanUpRun(run);
   }
 
-  return signals.received === null ? exitCode : SIGNAL_EXIT_CODES[signals.received];
+  if (signals.received !== null) {
+    return SIGNAL_EXIT_CODES[signals.received];
+  }
+
+  return exitCode === 0 ? cleanupCode : exitCode;
 }
 
 class BootstrapStopError extends Error {
@@ -176,8 +181,9 @@ function reportFailure(io: BootstrapIO, error: unknown): number {
   throw error;
 }
 
-// A kept container keeps the work directory too, since the container mounts it.
-async function cleanUpRun(run: BootstrapRun): Promise<void> {
+// A kept container, or one that will not go, keeps the work directory too, since the container
+// mounts it.
+async function cleanUpRun(run: BootstrapRun): Promise<number> {
   const container = run.state.container;
 
   if (run.args.keep && container !== null) {
@@ -185,10 +191,16 @@ async function cleanUpRun(run: BootstrapRun): Promise<void> {
       `test-bootstrap: kept ${container}; unmount /var/lib/imp and detach its loop devices before docker rm -f -v\n`,
     );
 
-    return;
+    return 0;
   }
 
-  await removeTestContainer(run);
+  try {
+    await removeTestContainer(run);
+  } catch (error) {
+    return reportFailure(run.io, error);
+  }
 
   run.io.removeDirectory(run.work);
+
+  return 0;
 }

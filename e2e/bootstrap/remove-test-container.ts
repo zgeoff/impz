@@ -1,3 +1,4 @@
+import { BootstrapTestError } from './bootstrap-test-error';
 import { STORAGE_PATHS } from './storage-paths';
 import type { BootstrapRun } from './types';
 
@@ -41,6 +42,7 @@ export async function removeTestContainer(run: BootstrapRun): Promise<void> {
 
   if (removal.exitCode !== 0) {
     run.io.writeStderr(removal.stderr.toString());
+    throw new BootstrapTestError(`docker rm -f -v ${container} failed; the container stays`);
   }
 
   run.state.container = null;

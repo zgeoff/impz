@@ -1,4 +1,5 @@
 import { join, resolve } from 'node:path';
+import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
 import type { DevEnv } from './lib/build-dev-layout.ts';
 import { DevError } from './lib/dev-error.ts';
@@ -8,12 +9,13 @@ import { REPO_ROOT } from './lib/repo-root.ts';
 import { toProcessEnv } from './lib/to-process-env.ts';
 import { createStopGuard } from './zfs/create-stop-guard.ts';
 import type { StopGuard } from './zfs/create-stop-guard.ts';
+import { findHostRefusal } from './zfs/find-host-refusal.ts';
 import { formatLocalTimestamp } from './zfs/format-local-timestamp.ts';
 import { formatZfsTimings } from './zfs/format-zfs-timings.ts';
 import { parseZfsOops } from './zfs/parse-zfs-oops.ts';
 import { readVdevUse } from './zfs/read-vdev-use.ts';
 import { reportZfsError } from './zfs/report-zfs-error.ts';
-import type { ZfsIO } from './zfs/types.ts';
+import type { ZfsHostFacts, ZfsIO } from './zfs/types.ts';
 import { wireZfsIO } from './zfs/wire-zfs-io.ts';
 
 const PREFIX = 'zfs-host-test';
@@ -32,12 +34,71 @@ interface RunZfsHostTestOptions {
 // .claude/skills/project-testing/references/zfs-nixos-go-ci.md lists the settings this reads.
 export async function runZfsHostTest(options: RunZfsHostTestOptions): Promise<number> {
   try {
-    const host = await checkHost(options);
+    const facts = await readHostFacts(options);
+
+    const refusal = findHostRefusal(facts);
+
+    if (refusal !== null) {
+      throw new DevError(refusal);
+    }
+
+    invariant(facts.module === 'loaded', 'a host without the zfs module is refused');
+
+    const host = await setUpHost(options, facts);
 
     return await runOnPool(options, host);
   } catch (error) {
     return reportZfsError(options.io, PREFIX, error);
   }
+}
+
+const OWN_PATHS = ['bench.img', 'data', 'data-mv-b'];
+
+// Every probe only reads. A work dir that this run makes itself holds nothing yet.
+async function readHostFacts(options: RunZfsHostTestOptions): Promise<ZfsHostFacts> {
+  const io = options.io;
+
+  const versionFile =
+    pickSetting(options.env, 'IMP_ZFS_MODULE_VERSION_FILE') ?? '/sys/module/zfs/version';
+
+  const version = io.files.readText(versionFile);
+
+  if (version === null) {
+    return { module: 'missing' };
+  }
+
+  const pool = `impbench${String(io.pid)}`;
+
+  const listed = await io.shell`sudo zpool list ${pool}`.quiet().nothrow();
+
+  const work = pickSetting(options.env, 'IMP_ZFS_TEST_DIR');
+
+  const existingPaths =
+    work === undefined
+      ? []
+      : OWN_PATHS.map((name) => join(work, name)).filter((path) => io.files.probePath(path));
+
+  const existingContainers: string[] = [];
+
+  for (const name of [DEV_NAME, MOVES_B]) {
+    const inspected = await io.shell`docker container inspect ${name}`.quiet().nothrow();
+
+    if (inspected.exitCode === 0) {
+      existingContainers.push(name);
+    }
+  }
+
+  const network = await io.shell`docker network inspect ${MOVES_NETWORK}`.quiet().nothrow();
+
+  return {
+    module: 'loaded',
+    version,
+    pool,
+    poolExists: listed.exitCode === 0,
+    existingPaths,
+    existingContainers,
+    existingNetworks: network.exitCode === 0 ? [MOVES_NETWORK] : [],
+  };
 }
 
 interface Host {
@@ -47,50 +108,16 @@ interface Host {
   readonly env: Record<string, string>;
 }
 
-// A generated or fixed name is not ownership: before it touches anything, it refuses a pool, a
-// pool file, a data dir, a container or a network that is already there.
-async function checkHost(options: RunZfsHostTestOptions): Promise<Host> {
+type LoadedHostFacts = Extract<ZfsHostFacts, { module: 'loaded' }>;
+
+async function setUpHost(options: RunZfsHostTestOptions, facts: LoadedHostFacts): Promise<Host> {
   const io = options.io;
+  const pool = facts.pool;
+  const version = facts.version;
 
-  const versionFile =
-    pickSetting(options.env, 'IMP_ZFS_MODULE_VERSION_FILE') ?? '/sys/module/zfs/version';
-
-  const version = io.files.readText(versionFile);
-
-  if (version === null) {
-    throw new DevError('load the zfs module first (sudo modprobe zfs)');
-  }
-
-  const pool = `impbench${String(io.pid)}`;
-
-  const listed = await io.shell`sudo zpool list ${pool}`.quiet().nothrow();
-
-  if (listed.exitCode === 0) {
-    throw new DevError(`a pool named ${pool} already exists; refusing to touch it`);
-  }
-
-  const setting = pickSetting(options.env, 'IMP_ZFS_TEST_DIR');
-  const work = setting ?? io.files.createTempDirectory('/var/tmp/imp-zfs.');
-
-  for (const name of ['bench.img', 'data', 'data-mv-b']) {
-    if (io.files.probePath(join(work, name))) {
-      throw new DevError(`${join(work, name)} already exists; refusing to touch it`);
-    }
-  }
-
-  for (const name of [DEV_NAME, MOVES_B]) {
-    const inspected = await io.shell`docker container inspect ${name}`.quiet().nothrow();
-
-    if (inspected.exitCode === 0) {
-      throw new DevError(`a container named ${name} already exists; refusing to touch it`);
-    }
-  }
-
-  const network = await io.shell`docker network inspect ${MOVES_NETWORK}`.quiet().nothrow();
-
-  if (network.exitCode === 0) {
-    throw new DevError(`a network named ${MOVES_NETWORK} already exists; refusing to touch it`);
-  }
+  const work =
+    pickSetting(options.env, 'IMP_ZFS_TEST_DIR') ??
+    io.files.createTempDirectory('/var/tmp/imp-zfs.');
 
   io.files.createDirectory(work, { parents: true });
 
@@ -363,7 +390,14 @@ async function removeMade(run: PoolRun, status: number): Promise<number> {
     return failed;
   }
 
-  await io.shell`sudo rm -f ${host.img}`.nothrow();
+  const removed = await io.shell`sudo rm -f ${host.img}`.quiet().nothrow();
+
+  if (removed.exitCode !== 0) {
+    io.writeStderr(removed.stderr.toString());
+    io.writeStderr(`${PREFIX}: could not remove ${host.img}\n`);
+
+    return failed;
+  }
 
   return status;
 }

@@ -57,13 +57,13 @@ test('it finds no ZFS oops when an oops outside ZFS sits beside a ZFS warning', 
   ).toStrictEqual([]);
 });
 
-test('it finds no ZFS oops when a ZFS soft lockup comes before an oops outside ZFS', () => {
+test('it finds no ZFS oops when a ZFS soft lockup closes an open record before an oops outside ZFS', () => {
   expect(
-    parseZfsOops(`[  80.100000] watchdog: BUG: soft lockup - CPU#2 stuck for 26s! [z_wr_iss:812]
+    parseZfsOops(`[  80.000000] ------------[ cut here ]------------
+[  80.100000] watchdog: BUG: soft lockup - CPU#2 stuck for 26s! [z_wr_iss:812]
 [  80.100100] CPU: 2 UID: 0 PID: 812 Comm: z_wr_iss Tainted: P O 6.17.0-1-azure
 [  80.100200]  zio_execute+0x90/0x130 [zfs]
 [  80.100300]  taskq_thread+0x2a0/0x4d0 [spl]
-[  90.200050] ------------[ cut here ]------------
 [  90.200100] kernel BUG at mm/slub.c:500!
 [  90.200200] Oops: invalid opcode: 0000 [#1] SMP NOPTI
 [  90.200500]  kmem_cache_free+0x10/0x40

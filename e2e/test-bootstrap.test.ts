@@ -1,19 +1,25 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubSlowCommand } from '@impz/test-utils/create-stub-slow-command';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createStubBin } from '../scripts/test-utils/create-stub-bin';
 import { REPO_ROOT } from './lib/instance';
 
+// Bun 1.4.2 runs onTestFinished callbacks first in, first out; the stack closes last in, first out,
+// so a harness the test spawns stops before the directory its stand-ins live in goes.
 function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const directory = mkdtempSync(join(tmpdir(), 'imp-test-bootstrap-'));
 
-  onTestFinished(() => {
+  stack.defer(() => {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  return { directoryPath: directory };
+  return { stack, directoryPath: directory };
 }
 
 test.each([
@@ -45,23 +51,22 @@ test('it prints the usage through the bash wrapper for --help', () => {
 
 test('it lets the running command finish on SIGTERM, then runs no other and exits 143', async () => {
   const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    ['echo "$1 started" >>"$STUB_CALLS"', 'sleep 1', 'echo "$1 finished" >>"$STUB_CALLS"'].join(
-      '\n',
-    ),
-  );
+  const docker = createStubSlowCommand(ctx.directoryPath, 'docker');
 
   const harness = Bun.spawn(
     ['bash', join(REPO_ROOT, 'e2e', 'test-bootstrap.sh'), '--image', 'imp-host:dev-test'],
     { env: { ...process.env, PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
   );
 
+  ctx.stack.defer(async () => {
+    harness.kill('SIGKILL');
+
+    await harness.exited;
+  });
+
   await waitFor(
     () => {
-      if (!readFileSync(docker.calls, 'utf8').includes('image started')) {
+      if (readFileSync(docker.log, 'utf8') === '') {
         throw new Error('docker has not started');
       }
     },
@@ -70,11 +75,13 @@ test('it lets the running command finish on SIGTERM, then runs no other and exit
 
   harness.kill('SIGTERM');
 
+  writeFileSync(docker.release, '');
+
   const exitCode = await harness.exited;
 
   expect(exitCode).toBe(143);
 
-  expect(readFileSync(docker.calls, 'utf8')).toBe(
-    'docker image inspect imp-host:dev-test\nimage started\nimage finished\n',
+  expect(readFileSync(docker.log, 'utf8')).toBe(
+    'docker image inspect imp-host:dev-test started\ndocker image inspect imp-host:dev-test finished\n',
   );
 });

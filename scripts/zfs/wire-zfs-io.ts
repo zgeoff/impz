@@ -5,33 +5,25 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
-  readFileSync,
-  rmSync,
   rmdirSync,
-  statSync,
-  writeFileSync,
 } from 'node:fs';
-import { $ } from 'bun';
+import { probeDirectory } from '../lib/probe-directory.ts';
+import { readTextOrNull } from '../lib/read-text-or-null.ts';
+import { removeFile } from '../lib/remove-file.ts';
+import { runBunShell } from '../lib/run-bun-shell.ts';
 import { toProcessEnv } from '../lib/to-process-env.ts';
+import { writeStderr } from '../lib/write-stderr.ts';
+import { writeText } from '../lib/write-text.ts';
 import type { ZfsChild, ZfsIO } from './types.ts';
 
 export function wireZfsIO(): ZfsIO {
   return {
-    // Bun's shell breaks when it is called as a method, with another object as its this.
-    shell: (strings, ...expressions) => $(strings, ...expressions),
+    shell: runBunShell,
     files: {
       probePath: (path) => lstatSync(path, { throwIfNoEntry: false }) !== undefined,
-      probeDirectory: (path) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false,
-      readText: (path) => {
-        try {
-          return readFileSync(path, 'utf8');
-        } catch {
-          return null;
-        }
-      },
-      writeText: (path, text) => {
-        writeFileSync(path, text);
-      },
+      probeDirectory,
+      readText: readTextOrNull,
+      writeText,
       appendText: (path, text) => {
         appendFileSync(path, text);
       },
@@ -42,9 +34,7 @@ export function wireZfsIO(): ZfsIO {
       createEmptyFile: (path) => {
         closeSync(openSync(path, 'wx'));
       },
-      removeFile: (path) => {
-        rmSync(path, { force: true });
-      },
+      removeFile,
       removeEmptyDirectory: (path) => {
         try {
           rmdirSync(path);
@@ -84,8 +74,6 @@ export function wireZfsIO(): ZfsIO {
     writeStdout: (text) => {
       process.stdout.write(text);
     },
-    writeStderr: (text) => {
-      process.stderr.write(text);
-    },
+    writeStderr,
   };
 }

@@ -47,6 +47,20 @@ export interface ZfsChild {
   readonly stderr: ReadableStream<Uint8Array> | null;
 }
 
+// What zfs-host-test finds on the host before it touches anything. Without the zfs module it asks
+// zpool and Docker nothing.
+export type ZfsHostFacts =
+  | { readonly module: 'missing' }
+  | {
+      readonly module: 'loaded';
+      readonly version: string;
+      readonly pool: string;
+      readonly poolExists: boolean;
+      readonly existingPaths: readonly string[];
+      readonly existingContainers: readonly string[];
+      readonly existingNetworks: readonly string[];
+    };
+
 export interface ZfsIO {
   readonly shell: DevShell;
   readonly files: ZfsFiles;

@@ -83,7 +83,7 @@ export async function runZfsLeg(run: BootstrapRun): Promise<void> {
 }
 
 async function checkPoolProperties(run: BootstrapRun, target: BootstrapTarget): Promise<void> {
-  const read = readPoolProperties(join(run.root, 'deploy', 'zfs-pool.json'));
+  const read = readPoolProperties(join(run.root, 'deploy', 'zfs-pool.json'), run.io.readText);
 
   if (read.kind === 'refused') {
     throw new BootstrapTestError(`[${target.distro}] ${read.reason}`);

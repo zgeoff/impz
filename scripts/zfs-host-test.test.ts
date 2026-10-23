@@ -175,7 +175,10 @@ test('it refuses a bench pool name that is taken and touches nothing', () => {
     /^zfs-host-test: a pool named impbench\d+ already exists; refusing to touch it\n$/u,
   );
 
-  expect(calls).toBe('sudo zpool list impbenchPID\nzpool list impbenchPID\n');
+  expect(calls).toBe(
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
+  );
+
   expect(existsSync(join(work, 'bench.img'))).toBeFalse();
 });
 
@@ -209,7 +212,10 @@ test('it refuses a work dir that already holds a bench.img and leaves the file a
     `zfs-host-test: ${work}/bench.img already exists; refusing to touch it\n`,
   );
 
-  expect(calls).toBe('sudo zpool list impbenchPID\nzpool list impbenchPID\n');
+  expect(calls).toBe(
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
+  );
+
   expect(readFileSync(join(work, 'bench.img'), 'utf8')).toBe('another run');
 });
 
@@ -606,7 +612,10 @@ test('it refuses a work dir that already holds a data dir and leaves it as it wa
     `zfs-host-test: ${work}/data already exists; refusing to touch it\n`,
   );
 
-  expect(calls).toBe('sudo zpool list impbenchPID\nzpool list impbenchPID\n');
+  expect(calls).toBe(
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
+  );
+
   expect(readFileSync(join(work, 'data', 'imp.db'), 'utf8')).toBe('another run');
 });
 
@@ -640,7 +649,7 @@ test('it refuses an imp-zfs container that is already there and touches nothing'
   );
 
   expect(calls).toBe(
-    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\n',
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
   );
 
   expect(existsSync(join(work, 'data'))).toBeFalse();
@@ -676,7 +685,10 @@ test('it refuses a work dir that already holds the moves suites’ B data dir an
     `zfs-host-test: ${work}/data-mv-b already exists; refusing to touch it\n`,
   );
 
-  expect(calls).toBe('sudo zpool list impbenchPID\nzpool list impbenchPID\n');
+  expect(calls).toBe(
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
+  );
+
   expect(readFileSync(join(work, 'data-mv-b', 'imp.db'), 'utf8')).toBe('another run');
   expect(existsSync(join(work, 'data'))).toBeFalse();
 });
@@ -711,7 +723,7 @@ test('it refuses an imp-zfs-mv-b container that is already there and touches not
   );
 
   expect(calls).toBe(
-    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\n',
+    'sudo zpool list impbenchPID\nzpool list impbenchPID\ndocker container inspect imp-zfs\ndocker container inspect imp-zfs-mv-b\ndocker network inspect imp-zfs-mv\n',
   );
 
   expect(existsSync(join(work, 'data'))).toBeFalse();
@@ -916,6 +928,43 @@ test('it destroys the pool and removes its file when SIGTERM comes during the po
 
   expect(readFileSync(join(ctx.stubs, 'pools'), 'utf8')).toBe('');
   expect(existsSync(join(work, 'bench.img'))).toBeFalse();
+});
+
+test('it fails, saying so, when the pool file will not go', () => {
+  const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+  createStubInstanceDocker(ctx.stubs, { containers: [] });
+
+  const work = join(ctx.directoryPath, 'work');
+
+  mkdirSync(work);
+  createStubZpool(ctx.stubs);
+
+  createStubBin(
+    ctx.stubs,
+    'rm',
+    `echo "rm: cannot remove '$2': Operation not permitted" >&2; exit 1`,
+  );
+
+  const result = Bun.spawnSync(ctx.run, {
+    env: {
+      PATH: ctx.path,
+      IMP_ROOT: ctx.root,
+      IMP_ZFS_TEST_DIR: work,
+      IMP_ZFS_BENCH_GIB: '1',
+      IMP_ZFS_TEST_UNIT: '0',
+      IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
+    },
+  });
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    `rm: cannot remove '${work}/bench.img': Operation not permitted\nzfs-host-test: could not remove ${work}/bench.img\n`,
+  );
+
+  expect(existsSync(join(work, 'bench.img'))).toBeTrue();
 });
 
 test('it keeps the pool file and fails while a pool still uses it', () => {

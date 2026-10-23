@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { parseZfsPoolProperties } from '../../scripts/lib/parse-zfs-pool-properties.ts';
 
 // -o words are pool properties, which zpool reads back, and -O words the pool's root dataset's,
@@ -13,11 +12,14 @@ type PoolPropertiesRead =
   | { readonly kind: 'read'; readonly properties: readonly PoolProperty[] }
   | { readonly kind: 'refused'; readonly reason: string };
 
-export function readPoolProperties(path: string): PoolPropertiesRead {
+export function readPoolProperties(
+  path: string,
+  readText: (path: string) => string,
+): PoolPropertiesRead {
   let text: string;
 
   try {
-    text = readFileSync(path, 'utf8');
+    text = readText(path);
   } catch (error) {
     return refuse(`cannot read the pool properties from ${path}: ${String(error)}`);
   }
