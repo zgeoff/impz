@@ -99,7 +99,7 @@ test('it ends a call when its caller’s signal aborts before the deadline', asy
 
 // Bun reads its fetch idle limit (360 s by default) only at startup, so a
 // child Bun runs with 1 s; its plain fetch is the control that the limit
-// expires, after about 8 s on Bun 1.4.2
+// expires, after about 8 s
 test('it gets an answer that stays silent past Bun’s idle limit, where a plain fetch gives up', async () => {
   const ctx = setupTest();
 

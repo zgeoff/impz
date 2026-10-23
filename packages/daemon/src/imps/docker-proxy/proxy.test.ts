@@ -685,7 +685,7 @@ test('it holds a pull and an export past the control deadline that ends a create
 });
 
 // Bun reads its fetch idle limit only at startup, so the proxy runs in a child Bun with a 1 s
-// limit. On Bun 1.4.2 the child's plain fetch gives up after about 8 s.
+// limit. The child's plain fetch gives up after about 8 s.
 test('it passes on a pull and an export that stay silent past Bun’s idle limit, where a plain fetch gives up', async () => {
   const ctx = await setupTest();
 
@@ -1073,9 +1073,9 @@ test('it logs one impd.docker-proxy line, and nothing unhandled, when the engine
     new Response(child.stderr).text(),
   ]);
 
-  expect(stdout).toBe(
-    'WARNING impd.docker-proxy the engine closed POST /v1.55/images/create mid-stream: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()\n' +
-      '{"client":"ECONNRESET"}\n',
+  // an older Bun leaves the error's code out of a fetch error's message
+  expect(stdout).toMatch(
+    /^WARNING impd\.docker-proxy the engine closed POST \/v1\.55\/images\/create mid-stream: (?:ECONNRESET: )?The socket connection was closed unexpectedly\. For more information, pass `verbose: true` in the second argument to fetch\(\)\n\{"client":"ECONNRESET"\}\n$/v,
   );
 
   expect(stderr).toBe('');
@@ -1127,7 +1127,9 @@ test('it warns through its logger when the engine closes a stream', async () => 
     {
       method: 'POST',
       path: '/v1.55/images/create',
-      reason: expect.toStartWith('The socket connection was closed unexpectedly.'),
+      reason: expect.stringMatching(
+        /^(?:ECONNRESET: )?The socket connection was closed unexpectedly\./v,
+      ),
     },
   );
 });
