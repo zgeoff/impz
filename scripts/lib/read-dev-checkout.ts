@@ -1,4 +1,3 @@
-import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildDevImageTag } from './build-dev-image-tag.ts';
 import type { DevEnv } from './build-dev-layout.ts';
@@ -13,8 +12,12 @@ export interface DevCheckout {
 
 // The tag and the label take the path without symlinks, so every way to reach the checkout names
 // one image.
-export function readDevCheckout(env: DevEnv, root: string): DevCheckout {
-  const rootPhysical = realpathSync(root);
+export function readDevCheckout(
+  readRealPath: (path: string) => string,
+  env: DevEnv,
+  root: string,
+): DevCheckout {
+  const rootPhysical = readRealPath(root);
 
   return {
     root,

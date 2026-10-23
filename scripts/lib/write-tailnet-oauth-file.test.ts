@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { OpReader } from './make-op-reader.ts';
+import { writeSecretText } from './write-secret-text.ts';
 import { writeTailnetOAuthFile } from './write-tailnet-oauth-file.ts';
 
 function setupTest() {
@@ -29,6 +30,7 @@ test('it writes the OAuth client from the item in IMP_OP_VAULT, owner-only', asy
     env: { IMP_OP_VAULT: 'example' },
     readOp: (ref) => Promise.resolve(answers[ref] ?? ''),
     warn: () => {},
+    writeSecretText,
   });
 
   expect(isWritten).toBeTrue();
@@ -47,7 +49,7 @@ test('it never asks op without a vault, and names the variables to set', async (
   const readOp = mock<OpReader>(() => Promise.resolve('fake-client-id'));
   const warn = mock<(line: string) => void>();
 
-  const isWritten = await writeTailnetOAuthFile({ file, env: {}, readOp, warn });
+  const isWritten = await writeTailnetOAuthFile({ file, env: {}, readOp, warn, writeSecretText });
 
   expect(isWritten).toBeFalse();
   expect(readOp).not.toHaveBeenCalled();
@@ -72,6 +74,7 @@ test('it writes nothing when op has no client secret', async () => {
     env: { IMP_OP_VAULT: 'example' },
     readOp: (ref) => Promise.resolve(answers[ref] ?? ''),
     warn: () => {},
+    writeSecretText,
   });
 
   expect(isWritten).toBeFalse();
@@ -87,6 +90,7 @@ test('it writes nothing without op', async () => {
     env: { IMP_OP_VAULT: 'example' },
     readOp: null,
     warn: () => {},
+    writeSecretText,
   });
 
   expect(isWritten).toBeFalse();

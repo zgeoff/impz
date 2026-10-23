@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import * as z from 'zod';
 import { buildDevLayout } from '../../scripts/lib/build-dev-layout.ts';
@@ -115,7 +116,7 @@ export async function runChecked(argv: readonly string[]): Promise<string> {
 }
 
 export function readHostImage(): string {
-  return readDevCheckout(process.env, REPO_ROOT).hostImage;
+  return readDevCheckout(realpathSync, process.env, REPO_ROOT).hostImage;
 }
 
 export function readHostImageFromEnv(): string {

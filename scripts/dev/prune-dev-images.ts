@@ -5,7 +5,7 @@ import type { ImageLabels, ImageObservation } from './pick-image-retention.ts';
 import type { Dev } from './types.ts';
 
 export async function pruneDevImages(dev: Dev): Promise<void> {
-  const machineID = readMachineID(dev.env);
+  const machineID = readMachineID(dev.io.files.readText, dev.env);
 
   if (machineID.id === '') {
     throw new DevError(`prune needs a machine id in ${machineID.file}`);

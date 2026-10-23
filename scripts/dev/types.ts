@@ -1,5 +1,6 @@
 import type { $, ShellExpression } from 'bun';
 import type { DevEnv, DevLayout } from '../lib/build-dev-layout.ts';
+import type { OpReader } from '../lib/make-op-reader.ts';
 import type { DevCheckout } from '../lib/read-dev-checkout.ts';
 
 type DevShell = (
@@ -8,6 +9,8 @@ type DevShell = (
 ) => $.ShellPromise;
 
 export interface DevFiles {
+  // A device node such as /dev/kvm counts.
+  readonly probePath: (path: string) => boolean;
   readonly probeFile: (path: string) => boolean;
   readonly probeDirectory: (path: string) => boolean;
 
@@ -19,6 +22,9 @@ export interface DevFiles {
   readonly readRealPath: (path: string) => string;
 
   readonly writeText: (path: string, text: string) => void;
+
+  // Makes the parent folder, and only the owner can read the file.
+  readonly writeSecretText: (path: string, text: string) => void;
   readonly createDirectory: (path: string) => void;
   readonly rename: (from: string, to: string) => void;
   readonly remove: (path: string) => void;
@@ -30,6 +36,7 @@ export interface DevIO {
   // Runs a command on the caller's terminal and gives its exit code.
   readonly runAttached: (argv: readonly string[]) => Promise<number>;
   readonly files: DevFiles;
+  readonly makeOpReader: (env: DevEnv) => OpReader | null;
   readonly now: () => number;
   readonly sleep: (durationMs: number) => Promise<void>;
   readonly writeStdout: (line: string) => void;

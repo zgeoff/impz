@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { OpReader } from './make-op-reader.ts';
 import { readTailscaleAuthkey } from './read-tailscale-authkey.ts';
+import { readTextOrNull } from './read-text-or-null.ts';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-tskey-'));
@@ -28,6 +29,7 @@ test('it takes the key from the env without asking op', async () => {
     root: ctx.root,
     readOp,
     warn: ctx.warn,
+    readText: readTextOrNull,
   });
 
   expect(found).toStrictEqual({ key: 'fake-tskey-from-env', tags: null });
@@ -43,6 +45,7 @@ test("it joins with impz's tag:imp-e2e client from op, ephemeral and preauthoriz
     root: ctx.root,
     readOp,
     warn: ctx.warn,
+    readText: readTextOrNull,
   });
 
   expect(found).toStrictEqual({
@@ -63,6 +66,7 @@ test('it keeps the tags IMP_TAILSCALE_TAGS sets for a client secret from op', as
     root: ctx.root,
     readOp: () => Promise.resolve('tskey-client-fake-other'),
     warn: ctx.warn,
+    readText: readTextOrNull,
   });
 
   expect(found).toStrictEqual({
@@ -80,6 +84,7 @@ test('it reads the reference IMP_TAILSCALE_AUTHKEY_REF names', async () => {
     root: ctx.root,
     readOp,
     warn: ctx.warn,
+    readText: readTextOrNull,
   });
 
   expect(found).toStrictEqual({ key: 'fake-plain-key', tags: null });
@@ -95,6 +100,7 @@ test('it never asks op without IMP_TAILSCALE_OP=1', async () => {
     root: ctx.root,
     readOp,
     warn: ctx.warn,
+    readText: readTextOrNull,
   });
 
   expect(found).toBeNull();
@@ -112,6 +118,7 @@ test('it skips op without a vault, names the variables to set, and falls back to
     root: ctx.root,
     readOp,
     warn: ctx.warn,
+    readText: readTextOrNull,
   });
 
   expect(found).toStrictEqual({ key: 'fake-tskey-from-env', tags: null });
@@ -135,6 +142,7 @@ test('it falls back to the last key in .env when op has none', async () => {
     root: ctx.root,
     readOp: () => Promise.resolve(''),
     warn: ctx.warn,
+    readText: readTextOrNull,
   });
 
   expect(found).toStrictEqual({ key: 'fake-new', tags: null });
@@ -148,6 +156,7 @@ test('it reads no key when no source has one', async () => {
     root: ctx.root,
     readOp: null,
     warn: ctx.warn,
+    readText: readTextOrNull,
   });
 
   expect(found).toBeNull();

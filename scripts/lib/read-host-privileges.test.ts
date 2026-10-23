@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readHostPrivileges } from './read-host-privileges.ts';
+import { readTextOrNull } from './read-text-or-null.ts';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-privileges-'));
@@ -44,7 +45,9 @@ test("it swaps the deployed seccomp profile for the repo's own and adds each pro
     }),
   );
 
-  expect(readHostPrivileges(ctx.root)).toStrictEqual([
+  expect(
+    readHostPrivileges({ readText: readTextOrNull, probePath: existsSync }, ctx.root),
+  ).toStrictEqual([
     '--cap-drop',
     'ALL',
     '--security-opt',
@@ -52,4 +55,10 @@ test("it swaps the deployed seccomp profile for the repo's own and adds each pro
     '--device',
     '/dev/present',
   ]);
+});
+
+test('it refuses when the args file cannot be read', () => {
+  expect(() =>
+    readHostPrivileges({ readText: () => null, probePath: () => false }, '/w/imp'),
+  ).toThrowWithMessage(Error, 'cannot read /w/imp/deploy/imp-host.args.json');
 });

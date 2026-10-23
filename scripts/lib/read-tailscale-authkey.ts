@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DevEnv } from './build-dev-layout.ts';
 import type { OpReader } from './make-op-reader.ts';
@@ -15,6 +14,7 @@ interface TailscaleAuthkeyOptions {
   readonly root: string;
   readonly readOp: OpReader | null;
   readonly warn: (line: string) => void;
+  readonly readText: (path: string) => string | null;
 }
 
 const CLIENT_SECRET_PREFIX = 'tskey-client-';
@@ -58,19 +58,13 @@ export async function readTailscaleAuthkey(
     }
   }
 
-  const fromFile = readEnvFileKey(join(options.root, '.env'));
+  const fromFile = parseEnvFileKey(options.readText(join(options.root, '.env')) ?? '');
 
   return fromFile === '' ? null : { key: fromFile, tags };
 }
 
-function readEnvFileKey(file: string): string {
-  if (!existsSync(file)) {
-    return '';
-  }
-
-  const lines = readFileSync(file, 'utf8')
-    .split('\n')
-    .filter((line) => line.startsWith('TAILSCALE_AUTHKEY='));
+function parseEnvFileKey(text: string): string {
+  const lines = text.split('\n').filter((line) => line.startsWith('TAILSCALE_AUTHKEY='));
 
   return (lines.at(-1) ?? '')
     .slice('TAILSCALE_AUTHKEY='.length)

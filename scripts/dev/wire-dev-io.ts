@@ -1,6 +1,17 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { $ } from 'bun';
+import { makeOpReader } from '../lib/make-op-reader.ts';
 import { readRealPath } from '../lib/read-real-path.ts';
+import { readTextOrNull } from '../lib/read-text-or-null.ts';
+import { writeSecretText } from '../lib/write-secret-text.ts';
 import type { DevIO } from './types.ts';
 
 export function wireDevIO(): DevIO {
@@ -10,20 +21,16 @@ export function wireDevIO(): DevIO {
     runAttached: (argv) =>
       Bun.spawn([...argv], { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' }).exited,
     files: {
+      probePath: existsSync,
       probeFile: (path) => statSync(path, { throwIfNoEntry: false })?.isFile() ?? false,
       probeDirectory: (path) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false,
-      readText: (path) => {
-        try {
-          return readFileSync(path, 'utf8');
-        } catch {
-          return null;
-        }
-      },
+      readText: readTextOrNull,
       readBytes: (path) => readFileSync(path),
       readRealPath: (path) => readRealPath(path, process.cwd()),
       writeText: (path, text) => {
         writeFileSync(path, text);
       },
+      writeSecretText,
       createDirectory: (path) => {
         mkdirSync(path, { recursive: true });
       },
@@ -34,6 +41,7 @@ export function wireDevIO(): DevIO {
         rmSync(path, { force: true });
       },
     },
+    makeOpReader,
     now: Date.now,
     sleep: Bun.sleep,
     writeStdout: (line) => {

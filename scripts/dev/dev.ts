@@ -5,7 +5,6 @@ import { buildDevLayout } from '../lib/build-dev-layout.ts';
 import type { DevEnv } from '../lib/build-dev-layout.ts';
 import { createHostImage } from '../lib/create-host-image.ts';
 import { DevError } from '../lib/dev-error.ts';
-import { makeOpReader } from '../lib/make-op-reader.ts';
 import type { OpReader } from '../lib/make-op-reader.ts';
 import { parseSecondsSetting } from '../lib/parse-seconds-setting.ts';
 import { readDevCheckout } from '../lib/read-dev-checkout.ts';
@@ -44,7 +43,8 @@ export async function runDev(options: RunDevOptions): Promise<number> {
   try {
     const env = options.env;
     const layout = buildDevLayout({ env, root: REPO_ROOT, cwd: options.cwd });
-    const dev: Dev = { env, layout, checkout: readDevCheckout(env, REPO_ROOT), io };
+    const checkout = readDevCheckout(io.files.readRealPath, env, REPO_ROOT);
+    const dev: Dev = { env, layout, checkout, io };
     const command = parseDevCommand(options.argv);
 
     if (command === null) {
@@ -178,7 +178,11 @@ function resolveKernel(dev: Dev): string {
 // CI builds and loads the image first, with its own cache, and sets IMP_HOST_IMAGE_READY=1.
 async function prepareHostImage(dev: Dev): Promise<void> {
   if (dev.env['IMP_HOST_IMAGE_READY'] !== '1') {
-    await createHostImage(dev.checkout, readMachineID(dev.env).id);
+    await createHostImage(
+      dev.io.shell,
+      dev.checkout,
+      readMachineID(dev.io.files.readText, dev.env).id,
+    );
 
     return;
   }
@@ -193,7 +197,7 @@ async function prepareHostImage(dev: Dev): Promise<void> {
 }
 
 async function startHost(dev: Dev, drives: Drives): Promise<void> {
-  const readOp = makeOpReader(dev.env);
+  const readOp = dev.io.makeOpReader(dev.env);
 
   await dev.io.shell`docker rm -f ${dev.layout.name}`.quiet().nothrow();
 
@@ -211,7 +215,7 @@ async function startHost(dev: Dev, drives: Drives): Promise<void> {
     layout: dev.layout,
     checkout: dev.checkout,
     env: tailscale.env,
-    privileges: readHostPrivileges(dev.checkout.root),
+    privileges: readHostPrivileges(dev.io.files, dev.checkout.root),
     hasEnvFile: dev.io.files.probeFile(join(dev.checkout.root, '.env')),
     tailscale: tailscale.arg,
     tailnetOAuthFile,
@@ -242,6 +246,7 @@ async function readHostTailscale(dev: Dev, readOp: OpReader | null): Promise<Hos
     warn: (line) => {
       dev.io.writeStderr(`${line}\n`);
     },
+    readText: dev.io.files.readText,
   });
 
   if (authkey === null) {
@@ -265,6 +270,7 @@ async function writeHostOAuthFile(dev: Dev, readOp: OpReader | null): Promise<st
     warn: (line) => {
       dev.io.writeStderr(`${line}\n`);
     },
+    writeSecretText: dev.io.files.writeSecretText,
   });
 
   if (!isWritten) {

@@ -1,5 +1,3 @@
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
 import type { DevEnv } from './build-dev-layout.ts';
 import type { OpReader } from './make-op-reader.ts';
 import { resolveOpRef } from './resolve-op-ref.ts';
@@ -9,6 +7,7 @@ interface TailnetOAuthFileOptions {
   readonly env: DevEnv;
   readonly readOp: OpReader | null;
   readonly warn: (line: string) => void;
+  readonly writeSecretText: (path: string, text: string) => void;
 }
 
 export async function writeTailnetOAuthFile(options: TailnetOAuthFileOptions): Promise<boolean> {
@@ -36,17 +35,10 @@ export async function writeTailnetOAuthFile(options: TailnetOAuthFileOptions): P
     return false;
   }
 
-  mkdirSync(dirname(options.file), { recursive: true });
-
-  writeFileSync(
+  options.writeSecretText(
     options.file,
     `${JSON.stringify({ clientId: clientID, clientSecret }, null, 2)}\n`,
-    {
-      mode: 0o600,
-    },
   );
-
-  chmodSync(options.file, 0o600);
 
   return true;
 }

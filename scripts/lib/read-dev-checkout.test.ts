@@ -22,7 +22,7 @@ test('it tags the host image for the checkout', () => {
 
   mkdirSync(root);
 
-  expect(readDevCheckout({}, root)).toStrictEqual({
+  expect(readDevCheckout(realpathSync, {}, root)).toStrictEqual({
     root,
     rootPhysical: root,
     hostImage: buildDevImageTag(root),
@@ -38,13 +38,17 @@ test('it tags a checkout reached through a symlink by its real path', () => {
   mkdirSync(root);
   symlinkSync(root, link);
 
-  expect(readDevCheckout({}, link).hostImage).toBe(buildDevImageTag(root));
+  expect(readDevCheckout(realpathSync, {}, link).hostImage).toBe(buildDevImageTag(root));
 });
 
 test('it keeps the host image and build directory the environment sets', () => {
   const ctx = setupTest();
 
   expect(
-    readDevCheckout({ IMP_HOST_IMAGE: 'imp-host:dev', IMP_BUILD: '/w/out' }, ctx.directoryPath),
+    readDevCheckout(
+      realpathSync,
+      { IMP_HOST_IMAGE: 'imp-host:dev', IMP_BUILD: '/w/out' },
+      ctx.directoryPath,
+    ),
   ).toMatchObject({ hostImage: 'imp-host:dev', buildDir: '/w/out' });
 });
