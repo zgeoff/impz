@@ -132,6 +132,7 @@ export type { Network, NetworkJoin } from './schemas/network-schema';
 export {
   BrokerRuleSchema,
   GrantFilterSchema,
+  METHOD_OVERRIDE_HEADERS,
   OAuthConfigSchema,
   SecretKindSchema,
   SecretNameSchema,

@@ -1,3 +1,4 @@
+import { METHOD_OVERRIDE_HEADERS } from '@impz/api';
 import type { AuditRefusal, GrantFilter } from '@impz/api';
 import type { Logger } from '@logtape/logtape';
 import type { NewAuditEntry } from '../../platform/db/broker-audit';
@@ -55,10 +56,6 @@ export interface ForwardDeps {
   ) => Promise<boolean>;
 }
 
-// Some frameworks run the method one of these names in place of the
-// request's own, so on a filtered grant they could turn an allowed POST into
-// a method the filter refused.
-const METHOD_OVERRIDE_HEADERS = ['x-http-method-override', 'x-http-method', 'x-method-override'];
 const MAX_AUDIT_PATH = 512;
 
 export function createForwarder(deps: ForwardDeps): (request: Request) => Promise<Response> {
