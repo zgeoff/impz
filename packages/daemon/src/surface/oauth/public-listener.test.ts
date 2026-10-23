@@ -58,13 +58,41 @@ async function setupTest() {
     stack,
     rootToken,
     publicMcp,
-    handle: createPublicHandler({
-      config: publicMcp,
-      oauth: harness.impd.oauth,
-      mcp: harness.impd.api.publicMcp,
-    }),
+    handle: createPublicHandler(
+      { config: publicMcp, oauth: harness.impd.oauth, mcp: harness.impd.api.publicMcp },
+      () => {},
+    ),
   });
 }
+
+test.each([
+  ['GET', '/.well-known/oauth-authorization-server', 200],
+  ['GET', '/.well-known/oauth-protected-resource', 200],
+  ['GET', '/.well-known/oauth-protected-resource/mcp', 200],
+  ['GET', '/error', 400],
+  ['GET', '/login', 400],
+  ['GET', '/consent', 400],
+  ['HEAD', '/.well-known/oauth-authorization-server', 404],
+  ['HEAD', '/login', 404],
+  ['POST', '/.well-known/oauth-authorization-server', 404],
+  ['GET', '/.well-known/oauth-authorization-server/', 404],
+  ['GET', '/login/', 404],
+  ['PUT', '/login', 404],
+  ['GET', '/oauth2/token', 404],
+  ['GET', '/oauth2/revoke', 404],
+  ['POST', '/oauth2/authorize', 404],
+  ['GET', '/elsewhere', 404],
+  ['GET', '/', 404],
+])('it answers %s %s with %d', async (method, path, status) => {
+  const ctx = await setupTest();
+
+  const response = await ctx.handle(
+    new Request(`http://127.0.0.1:7171${path}`, { method, headers: { host: '127.0.0.1:7171' } }),
+    null,
+  );
+
+  expect(response.status).toBe(status);
+});
 
 test.each([
   ['/.well-known/oauth-protected-resource/mcp'],
@@ -1659,11 +1687,10 @@ test('it answers a request that throws with a bare 500, and logs the reason', as
 test('it takes 64 open tool calls at once', async () => {
   const ctx = await setupTest();
 
-  const handle = createPublicHandler({
-    config: ctx.publicMcp,
-    oauth: ctx.impd.oauth,
-    mcp: buildStubMcpTransport(),
-  });
+  const handle = createPublicHandler(
+    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: buildStubMcpTransport() },
+    () => {},
+  );
 
   const statuses = await Promise.all(
     Array.from({ length: 64 }, async () => {
@@ -1689,11 +1716,10 @@ test('it keeps a tool call’s slot until the tool ends, though its client goes'
 
   const transport = buildStubMcpTransport();
 
-  const handle = createPublicHandler({
-    config: ctx.publicMcp,
-    oauth: ctx.impd.oauth,
-    mcp: transport,
-  });
+  const handle = createPublicHandler(
+    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: transport },
+    () => {},
+  );
 
   await Promise.all(
     Array.from({ length: 64 }, async () => {
@@ -1725,11 +1751,10 @@ test('it frees a tool call’s slot once the tool ends', async () => {
 
   const transport = buildStubMcpTransport();
 
-  const handle = createPublicHandler({
-    config: ctx.publicMcp,
-    oauth: ctx.impd.oauth,
-    mcp: transport,
-  });
+  const handle = createPublicHandler(
+    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: transport },
+    () => {},
+  );
 
   await Promise.all(
     Array.from({ length: 64 }, async () => {
@@ -1782,11 +1807,10 @@ test('it reads at most 16 bodies at once for requests past every slot', async ()
 
   const transport = buildStubMcpTransport();
 
-  const handle = createPublicHandler({
-    config: ctx.publicMcp,
-    oauth: ctx.impd.oauth,
-    mcp: transport,
-  });
+  const handle = createPublicHandler(
+    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: transport },
+    () => {},
+  );
 
   await Promise.all(
     Array.from({ length: 64 }, async () => {
@@ -2012,11 +2036,10 @@ test('it refuses a request that starts work with every slot held', async () => {
 
   const transport = buildStubMcpTransport();
 
-  const handle = createPublicHandler({
-    config: ctx.publicMcp,
-    oauth: ctx.impd.oauth,
-    mcp: transport,
-  });
+  const handle = createPublicHandler(
+    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: transport },
+    () => {},
+  );
 
   await Promise.all(
     Array.from({ length: 64 }, async () => {
