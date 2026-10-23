@@ -1,3 +1,4 @@
+export { buildWithout } from './build-without';
 export { formatBytes } from './format-bytes';
 export { formatDuration } from './format-duration';
 export { formatMib } from './format-mib';

@@ -1,5 +1,6 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import type { HarnessEnv } from './config';
 import { createInstanceClient, runImpWith } from './imp-cli';
 import type { DevInstance } from './instance';
 import {
@@ -105,16 +106,16 @@ function buildHostEnv(
 
 // B would inherit A's IMP_ZFS_ROOT otherwise, and two impds on one dataset
 // take each other's disks.
-export function readHostBZfsRoot(): string | undefined {
-  const root = process.env['IMP_ZFS_ROOT'] ?? '';
+export function pickHostBZfsRoot(env: HarnessEnv): string | undefined {
+  const root = env['IMP_ZFS_ROOT'] ?? '';
 
-  return process.env['IMP_STORAGE_BACKEND'] === 'zfs' && root !== '' ? `${root}-mv-b` : undefined;
+  return env['IMP_STORAGE_BACKEND'] === 'zfs' && root !== '' ? `${root}-mv-b` : undefined;
 }
 
 function readHostB(options: MoveHostsOptions): DevInstance {
   const names = buildNames();
   const network = buildMoveNetwork(readOffset());
-  const zfsRoot = readHostBZfsRoot();
+  const zfsRoot = pickHostBZfsRoot(process.env);
 
   return createInstance({
     container: names.container,
@@ -143,15 +144,15 @@ async function checkAOnNetwork(network: string): Promise<boolean> {
 }
 
 // --bail skips afterAll, so a failed run can leave B up and A on the network.
-export async function removeMoveLeftovers(): Promise<void> {
+export async function removeMoveLeftovers(env: HarnessEnv): Promise<void> {
   const names = buildNames();
 
-  await runDevScript('down', readHostB({ tailnet: false }));
+  await runDevScript('down', readHostB({ tailnet: false }), {}, env);
 
   const isOnNetwork = await checkAOnNetwork(names.network);
 
   if (isOnNetwork) {
-    await runDevScript('reboot');
+    await runDevScript('reboot', instance, {}, env);
   }
 
   await runCommand(['docker', 'network', 'rm', names.network]);
@@ -214,11 +215,13 @@ export interface HostBFixtureDeps {
   readonly log: (line: string) => void;
 }
 
-export function buildHostBFixtureDeps(keep: boolean): HostBFixtureDeps {
+// env is the harness's: B starts with its host image and its tailnet key, and
+// never with a key the harness withheld.
+export function buildHostBFixtureDeps(keep: boolean, env: HarnessEnv): HostBFixtureDeps {
   return {
     cliDir: buildNames().cliDir,
     keep,
-    removeLeftovers: removeMoveLeftovers,
+    removeLeftovers: () => removeMoveLeftovers(env),
     createNetwork: async (name, network) => {
       await runChecked([
         'docker',
@@ -232,13 +235,19 @@ export function buildHostBFixtureDeps(keep: boolean): HostBFixtureDeps {
       ]);
     },
     startHost: async (host) => {
-      await runDevScript('up', host);
+      await runDevScript('up', host, {}, env);
       await checkPrivileges(host.container);
     },
-    login: async (host, env) => {
+    login: async (host, cliEnv) => {
       const token = await readToken(host);
 
-      await runImpWith({ stdin: `${token}\n`, env }, 'login', host.apiUrl, '--name', HOST_B);
+      await runImpWith(
+        { stdin: `${token}\n`, env: cliEnv },
+        'login',
+        host.apiUrl,
+        '--name',
+        HOST_B,
+      );
     },
     resetHost: async (host, prefix) => {
       const client = await createInstanceClient(host);
@@ -246,12 +255,12 @@ export function buildHostBFixtureDeps(keep: boolean): HostBFixtureDeps {
       await resetBaseline({ client, prefixes: [prefix], dataDir: host.dataDir });
     },
     removeHost: async (host) => {
-      const target = await resolveDataWipe(host.dataDir, readHostBZfsRoot());
+      const target = await resolveDataWipe(host.dataDir, env, pickHostBZfsRoot(env));
 
-      await runDevScript('down', host);
+      await runDevScript('down', host, {}, env);
 
       if (target !== null) {
-        await removeDataDir(target);
+        await removeDataDir(target, env);
       }
     },
     log: (line) => {
