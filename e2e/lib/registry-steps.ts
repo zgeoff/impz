@@ -99,8 +99,24 @@ export async function startRegistry(
   const name = plan.name;
   const certs = plan.certDirectory;
 
-  // The network is named for this instance, so one a stopped run left is this instance's.
-  await runCommand(['docker', 'network', 'rm', plan.network]);
+  const left = await runCommand([
+    'docker',
+    'network',
+    'inspect',
+    plan.network,
+    '--format',
+    `{{index .Labels "${REGISTRY_OWNER_LABEL}"}}`,
+  ]);
+
+  if (left.exitCode === 0) {
+    if (left.stdout.trim() !== instance.container) {
+      throw new Error(
+        `a network named ${plan.network} is there, and this instance did not label it`,
+      );
+    }
+
+    await runChecked(['docker', 'network', 'rm', plan.network]);
+  }
 
   await runChecked([
     'docker',
