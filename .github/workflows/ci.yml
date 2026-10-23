@@ -152,7 +152,8 @@ jobs:
       - name: Test ACME
         run: bun run test:pebble
 
-      # tailscale-up.sh joining Headscale in Docker with a tagged pre-auth key
+      # tailscale-up.sh joining Headscale in Docker with a tagged pre-auth key,
+      # and the e2e harness's Headscale: its policy and its teardown
       - name: Test Headscale Join
         run: bun run test:headscale
 
