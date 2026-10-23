@@ -506,7 +506,8 @@ jobs:
       # /mnt is the runner's larger temp disk; the XFS file goes there when
       # the image has one. CI must not pass --clean to the harness: it
       # refuses to wipe a data dir outside .data/ that holds no imp.xfs, and
-      # a fresh runner has nothing to clean.
+      # a fresh runner has nothing to clean. The moves-tailnet suite's second
+      # host keeps its data beside the instance's, in <data>-mv-b.
       - name: Pick the data dir
         run: |
           df -h / /mnt || true
@@ -515,8 +516,8 @@ jobs:
           else
             data=$GITHUB_WORKSPACE/.data/ci
           fi
-          sudo mkdir -p "$data"
-          sudo chown "$(id -u):$(id -g)" "$data"
+          sudo mkdir -p "$data" "$data-mv-b"
+          sudo chown "$(id -u):$(id -g)" "$data" "$data-mv-b"
           echo "IMP_DEV_DATA=$data" >> "$GITHUB_ENV"
 
       - name: Setup Bun
