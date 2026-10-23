@@ -298,12 +298,14 @@ export async function runE2E(options: Readonly<RunE2EOptions>): Promise<number> 
       }
     }
   } finally {
-    if (args.suites.includes('https')) {
-      await deps.stopPebble();
-    }
-
-    if (tailnet.kind === 'headscale') {
-      await deps.stopHeadscale();
+    try {
+      if (args.suites.includes('https')) {
+        await deps.stopPebble();
+      }
+    } finally {
+      if (tailnet.kind === 'headscale') {
+        await deps.stopHeadscale();
+      }
     }
   }
 
