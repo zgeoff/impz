@@ -92,6 +92,31 @@ test('it counts what a guest faulted in since the last reading', async () => {
   expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
 });
 
+test('it counts what a guest faulted in after an unplug during the last reading', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['old', 'x'],
+    awake: [{ id: 'old', rssMib: 900 }],
+  });
+
+  const readRamMib = mock(host.deps.readRamMib);
+  const governor = createRamGovernor({ ...host.deps, readRamMib, log: () => {} });
+
+  readRamMib.mockImplementationOnce((pid, id) => {
+    host.applyChange({ kind: 'rss', id: 'old', mib: 200 }, governor);
+
+    return host.deps.readRamMib(pid, id);
+  });
+
+  await governor.enforce();
+
+  host.applyChange({ kind: 'rss', id: 'old', mib: 800 }, governor);
+
+  await governor.admit({ id: 'x', name: 'x', reserveMib: 400, memoryMib: 600 });
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
+});
+
 test('it reads every VM again once the last reading is too old', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,

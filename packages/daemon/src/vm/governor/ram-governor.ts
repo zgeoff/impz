@@ -228,10 +228,16 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
   };
 
   const readVmRam = async (imp: AwakeImp) => {
-    // A page faulted in between the two reads counts in both, so the bound built on them stays
-    // above what the VM owns.
-    const residentMib = await deps.readResidentMib(imp.pid, imp.apiSocket);
+    // The page walk is not atomic: a page faulted in during it counts in the walk and again in the
+    // growth from the lower count, and a page unplugged during it leaves that lower count behind.
+    const residentBeforeMib = await deps.readResidentMib(imp.pid, imp.apiSocket);
     const ownedMib = await deps.readRamMib(imp.pid, imp.apiSocket);
+    const residentAfterMib = await deps.readResidentMib(imp.pid, imp.apiSocket);
+
+    const residentMib =
+      residentBeforeMib === null || residentAfterMib === null
+        ? null
+        : Math.min(residentBeforeMib, residentAfterMib);
 
     return { ownedMib, residentMib };
   };
