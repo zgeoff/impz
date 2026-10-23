@@ -42,11 +42,12 @@ test('it ends a process on pkill, so ps no longer finds it', () => {
   const killed = Bun.spawnSync([join(stub.bin, 'pkill'), '-x', 'tailscaled']);
   const listed = Bun.spawnSync([join(stub.bin, 'ps'), '-C', 'tailscaled', '-o', 'stat=']);
 
-  expect({
-    pkillExitCode: killed.exitCode,
-    psExitCode: listed.exitCode,
-    psStdout: listed.stdout.toString(),
-  }).toStrictEqual({ pkillExitCode: 0, psExitCode: 1, psStdout: '' });
+  expect(killed.exitCode).toBe(0);
+
+  expect({ exitCode: listed.exitCode, stdout: listed.stdout.toString() }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+  });
 });
 
 test('it leaves the other processes running on pkill', () => {
@@ -74,9 +75,11 @@ test('it still ends the process but exits 1 on pkill when told to fail', () => {
   const killed = Bun.spawnSync([join(stub.bin, 'pkill'), '-x', 'tailscaled']);
   const listed = Bun.spawnSync([join(stub.bin, 'ps'), '-C', 'tailscaled', '-o', 'stat=']);
 
-  expect({ pkillExitCode: killed.exitCode, psStdout: listed.stdout.toString() }).toStrictEqual({
-    pkillExitCode: 1,
-    psStdout: '',
+  expect(killed.exitCode).toBe(1);
+
+  expect({ exitCode: listed.exitCode, stdout: listed.stdout.toString() }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
   });
 });
 
