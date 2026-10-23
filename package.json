@@ -106,7 +106,7 @@
     "check": "bun run check:static && bun test",
     "check:static": "bun run deadcode && bun run format:check && bun run lint:full && bun run lint:docs && bun run typecheck",
     "test:host": "bun test ./packages/daemon/src/network/egress/egress-ruleset.test.ts ./host/scripts/setup-net.test.ts ./packages/daemon/testing/host-net/run-in-netns.test.ts ./packages/daemon/testing/network/build-stub-public-network.test.ts",
-    "test:headscale": "bun test ./host/scripts/tailscale-up.headscale.ts ./e2e/lib/headscale.headscale.ts",
+    "test:headscale": "bun test ./host/scripts/tailscale-up.headscale.ts ./e2e/lib/headscale.headscale.ts ./e2e/lib/remove-docker-network.headscale.ts",
     "test:pebble": "bun scripts/dev/pull-pebble-images.ts && bun test ./packages/daemon/src/network/https/acme/acme-issuer.pebble.ts",
     "test:dashboard": "bun run --cwd packages/dashboard test",
     "typecheck": "tsrs -p tsconfig.json --noEmit && tsrs -p packages/dashboard/tsconfig.json --noEmit",
