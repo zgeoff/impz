@@ -59,7 +59,7 @@ test('it refuses a file that is not JSON', () => {
 
   expect(readPoolProperties(path)).toStrictEqual({
     kind: 'refused',
-    reason: expect.toStartWith(`cannot read the pool properties from ${path}: `),
+    reason: expect.toStartWith('deploy/zfs-pool.json: '),
   });
 });
 
@@ -71,7 +71,7 @@ test('it refuses a file with no create list', () => {
 
   expect(readPoolProperties(path)).toStrictEqual({
     kind: 'refused',
-    reason: expect.toStartWith(`cannot read the pool properties from ${path}: `),
+    reason: expect.toStartWith('deploy/zfs-pool.json: '),
   });
 });
 
@@ -83,7 +83,7 @@ test('it refuses a file that gives no properties', () => {
 
   expect(readPoolProperties(path)).toStrictEqual({
     kind: 'refused',
-    reason: `${path} gives zpool create no properties`,
+    reason: expect.toInclude('gives zpool create no properties'),
   });
 });
 

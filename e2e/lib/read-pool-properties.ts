@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import * as z from 'zod';
+import { parseZfsPool } from '../../scripts/lib/parse-zfs-pool.ts';
 
 // -o words are pool properties, which zpool reads back, and -O words the pool's root dataset's,
 // which zfs reads back.
@@ -13,8 +13,6 @@ type PoolPropertiesRead =
   | { readonly kind: 'read'; readonly properties: readonly PoolProperty[] }
   | { readonly kind: 'refused'; readonly reason: string };
 
-const PoolFileSchema = z.object({ create: z.array(z.string()) });
-
 export function readPoolProperties(path: string): PoolPropertiesRead {
   let text: string;
 
@@ -24,25 +22,17 @@ export function readPoolProperties(path: string): PoolPropertiesRead {
     return refuse(`cannot read the pool properties from ${path}: ${String(error)}`);
   }
 
-  let json: unknown;
+  let words: readonly string[];
 
   try {
-    json = JSON.parse(text);
+    words = parseZfsPool(text);
   } catch (error) {
-    return refuse(`cannot read the pool properties from ${path}: ${String(error)}`);
+    const reason = error instanceof Error ? error.message : String(error);
+
+    return refuse(reason);
   }
 
-  const file = PoolFileSchema.safeParse(json);
-
-  if (!file.success) {
-    return refuse(`cannot read the pool properties from ${path}: ${file.error.message}`);
-  }
-
-  if (file.data.create.length === 0) {
-    return refuse(`${path} gives zpool create no properties`);
-  }
-
-  return parseCreateWords(path, file.data.create);
+  return parseCreateWords(path, words);
 }
 
 function refuse(reason: string): PoolPropertiesRead {

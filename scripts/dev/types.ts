@@ -3,7 +3,7 @@ import type { DevEnv, DevLayout } from '../lib/build-dev-layout.ts';
 import type { OpReader } from '../lib/make-op-reader.ts';
 import type { DevCheckout } from '../lib/read-dev-checkout.ts';
 
-type DevShell = (
+export type DevShell = (
   strings: TemplateStringsArray,
   ...expressions: ShellExpression[]
 ) => $.ShellPromise;
