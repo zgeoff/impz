@@ -78,7 +78,7 @@ async function setupTest() {
 test('it joins a Headscale tailnet with the tags its pre-auth key carries', async () => {
   const ctx = await setupTest();
 
-  const created =
+  const created: unknown =
     await $`docker exec ${ctx.headscale} headscale preauthkeys create --tags tag:imp-e2e -o json`.json();
 
   const key = z.object({ key: z.string() }).parse(created).key;
@@ -89,7 +89,7 @@ test('it joins a Headscale tailnet with the tags its pre-auth key carries', asyn
       .quiet()
       .nothrow();
 
-  const status = await $`docker exec ${ctx.node} tailscale status --json`.json();
+  const status: unknown = await $`docker exec ${ctx.node} tailscale status --json`.json();
 
   const selfSchema = z.object({ Tags: z.array(z.string()) });
   const self = z.object({ Self: selfSchema }).parse(status).Self;
