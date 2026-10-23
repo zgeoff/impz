@@ -22,8 +22,8 @@ import { buildStubVmm } from '../testing/vm/build-stub-vmm';
 import { loadConfig } from './config';
 import { createImpd } from './create-impd';
 import type { ImpdBoundaries } from './impd-deps';
-import { HOST_ADD_WARNING } from './imps/images/create-image-adds';
-import { HOST_BUILD_WARNING } from './imps/images/create-image-builds';
+import { DEFAULT_BUILD_IMAGE } from './imps/images/build-image';
+import { readSetfcapWarning } from './imps/images/unpack-export';
 import { createImage } from './platform/db/images';
 import { createImp, listImps } from './platform/db/imps';
 import { openDatabase } from './platform/db/open-database';
@@ -145,16 +145,15 @@ test('it writes a failed default image seed to the log it is given', async () =>
     directory: dockerDir,
     images: [
       {
-        refs: ['seed.test/ubuntu:24.04'],
+        refs: [DEFAULT_BUILD_IMAGE],
         inspects: [{ Id: `sha256:${'c'.repeat(64)}` }],
         isOnHost: false,
-        pull: { stderr: 'pull access denied for seed.test/ubuntu' },
+        pull: { stderr: 'pull access denied for ghcr.io/zgeoff/imp-base' },
       },
     ],
   });
 
   updateEnv('PATH', docker.path);
-  updateEnv('IMP_BUILD_ISOLATION', 'host');
 
   const ctx = await setupTest({ boundaries: { images: { seedRef: 'seed.test/ubuntu:24.04' } } });
 
@@ -557,14 +556,15 @@ test('it answers /health without a token, not ready before the default image is 
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  // the stub docker's pull of the seed holds until its directory goes
+  // the seed's builder waits on the stub docker's pull of the builder image, which holds until
+  // its directory goes
   const dockerDir = await mkdtemp(join(tmpdir(), 'create-impd-docker-'));
 
   const docker = createStubDockerCli({
     directory: dockerDir,
     images: [
       {
-        refs: ['seed.test/ubuntu:24.04'],
+        refs: [DEFAULT_BUILD_IMAGE],
         inspects: [{ Id: `sha256:${'c'.repeat(64)}` }],
         isOnHost: false,
         pull: 'hang',
@@ -586,7 +586,6 @@ test('it answers /health without a token, not ready before the default image is 
       IMP_DATA_DIR: dataDir,
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
-      IMP_BUILD_ISOLATION: 'host',
       IMP_SSH_PORT: '0',
       IMP_API_PORT: String(ports.take()),
       IMP_BROKER_PORT: String(ports.take()),
@@ -757,7 +756,7 @@ test('it logs to stdout when no log is given', async () => {
 
     const dataDir = ${JSON.stringify(ctx.dataDir)};
 
-    await createImpd(loadConfig({ IMP_DATA_DIR: dataDir, IMP_BUILD_ISOLATION: 'host' }), {
+    await createImpd(loadConfig({ IMP_DATA_DIR: dataDir }), {
       db: await openDatabase(':memory:'),
       rootToken: 'root-token',
       storage: createXfsBackend({ dataDir: dataDir + '/child' }),
@@ -766,10 +765,10 @@ test('it logs to stdout when no log is given', async () => {
         systemDrive: { sha256: 'b'.repeat(64) },
       })} },
 
-      // a CapEff with CAP_SETFCAP, so no capability warning comes first
-      readProcStatus: () => 'CapEff:\\t00000000882810fb\\n',
+      // a CapEff without CAP_SETFCAP, so the capability warning is the first line
+      readProcStatus: () => 'CapEff:\\t0000000000000000\\n',
 
-      // the host warnings come before the IPv6 plan; the boot ends there
+      // the capability warning comes before the IPv6 plan; the boot ends there
       resolveIpv6: () => process.exit(0),
     });
   `;
@@ -782,5 +781,5 @@ test('it logs to stdout when no log is given', async () => {
 
   const stdout = await new Response(child.stdout).text();
 
-  expect(stdout).toStartWith(`${HOST_BUILD_WARNING}\n${HOST_ADD_WARNING}\n`);
+  expect(stdout).toStartWith(`${readSetfcapWarning('CapEff:\t0000000000000000\n')}\n`);
 }, 30_000);

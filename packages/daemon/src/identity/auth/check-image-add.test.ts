@@ -1,53 +1,41 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
-import { updateEnv } from '@impz/test-utils/update-env';
-import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
-import { startTestImpd } from '../../../testing/start-test-impd';
+import { buildStubImageBuilder } from '../../../testing/imps/build-stub-image-builder';
+import { createFilesTar } from '../../../testing/imps/create-files-tar';
+import { startBuilderImpd } from '../../../testing/imps/start-builder-impd';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await startTestImpd(stack, { env: readImpEnv() });
+  const directory = await mkdtemp(join(tmpdir(), 'check-image-add-'));
 
-  const tree = join(harness.dataDir, 'tree');
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  await mkdir(tree);
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(directory, { hello: 'hi' })],
+    repoDigest: `sha256:${'e'.repeat(64)}`,
+  });
+
+  const harness = await startBuilderImpd(stack, builder, {
+    env: readImpEnv(),
+    dataDir: join(directory, 'data'),
+  });
 
   return {
-    dataDir: harness.dataDir,
-    tree,
     buildClient: harness.buildClient,
     client: harness.client,
   };
 }
 
 test('it lets a nixie-* token add nixie-x from a pinned ref under its prefix', async () => {
-  updateEnv('IMP_BUILD_ISOLATION', 'host');
-
   const ctx = await setupTest();
 
-  await writeFile(join(ctx.tree, 'hello'), 'hi');
-
   const ref = `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`;
-
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: [ref],
-        inspects: [{ Id: `sha256:${'b'.repeat(64)}`, Config: {}, Size: 2, RepoDigests: [ref] }],
-        isOnHost: false,
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', ctx.tree, '-c', 'hello']).stdout,
-  });
-
-  updateEnv('PATH', docker.path);
 
   const made = await ctx.client.tokens.create({
     name: 'nixie',
@@ -62,7 +50,7 @@ test('it lets a nixie-* token add nixie-x from a pinned ref under its prefix', a
     id: expect.any(String) as unknown,
     name: 'nixie-x',
     ref,
-    digest: expect.toStartWith('sha256:') as unknown,
+    digest: expect.toStartWith('imp-build-') as unknown,
     source: 'oci',
     createdAt: expect.toBeValidDate() as unknown,
     sizeBytes: expect.any(Number) as unknown,
@@ -71,28 +59,9 @@ test('it lets a nixie-* token add nixie-x from a pinned ref under its prefix', a
 });
 
 test('it lets a nixie-* token stream the add of nixie-x from a pinned ref under its prefix', async () => {
-  updateEnv('IMP_BUILD_ISOLATION', 'host');
-
   const ctx = await setupTest();
 
-  await writeFile(join(ctx.tree, 'hello'), 'hi');
-
   const ref = `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`;
-
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: [ref],
-        inspects: [{ Id: `sha256:${'b'.repeat(64)}`, Config: {}, Size: 2, RepoDigests: [ref] }],
-        isOnHost: false,
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', ctx.tree, '-c', 'hello']).stdout,
-  });
-
-  updateEnv('PATH', docker.path);
 
   const made = await ctx.client.tokens.create({
     name: 'nixie',
@@ -313,28 +282,9 @@ test('it gives a token an image ref prefix with an update and keeps its grantabl
 });
 
 test('it lets a token add an image once an update gives it a prefix', async () => {
-  updateEnv('IMP_BUILD_ISOLATION', 'host');
-
   const ctx = await setupTest();
 
-  await writeFile(join(ctx.tree, 'hello'), 'hi');
-
   const ref = `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`;
-
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: [ref],
-        inspects: [{ Id: `sha256:${'b'.repeat(64)}`, Config: {}, Size: 2, RepoDigests: [ref] }],
-        isOnHost: false,
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', ctx.tree, '-c', 'hello']).stdout,
-  });
-
-  updateEnv('PATH', docker.path);
 
   const made = await ctx.client.tokens.create({
     name: 'nixie',

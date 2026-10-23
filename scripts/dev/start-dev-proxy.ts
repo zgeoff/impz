@@ -71,10 +71,10 @@ async function readProxyStamp(dev: Dev, fresh: string): Promise<string> {
   return createHash('sha256').update(binaryHash).update(parts.join('\n')).digest('hex');
 }
 
-const CONTEXT_VARIABLES = ['IMP_BUILD_CONTEXT_MAX_MIB', 'IMP_BUILD_ISOLATION', 'IMP_BUILD_IMAGE'];
+const CONTEXT_VARIABLES = ['IMP_BUILD_IMAGE'];
 
-// Under imp isolation the proxy pulls only IMP_BUILD_IMAGE. impd takes each setting from the env,
-// else .env, so the proxy does too; only these keys come from .env, never its secrets.
+// The proxy pulls only IMP_BUILD_IMAGE. impd takes it from the env, else .env, so the proxy does
+// too; only this key comes from .env, never its secrets.
 function readProxyContext(files: DevFiles, env: DevEnv, root: string): string[] {
   const lines = files.readText(join(root, '.env'))?.split('\n') ?? [];
 

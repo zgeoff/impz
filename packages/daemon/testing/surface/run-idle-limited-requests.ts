@@ -84,10 +84,7 @@ function makeDockerProxyCalls(socket: string): [string, () => Promise<Response>]
     upstreamSocket: socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-
-    // no builder image puts the proxy in host isolation, which lets pulls through
-    builderImage: null,
-    buildContextMaxBytes: 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: () => {},
   });
 
@@ -96,9 +93,10 @@ function makeDockerProxyCalls(socket: string): [string, () => Promise<Response>]
       'pull',
       () =>
         proxy(
-          new Request('http://docker/v1.55/images/create?fromImage=busybox&tag=latest', {
-            method: 'POST',
-          }),
+          new Request(
+            `http://docker/v1.55/images/create?fromImage=ghcr.io%2Fzgeoff%2Fimp-base&tag=sha256%3A${'d'.repeat(64)}`,
+            { method: 'POST' },
+          ),
         ),
     ],
     ['export', () => proxy(new Request(`http://docker/v1.55/containers/${'a'.repeat(64)}/export`))],
