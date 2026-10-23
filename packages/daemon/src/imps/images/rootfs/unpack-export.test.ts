@@ -1,10 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { createStubDockerCli } from '../../../../testing/imps/create-stub-docker-cli';
+import { listChildPids } from '../../../../testing/platform/list-child-pids';
 import {
   assertUnpacked,
   findUnpackFailure,
@@ -256,6 +257,33 @@ test('#writeExportedTree fails the unpack with the stderr of a tar that fails', 
     Error,
     /^tar exited 2: tar: This does not look like a tar archive\n/v,
   );
+});
+
+test('#writeExportedTree stops and reaps the export when tar cannot start', async () => {
+  const ctx = await setupTest();
+
+  createStubDockerCli({
+    directory: ctx.directoryPath,
+    exportTar: new TextEncoder().encode('tar'),
+    isExportHeld: true,
+  });
+
+  const tools = join(ctx.directoryPath, 'tools');
+
+  mkdirSync(tools);
+  symlinkSync(Bun.which('cat') ?? '/bin/cat', join(tools, 'cat'));
+  symlinkSync(Bun.which('sleep') ?? '/bin/sleep', join(tools, 'sleep'));
+  updateEnv('PATH', `${join(ctx.directoryPath, 'bin')}:${tools}`);
+
+  const before = listChildPids();
+
+  const failure = await writeExportedTree('c'.repeat(64), ctx.directoryPath).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(failure).toBeInstanceOf(Error);
+  expect(listChildPids()).toStrictEqual(before);
 });
 
 test('#writeExportedTree stops an export that tar stopped reading, and fails with the stderr of tar', async () => {

@@ -27,12 +27,7 @@ export async function writeExportedTree(containerId: string, root: string): Prom
     env: process.env,
   });
 
-  const tar = Bun.spawn([...UNPACK_TAR_ARGS, '-C', root], {
-    stdin: exporter.stdout,
-    stdout: 'ignore',
-    stderr: 'pipe',
-    env: { ...process.env, LC_ALL: 'C' },
-  });
+  const tar = await spawnTar(root, exporter);
 
   const state = { hasExportEnded: false, isTarFirst: false, isExportStopped: false };
 
@@ -78,6 +73,24 @@ export async function writeExportedTree(containerId: string, root: string): Prom
   }
 
   assertUnpacked({ exitCode: tarCode, stdout: '', stderr: tarStderr });
+}
+
+// An export that nothing reads blocks on its full pipe, so it goes with the tar that failed.
+async function spawnTar(root: string, exporter: Bun.Subprocess<'ignore', 'pipe', 'pipe'>) {
+  try {
+    return Bun.spawn([...UNPACK_TAR_ARGS, '-C', root], {
+      stdin: exporter.stdout,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      env: { ...process.env, LC_ALL: 'C' },
+    });
+  } catch (error) {
+    exporter.kill();
+
+    await exporter.exited;
+
+    throw error;
+  }
 }
 
 interface UnpackOutcome {
