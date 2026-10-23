@@ -10,7 +10,6 @@ function setupTest() {
     writeStderr: mock(),
     createWorkDirectory: mock(() => '/nonexistent/test-bootstrap'),
     onSignal: mock(),
-    exit: mock(),
   };
 
   return { io };

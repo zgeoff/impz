@@ -36,8 +36,5 @@ export function wireBootstrapIO(): BootstrapIO {
     onSignal: (signal, handler) => {
       process.on(signal, handler);
     },
-    exit: (code) => {
-      process.exit(code);
-    },
   };
 }

@@ -50,46 +50,47 @@ export async function runTestBootstrap(options: RunTestBootstrapOptions): Promis
 
   const run = buildRun({ options, args, work: io.createWorkDirectory() });
   const signals: { received: HandledSignal | null } = { received: null };
-  const cleanup: { done: Promise<void> | null } = { done: null };
-
-  // A signal and the run's own end can both reach teardown; it runs once.
-  const cleanUp = (): Promise<void> => {
-    cleanup.done ??= cleanUpRun(run);
-
-    return cleanup.done;
-  };
-
-  const stopOnSignal = async (signal: HandledSignal): Promise<void> => {
-    if (signals.received !== null) {
-      return;
-    }
-
-    signals.received = signal;
-
-    await cleanUp();
-
-    io.exit(SIGNAL_EXIT_CODES[signal]);
-  };
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     io.onSignal(signal, () => {
-      void stopOnSignal(signal);
+      signals.received ??= signal;
     });
   }
+
+  // As a bash trap waits for the command that runs, a signal lets that command finish, so teardown
+  // sees the container it made; the plan's next command then stops the run.
+  const guarded: BootstrapIO = {
+    ...io,
+    shell: (strings, ...expressions) => {
+      if (signals.received !== null) {
+        throw new BootstrapStopError(signals.received);
+      }
+
+      return io.shell(strings, ...expressions);
+    },
+  };
 
   let exitCode: number;
 
   try {
-    await runPlan(run);
+    await runPlan({ ...run, io: guarded });
 
     exitCode = 0;
   } catch (error) {
-    exitCode = reportFailure(io, error);
+    exitCode = signals.received === null ? reportFailure(io, error) : 0;
   } finally {
-    await cleanUp();
+    await cleanUpRun(run);
   }
 
   return signals.received === null ? exitCode : SIGNAL_EXIT_CODES[signals.received];
+}
+
+class BootstrapStopError extends Error {
+  constructor(signal: HandledSignal) {
+    super(`stopped by ${signal}`);
+
+    this.name = 'BootstrapStopError';
+  }
 }
 
 interface RunParts {
@@ -121,23 +122,6 @@ function buildRun(parts: RunParts): BootstrapRun {
       io.writeStdout(`test-bootstrap: ${line}`);
     },
   };
-}
-
-// A kept container keeps the work directory too, since the container mounts it.
-async function cleanUpRun(run: BootstrapRun): Promise<void> {
-  const container = run.state.container;
-
-  if (run.args.keep && container !== null) {
-    run.io.writeStderr(
-      `test-bootstrap: kept ${container}; unmount /var/lib/imp and detach its loop devices before docker rm -f -v\n`,
-    );
-
-    return;
-  }
-
-  await removeTestContainer(run);
-
-  run.io.removeDirectory(run.work);
 }
 
 async function runPlan(run: BootstrapRun): Promise<void> {
@@ -190,4 +174,21 @@ function reportFailure(io: BootstrapIO, error: unknown): number {
   }
 
   throw error;
+}
+
+// A kept container keeps the work directory too, since the container mounts it.
+async function cleanUpRun(run: BootstrapRun): Promise<void> {
+  const container = run.state.container;
+
+  if (run.args.keep && container !== null) {
+    run.io.writeStderr(
+      `test-bootstrap: kept ${container}; unmount /var/lib/imp and detach its loop devices before docker rm -f -v\n`,
+    );
+
+    return;
+  }
+
+  await removeTestContainer(run);
+
+  run.io.removeDirectory(run.work);
 }

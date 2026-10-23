@@ -19,7 +19,6 @@ export interface BootstrapIO {
   readonly writeStdout: (line: string) => void;
   readonly writeStderr: (text: string) => void;
   readonly onSignal: (signal: NodeJS.Signals, handler: () => void) => void;
-  readonly exit: (code: number) => void;
 }
 
 interface BootstrapState {
