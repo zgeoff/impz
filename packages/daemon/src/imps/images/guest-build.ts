@@ -6,7 +6,7 @@ import { countTreeBytes } from '../../vm/storage/count-tree-bytes';
 import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
 import type { BuildOutput } from './create-build-steps';
 import { createPlainLines } from './create-plain-lines';
-import { DockerBuildError } from './docker-build';
+import { DockerBuildError } from './docker-build-error';
 import type { GuestExec } from './guest-exec';
 import { ImageLimitError } from './image-limit-error';
 import { PIN_INSPECT_FORMAT, PinInspectSchema, formatPlatform, pickRepoDigest } from './image-pin';

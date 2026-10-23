@@ -78,7 +78,7 @@ Firecracker process and the tailnet node, in a network namespace of its own, so 
 firewall rules for the imps never touch the host's network. A small entrypoint sets up the cgroups,
 the storage, the network and Tailscale, then runs impd under a supervisor that restarts it. The
 second container, imp-docker-proxy, holds the host's Docker socket and lets through only the calls
-impd makes, for image pulls and builds.
+impd makes to fetch the builder image that every image pull and build runs in.
 
 impd is one Bun process. It starts one Firecracker microVM per awake imp, detached from itself, so
 an impd restart leaves every VM running and the next impd adopts them. Each Firecracker runs under

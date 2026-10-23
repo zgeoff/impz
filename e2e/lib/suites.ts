@@ -1,8 +1,11 @@
+import { config } from './config';
+import { REPO_ROOT } from './instance';
 import type { DevInstance } from './instance';
 import { checkHostRunsKsm } from './ksm-host';
 import { buildMoveSettings, readMoveOptions } from './move-hosts';
 import type { HostBFixtureName } from './move-hosts';
 import { buildRouteOrigin } from './oauth-route';
+import { buildRegistryPlan, buildRegistrySettings } from './registry-plan';
 
 export type FixtureImage = 'base' | 'e2e-tiny' | 'e2e-bare' | 'e2e-ws' | 'e2e-git' | 'e2e-ra';
 
@@ -42,9 +45,9 @@ export const SUITES: readonly Suite[] = [
     images: [],
     journeys: ['registry-moved-tag', 'registry-copy-from', 'registry-multi-platform'],
 
-    // A builder imp may not reach the host's loopback, by design, so it cannot
-    // reach this registry either.
-    settings: () => ({ IMP_BUILD_ISOLATION: 'host' }),
+    // A builder may not reach a private address, so impd opens this one registry to it.
+    settings: (target) =>
+      buildRegistrySettings(buildRegistryPlan(target, config.registryName, REPO_ROOT)),
   },
   { name: 'checkpoints', prefix: 'e2e-cp-', images: ['e2e-tiny'] },
   { name: 'disks', prefix: 'e2e-disk-', images: ['e2e-tiny'] },
@@ -144,7 +147,7 @@ export const SUITES: readonly Suite[] = [
     name: 'socket',
     prefix: 'e2e-sock-',
     images: ['e2e-tiny'],
-    journeys: ['socket-refusals', 'socket-builds', 'socket-proxy-stopped'],
+    journeys: ['socket-refusals', 'socket-proxy-stopped'],
   },
 
   {
