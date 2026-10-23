@@ -25,9 +25,9 @@ does nothing. Otherwise it:
 4. Runs
    `tailscale up --auth-key=file:... --hostname=${IMP_TAILSCALE_HOSTNAME:-imp} --advertise-tags=tag:imp --accept-dns=false --reset --timeout=60s`.
    The key goes through a 0600 temp file, or the key file itself, so it never shows in argv. A node
-   that runs from saved state under another hostname logs in again only when there is a key. With
-   `IMP_TAILSCALE_LOGIN_SERVER` set, it passes `--login-server` in place of `--advertise-tags`
-   ([Headscale](#headscale)).
+   that runs from saved state under another hostname, or on another control server, logs in again
+   only when there is a key. With `IMP_TAILSCALE_LOGIN_SERVER` set, it passes `--login-server` in
+   place of `--advertise-tags` ([Headscale](#headscale)).
 5. Waits for `Running` and prints the tailnet IP and MagicDNS name.
 
 `host/scripts/tailscale-down.sh` runs `tailscale logout` and stops `tailscaled`. Logout deletes an
@@ -50,8 +50,10 @@ headscale preauthkeys create --tags tag:imp-e2e
 ```
 
 The tag check works as with Tailscale: with `IMP_TAILSCALE_TAGS` set, a node whose tags differ joins
-again with the key, or goes down. `bun run test:headscale` joins a Headscale tailnet in Docker this
-way.
+again with the key, or goes down. A node on another control server, such as Tailscale's, joins the
+one `IMP_TAILSCALE_LOGIN_SERVER` names with the key and `--force-reauth`, which `tailscale` needs to
+change servers. Without a key it stays where it is, and `tailscale-up.sh` says so on stderr.
+`bun run test:headscale` joins a Headscale tailnet in Docker this way.
 
 ## State and ephemeral keys
 

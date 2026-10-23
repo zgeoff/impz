@@ -17,7 +17,8 @@
 #      IMP_TAILSCALE_TAGS        tags to advertise, comma-separated (default tag:imp); the
 #                                e2e harness sets tag:imp-e2e
 #      IMP_TAILSCALE_LOGIN_SERVER  a Headscale control server (default Tailscale's); its key
-#                                carries the tags, so none are advertised
+#                                carries the tags, so none are advertised. A node on another
+#                                server joins this one with the key, as for a new hostname
 #      IMP_TAILSCALE_STATE_DIR   node state (default /var/lib/imp/tailscale); "mem" keeps it in memory
 #      IMP_DNS                   resolvers used if resolv.conf points into the tailnet,
 #                                comma-separated as impd reads it (default "1.1.1.1,8.8.8.8")
@@ -130,6 +131,17 @@ reauth=()
 # Headscale refuses any advertised tag on a key join: the key carries them.
 control=(--advertise-tags="${IMP_TAILSCALE_TAGS:-tag:imp}")
 [ -z "${IMP_TAILSCALE_LOGIN_SERVER:-}" ] || control=(--login-server="$IMP_TAILSCALE_LOGIN_SERVER")
+
+# control_differs: the node is on another control server than the one asked
+# for; sets node_control and wanted_control. Tailscale's own server goes by
+# its current and its old URL, and older prefs leave it empty.
+control_differs() {
+  node_control=$(ts debug prefs | jq -r '.ControlURL // empty')
+  case $node_control in https://controlplane.tailscale.com | https://login.tailscale.com) node_control= ;; esac
+  local login_server=${IMP_TAILSCALE_LOGIN_SERVER:-}
+  wanted_control=${login_server:-Tailscale}
+  [ "${node_control%/}" != "${login_server%/}" ]
+}
 join() {
   local auth=$key_file rc=0
   if [ -z "$auth" ]; then
@@ -181,6 +193,12 @@ wait_later() {
     state=$(backend)
     if [ "$state" = Running ]; then
       echo "tailscale-up: the saved node is Running"
+      if [ -n "$has_key" ] && control_differs; then
+        echo "tailscale-up: the saved node is on ${node_control:-Tailscale}, not $wanted_control; joining again with the key"
+        reauth=(--force-reauth)
+        join && ensure_tags
+        return
+      fi
       ensure_tags
       return
     elif needs_login "$state"; then
@@ -215,9 +233,18 @@ if [ -n "$has_state" ]; then
   if [ "$state" = Running ]; then
     want_up=0
     # Without a key the saved node is used as it is, even under another
-    # hostname; with one, a new hostname logs in again.
+    # hostname or control server; with one, a new hostname or control
+    # server logs in again.
     if [ -n "$has_key" ] && [ "$(ts status --json | jq -r '.Self.HostName')" != "$hostname" ]; then
       want_up=1
+    elif control_differs; then
+      if [ -n "$has_key" ]; then
+        echo "tailscale-up: the saved node is on ${node_control:-Tailscale}, not $wanted_control; joining again with the key"
+        want_up=1
+        reauth=(--force-reauth)
+      else
+        echo "tailscale-up: the saved node is on ${node_control:-Tailscale}, not $wanted_control; give an auth key to join it" >&2
+      fi
     fi
   elif needs_login "$state"; then
     if [ -z "$has_key" ]; then
@@ -233,10 +260,13 @@ if [ -n "$has_state" ]; then
     wait_later </dev/null &
     exit 0
   fi
-elif [ "$(backend)" = Running ] &&
-  [ "$(ts status --json | jq -r '.Self.HostName')" = "$hostname" ]; then
+elif [ "$(backend)" = Running ]; then
   # a second run while tailscaled is up (state in memory)
-  want_up=0
+  if control_differs; then
+    reauth=(--force-reauth)
+  elif [ "$(ts status --json | jq -r '.Self.HostName')" = "$hostname" ]; then
+    want_up=0
+  fi
 fi
 
 if [ $want_up = 1 ]; then

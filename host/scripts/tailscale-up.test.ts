@@ -828,6 +828,210 @@ test('it joins Tailscale as tag:imp when no login server is given', () => {
   ]);
 });
 
+// The stub tailscale prints no prefs, as a node on Tailscale's own server
+// whose prefs leave the control URL empty.
+test('it joins the login server again with the key when the saved node is on Tailscale', () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
+
+  ctx.tailscale.writeNode({
+    BackendState: 'Running',
+    Self: {
+      HostName: 'imp',
+      Tags: ['tag:imp'],
+      TailscaleIPs: ['100.64.0.7'],
+      DNSName: 'imp.tail1234.ts.net.',
+    },
+  });
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      '"$0" >"$1" 2>"$2"',
+      new URL('tailscale-up.sh', import.meta.url).pathname,
+      ctx.out,
+      ctx.err,
+    ],
+    {
+      env: {
+        PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_RESOLV_CONF: ctx.resolvConf,
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
+        IMP_TAILSCALE_HOSTNAME: 'imp',
+        TAILSCALE_AUTHKEY: 'fake-key',
+        IMP_TAILSCALE_LOGIN_SERVER: 'http://headscale.test:8080',
+      },
+    },
+  );
+
+  expect(result.exitCode).toBe(0);
+
+  expect(ctx.tailscale.readCalls('up')).toStrictEqual([
+    expect.stringMatching(
+      /^up --reset --force-reauth --auth-key=file:\S+ --hostname=imp --login-server=http:\/\/headscale\.test:8080 --accept-dns=false --timeout=60s$/u,
+    ),
+  ]);
+});
+
+test('it keeps a saved node on Tailscale without a key and says it is not on the login server', () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
+
+  ctx.tailscale.writeNode({
+    BackendState: 'Running',
+    Self: {
+      HostName: 'imp',
+      Tags: ['tag:imp'],
+      TailscaleIPs: ['100.64.0.7'],
+      DNSName: 'imp.tail1234.ts.net.',
+    },
+  });
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      '"$0" >"$1" 2>"$2"',
+      new URL('tailscale-up.sh', import.meta.url).pathname,
+      ctx.out,
+      ctx.err,
+    ],
+    {
+      env: {
+        PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_RESOLV_CONF: ctx.resolvConf,
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
+        IMP_TAILSCALE_HOSTNAME: 'imp',
+        IMP_TAILSCALE_LOGIN_SERVER: 'http://headscale.test:8080',
+      },
+    },
+  );
+
+  expect(result.exitCode).toBe(0);
+  expect(ctx.tailscale.readCalls('up')).toStrictEqual([]);
+
+  expect(readFileSync(ctx.err, 'utf8')).toBe(
+    'tailscale-up: the saved node is on Tailscale, not http://headscale.test:8080; give an auth key to join it\n',
+  );
+});
+
+test('it joins the login server again with the key when a node in memory is on Tailscale', () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
+
+  ctx.tailscale.writeNode({
+    BackendState: 'Running',
+    Self: {
+      HostName: 'imp',
+      Tags: ['tag:imp'],
+      TailscaleIPs: ['100.64.0.7'],
+      DNSName: 'imp.tail1234.ts.net.',
+    },
+  });
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      '"$0" >"$1" 2>"$2"',
+      new URL('tailscale-up.sh', import.meta.url).pathname,
+      ctx.out,
+      ctx.err,
+    ],
+    {
+      env: {
+        PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_RESOLV_CONF: ctx.resolvConf,
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
+        IMP_TAILSCALE_HOSTNAME: 'imp',
+        TAILSCALE_AUTHKEY: 'fake-key',
+        IMP_TAILSCALE_LOGIN_SERVER: 'http://headscale.test:8080',
+      },
+    },
+  );
+
+  expect(result.exitCode).toBe(0);
+
+  expect(ctx.tailscale.readCalls('up')).toStrictEqual([
+    expect.stringMatching(
+      /^up --reset --force-reauth --auth-key=file:\S+ --hostname=imp --login-server=http:\/\/headscale\.test:8080 --accept-dns=false --timeout=60s$/u,
+    ),
+  ]);
+});
+
+test('it joins the login server again with the key once a slow saved node is Running on Tailscale', async () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
+
+  ctx.tailscale.writeNode({
+    BackendState: 'Running',
+    Self: {
+      HostName: 'imp',
+      Tags: ['tag:imp'],
+      TailscaleIPs: ['100.64.0.7'],
+      DNSName: 'imp.tail1234.ts.net.',
+    },
+  });
+
+  ctx.tailscale.holdStart();
+
+  Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      '"$0" >"$1" 2>"$2"',
+      new URL('tailscale-up.sh', import.meta.url).pathname,
+      ctx.out,
+      ctx.err,
+    ],
+    {
+      env: {
+        PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_RESOLV_CONF: ctx.resolvConf,
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
+        IMP_TAILSCALE_HOSTNAME: 'imp',
+        TAILSCALE_AUTHKEY: 'fake-key',
+        IMP_TAILSCALE_LOGIN_SERVER: 'http://headscale.test:8080',
+      },
+    },
+  );
+
+  ctx.tailscale.releaseStart();
+
+  const up = await waitFor(
+    () => {
+      const [call] = ctx.tailscale.readCalls('up');
+
+      if (call === undefined) {
+        throw new Error('no tailscale up yet');
+      }
+
+      return call;
+    },
+    { timeoutMs: 20_000 },
+  );
+
+  expect(up).toMatch(
+    /^up --reset --force-reauth --auth-key=file:\S+ --hostname=imp --login-server=http:\/\/headscale\.test:8080 --accept-dns=false --timeout=60s$/u,
+  );
+}, 30_000);
+
 test('it joins the login server without advertising tags, which its key carries', () => {
   const ctx = setupTest();
 
