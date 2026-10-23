@@ -96,6 +96,10 @@ export interface RamGovernorDeps {
   readonly listAwake: () => Promise<AwakeImp[]>;
   readonly readRamMib: (pid: number, apiSocket: string) => Promise<number | null>;
 
+  // The kernel keeps this count per process, so a read walks no pages. A page's share of it is never
+  // less than its share of what readRamMib counts, KSM or not.
+  readonly readResidentMib: (pid: number, apiSocket: string) => Promise<number | null>;
+
   // Writes split pages that KSM merged faster than a tick, so a share of what KSM saves stays free.
   readonly readHeadroomMib?: (pids: readonly number[]) => Promise<number>;
   readonly isBusy: (id: string) => boolean;
@@ -152,6 +156,15 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     }
   };
 
+  const recordAdmission = (request: AdmissionRequest, usedMib: number): void => {
+    reservations.set(request.id, {
+      mib: request.reserveMib,
+      until: now() + RESERVATION_TTL_MS,
+    });
+
+    emitAdmission(request, 'admitted', usedMib);
+  };
+
   const readReservation = (id: string): number => {
     const reservation = reservations.get(id);
 
@@ -168,7 +181,10 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     return reservation.mib;
   };
 
-  const readEffectiveUsage = async (excludeId: string | null) => {
+  const readEffectiveUsage = async (
+    excludeId: string | null,
+    readVmMib: RamGovernorDeps['readRamMib'] = deps.readRamMib,
+  ) => {
     const listed = await deps.listAwake();
 
     const awake = listed.filter((imp) => imp.id !== excludeId);
@@ -178,7 +194,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     let usedMib = 0;
     let effectiveMib = 0;
 
-    const readings = await Promise.all(awake.map((imp) => deps.readRamMib(imp.pid, imp.apiSocket)));
+    const readings = await Promise.all(awake.map((imp) => readVmMib(imp.pid, imp.apiSocket)));
 
     for (const [index, imp] of awake.entries()) {
       const measured = readings[index] ?? 0;
@@ -331,6 +347,14 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           throw buildImpOverBudgetError(deps.budgetMib, usage.effectiveMib, request.memoryMib);
         }
 
+        const bound = await readEffectiveUsage(request.id, deps.readResidentMib);
+
+        if (bound.effectiveMib + request.reserveMib <= deps.budgetMib) {
+          recordAdmission(request, bound.effectiveMib);
+
+          return;
+        }
+
         const findMissing = (usage: UsageTotals) =>
           usage.effectiveMib + request.reserveMib - deps.budgetMib;
 
@@ -366,12 +390,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           });
         }
 
-        reservations.set(request.id, {
-          mib: request.reserveMib,
-          until: now() + RESERVATION_TTL_MS,
-        });
-
-        emitAdmission(request, 'admitted', room.effectiveMib);
+        recordAdmission(request, room.effectiveMib);
       }),
 
     release: (id) => {

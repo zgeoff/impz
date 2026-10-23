@@ -14,10 +14,15 @@ interface HostImp {
   failsSleep: boolean;
 
   spareMib: number;
+
+  // A guest whose pages drop and fault back in during a page walk: the next walk sees this many
+  // MiB while the resident count before and after it stays the same.
+  dipMib: number | null;
 }
 
 export type HostChange =
   | { readonly kind: 'rss'; readonly id: string; readonly mib: number }
+  | { readonly kind: 'dip'; readonly id: string; readonly mib: number }
   | { readonly kind: 'hold'; readonly id: string; readonly on: boolean }
   | { readonly kind: 'busy'; readonly id: string; readonly on: boolean }
   | { readonly kind: 'failSleep'; readonly id: string; readonly on: boolean }
@@ -56,6 +61,7 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
         busy: false,
         failsSleep: false,
         spareMib: 0,
+        dipMib: null,
       },
     ]),
   );
@@ -69,6 +75,7 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
       busy: false,
       failsSleep: imp.failsSleep ?? false,
       spareMib: 0,
+      dipMib: null,
     });
   }
 
@@ -115,6 +122,13 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
     },
   );
 
+  // The stub has no KSM, so a VM owns every page it holds resident.
+  const readRssMib = (_pid: number, id: string): Promise<number | null> => {
+    const rssMib = imps.get(id)?.awake === true ? getImp(id).rssMib : null;
+
+    return Promise.resolve(rssMib);
+  };
+
   const deps = {
     budgetMib: options.budgetMib,
     listAwake: async (): ReturnType<RamGovernorDeps['listAwake']> => {
@@ -132,11 +146,19 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
           holdUntil: imp.held ? HELD_FOREVER : null,
         }));
     },
-    readRamMib: (_pid: number, id: string): Promise<number | null> => {
-      const ramMib = imps.get(id)?.awake === true ? getImp(id).rssMib : null;
+    readRamMib: (pid: number, id: string): Promise<number | null> => {
+      const imp = imps.get(id);
+      const dipMib = imp?.awake === true ? imp.dipMib : null;
 
-      return Promise.resolve(ramMib);
+      if (imp === undefined || dipMib === null) {
+        return readRssMib(pid, id);
+      }
+
+      imp.dipMib = null;
+
+      return Promise.resolve(dipMib);
     },
+    readResidentMib: readRssMib,
     isBusy: (id: string): boolean => getImp(id).busy,
     trySleepImp,
 
@@ -216,6 +238,9 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
       match(change)
         .with({ kind: 'rss' }, (rss) => {
           imp.rssMib = rss.mib;
+        })
+        .with({ kind: 'dip' }, (dip) => {
+          imp.dipMib = dip.mib;
         })
         .with({ kind: 'hold' }, (hold) => {
           imp.held = hold.on;
