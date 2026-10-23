@@ -3,7 +3,7 @@ import type { ImpdServices } from './create-impd-services';
 import type { ImpdStorage } from './create-impd-storage';
 import type { TailscaleStatus } from './host-net/net/tailscale-status';
 import type { ImpdDeps } from './impd-deps';
-import { BUILD_KEEPALIVE_MS } from './imps/images/build-event-stream';
+import { BUILD_KEEPALIVE_MS } from './imps/images/build/build-event-stream';
 import type { Imps } from './imps/imps/imp-service';
 import type { ImpdAccess } from './load-impd-access';
 import type { Broker } from './network/broker/broker-service';

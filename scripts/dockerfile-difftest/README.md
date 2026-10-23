@@ -1,11 +1,11 @@
 # dockerfile-difftest
 
 `impz image build` checks a Dockerfile before the build starts. To do that, impd parses it with a
-port of the frontend's parser: `packages/daemon/src/imps/images/dockerfile-parse.ts`. The check is
-sound only while impd and the frontend split each Dockerfile the same way. This tool tests that: it
-generates Dockerfiles full of hostile forms and parses each one twice, with the port and with the Go
-parser it ports. The forms cover quotes and escapes, `# escape=`, line continuations, heredocs, a
-BOM, CRLF, JSON arrays with escapes, and spaces that are not ASCII.
+port of the frontend's parser: `packages/daemon/src/imps/images/dockerfile/dockerfile-parse.ts`. The
+check is sound only while impd and the frontend split each Dockerfile the same way. This tool tests
+that: it generates Dockerfiles full of hostile forms and parses each one twice, with the port and
+with the Go parser it ports. The forms cover quotes and escapes, `# escape=`, line continuations,
+heredocs, a BOM, CRLF, JSON arrays with escapes, and spaces that are not ASCII.
 
 impd builds a pinned copy of each Dockerfile, with each image the build names replaced by its digest
 (`renderPinnedDockerfile` in `dockerfile-check.ts`). The tool also pins every file that both parsers

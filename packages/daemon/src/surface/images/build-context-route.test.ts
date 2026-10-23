@@ -18,7 +18,7 @@ import { createFilesTar } from '../../../testing/imps/create-files-tar';
 import { startBuilderImpd } from '../../../testing/imps/start-builder-impd';
 import type { StubAnswer } from '../../../testing/vm/build-stub-guest';
 import { DOCKERFILE_FRONTEND } from '../../imps/docker-contract/dockerfile-frontend';
-import { PIN_INSPECT_FORMAT } from '../../imps/images/image-pin';
+import { PIN_INSPECT_FORMAT } from '../../imps/images/pull/image-pin';
 import { createForwardedPeers } from '../../network/proxy/forwarded-peers';
 import { startWakeProxy } from '../../network/proxy/wake-proxy';
 import { createApiAudit } from '../../platform/audit/api-audit';

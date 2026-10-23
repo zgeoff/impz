@@ -18,8 +18,8 @@ import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpsConfig } from '../imps-config';
 import type { ImpCheckpointHooks } from '../imps/imp-service';
 import { readHeldImage } from './read-held-image';
-import { removeUnusedRootfs } from './remove-unused-rootfs';
 import { requireClientImageName } from './require-client-image-name';
+import { removeUnusedRootfs } from './rootfs/remove-unused-rootfs';
 import { writeImageRow } from './write-image-row';
 
 // No Docker image ID starts with this prefix, so a template's digest never collides with one.

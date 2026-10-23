@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';
+import { PIN_INSPECT_FORMAT } from '../../src/imps/images/pull/image-pin';
 import { runCommand } from '../../src/platform/process/run-command';
 import { createStubDockerCli } from './create-stub-docker-cli';
 

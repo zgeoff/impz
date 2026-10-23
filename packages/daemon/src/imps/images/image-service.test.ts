@@ -15,7 +15,7 @@ import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
 import { createStorageGate } from '../../vm/storage/storage-gate';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
-import { BUILDER_IMAGE } from './builder-imps';
+import { BUILDER_IMAGE } from './builders/builder-imps';
 import { createImageService } from './image-service';
 
 async function setupTest() {
