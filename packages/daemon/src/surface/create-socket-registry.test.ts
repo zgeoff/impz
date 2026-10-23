@@ -3,8 +3,8 @@ import { createSocketRegistry } from './create-socket-registry';
 
 test('it closes every socket it holds with the code and reason given', () => {
   const registry = createSocketRegistry<string>();
-  const closeFirst = mock();
-  const closeSecond = mock();
+  const closeFirst = mock((): void => {});
+  const closeSecond = mock((): void => {});
 
   registry.add('a', { session: 'first', close: closeFirst, forget: () => {} });
   registry.add('b', { session: 'second', close: closeSecond, forget: () => {} });
@@ -24,7 +24,7 @@ test('it finds the session of a socket it holds', () => {
 
 test('it forgets a removed socket and stops its revocation watch', () => {
   const registry = createSocketRegistry<string>();
-  const forget = mock();
+  const forget = mock((): void => {});
 
   registry.add('a', { session: 'first', close: () => {}, forget });
 
@@ -37,7 +37,7 @@ test('it forgets a removed socket and stops its revocation watch', () => {
 
 test('it leaves a removed socket open on a later close of all', () => {
   const registry = createSocketRegistry<string>();
-  const close = mock();
+  const close = mock((): void => {});
 
   registry.add('a', { session: 'first', close, forget: () => {} });
   registry.remove('a');
