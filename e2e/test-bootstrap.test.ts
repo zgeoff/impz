@@ -6,7 +6,7 @@ import { createStubSlowCommand } from '@impz/test-utils/create-stub-slow-command
 import { waitFor } from '@impz/test-utils/wait-for';
 import { REPO_ROOT } from './lib/instance';
 
-// Bun 1.4.2 runs onTestFinished callbacks first in, first out; the stack closes last in, first out,
+// Bun runs onTestFinished callbacks first in, first out; the stack closes last in, first out,
 // so a harness the test spawns stops before the directory its stand-ins live in goes.
 function setupTest() {
   const stack = new AsyncDisposableStack();

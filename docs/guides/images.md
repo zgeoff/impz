@@ -113,11 +113,11 @@ by digest as `images/examples/hello` names it, works on both.
 
   An error ends the stream as `{"type":"error","code":"...","message":"..."}`, with the code an oRPC
   call would give. A client skips an event type it does not know. The stream exists because a
-  client's fetch gives up on a response that stays silent: Bun's fetch (1.4.3) after 360 s without a
-  byte, before the headers or between two chunks, unless the call passes `timeout: false`. Node's
-  fetch (undici) waits 300 s for the headers (`headersTimeout`) and 300 s between two chunks of the
-  body (`bodyTimeout`). A build can take longer than that. A client that sends no such `Accept`, as
-  an older CLI, gets the image or the error as JSON when the build ends, and still fails on a build
+  client's fetch gives up on a response that stays silent: Bun's fetch after 360 s without a byte,
+  before the headers or between two chunks, unless the call passes `timeout: false`. Node's fetch
+  (undici) waits 300 s for the headers (`headersTimeout`) and 300 s between two chunks of the body
+  (`bodyTimeout`). A build can take longer than that. A client that sends no such `Accept`, as an
+  older CLI, gets the image or the error as JSON when the build ends, and still fails on a build
   longer than its fetch waits. `system.info` lists `imageBuildStream` among the features of an impd
   that streams. The CLI asks for the stream and reads JSON from an impd that answers JSON.
 
