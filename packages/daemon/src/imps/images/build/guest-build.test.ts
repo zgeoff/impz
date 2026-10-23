@@ -775,6 +775,25 @@ test('#loadGuestImage refuses a ref whose pull in the builder fails as BAD_REQUE
   });
 });
 
+test('#loadGuestImage keeps the last 4000 characters of a long pull failure', () => {
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onPull: () => ({ code: 1, stderr: `${'x'.repeat(5000)}denied\n` }),
+  });
+
+  expect(
+    loadGuestImage(createGuestExec(builder.guest.open), {
+      ref: 'busybox:9',
+      platform: 'linux/amd64',
+      signal: new AbortController().signal,
+    }),
+  ).rejects.toMatchObject({
+    code: 'BAD_REQUEST',
+    message: `the pull of busybox:9 in the builder failed: ${'x'.repeat(3994)}denied`,
+  });
+});
+
 test("#loadGuestImage refuses a ref the registry denies to the builder's engine", () => {
   const builder = buildStubImageBuilder({
     exported: [],
