@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.4](https://github.com/zgeoff/impz/compare/v2.10.3...v2.10.4) (2026-10-23)
+
+
+### Performance Improvements
+
+* **daemon:** admit without a page walk while ram is far under budget ([#637](https://github.com/zgeoff/impz/issues/637)) ([d38d41b](https://github.com/zgeoff/impz/commit/d38d41b32820c141580ef69d950fa7cd0ed1500f))
+
 ## [2.10.3](https://github.com/zgeoff/impz/compare/v2.10.2...v2.10.3) (2026-10-22)
 
 ### Bug Fixes
