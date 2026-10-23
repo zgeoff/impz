@@ -51,6 +51,7 @@ test.each([
   ['POST', '/oauth2/revoke', 400],
   ['GET', '/login', 400],
   ['GET', '/consent', 400],
+  ['GET', '/error', 400],
 ])('it answers %s %s on the public port impd opens with %d', async (method, path, status) => {
   const ctx = await setupTest();
 
