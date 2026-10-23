@@ -636,13 +636,16 @@ run_zfs() {
   in_container zfs get -H -o value mountpoint "$zfs_pool/imp" | grep -qx legacy ||
     fail "[$distro] $zfs_pool/imp is not mountpoint=legacy"
   # -o words are pool properties and -O words the pool's root dataset's
-  local flag property
+  local flag property pool_properties
+  pool_properties=$(jq -r '.create | range(0; length; 2) as $i | "\(.[$i]) \(.[$i + 1])"' deploy/zfs-pool.json) ||
+    fail "[$distro] cannot read the pool properties from deploy/zfs-pool.json"
+  [ -n "$pool_properties" ] || fail "[$distro] deploy/zfs-pool.json gives zpool create no properties"
   while read -r flag property; do
     case $flag in
       -o) in_container zpool get -H -o value "${property%%=*}" "$zfs_pool" ;;
       -O) in_container zfs get -H -o value "${property%%=*}" "$zfs_pool" ;;
     esac | grep -qxF -- "${property#*=}" || fail "[$distro] $zfs_pool does not have $property"
-  done < <(jq -r '.create | range(0; length; 2) as $i | "\(.[$i]) \(.[$i + 1])"' deploy/zfs-pool.json)
+  done <<<"$pool_properties"
   in_container grep -qx 'IMP_STORAGE_BACKEND=zfs' /etc/imp/imp-host.env || fail "[$distro] the env file is not zfs"
   in_container grep -qx "IMP_ZFS_ROOT=$zfs_pool/imp" /etc/imp/imp-host.env || fail "[$distro] no IMP_ZFS_ROOT"
   wait_for_imp_host || fail "[$distro] the imp-host container is not running on zfs"
