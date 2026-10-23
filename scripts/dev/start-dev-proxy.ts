@@ -62,7 +62,7 @@ async function readProxyStamp(dev: Dev, fresh: string): Promise<string> {
     .nothrow();
 
   const parts = [
-    ...readProxyPrivileges(dev.checkout.root),
+    ...readProxyPrivileges(dev.io.files.readText, dev.checkout.root),
     ...readProxyContext(dev.io.files, dev.env, dev.checkout.root),
     dev.checkout.hostImage,
     image.stdout.toString(),
@@ -100,7 +100,7 @@ async function replaceProxy(dev: Dev, fresh: string): Promise<void> {
 
   const group = await readSocketGroup(dev);
 
-  const privileges = readProxyPrivileges(dev.checkout.root);
+  const privileges = readProxyPrivileges(dev.io.files.readText, dev.checkout.root);
   const context = readProxyContext(dev.io.files, dev.env, dev.checkout.root);
   const image = `IMP_HOST_IMAGE=${dev.checkout.hostImage}`;
   const socketVolume = `${dev.layout.name}-docker:/run/imp-docker`;

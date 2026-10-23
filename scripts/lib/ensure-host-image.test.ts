@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
+import { buildStubDevHostDocker } from '../test-utils/build-stub-dev-host-docker';
 import { createStubBin } from '../test-utils/create-stub-bin';
 import { ensureHostImage } from './ensure-host-image.ts';
 
@@ -22,7 +23,7 @@ test('it builds the host image, labelled with the checkout and machine, when it 
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    'case "$1 $2" in "image inspect") exit 1 ;; esac',
+    buildStubDevHostDocker({ containers: {}, hasImage: false, hasSocket: false }),
   );
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
@@ -50,7 +51,7 @@ test('it leaves the machine label off without a machine id, so prune never touch
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    'case "$1 $2" in "image inspect") exit 1 ;; esac',
+    buildStubDevHostDocker({ containers: {}, hasImage: false, hasSocket: false }),
   );
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
@@ -74,7 +75,12 @@ test('it leaves the machine label off without a machine id, so prune never touch
 
 test('it builds nothing when the host image exists', async () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker');
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: false }),
+  );
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 

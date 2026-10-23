@@ -310,6 +310,57 @@ test('it fails pgrep with no output when impd has no pids', () => {
   });
 });
 
+test('it fails pgrep with the lookup error it is given', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({
+      containers: {},
+      hasImage: true,
+      hasSocket: true,
+      impdPids: [4242],
+      impdLookupError: { exitCode: 127, stderr: 'exec: "pgrep": executable file not found\n' },
+    }),
+  );
+
+  const result = Bun.spawnSync(
+    ['docker', 'exec', 'imp-dev', 'pgrep', '-f', 'bun .*/daemon/src/main.ts'],
+    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+  );
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 127,
+    stdout: '',
+    stderr: 'exec: "pgrep": executable file not found\n',
+  });
+});
+
+test('it builds an image quietly and prints its id', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({ containers: {}, hasImage: false, hasSocket: false }),
+  );
+
+  const result = Bun.spawnSync(
+    ['docker', 'build', '-q', '-t', 'imp-host:dev', '-f', '/w/imp/host/Dockerfile', '/w/imp'],
+    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+  );
+
+  expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
+    exitCode: 0,
+    stdout: 'sha256:stub-built-image\n',
+  });
+});
+
 test('it takes the SIGHUP to impd', () => {
   const ctx = setupTest();
 

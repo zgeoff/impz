@@ -1,11 +1,14 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { $ } from 'bun';
+import { readRealPath } from '../lib/read-real-path.ts';
 import type { DevIO } from './types.ts';
 
 export function wireDevIO(): DevIO {
   return {
     // Bun's shell breaks when it is called as a method, with another object as its this.
     shell: (strings, ...expressions) => $(strings, ...expressions),
+    runAttached: (argv) =>
+      Bun.spawn([...argv], { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' }).exited,
     files: {
       probeFile: (path) => statSync(path, { throwIfNoEntry: false })?.isFile() ?? false,
       probeDirectory: (path) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false,
@@ -17,6 +20,7 @@ export function wireDevIO(): DevIO {
         }
       },
       readBytes: (path) => readFileSync(path),
+      readRealPath: (path) => readRealPath(path, process.cwd()),
       writeText: (path, text) => {
         writeFileSync(path, text);
       },

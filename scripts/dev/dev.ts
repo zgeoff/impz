@@ -1,4 +1,4 @@
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { $ } from 'bun';
 import { match } from 'ts-pattern';
 import { buildDevLayout } from '../lib/build-dev-layout.ts';
@@ -88,15 +88,15 @@ function dispatchDev(dev: Dev, command: DevCommand): Promise<number> {
 
       return 0;
     })
-    .with('logs', () => runAttached(['docker', 'logs', '-f', dev.layout.name]))
+    .with('logs', () => dev.io.runAttached(['docker', 'logs', '-f', dev.layout.name]))
     .with('restart', async () => {
       await restartDev(dev);
 
       return 0;
     })
-    .with('shell', () => runAttached(['docker', 'exec', '-it', dev.layout.name, 'bash']))
+    .with('shell', () => dev.io.runAttached(['docker', 'exec', '-it', dev.layout.name, 'bash']))
     .with('token', () =>
-      runAttached(['docker', 'exec', dev.layout.name, 'cat', '/var/lib/imp/token']),
+      dev.io.runAttached(['docker', 'exec', dev.layout.name, 'cat', '/var/lib/imp/token']),
     )
     .with('prune', async () => {
       await pruneDevImages(dev);
@@ -203,10 +203,7 @@ async function startHost(dev: Dev, drives: Drives): Promise<void> {
   const tailnetOAuthFile = await writeHostOAuthFile(dev, readOp);
 
   const acmeSetting = dev.env['IMP_ACME_CA_FILE'] ?? '';
-
-  const acmeCAFile =
-    acmeSetting === '' ? null : resolveContainerPath(dev.checkout.root, acmeSetting);
-
+  const acmeCAFile = acmeSetting === '' ? null : resolveContainerPath(dev, acmeSetting);
   const uplinkSetting = dev.env['IMP_UPLINK_MTU'] ?? '';
   const uplinkMTU = uplinkSetting === '' ? await readUplinkMTU(dev.io) : uplinkSetting;
 
@@ -219,8 +216,8 @@ async function startHost(dev: Dev, drives: Drives): Promise<void> {
     tailscale: tailscale.arg,
     tailnetOAuthFile,
     acmeCAFile,
-    kernel: resolveContainerPath(dev.checkout.root, drives.kernel),
-    systemDrive: resolveContainerPath(dev.checkout.root, drives.systemDrive),
+    kernel: resolveContainerPath(dev, drives.kernel),
+    systemDrive: resolveContainerPath(dev, drives.systemDrive),
     uplinkMTU,
   });
 
@@ -277,14 +274,16 @@ async function writeHostOAuthFile(dev: Dev, readOp: OpReader | null): Promise<st
   return '/data/tailnet-oauth.json';
 }
 
-function resolveContainerPath(root: string, path: string): string {
-  const absolute = resolve(path);
+// The checkout mounts at /src, so a path that a symlink leads out of it does not exist there.
+function resolveContainerPath(dev: Dev, path: string): string {
+  const root = dev.checkout.rootPhysical;
+  const real = dev.io.files.readRealPath(path);
 
-  if (!absolute.startsWith(`${root}/`)) {
-    throw new DevError(`${path} is not under ${root}`);
+  if (!real.startsWith(`${root}/`)) {
+    throw new DevError(`${path} is not under ${dev.checkout.root}`);
   }
 
-  return `/src/${absolute.slice(root.length + 1)}`;
+  return `/src/${real.slice(root.length + 1)}`;
 }
 
 // The container's own eth0 claims 1500 whatever the real path allows.
@@ -322,16 +321,6 @@ async function downDev(dev: Dev): Promise<void> {
   await dev.io.shell`docker volume rm ${volumes}`.quiet().nothrow();
 }
 
-function runAttached(argv: readonly string[]): Promise<number> {
-  const subprocess = Bun.spawn([...argv], {
-    stdin: 'inherit',
-    stdout: 'inherit',
-    stderr: 'inherit',
-  });
-
-  return subprocess.exited;
-}
-
 // SIGHUP: impd exits without sleeping the VMs, and the entrypoint restarts it. The wait for the old
 // pid to go makes /health answer from the new impd.
 async function restartDev(dev: Dev): Promise<void> {
@@ -348,6 +337,11 @@ async function restartDev(dev: Dev): Promise<void> {
   const found = await dev.io.shell`docker exec ${dev.layout.name} pgrep -f ${pattern}`
     .quiet()
     .nothrow();
+
+  // pgrep exits 1 when nothing matches; any other failure means the lookup itself broke.
+  if (found.exitCode !== 0 && found.exitCode !== 1) {
+    throw new DevError(`cannot find impd's process in ${dev.layout.name}`, found.stderr.toString());
+  }
 
   const pids = found.stdout
     .toString()

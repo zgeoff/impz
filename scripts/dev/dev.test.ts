@@ -1,11 +1,13 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { expect, mock, onTestFinished, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildDevImageTag } from '../lib/build-dev-image-tag.ts';
 import { buildStubDevDocker } from '../test-utils/build-stub-dev-docker';
 import { buildStubDevHostDocker } from '../test-utils/build-stub-dev-host-docker';
 import { createStubBin } from '../test-utils/create-stub-bin';
+import { runDev } from './dev.ts';
+import { wireDevIO } from './wire-dev-io.ts';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-dev-'));
@@ -120,7 +122,10 @@ test('it fails a restart whose new proxy stops without a socket, printing its lo
   });
 });
 
-test('it fails a restart whose impd is not ready by IMP_DEV_READY_TIMEOUT_S', () => {
+test.each([
+  ['reports impd is not ready', `echo '{"ready":false}'`],
+  ['exits nonzero after it printed ready', `echo '{"ready":true'; exit 18`],
+])('it fails a restart by IMP_DEV_READY_TIMEOUT_S whose health check %s', (_label, curl) => {
   const ctx = setupTest();
 
   const docker = createStubBin(
@@ -133,7 +138,7 @@ test('it fails a restart whose impd is not ready by IMP_DEV_READY_TIMEOUT_S', ()
     }),
   );
 
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":false}'`);
+  createStubBin(ctx.directoryPath, 'curl', curl);
 
   // A host without Docker has no docker socket, so stat answers for the socket's group.
   createStubBin(ctx.directoryPath, 'stat', 'echo 999');
@@ -352,7 +357,7 @@ test('it fails a restart whose IMP_DEV_READY_TIMEOUT_S is not a number', () => {
   });
 });
 
-test('it fails a restart whose health check exits nonzero after it printed ready', () => {
+test('it fails a restart with the reason when it cannot look up the old impd', () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
@@ -362,10 +367,11 @@ test('it fails a restart whose health check exits nonzero after it printed ready
       containers: { 'imp-dev': true, 'imp-dev-docker-proxy': true },
       hasImage: true,
       hasSocket: true,
+      impdLookupError: { exitCode: 127, stderr: 'exec: "pgrep": executable file not found\n' },
     }),
   );
 
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true'; exit 18`);
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
 
   // A host without Docker has no docker socket, so stat answers for the socket's group.
   createStubBin(ctx.directoryPath, 'stat', 'echo 999');
@@ -375,7 +381,6 @@ test('it fails a restart whose health check exits nonzero after it printed ready
       PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
       IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
       IMP_HOST_IMAGE: 'imp-host:dev-test',
-      IMP_DEV_READY_TIMEOUT_S: '1',
     },
   });
 
@@ -386,8 +391,10 @@ test('it fails a restart whose health check exits nonzero after it printed ready
   }).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: 'dev.sh: impd not ready after 1s\n',
+    stderr: `dev.sh: cannot find impd's process in imp-dev\nexec: "pgrep": executable file not found\n`,
   });
+
+  expect(readFileSync(docker.calls, 'utf8')).not.toInclude('kill -HUP');
 });
 
 test('it fails a restart with the reason when it cannot read the docker socket group', () => {
@@ -752,6 +759,66 @@ test('it fails up when the container stops before impd is ready, printing its lo
     stdout: 'dev.sh: started imp-dev\n',
     stderr: 'dev.sh: imp-dev stopped; last log lines:\nimpd: /dev/kvm is missing\n',
   });
+});
+
+test('it gives the container the real path of a kernel that a symlink outside the repo leads to', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({
+      containers: { 'imp-dev': false, 'imp-dev-docker-proxy': true },
+      hasImage: true,
+      hasSocket: true,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', 'exit 7');
+
+  // A host without Docker has no docker socket, so stat answers for the socket's group.
+  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
+
+  const kernel = join(ctx.directoryPath, 'vmlinux');
+
+  symlinkSync(new URL('../../package.json', import.meta.url).pathname, kernel);
+
+  Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+
+      IMP_KERNEL: kernel,
+      IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+      IMP_HOST_IMAGE_READY: '1',
+      IMP_DEV_TAILNET: '0',
+      IMP_UPLINK_MTU: '1500',
+    },
+  });
+
+  expect(readFileSync(docker.calls, 'utf8')).toInclude(' -e IMP_KERNEL=/src/package.json ');
+});
+
+test('it runs logs, shell and token on the caller terminal through the given runner', async () => {
+  const runAttached = mock(() => Promise.resolve(3));
+
+  const exitCode = await runDev({
+    argv: ['token'],
+    env: {},
+    cwd: '/',
+    io: { ...wireDevIO(), runAttached },
+  });
+
+  expect(exitCode).toBe(3);
+
+  expect(runAttached).toHaveBeenCalledExactlyOnceWith([
+    'docker',
+    'exec',
+    'imp-dev',
+    'cat',
+    '/var/lib/imp/token',
+  ]);
 });
 
 test('it stops before it asks docker anything when there is no machine id', () => {

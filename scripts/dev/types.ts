@@ -15,6 +15,9 @@ export interface DevFiles {
   readonly readText: (path: string) => string | null;
   readonly readBytes: (path: string) => Uint8Array;
 
+  // As realpath -m does: the symlinks of the part that exists resolve, and the rest is kept.
+  readonly readRealPath: (path: string) => string;
+
   readonly writeText: (path: string, text: string) => void;
   readonly createDirectory: (path: string) => void;
   readonly rename: (from: string, to: string) => void;
@@ -23,6 +26,9 @@ export interface DevFiles {
 
 export interface DevIO {
   readonly shell: DevShell;
+
+  // Runs a command on the caller's terminal and gives its exit code.
+  readonly runAttached: (argv: readonly string[]) => Promise<number>;
   readonly files: DevFiles;
   readonly now: () => number;
   readonly sleep: (durationMs: number) => Promise<void>;
