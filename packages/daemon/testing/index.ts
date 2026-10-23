@@ -60,7 +60,12 @@ export { VmIdentitySchema, readVmIdentity, writeVmIdentity } from '../src/vm/sle
 export { buildTemplateKey } from '../src/vm/templates/boot-templates';
 export { createGenerationLog } from '../src/imps/session-logs/generation-log';
 export { DOCKERFILE_FRONTEND } from '../src/imps/docker-contract/dockerfile-frontend';
-export { BUILD_KEEPALIVE_MS } from '../src/imps/images/build-event-stream';
-export { checkDockerfile, renderPinnedDockerfile } from '../src/imps/images/dockerfile-check';
-export { parseDockerfile, splitNameWords } from '../src/imps/images/dockerfile-parse';
-export type { Instruction } from '../src/imps/images/dockerfile-parse';
+export { BUILD_KEEPALIVE_MS } from '../src/imps/images/build/build-event-stream';
+
+export {
+  checkDockerfile,
+  renderPinnedDockerfile,
+} from '../src/imps/images/dockerfile/dockerfile-check';
+
+export { parseDockerfile, splitNameWords } from '../src/imps/images/dockerfile/dockerfile-parse';
+export type { Instruction } from '../src/imps/images/dockerfile/dockerfile-parse';

@@ -4,7 +4,7 @@ import type { ReachBoundaries } from './host-net/net/reach-policy';
 import type { TailscaleStatus } from './host-net/net/tailscale-status';
 import type { TapDevices } from './host-net/net/tap-devices';
 import type { TailnetPeer } from './identity/auth/tailnet-identity';
-import type { Repeat } from './imps/images/build-event-stream';
+import type { Repeat } from './imps/images/build/build-event-stream';
 import type { ImageServiceDeps } from './imps/images/image-service';
 import type { ImpService, ImpServiceDeps } from './imps/imps/imp-service';
 import type { BrokerDeps } from './network/broker/broker-service';

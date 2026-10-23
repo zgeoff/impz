@@ -1,6 +1,6 @@
 import type { ImageBuildPhase } from '@impz/api';
-import { runImageOp } from '../imps/images/image-op-stream';
-import type { ImageOpStreamOptions } from '../imps/images/image-op-stream';
+import { runImageOp } from '../imps/images/build/image-op-stream';
+import type { ImageOpStreamOptions } from '../imps/images/build/image-op-stream';
 import { findImpName } from '../platform/audit/api-audit';
 import { mergeSignals } from '../platform/process/merge-signals';
 import type { AuditDetail, RpcContext, RpcImplementer } from './create-implementer';

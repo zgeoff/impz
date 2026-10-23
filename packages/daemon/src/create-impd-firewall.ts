@@ -11,7 +11,7 @@ import { checkHostRules6, readOrCreateUlaPrefix, resolveIpv6Plan } from './host-
 import type { Ipv6Plan } from './host-net/net/ipv6-plan';
 import { createReachPolicy } from './host-net/net/reach-policy';
 import type { ImpdDeps } from './impd-deps';
-import type { BuilderTestRegistry } from './imps/images/builder-imps';
+import type { BuilderTestRegistry } from './imps/images/builders/builder-imps';
 import { createBroker } from './network/broker/broker-service';
 import type { Broker } from './network/broker/broker-service';
 import type { SecretFiles } from './network/broker/secret-files';

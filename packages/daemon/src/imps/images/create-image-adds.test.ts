@@ -19,7 +19,7 @@ import { createImage, listImages, readImageByName } from '../../platform/db/imag
 import { listImps } from '../../platform/db/imps';
 import { runChecked } from '../../platform/process/run-command';
 import { buildImagePaths } from '../../vm/storage/data-layout';
-import { BUILDER_IMAGE, createBuilders } from './builder-imps';
+import { BUILDER_IMAGE, createBuilders } from './builders/builder-imps';
 import { createImageService } from './image-service';
 
 async function setupTest() {
