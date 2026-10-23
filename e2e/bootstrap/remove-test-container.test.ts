@@ -15,7 +15,7 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  const writeStderr = mock();
+  const writeStderr = mock(() => {});
 
   const run: BootstrapRun = {
     io: { ...wireBootstrapIO(), writeStderr },
@@ -27,7 +27,7 @@ function setupTest() {
     runID: 4242,
     zfsPool: 'impt4242',
     state: { container: null },
-    log: mock(),
+    log: mock(() => {}),
   };
 
   return { directory, run, writeStderr };
