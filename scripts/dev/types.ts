@@ -2,7 +2,7 @@ import type { $, ShellExpression } from 'bun';
 import type { DevEnv, DevLayout } from '../lib/build-dev-layout.ts';
 import type { DevCheckout } from '../lib/read-dev-checkout.ts';
 
-export type DevShell = (
+type DevShell = (
   strings: TemplateStringsArray,
   ...expressions: ShellExpression[]
 ) => $.ShellPromise;

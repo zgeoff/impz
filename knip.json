@@ -11,7 +11,7 @@
   // POSIX tools the tests run through Bun's shell, the iproute2 and procps
   // tools the dev CLI runs, and the Go toolchain's gofmt, which the go:fmt-vet
   // pre-push job runs
-  "ignoreBinaries": ["mkfifo", "ip", "pgrep", "gofmt"],
+  "ignoreBinaries": ["mkfifo", "pgrep", "gofmt"],
   "workspaces": {
     ".": {
       // run-related-tests.ts is a synced CLI that test:related reaches through
