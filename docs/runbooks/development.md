@@ -10,6 +10,7 @@ bun run typecheck && bun run lint && bun test
 bun run test:dashboard            # the dashboard's component tests, in their own run
 bun run test:host                 # nft and iptables in namespaces; IMP_HOST_TESTS=required fails a skip
 bun run test:pebble               # the ACME issuer against Pebble in Docker
+bun run test:headscale            # tailscale-up.sh joining Headscale in Docker with a tagged key
 bun run format:check && bun run deadcode
 bun run lint:shell                # shellcheck and shfmt over install.sh and the shell in scripts/, host/, kernel/, deploy/, test/, packages/
 actionlint && zizmor --config .github/zizmor.yml .github   # the workflows, as CI lints them
@@ -272,7 +273,7 @@ Lefthook installs the hooks with `bun install`.
 | Job          | Required | What it runs                                                                                                                                                                                                      |
 | ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `gitleaks`   | yes      | A secret scan over the history.                                                                                                                                                                                   |
-| `checks`     | yes      | `bun run audit`, the Bun pin check, `bun run check:static`, `bun test` capped at 1536 MiB with no swap, `test:pebble`, and the dashboard's tests and build.                                                       |
+| `checks`     | yes      | `bun run audit`, the Bun pin check, `bun run check:static`, `bun test` capped at 1536 MiB with no swap, `test:pebble`, `test:headscale`, and the dashboard's tests and build.                                     |
 | `go`         | yes      | In `agent/` and `host/ksm-exec`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Dockerfile difftest module. |
 | `shellcheck` | yes      | `bun run lint:shell`, actionlint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                               |
 | `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                         |

@@ -121,6 +121,23 @@ test('#BrokerRuleSchema rejects a rule whose header is not lowercase', () => {
   });
 });
 
+test.each([
+  [
+    'x-http-method-override',
+    "must not be x-http-method-override, which overrides the request's method",
+  ],
+  ['x-http-method', "must not be x-http-method, which overrides the request's method"],
+  ['x-method-override', "must not be x-method-override, which overrides the request's method"],
+])('#BrokerRuleSchema rejects a rule whose header is the method override %s', (header, message) => {
+  const result = BrokerRuleSchema.safeParse({
+    host: 'api.example.com',
+    header,
+    scheme: 'bearer',
+  });
+
+  expect(result.error?.issues).toPartiallyContain({ path: ['header'], message });
+});
+
 test('#BrokerRuleSchema rejects a rule with an unknown scheme', () => {
   const result = BrokerRuleSchema.safeParse({
     host: 'api.example.com',

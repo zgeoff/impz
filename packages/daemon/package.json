@@ -1,6 +1,6 @@
 {
   "name": "@impz/daemon",
-  "version": "2.10.5",
+  "version": "2.10.6",
   "private": true,
   "description": "impd: the imp host daemon",
   "type": "module",
@@ -30,6 +30,7 @@
     "@orpc/client": "catalog:",
     "@orpc/server": "catalog:",
     "@peculiar/x509": "catalog:",
+    "@zgeoff/kysely-bun-sqlite": "catalog:",
     "acme-client": "catalog:",
     "better-auth": "catalog:",
     "dns-packet": "catalog:",

@@ -56,7 +56,7 @@
     },
     "packages/api": {
       "name": "@impz/api",
-      "version": "2.10.5",
+      "version": "2.10.6",
       "dependencies": {
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -69,7 +69,7 @@
     },
     "packages/cli": {
       "name": "@impz/cli",
-      "version": "2.10.5",
+      "version": "2.10.6",
       "bin": {
         "impz": "src/main.ts",
       },
@@ -95,7 +95,7 @@
     },
     "packages/client": {
       "name": "@impz/client",
-      "version": "2.10.5",
+      "version": "2.10.6",
       "dependencies": {
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -120,7 +120,7 @@
     },
     "packages/daemon": {
       "name": "@impz/daemon",
-      "version": "2.10.5",
+      "version": "2.10.6",
       "dependencies": {
         "@better-auth/mcp": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
@@ -141,6 +141,7 @@
         "@orpc/client": "catalog:",
         "@orpc/server": "catalog:",
         "@peculiar/x509": "catalog:",
+        "@zgeoff/kysely-bun-sqlite": "catalog:",
         "acme-client": "catalog:",
         "better-auth": "catalog:",
         "dns-packet": "catalog:",
@@ -319,6 +320,7 @@
     "@zgeoff/bun-test-extended": "0.2.1",
     "@zgeoff/bun-test-react": "0.2.1",
     "@zgeoff/format-codemod": "0.3.1",
+    "@zgeoff/kysely-bun-sqlite": "0.3.0",
     "@zgeoff/oxlint-config": "0.5.2",
     "@zgeoff/skill-gate": "0.2.6",
     "acme-client": "5.4.0",
@@ -1190,6 +1192,8 @@
     "@zgeoff/bun-test-react": ["@zgeoff/bun-test-react@0.2.1", "", { "dependencies": { "@happy-dom/global-registrator": "20.14.5", "@testing-library/jest-dom": "7.0.1", "happy-dom": "20.14.5" }, "peerDependencies": { "@testing-library/react": ">=16.0.0", "react": ">=19.0.0", "react-dom": ">=19.0.0", "zustand": ">=5.0.0" }, "optionalPeers": ["zustand"] }, "sha512-PyttguyF542VNL3CikzklSXY2LGIeDRvbLqqOeVrjeENPOkBJKxvCfsqFaCOJJj31EU3uxM4eYqMhfiF5f1B3A=="],
 
     "@zgeoff/format-codemod": ["@zgeoff/format-codemod@0.3.1", "", { "dependencies": { "gunshi": "1.0.0-rc.1", "oxc-parser": "0.154.0" }, "bin": { "format-codemod": "dist/cli.js" } }, "sha512-upt1uvxiSrWdDyLJxnCpZ+4cTaObNvH38bMqlfOXSsTcRByHK2YM1FeRE/utdqrJ39im4TKw1cPjtSrIprY4yg=="],
+
+    "@zgeoff/kysely-bun-sqlite": ["@zgeoff/kysely-bun-sqlite@0.3.0", "", { "peerDependencies": { "kysely": ">=0.29.5 <0.30.0" } }, "sha512-LJ8sc8xpEDa0aYBNA4raORnSit3SUXpVLK+F5qImnw4TDKBjgK2b5l3qNja99K2ITXF6Bpr6dAoMB6UDmdJ6EQ=="],
 
     "@zgeoff/oxlint-config": ["@zgeoff/oxlint-config@0.5.2", "", { "dependencies": { "@stylistic/eslint-plugin": "5.10.0" }, "peerDependencies": { "oxlint": ">=1.78.0" } }, "sha512-cUW6nPI6b2+iDBiRnqJb0edKpZ7nBlNpKNV3UpwRtuthkTNQkecsBEC9nH3rwM7S1nUUAFoV2wkiHJZwoBUHSw=="],
 

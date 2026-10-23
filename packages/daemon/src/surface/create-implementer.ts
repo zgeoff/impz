@@ -3,9 +3,9 @@ import { mapEventIterator } from '@orpc/client';
 import { implement } from '@orpc/server';
 import {
   checkAccess,
-  findAccess,
-  isAuditedProcedure,
-  isRefusalAudited,
+  findDeclaredAccess,
+  isAuditedAccess,
+  isRefusalAuditedAccess,
 } from '../identity/auth/access-policy';
 import { readChangedImps } from '../identity/auth/builder-calls';
 import { toCallerError } from '../identity/auth/caller-view';
@@ -26,18 +26,22 @@ export interface AuditDetail {
 
 export type RpcImplementer = ReturnType<typeof createImplementer>;
 
-export function createImplementer(deps: RouterDeps) {
+interface ImplementerDeps {
+  readonly broker: Pick<RouterDeps['broker'], 'readSecretGeneration'>;
+  readonly imps: Pick<RouterDeps['imps'], 'readImpRecord'>;
+  readonly audit: Pick<RouterDeps['audit'], 'record'>;
+  readonly now: () => number;
+}
+
+export function createImplementer(deps: ImplementerDeps) {
   return implement(callerContract)
     .$context<RpcContext>()
     .use(async (options, input) => {
       const procedure = options.path.join('.');
       const caller = options.context.caller;
+      const access = findDeclaredAccess(options.procedure['~orpc'].meta);
 
       const requireAccess = async (): Promise<void> => {
-        const access = findAccess(procedure);
-
-        // Never cached: a secret's name can come to mean another secret than the
-        // one a token was given.
         const refusal = await checkAccess(access, caller, input, deps.broker.readSecretGeneration);
 
         if (refusal !== null) {
@@ -66,11 +70,11 @@ export function createImplementer(deps: RouterDeps) {
 
       const toApiError = (error: unknown) => toORPCError(toCallerError(error, caller));
 
-      if (!isAuditedProcedure(procedure)) {
+      if (!isAuditedAccess(access)) {
         try {
           await requireAccess();
         } catch (error) {
-          if (isRefusalAudited(procedure)) {
+          if (isRefusalAuditedAccess(access)) {
             deps.audit.record(buildCall(null), error);
           }
 
