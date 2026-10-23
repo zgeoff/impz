@@ -150,7 +150,6 @@ export async function startImpdListeners(
   const ssh = await runStep('ssh', () =>
     startSsh({
       config,
-      db,
       imps: parts.imps,
       authorizedKeys: parts.authorizedKeys,
       tokens: parts.access.tokens,

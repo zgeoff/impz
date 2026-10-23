@@ -32,7 +32,7 @@ memory, which also shrinks.
 
 ## Names a library fixes
 
-A method whose name a library interface fixes, such as kysely's `executeQuery`, keeps that name.
+A method whose name a library interface fixes, such as the MCP SDK's `saveTokens`, keeps that name.
 Each such name sits in the `exemptNames` option of `zgeoff/function-verb` in
 [`.oxlintrc.json`](../../../.oxlintrc.json), with a comment that names the interface. The fixed name
 wins over the shared rule that `make`, `with`, `use`, `on` and `to` take a suffix, so a stand-in for

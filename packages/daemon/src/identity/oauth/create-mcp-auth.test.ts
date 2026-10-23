@@ -4,6 +4,7 @@ import invariant from 'tiny-invariant';
 import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
 import { runOAuthSignIn } from '../../../testing/identity/run-oauth-sign-in';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
+import { makeOAuthResponder } from '../../../testing/surface/make-oauth-responder';
 import { createRevocations } from '../auth/revocations';
 import { loadTokenStore } from '../auth/token-store';
 import { createMcpAuth } from './create-mcp-auth';
@@ -39,11 +40,7 @@ async function setupTest() {
     auth,
     log,
 
-    respond: async (request: Request) => {
-      const answered = await auth.handle(request);
-
-      return answered ?? new Response('not found', { status: 404 });
-    },
+    respond: makeOAuthResponder(auth),
   };
 }
 
@@ -971,11 +968,7 @@ test('it signs a client in on a clock of impd’s own that is not the wall clock
 
   const issued = await runOAuthSignIn(
     {
-      respond: async (request) => {
-        const answered = await frozen.handle(request);
-
-        return answered ?? new Response('not found', { status: 404 });
-      },
+      respond: makeOAuthResponder(frozen),
       origin: 'http://127.0.0.1:7171',
       clientID: client.clientId,
       redirectURI: 'https://client.example/callback',
@@ -989,7 +982,7 @@ test('it signs a client in on a clock of impd’s own that is not the wall clock
   expect(issued.scope).toBe('read offline_access');
 });
 
-test('it answers no path while the route is off', async () => {
+test('it gives no OAuth handlers while the route is off', async () => {
   const ctx = await setupTest();
 
   const off = createMcpAuth({
@@ -1001,9 +994,5 @@ test('it answers no path while the route is off', async () => {
     log: () => {},
   });
 
-  const answered = await off.handle(
-    new Request('http://127.0.0.1/.well-known/oauth-authorization-server'),
-  );
-
-  expect(answered).toBeNull();
+  expect(off.handlers).toBeNull();
 });

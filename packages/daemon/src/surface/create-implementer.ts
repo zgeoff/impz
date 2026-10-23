@@ -3,15 +3,13 @@ import { mapEventIterator } from '@orpc/client';
 import { implement } from '@orpc/server';
 import {
   checkAccess,
-  findAccess,
-  isAuditedProcedure,
-  isRefusalAudited,
+  findDeclaredAccess,
+  isAuditedAccess,
+  isRefusalAuditedAccess,
 } from '../identity/auth/access-policy';
 import { readChangedImps } from '../identity/auth/builder-calls';
 import { toCallerError } from '../identity/auth/caller-view';
 import { findImpName } from '../platform/audit/api-audit';
-import { readImpByName } from '../platform/db/imps';
-import { readSecret } from '../platform/db/secrets';
 import { buildBuilderError, buildForbiddenError } from '../platform/errors/impd-errors';
 import type { Caller } from '../platform/principal/caller';
 import type { RouterDeps } from './create-router';
@@ -28,32 +26,30 @@ export interface AuditDetail {
 
 export type RpcImplementer = ReturnType<typeof createImplementer>;
 
-export function createImplementer(deps: RouterDeps) {
-  // Never cached: a secret's name can come to mean another secret than the
-  // one a token was given.
-  const readGeneration = async (name: string): Promise<string | null> => {
-    const secret = await readSecret(deps.db, name);
+interface ImplementerDeps {
+  readonly broker: Pick<RouterDeps['broker'], 'readSecretGeneration'>;
+  readonly imps: Pick<RouterDeps['imps'], 'readImpRecord'>;
+  readonly audit: Pick<RouterDeps['audit'], 'record'>;
+  readonly now: () => number;
+}
 
-    return secret?.generation ?? null;
-  };
-
+export function createImplementer(deps: ImplementerDeps) {
   return implement(callerContract)
     .$context<RpcContext>()
     .use(async (options, input) => {
       const procedure = options.path.join('.');
       const caller = options.context.caller;
+      const access = findDeclaredAccess(options.procedure['~orpc'].meta);
 
       const requireAccess = async (): Promise<void> => {
-        const access = findAccess(procedure);
-
-        const refusal = await checkAccess(access, caller, input, readGeneration);
+        const refusal = await checkAccess(access, caller, input, deps.broker.readSecretGeneration);
 
         if (refusal !== null) {
           throw buildForbiddenError(refusal.message, refusal.reason);
         }
 
         for (const name of readChangedImps(procedure, access, input)) {
-          const imp = await readImpByName(deps.db, name);
+          const imp = await deps.imps.readImpRecord(name);
 
           if (imp?.kind === 'builder') {
             throw buildBuilderError(name);
@@ -74,11 +70,11 @@ export function createImplementer(deps: RouterDeps) {
 
       const toApiError = (error: unknown) => toORPCError(toCallerError(error, caller));
 
-      if (!isAuditedProcedure(procedure)) {
+      if (!isAuditedAccess(access)) {
         try {
           await requireAccess();
         } catch (error) {
-          if (isRefusalAudited(procedure)) {
+          if (isRefusalAuditedAccess(access)) {
             deps.audit.record(buildCall(null), error);
           }
 

@@ -34,6 +34,10 @@ each; open one when the task touches its area.
   test. Set an impd setting with [`updateEnv`](../../../packages/test-utils/src/update-env.ts)
   before `setupTest()`, which reads it through
   [`readImpEnv`](../../../packages/test-utils/src/read-imp-env.ts).
+- **An ambient proxy is turned off.** Bun's `fetch` sends even a unix-socket or loopback request
+  through the proxy that the shell's `HTTPS_PROXY` names, and it keeps that proxy after the variable
+  is deleted. The root preload sets `NO_PROXY` to `*` instead, and every child process inherits it,
+  so a child that a test sends through a proxy overrides it, as curl's `--noproxy ''` does.
 - **MSW sees only `fetch`, and not all of it.** A `fetch` to loopback or a unix socket skips MSW and
   goes to the real network. `node:http` clients and WebSockets bypass MSW too, so those boundaries
   need a real stand-in server.
@@ -73,6 +77,7 @@ each; open one when the task touches its area.
 | Agent Go, root-only tests   | `cd agent && sudo -E env "PATH=$PATH" go test -tags root -race ./...`                                                | Root, a writable cgroup2                                       |
 | Host networking             | `sudo env "PATH=$PATH" IMP_HOST_TESTS=required bun run test:host`                                                    | Root, `nft`, `iptables`, `ip6tables`, `ip`, `ping`, `sysctl`   |
 | ACME issuer                 | `bun run test:pebble`                                                                                                | Docker                                                         |
+| Headscale join              | `bun run test:headscale`                                                                                             | Docker, and the network for the client's packages              |
 | Build disk hold             | `IMP_TEST_SMALL_FS=<dir> bun test packages/daemon/src/imps/images/create-image-builds.test.ts -t 'small filesystem'` | A 4 GiB loop-mounted filesystem at `<dir>`; a tiny tmpfs fails |
 | End to end                  | `e2e/test-e2e.sh [--only <suites> \| --group <1-3>] [--clean \| --reuse] [--keep]`                                   | KVM, Docker; `--help` lists suites and extra needs             |
 | One journey                 | `bun test --config=e2e/bunfig.toml ./e2e/suites/<journey>.e2e.ts`                                                    | A dev instance that is already up                              |
@@ -91,8 +96,8 @@ read that CI job's result instead of working around it.
   `bun run test:dashboard` runs.
 - A client or MCP server test that needs a real impd lives in
   [`packages/integration/`](../../../packages/integration/), not beside its module.
-- `*.e2e.ts` and `*.pebble.ts` never run in plain `bun test`; each runs only when its `./` path is
-  given, which the e2e harness and `test:pebble` do.
+- `*.e2e.ts`, `*.pebble.ts` and `*.headscale.ts` never run in plain `bun test`; each runs only when
+  its `./` path is given, which the e2e harness, `test:pebble` and `test:headscale` do.
 - Gated tests load in plain `bun test` and skip: the real-pool ZFS tests until `IMP_TEST_ZFS_ROOT`
   and `IMP_TEST_ZFS_DIR` are set, the small-filesystem tests until `IMP_TEST_SMALL_FS` is, and each
   host networking test where its namespace probe fails. `IMP_HOST_TESTS=required` turns that skip

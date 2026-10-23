@@ -8,7 +8,7 @@ const TIMINGS = [
 const MEM_FILE = /mem file [0-9]+ MiB on disk/gu;
 
 const SUITE_METRIC =
-  /^ +(?:newPlusExecMs|checkpointMs|restoreMs|forkCheckpointMs|forkLiveMs|idleToSleepMs|wakeOnHttpMs|backup[A-Za-z]+): /u;
+  /^ +(?:newPlusExecMs|checkpointMs|restoreMs|forkCheckpointMs|forkLiveMs|idleToSleepMs|wakeOnHttpMs|backup[A-Za-z]+|bootTemplate[A-Za-z0-9]+): /u;
 
 interface ZfsLogs {
   readonly impdLog: string;

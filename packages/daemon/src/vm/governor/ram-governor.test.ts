@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, mock, test } from 'bun:test';
 import type { ImpEvent } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import fc from 'fast-check';
@@ -10,6 +10,94 @@ import { ENFORCE_INTERVAL_MS, createRamGovernor } from './ram-governor';
 
 test('it enforces the budget every 5 s, as the docs say', () => {
   expect(ENFORCE_INTERVAL_MS).toBe(5000);
+});
+
+test('it admits on the resident counts and walks no VM pages while the budget is far', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a', 'b', 'x'],
+    awake: [
+      { id: 'a', rssMib: 200 },
+      { id: 'b', rssMib: 200 },
+    ],
+  });
+
+  const readRamMib = mock(host.deps.readRamMib);
+  const governor = createRamGovernor({ ...host.deps, readRamMib, log: () => {} });
+
+  await governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600 });
+
+  expect(readRamMib).not.toHaveBeenCalled();
+});
+
+test('it counts the reserve it admitted on the resident counts', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a', 'x'],
+    awake: [{ id: 'a', rssMib: 200 }],
+  });
+
+  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+
+  await governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600 });
+
+  const usage = await governor.readUsage();
+
+  expect(usage).toStrictEqual({ usedMib: 200, reservedMib: 300, headroomMib: 0 });
+});
+
+test('it walks every VM and makes room when the resident counts leave too little', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['old', 'new', 'x'],
+    awake: [
+      { id: 'old', rssMib: 300 },
+      { id: 'new', rssMib: 300 },
+    ],
+  });
+
+  const readRamMib = mock(host.deps.readRamMib);
+  const governor = createRamGovernor({ ...host.deps, readRamMib, log: () => {} });
+
+  await governor.admit({ id: 'x', name: 'x', reserveMib: 500, memoryMib: 600 });
+
+  expect(readRamMib).toHaveBeenCalled();
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
+});
+
+test('it counts the KSM headroom beside the resident counts and makes room for it', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['old', 'x'],
+    awake: [{ id: 'old', rssMib: 600 }],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    readHeadroomMib: () => Promise.resolve(300),
+    log: () => {},
+  });
+
+  await governor.admit({ id: 'x', name: 'x', reserveMib: 200, memoryMib: 600 });
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
+});
+
+test('it makes room by what a guest holds now when its pages dipped during an earlier walk', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['old', 'x'],
+    awake: [{ id: 'old', rssMib: 900 }],
+  });
+
+  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+
+  host.applyChange({ kind: 'dip', id: 'old', mib: 200 }, governor);
+
+  await governor.enforce();
+  await governor.admit({ id: 'x', name: 'x', reserveMib: 400, memoryMib: 600 });
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
 });
 
 test('it sleeps the least recently active imp that is not busy to make room', async () => {

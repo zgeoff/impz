@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { onTestFinished } from 'bun:test';
-import { Kysely, SqliteAdapter, SqliteIntrospector, SqliteQueryCompiler } from 'kysely';
-import { createBunSqliteDriver } from '../../src/platform/db/create-bun-sqlite-driver';
+import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
+import { Kysely } from 'kysely';
 import type { ImpWrite } from '../../src/platform/db/imp-write-feed';
 import type { ImpDatabase } from '../../src/platform/db/open-database';
 import type { DB } from '../../src/platform/db/schema';
@@ -13,18 +13,11 @@ export function createUnmigratedDatabase(path = ':memory:'): ImpDatabase {
   sqlite.run('PRAGMA journal_mode = WAL;');
   sqlite.run('PRAGMA foreign_keys = ON;');
 
-  const builder = new Kysely<DB>({
-    dialect: {
-      createAdapter: () => new SqliteAdapter(),
-      createDriver: () => createBunSqliteDriver(sqlite),
-      createIntrospector: (kysely) => new SqliteIntrospector(kysely),
-      createQueryCompiler: () => new SqliteQueryCompiler(),
-    },
-  });
+  const builder = new Kysely<DB>({ dialect: buildSQLiteDialect(sqlite) });
 
   const db = Object.assign(builder, { writes: createEventBus<ImpWrite>() });
 
-  // kysely closes a driver only once a query has started it, so the handle closes here too
+  // the shared driver's destroy leaves the handle open for its opener to close
   onTestFinished(async () => {
     await db.destroy();
 

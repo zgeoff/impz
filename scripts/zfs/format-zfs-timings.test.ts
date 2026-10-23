@@ -18,6 +18,7 @@ impd: imp-c: mem file 512 MiB on disk
   checkpointMs: 130
   wakeOnHttpMs: 41
   backupUploadMs: 900
+  bootTemplateRestoreP50Ms: 62
   otherMs: 5
 checkpointMs: 7
 `,
@@ -35,6 +36,7 @@ checkpointMs: 7
       checkpointMs: 130
       wakeOnHttpMs: 41
       backupUploadMs: 900
+      bootTemplateRestoreP50Ms: 62
 
     "
   `);
