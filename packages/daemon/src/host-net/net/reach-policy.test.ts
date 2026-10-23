@@ -21,6 +21,7 @@ test('it builds the ranges each imp and each public imp is refused', () => {
     deny: ['198.51.100.7/32', '2001:db8:9::/48'],
     ipv6: ctx.ipv6,
     now: () => 0,
+    ...buildStubHostRoutes().deps,
   });
 
   const ranges = reach.buildRanges({
@@ -102,7 +103,14 @@ test.each([
 
 test('it refuses every IPv6 address to an imp when impd has no IPv6 plan', async () => {
   const ctx = setupTest();
-  const reach = createReachPolicy({ subnet: ctx.subnet, deny: [], ipv6: null, now: () => 0 });
+
+  const reach = createReachPolicy({
+    subnet: ctx.subnet,
+    deny: [],
+    ipv6: null,
+    now: () => 0,
+    ...buildStubHostRoutes().deps,
+  });
 
   const host = await reach.read(false);
 
@@ -136,6 +144,7 @@ test('it reads none of the IPv4 routes for imps that are not public', async () =
     deny: [],
     ipv6: null,
     now: () => 0,
+    readConnected6: () => Promise.resolve([]),
     readConnected4,
     readUplinks,
   });
@@ -174,6 +183,7 @@ test('it answers a cached read from the last read within 30 s', async () => {
     deny: [],
     ipv6: ctx.ipv6,
     now: () => clock.now,
+    ...buildStubHostRoutes().deps,
     readConnected6,
   });
 
@@ -196,6 +206,7 @@ test('it reads the host again for a cached read 30 s after the last read', async
     deny: [],
     ipv6: ctx.ipv6,
     now: () => clock.now,
+    ...buildStubHostRoutes().deps,
     readConnected6,
   });
 

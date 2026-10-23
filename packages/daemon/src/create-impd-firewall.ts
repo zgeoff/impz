@@ -1,6 +1,10 @@
 import { join } from 'node:path';
 import type { Config } from './config';
-import { readIpv6DefaultRoute } from './host-net/net/host-routes';
+import {
+  readConnectedPrefixes,
+  readIpv6DefaultRoute,
+  readUplinks,
+} from './host-net/net/host-routes';
 import { checkHostRules6, readOrCreateUlaPrefix, resolveIpv6Plan } from './host-net/net/ipv6-plan';
 import type { Ipv6Plan } from './host-net/net/ipv6-plan';
 import { createReachPolicy } from './host-net/net/reach-policy';
@@ -45,6 +49,9 @@ export async function createImpdFirewall(
     deny: config.egressDeny,
     ipv6,
     now: deps.now ?? Date.now,
+    readConnected4: () => readConnectedPrefixes('ipv4'),
+    readConnected6: () => readConnectedPrefixes('ipv6'),
+    readUplinks: () => readUplinks(),
     ...deps.reach,
   });
 
@@ -52,7 +59,6 @@ export async function createImpdFirewall(
     config,
     db: deps.db,
     log,
-    ipv6,
     reach,
     secretFiles,
     ...(deps.now !== undefined && { now: deps.now }),

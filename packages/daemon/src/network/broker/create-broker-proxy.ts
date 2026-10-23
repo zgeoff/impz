@@ -3,8 +3,6 @@ import { join } from 'node:path';
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressMode } from '@impz/api';
 import { readRouteDevice } from '../../host-net/net/host-routes';
-import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
-import { createReachPolicy } from '../../host-net/net/reach-policy';
 import type { ReachPolicy } from '../../host-net/net/reach-policy';
 import { writeAuditEntry } from '../../platform/db/broker-audit';
 import type { NewAuditEntry } from '../../platform/db/broker-audit';
@@ -52,8 +50,7 @@ interface BrokerProxyDeps {
   readonly fetch?: UpstreamFetch | undefined;
   readonly resolveTunnelTarget?: ((host: string, mode: EgressMode) => Promise<string>) | undefined;
   readonly dialTunnel?: ((address: string, port: number) => Socket) | undefined;
-  readonly ipv6?: Ipv6Plan | null | undefined;
-  readonly reach?: ReachPolicy | undefined;
+  readonly reach: ReachPolicy;
   readonly afterRuleRead?: (() => Promise<void>) | undefined;
 
   readonly refreshAfterRejection?: ForwardDeps['refreshAfterRejection'] | undefined;
@@ -68,15 +65,7 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
   const log = deps.log;
   const now = deps.now;
   const ca = deps.ca;
-
-  const reach =
-    deps.reach ??
-    createReachPolicy({
-      subnet: config.subnet,
-      deny: config.egressDeny,
-      ipv6: deps.ipv6 ?? null,
-      now,
-    });
+  const reach = deps.reach;
 
   const resolveTarget = async (host: string, mode: EgressMode): Promise<string> => {
     const isPublic = EGRESS_MODE_TRAITS[mode].isPublic;

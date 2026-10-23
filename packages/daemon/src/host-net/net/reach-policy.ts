@@ -1,6 +1,5 @@
 import { formatSubnet } from './addressing';
 import type { Subnet } from './addressing';
-import { readConnectedPrefixes, readUplinks } from './host-routes';
 import type { Uplinks } from './host-routes';
 import type { Ipv6Plan } from './ipv6-plan';
 import { parseAddress } from './parse-address';
@@ -20,7 +19,7 @@ export interface ReachBoundaries {
   readonly readUplinks: () => Promise<Uplinks>;
 }
 
-export interface ReachPolicyOptions extends Partial<ReachBoundaries> {
+export interface ReachPolicyOptions extends ReachBoundaries {
   readonly subnet: Subnet;
   readonly deny: readonly string[];
   readonly ipv6: Ipv6Plan | null;
@@ -64,12 +63,6 @@ export const NO_HOST_ROUTES: HostRoutes = {
 };
 
 export function createReachPolicy(options: ReachPolicyOptions): ReachPolicy {
-  const readers: ReachBoundaries = {
-    readConnected4: options.readConnected4 ?? (() => readConnectedPrefixes('ipv4')),
-    readConnected6: options.readConnected6 ?? (() => readConnectedPrefixes('ipv6')),
-    readUplinks: options.readUplinks ?? (() => readUplinks()),
-  };
-
   const hasIPv6 = options.ipv6 !== null;
   const private4 = [...REFUSED_RANGES4, formatSubnet(options.subnet)];
   const deny4 = options.deny.filter((cidr) => !cidr.includes(':'));
@@ -99,9 +92,9 @@ export function createReachPolicy(options: ReachPolicyOptions): ReachPolicy {
   // read at each call: Docker can attach a network to the container later
   const read = async (hasPublic: boolean): Promise<HostReach> => {
     const routes: HostRoutes = {
-      connected6: hasIPv6 ? await readers.readConnected6() : [],
-      connected4: hasPublic ? await readers.readConnected4() : [],
-      uplinks: hasPublic ? await readers.readUplinks() : NO_HOST_ROUTES.uplinks,
+      connected6: hasIPv6 ? await options.readConnected6() : [],
+      connected4: hasPublic ? await options.readConnected4() : [],
+      uplinks: hasPublic ? await options.readUplinks() : NO_HOST_ROUTES.uplinks,
     };
 
     const reach = buildHostReach(buildRanges(routes), routes.uplinks, hasIPv6);

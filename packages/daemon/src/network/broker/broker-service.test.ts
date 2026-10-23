@@ -9,12 +9,14 @@ import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
+import { buildStubHostRoutes } from '../../../testing/host-net/build-stub-host-routes';
 import { startStubBrokerGuestSocket } from '../../../testing/network/start-stub-broker-guest-socket';
 import { startStubBrokerReplyTarget } from '../../../testing/network/start-stub-broker-reply-target';
 import { buildMockNewAuditEntry } from '../../../testing/platform/build-mock-new-audit-entry';
 import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { parsePrefix64 } from '../../host-net/net/addressing6';
+import { createReachPolicy } from '../../host-net/net/reach-policy';
 import {
   AUDIT_ROWS_PER_IMP,
   listAuditEntries,
@@ -1102,8 +1104,14 @@ test('it refuses a tunnel into the imps’ IPv6 prefix', async () => {
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    ipv6: { prefix, nat66: false, uplink: null },
     runOAuthTimer: false,
+    reach: createReachPolicy({
+      subnet: ctx.config.subnet,
+      deny: [],
+      ipv6: { prefix, nat66: false, uplink: null },
+      now: Date.now,
+      ...buildStubHostRoutes().deps,
+    }),
   });
 
   ctx.stack.defer(() => broker.stop());
@@ -1139,8 +1147,14 @@ test('it dials a public IPv6 address when impd has IPv6', async () => {
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    ipv6: { prefix, nat66: false, uplink: null },
     runOAuthTimer: false,
+    reach: createReachPolicy({
+      subnet: ctx.config.subnet,
+      deny: [],
+      ipv6: { prefix, nat66: false, uplink: null },
+      now: Date.now,
+      ...buildStubHostRoutes().deps,
+    }),
     dialTunnel: (host) => {
       dialled.push(host);
 
@@ -1179,6 +1193,13 @@ test('it refuses every IPv6 tunnel when impd has no IPv6', async () => {
     db: ctx.db,
     log: () => {},
     runOAuthTimer: false,
+    reach: createReachPolicy({
+      subnet: ctx.config.subnet,
+      deny: [],
+      ipv6: null,
+      now: Date.now,
+      ...buildStubHostRoutes().deps,
+    }),
   });
 
   ctx.stack.defer(() => broker.stop());

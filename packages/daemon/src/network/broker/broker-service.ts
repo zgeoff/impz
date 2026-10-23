@@ -12,7 +12,6 @@ import type {
 } from '@impz/api';
 import { match } from 'ts-pattern';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
-import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
 import type { ReachPolicy } from '../../host-net/net/reach-policy';
 import { listAuditEntries, listRefusedRequests } from '../../platform/db/broker-audit';
 import { createForkGrants } from '../../platform/db/create-fork-grants';
@@ -134,8 +133,7 @@ export interface BrokerDeps {
   readonly resolveTunnelTarget?: (host: string, mode: EgressMode) => Promise<string>;
   readonly dialTunnel?: (address: string, port: number) => Socket;
 
-  readonly ipv6?: Ipv6Plan | null;
-  readonly reach?: ReachPolicy;
+  readonly reach: ReachPolicy;
 
   readonly afterRuleRead?: () => Promise<void>;
 
@@ -201,7 +199,6 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     fetch: deps.fetch,
     resolveTunnelTarget: deps.resolveTunnelTarget,
     dialTunnel: deps.dialTunnel,
-    ipv6: deps.ipv6,
     reach: deps.reach,
     afterRuleRead: deps.afterRuleRead,
     refreshAfterRejection: refresher.refreshAfterRejection,
