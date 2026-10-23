@@ -15,8 +15,8 @@ for a key.
 When a run holds a Headscale suite, the harness sets the tailnet up before the dev instance starts,
 and takes it down after the last suite:
 
-1. The harness creates the Docker network `<IMP_DEV_NAME>-ts` and starts Headscale on it, under the
-   alias `headscale`. Headscale reads its config and policy from
+1. The harness creates the Docker network `<IMP_DEV_NAME>-ts` if it is missing, and starts Headscale
+   on it under the alias `headscale`. Headscale reads its config and policy from
    [`e2e/fixtures/headscale/`](../../e2e/fixtures/headscale/) and keeps its state on a tmpfs, so
    each run starts from an empty tailnet.
 2. The harness mints a reusable, ephemeral pre-auth key that carries `tag:imp-e2e`. One key joins
@@ -27,8 +27,10 @@ and takes it down after the last suite:
    the tailnet through it, since this machine's own tailscaled stays on the tailnet it already has.
 4. The dev instance starts on `<IMP_DEV_NAME>-ts` with the key, `IMP_TAILSCALE_LOGIN_SERVER` set to
    `http://headscale:8080` and `IMP_TAILSCALE_TAGS=tag:imp-e2e`.
-5. After the last suite, the harness removes the member, Headscale and the network, whether the run
-   passed or not. A run that finds them left over from a killed run removes them first.
+5. After the last suite, the harness removes the member and Headscale, whether the run passed or
+   not. The network stays while the dev instance is on it, and the next run starts its Headscale on
+   that network. A run that finds a member or a Headscale left over from a killed run removes them
+   first.
 
 Headscale's relay serves plain HTTP, and tailscaled reaches a relay only over TLS. Two nodes
 therefore reach each other only on a Docker network they share. The moves-tailnet suite connects
