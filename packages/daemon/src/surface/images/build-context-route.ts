@@ -10,8 +10,10 @@ import type { ImageService } from '../../imps/images/image-service';
 import type { ApiAudit } from '../../platform/audit/api-audit';
 import { ImpdError } from '../../platform/errors/impd-error';
 import type { Caller } from '../../platform/principal/caller';
+import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { startRealTimer } from '../../platform/process/start-real-timer';
 import { buildUploadsDir } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { SurfaceConfig } from '../surface-config';
@@ -22,11 +24,10 @@ const BUILD_ACCESS = findDeclaredAccess(callerContract.images.buildStream['~orpc
 
 // A client follows its upload with the build at once, so a context still here after this long
 // has lost its client.
+/* @internal */
 export const UPLOAD_TTL_MS = 5 * 60_000;
 
-export type StartTimer = (durationMs: number, fire: () => void) => () => void;
-
-export interface BuildUpload {
+interface BuildUpload {
   readonly tarPath: string;
   readonly query: BuildContextQuery;
   readonly run: BuildRun;
@@ -61,7 +62,7 @@ interface BuildFailure {
 
 export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRoute {
   const uploadsDir = buildUploadsDir(deps.config.dataDir);
-  const startTimer = deps.startTimer ?? startTimeout;
+  const startTimer = deps.startTimer ?? startRealTimer;
 
   const held = new Map<string, HeldUpload>();
 
@@ -108,11 +109,11 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
 
     const expiresAt = deps.now() + UPLOAD_TTL_MS;
 
-    const stopTimer = startTimer(UPLOAD_TTL_MS, () => {
+    const stopTimer = startTimer(() => {
       held.delete(id);
 
       release();
-    });
+    }, UPLOAD_TTL_MS);
 
     held.set(id, { upload: { tarPath, query, run, release }, owner: toOwner(caller), stopTimer });
 
@@ -170,14 +171,6 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
 
       return entry.upload;
     },
-  };
-}
-
-function startTimeout(durationMs: number, fire: () => void): () => void {
-  const timer = setTimeout(fire, durationMs);
-
-  return () => {
-    clearTimeout(timer);
   };
 }
 

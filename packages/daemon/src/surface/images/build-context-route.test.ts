@@ -11,7 +11,7 @@ import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
 import { buildStubImageBuilder } from '../../../testing/imps/build-stub-image-builder';
 import { createFilesTar } from '../../../testing/imps/create-files-tar';
 import { startBuilderImpd } from '../../../testing/imps/start-builder-impd';
-import { buildStubRepeat } from '../../../testing/platform/build-stub-repeat';
+import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { runUploadedBuild } from '../../../testing/surface/run-uploaded-build';
 import type { StubAnswer } from '../../../testing/vm/build-stub-guest';
 import { DOCKERFILE_FRONTEND } from '../../imps/docker-contract/dockerfile-frontend';
@@ -343,7 +343,7 @@ test('it removes an upload, frees its slot and ends its run when no build takes 
     cloneDisk: ctx.cloneDisk,
   });
 
-  const timers = buildStubRepeat();
+  const clock = buildStubClock();
   const caller = buildMockCaller();
 
   const route = createBuildContextRoute({
@@ -352,7 +352,7 @@ test('it removes an upload, frees its slot and ends its run when no build takes 
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
-    startTimer: timers.repeat,
+    startTimer: clock.startTimer,
   });
 
   const uploaded = await route.respond(
@@ -364,7 +364,7 @@ test('it removes an upload, frees its slot and ends its run when no build takes 
 
   const upload = BuildContextUploadSchema.parse(answer);
 
-  timers.tick(UPLOAD_TTL_MS);
+  clock.runFor(UPLOAD_TTL_MS);
 
   const uploads = await readdir(buildUploadsDir(ctx.dataDir));
   const builds = await harness.client.images.builds();

@@ -9,14 +9,6 @@ export const BUILD_KEEPALIVE_MS = 15_000;
 
 export type Repeat = (durationMs: number, tick: () => void) => () => void;
 
-export function runOnInterval(durationMs: number, tick: () => void): () => void {
-  const timer = setInterval(tick, durationMs);
-
-  return () => {
-    clearInterval(timer);
-  };
-}
-
 export interface BuildReport {
   readonly setPhase: (phase: ImageBuildPhase) => void;
   readonly output: BuildOutput;
@@ -161,4 +153,12 @@ export async function* runImageOp(
       yield buildProgress();
     }
   }
+}
+
+function runOnInterval(durationMs: number, tick: () => void): () => void {
+  const timer = setInterval(tick, durationMs);
+
+  return () => {
+    clearInterval(timer);
+  };
 }
