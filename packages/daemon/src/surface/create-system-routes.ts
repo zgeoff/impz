@@ -3,8 +3,6 @@ import type { SystemInfo } from '@impz/api';
 import packageJson from '../../package.json' with { type: 'json' };
 import { countBootStatuses } from '../imps/imps/boot-status';
 import type { RecordsStatus } from '../network/https/https-service';
-import { writeDatabaseCopy } from '../platform/db/database-copy';
-import { listImps } from '../platform/db/imps';
 import type { ImpRecord } from '../platform/db/imps';
 import { readKsmHostStats } from '../vm/vmm/ksm';
 import type { RpcImplementer } from './create-implementer';
@@ -27,12 +25,7 @@ export function createSystemRoutes(os: RpcImplementer, deps: RouterDeps) {
       }),
     ),
     copyDatabase: os.system.copyDatabase.handler(async (context) => {
-      const copy = await writeDatabaseCopy(deps.db, {
-        diskBudget: deps.diskBudget,
-        dataDir: deps.config.dataDir,
-        name: context.input.name ?? buildCopyName(deps.now()),
-        now: deps.now,
-      });
+      const copy = await deps.writeDatabaseCopy(context.input.name ?? buildCopyName(deps.now()));
 
       // A restore script prints these fields in this order.
       return {
@@ -51,7 +44,7 @@ const GUEST_INFO: NonNullable<SystemInfo['guest']> = { scratchDir: '/tmp', isCle
 
 async function readSystemInfo(deps: RouterDeps): Promise<SystemInfo> {
   const [imps, usage, tailscale, storage, defaultImage] = await Promise.all([
-    listImps(deps.db),
+    deps.imps.listImpRecords(),
     deps.governor.readUsage(),
     deps.readTailscale(),
     deps.diskBudget.readStatus(),

@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite';
-import { Kysely, SqliteAdapter, SqliteIntrospector, SqliteQueryCompiler } from 'kysely';
+import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
+import { Kysely } from 'kysely';
 import { createEventBus } from '../events/event-bus';
-import { createBunSqliteDriver } from './create-bun-sqlite-driver';
 import type { ImpWrite, ImpWriteFeed } from './imp-write-feed';
 import { runMigrations } from './run-migrations';
 import type { DB } from './schema';
@@ -20,16 +20,19 @@ export async function openDatabase(path: string, options: OpenOptions = {}): Pro
   sqlite.run('PRAGMA journal_mode = WAL;');
   sqlite.run('PRAGMA foreign_keys = ON;');
 
-  const builder = new Kysely<DB>({
-    dialect: {
-      createAdapter: () => new SqliteAdapter(),
-      createDriver: () => createBunSqliteDriver(sqlite),
-      createIntrospector: (kysely) => new SqliteIntrospector(kysely),
-      createQueryCompiler: () => new SqliteQueryCompiler(),
+  const builder = new Kysely<DB>({ dialect: buildSQLiteDialect(sqlite) });
+
+  const destroyDriver = builder.destroy.bind(builder);
+
+  // the shared driver's destroy leaves the handle open for its opener to close
+  const db = Object.assign(builder, {
+    writes: options.writes ?? createEventBus<ImpWrite>(),
+    destroy: async () => {
+      await destroyDriver();
+
+      sqlite.close();
     },
   });
-
-  const db = Object.assign(builder, { writes: options.writes ?? createEventBus<ImpWrite>() });
 
   try {
     await runMigrations(db);

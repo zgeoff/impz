@@ -2,7 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
 import { ApprovalCodeSchema } from '@impz/api';
 import { createImpClient } from '@impz/client';
-import { createPendingSignIn, startTestImpd } from '@impz/daemon/testing';
+import { createPendingSignIn, makeOAuthResponder, startTestImpd } from '@impz/daemon/testing';
 import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import * as z from 'zod';
 import { UsageError } from '../cli/errors';
@@ -49,11 +49,7 @@ async function setupTest() {
     rootToken,
     setClock: harness.setClock,
     calls,
-    handleRoute: async (request: Request) => {
-      const answered = await impd.oauth.handle(request);
-
-      return answered ?? new Response('not found', { status: 404 });
-    },
+    handleRoute: makeOAuthResponder(impd.oauth),
     connect: (token: string) =>
       createImpClient({
         url: 'http://impd.test',
